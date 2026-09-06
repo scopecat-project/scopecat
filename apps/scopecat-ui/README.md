@@ -104,3 +104,11 @@ not bypass attention or retry a failed hardware step. Configuration acceptance
 remains part of the declared procedure and its review policy. The generic GUI
 does not accept calibration parameters itself. Existing projects without a
 provider show an empty state.
+
+
+Decision review renders retained run, sample and project analysis publications
+inline, including curves, facts and proposed parameter differences. Table changes
+are expanded to changed fields; quantity representation changes remain visible.
+Simple scalar response schemas use form fields, while complex structures retain
+the JSON editor. The same revision/hash checks and recorded reviewer apply to both.
+The GUI does not replace the procedure's verification or acceptance policy.

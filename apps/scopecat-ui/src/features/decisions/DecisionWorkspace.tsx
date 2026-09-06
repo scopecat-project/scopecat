@@ -6,6 +6,8 @@ import type {
   ProcedureStepAttempt,
   ProcedureStepInputSubmitCommand,
 } from "../../api-contract";
+import { DecisionEvidence } from "./DecisionEvidence";
+import { DecisionFields, decisionFields } from "./DecisionFields";
 import { errorMessage, formatRelative } from "../../lib/presentation";
 import { classes, primaryButton } from "../../ui/styles";
 import { getProcedureSteps, getWaitingProcedures, submitProcedureInput } from "./decision-api";
@@ -88,7 +90,7 @@ export function DecisionWorkspace({ daemonUnavailable }: { daemonUnavailable: bo
         <header className="mb-3 rounded-md border border-line bg-panel-soft px-3.5 py-3">
           <p className="m-0 text-[0.66rem] leading-5 text-text-dim">
             Inspect the retained evidence and record one structured judgment. The procedure then
-            becomes ready for its next worker claim.
+            continues with the recorded response.
           </p>
         </header>
         <DecisionCard key={selected.procedure_run_id} procedure={selected} />
@@ -144,6 +146,8 @@ function DecisionForm({
   const [valueText, setValueText] = useState(() =>
     JSON.stringify(request.response_template ?? initialValue(request.structure), null, 2),
   );
+  const fields = decisionFields(request.structure);
+  const [useJson, setUseJson] = useState(!fields);
   const [parseError, setParseError] = useState<string>();
   const queryClient = useQueryClient();
   const submit = useMutation({
@@ -223,16 +227,51 @@ function DecisionForm({
         </section>
       )}
 
+      <div className="mb-4 grid gap-3 lg:grid-cols-2">
+        {step.inputs
+          .filter((input) => input.kind === "analysis")
+          .map((input) => (
+            <DecisionEvidence key={JSON.stringify(input)} input={input} />
+          ))}
+      </div>
       <div className="grid grid-cols-[minmax(0,1.3fr)_minmax(260px,0.7fr)] gap-4 max-[850px]:grid-cols-1">
-        <label className="grid gap-1.5 text-[0.64rem] font-bold text-text-dim">
-          Structured judgment (JSON)
-          <textarea
-            className="min-h-[220px] resize-y rounded-md border border-line bg-bg p-3 font-mono text-[0.68rem] leading-5 text-text outline-none focus:border-accent"
-            spellCheck={false}
-            value={valueText}
-            onChange={(event) => setValueText(event.target.value)}
-          />
-        </label>
+        <div className="grid content-start gap-3">
+          {fields && (
+            <button
+              type="button"
+              className="text-left text-xs text-accent"
+              onClick={() => {
+                try {
+                  if (!isRecord(JSON.parse(valueText)))
+                    throw new Error("Judgment must be an object.");
+                  setUseJson(!useJson);
+                  setParseError(undefined);
+                } catch (error) {
+                  setParseError(errorMessage(error));
+                }
+              }}
+            >
+              {useJson ? "Use form" : "Edit JSON"}
+            </button>
+          )}
+          {!useJson && fields ? (
+            <DecisionFields
+              fields={fields}
+              value={JSON.parse(valueText)}
+              onChange={(value) => setValueText(JSON.stringify(value, null, 2))}
+            />
+          ) : (
+            <label className="grid gap-1.5 text-[0.64rem] font-bold text-text-dim">
+              Structured judgment (JSON)
+              <textarea
+                className="min-h-[220px] resize-y rounded-md border border-line bg-bg p-3 font-mono text-[0.68rem] leading-5 text-text outline-none focus:border-accent"
+                spellCheck={false}
+                value={valueText}
+                onChange={(event) => setValueText(event.target.value)}
+              />
+            </label>
+          )}
+        </div>
         <div className="grid content-start gap-3">
           <div className="grid gap-1.5 text-[0.64rem] text-text-dim">
             <label className="grid gap-1.5 font-bold">
