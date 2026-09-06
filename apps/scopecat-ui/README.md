@@ -111,3 +111,6 @@ are expanded to changed fields; quantity representation changes remain visible.
 Simple scalar response schemas use form fields, while complex structures retain
 the JSON editor. The same revision/hash checks and recorded reviewer apply to both.
 The GUI does not replace the procedure's verification or acceptance policy.
+
+Launch forms also support arrays of string enums as multi-select fields. Membership
+changes invalidate previews; procedure progress links to retained analysis results.

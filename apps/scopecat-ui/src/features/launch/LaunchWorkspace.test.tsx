@@ -111,3 +111,44 @@ it("retains the submission key after a lost response and opens durable progress"
   expect(submitted[0]?.request_key).toBe(submitted[1]?.request_key);
   expect(new URLSearchParams(window.location.search).get("procedure")).toBe("p1");
 });
+
+it("submits selected array members and invalidates the preview when membership changes", async () => {
+  window.history.replaceState(null, "", "/#launch");
+  const fetcher = vi
+    .fn()
+    .mockResolvedValueOnce(
+      Response.json({
+        calibrations: [
+          {
+            ...entry,
+            id: "allxy",
+            request: {
+              required: ["qubits"],
+              properties: {
+                qubits: {
+                  type: "array",
+                  title: "Qubits",
+                  items: { type: "string", enum: ["Q04", "Q12", "Q24"] },
+                },
+              },
+            },
+          },
+        ],
+      }),
+    )
+    .mockResolvedValueOnce(Response.json({ configuration_writeback: false }));
+  vi.stubGlobal("fetch", fetcher);
+  mount();
+  const select = (await screen.findByLabelText("Qubits")) as HTMLSelectElement;
+  select.options[0]!.selected = true;
+  select.options[2]!.selected = true;
+  fireEvent.change(select);
+  fireEvent.click(screen.getByRole("button", { name: "Preview" }));
+  await screen.findByText("Preview ready");
+  expect((await (fetcher.mock.calls[1]![0] as Request).json()).inputs).toEqual({
+    qubits: ["Q04", "Q24"],
+  });
+  select.options[2]!.selected = false;
+  fireEvent.change(select);
+  expect(screen.queryByText("Preview ready")).toBeNull();
+});

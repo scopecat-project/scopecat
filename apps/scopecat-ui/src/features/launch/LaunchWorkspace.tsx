@@ -5,8 +5,9 @@ import { apiClient, apiData } from "../../api-client";
 type Field = {
   type: string;
   title?: string;
-  default?: string | number | boolean;
+  default?: string | number | boolean | string[];
   enum?: string[];
+  items?: { type?: string; enum?: string[] };
   minimum?: number;
   maximum?: number;
   exclusiveMinimum?: number;
@@ -78,7 +79,7 @@ function LaunchForm({ entry, onAdmitted }: { entry: Entry; onAdmitted: (id: stri
     Object.fromEntries(
       Object.entries(entry.request.properties).map(([name, field]) => [
         name,
-        String(field.default ?? ""),
+        Array.isArray(field.default) ? field.default.join("\n") : String(field.default ?? ""),
       ]),
     ),
   );
@@ -100,9 +101,11 @@ function LaunchForm({ entry, onAdmitted }: { entry: Entry; onAdmitted: (id: stri
           name,
           ["number", "integer"].includes(entry.request.properties[name]?.type ?? "string")
             ? Number(value)
-            : entry.request.properties[name]?.type === "boolean"
-              ? value === "true"
-              : value,
+            : entry.request.properties[name]?.type === "array"
+              ? value.split("\n").filter(Boolean)
+              : entry.request.properties[name]?.type === "boolean"
+                ? value === "true"
+                : value,
         ]),
     );
   }
@@ -177,7 +180,27 @@ function LaunchForm({ entry, onAdmitted }: { entry: Entry; onAdmitted: (id: stri
         {Object.entries(entry.request.properties).map(([name, field]) => (
           <label key={name} className="flex flex-col gap-1">
             {field.title ?? name}
-            {field.enum || field.type === "boolean" ? (
+            {field.type === "array" && field.items?.enum ? (
+              <select
+                multiple
+                aria-label={field.title ?? name}
+                required={entry.request.required?.includes(name)}
+                value={(values[name] ?? "").split("\n").filter(Boolean)}
+                onChange={(event) =>
+                  change(
+                    name,
+                    Array.from(event.target.selectedOptions, (option) => option.value).join("\n"),
+                  )
+                }
+                className="border rounded p-2 min-h-32"
+              >
+                {field.items.enum.map((value) => (
+                  <option key={value} value={value}>
+                    {value}
+                  </option>
+                ))}
+              </select>
+            ) : field.enum || field.type === "boolean" ? (
               <select
                 aria-label={field.title ?? name}
                 required={entry.request.required?.includes(name)}
@@ -333,6 +356,20 @@ function ProcedureProgress({ procedureId }: { procedureId: string }) {
                 href={`?run=${encodeURIComponent(step.output.run_id)}#runs`}
               >
                 Open run
+              </a>
+            )}
+            {step.output?.kind === "analysis" && (
+              <a
+                className="ml-2 underline"
+                href={
+                  step.output.subject.kind === "run"
+                    ? `?run=${encodeURIComponent(step.output.subject.run_id)}#runs`
+                    : step.output.subject.kind === "sample"
+                      ? `?sample=${encodeURIComponent(step.output.subject.sample_id)}#samples`
+                      : `?analysis=${encodeURIComponent(step.output.analysis_record_id)}#analyses`
+                }
+              >
+                Open analysis
               </a>
             )}
           </li>
