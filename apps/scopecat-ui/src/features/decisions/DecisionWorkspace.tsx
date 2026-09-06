@@ -13,7 +13,9 @@ import { classes, primaryButton } from "../../ui/styles";
 import { getProcedureSteps, getWaitingProcedures, submitProcedureInput } from "./decision-api";
 
 export function DecisionWorkspace({ daemonUnavailable }: { daemonUnavailable: boolean }) {
-  const [selectedId, setSelectedId] = useState<string>();
+  const [selectedId, setSelectedId] = useState<string | undefined>(
+    () => new URLSearchParams(window.location.search).get("procedure") ?? undefined,
+  );
   const procedures = useQuery({
     queryKey: ["procedure-decisions"],
     queryFn: ({ signal }) => getWaitingProcedures(signal),

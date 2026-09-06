@@ -105,7 +105,6 @@ remains part of the declared procedure and its review policy. The generic GUI
 does not accept calibration parameters itself. Existing projects without a
 provider show an empty state.
 
-
 Decision review renders retained run, sample and project analysis publications
 inline, including curves, facts and proposed parameter differences. Table changes
 are expanded to changed fields; quantity representation changes remain visible.

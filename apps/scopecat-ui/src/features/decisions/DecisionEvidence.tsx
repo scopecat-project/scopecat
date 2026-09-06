@@ -69,17 +69,33 @@ export function DecisionEvidence({ input }: { input: Evidence }) {
                 </dl>
               </section>
             ))}
+          <AnalysisPublicationView
+            analysis={{
+              ...analysis.data,
+              inputs: [],
+              executions: [],
+              outputs: analysis.data.outputs.filter(
+                (output) => output.kind === "figure" || output.kind === "table",
+              ),
+            }}
+            getArtifactDownload={download}
+          />
           {subject.kind === "run" &&
             analysis.data.outputs.some((output) => output.kind === "parameter_change_proposal") && (
               <DecisionProposals runId={subject.run_id} analysisId={id} />
             )}
-          <AnalysisPublicationView
-            analysis={{
-              ...analysis.data,
-              outputs: analysis.data.outputs.filter((output) => output.kind !== "fact"),
-            }}
-            getArtifactDownload={download}
-          />
+          <details className="mt-3 text-xs text-text-dim">
+            <summary className="cursor-pointer">Publication details and provenance</summary>
+            <AnalysisPublicationView
+              analysis={{
+                ...analysis.data,
+                outputs: analysis.data.outputs.filter(
+                  (output) => output.kind !== "figure" && output.kind !== "table",
+                ),
+              }}
+              getArtifactDownload={download}
+            />
+          </details>
         </>
       )}
     </section>
