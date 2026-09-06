@@ -20,6 +20,7 @@ import { titleCase } from "./lib/presentation";
 import { classes, iconButton } from "./ui/styles";
 
 type ProjectView =
+  | "launch"
   | "runs"
   | "samples"
   | "analyses"
@@ -27,6 +28,11 @@ type ProjectView =
   | "reviews"
   | "instruments"
   | "configuration";
+
+const LaunchWorkspace = lazy(async () => {
+  const module = await import("./features/launch/LaunchWorkspace");
+  return { default: module.LaunchWorkspace };
+});
 
 const AnalysesWorkspace = lazy(async () => {
   const module = await import("./features/analyses/AnalysesWorkspace");
@@ -242,6 +248,15 @@ export default function App() {
         >
           <button
             type="button"
+            className={navigationClass(view === "launch")}
+            aria-current={view === "launch" ? "page" : undefined}
+            onClick={() => selectView("launch")}
+          >
+            <Activity size={15} aria-hidden="true" />
+            Calibrations
+          </button>
+          <button
+            type="button"
             className={navigationClass(view === "samples")}
             aria-current={view === "samples" ? "page" : undefined}
             onClick={() => selectView("samples")}
@@ -412,6 +427,10 @@ export default function App() {
               selectedAnalysisId={selectedAnalysisId}
             />
           </Suspense>
+        ) : view === "launch" ? (
+          <Suspense fallback={<p>Loading calibrations…</p>}>
+            <LaunchWorkspace />
+          </Suspense>
         ) : view === "decisions" ? (
           <Suspense
             fallback={
@@ -549,6 +568,7 @@ function selectedSampleRevisionFromUrl(): number | undefined {
 }
 
 function projectViewFromLocation(): ProjectView {
+  if (window.location.hash === "#launch") return "launch";
   if (window.location.hash === "#configuration") return "configuration";
   if (window.location.hash === "#instruments") return "instruments";
   if (window.location.hash === "#analyses") return "analyses";

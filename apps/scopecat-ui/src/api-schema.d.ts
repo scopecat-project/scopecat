@@ -225,6 +225,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/experiment-launcher": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Experiment Launch Catalog */
+        get: operations["experiment_launch_catalog_api_v1_experiment_launcher_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/experiment-launcher/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Experiment Launch Preview */
+        post: operations["experiment_launch_preview_api_v1_experiment_launcher_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/health": {
         parameters: {
             query?: never;
@@ -3541,6 +3575,23 @@ export interface components {
         JsonMetadata: {
             [key: string]: components["schemas"]["pydantic__types__JsonValue"];
         };
+        /** LaunchRequest */
+        LaunchRequest: {
+            /**
+             * Action
+             * @enum {string}
+             */
+            action: "list" | "preview";
+            /**
+             * Experiment
+             * @default
+             */
+            experiment: string;
+            /** Inputs */
+            inputs?: {
+                [key: string]: components["schemas"]["pydantic__types__JsonValue"];
+            };
+        };
         /**
          * LinearCoordinatesSpec
          * @description Expected coordinates sampled uniformly between two state values.
@@ -6780,6 +6831,63 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EventPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    experiment_launch_catalog_api_v1_experiment_launcher_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: components["schemas"]["pydantic__types__JsonValue"];
+                    };
+                };
+            };
+        };
+    };
+    experiment_launch_preview_api_v1_experiment_launcher_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LaunchRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: components["schemas"]["pydantic__types__JsonValue"];
+                    };
                 };
             };
             /** @description Validation Error */

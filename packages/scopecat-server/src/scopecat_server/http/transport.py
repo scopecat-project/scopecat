@@ -5,6 +5,9 @@
 from __future__ import annotations
 
 import asyncio
+import json
+import subprocess
+import sys
 from collections.abc import AsyncIterator, Callable
 from pathlib import Path, PurePosixPath
 from typing import Annotated, Literal, cast, override
@@ -13,6 +16,8 @@ from fastapi import FastAPI, Header, HTTPException, Query, Request
 from fastapi import Path as ApiPath
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
+from pydantic import JsonValue
+from scopecat.application.launch import LaunchRequest
 from scopecat.automation import (
     ProcedureCloseCommand,
     ProcedureCloseReceipt,
@@ -291,6 +296,41 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
         max_body_bytes=max_command_body_bytes,
     )
     _install_error_mapping(app)
+
+    def launch_call(command: LaunchRequest) -> dict[str, JsonValue]:
+        try:
+            completed = subprocess.run(  # noqa: S603 - fixed project worker command
+                [
+                    sys.executable,
+                    "-m",
+                    "scopecat.application.launch_worker",
+                    str(application.project_root),
+                ],
+                input=command.model_dump_json(),
+                capture_output=True,
+                text=True,
+                timeout=60,
+                check=False,
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+            )
+        except subprocess.TimeoutExpired as error:
+            raise HTTPException(504, "Experiment preview timed out") from error
+        if completed.returncode:
+            detail = completed.stderr.strip().splitlines()
+            raise HTTPException(
+                422, detail[-1] if detail else "Experiment preview failed"
+            )
+        return json.loads(completed.stdout)
+
+    @app.get(f"{_API_PREFIX}/experiment-launcher")
+    def experiment_launch_catalog() -> dict[str, JsonValue]:
+        return launch_call(LaunchRequest(action="list"))
+
+    @app.post(f"{_API_PREFIX}/experiment-launcher/preview")
+    def experiment_launch_preview(command: LaunchRequest) -> dict[str, JsonValue]:
+        if command.action != "preview":
+            raise HTTPException(422, "Expected preview action")
+        return launch_call(command)
 
     @app.get(f"{_API_PREFIX}/health")
     def health() -> DaemonHealth:
