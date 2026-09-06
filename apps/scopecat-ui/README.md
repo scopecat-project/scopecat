@@ -69,11 +69,11 @@ restores the previous default. The fixture removes the daemon and project after
 success or an assertion failure. If identity-safe daemon shutdown itself fails,
 it retains the project and reports the daemon log for manual cleanup.
 
-## Project calibration previews
+## Project calibration launch
 
 The Calibrations page discovers entries from the optional
 `LabApplication.launch_provider` callback. A callback receives a connected
-`LabClient` and a validated `LaunchRequest` (`list` or `preview`). `list` returns
+`LabClient` and a validated `LaunchRequest` (`list`, `preview` or `submit`). `list` returns
 `calibrations` entries with `id`, `title`, `description`, and a JSON Schema
 `request` object. The initial form supports scalar string, number, integer and
 boolean properties, required fields, defaults and string enums. Projects should
@@ -82,8 +82,25 @@ its input values; the provider validates the project request and compiles agains
 configuration. Its returned JSON becomes the expandable preview detail.
 
 Callbacks run in a separate project process using the daemon interpreter, with
-a 60-second timeout. They must only read and compile: no acquisition, acceptance,
-or instrument session operations. This is a trusted project-code contract, not a
-sandbox. The daemon does not import the project's execution callbacks. Existing
-projects without a provider show an empty state. The API cannot start acquisition;
-async admission and worker execution remain a separate follow-up.
+a 60-second timeout. `list` and `preview` only read and compile. An entry may set
+`can_submit: true`; its `submit` callback validates the preview configuration
+hash/generation and calls `lab.procedures.submit`, returning `procedure_id`.
+Callbacks must not acquire data or activate configuration inside this bounded
+request. This is a trusted project-code contract, not a sandbox.
+
+The server separately wakes a project process for the admitted procedure. Its
+normal `resume` operation uses the existing durable procedure and lease rules;
+HTTP disconnects do not cancel it. The process waits across interpretation input,
+then continues until closure or attention. Multiple wakeups are deduplicated
+locally, while the durable lease remains authoritative across processes. Process
+output goes to `.scopecat/console-worker.log`. A failed spawn does not erase the
+submission: the response retains the procedure ID and reports `dispatch_error`.
+The progress view offers Resume execution and links to child runs and Decisions.
+Its procedure ID is retained in the URL for reopening the page.
+
+Workers exit on daemon connection failure. After a daemon restart or process
+failure, reopen progress and request resume for a runnable procedure; this does
+not bypass attention or retry a failed hardware step. Configuration acceptance
+remains part of the declared procedure and its review policy. The generic GUI
+does not accept calibration parameters itself. Existing projects without a
+provider show an empty state.

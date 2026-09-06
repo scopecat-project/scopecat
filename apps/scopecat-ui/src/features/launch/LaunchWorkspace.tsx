@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient, apiData } from "../../api-client";
 
@@ -13,6 +13,7 @@ type Field = {
 };
 type Entry = {
   id: string;
+  can_submit?: boolean;
   title: string;
   description: string;
   request: { properties: Record<string, Field>; required?: string[] };
@@ -26,6 +27,15 @@ export function LaunchWorkspace() {
       return (result.calibrations ?? []) as unknown as Entry[];
     },
   });
+  const [procedureId, setProcedureId] = useState(
+    () => new URLSearchParams(window.location.search).get("procedure") ?? "",
+  );
+  function admitted(id: string) {
+    setProcedureId(id);
+    const url = new URL(window.location.href);
+    url.searchParams.set("procedure", id);
+    window.history.replaceState(null, "", url);
+  }
   const [selected, setSelected] = useState("");
   const entry = catalog.data?.find((item) => item.id === selected) ?? catalog.data?.[0];
   return (
@@ -52,14 +62,18 @@ export function LaunchWorkspace() {
               ))}
             </select>
           </label>
-          <LaunchForm key={entry.id} entry={entry} />
+          <LaunchForm key={entry.id} entry={entry} onAdmitted={admitted} />
         </>
       )}
+      {procedureId && <ProcedureProgress procedureId={procedureId} />}
     </section>
   );
 }
 
-function LaunchForm({ entry }: { entry: Entry }) {
+function LaunchForm({ entry, onAdmitted }: { entry: Entry; onAdmitted: (id: string) => void }) {
+  const [sample, setSample] = useState("");
+  const [actor, setActor] = useState("");
+  const requestKey = useRef<string | undefined>(undefined);
   const [values, setValues] = useState<Record<string, string>>(() =>
     Object.fromEntries(
       Object.entries(entry.request.properties).map(([name, field]) => [
@@ -76,13 +90,10 @@ function LaunchForm({ entry }: { entry: Entry }) {
     setValues({ ...values, [name]: value });
     setResult(undefined);
     setError("");
+    requestKey.current = undefined;
   }
-  async function preview(event: React.FormEvent) {
-    event.preventDefault();
-    setPending(true);
-    setError("");
-    setResult(undefined);
-    const inputs = Object.fromEntries(
+  function inputValues() {
+    return Object.fromEntries(
       Object.entries(values)
         .filter(([, value]) => value !== "")
         .map(([name, value]) => [
@@ -94,14 +105,60 @@ function LaunchForm({ entry }: { entry: Entry }) {
               : value,
         ]),
     );
+  }
+  async function preview(event: React.FormEvent) {
+    event.preventDefault();
+    requestKey.current = undefined;
+    setPending(true);
+    setError("");
+    setResult(undefined);
+    const inputs = inputValues();
     try {
       setResult(
         await apiData(
           apiClient.POST("/api/v1/experiment-launcher/preview", {
-            body: { action: "preview", experiment: entry.id, inputs },
+            body: {
+              action: "preview",
+              experiment: entry.id,
+              inputs,
+              actor: actor || "operator",
+              request_key: "",
+            },
           }),
         ),
       );
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : String(caught));
+    } finally {
+      setPending(false);
+    }
+  }
+  const source = (
+    result as { config_source?: { content_hash: string; registry_generation: number } } | undefined
+  )?.config_source;
+  async function start() {
+    if (!source) return;
+    requestKey.current ??= crypto.randomUUID();
+    setPending(true);
+    setError("");
+    try {
+      const receipt = await apiData(
+        apiClient.POST("/api/v1/experiment-launcher/submit", {
+          body: {
+            action: "submit",
+            experiment: entry.id,
+            inputs: inputValues(),
+            request_key: requestKey.current,
+            sample,
+            actor,
+            expected_config_hash: source.content_hash,
+            expected_generation: source.registry_generation,
+          },
+        }),
+      );
+      onAdmitted(receipt.procedure_id);
+      if (receipt.dispatch_error)
+        setError(`Submitted; execution needs retry: ${receipt.dispatch_error}`);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : String(caught));
     } finally {
@@ -154,9 +211,44 @@ function LaunchForm({ entry }: { entry: Entry }) {
       <button type="submit" disabled={pending} className="border rounded px-4 py-2">
         {pending ? "Compiling…" : "Preview"}
       </button>
+      {entry.can_submit && (
+        <fieldset disabled={pending} className="flex flex-wrap gap-3">
+          <label>
+            Sample ID{" "}
+            <input
+              aria-label="Sample ID"
+              value={sample}
+              onChange={(e) => {
+                setSample(e.target.value);
+                requestKey.current = undefined;
+              }}
+              className="border rounded p-2"
+            />
+          </label>
+          <label>
+            Operator{" "}
+            <input
+              aria-label="Operator"
+              value={actor}
+              onChange={(e) => setActor(e.target.value)}
+              className="border rounded p-2"
+            />
+          </label>
+          <button
+            type="button"
+            disabled={!source || !sample.trim() || !actor.trim() || pending}
+            onClick={() => {
+              void start();
+            }}
+            className="border rounded px-4 py-2"
+          >
+            Start acquisition
+          </button>
+        </fieldset>
+      )}
       <p className="text-sm">
-        Preview does not acquire data or activate configuration. Start acquisition through the
-        project calibration command.
+        Preview compiles only. Start acquisition submits a durable procedure; configuration
+        acceptance waits for review.
       </p>
       {error && <p role="alert">{error}</p>}
       {result !== undefined && (
@@ -170,4 +262,96 @@ function LaunchForm({ entry }: { entry: Entry }) {
       )}
     </form>
   );
+}
+
+function ProcedureProgress({ procedureId }: { procedureId: string }) {
+  const [error, setError] = useState("");
+  const status = useQuery({
+    queryKey: ["launch-procedure", procedureId],
+    queryFn: () =>
+      apiData(
+        apiClient.GET("/api/v1/procedures/{procedure_run_id}", {
+          params: { path: { procedure_run_id: procedureId } },
+        }),
+      ),
+    refetchInterval: 1000,
+  });
+  const steps = useQuery({
+    queryKey: ["launch-procedure-steps", procedureId],
+    queryFn: () =>
+      apiData(
+        apiClient.GET("/api/v1/procedures/{procedure_run_id}/steps", {
+          params: { path: { procedure_run_id: procedureId }, query: { limit: 50 } },
+        }),
+      ),
+    refetchInterval: 1000,
+  });
+  async function resume() {
+    setError("");
+    try {
+      const receipt = await apiData(
+        apiClient.POST("/api/v1/procedures/{procedure_run_id}/dispatch", {
+          params: { path: { procedure_run_id: procedureId } },
+        }),
+      );
+      if (receipt.dispatch_error) setError(receipt.dispatch_error);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : String(caught));
+    }
+  }
+  return (
+    <section className="border rounded p-4 space-y-2">
+      <h3>Procedure progress</h3>
+      <p>{procedureId}</p>
+      {status.error && <p role="alert">{status.error.message}</p>}
+      <p>{status.data && statusLabel(status.data.closure?.status ?? status.data.state)}</p>
+      {(status.data?.attention_reason || status.data?.closure?.reason) && (
+        <p>{status.data.attention_reason ?? status.data.closure?.reason}</p>
+      )}
+      {status.data?.state === "waiting_for_input" && (
+        <a href="#decisions">Review results in Decisions</a>
+      )}
+      {status.data && ["ready", "waiting_for_input"].includes(status.data.state) && (
+        <button
+          type="button"
+          onClick={() => {
+            void resume();
+          }}
+          className="border rounded px-3 py-1"
+        >
+          Resume execution
+        </button>
+      )}
+      {error && <p role="alert">{error}</p>}
+      <ul>
+        {steps.data?.items.map((step) => (
+          <li key={`${step.step_key}:${step.attempt}`}>
+            {step.step_key}: {statusLabel(step.state)} {step.failure_reason}
+            {step.output?.kind === "run" && (
+              <a
+                className="ml-2 underline"
+                href={`?run=${encodeURIComponent(step.output.run_id)}#runs`}
+              >
+                Open run
+              </a>
+            )}
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+function statusLabel(state: string): string {
+  const labels: Record<string, string> = {
+    ready: "Queued",
+    leased: "Running",
+    waiting_for_input: "Waiting for review",
+    attention_required: "Needs attention",
+    succeeded: "Completed",
+    failed: "Failed",
+    closed: "Finished",
+    running: "Running",
+  };
+  return labels[state] ?? state.replaceAll("_", " ");
 }

@@ -17,7 +17,7 @@ from fastapi import Path as ApiPath
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import JsonValue
-from scopecat.application.launch import LaunchRequest
+from scopecat.application.launch import LaunchRequest, LaunchSubmission
 from scopecat.automation import (
     ProcedureCloseCommand,
     ProcedureCloseReceipt,
@@ -253,6 +253,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
+from scopecat_server.services.project_workers import ProjectProcedureWorkers
 from scopecat_server.storage.sqlite.connection import SQLiteBusyError
 
 from ..command_payloads import (
@@ -297,6 +298,8 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
     )
     _install_error_mapping(app)
 
+    project_workers = ProjectProcedureWorkers(lambda: application.project_root)
+
     def launch_call(command: LaunchRequest) -> dict[str, JsonValue]:
         try:
             completed = subprocess.run(  # noqa: S603 - fixed project worker command
@@ -331,6 +334,29 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
         if command.action != "preview":
             raise HTTPException(422, "Expected preview action")
         return launch_call(command)
+
+    def dispatch_procedure(procedure_id: str) -> LaunchSubmission:
+        run = application.automation.get(procedure_id)
+        if run.state in {"closed", "attention_required"}:
+            return LaunchSubmission(procedure_id=procedure_id)
+        try:
+            project_workers.dispatch(procedure_id)
+        except OSError as error:
+            return LaunchSubmission(
+                procedure_id=procedure_id, dispatch_error=str(error)
+            )
+        return LaunchSubmission(procedure_id=procedure_id)
+
+    @app.post(f"{_API_PREFIX}/experiment-launcher/submit")
+    def experiment_launch_submit(command: LaunchRequest) -> LaunchSubmission:
+        if command.action != "submit" or not command.request_key.strip():
+            raise HTTPException(422, "Submit requires a request key")
+        admitted = LaunchSubmission.model_validate(launch_call(command))
+        return dispatch_procedure(admitted.procedure_id)
+
+    @app.post(f"{_API_PREFIX}/procedures/{{procedure_run_id}}/dispatch")
+    def dispatch_project_procedure(procedure_run_id: str) -> LaunchSubmission:
+        return dispatch_procedure(procedure_run_id)
 
     @app.get(f"{_API_PREFIX}/health")
     def health() -> DaemonHealth:

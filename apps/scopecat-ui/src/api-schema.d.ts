@@ -259,6 +259,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/experiment-launcher/submit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Experiment Launch Submit */
+        post: operations["experiment_launch_submit_api_v1_experiment_launcher_submit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/health": {
         parameters: {
             query?: never;
@@ -559,6 +576,40 @@ export interface paths {
         get: operations["list_procedures_api_v1_procedures_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/procedures/{procedure_run_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Procedure */
+        get: operations["get_procedure_api_v1_procedures__procedure_run_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/procedures/{procedure_run_id}/dispatch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Dispatch Project Procedure */
+        post: operations["dispatch_project_procedure_api_v1_procedures__procedure_run_id__dispatch_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3581,7 +3632,16 @@ export interface components {
              * Action
              * @enum {string}
              */
-            action: "list" | "preview";
+            action: "list" | "preview" | "submit";
+            /**
+             * Actor
+             * @default operator
+             */
+            actor: string;
+            /** Expected Config Hash */
+            expected_config_hash?: string | null;
+            /** Expected Generation */
+            expected_generation?: number | null;
             /**
              * Experiment
              * @default
@@ -3591,6 +3651,23 @@ export interface components {
             inputs?: {
                 [key: string]: components["schemas"]["pydantic__types__JsonValue"];
             };
+            /**
+             * Request Key
+             * @default
+             */
+            request_key: string;
+            /** Sample */
+            sample?: string | null;
+        };
+        /**
+         * LaunchSubmission
+         * @description A durable admission, with an independent best-effort worker wakeup.
+         */
+        LaunchSubmission: {
+            /** Dispatch Error */
+            dispatch_error?: string | null;
+            /** Procedure Id */
+            procedure_id: string;
         };
         /**
          * LinearCoordinatesSpec
@@ -6901,6 +6978,39 @@ export interface operations {
             };
         };
     };
+    experiment_launch_submit_api_v1_experiment_launcher_submit_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LaunchRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LaunchSubmission"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     health_api_v1_health_get: {
         parameters: {
             query?: never;
@@ -7450,6 +7560,68 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProcedureRunPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_procedure_api_v1_procedures__procedure_run_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                procedure_run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProcedureRun"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    dispatch_project_procedure_api_v1_procedures__procedure_run_id__dispatch_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                procedure_run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LaunchSubmission"];
                 };
             };
             /** @description Validation Error */

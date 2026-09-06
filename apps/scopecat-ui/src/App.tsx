@@ -608,20 +608,7 @@ function replaceNavigation(
   } else {
     location.searchParams.delete("sample-revision");
   }
-  location.hash =
-    view === "configuration"
-      ? "configuration"
-      : view === "instruments"
-        ? "instruments"
-        : view === "analyses"
-          ? "analyses"
-          : view === "samples"
-            ? "samples"
-            : view === "decisions"
-              ? "decisions"
-              : view === "reviews"
-                ? "reviews"
-                : "";
+  location.hash = view === "runs" ? "" : view;
   window.history.replaceState(null, "", `${location.pathname}${location.search}${location.hash}`);
 }
 

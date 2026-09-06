@@ -44,6 +44,8 @@ it("previews a typed request and clears results after edits", async () => {
   const request = fetcher.mock.calls[1]?.[0] as Request;
   expect(await request.json()).toEqual({
     action: "preview",
+    actor: "operator",
+    request_key: "",
     experiment: "rabi",
     inputs: { qubit: "Q12", amplitude_max: 0.4 },
   });
@@ -71,4 +73,41 @@ it("shows compilation failure without a successful preview", async () => {
   fireEvent.click(screen.getByRole("button", { name: "Preview" }));
   expect(await screen.findByRole("alert")).toHaveTextContent("binding unavailable");
   expect(screen.queryByText("Preview ready")).toBeNull();
+});
+
+it("retains the submission key after a lost response and opens durable progress", async () => {
+  window.history.replaceState(null, "", "/#launch");
+  const submitted: Array<{ request_key: string }> = [];
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (request: Request) => {
+      const path = new URL(request.url).pathname;
+      if (path.endsWith("/experiment-launcher"))
+        return Response.json({ calibrations: [{ ...entry, can_submit: true }] });
+      if (path.endsWith("/preview"))
+        return Response.json({ config_source: { content_hash: "hash", registry_generation: 1 } });
+      if (path.endsWith("/submit")) {
+        submitted.push(await request.json());
+        if (submitted.length === 1) throw new TypeError("connection lost");
+        return Response.json({ procedure_id: "p1", dispatch_error: null });
+      }
+      if (path.endsWith("/steps")) return Response.json({ items: [], next_cursor: null });
+      return Response.json({ procedure_run_id: "p1", state: "waiting_for_input", closure: null });
+    }),
+  );
+  mount();
+  fireEvent.change(await screen.findByLabelText("Qubit"), { target: { value: "Q12" } });
+  fireEvent.change(screen.getByLabelText("Amplitude"), { target: { value: "0.4" } });
+  fireEvent.change(screen.getByLabelText("Sample ID"), { target: { value: "chip" } });
+  fireEvent.change(screen.getByLabelText("Operator"), { target: { value: "reviewer" } });
+  expect(screen.getByRole("button", { name: "Start acquisition" })).toBeDisabled();
+  fireEvent.click(screen.getByRole("button", { name: "Preview" }));
+  await screen.findByText("Preview ready");
+  fireEvent.click(screen.getByRole("button", { name: "Start acquisition" }));
+  await screen.findByRole("alert");
+  fireEvent.click(screen.getByRole("button", { name: "Start acquisition" }));
+  await screen.findByText("Procedure progress");
+  expect(submitted).toHaveLength(2);
+  expect(submitted[0]?.request_key).toBe(submitted[1]?.request_key);
+  expect(new URLSearchParams(window.location.search).get("procedure")).toBe("p1");
 });

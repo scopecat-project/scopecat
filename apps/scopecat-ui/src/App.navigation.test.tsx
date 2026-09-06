@@ -106,6 +106,10 @@ vi.mock("./features/proposals/RunProposals", () => ({
   RunProposals: () => <div>Proposal details</div>,
 }));
 
+vi.mock("./features/launch/LaunchWorkspace", () => ({
+  LaunchWorkspace: () => <div>Calibration launcher</div>,
+}));
+
 const RUNS = [projectRun("run-1"), projectRun("run-2")];
 let projectEventListener: ((event: Event) => void) | undefined;
 let openEventListener: ((event: Event) => void) | undefined;
@@ -1018,3 +1022,12 @@ function canonicalQueryCallCounts(): number[] {
     vi.mocked(getRunAnalysisSummaries).mock.calls.length,
   ];
 }
+
+it("retains the calibration route and procedure when navigating back", async () => {
+  window.history.replaceState(null, "", "/?procedure=p1#configuration");
+  renderApp();
+  fireEvent.click(await screen.findByRole("button", { name: "Calibrations" }));
+  expect(await screen.findByText("Calibration launcher")).toBeVisible();
+  expect(window.location.hash).toBe("#launch");
+  expect(new URLSearchParams(window.location.search).get("procedure")).toBe("p1");
+});
