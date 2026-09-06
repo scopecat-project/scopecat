@@ -88,22 +88,27 @@ hash/generation and calls `lab.procedures.submit`, returning `procedure_id`.
 Callbacks must not acquire data or activate configuration inside this bounded
 request. This is a trusted project-code contract, not a sandbox.
 
-The server separately wakes a project process for the admitted procedure. Its
-normal `resume` operation uses the existing durable procedure and lease rules;
-HTTP disconnects do not cancel it. The process waits across interpretation input,
-then continues until closure or attention. Multiple wakeups are deduplicated
-locally, while the durable lease remains authoritative across processes. Process
-output goes to `.scopecat/console-worker.log`. A failed spawn does not erase the
-submission: the response retains the procedure ID and reports `dispatch_error`.
-The progress view offers Resume execution and links to child runs and Decisions.
-Its procedure ID is retained in the URL for reopening the page.
+The server manages project processes for explicitly dispatched procedures, with
+at most two live workers. A worker runs the normal durable `resume` operation
+until closure, attention, or interpretation input, then exits. Waiting for review
+consumes no process. The manager observes submitted review input and wakes ready
+procedures; HTTP disconnects do not cancel execution. Durable leases remain the
+authority across processes.
 
-Workers exit on daemon connection failure. After a daemon restart or process
-failure, reopen progress and request resume for a runnable procedure; this does
-not bypass attention or retry a failed hardware step. Configuration acceptance
-remains part of the declared procedure and its review policy. The generic GUI
-does not accept calibration parameters itself. Existing projects without a
-provider show an empty state.
+Manager membership is retained in `.scopecat/console-procedures.json`. On daemon
+restart, only previously managed, ready procedures are eligible to resume; other
+CLI procedures are not automatically adopted. An observed nonzero worker exit
+pauses automatic dispatch until an explicit Resume execution request. Attention
+and closed procedures leave the manager. This is process management, not a
+hardware recovery or procedure cancellation protocol. Daemon shutdown does not
+forcibly kill hardware workers.
+
+Process output goes to `.scopecat/console-worker.log`. A failed spawn retains the
+procedure ID and reports `dispatch_error`. The progress view offers Resume
+execution and links to child runs and Decisions; its procedure ID remains in the
+URL. Configuration acceptance stays in the declared procedure and review policy.
+The generic GUI does not accept calibration parameters itself. Existing projects
+without a provider show an empty state.
 
 Decision review renders retained run, sample and project analysis publications
 inline, including curves, facts and proposed parameter differences. Table changes

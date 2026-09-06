@@ -97,7 +97,7 @@ def test_dispatch_deduplicates_live_workers(tmp_path):
 
     from scopecat_server.services.project_workers import ProjectProcedureWorkers
 
-    workers = ProjectProcedureWorkers(lambda: tmp_path)
+    workers = ProjectProcedureWorkers(lambda: tmp_path, lambda _: "ready")
     child = Mock()
     child.poll.return_value = None
     with patch(
@@ -111,27 +111,117 @@ def test_dispatch_deduplicates_live_workers(tmp_path):
         assert spawn.call_count == 2
 
 
-def test_worker_continues_after_review_and_stops_when_closed():
+def test_worker_exits_at_review_without_polling():
     from unittest.mock import Mock
 
     from scopecat.application.launch_worker import run_procedure
 
-    first = SimpleNamespace(state="ready", resume=Mock())
-    repeated = SimpleNamespace(state="ready", resume=Mock())
-    lab = SimpleNamespace(
-        procedures=SimpleNamespace(
-            get=Mock(
-                side_effect=[
-                    first,
-                    SimpleNamespace(state="waiting_for_input"),
-                    repeated,
-                    SimpleNamespace(state="closed"),
-                ]
-            )
-        )
+    handle = SimpleNamespace(state="waiting_for_input", resume=Mock())
+    lab = SimpleNamespace(procedures=SimpleNamespace(get=Mock(return_value=handle)))
+    run_procedure(lab, "p1")
+    handle.resume.assert_not_called()
+    lab.procedures.get.assert_called_once_with("p1")
+    handle.state = "ready"
+    run_procedure(lab, "p1")
+    handle.resume.assert_called_once()
+
+
+def test_manager_recovers_waiting_members_and_bounds_processes(tmp_path):
+    from unittest.mock import Mock
+
+    from scopecat_server.services.project_workers import ProjectProcedureWorkers
+
+    states = {"p1": "waiting_for_input", "p2": "ready"}
+    manager = ProjectProcedureWorkers(
+        lambda: tmp_path, states.__getitem__, max_workers=1
     )
-    with patch("scopecat.application.launch_worker.time.sleep") as sleep:
-        run_procedure(lab, "p1")
-    first.resume.assert_called_once()
-    repeated.resume.assert_called_once()
-    sleep.assert_called_once_with(1)
+    with patch("scopecat_server.services.project_workers.subprocess.Popen") as spawn:
+        manager.dispatch("p1")
+        spawn.assert_not_called()
+        restored = ProjectProcedureWorkers(
+            lambda: tmp_path, states.__getitem__, max_workers=1
+        )
+        states["p1"] = "ready"
+        first, second = Mock(), Mock()
+        first.poll.return_value = second.poll.return_value = None
+        spawn.side_effect = [first, second]
+        restored.tick()
+        restored.dispatch("p2")
+        assert spawn.call_count == 1
+        states["p1"] = "closed"
+        first.poll.return_value = 0
+        restored.tick()
+        assert spawn.call_count == 2
+        assert spawn.call_args.args[0][-1] == "p2"
+
+
+def test_failed_process_requires_explicit_dispatch_even_after_restart(tmp_path):
+    from unittest.mock import Mock
+
+    from scopecat_server.services.project_workers import ProjectProcedureWorkers
+
+    manager = ProjectProcedureWorkers(lambda: tmp_path, lambda _: "ready")
+    child = Mock()
+    child.poll.return_value = None
+    with patch(
+        "scopecat_server.services.project_workers.subprocess.Popen", return_value=child
+    ) as spawn:
+        manager.dispatch("p1")
+        child.poll.return_value = 1
+        manager.tick()
+        restored = ProjectProcedureWorkers(lambda: tmp_path, lambda _: "ready")
+        restored.tick()
+        spawn.assert_called_once()
+        restored.dispatch("p1")
+        assert spawn.call_count == 2
+
+
+def test_review_arriving_before_previous_worker_exit_is_not_lost(tmp_path):
+    from unittest.mock import Mock
+
+    from scopecat_server.services.project_workers import ProjectProcedureWorkers
+
+    state = ["ready"]
+    manager = ProjectProcedureWorkers(lambda: tmp_path, lambda _: state[0])
+    child = Mock()
+    child.poll.return_value = None
+    with patch(
+        "scopecat_server.services.project_workers.subprocess.Popen", return_value=child
+    ) as spawn:
+        manager.dispatch("p1")
+        state[0] = "waiting_for_input"
+        manager.tick()
+        state[0] = "ready"
+        manager.tick()
+        spawn.assert_called_once()
+        child.poll.return_value = 0
+        manager.tick()
+        assert spawn.call_count == 2
+
+
+def test_manager_drops_terminal_and_attention_procedures(tmp_path):
+    from unittest.mock import Mock
+
+    from scopecat_server.services.project_workers import ProjectProcedureWorkers
+
+    states = {"closed": "waiting_for_input", "attention": "waiting_for_input"}
+    manager = ProjectProcedureWorkers(lambda: tmp_path, states.__getitem__)
+    for key in states:
+        manager.dispatch(key)
+    states.update(closed="closed", attention="attention_required")
+    manager.tick()
+    # Durable cancellation is represented by closed state; neither it nor
+    # attention may be restarted just because the daemon restarts.
+    restarted = ProjectProcedureWorkers(lambda: tmp_path, states.__getitem__)
+    with patch.object(restarted, "_spawn", Mock()) as spawn:
+        restarted.tick()
+        spawn.assert_not_called()
+    assert restarted._load() == {}
+
+
+def test_http_lifespan_starts_and_stops_manager():
+    with patch("scopecat_server.http.transport.ProjectProcedureWorkers") as manager:
+        with TestClient(create_app(SimpleNamespace(project_root=Path.cwd()))):
+            manager.return_value.start.assert_called_once()
+            manager.return_value.stop.assert_not_called()
+        manager.return_value.stop.assert_called_once()

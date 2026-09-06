@@ -181,7 +181,7 @@ def serve_project(
                 host=host,
                 port=actual_port,
                 access_log=False,
-                lifespan="off",
+                lifespan="on",
             )
         )
         server.run(sockets=[listener])

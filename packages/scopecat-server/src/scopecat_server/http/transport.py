@@ -8,7 +8,8 @@ import asyncio
 import json
 import subprocess
 import sys
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncGenerator, AsyncIterator, Callable
+from contextlib import asynccontextmanager
 from pathlib import Path, PurePosixPath
 from typing import Annotated, Literal, cast, override
 
@@ -287,7 +288,20 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
 ) -> FastAPI:
     """Create transport routes around an already-composed daemon application."""
 
-    app = FastAPI(title="Scopecat daemon", version="1")
+    project_workers = ProjectProcedureWorkers(
+        lambda: application.project_root,
+        lambda procedure_id: application.automation.get(procedure_id).state,
+    )
+
+    @asynccontextmanager
+    async def lifespan(_app: FastAPI) -> AsyncGenerator[None]:
+        project_workers.start()
+        try:
+            yield
+        finally:
+            project_workers.stop()
+
+    app = FastAPI(title="Scopecat daemon", version="1", lifespan=lifespan)
     app.add_middleware(
         TrustedHostMiddleware,
         allowed_hosts=["127.0.0.1", "localhost", "[::1]", "testserver"],
@@ -297,8 +311,6 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
         max_body_bytes=max_command_body_bytes,
     )
     _install_error_mapping(app)
-
-    project_workers = ProjectProcedureWorkers(lambda: application.project_root)
 
     def launch_call(command: LaunchRequest) -> dict[str, JsonValue]:
         try:

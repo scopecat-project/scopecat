@@ -5,26 +5,23 @@ from __future__ import annotations
 import contextlib
 import json
 import sys
-import time
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import scopecat as sc
 from scopecat.project import load_project
 
 from .launch import LaunchRequest
 
+if TYPE_CHECKING:
+    from scopecat.api.lab import LabClient
 
-def run_procedure(lab, procedure_id: str) -> None:
-    """Wait across operator review; durable state remains authoritative."""
-    while True:
-        handle = lab.procedures.get(procedure_id)
-        state = handle.state
-        if state in {"closed", "attention_required"}:
-            return
-        if state == "ready":
-            handle.resume()
-        else:
-            time.sleep(1)
+
+def run_procedure(lab: LabClient, procedure_id: str) -> None:
+    """Run until the next durable boundary; review waits belong to the manager."""
+    handle = lab.procedures.get(procedure_id)
+    if handle.state == "ready":
+        handle.resume()
 
 
 def main() -> None:
