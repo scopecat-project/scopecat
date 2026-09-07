@@ -100,6 +100,70 @@ it.each([
   );
 });
 
+it("shows an uncertain current child as attention even when its parent is ready and managed", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () =>
+      Response.json({
+        ...view({
+          dispatch: { management: "active", worker_running: false },
+          dispatch_blocked_reason: "A child run has an unknown outcome; inspect retained evidence.",
+        }),
+        current_child: {
+          step_key: "diagnostic",
+          run: {
+            control: {
+              state: "attention_required",
+              sequence: 1,
+              completed_point_count: 1,
+              attention_reason: "External effect needs reconciliation",
+              point_plan: {
+                initial_point_count: 1,
+                accepted_point_count: 1,
+                point_limit: 1,
+                decision_count: 0,
+                optimizer_attempt_count: 0,
+                operator_request_count: 0,
+                plan_closed: true,
+              },
+              admission: {
+                run_id: "retained-child",
+                admitted_at: NOW,
+                plan: {
+                  experiment_id: "diagnostic",
+                  point_count: 1,
+                  initial_point_count: 1,
+                  point_limit: 1,
+                  coordinates: [],
+                  sampled_points: [],
+                  sampled_points_truncated: false,
+                },
+              },
+            },
+            snapshot: {
+              run_id: "retained-child",
+              config_content_hash: "sha256:config",
+              outcome: { result: "interrupted", certainty: "indeterminate" },
+            },
+            resources: [],
+          },
+        },
+      }),
+    ),
+  );
+  mount();
+  expect(await screen.findByText("Needs attention", { exact: true })).toHaveAttribute(
+    "role",
+    "status",
+  );
+  expect(screen.queryByText("Queued for a worker")).toBeNull();
+  expect(screen.queryByRole("button", { name: "Dispatch existing procedure" })).toBeNull();
+  expect(screen.getByRole("link", { name: /Open current child run/ })).toHaveAttribute(
+    "href",
+    "?procedure=p1&run=retained-child#runs",
+  );
+});
+
 it("shows failed closure and its reason without suggesting retry", async () => {
   const data = view();
   data.procedure.state = "closed";
