@@ -434,7 +434,12 @@ test("accepts a notebook candidate in the GUI and preserves its provenance", asy
   ).toBeVisible();
   await expect(analyses.getByText("Showing 6 of 6 points across 2 layers")).toBeVisible();
   await expect(analyses.getByText(/Declared fixture residual bounds/)).toBeVisible();
-  await analyses.locator("figure").screenshot({ path: test.info().outputPath("layered-fit.png") });
+  const layeredFigure = analyses.locator("figure");
+  await layeredFigure.getByText("Retained source and projection", { exact: true }).first().click();
+  await expect(
+    layeredFigure.getByText("Dataset output in this publication:").first(),
+  ).toBeVisible();
+  await layeredFigure.screenshot({ path: test.info().outputPath("layered-fit.png") });
   const proposals = page.getByTestId("run-proposals-card");
   await expect(proposals.getByText(candidate.proposalId, { exact: true })).toBeVisible();
   await expect(proposals.getByText("98% confidence", { exact: true })).toBeVisible();
