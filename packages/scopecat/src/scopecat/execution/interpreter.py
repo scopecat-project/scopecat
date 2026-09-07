@@ -21,6 +21,7 @@ from scopecat.execution.effects.domain import (
 from scopecat.execution.evidence import (
     build_instrument_state_evidence,
     build_terminal_contents,
+    compilation_cost_ref,
     domain_execution_evidence_ref,
     instrument_state_evidence_ref,
 )
@@ -75,6 +76,7 @@ from scopecat.optimization import (
     OptimizationComplete,
 )
 from scopecat.records.content import ModelWrite
+from scopecat.records.costs import RunCompilationCost
 from scopecat.records.execution import (
     InstrumentStateEvidence,
     RecoveryGroupCompletion,
@@ -384,8 +386,11 @@ def _execute_run(
         ),
         instrument_state=instrument_state,
         domain_execution=domain_execution,
+        compilation_cost=program.compilation_cost,
     )
-    models = _terminal_evidence_model_writes(instrument_state, domain_execution)
+    models = _terminal_evidence_model_writes(
+        instrument_state, domain_execution, program.compilation_cost
+    )
     try:
         snapshot = session.commit_terminal(
             TerminalRunCommit(
@@ -423,8 +428,11 @@ def _execute_run(
 def _terminal_evidence_model_writes(
     instrument_state: InstrumentStateEvidence | None,
     domain_execution: DomainExecutionEvidence | None,
+    compilation_cost: RunCompilationCost | None = None,
 ) -> list[ModelWrite]:
     models: list[ModelWrite] = []
+    if compilation_cost is not None:
+        models.append(ModelWrite(ref=compilation_cost_ref(), value=compilation_cost))
     if instrument_state is not None:
         models.append(
             ModelWrite(

@@ -11,6 +11,7 @@ from scopecat.inspection import (
     CompiledArtifactInspection,
     CompiledProgramInspectionQuery,
 )
+from scopecat.records.costs import RunCompilationCost
 from scopecat.sdk.payloads import PayloadCodecRegistry
 
 if TYPE_CHECKING:
@@ -297,6 +298,8 @@ class RunProgram:
         repr=False,
         compare=False,
     )
+
+    compilation_cost: RunCompilationCost | None = field(default=None, compare=False)
 
     @property
     def experiment_id(self) -> str:

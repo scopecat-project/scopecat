@@ -16,6 +16,7 @@ from scopecat.kernel.errors import RunFinalizationFailed
 from scopecat.kernel.state import StateValue
 from scopecat.planning.system import ExperimentSystem
 from scopecat.records.config import instrument_bindings
+from scopecat.records.costs import RunMeasuredCosts
 from scopecat.records.run import RunSnapshot
 from scopecat.sdk.instruments.backend import (
     BackendInvokeRequest,
@@ -103,6 +104,13 @@ def _assert_fenced_unknown(
     [run_id] = [
         item.run_id for item in client.list_runs().items if item.run_id not in previous
     ]
+    measured = client.get_run_measured_costs(run_id)
+    assert measured.compilation is None  # Terminal persistence is unconfirmed.
+    assert (
+        measured.operations
+    )  # Earlier costs remain readable before a terminal record.
+    if problem_code is not None:
+        assert sum(item.status == "unknown" for item in measured.operations) == 1
     detail = client.get_run(run_id)
     assert detail.control.state == "attention_required"
     assert detail.control.completed_point_count == 0
@@ -328,3 +336,66 @@ def create_backend(root):
         assert absent.value.response.status_code == 410
         assert ResidencyProbe(tmp_path).counts() == (1, 1, 1)
     assert ResidencyProbe(tmp_path).counts() == (1, 1, 1)
+
+
+def test_measured_costs_compare_cold_warm_and_explicit_reconnect(
+    tmp_path: Path,
+) -> None:
+    from scopecat.daemon.wire import InstrumentReleaseCommand
+
+    target = VolatileProgramTarget()
+    probe = ResidencyProbe(tmp_path)
+    endpoint = _worker(tmp_path)
+    with _lab(tmp_path, endpoint, target) as (lab, client):
+        summaries: list[RunMeasuredCosts] = []
+        for index in range(3):
+            if index == 2:
+                [binding] = instrument_bindings(residency_config())
+                client.release_instruments(
+                    InstrumentReleaseCommand(instrument_ids=(binding.id,))
+                )
+            result = lab.run(residency_experiment(2))
+            assert result.status == "completed"
+            summary = client.get_run_measured_costs(result.snapshot.run_id)
+            summaries.append(summary)
+            assert summary.compilation is not None
+            assert summary.compilation.seconds >= 0
+            assert summary.compilation.lazy_compilation_seconds is None
+            assert len(summary.finalizations) == 1
+            assert summary.finalizations[0].seconds >= 0
+            assert summary.terminal_commit_seconds is None
+            assert not summary.truncated
+            assert (
+                len(summary.operations) == 7
+            )  # One setup plus prepare/trigger/collect per point.
+            measured = [
+                item.measured
+                for item in summary.operations
+                if item.measured is not None
+            ]
+            size = len(target.content.encode("utf-8"))
+            assert sum(item.uploaded_bytes or 0 for item in measured) == size
+            assert sum(item.reused_bytes or 0 for item in measured) == size * 2
+            assert {item.retained_bytes for item in measured} == {size}
+            assert all(item.rendered_bytes is None for item in measured)
+            assert (
+                len([item for item in measured if item.transfer_seconds is not None])
+                == 1
+            )
+            assert (
+                len([item for item in measured if item.acquire_seconds is not None])
+                == 2
+            )
+        contexts = [
+            {item.connection_context for item in summary.operations}
+            for summary in summaries
+        ]
+        assert contexts == [{"cold"}, {"warm"}, {"reconnect"}]
+        generations = [
+            {item.connection_generation for item in summary.operations}
+            for summary in summaries
+        ]
+        assert len(generations[0]) == 1
+        assert generations[0] == generations[1]
+        assert generations[1].isdisjoint(generations[2])
+        assert probe.counts() == (3, 6, 6)

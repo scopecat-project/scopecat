@@ -250,6 +250,7 @@ class MountedInstrumentRouter:
         return DriverSuccess(
             _mount_state_readback(outcome.value, mount.path),
             metadata=outcome.metadata,
+            measured_cost=outcome.measured_cost,
         )
 
     def collect(
@@ -291,6 +292,7 @@ class MountedInstrumentRouter:
                 metadata=outcome.value.metadata,
             ),
             metadata=outcome.metadata,
+            measured_cost=outcome.measured_cost,
         )
 
     def prepare_acquisitions(

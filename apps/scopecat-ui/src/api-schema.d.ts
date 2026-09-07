@@ -956,6 +956,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/runs/{run_id}/measured-costs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Run Measured Costs */
+        get: operations["get_run_measured_costs_api_v1_runs__run_id__measured_costs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/runs/{run_id}/measurements/live": {
         parameters: {
             query?: never;
@@ -1865,6 +1882,7 @@ export interface components {
          *     reconcile state before it can safely issue another command or retry.
          */
         ApplyReceipt: {
+            measured_cost?: components["schemas"]["OperationCostMeasurement"] | null;
             metadata?: components["schemas"]["JsonMetadata"];
             /**
              * Problems
@@ -2002,6 +2020,7 @@ export interface components {
          *     duplicating an external acquisition.
          */
         CollectReceipt: {
+            measured_cost?: components["schemas"]["OperationCostMeasurement"] | null;
             metadata?: components["schemas"]["JsonMetadata"];
             /**
              * Problems
@@ -3731,6 +3750,7 @@ export interface components {
          * @description Outcome reported after one atomic instrument operation.
          */
         InvokeReceipt: {
+            measured_cost?: components["schemas"]["OperationCostMeasurement"] | null;
             metadata?: components["schemas"]["JsonMetadata"];
             /**
              * Problems
@@ -4649,6 +4669,35 @@ export interface components {
             /** Label */
             label?: string | null;
             value_type: components["schemas"]["InstrumentOperationScalarWire"];
+        };
+        /**
+         * OperationCostMeasurement
+         * @description Adapter measurements for one physical operation, never inferred estimates.
+         *
+         *     Timings may overlap each other and the host's backend-call wall interval.
+         *     Retained bytes is a current live-storage gauge, not transferred traffic.
+         *     None means unavailable, including when a device cannot report a counter.
+         */
+        OperationCostMeasurement: {
+            /** Acquire Seconds */
+            acquire_seconds?: number | null;
+            /** Rendered Bytes */
+            rendered_bytes?: number | null;
+            /** Retained Bytes */
+            retained_bytes?: number | null;
+            /** Reused Bytes */
+            reused_bytes?: number | null;
+            /** Source */
+            source: string;
+            /** Transfer Seconds */
+            transfer_seconds?: number | null;
+            /**
+             * Unavailable Reason
+             * @default not measured by this adapter
+             */
+            unavailable_reason: string;
+            /** Uploaded Bytes */
+            uploaded_bytes?: number | null;
         };
         /** OperationSpec */
         OperationSpec: {
@@ -5732,6 +5781,27 @@ export interface components {
             /** Content */
             content: string;
         };
+        /**
+         * RunCompilationCost
+         * @description Observed initial planning wall time; excludes lazy target compilation.
+         */
+        RunCompilationCost: {
+            /** Lazy Compilation Seconds */
+            lazy_compilation_seconds?: number | null;
+            /** Seconds */
+            seconds: number;
+            /**
+             * Source
+             * @default client_initial_planning_wall
+             * @constant
+             */
+            source: "client_initial_planning_wall";
+            /**
+             * Unavailable Reason
+             * @default lazy target compilation is not measured separately
+             */
+            unavailable_reason: string;
+        };
         RunConfigSource: components["schemas"]["ConfigRegistryRunConfigSource"] | components["schemas"]["AnalysisCandidateRunConfigSource"];
         /**
          * RunContentPage
@@ -6073,12 +6143,93 @@ export interface components {
             truncated: boolean;
         };
         /**
+         * RunFinalizationCost
+         * @description Run-host cleanup/readback/release wall interval, excluding terminal commit.
+         */
+        RunFinalizationCost: {
+            /** Operation Id */
+            operation_id: string;
+            /** Seconds */
+            seconds: number;
+            /**
+             * Source
+             * @default server_hardware_finalization_wall
+             * @constant
+             */
+            source: "server_hardware_finalization_wall";
+        };
+        /**
+         * RunMeasuredCosts
+         * @description Saved observations; no inferred totals over overlapping intervals.
+         */
+        RunMeasuredCosts: {
+            compilation?: components["schemas"]["RunCompilationCost"] | null;
+            /**
+             * Finalizations
+             * @default []
+             */
+            finalizations: components["schemas"]["RunFinalizationCost"][];
+            /**
+             * Operations
+             * @default []
+             */
+            operations: components["schemas"]["RunOperationCost"][];
+            /** Terminal Commit Seconds */
+            terminal_commit_seconds?: null;
+            /**
+             * Terminal Commit Unavailable Reason
+             * @default the evidence commit cannot measure its own durable completion
+             */
+            terminal_commit_unavailable_reason: string;
+            /**
+             * Truncated
+             * @default false
+             */
+            truncated: boolean;
+        };
+        /**
          * RunMeasurementDatasetResult
          * @description Internal dataset-loading payload wrapped by the public run facade.
          */
         RunMeasurementDatasetResult: {
             dataset: components["schemas"]["MeasurementDataset"];
             dataset_entry: components["schemas"]["ContentEntry"];
+        };
+        /**
+         * RunOperationCost
+         * @description One server-observed operation interval and optional adapter subintervals.
+         */
+        RunOperationCost: {
+            /**
+             * Connection Context
+             * @enum {string}
+             */
+            connection_context: "cold" | "warm" | "reconnect";
+            /** Connection Generation */
+            connection_generation: string;
+            /** Instrument Id */
+            instrument_id: string;
+            measured?: components["schemas"]["OperationCostMeasurement"] | null;
+            /**
+             * Operation
+             * @enum {string}
+             */
+            operation: "apply" | "invoke" | "collect" | "prepare";
+            /** Operation Id */
+            operation_id: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "completed" | "rejected" | "unknown";
+            /** Wall Seconds */
+            wall_seconds: number;
+            /**
+             * Wall Source
+             * @default server_backend_call
+             * @constant
+             */
+            wall_source: "server_backend_call";
         };
         /**
          * RunOutcome
@@ -8756,6 +8907,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RunFailureEvidence"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_run_measured_costs_api_v1_runs__run_id__measured_costs_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunMeasuredCosts"];
                 };
             };
             /** @description Validation Error */

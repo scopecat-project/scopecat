@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable, Iterable
 from contextlib import suppress
 from dataclasses import dataclass, field
+from hashlib import sha256
 from threading import Condition, RLock
 from typing import Literal, Self
 
@@ -212,6 +213,8 @@ class OwnedInstrument:
         "_instrument_id",
         "_owner",
         "_reused_connection",
+        "connection_context",
+        "connection_generation",
     )
 
     def __init__(
@@ -224,6 +227,8 @@ class OwnedInstrument:
         epoch: int,
         description: InstrumentDescription,
         reused_connection: bool,
+        connection_generation: str,
+        connection_context: Literal["cold", "warm", "reconnect"],
     ) -> None:
         self._actor = actor
         self._instrument_id = instrument_id
@@ -232,6 +237,10 @@ class OwnedInstrument:
         self._epoch = epoch
         self._description = description
         self._reused_connection = reused_connection
+        self.connection_generation = connection_generation
+        self.connection_context: Literal["cold", "warm", "reconnect"] = (
+            connection_context
+        )
 
     @property
     def instrument_id(self) -> str:
@@ -331,6 +340,7 @@ class _InstrumentActor:
         self._owned: OwnedInstrument | None = None
         self._state_cache: _InstrumentStateCache | None = None
         self._epoch = 0
+        self._connection_count = 0
         self._shutdown = False
 
     def acquire(
@@ -362,6 +372,7 @@ class _InstrumentActor:
             reused_connection = self._handle is not None
             if self._handle is None:
                 connected = connect()
+                self._connection_count += 1
                 self._endpoint = endpoint
                 self._handle = connected.handle
                 self._description = connected.description
@@ -377,6 +388,16 @@ class _InstrumentActor:
                 epoch=self._epoch,
                 description=description,
                 reused_connection=reused_connection,
+                connection_generation=sha256(
+                    f"{self._handle.endpoint_id}:{self._handle.token}".encode()
+                ).hexdigest(),
+                connection_context=(
+                    "warm"
+                    if reused_connection
+                    else "reconnect"
+                    if self._connection_count > 1
+                    else "cold"
+                ),
             )
             self._owned = owned
             self._state_cache = _InstrumentStateCache(instrument_id)
@@ -689,6 +710,7 @@ class InstrumentActorRegistry:
 
     def __init__(self) -> None:
         self._actors: dict[str, _InstrumentActor] = {}
+        self._previously_connected: set[str] = set()
         self._lock = RLock()
         self._condition = Condition(self._lock)
         self._acquiring: dict[str, int] = {}
@@ -737,6 +759,14 @@ class InstrumentActorRegistry:
             retiring = exclusivity_key in self._retirements
             current = self._actors.get(exclusivity_key) is actor
             if accepting and not retiring and current:
+                # Measurement context survives explicit idle-actor retirement,
+                # but makes no claim about an earlier daemon process.
+                if (
+                    owned.connection_context == "cold"
+                    and exclusivity_key in self._previously_connected
+                ):
+                    owned.connection_context = "reconnect"
+                self._previously_connected.add(exclusivity_key)
                 self._finish_acquire_locked(exclusivity_key)
                 return owned
 

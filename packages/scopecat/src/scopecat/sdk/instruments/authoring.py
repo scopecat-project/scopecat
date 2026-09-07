@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 from pydantic import JsonValue
 
 from scopecat.kernel.quantity import Quantity
+from scopecat.records.costs import OperationCostMeasurement
 from scopecat.records.instrument import CommandChannelBinding, ObservationSource
 from scopecat.records.measurement import MeasurementAcquisitionValue
 from scopecat.sdk.instruments.members import (
@@ -212,18 +213,21 @@ class DriverReadback:
 class DriverSuccess[T]:
     value: T
     metadata: dict[str, JsonValue] = field(default_factory=dict)
+    measured_cost: OperationCostMeasurement | None = None
 
 
 @dataclass(frozen=True, slots=True)
 class DriverRejected:
     problems: tuple[Problem, ...]
     metadata: dict[str, JsonValue] = field(default_factory=dict)
+    measured_cost: OperationCostMeasurement | None = None
 
 
 @dataclass(frozen=True, slots=True)
 class DriverUnknown:
     problems: tuple[Problem, ...]
     metadata: dict[str, JsonValue] = field(default_factory=dict)
+    measured_cost: OperationCostMeasurement | None = None
 
 
 type DriverOutcome[T] = DriverSuccess[T] | DriverRejected | DriverUnknown

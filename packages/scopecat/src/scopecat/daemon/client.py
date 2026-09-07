@@ -220,6 +220,7 @@ from scopecat.records.content import (
     ContentEntry,
     InlinePayloadBody,
 )
+from scopecat.records.costs import RunMeasuredCosts
 from scopecat.records.instrument import (
     InstrumentStateCacheReadback,
     InstrumentStateReadback,
@@ -1732,6 +1733,12 @@ class DaemonClient:
             f"{quote(generation, safe='')}/diagnostics",
             params={"raw": "true" if raw else "false"},
         ).content
+
+    def get_run_measured_costs(self, run_id: str) -> RunMeasuredCosts:
+        return self._get_model(
+            f"{_API_PREFIX}/runs/{quote(run_id, safe='')}/measured-costs",
+            RunMeasuredCosts,
+        )
 
     def get_run_failure_evidence(self, run_id: str) -> RunFailureEvidence:
         return self._get_model(

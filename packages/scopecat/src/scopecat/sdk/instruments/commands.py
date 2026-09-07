@@ -17,6 +17,7 @@ from scopecat.kernel.interface_identity import InterfaceId
 from scopecat.kernel.state import PayloadRef, StateValue
 from scopecat.program.measurement_types import MeasurementDType
 from scopecat.records.content import CommandPayload
+from scopecat.records.costs import OperationCostMeasurement
 from scopecat.records.instrument import (
     CommandChannelBinding as _CommandChannelBinding,
 )
@@ -104,6 +105,7 @@ class ApplyReceipt(BaseModel):
     problems: tuple[Problem, ...] = ()
     readback: _InstrumentStateReadback | None = None
     metadata: JsonMetadata = Field(default_factory=dict)
+    measured_cost: OperationCostMeasurement | None = None
 
     @model_validator(mode="after")
     def validate_outcome_truth_table(self) -> ApplyReceipt:
@@ -323,6 +325,7 @@ class InvokeReceipt(BaseModel):
     problems: tuple[Problem, ...] = ()
     readback: _InstrumentStateReadback | None = None
     metadata: JsonMetadata = Field(default_factory=dict)
+    measured_cost: OperationCostMeasurement | None = None
 
     @model_validator(mode="after")
     def validate_outcome_truth_table(self) -> InvokeReceipt:
@@ -341,6 +344,7 @@ class AcquisitionPreparationReceipt(BaseModel):
     status: Literal["prepared", "not_prepared", "unknown"] = "prepared"
     problems: tuple[Problem, ...] = ()
     metadata: JsonMetadata = Field(default_factory=dict)
+    measured_cost: OperationCostMeasurement | None = None
 
     @model_validator(mode="after")
     def validate_outcome_truth_table(self) -> AcquisitionPreparationReceipt:
@@ -365,6 +369,7 @@ class CollectReceipt(BaseModel):
     problems: tuple[Problem, ...] = ()
     readback: _InstrumentReadback | None = None
     metadata: JsonMetadata = Field(default_factory=dict)
+    measured_cost: OperationCostMeasurement | None = None
 
     @model_validator(mode="after")
     def validate_readback_outcome(self) -> CollectReceipt:

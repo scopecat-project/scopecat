@@ -11,6 +11,7 @@ import json
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
+from time import perf_counter
 from typing import Literal, cast
 from uuid import uuid4
 
@@ -56,6 +57,7 @@ from scopecat.sdk.instruments import (
     InstrumentDescription,
     InstrumentProviderContext,
     InstrumentProviderDescription,
+    OperationCostMeasurement,
     acquisition,
     acquisition_result,
     interface,
@@ -139,6 +141,7 @@ class VolatileProgramDriver:
         self.instrument_id = instrument_id
         self.connection = uuid4().hex
         self.loaded: str | None = None
+        self.device_bytes = b""
         self.triggered = False
         self.probe.record(self.connection, "connect", None)
 
@@ -170,8 +173,24 @@ class VolatileProgramDriver:
                         ),
                     )
                 )
+            started = perf_counter()
             self.loaded = cast("str", request.arguments["content"])
-            return DriverSuccess(None)
+            self.device_bytes = self.loaded.encode("utf-8")
+            elapsed = perf_counter() - started
+            return DriverSuccess(
+                None,
+                measured_cost=OperationCostMeasurement(
+                    source="testkit_virtual_program_buffer",
+                    transfer_seconds=elapsed,
+                    uploaded_bytes=len(self.device_bytes),
+                    reused_bytes=0,
+                    retained_bytes=len(self.device_bytes),
+                    unavailable_reason=(
+                        "virtual UTF-8 buffer assignment; "
+                        "no waveform rendering or physical bus"
+                    ),
+                ),
+            )
         assert request.target.operation_id == "trigger"
         assert self.loaded is not None, (
             "trigger reached a connection without loaded content"
@@ -188,21 +207,45 @@ class VolatileProgramDriver:
                     ),
                 )
             )
-        return DriverSuccess(None)
+        return DriverSuccess(
+            None,
+            measured_cost=OperationCostMeasurement(
+                source="testkit_virtual_program_buffer",
+                uploaded_bytes=0,
+                reused_bytes=len(self.device_bytes),
+                retained_bytes=len(self.device_bytes),
+                unavailable_reason=(
+                    "loaded program use; "
+                    "transfer/acquisition interval not measured here"
+                ),
+            ),
+        )
 
     def collect(self, request: DriverAcquisition) -> DriverOutcome[DriverReadback]:
         assert self.loaded is not None and self.triggered
         self.probe.record(self.connection, "collect", self.loaded)
         self.triggered = False
+        started = perf_counter()
+        readback = DriverReadback(
+            values={
+                result: MeasurementScalar.create(
+                    dtype="float64", value=1.0, unit="count"
+                )
+                for result in request.results
+            }
+        )
         return DriverSuccess(
-            DriverReadback(
-                values={
-                    result: MeasurementScalar.create(
-                        dtype="float64", value=1.0, unit="count"
-                    )
-                    for result in request.results
-                }
-            )
+            readback,
+            measured_cost=OperationCostMeasurement(
+                source="testkit_virtual_scalar_acquisition",
+                acquire_seconds=perf_counter() - started,
+                uploaded_bytes=0,
+                reused_bytes=0,
+                retained_bytes=len(self.device_bytes),
+                unavailable_reason=(
+                    "virtual scalar construction; no physical bus or waveform rendering"
+                ),
+            ),
         )
 
     def abort(self) -> None:
@@ -210,6 +253,7 @@ class VolatileProgramDriver:
 
     def disconnect(self) -> None:
         self.loaded = None
+        self.device_bytes = b""
         self.triggered = False
         self.probe.record(self.connection, "disconnect", None)
 
