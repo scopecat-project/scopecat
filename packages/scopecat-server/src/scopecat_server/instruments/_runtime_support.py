@@ -346,12 +346,18 @@ def release_instruments(instruments: Iterable[OwnedInstrument]) -> bool:
     return failed
 
 
-def abort_instruments(instruments: Iterable[OwnedInstrument]) -> bool:
+def abort_instruments(
+    instruments: Iterable[OwnedInstrument],
+    *,
+    failures: list[tuple[OwnedInstrument, str, Exception]] | None = None,
+) -> bool:
     failed = False
     for instrument in reversed(tuple(instruments)):
         try:
             instrument.abort()
-        except Exception:
+        except Exception as error:
+            if failures is not None:
+                failures.append((instrument, "abort", error))
             failed = True
     return failed
 
@@ -360,14 +366,21 @@ def fault_ownership(
     runtime: OwnershipRuntime,
     *,
     abort: bool,
+    failures: list[tuple[OwnedInstrument, str, Exception]] | None = None,
 ) -> bool:
-    failed = abort_instruments(runtime.instruments.values()) if abort else False
+    failed = (
+        abort_instruments(runtime.instruments.values(), failures=failures)
+        if abort
+        else False
+    )
     for instrument in reversed(tuple(runtime.instruments.values())):
         try:
             instrument.fault()
         except InstrumentActorConflict:
             continue
-        except Exception:
+        except Exception as error:
+            if failures is not None:
+                failures.append((instrument, "disconnect", error))
             failed = True
     return failed
 

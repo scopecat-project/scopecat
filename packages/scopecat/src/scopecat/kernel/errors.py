@@ -75,6 +75,24 @@ class ComputeExecutionError(OperationFailure):
     """A point-local compute could not execute its declared contract."""
 
 
+class RunFinalizationFailed(ProblemFailure):
+    """Execution evidence exists locally, but terminal persistence is unconfirmed.
+
+    Inspect ``execution_outcome`` and query the saved run before deciding what to
+    do next. This exception never grants permission to repeat a hardware effect.
+    """
+
+    terminal_persistence: Literal["unconfirmed"] = "unconfirmed"
+
+    def __init__(
+        self, *, execution_outcome: RunOutcome, finalization_problems: Sequence[Problem]
+    ) -> None:
+        self.run_id = execution_outcome.run_id
+        self.execution_outcome = execution_outcome
+        self.finalization_problems = tuple(finalization_problems)
+        super().__init__((*execution_outcome.problems, *self.finalization_problems))
+
+
 class RunFailure(ProblemFailure):
     """Base for terminal run failures with a durable outcome."""
 

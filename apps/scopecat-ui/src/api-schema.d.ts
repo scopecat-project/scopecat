@@ -939,6 +939,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/runs/{run_id}/failure-evidence": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Run Failure Evidence */
+        get: operations["get_run_failure_evidence_api_v1_runs__run_id__failure_evidence_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/runs/{run_id}/measurements/live": {
         parameters: {
             query?: never;
@@ -5848,6 +5865,30 @@ export interface components {
         };
         /** @enum {string} */
         RunExecutionSegmentResult: "succeeded" | "failed" | "cancelled" | "interrupted";
+        /** RunFailureEvidence */
+        RunFailureEvidence: {
+            /**
+             * Diagnostics
+             * @default []
+             */
+            diagnostics: components["schemas"]["WorkerDiagnosticLink"][];
+            primary?: components["schemas"]["Problem-Output"] | null;
+            /**
+             * Secondary
+             * @default []
+             */
+            secondary: components["schemas"]["Problem-Output"][];
+            /**
+             * Terminal Persistence
+             * @enum {string}
+             */
+            terminal_persistence: "confirmed" | "unconfirmed";
+            /**
+             * Truncated
+             * @default false
+             */
+            truncated: boolean;
+        };
         /**
          * RunMeasurementDatasetResult
          * @description Internal dataset-loading payload wrapped by the public run facade.
@@ -6731,6 +6772,24 @@ export interface components {
              * @enum {string}
              */
             kind: "virtual";
+        };
+        /** WorkerDiagnosticLink */
+        WorkerDiagnosticLink: {
+            /** Generation */
+            generation: string;
+            /** Href */
+            href?: string | null;
+            /** Instrument Id */
+            instrument_id?: string | null;
+            /** Operation */
+            operation?: string | null;
+            /** Request Id */
+            request_id?: number | null;
+            /**
+             * Retention
+             * @enum {string}
+             */
+            retention: "retained" | "unavailable_active_quota";
         };
     };
     responses: never;
@@ -8471,6 +8530,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RunExecutionSegmentPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_run_failure_evidence_api_v1_runs__run_id__failure_evidence_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunFailureEvidence"];
                 };
             };
             /** @description Validation Error */

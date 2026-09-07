@@ -166,6 +166,7 @@ from .actors import (
 )
 from .backend import (
     InstrumentBackendEndpoint,
+    InstrumentBackendError,
     InstrumentBackendRejected,
     InstrumentBackendUnavailable,
 )
@@ -999,7 +1000,6 @@ class InstrumentRuntime:
                 preparation_problems, indeterminate_reason = (
                     self._prepare_hardware_acquisitions(
                         run_id,
-                        canonical_request.lease_id,
                         context,
                         runtime,
                         canonical_request.batch.actions,
@@ -1017,7 +1017,6 @@ class InstrumentRuntime:
                         indeterminate_reason,
                     ) = self._execute_hardware_actions(
                         run_id,
-                        canonical_request.lease_id,
                         context,
                         runtime,
                         canonical_request.batch.actions,
@@ -1076,6 +1075,7 @@ class InstrumentRuntime:
             "completed_effect_ids": list(completed_effect_ids),
             "effect_receipts": list(effect_receipts),
             "problem_codes": [item.code for item in receipt.problems],
+            "problems": [item.model_dump(mode="json") for item in receipt.problems],
             "value_ids": [value.value_id for value in receipt.values],
         }
         try:
@@ -1092,13 +1092,16 @@ class InstrumentRuntime:
                 status="unknown" if receipt.indeterminate else "failed",
                 details=receipt_evidence,
             )
-        except BackendConflict:
-            self._lose_run_runtime(
-                run_id,
-                runtime,
-                token=request.lease_id,
-                reason="run_hardware_batch_audit_unknown",
-            )
+        except Exception as audit_error:
+            try:
+                self._lose_run_runtime(
+                    run_id,
+                    runtime,
+                    token=request.lease_id,
+                    reason="run_hardware_batch_audit_unknown",
+                )
+            except Exception as quarantine_error:
+                raise audit_error from quarantine_error
             raise
 
     def _preflight_hardware_batch(
@@ -1243,7 +1246,6 @@ class InstrumentRuntime:
     def _execute_hardware_actions(
         self,
         run_id: str,
-        token: str,
         context: RunContext,
         runtime: OwnershipRuntime,
         actions: Sequence[RunHardwareAction],
@@ -1267,7 +1269,6 @@ class InstrumentRuntime:
                 if isinstance(action, RunHardwareApply):
                     state_action = self._execute_hardware_apply(
                         run_id,
-                        token,
                         runtime,
                         action,
                         cast("BackendApplyRequest", backend_request),
@@ -1281,7 +1282,6 @@ class InstrumentRuntime:
                 elif isinstance(action, RunHardwareInvoke):
                     evidence = self._execute_hardware_invoke(
                         run_id,
-                        token,
                         runtime,
                         action,
                         cast("BackendInvokeRequest", backend_request),
@@ -1289,7 +1289,6 @@ class InstrumentRuntime:
                 else:
                     collected, evidence = self._execute_hardware_collect(
                         run_id,
-                        token,
                         runtime,
                         action,
                         cast("BackendCollectRequest", backend_request),
@@ -1359,7 +1358,6 @@ class InstrumentRuntime:
     def _prepare_hardware_acquisitions(
         self,
         run_id: str,
-        token: str,
         context: RunContext,
         runtime: OwnershipRuntime,
         actions: Sequence[RunHardwareAction],
@@ -1381,7 +1379,6 @@ class InstrumentRuntime:
             try:
                 self._execute_hardware_acquisition_prepare(
                     run_id,
-                    token,
                     runtime,
                     action,
                     BackendAcquisitionPlan(acquisitions=tuple(acquisitions)),
@@ -1429,7 +1426,6 @@ class InstrumentRuntime:
     def _execute_hardware_acquisition_prepare(
         self,
         run_id: str,
-        token: str,
         runtime: OwnershipRuntime,
         action: RunHardwareCollect,
         plan: BackendAcquisitionPlan,
@@ -1438,13 +1434,19 @@ class InstrumentRuntime:
         try:
             receipt = execute_instrument_acquisition_prepare(instrument, plan)
         except InstrumentCommandExecutionError as error:
-            self._lose_run_runtime(
-                run_id,
-                runtime,
-                token=token,
+            raise HardwareActionIndeterminate(
+                error.problems
+                or (
+                    hardware_problem(
+                        error.reason,
+                        str(error),
+                        run_id=run_id,
+                        operation_id=action.effect_id,
+                        instrument_id=action.instrument_id,
+                    ),
+                ),
                 reason=f"run_{error.reason}",
-            )
-            raise BackendConflict(str(error)) from error
+            ) from error
         if receipt.status == "unknown":
             raise HardwareActionIndeterminate(
                 receipt.problems,
@@ -1456,7 +1458,6 @@ class InstrumentRuntime:
     def _execute_hardware_apply(
         self,
         run_id: str,
-        token: str,
         runtime: OwnershipRuntime,
         action: RunHardwareApply,
         driver_request: BackendApplyRequest,
@@ -1504,13 +1505,19 @@ class InstrumentRuntime:
                 assignments=command.assignments,
             )
         except InstrumentCommandExecutionError as error:
-            self._lose_run_runtime(
-                run_id,
-                runtime,
-                token=token,
+            raise HardwareActionIndeterminate(
+                error.problems
+                or (
+                    hardware_problem(
+                        error.reason,
+                        str(error),
+                        run_id=run_id,
+                        operation_id=action.effect_id,
+                        instrument_id=action.instrument_id,
+                    ),
+                ),
                 reason=f"run_{error.reason}",
-            )
-            raise BackendConflict(str(error)) from error
+            ) from error
         if receipt.status == "unknown":
             raise HardwareActionIndeterminate(
                 receipt.problems,
@@ -1536,7 +1543,6 @@ class InstrumentRuntime:
     def _execute_hardware_invoke(
         self,
         run_id: str,
-        token: str,
         runtime: OwnershipRuntime,
         action: RunHardwareInvoke,
         backend_request: BackendInvokeRequest,
@@ -1545,13 +1551,19 @@ class InstrumentRuntime:
         try:
             receipt = execute_instrument_invoke(instrument, backend_request)
         except InstrumentCommandExecutionError as error:
-            self._lose_run_runtime(
-                run_id,
-                runtime,
-                token=token,
+            raise HardwareActionIndeterminate(
+                error.problems
+                or (
+                    hardware_problem(
+                        error.reason,
+                        str(error),
+                        run_id=run_id,
+                        operation_id=action.effect_id,
+                        instrument_id=action.instrument_id,
+                    ),
+                ),
                 reason=f"run_{error.reason}",
-            )
-            raise BackendConflict(str(error)) from error
+            ) from error
         if receipt.status == "unknown":
             raise HardwareActionIndeterminate(
                 receipt.problems,
@@ -1568,7 +1580,6 @@ class InstrumentRuntime:
     def _execute_hardware_collect(
         self,
         run_id: str,
-        token: str,
         runtime: OwnershipRuntime,
         action: RunHardwareCollect,
         driver_request: BackendCollectRequest,
@@ -1597,13 +1608,19 @@ class InstrumentRuntime:
         except InstrumentCommandExecutionError as error:
             if error.reason == "instrument_collect_receipt_invalid":
                 raise HardwareActionRejected(error.problems) from error
-            self._lose_run_runtime(
-                run_id,
-                runtime,
-                token=token,
+            raise HardwareActionIndeterminate(
+                error.problems
+                or (
+                    hardware_problem(
+                        error.reason,
+                        str(error),
+                        run_id=run_id,
+                        operation_id=action.effect_id,
+                        instrument_id=action.instrument_id,
+                    ),
+                ),
                 reason=f"run_{error.reason}",
-            )
-            raise BackendConflict(str(error)) from error
+            ) from error
         completed_at = datetime.now(UTC)
         if receipt.status == "unknown":
             raise HardwareActionIndeterminate(
@@ -1761,13 +1778,23 @@ class InstrumentRuntime:
                     try:
                         runtime.instruments[instrument_id].abort()
                     except Exception as error:
-                        self._lose_run_runtime(
-                            run_id,
-                            runtime,
-                            token=token,
-                            reason="run_instrument_abort_unknown",
-                            abort=False,
-                        )
+                        try:
+                            self._record_cleanup_failure(
+                                run_id,
+                                token=token,
+                                instrument_id=instrument_id,
+                                operation="abort",
+                                operation_id=f"{operation_id}.abort.{instrument_id}",
+                                error=error,
+                            )
+                        finally:
+                            self._lose_run_runtime(
+                                run_id,
+                                runtime,
+                                token=token,
+                                reason="run_instrument_abort_unknown",
+                                abort=False,
+                            )
                         raise BackendConflict(
                             "instrument abort failed with unknown state"
                         ) from error
@@ -3662,12 +3689,51 @@ class InstrumentRuntime:
         reason: str,
         abort: bool = True,
     ) -> None:
-        fault_ownership(runtime, abort=abort)
-        self._pop_run_runtime(run_id, expected=runtime)
-        self._mark_run_unknown(
+        failures: list[tuple[OwnedInstrument, str, Exception]] = []
+        fault_ownership(runtime, abort=abort, failures=failures)
+        try:
+            for instrument, operation, error in failures:
+                self._record_cleanup_failure(
+                    run_id,
+                    token=token,
+                    instrument_id=instrument.instrument_id,
+                    operation=operation,
+                    operation_id=f"hardware.fault.{operation}.{instrument.instrument_id}",
+                    error=error,
+                )
+        finally:
+            self._pop_run_runtime(run_id, expected=runtime)
+            self._mark_run_unknown(run_id, token=token, reason=reason)
+
+    def _record_cleanup_failure(
+        self,
+        run_id: str,
+        *,
+        token: str,
+        instrument_id: str,
+        operation: str,
+        operation_id: str,
+        error: Exception,
+    ) -> None:
+        cleanup_problem = hardware_problem(
+            f"run_instrument_{operation}_unknown",
+            f"Instrument {operation} failed with unknown state",
+            run_id=run_id,
+            operation_id=operation_id,
+            instrument_id=instrument_id,
+        )
+        if isinstance(error, InstrumentBackendError) and error.diagnostic is not None:
+            cleanup_problem = cleanup_problem.model_copy(
+                update={"details": {"worker_diagnostic": error.diagnostic}}
+            )
+        self._record_run_operation_event(
             run_id,
             token=token,
-            reason=reason,
+            instrument_id=instrument_id,
+            operation_id=operation_id,
+            event_kind="run_hardware_finalization_failed",
+            status="unknown",
+            details={"problems": [cleanup_problem.model_dump(mode="json")]},
         )
 
     def _mark_unknown(

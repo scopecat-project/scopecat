@@ -46,6 +46,7 @@ from scopecat.daemon.views import (
     RunControlView,
     RunDatasetBytesView,
     RunDetail,
+    RunFailureEvidence,
     RunPlanView,
     RunRequestView,
     RunResourceBlocker,
@@ -432,6 +433,15 @@ class RunService:
             snapshot=snapshot,
             resources=tuple(resources),
         )
+
+    def get_run_failure_evidence(self, run_id: str) -> RunFailureEvidence:
+        from .failure_evidence import failure_evidence
+
+        detail = self.get_run(run_id)
+        page = self._control.list_events(
+            limit=128, after=None, run_id=run_id, latest=True
+        )
+        return failure_evidence(detail, page.items, truncated=len(page.items) == 128)
 
     def get_run_config(self, run_id: str) -> RunConfigView:
         with self._config_errors():

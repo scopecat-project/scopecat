@@ -6,7 +6,7 @@ import json
 import os
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import suppress
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from multiprocessing import get_context
 from multiprocessing.process import BaseProcess
 from pathlib import Path
@@ -42,7 +42,7 @@ from scopecat.sdk.instruments.commands import (
     InvokeReceipt,
 )
 from scopecat.sdk.instruments.contracts import InstrumentDescription
-from scopecat.sdk.instruments.provider import InstrumentProviderDescription
+from scopecat.sdk.instruments.provider import DriverFault, InstrumentProviderDescription
 from scopecat.sdk.payloads import PayloadCodecCatalog
 
 from .backend import (
@@ -53,6 +53,12 @@ from .backend import (
     InstrumentHandle,
     InstrumentHandleInvalid,
     LocalInstrumentBackendEndpoint,
+)
+from .worker_output import (
+    diagnostic_reference,
+    record_exception,
+    record_problem,
+    worker_operation,
 )
 from .worker_process import run_instrument_worker
 from .worker_wire import (
@@ -154,6 +160,7 @@ class _RpcRequest(_WireModel):
     request_id: int = Field(ge=1)
     operation: _Operation
     handle: _ChildHandle | None = None
+    instrument_id: str | None = None
     body: dict[str, JsonValue] | None = None
     attachment_count: int = Field(
         default=0,
@@ -173,6 +180,7 @@ class _RpcError(_WireModel):
     code: _NonEmptyText
     message: _NonEmptyText
     problems: tuple[Problem, ...] = ()
+    diagnostic: dict[str, str | int] | None = None
 
 
 class _RpcResponse(_WireModel):
@@ -187,6 +195,7 @@ class _RpcResponse(_WireModel):
         le=DEFAULT_WIRE_LIMITS.max_attachments,
     )
     error: _RpcError | None = None
+    diagnostic: dict[str, str | int] | None = None
 
     @model_validator(mode="after")
     def validate_outcome(self) -> _RpcResponse:
@@ -208,6 +217,7 @@ class _StartupResponse(_WireModel):
     driver_catalog: dict[str, JsonValue] | None = None
     payload_catalog: dict[str, JsonValue] | None = None
     error: _RpcError | None = None
+    diagnostic: dict[str, str | int] | None = None
 
     @model_validator(mode="after")
     def validate_outcome(self) -> _StartupResponse:
@@ -269,6 +279,7 @@ class SubprocessInstrumentBackendEndpoint:
         self._shutdown_timeout = shutdown_timeout
         self._endpoint_id = uuid4().hex
         self._handles: dict[str, _ChildHandle] = {}
+        self._instrument_ids: dict[str, str] = {}
         self._state_lock = RLock()
         self._send_lock = Lock()
         self._shutdown_lock = Lock()
@@ -283,7 +294,12 @@ class SubprocessInstrumentBackendEndpoint:
         parent, child = context.Pipe(duplex=True)
         process = context.Process(
             target=run_instrument_worker,
-            args=(child, str(self._project_root), instrument_backend_spec),
+            args=(
+                child,
+                str(self._project_root),
+                instrument_backend_spec,
+                self._endpoint_id,
+            ),
             name=f"scopecat-instruments-{self._project_root.name}",
             daemon=True,
         )
@@ -305,7 +321,9 @@ class SubprocessInstrumentBackendEndpoint:
             startup = _recv_model(parent, _StartupResponse)
             if startup.status != "ready":
                 assert startup.error is not None
-                raise InstrumentBackendUnavailable(startup.error.message)
+                raise InstrumentBackendUnavailable(
+                    startup.error.message, diagnostic=startup.error.diagnostic
+                )
             assert startup.provider_id is not None
             assert startup.driver_catalog is not None
             assert startup.payload_catalog is not None
@@ -319,6 +337,7 @@ class SubprocessInstrumentBackendEndpoint:
                 startup.payload_catalog,
             )
             self._worker_pid = startup.worker_pid
+            self._diagnostic = startup.diagnostic
             self._available = True
             self._receiver = Thread(
                 target=self._receive_responses,
@@ -401,6 +420,7 @@ class SubprocessInstrumentBackendEndpoint:
         with self._state_lock:
             self._require_available()
             self._handles[token] = child_handle
+            self._instrument_ids[token] = binding.id
         return ConnectedInstrument(
             handle=InstrumentHandle(endpoint_id=self._endpoint_id, token=token),
             description=description,
@@ -494,6 +514,7 @@ class SubprocessInstrumentBackendEndpoint:
         self._rpc("disconnect", handle=handle)
         with self._state_lock:
             self._handles.pop(handle.token, None)
+            self._instrument_ids.pop(handle.token, None)
 
     def shutdown(self) -> None:
         with self._shutdown_lock:
@@ -568,6 +589,9 @@ class SubprocessInstrumentBackendEndpoint:
             request = self._new_request(
                 operation,
                 handle=child_handle,
+                instrument_id=None
+                if handle is None
+                else self._instrument_ids[handle.token],
                 body=body,
                 attachment_count=0 if frames is None else len(frames.attachments),
             )
@@ -600,7 +624,12 @@ class SubprocessInstrumentBackendEndpoint:
             if not timed_out:
                 pending.event.wait()
         if pending.error is not None:
-            raise pending.error
+            reference = self._request_diagnostic(request)
+            raise InstrumentBackendUnavailable(
+                str(pending.error),
+                diagnostic=reference,
+                problems=pending.error.problems,
+            ) from pending.error
         received = pending.received
         if received is None:
             raise InstrumentBackendUnavailable("instrument worker returned no response")
@@ -609,6 +638,18 @@ class SubprocessInstrumentBackendEndpoint:
             assert response.error is not None
             _raise_worker_error(response.error)
         return received
+
+    def _request_diagnostic(self, request: _RpcRequest) -> dict[str, str | int] | None:
+        if self._diagnostic is None:
+            return None
+        reference = {
+            **self._diagnostic,
+            "request_id": request.request_id,
+            "operation": request.operation,
+        }
+        if request.instrument_id is not None:
+            reference["instrument_id"] = request.instrument_id
+        return reference
 
     def _receive_responses(self) -> None:
         while True:
@@ -668,6 +709,7 @@ class SubprocessInstrumentBackendEndpoint:
         operation: _Operation,
         *,
         handle: _ChildHandle | None = None,
+        instrument_id: str | None = None,
         body: dict[str, JsonValue] | None = None,
         attachment_count: int = 0,
     ) -> _RpcRequest:
@@ -675,6 +717,7 @@ class SubprocessInstrumentBackendEndpoint:
             request_id=self._next_request_id,
             operation=operation,
             handle=handle,
+            instrument_id=instrument_id,
             body=body,
             attachment_count=attachment_count,
         )
@@ -739,6 +782,7 @@ class SubprocessInstrumentBackendEndpoint:
     ) -> None:
         self._available = False
         self._handles.clear()
+        self._instrument_ids.clear()
         for request_id, item in tuple(self._pending.items()):
             if request_id == preserve_request_id:
                 continue
@@ -814,12 +858,14 @@ def _instrument_worker_main(
                 _StartupResponse(
                     status="ready",
                     worker_pid=os.getpid(),
+                    diagnostic=diagnostic_reference({"operation": "startup"}),
                     provider_id=endpoint.provider_id,
                     driver_catalog=_model_to_body(endpoint.driver_catalog),
                     payload_catalog=_model_to_body(endpoint.payload_catalog),
                 ),
             )
-        except Exception:
+        except Exception as error:
+            record_exception(error)
             with suppress(Exception):
                 _send_model(
                     connection,
@@ -830,6 +876,7 @@ def _instrument_worker_main(
                             kind="unavailable",
                             code="instrument_worker_start_failed",
                             message="instrument worker failed to start",
+                            diagnostic=diagnostic_reference({"operation": "startup"}),
                         ),
                     ),
                 )
@@ -870,11 +917,13 @@ def _instrument_worker_main(
             try:
                 executor.shutdown(wait=True, cancel_futures=False)
             except Exception as error:
+                record_exception(error)
                 cleanup_errors.append(error)
         if endpoint is not None:
             try:
                 endpoint.shutdown()
             except Exception as error:
+                record_exception(error)
                 cleanup_errors.append(error)
         if shutdown_request is not None:
             response = (
@@ -885,6 +934,12 @@ def _instrument_worker_main(
                         kind="backend_error",
                         code="instrument_worker_shutdown_failed",
                         message="instrument worker cleanup failed",
+                        diagnostic=diagnostic_reference(
+                            {
+                                "request_id": shutdown_request.request_id,
+                                "operation": "shutdown",
+                            }
+                        ),
                     ),
                 )
                 if cleanup_errors
@@ -905,16 +960,43 @@ def _dispatch_and_respond(
     request: _RpcRequest,
     invoke_request: BackendInvokeRequest | None,
 ) -> None:
-    try:
-        outgoing = _dispatch_request(
-            endpoint,
-            request,
-            invoke_request=invoke_request,
-        )
-    except Exception as error:
-        outgoing = _OutgoingResponse(
-            response=_error_response(request.request_id, error)
-        )
+    context: dict[str, str | int] = {
+        "request_id": request.request_id,
+        "operation": request.operation,
+    }
+    if invoke_request is not None:
+        context["operation"] = f"invoke:{invoke_request.operation_id}"
+    if request.instrument_id is not None:
+        context["instrument_id"] = request.instrument_id
+    elif request.body is not None:
+        binding = request.body.get("binding")
+        if isinstance(binding, dict):
+            instrument_id = binding.get("id")
+            if isinstance(instrument_id, str):
+                context["instrument_id"] = instrument_id
+    with worker_operation(context):
+        try:
+            outgoing = _dispatch_request(
+                endpoint,
+                request,
+                invoke_request=invoke_request,
+            )
+        except Exception as error:
+            record_exception(error)
+            response = _error_response(request.request_id, error)
+            assert response.error is not None
+            outgoing = _OutgoingResponse(
+                response=response.model_copy(
+                    update={
+                        "error": response.error.model_copy(
+                            update={"diagnostic": diagnostic_reference(context)}
+                        )
+                    }
+                )
+            )
+        reference = diagnostic_reference(context)
+        if reference is not None:
+            outgoing = _with_diagnostic(outgoing, reference)
     try:
         with response_lock:
             _send_model(connection, outgoing.response)
@@ -926,6 +1008,55 @@ def _dispatch_and_respond(
     except EOFError, OSError, ValueError:
         with suppress(OSError):
             connection.close()
+
+
+def _annotate_problems(
+    problems: tuple[Problem, ...], reference: dict[str, str | int]
+) -> tuple[Problem, ...]:
+    for item in problems:
+        record_problem(item.code, item.message)
+    return tuple(
+        item.model_copy(
+            update={
+                "message": item.message[:512],
+                "details": {**item.details, "worker_diagnostic": reference},
+            }
+        )
+        for item in problems
+    )
+
+
+def _with_diagnostic(
+    outgoing: _OutgoingResponse, reference: dict[str, str | int]
+) -> _OutgoingResponse:
+    body = outgoing.response.body
+    if body is not None:
+        problems = body.get("problems")
+        if isinstance(problems, list):
+            body = {
+                **body,
+                "problems": [
+                    item.model_dump(mode="json")
+                    for item in _annotate_problems(
+                        tuple(Problem.model_validate(item) for item in problems),
+                        reference,
+                    )
+                ],
+            }
+    error = outgoing.response.error
+    if error is not None:
+        error = error.model_copy(
+            update={
+                "problems": _annotate_problems(error.problems, reference),
+                "diagnostic": reference,
+            }
+        )
+    return replace(
+        outgoing,
+        response=outgoing.response.model_copy(
+            update={"body": body, "diagnostic": reference, "error": error}
+        ),
+    )
 
 
 def _dispatch_request(
@@ -1011,6 +1142,11 @@ def _dispatch_request(
                 _require_mapping(body, "request"),
             ),
         )
+        reference = diagnostic_reference()
+        if reference is not None and receipt.problems:
+            receipt = receipt.model_copy(
+                update={"problems": _annotate_problems(receipt.problems, reference)}
+            )
         frames = split_collect_receipt(receipt)
         return _OutgoingResponse(
             response=_RpcResponse(
@@ -1055,30 +1191,37 @@ def _ok_response(
 
 
 def _error_response(request_id: int, error: BaseException) -> _RpcResponse:
-    if isinstance(error, InstrumentBackendRejected):
+    if isinstance(error, DriverFault):
+        payload = _RpcError(
+            kind="backend_error",
+            code=error.problem.code,
+            message=error.problem.message[:512],
+            problems=(error.problem,),
+        )
+    elif isinstance(error, InstrumentBackendRejected):
         payload = _RpcError(
             kind="rejected",
             code="instrument_backend_rejected",
-            message=str(error),
+            message=str(error)[:512],
             problems=error.problems,
         )
     elif isinstance(error, InstrumentHandleInvalid):
         payload = _RpcError(
             kind="invalid_handle",
             code="instrument_handle_invalid",
-            message=str(error),
+            message=str(error)[:512],
         )
     elif isinstance(error, InstrumentBackendUnavailable):
         payload = _RpcError(
             kind="unavailable",
             code="instrument_backend_unavailable",
-            message=str(error),
+            message=str(error)[:512],
         )
     elif isinstance(error, InstrumentBackendError):
         payload = _RpcError(
             kind="backend_error",
             code="instrument_backend_error",
-            message=str(error),
+            message=str(error)[:512],
         )
     else:
         payload = _RpcError(
@@ -1097,13 +1240,20 @@ def _raise_worker_error(error: _RpcError) -> None:
     if error.kind == "rejected":
         raise InstrumentBackendRejected(
             error.message,
-            problems=error.problems,
+            problems=_annotate_problems(error.problems, error.diagnostic)
+            if error.diagnostic
+            else error.problems,
+            diagnostic=error.diagnostic,
         )
     if error.kind == "invalid_handle":
-        raise InstrumentHandleInvalid(error.message)
+        raise InstrumentHandleInvalid(error.message, diagnostic=error.diagnostic)
     if error.kind == "unavailable":
-        raise InstrumentBackendUnavailable(error.message)
-    raise InstrumentBackendError(error.message)
+        raise InstrumentBackendUnavailable(
+            error.message, diagnostic=error.diagnostic, problems=error.problems
+        )
+    raise InstrumentBackendError(
+        error.message, diagnostic=error.diagnostic, problems=error.problems
+    )
 
 
 def _receive_invoke(

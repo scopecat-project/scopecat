@@ -6,7 +6,7 @@ from collections.abc import Sequence
 from typing import Literal
 
 from scopecat.kernel.instrument_members import StateMemberRef
-from scopecat.kernel.problems import Problem
+from scopecat.kernel.problems import Problem, ProblemPhase
 from scopecat.records.instrument import (
     InstrumentStateCacheReadback,
     InstrumentStateReadback,
@@ -40,6 +40,7 @@ from scopecat.sdk.instruments.contracts import (
 
 from ..errors import BackendConflict
 from .actors import OwnedInstrument
+from .backend import InstrumentBackendError
 
 type InstrumentCommandFailureReason = Literal[
     "instrument_acquisition_prepare_unknown",
@@ -54,6 +55,23 @@ type InstrumentCommandFailureReason = Literal[
 ]
 
 
+def _worker_error_problems(error: Exception) -> tuple[Problem, ...]:
+    if not isinstance(error, InstrumentBackendError):
+        return ()
+    if error.problems:
+        return error.problems
+    return (
+        Problem(
+            code="instrument_worker_operation_failed",
+            phase=ProblemPhase.EXECUTION,
+            message=str(error)[:512],
+            details={}
+            if error.diagnostic is None
+            else {"worker_diagnostic": error.diagnostic},
+        ),
+    )
+
+
 def execute_instrument_acquisition_prepare(
     instrument: OwnedInstrument,
     plan: BackendAcquisitionPlan,
@@ -64,6 +82,7 @@ def execute_instrument_acquisition_prepare(
         raise InstrumentCommandExecutionError(
             "instrument_acquisition_prepare_unknown",
             "instrument acquisition preparation failed with unknown state",
+            problems=_worker_error_problems(error),
         ) from error
 
 
@@ -92,6 +111,7 @@ def execute_instrument_apply(
         raise InstrumentCommandExecutionError(
             "instrument_apply_unknown",
             "instrument apply failed with unknown state",
+            problems=_worker_error_problems(error),
         ) from error
     if receipt.status != "applied":
         return receipt
@@ -115,6 +135,7 @@ def execute_instrument_invoke(
         raise InstrumentCommandExecutionError(
             "instrument_invoke_unknown",
             "instrument invoke failed with unknown state",
+            problems=_worker_error_problems(error),
         ) from error
     if receipt.status != "invoked":
         return receipt
@@ -150,6 +171,7 @@ def execute_instrument_collect(
         raise InstrumentCommandExecutionError(
             "instrument_collect_unknown",
             "instrument collect failed with unknown state",
+            problems=_worker_error_problems(error),
         ) from error
     problems = validate_collect_receipt(
         command=command,

@@ -95,8 +95,10 @@ records `run_instrument_acquisition_prepare_unknown` with indeterminate certaint
 
 For a lost trigger response, the daemon records the original
 `fixture_trigger_response_lost` code in `run_hardware_batch_unknown`, fences the
-executor and quarantines its resources. Current subsequent finalization surfaces
-`DaemonConflictError` about the expired/revoked lease instead of a clean
-`RunIndeterminate`. The reference test asserts both that actual exception and the
-durable original cause. Improving this failure/cleanup causal surface belongs to
-the failure-causality work; it does not justify retrying the trigger.
+executor and quarantines its resources. If subsequent finalization cannot commit
+with the revoked lease, `RunFinalizationFailed` preserves the original execution
+problem first, appends the terminal persistence problem and retains the lease
+conflict as its exception cause. Its local `execution_outcome` is explicitly not
+a promise of a durable terminal result. The reference test checks both that
+exception and the actual saved attention/uncertainty evidence. See
+[worker failure diagnostics](instruments.md#inspect-worker-failures-and-vendor-output).
