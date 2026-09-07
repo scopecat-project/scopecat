@@ -1,8 +1,7 @@
 # Command-line interface
 
-The `scopecat` command manages one local lab project. Every command accepts a
-project directory or a path to `scopecat.toml`; the current directory is the
-default.
+The `scopecat` command manages one local lab project. Project lifecycle and configuration commands accept a project directory or a
+path to `scopecat.toml`; the current directory is the default.
 
 ## Project lifecycle
 
@@ -18,6 +17,17 @@ default.
 `start` and `serve` accept `--host`, `--port`, `--static-dir`, and `--api-only`.
 Only loopback hosts are accepted. Port `0`, the default, selects an available
 port.
+
+## Snapshots
+
+| Command | Purpose |
+| --- | --- |
+| `scopecat snapshot create PROJECT DESTINATION` | Capture a stopped project in a fresh snapshot directory. |
+| `scopecat snapshot verify SNAPSHOT` | Verify inventory, SQLite integrity, schema and immutable objects. |
+| `scopecat snapshot restore SNAPSHOT DESTINATION` | Restore into a fresh project path without starting work. |
+
+See [backup and restore](../how-to/backup-and-restore.md) for the source boundary,
+dependency retention and explicit schema-version policy.
 
 ## Configuration
 

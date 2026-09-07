@@ -28,12 +28,78 @@ automation_app = typer.Typer(
 )
 app.add_typer(config_app, name="config")
 app.add_typer(automation_app, name="automation")
+snapshot_app = typer.Typer(
+    help="Create, verify, and restore stopped-project snapshots.",
+    no_args_is_help=True,
+)
+app.add_typer(snapshot_app, name="snapshot")
 console = Console()
 error_console = Console(stderr=True)
 
 _CURRENT_DIRECTORY = Path()
 _DEFAULT_STATIC_DIR = Path(__file__).with_name("static")
 _LOOPBACK_HOSTS = frozenset({"127.0.0.1", "::1", "localhost"})
+
+
+@snapshot_app.command("create")
+def snapshot_create(
+    project: Annotated[Path, typer.Argument(help="Stopped project directory.")],
+    destination: Annotated[
+        Path, typer.Argument(help="New snapshot directory outside the project.")
+    ],
+) -> None:
+    """Capture the database, immutable objects, source, and runtime versions."""
+    from scopecat.project import open_project
+
+    from .snapshots import SnapshotError, create_snapshot
+    from .storage.sqlite.project_store import ProjectStoreError
+
+    try:
+        manifest = create_snapshot(open_project(project), destination)
+    except (SnapshotError, ProjectStoreError, ValueError) as error:
+        _fail(error)
+    console.print(
+        f"[green]snapshot created[/green] {destination.resolve()} "
+        f"(schema {manifest.schema_version})"
+    )
+
+
+@snapshot_app.command("verify")
+def snapshot_verify(
+    snapshot: Annotated[Path, typer.Argument(help="Snapshot directory.")],
+) -> None:
+    """Verify file hashes, SQLite integrity, schema, and referenced objects."""
+    from .snapshots import SnapshotError, verify_snapshot
+    from .storage.sqlite.project_store import ProjectStoreError
+
+    try:
+        manifest = verify_snapshot(snapshot)
+    except (SnapshotError, ProjectStoreError) as error:
+        _fail(error)
+    console.print(
+        f"[green]snapshot verified[/green] {snapshot.resolve()} "
+        f"(schema {manifest.schema_version})"
+    )
+
+
+@snapshot_app.command("restore")
+def snapshot_restore(
+    snapshot: Annotated[Path, typer.Argument(help="Snapshot directory.")],
+    destination: Annotated[Path, typer.Argument(help="Fresh project directory.")],
+) -> None:
+    """Restore verified files; project code and procedures are not started."""
+    from .snapshots import SnapshotError, restore_snapshot
+    from .storage.sqlite.project_store import ProjectStoreError
+
+    try:
+        restore_snapshot(snapshot, destination)
+    except (SnapshotError, ProjectStoreError) as error:
+        _fail(error)
+    console.print(f"[green]snapshot restored[/green] {destination.resolve()}")
+    console.print(
+        "Reinstall the recorded dependencies before starting the project. "
+        "Procedures require explicit dispatch."
+    )
 
 
 def _validate_host(value: str) -> str:

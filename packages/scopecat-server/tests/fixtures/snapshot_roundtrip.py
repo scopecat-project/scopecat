@@ -1,0 +1,207 @@
+"""Exercise snapshot recovery with real reference-lab data in any installed Python.
+
+Run with the interpreter/environment being checked:
+    python packages/scopecat-server/tests/fixtures/snapshot_roundtrip.py TEMPLATE
+
+The template is copied into temporary projects. Each project uses a separate
+client process and a real daemon; no editable imports or physical devices are
+required. Package wheels must already be installed in the selected interpreter.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import shutil
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+from typing import cast
+from unittest.mock import patch
+
+from pydantic import JsonValue
+from scopecat.automation import ProcedureRunListQuery
+from scopecat.daemon.client import DaemonClient
+from scopecat.daemon.endpoint import resolve_daemon_endpoint
+from scopecat.project import load_project
+
+from scopecat_server.lifecycle import start_project, stop_project
+from scopecat_server.services.project_workers import ProjectProcedureWorkers
+from scopecat_server.snapshots import create_snapshot, restore_snapshot, verify_snapshot
+from scopecat_server.storage.sqlite.automation import SQLiteAutomationStore
+from scopecat_server.storage.sqlite.connection import SQLiteDatabase
+
+
+def capture(root: Path, *, seed: bool) -> dict[str, JsonValue]:
+    project = load_project(root / "scopecat.toml")
+    with (
+        project.connect() as lab,
+        DaemonClient(resolve_daemon_endpoint(root)) as client,
+    ):
+        if seed:
+            # Load the copied project's maintained acceptance producer only after
+            # binding the application's imports to this fresh process.
+            from reference_lab.acceptance import capture_acceptance_fixtures
+            from reference_lab.configuration import bootstrap_config
+            from reference_lab.workflows.temperature_diagnostic import (
+                TemperatureDiagnosticIntent,
+                temperature_diagnostic_procedure,
+            )
+
+            fixtures = capture_acceptance_fixtures(lab, client)
+            assert fixtures["diagnostic"] is not None
+            context = lab.analysis("Snapshot provenance", key="snapshot-provenance")
+            first = next(
+                item
+                for item in client.list_runs().items
+                if client.measurement_preview(item.run_id).items
+            )
+            context.measurements(lab.get_run(first.run_id), id="source")
+            context.result().fact("verified", True).artifact(
+                "report", text="Retained snapshot analysis", filename="report.txt"
+            ).save()
+            ready = lab.procedures.submit(
+                temperature_diagnostic_procedure,
+                TemperatureDiagnosticIntent(initial_config=bootstrap_config()),
+                request_key="snapshot-ready",
+            )
+            assert ready.state == "ready"
+        runs = client.list_runs()
+        procedures = client.list_procedures(ProcedureRunListQuery())
+        assert any(item.state == "ready" for item in procedures.items)
+        publication = lab.published_analysis("snapshot-provenance")
+        assert publication.fact("verified").value is True
+        report = publication.artifact("report").text()
+        assert report == "Retained snapshot analysis"
+        return {
+            "runs": runs.model_dump(mode="json"),
+            "measurements": {
+                item.run_id: client.measurement_preview(item.run_id).model_dump(
+                    mode="json"
+                )
+                for item in runs.items
+            },
+            "run_configs": {
+                item.run_id: client.run_config(item.run_id).model_dump(mode="json")
+                for item in runs.items
+            },
+            "analyses": {
+                item.run_id: client.analyses(item.run_id).model_dump(mode="json")
+                for item in runs.items
+            },
+            "proposals": {
+                item.run_id: client.parameter_proposals(item.run_id).model_dump(
+                    mode="json"
+                )
+                for item in runs.items
+            },
+            "publication": client.project_analysis("snapshot-provenance").model_dump(
+                mode="json"
+            ),
+            "report": report,
+            "registry": client.config_registry().model_dump(mode="json"),
+            "activations": client.config_activation_history().model_dump(mode="json"),
+            "procedures": procedures.model_dump(mode="json"),
+        }
+
+
+def _capture_process(
+    root: Path, output: Path, *, seed: bool = False
+) -> dict[str, JsonValue]:
+    command = [
+        sys.executable,
+        str(Path(__file__).resolve()),
+        str(root),
+        "--output",
+        str(output),
+    ]
+    if seed:
+        command.append("--seed")
+    subprocess.run(command, check=True)  # noqa: S603 - fixed interpreter and local script
+    return cast("dict[str, JsonValue]", json.loads(output.read_text(encoding="utf-8")))
+
+
+def check_roundtrip(template: Path) -> None:
+    with tempfile.TemporaryDirectory(prefix="scopecat-snapshot-check-") as temporary:
+        root = Path(temporary)
+        source = root / "source"
+        source.mkdir()
+        for name in ("src", "config"):
+            shutil.copytree(template / name, source / name)
+        shutil.copy2(template / "scopecat.toml", source / "scopecat.toml")
+        project = load_project(source / "scopecat.toml")
+        start_project(project)
+        try:
+            before = _capture_process(source, root / "before.json", seed=True)
+        finally:
+            stop_project(project)
+
+        # Preserve a real durable ready procedure but deliberately include the
+        # old GUI's dispatch intent in source state before capture.
+        database = SQLiteDatabase(source / ".scopecat/control.sqlite3")
+        try:
+            store = SQLiteAutomationStore(database)
+            ready = [
+                item.procedure_run_id
+                for item in store.list_runs().items
+                if item.state == "ready"
+            ]
+        finally:
+            database.close()
+        assert ready
+        (source / ".scopecat/console-procedures.json").write_text(
+            json.dumps(dict.fromkeys(ready, "active")), encoding="utf-8"
+        )
+        snapshot = root / "snapshot"
+        restored = root / "restored"
+        create_snapshot(project, snapshot)
+        verify_snapshot(snapshot)
+        restore_snapshot(snapshot, restored)
+        restored_project = load_project(restored / "scopecat.toml")
+        start_project(restored_project)
+        try:
+            after = _capture_process(restored, root / "after.json")
+            assert after == before, "restored values or provenance changed"
+        finally:
+            stop_project(restored_project)
+
+        database = SQLiteDatabase(restored / ".scopecat/control.sqlite3")
+        try:
+            store = SQLiteAutomationStore(database)
+            manager = ProjectProcedureWorkers(
+                lambda: restored, lambda key: store.read_run(key).state
+            )
+            with patch.object(manager, "_spawn") as spawn:
+                manager.tick()
+                spawn.assert_not_called()
+                assert store.read_run(ready[0]).state == "ready"
+                manager.dispatch(ready[0])
+                spawn.assert_called_once_with(ready[0])
+        finally:
+            database.close()
+        print(
+            "snapshot roundtrip verified: measurement, analysis, configuration, "
+            "provenance, and explicit dispatch"
+        )
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("project", type=Path)
+    parser.add_argument("--output", type=Path)
+    parser.add_argument("--seed", action="store_true")
+    args = parser.parse_args()
+    project = cast("Path", args.project)
+    output = cast("Path | None", args.output)
+    if output is None:
+        check_roundtrip(project)
+    else:
+        output.write_text(
+            json.dumps(capture(project, seed=cast("bool", args.seed)), sort_keys=True),
+            encoding="utf-8",
+        )
+
+
+if __name__ == "__main__":
+    main()
