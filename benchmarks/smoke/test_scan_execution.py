@@ -16,6 +16,7 @@ from benchmarks.e2e.scan_execution import ScanScenario, _scopecat_invocation
 from scopecat.compiler.frontend.resolution import compile_invocation
 from scopecat.program.expressions import PointColumnScalarExpr
 from scopecat.program.logical import LogicalDomainExecution, LogicalEnsureState
+from scopecat.records.costs import RunOperationCost
 
 
 @pytest.mark.parametrize("qubit_count", [2, 16, 64, 128])
@@ -155,17 +156,26 @@ def test_fixed_program_lo_sweep_avoids_per_point_durable_job_writes(
             "tuple[int]",
             connection.execute("SELECT COUNT(*) FROM durable_events").fetchone(),
         )[0]
-        measured_payloads = [
-            json.loads(row[0])
-            for row in connection.execute(
-                "SELECT payload_json FROM durable_events "
-                "WHERE kind = 'run_hardware_batch_measured'"
+        measured_batches = [
+            tuple(
+                RunOperationCost.model_validate(item)
+                for item in cast("list[object]", json.loads(row[0]))
+            )
+            for row in cast(
+                "list[tuple[str]]",
+                connection.execute(
+                    "SELECT json_extract(payload_json, '$.costs') FROM durable_events "
+                    "WHERE kind = 'run_hardware_batch_measured'"
+                ).fetchall(),
             )
         ]
-        finalization_count = connection.execute(
-            "SELECT COUNT(*) FROM durable_events "
-            "WHERE kind = 'run_hardware_finalization_measured'"
-        ).fetchone()[0]
+        finalization_count = cast(
+            "tuple[int]",
+            connection.execute(
+                "SELECT COUNT(*) FROM durable_events "
+                "WHERE kind = 'run_hardware_finalization_measured'"
+            ).fetchone(),
+        )[0]
         durable_refs = tuple(
             row[0]
             for row in cast(
@@ -197,13 +207,13 @@ def test_fixed_program_lo_sweep_avoids_per_point_durable_job_writes(
     assert measurement_append_count == 1
     # Measurement events follow physical batches, not 1,000 shots per point.
     # Existing lifecycle/domain/measurement ledgers retain their previous bound.
-    assert len(measured_payloads) == 5 * point_count + 1
+    assert len(measured_batches) == 5 * point_count + 1
     assert finalization_count == 1
     assert (
-        durable_event_count - len(measured_payloads) - finalization_count < point_count
+        durable_event_count - len(measured_batches) - finalization_count < point_count
     )
     operation_counts = Counter(
-        item["operation"] for payload in measured_payloads for item in payload["costs"]
+        item.operation for batch in measured_batches for item in batch
     )
     assert operation_counts == {
         "invoke": 9 * point_count,
