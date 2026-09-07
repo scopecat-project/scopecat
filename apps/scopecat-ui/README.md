@@ -79,7 +79,11 @@ The Calibrations page discovers entries from the optional
 boolean properties, required fields, defaults and string enums. Projects should
 advertise only inputs supported by this form. `preview` receives the entry ID and
 its input values; the provider validates the project request and compiles against
-configuration. Its returned JSON becomes the expandable preview detail.
+configuration. Its returned JSON becomes the expandable preview detail. For
+submittable entries it must include `config_source.content_hash` and
+`config_source.registry_generation`; the GUI passes these back as
+`expected_config_hash` and `expected_generation`. The provider must reject a
+changed active configuration before admitting the procedure.
 
 Callbacks run in a separate project process using the daemon interpreter, with
 a 60-second timeout. `list` and `preview` only read and compile. An entry may set

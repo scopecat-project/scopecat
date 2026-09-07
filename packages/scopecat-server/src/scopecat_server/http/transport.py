@@ -320,7 +320,7 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
                 [
                     sys.executable,
                     "-m",
-                    "scopecat.application.launch_worker",
+                    "scopecat_server.launch_worker",
                     str(application.project_root),
                 ],
                 input=command.model_dump_json(),
@@ -337,7 +337,7 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
             raise HTTPException(
                 422, detail[-1] if detail else "Experiment preview failed"
             )
-        return json.loads(completed.stdout)
+        return cast("dict[str, JsonValue]", json.loads(completed.stdout))
 
     @app.get(f"{_API_PREFIX}/experiment-launcher")
     def experiment_launch_catalog() -> dict[str, JsonValue]:

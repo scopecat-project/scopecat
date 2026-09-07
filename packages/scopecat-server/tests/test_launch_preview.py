@@ -1,18 +1,34 @@
+from __future__ import annotations
+
 import subprocess
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch
+from typing import TYPE_CHECKING, cast
+from unittest.mock import Mock, patch
 
 from fastapi.testclient import TestClient
 
 from scopecat_server.http.transport import create_app
 
+if TYPE_CHECKING:
+    import pytest
+    from scopecat.api.lab import LabClient
 
-def client():
-    return TestClient(create_app(SimpleNamespace(project_root=Path.cwd())))
+    from scopecat_server.services.application import DaemonApplication
 
 
-def test_catalog_runs_a_fixed_separate_worker():
+def client() -> TestClient:
+    return TestClient(
+        create_app(
+            cast(
+                "DaemonApplication",
+                cast("object", SimpleNamespace(project_root=Path.cwd())),
+            )
+        )
+    )
+
+
+def test_catalog_runs_a_fixed_separate_worker() -> None:
     with patch("scopecat_server.http.transport.subprocess.run") as run:
         run.return_value = SimpleNamespace(
             returncode=0, stdout='{"calibrations": []}', stderr=""
@@ -21,12 +37,12 @@ def test_catalog_runs_a_fixed_separate_worker():
         assert response.json() == {"calibrations": []}
         assert run.call_args.args[0][1:3] == [
             "-m",
-            "scopecat.application.launch_worker",
+            "scopecat_server.launch_worker",
         ]
         assert '"action":"list"' in run.call_args.kwargs["input"]
 
 
-def test_preview_failure_is_visible_and_start_is_not_supported():
+def test_preview_failure_is_visible_and_start_is_not_supported() -> None:
     with patch("scopecat_server.http.transport.subprocess.run") as run:
         run.return_value = SimpleNamespace(
             returncode=1, stdout="", stderr="traceback\nValueError: bad target"
@@ -45,7 +61,7 @@ def test_preview_failure_is_visible_and_start_is_not_supported():
         run.assert_not_called()
 
 
-def test_timeout_has_a_bounded_error():
+def test_timeout_has_a_bounded_error() -> None:
     with patch(
         "scopecat_server.http.transport.subprocess.run",
         side_effect=subprocess.TimeoutExpired("worker", 60),
@@ -54,11 +70,11 @@ def test_timeout_has_a_bounded_error():
 
 
 def test_worker_loads_manifest_file_and_supports_empty_project(
-    tmp_path, monkeypatch, capsys
-):
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
     import io
 
-    from scopecat.application import launch_worker
+    from scopecat_server import launch_worker
 
     monkeypatch.setattr("sys.argv", ["launch_worker", str(tmp_path)])
     monkeypatch.setattr("sys.stdin", io.StringIO('{"action":"list"}'))
@@ -71,9 +87,16 @@ def test_worker_loads_manifest_file_and_supports_empty_project(
     assert capsys.readouterr().out.strip() == '{"calibrations": []}'
 
 
-def test_admission_survives_dispatch_failure(tmp_path):
-    automation = SimpleNamespace(get=lambda _: SimpleNamespace(state="ready"))
-    app = create_app(SimpleNamespace(project_root=tmp_path, automation=automation))
+def test_admission_survives_dispatch_failure(tmp_path: Path) -> None:
+    automation = SimpleNamespace(get=Mock(return_value=SimpleNamespace(state="ready")))
+    app = create_app(
+        cast(
+            "DaemonApplication",
+            cast(
+                "object", SimpleNamespace(project_root=tmp_path, automation=automation)
+            ),
+        )
+    )
     with (
         patch("scopecat_server.http.transport.subprocess.run") as run,
         patch(
@@ -92,9 +115,7 @@ def test_admission_survives_dispatch_failure(tmp_path):
     assert result.json() == {"procedure_id": "p1", "dispatch_error": "cannot spawn"}
 
 
-def test_dispatch_deduplicates_live_workers(tmp_path):
-    from unittest.mock import Mock
-
+def test_dispatch_deduplicates_live_workers(tmp_path: Path) -> None:
     from scopecat_server.services.project_workers import ProjectProcedureWorkers
 
     workers = ProjectProcedureWorkers(lambda: tmp_path, lambda _: "ready")
@@ -111,24 +132,20 @@ def test_dispatch_deduplicates_live_workers(tmp_path):
         assert spawn.call_count == 2
 
 
-def test_worker_exits_at_review_without_polling():
-    from unittest.mock import Mock
-
-    from scopecat.application.launch_worker import run_procedure
+def test_worker_exits_at_review_without_polling() -> None:
+    from scopecat_server.launch_worker import run_procedure
 
     handle = SimpleNamespace(state="waiting_for_input", resume=Mock())
     lab = SimpleNamespace(procedures=SimpleNamespace(get=Mock(return_value=handle)))
-    run_procedure(lab, "p1")
+    run_procedure(cast("LabClient", cast("object", lab)), "p1")
     handle.resume.assert_not_called()
     lab.procedures.get.assert_called_once_with("p1")
     handle.state = "ready"
-    run_procedure(lab, "p1")
+    run_procedure(cast("LabClient", cast("object", lab)), "p1")
     handle.resume.assert_called_once()
 
 
-def test_manager_recovers_waiting_members_and_bounds_processes(tmp_path):
-    from unittest.mock import Mock
-
+def test_manager_recovers_waiting_members_and_bounds_processes(tmp_path: Path) -> None:
     from scopecat_server.services.project_workers import ProjectProcedureWorkers
 
     states = {"p1": "waiting_for_input", "p2": "ready"}
@@ -155,9 +172,9 @@ def test_manager_recovers_waiting_members_and_bounds_processes(tmp_path):
         assert spawn.call_args.args[0][-1] == "p2"
 
 
-def test_failed_process_requires_explicit_dispatch_even_after_restart(tmp_path):
-    from unittest.mock import Mock
-
+def test_failed_process_requires_explicit_dispatch_even_after_restart(
+    tmp_path: Path,
+) -> None:
     from scopecat_server.services.project_workers import ProjectProcedureWorkers
 
     manager = ProjectProcedureWorkers(lambda: tmp_path, lambda _: "ready")
@@ -176,9 +193,9 @@ def test_failed_process_requires_explicit_dispatch_even_after_restart(tmp_path):
         assert spawn.call_count == 2
 
 
-def test_review_arriving_before_previous_worker_exit_is_not_lost(tmp_path):
-    from unittest.mock import Mock
-
+def test_review_arriving_before_previous_worker_exit_is_not_lost(
+    tmp_path: Path,
+) -> None:
     from scopecat_server.services.project_workers import ProjectProcedureWorkers
 
     state = ["ready"]
@@ -199,9 +216,7 @@ def test_review_arriving_before_previous_worker_exit_is_not_lost(tmp_path):
         assert spawn.call_count == 2
 
 
-def test_manager_drops_terminal_and_attention_procedures(tmp_path):
-    from unittest.mock import Mock
-
+def test_manager_drops_terminal_and_attention_procedures(tmp_path: Path) -> None:
     from scopecat_server.services.project_workers import ProjectProcedureWorkers
 
     states = {"closed": "waiting_for_input", "attention": "waiting_for_input"}
@@ -219,9 +234,16 @@ def test_manager_drops_terminal_and_attention_procedures(tmp_path):
     assert restarted._load() == {}
 
 
-def test_http_lifespan_starts_and_stops_manager():
+def test_http_lifespan_starts_and_stops_manager() -> None:
     with patch("scopecat_server.http.transport.ProjectProcedureWorkers") as manager:
-        with TestClient(create_app(SimpleNamespace(project_root=Path.cwd()))):
+        with TestClient(
+            create_app(
+                cast(
+                    "DaemonApplication",
+                    cast("object", SimpleNamespace(project_root=Path.cwd())),
+                )
+            )
+        ):
             manager.return_value.start.assert_called_once()
             manager.return_value.stop.assert_not_called()
         manager.return_value.stop.assert_called_once()

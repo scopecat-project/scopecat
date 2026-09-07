@@ -124,7 +124,7 @@ class ProjectProcedureWorkers:
                 [
                     sys.executable,
                     "-m",
-                    "scopecat.application.launch_worker",
+                    "scopecat_server.launch_worker",
                     str(root),
                     "--procedure",
                     procedure_id,

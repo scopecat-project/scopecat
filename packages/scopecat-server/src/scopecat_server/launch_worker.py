@@ -9,9 +9,9 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import scopecat as sc
+from pydantic import JsonValue
+from scopecat.application.launch import LaunchRequest
 from scopecat.project import load_project
-
-from .launch import LaunchRequest
 
 if TYPE_CHECKING:
     from scopecat.api.lab import LabClient
@@ -35,6 +35,7 @@ def main() -> None:
     root = Path(sys.argv[1]).resolve()
     with contextlib.redirect_stdout(sys.stderr):
         application = load_project(root / "scopecat.toml").load_application()
+        result: dict[str, JsonValue]
         if application.launch_provider is None:
             result = {"calibrations": []}
             if request.action != "list":
