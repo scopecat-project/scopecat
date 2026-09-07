@@ -38,6 +38,9 @@ def create_application(_project_root: Path) -> LabApplication:
         drag_beta_calibration_procedure,
         drag_beta_verification_procedure,
     )
+    from reference_lab.workflows.temperature_diagnostic import (
+        temperature_diagnostic_procedure,
+    )
 
     return LabApplication(
         build_experiment_system=lambda config, instrument_catalog: reference_lab_system(
@@ -45,6 +48,7 @@ def create_application(_project_root: Path) -> LabApplication:
             instrument_catalog=instrument_catalog,
         ),
         procedures=(
+            temperature_diagnostic_procedure,
             drag_beta_calibration_procedure,
             drag_beta_verification_procedure,
         ),

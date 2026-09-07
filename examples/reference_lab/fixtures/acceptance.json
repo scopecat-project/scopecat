@@ -1,0 +1,542 @@
+{
+  "diagnostic": {
+    "dataset_schema": {
+      "dataset_id": "raw-measurements",
+      "dimensions": [
+        {
+          "id": "point",
+          "index": null,
+          "kind": "point",
+          "label": null,
+          "metadata": {},
+          "size": 1
+        }
+      ],
+      "format_version": "scopecat.measurement_dataset_schema.v17",
+      "metadata": {
+        "experiment_id": "reference_lab.temperature_diagnostic"
+      },
+      "point_domain": {
+        "axes": [],
+        "kind": "product_grid"
+      },
+      "primary_coordinates": [],
+      "primary_observables": [
+        "temperature",
+        "resistance"
+      ],
+      "record_schema": "scopecat.measurement_record.v10",
+      "result": {
+        "fields": [
+          {
+            "path": [
+              "temperature"
+            ],
+            "variable_id": "temperature"
+          },
+          {
+            "path": [
+              "resistance"
+            ],
+            "variable_id": "resistance"
+          }
+        ],
+        "id": "reference_lab.temperature_diagnostic",
+        "version": "sha256:085bef94fb3f1abff5fe985e71330a71734ed3801f06662864cc4c79891b65da"
+      },
+      "variable_groups": [
+        {
+          "id": "temperature_readout.sample",
+          "metadata": {}
+        }
+      ],
+      "variables": [
+        {
+          "dims": [
+            "point"
+          ],
+          "dtype": "float64",
+          "entity_acquisition": null,
+          "id": "temperature",
+          "label": null,
+          "metadata": {},
+          "recording_group_id": "temperature_readout.sample",
+          "role": "observable",
+          "source_entity_products": null,
+          "source_product_id": "temperature_readout.sample/temperature",
+          "source_value_id": null,
+          "unit": "K"
+        },
+        {
+          "dims": [
+            "point"
+          ],
+          "dtype": "float64",
+          "entity_acquisition": null,
+          "id": "resistance",
+          "label": null,
+          "metadata": {},
+          "recording_group_id": "temperature_readout.sample",
+          "role": "observable",
+          "source_entity_products": null,
+          "source_product_id": "temperature_readout.sample/resistance",
+          "source_value_id": null,
+          "unit": "Ohm"
+        }
+      ]
+    },
+    "items": [
+      {
+        "acquisition_evidence": {
+          "entries": [
+            {
+              "event_index": 0,
+              "kind": "instrument",
+              "result_id": "resistance"
+            },
+            {
+              "event_index": 0,
+              "kind": "instrument",
+              "result_id": "temperature"
+            }
+          ],
+          "events": [
+            {
+              "acquisition_id": "sample",
+              "command_id": "collect-c34c30c3499f711e385948270e12ea52179b0bd2ddb197159ae22fb75e2fc890",
+              "completed_at": "2026-09-01T00:00:00Z",
+              "component_path": [],
+              "instrument_id": "mixing-chamber",
+              "interface_id": "scopecat.temperature_readout/v1",
+              "started_at": "2026-09-01T00:00:00Z"
+            }
+          ],
+          "variable_refs": {
+            "resistance": 0,
+            "temperature": 1
+          }
+        },
+        "coordinates": {},
+        "logical_point_id": "5d1b3eabe4a7c1827971dfd7ce28218fecfda8cf40c56a451068b90ca29bb85f",
+        "metadata": {},
+        "observables": {
+          "resistance": {
+            "dtype": "float64",
+            "kind": "scalar",
+            "metadata": {},
+            "unit": "Ohm",
+            "value": 6898.648307306074
+          },
+          "temperature": {
+            "dtype": "float64",
+            "kind": "scalar",
+            "metadata": {},
+            "unit": "K",
+            "value": 0.02
+          }
+        },
+        "point_index": 0,
+        "run_id": "acceptance-diagnostic"
+      }
+    ],
+    "truncated": false
+  },
+  "entity_analysis": {
+    "dataset_id": "raw-measurements",
+    "dimensions": [
+      {
+        "id": "point",
+        "index": null,
+        "kind": "point",
+        "label": null,
+        "metadata": {},
+        "size": 2
+      },
+      {
+        "id": "logical_qubit",
+        "index": {
+          "kind": "entity",
+          "values": [
+            {
+              "id": "q0",
+              "kind": "logical_qubit",
+              "metadata": {}
+            },
+            {
+              "id": "q1",
+              "kind": "logical_qubit",
+              "metadata": {}
+            }
+          ]
+        },
+        "kind": "entity",
+        "label": "logical_qubit",
+        "metadata": {},
+        "size": 2
+      },
+      {
+        "id": "shared/parallel-two-qubit-ramsey/shot",
+        "index": null,
+        "kind": "shot",
+        "label": "shot",
+        "metadata": {},
+        "size": 64
+      }
+    ],
+    "format_version": "scopecat.measurement_dataset_schema.v17",
+    "metadata": {
+      "experiment_id": "reference_lab.parallel_raw_ramsey"
+    },
+    "point_domain": {
+      "axes": [
+        {
+          "id": "delay",
+          "size": 2,
+          "source": {
+            "kind": "values",
+            "values": [
+              {
+                "dtype": "float64",
+                "kind": "scalar",
+                "metadata": {},
+                "unit": "ns",
+                "value": 88.0
+              },
+              {
+                "dtype": "float64",
+                "kind": "scalar",
+                "metadata": {},
+                "unit": "ns",
+                "value": 128.0
+              }
+            ]
+          }
+        }
+      ],
+      "kind": "product_grid"
+    },
+    "primary_coordinates": [
+      "delay"
+    ],
+    "primary_observables": [
+      "iq_shots"
+    ],
+    "record_schema": "scopecat.measurement_record.v10",
+    "result": {
+      "fields": [
+        {
+          "path": [
+            "delay"
+          ],
+          "variable_id": "delay"
+        },
+        {
+          "path": [
+            "iq_shots"
+          ],
+          "variable_id": "iq_shots"
+        }
+      ],
+      "id": "reference_lab.parallel_raw_ramsey",
+      "version": "sha256:4e239518b9acae53f4d8fb796cca3f420c5a72b94d7b1d3c51a06b63772743d2"
+    },
+    "variable_groups": [],
+    "variables": [
+      {
+        "dims": [
+          "point"
+        ],
+        "dtype": "float64",
+        "entity_acquisition": null,
+        "id": "delay",
+        "label": null,
+        "metadata": {},
+        "recording_group_id": null,
+        "role": "coordinate",
+        "source_entity_products": null,
+        "source_product_id": null,
+        "source_value_id": null,
+        "unit": "ns"
+      },
+      {
+        "dims": [
+          "point",
+          "logical_qubit",
+          "shared/parallel-two-qubit-ramsey/shot"
+        ],
+        "dtype": "complex128",
+        "entity_acquisition": {
+          "cohort_id": null,
+          "policy": "independent"
+        },
+        "id": "iq_shots",
+        "label": null,
+        "metadata": {
+          "quantum.acquisition_kind": "integrated_iq",
+          "quantum.local_dimensions": []
+        },
+        "recording_group_id": null,
+        "role": "observable",
+        "source_entity_products": {
+          "common_metadata": {
+            "quantum.acquisition_kind": "integrated_iq",
+            "quantum.local_dimensions": []
+          },
+          "dimension_id": "logical_qubit",
+          "metadata_overrides": [],
+          "product_ids": [
+            "parallel-two-qubit-ramsey/q0_iq_shots",
+            "parallel-two-qubit-ramsey/q1_iq_shots"
+          ]
+        },
+        "source_product_id": null,
+        "source_value_id": null,
+        "unit": "ratio"
+      }
+    ]
+  },
+  "inspection": {
+    "active": true,
+    "coordinates": [],
+    "created_at": "2026-09-01T00:00:00Z",
+    "experiment_id": "reference_lab.temperature_diagnostic",
+    "experiment_kind": "temperature_diagnostic",
+    "heartbeat_interval_seconds": 5.0,
+    "latest_result": {
+      "completed_at": "2026-09-01T00:00:00Z",
+      "error": null,
+      "inspections": [],
+      "point": {
+        "coordinates": {},
+        "point_index": 0,
+        "proposal_fingerprint": "sha256:80ef5f8fafbcc95cd4c908663a01e94bf03593e6001f2201f56a80618e8e689d",
+        "source": "author"
+      },
+      "request_id": "initial"
+    },
+    "pending_request_count": 0,
+    "planned_points": [
+      {
+        "coordinates": {},
+        "point_index": 0,
+        "proposal_fingerprint": null,
+        "source": "author"
+      }
+    ],
+    "planned_points_truncated": false,
+    "session_id": "acceptance-inspection",
+    "title": "Temperature diagnostic",
+    "updated_at": "2026-09-01T00:00:00Z"
+  },
+  "resource_cancelled": {
+    "certainty": "known",
+    "finished_at": "2026-09-01T00:00:00Z",
+    "problems": [
+      {
+        "code": "procedure_cancelled_before_execution",
+        "details": {},
+        "location": null,
+        "message": "parent procedure cancelled while waiting for resources",
+        "occurrence_id": null,
+        "phase": "execution",
+        "related_locations": []
+      }
+    ],
+    "result": "cancelled",
+    "run_id": "acceptance-waiting"
+  },
+  "resource_waiting": [
+    {
+      "blocked_by": {
+        "owner_id": "acceptance-session",
+        "owner_kind": "instrument_session",
+        "status": "active"
+      },
+      "expires_at": null,
+      "resource": {
+        "id": "mixing-chamber",
+        "kind": "instrument"
+      },
+      "status": "blocked"
+    }
+  ],
+  "reviewed_candidate": {
+    "items": [
+      {
+        "approval": {
+          "actor": "acceptance-operator",
+          "approved_at": "2026-09-01T00:00:00Z",
+          "note": "Verified in virtual lab",
+          "proposal_id": "q1-channel-delay",
+          "run_id": "acceptance-source"
+        },
+        "proposal": {
+          "analysis_record_id": "acceptance-analysis",
+          "base_config_content_hash": "sha256:15248161728d3097f23ae3b6e8109e20a2a2ec2b720eafcceefc89943acd302e",
+          "base_config_id": "reference-lab-profile",
+          "confidence": null,
+          "deltas": [
+            {
+              "after": {
+                "id": "channel_calibrations",
+                "rows": [
+                  {
+                    "channel_delay": {
+                      "unit": "ns",
+                      "value": 0.0
+                    },
+                    "flux_gain": 0.98,
+                    "flux_offset": {
+                      "unit": "V",
+                      "value": 0.0
+                    },
+                    "flux_polarity": 1,
+                    "qubit": {
+                      "id": "q0",
+                      "kind": "logical_qubit",
+                      "metadata": {}
+                    }
+                  },
+                  {
+                    "channel_delay": {
+                      "unit": "ns",
+                      "value": 1.0
+                    },
+                    "flux_gain": 1.02,
+                    "flux_offset": {
+                      "unit": "V",
+                      "value": 0.002
+                    },
+                    "flux_polarity": -1,
+                    "qubit": {
+                      "id": "q1",
+                      "kind": "logical_qubit",
+                      "metadata": {}
+                    }
+                  },
+                  {
+                    "channel_delay": {
+                      "unit": "ns",
+                      "value": -0.5
+                    },
+                    "flux_gain": 1.01,
+                    "flux_offset": {
+                      "unit": "V",
+                      "value": -0.001
+                    },
+                    "flux_polarity": 1,
+                    "qubit": {
+                      "id": "q2",
+                      "kind": "logical_qubit",
+                      "metadata": {}
+                    }
+                  },
+                  {
+                    "channel_delay": {
+                      "unit": "ns",
+                      "value": 0.75
+                    },
+                    "flux_gain": 0.99,
+                    "flux_offset": {
+                      "unit": "V",
+                      "value": 0.003
+                    },
+                    "flux_polarity": -1,
+                    "qubit": {
+                      "id": "q3",
+                      "kind": "logical_qubit",
+                      "metadata": {}
+                    }
+                  }
+                ],
+                "shape": "table"
+              },
+              "before": {
+                "id": "channel_calibrations",
+                "rows": [
+                  {
+                    "channel_delay": {
+                      "unit": "ns",
+                      "value": 0.0
+                    },
+                    "flux_gain": 0.98,
+                    "flux_offset": {
+                      "unit": "V",
+                      "value": 0.0
+                    },
+                    "flux_polarity": 1,
+                    "qubit": {
+                      "id": "q0",
+                      "kind": "logical_qubit",
+                      "metadata": {}
+                    }
+                  },
+                  {
+                    "channel_delay": {
+                      "unit": "ns",
+                      "value": 1.5
+                    },
+                    "flux_gain": 1.02,
+                    "flux_offset": {
+                      "unit": "V",
+                      "value": 0.002
+                    },
+                    "flux_polarity": -1,
+                    "qubit": {
+                      "id": "q1",
+                      "kind": "logical_qubit",
+                      "metadata": {}
+                    }
+                  },
+                  {
+                    "channel_delay": {
+                      "unit": "ns",
+                      "value": -0.5
+                    },
+                    "flux_gain": 1.01,
+                    "flux_offset": {
+                      "unit": "V",
+                      "value": -0.001
+                    },
+                    "flux_polarity": 1,
+                    "qubit": {
+                      "id": "q2",
+                      "kind": "logical_qubit",
+                      "metadata": {}
+                    }
+                  },
+                  {
+                    "channel_delay": {
+                      "unit": "ns",
+                      "value": 0.75
+                    },
+                    "flux_gain": 0.99,
+                    "flux_offset": {
+                      "unit": "V",
+                      "value": 0.003
+                    },
+                    "flux_polarity": -1,
+                    "qubit": {
+                      "id": "q3",
+                      "kind": "logical_qubit",
+                      "metadata": {}
+                    }
+                  }
+                ],
+                "shape": "table"
+              },
+              "parameter_id": "channel_calibrations"
+            }
+          ],
+          "evidence_output_ids": [],
+          "id": "q1-channel-delay",
+          "proposed_at": "2026-09-01T00:00:00Z",
+          "reason": "align q1 acquisition with the shared readout window",
+          "source_run_id": "acceptance-source"
+        }
+      }
+    ],
+    "next_cursor": null,
+    "run_id": "acceptance-source"
+  }
+}
