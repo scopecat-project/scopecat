@@ -51,6 +51,21 @@ class Float:
 
 
 @dataclass(frozen=True, slots=True)
+class Complex:
+    """Finite complex scalar content with an optional measurement unit.
+
+    Real and imaginary components share the declared unit. Complex values have
+    no ordering bounds; explicit unit conversion supports linear scales only.
+    """
+
+    unit: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.unit is not None and not is_supported_unit(self.unit):
+            raise ValueError(f"unsupported complex unit: {self.unit}")
+
+
+@dataclass(frozen=True, slots=True)
 class String:
     """String scalar content with optional closed choices."""
 
@@ -122,7 +137,7 @@ class Payload:
         _validate_id(self.schema_id, label="payload schema")
 
 
-type AtomType = Bool | Int | Float | String | Quantity | Entity | Payload
+type AtomType = Bool | Int | Float | Complex | String | Quantity | Entity | Payload
 type ValueDType = Literal["float64", "int64", "complex128", "bool", "string"]
 
 
@@ -215,7 +230,7 @@ class Table:
             raise ValueError(msg)
         for column_id in self.primary_key:
             column = columns[column_id]
-            if isinstance(column.value_type.atom, Payload):
+            if isinstance(column.value_type.atom, Payload | Complex):
                 msg = (
                     f"Table primary key column {column_id!r} must use a primitive, "
                     "quantity, or entity atom"

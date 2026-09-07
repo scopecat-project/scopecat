@@ -10,6 +10,7 @@ from scopecat.kernel.value_types import (
     Array,
     AtomType,
     Bool,
+    Complex,
     Entity,
     Float,
     Int,
@@ -111,6 +112,8 @@ def _atom_assignable(source: AtomType, target: AtomType) -> bool:
         return (not target.finite or source.finite) and _numeric_constraints_are_subset(
             source, target
         )
+    if isinstance(source, Complex) and isinstance(target, Complex):
+        return source.unit == target.unit
     if isinstance(source, String) and isinstance(target, String):
         if target.choices is not None:
             return source.choices is not None and set(source.choices) <= set(
@@ -220,6 +223,8 @@ def _literal_scalar_type(value: object) -> Scalar:
         return Scalar(Int(minimum=value, maximum=value))
     if isinstance(value, float):
         return Scalar(Float(minimum=value, maximum=value))
+    if isinstance(value, complex):
+        return Scalar(Complex())
     if isinstance(value, str):
         return Scalar(String())
     if isinstance(value, QuantityValue):

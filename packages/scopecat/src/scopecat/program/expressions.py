@@ -345,7 +345,7 @@ def _snapshot_literal(value: object) -> object:
         return value
     if isinstance(value, EntityRef | Quantity):
         return value.model_copy(deep=True)
-    if value is None or isinstance(value, str | int | float | bool):
+    if value is None or isinstance(value, str | int | float | complex | bool):
         return value
     if isinstance(value, Mapping):
         mapping = cast("Mapping[object, object]", value)

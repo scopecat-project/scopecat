@@ -54,6 +54,7 @@ from scopecat.kernel.value_types import (
     Array,
     ArrayDimension,
     Bool,
+    Complex,
     DataType,
     Float,
     Int,
@@ -192,11 +193,13 @@ def _infer_compute_output_type(
         return ScalarType(Int())
     if annotation is float:
         return ScalarType(Float())
+    if annotation is complex:
+        return ScalarType(Complex())
     if annotation is str:
         return ScalarType(String())
     raise TypeError(
         "compute output_type is required unless the function return annotation "
-        "is bool, int, float, str, or Annotated with ScalarType/ArrayType, or "
+        "is bool, int, float, complex, str, or Annotated with ScalarType/ArrayType, or "
         "the function is decorated with ProductBundle.kernel"
     )
 
@@ -276,6 +279,8 @@ def _compute_input_data_type(value: object) -> DataType:
             return ScalarType(
                 Float() if spec.unit is None else QuantityType(unit=spec.unit)
             )
+        if spec.dtype == "complex128":
+            return ScalarType(Complex(unit=spec.unit))
         if spec.dtype == "string" and spec.unit is None:
             return ScalarType(String())
         raise TypeError(
@@ -355,6 +360,19 @@ def _converted_unit_type(value_type: DataType, unit: str) -> DataType:
         if not compatible_units(source_unit, unit):
             raise ValueError(f"cannot convert {source_unit!r} to {unit!r}")
         return replace(value_type, unit=unit)
+    if isinstance(value_type.atom, Complex):
+        source_unit = value_type.atom.unit
+        if source_unit is None:
+            raise TypeError("unit conversion requires a unit-bearing complex scalar")
+        from scopecat.kernel.units import UNIT_SCALE_TO_BASE
+
+        if not compatible_units(source_unit, unit) or any(
+            selected not in UNIT_SCALE_TO_BASE for selected in (source_unit, unit)
+        ):
+            raise ValueError(
+                "complex scalar conversion requires compatible linear units"
+            )
+        return ScalarType(replace(value_type.atom, unit=unit))
     if not isinstance(value_type.atom, QuantityType):
         raise TypeError("unit conversion requires a quantity value")
     source_unit = value_type.atom.unit
@@ -424,7 +442,7 @@ def _is_entity_input_type(value_type: ValueType) -> bool:
 def _is_public_state_binding(value: object) -> bool:
     return (
         isinstance(value, ValueRef) and isinstance(value.value_type, ScalarType)
-    ) or isinstance(value, Quantity | EntityRef | str | int | float | bool)
+    ) or isinstance(value, Quantity | EntityRef | str | int | float | complex | bool)
 
 
 def _is_public_invocation_input(value: object) -> bool:
@@ -1113,7 +1131,7 @@ class ModuleContext:
         source_unit = (
             source_type.unit
             if isinstance(source_type, ArrayType)
-            else cast("QuantityType", source_type.atom).unit
+            else cast("QuantityType | Complex", source_type.atom).unit
         )
         if source_unit is None:
             raise AssertionError("converted unit types must have a source unit")

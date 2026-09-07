@@ -8,7 +8,9 @@ from scopecat.kernel.entity import EntityRef
 from scopecat.kernel.payloads import PayloadValue
 from scopecat.kernel.quantity import Quantity
 
-type ScalarValue = str | int | float | bool | Quantity | EntityRef | PayloadValue | None
+type ScalarValue = (
+    str | int | float | complex | bool | Quantity | EntityRef | PayloadValue | None
+)
 type CellValue = ScalarValue | dict[str, object]
 type Row = dict[str, CellValue]
 
@@ -18,7 +20,7 @@ def is_cell_value(value: object) -> TypeGuard[CellValue]:
 
     return value is None or isinstance(
         value,
-        str | int | float | bool | Quantity | EntityRef | PayloadValue | dict,
+        str | int | float | complex | bool | Quantity | EntityRef | PayloadValue | dict,
     )
 
 

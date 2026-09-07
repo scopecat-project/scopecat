@@ -23,6 +23,7 @@ from scopecat.kernel.value_types import (
     Array,
     AtomType,
     Bool,
+    Complex,
     Entity,
     Float,
     Int,
@@ -182,6 +183,16 @@ def _coerce_atom(atom: AtomType, value: object, *, path: ValuePath) -> object:
             path=path,
         )
         return numeric_value
+    if isinstance(atom, Complex):
+        if isinstance(value, bool) or not isinstance(value, int | float | complex):
+            raise ValueValidationError(path, f"expected complex, got {value!r}")
+        try:
+            numeric = complex(value)
+        except OverflowError as error:
+            raise ValueValidationError(path, "expected a finite complex") from error
+        if not math.isfinite(numeric.real) or not math.isfinite(numeric.imag):
+            raise ValueValidationError(path, "expected a finite complex")
+        return numeric
     if isinstance(atom, String):
         return _coerce_string(atom, value, path=path)
     if isinstance(atom, Quantity):

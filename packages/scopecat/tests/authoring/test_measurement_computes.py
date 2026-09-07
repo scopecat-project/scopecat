@@ -552,3 +552,72 @@ def test_domain_and_compute_cannot_own_the_same_product() -> None:
     assert "logical_product_producer_duplicate" in {
         problem.code for problem in error.value.problems
     }
+
+
+def test_complex_scalar_mean_and_linear_unit_conversion_have_no_local_axis() -> None:
+    def iq_mean(
+        *, values: object
+    ) -> Annotated[complex, sc.ScalarType(sc.ComplexType(unit="mV"))]:
+        return complex(np.mean(np.asarray(values, dtype=np.complex128)))
+
+    @sc.module(id="test.complex-scalar-mean")
+    def module(context: sc.ModuleContext) -> sc.ProductRef:
+        source = context._product(
+            "iq", dtype="complex128", unit="mV", axes=(shot_axis(2),)
+        )
+        mean = context.compute("mean", fn=iq_mean, values=source)
+        return context.convert(mean, "V", id="mean_volts")
+
+    logical = compose_module(module.definition)
+    output = logical.product_declarations[-1]
+    assert output.value_spec.dtype == "complex128"
+    assert output.value_spec.unit == "V"
+    assert output.value_spec.axes == ()
+    mean_compute, conversion = logical.measurement_computes
+    mean = mean_compute.kernel(
+        {
+            "values": MeasurementArray.create(
+                values=np.asarray([1 + 2j, 3 + 6j]),
+                dtype="complex128",
+                unit="mV",
+            )
+        }
+    )["result"]
+    assert isinstance(mean, MeasurementScalar)
+    assert mean.value == 2 + 4j
+    converted = conversion.kernel(
+        {"value": mean, "source_unit": "mV", "target_unit": "V"}
+    )["result"]
+    assert isinstance(converted, MeasurementScalar)
+    assert converted.value == 0.002 + 0.004j
+    assert converted.dtype == "complex128"
+    assert converted.unit == "V"
+
+
+def test_complex_scalar_rejects_real_output_and_nonlinear_conversion() -> None:
+    def identity(value: object) -> object:
+        return value
+
+    @sc.module(id="test.complex-real-output")
+    def module(context: sc.ModuleContext) -> sc.ProductRef:
+        source = context._product("iq", dtype="complex128")
+        return context.compute(
+            "wrong",
+            fn=identity,
+            value=source,
+            output_type=sc.ScalarType(sc.FloatType()),
+        )
+
+    [compute] = compose_module(module.definition).measurement_computes
+    with pytest.raises(ValueError, match="expected float"):
+        compute.kernel(
+            {"value": MeasurementScalar.create(value=1 + 2j, dtype="complex128")}
+        )
+
+    with pytest.raises(ValueError, match="compatible linear units"):
+
+        @sc.module(id="test.complex-nonlinear")
+        def nonlinear(context: sc.ModuleContext) -> sc.ProductRef:
+            return context.convert(
+                context._product("iq", dtype="complex128", unit="dBm"), "W"
+            )

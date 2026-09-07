@@ -129,6 +129,7 @@ from scopecat.program.value_refs import (
 from scopecat.program.value_types import (
     Array,
     Bool,
+    Complex,
     DataType,
     Entity,
     Float,
@@ -2046,6 +2047,7 @@ def _annotation_value_type(annotation: object, *, parameter: str) -> ValueType:
         bool: Scalar(Bool()),
         int: Scalar(Int()),
         float: Scalar(Float()),
+        complex: Scalar(Complex()),
         str: Scalar(String()),
         EntityRef: Scalar(Entity()),
         QuantityValue: Scalar(Quantity()),
@@ -2097,6 +2099,7 @@ def _python_annotation_matches(annotation: object, value_type: ValueType) -> boo
             Bool: (bool,),
             Entity: (str, EntityRef),
             Float: (float,),
+            Complex: (complex,),
             Int: (int,),
             Payload: (dict, Mapping),
             Quantity: (QuantityValue,),
