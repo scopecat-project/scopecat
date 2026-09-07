@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import argparse
 import shutil
+from difflib import unified_diff
+from itertools import islice
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import cast
@@ -38,7 +40,19 @@ def main() -> None:
         finally:
             stop_project(project)
     if cast("bool", args.check):
-        if not OUTPUT.is_file() or OUTPUT.read_text() != content:
+        expected = OUTPUT.read_text() if OUTPUT.is_file() else ""
+        if expected != content:
+            differences = unified_diff(
+                expected.splitlines(),
+                content.splitlines(),
+                fromfile="committed acceptance.json",
+                tofile="fresh acceptance.json",
+                n=2,
+                lineterm="",
+            )
+            # Keep CI diagnostics bounded without rewriting captured scientific data.
+            for line in islice(differences, 80):
+                print(line[:300])
             raise SystemExit(
                 "Reference-lab acceptance fixture is stale; run "
                 "uv run python scripts/generate_reference_lab_acceptance.py"
