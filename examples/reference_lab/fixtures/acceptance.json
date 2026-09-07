@@ -1,4 +1,316 @@
 {
+  "coherent_scalar": {
+    "dataset_schema": {
+      "dataset_id": "raw-measurements",
+      "dimensions": [
+        {
+          "id": "point",
+          "index": null,
+          "kind": "point",
+          "label": null,
+          "metadata": {},
+          "size": 4
+        }
+      ],
+      "format_version": "scopecat.measurement_dataset_schema.v17",
+      "metadata": {
+        "experiment_id": "reference_lab.coherent_ramsey"
+      },
+      "point_domain": {
+        "axes": [
+          {
+            "id": "delay",
+            "size": 2,
+            "source": {
+              "kind": "values",
+              "values": [
+                {
+                  "dtype": "float64",
+                  "kind": "scalar",
+                  "metadata": {},
+                  "unit": "ns",
+                  "value": 8.0
+                },
+                {
+                  "dtype": "float64",
+                  "kind": "scalar",
+                  "metadata": {},
+                  "unit": "ns",
+                  "value": 88.0
+                }
+              ]
+            }
+          },
+          {
+            "id": "phase",
+            "size": 2,
+            "source": {
+              "kind": "values",
+              "values": [
+                {
+                  "dtype": "float64",
+                  "kind": "scalar",
+                  "metadata": {},
+                  "unit": "rad",
+                  "value": 0.0
+                },
+                {
+                  "dtype": "float64",
+                  "kind": "scalar",
+                  "metadata": {},
+                  "unit": "rad",
+                  "value": 1.0
+                }
+              ]
+            }
+          }
+        ],
+        "kind": "product_grid"
+      },
+      "primary_coordinates": [
+        "delay",
+        "phase"
+      ],
+      "primary_observables": [
+        "iq_mean"
+      ],
+      "record_schema": "scopecat.measurement_record.v10",
+      "result": {
+        "fields": [
+          {
+            "path": [
+              "delay"
+            ],
+            "variable_id": "delay"
+          },
+          {
+            "path": [
+              "phase"
+            ],
+            "variable_id": "phase"
+          },
+          {
+            "path": [
+              "iq_mean"
+            ],
+            "variable_id": "iq_mean"
+          }
+        ],
+        "id": "reference_lab.coherent_ramsey",
+        "version": "sha256:6e0628ba53d97987de1de937acff112ff6063aab82cf8698237d077c37137e3f"
+      },
+      "variable_groups": [],
+      "variables": [
+        {
+          "dims": [
+            "point"
+          ],
+          "dtype": "float64",
+          "entity_acquisition": null,
+          "id": "delay",
+          "label": null,
+          "metadata": {},
+          "recording_group_id": null,
+          "role": "coordinate",
+          "source_entity_products": null,
+          "source_product_id": null,
+          "source_value_id": null,
+          "unit": "ns"
+        },
+        {
+          "dims": [
+            "point"
+          ],
+          "dtype": "float64",
+          "entity_acquisition": null,
+          "id": "phase",
+          "label": null,
+          "metadata": {},
+          "recording_group_id": null,
+          "role": "coordinate",
+          "source_entity_products": null,
+          "source_product_id": null,
+          "source_value_id": null,
+          "unit": "rad"
+        },
+        {
+          "dims": [
+            "point"
+          ],
+          "dtype": "complex128",
+          "entity_acquisition": null,
+          "id": "iq_mean",
+          "label": null,
+          "metadata": {},
+          "recording_group_id": null,
+          "role": "observable",
+          "source_entity_products": null,
+          "source_product_id": "iq_mean",
+          "source_value_id": null,
+          "unit": "ratio"
+        }
+      ]
+    },
+    "items": [
+      {
+        "acquisition_evidence": {
+          "entries": [],
+          "events": [],
+          "variable_refs": {}
+        },
+        "coordinates": {
+          "delay": {
+            "dtype": "float64",
+            "kind": "scalar",
+            "metadata": {},
+            "unit": "ns",
+            "value": 8.0
+          },
+          "phase": {
+            "dtype": "float64",
+            "kind": "scalar",
+            "metadata": {},
+            "unit": "rad",
+            "value": 0.0
+          }
+        },
+        "logical_point_id": "e603f1dcd6e025d9c709e246452241f929fc9b07a616c8f51d7334b585dd0461",
+        "metadata": {},
+        "observables": {
+          "iq_mean": {
+            "dtype": "complex128",
+            "kind": "scalar",
+            "metadata": {},
+            "unit": "ratio",
+            "value": {
+              "imag": 2.060851489460447e-15,
+              "real": 0.75
+            }
+          }
+        },
+        "point_index": 0,
+        "run_id": "acceptance-coherent"
+      },
+      {
+        "acquisition_evidence": {
+          "entries": [],
+          "events": [],
+          "variable_refs": {}
+        },
+        "coordinates": {
+          "delay": {
+            "dtype": "float64",
+            "kind": "scalar",
+            "metadata": {},
+            "unit": "ns",
+            "value": 8.0
+          },
+          "phase": {
+            "dtype": "float64",
+            "kind": "scalar",
+            "metadata": {},
+            "unit": "rad",
+            "value": 1.0
+          }
+        },
+        "logical_point_id": "4eafc7f1a0c04d58405ccf4d64085b49bef13c3ce69dcb86db5da95955e2df74",
+        "metadata": {},
+        "observables": {
+          "iq_mean": {
+            "dtype": "complex128",
+            "kind": "scalar",
+            "metadata": {},
+            "unit": "ratio",
+            "value": {
+              "imag": 0.0,
+              "real": 0.0
+            }
+          }
+        },
+        "point_index": 1,
+        "run_id": "acceptance-coherent"
+      },
+      {
+        "acquisition_evidence": {
+          "entries": [],
+          "events": [],
+          "variable_refs": {}
+        },
+        "coordinates": {
+          "delay": {
+            "dtype": "float64",
+            "kind": "scalar",
+            "metadata": {},
+            "unit": "ns",
+            "value": 88.0
+          },
+          "phase": {
+            "dtype": "float64",
+            "kind": "scalar",
+            "metadata": {},
+            "unit": "rad",
+            "value": 0.0
+          }
+        },
+        "logical_point_id": "707a3959399e6718914859fecc039ed28174869734f39a699dd3ce31f6820a84",
+        "metadata": {},
+        "observables": {
+          "iq_mean": {
+            "dtype": "complex128",
+            "kind": "scalar",
+            "metadata": {},
+            "unit": "ratio",
+            "value": {
+              "imag": 1.0364972768961422e-14,
+              "real": 0.6250000000000054
+            }
+          }
+        },
+        "point_index": 2,
+        "run_id": "acceptance-coherent"
+      },
+      {
+        "acquisition_evidence": {
+          "entries": [],
+          "events": [],
+          "variable_refs": {}
+        },
+        "coordinates": {
+          "delay": {
+            "dtype": "float64",
+            "kind": "scalar",
+            "metadata": {},
+            "unit": "ns",
+            "value": 88.0
+          },
+          "phase": {
+            "dtype": "float64",
+            "kind": "scalar",
+            "metadata": {},
+            "unit": "rad",
+            "value": 1.0
+          }
+        },
+        "logical_point_id": "a6462c939716de5a20630205c0b952c4866eb0b3e7dcd2845575d613b66a2165",
+        "metadata": {},
+        "observables": {
+          "iq_mean": {
+            "dtype": "complex128",
+            "kind": "scalar",
+            "metadata": {},
+            "unit": "ratio",
+            "value": {
+              "imag": 0.0,
+              "real": 0.0
+            }
+          }
+        },
+        "point_index": 3,
+        "run_id": "acceptance-coherent"
+      }
+    ],
+    "truncated": false
+  },
   "diagnostic": {
     "dataset_schema": {
       "dataset_id": "raw-measurements",

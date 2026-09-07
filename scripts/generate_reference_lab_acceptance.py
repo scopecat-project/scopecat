@@ -4,11 +4,17 @@ from __future__ import annotations
 
 import argparse
 import shutil
+from difflib import unified_diff
+from itertools import islice
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import cast
 
-from reference_lab.acceptance import acceptance_json, capture_acceptance_fixtures
+from reference_lab.acceptance import (
+    acceptance_json,
+    acceptance_json_matches,
+    capture_acceptance_fixtures,
+)
 from reference_lab.application import create_application
 from reference_lab.configuration import EXAMPLE_ROOT
 from scopecat.daemon.client import DaemonClient
@@ -38,7 +44,19 @@ def main() -> None:
         finally:
             stop_project(project)
     if cast("bool", args.check):
-        if not OUTPUT.is_file() or OUTPUT.read_text() != content:
+        expected = OUTPUT.read_text() if OUTPUT.is_file() else ""
+        if not expected or not acceptance_json_matches(expected, content):
+            differences = unified_diff(
+                expected.splitlines(),
+                content.splitlines(),
+                fromfile="committed acceptance.json",
+                tofile="fresh acceptance.json",
+                n=2,
+                lineterm="",
+            )
+            # Keep CI diagnostics bounded without rewriting captured scientific data.
+            for line in islice(differences, 80):
+                print(line[:300])
             raise SystemExit(
                 "Reference-lab acceptance fixture is stale; run "
                 "uv run python scripts/generate_reference_lab_acceptance.py"

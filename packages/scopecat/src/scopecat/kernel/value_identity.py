@@ -27,6 +27,12 @@ def scalar_identity(value: object) -> ScalarIdentity:
     if isinstance(value, int | float):
         normalized = 0.0 if value == 0 else value
         return ("number", normalized)
+    if isinstance(value, complex):
+        return (
+            "complex",
+            0.0 if value.real == 0 else value.real,
+            0.0 if value.imag == 0 else value.imag,
+        )
     if isinstance(value, str):
         return ("string", value)
     if isinstance(value, Quantity):

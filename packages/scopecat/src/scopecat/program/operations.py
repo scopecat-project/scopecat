@@ -25,7 +25,16 @@ from scopecat.program.value_refs import (
 from scopecat.program.value_types import DataType, ValueType
 
 type ComputeNodeInputValue = (
-    ValueRef | Quantity | str | int | float | bool | EntityRef | PayloadValue | None
+    ValueRef
+    | Quantity
+    | str
+    | int
+    | float
+    | complex
+    | bool
+    | EntityRef
+    | PayloadValue
+    | None
 )
 
 

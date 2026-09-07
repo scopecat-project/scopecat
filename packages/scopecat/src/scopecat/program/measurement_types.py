@@ -10,6 +10,7 @@ from numpy.typing import NDArray
 
 from scopecat.kernel.value_types import (
     Bool,
+    Complex,
     Entity,
     Float,
     Int,
@@ -65,6 +66,8 @@ def measurement_value_spec_from_scalar(
         return "int64", None
     if isinstance(atom, Float):
         return "float64", None
+    if isinstance(atom, Complex):
+        return "complex128", atom.unit
     if isinstance(atom, QuantityType):
         return "float64", atom.unit
     if isinstance(atom, String | Entity):

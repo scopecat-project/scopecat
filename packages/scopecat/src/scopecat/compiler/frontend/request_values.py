@@ -38,6 +38,14 @@ def project_run_request_value(
 
     if value is None or isinstance(value, str | bool | int | float | Quantity):
         return normalize_run_request_value(value)
+    if isinstance(value, complex):
+        return normalize_run_request_value(
+            {
+                "kind": "complex",
+                "real": value.real,
+                "imag": value.imag,
+            }
+        )
     if isinstance(value, EntityRef):
         return {
             "kind": "entity",

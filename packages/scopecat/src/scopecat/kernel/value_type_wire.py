@@ -17,6 +17,7 @@ from pydantic import (
 
 from scopecat.kernel.value_types import (
     Bool,
+    Complex,
     Entity,
     Float,
     Int,
@@ -211,6 +212,10 @@ def _scalar_to_wire(
             return _EntityWire(type="entity", entity_kind=entity_kind)
         case Payload(schema_id=schema_id):
             return _PayloadWire(type="payload", schema_id=schema_id)
+        case Complex():
+            raise TypeError(
+                "complex scalar is unsupported by configuration/instrument contracts"
+            )
         case Float() | Quantity():
             msg = "durable scalar types must require finite numeric values"
             raise ValueError(msg)

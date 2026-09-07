@@ -42,6 +42,10 @@ by hand into a second set of mocks.
   configuration. Its completed run retains temperature, resistance and acquisition
   evidence in the normal measurement dataset. A separate compilation review
   exercises the existing review response without admitting a run.
+- **Complex scalar grid:** `coherent_ramsey` reduces acquired IQ shots to one
+  native complex mean at each delay/phase point. The same generated records check
+  real/imaginary storage and remote Arrow values, then exercise magnitude, phase,
+  real and imaginary UI views without an aggregate axis or stored projections.
 - **Reviewed candidate:** the existing entity-indexed Ramsey workflow produces a
   q1 channel-delay proposal, runs its candidate and accepts it through the public
   manual-review operation. The proposal page includes its durable approval.
@@ -54,7 +58,12 @@ by hand into a second set of mocks.
 
 Only explicitly named capture IDs and wall-clock fields are normalized. Scientific
 values, content hashes, entity alignment and proposal deltas remain generated
-production output. Regenerate after changing their producers; inspect the diff.
+production output. The fixture check compares only the coherent scalar IQ mean's
+real/imaginary components with absolute and relative tolerance `1e-12` in `ratio`,
+accounting for native reduction roundoff across platforms. Generation never
+rounds these values; record identity and remote Arrow comparisons within each run
+remain exact. All other fixture fields remain exact. Regenerate after changing
+their producers; inspect the diff.
 
 ## Focused commands by lane
 

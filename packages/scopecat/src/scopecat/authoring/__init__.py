@@ -92,6 +92,9 @@ from scopecat.program.value_types import (
     Bool as BoolType,
 )
 from scopecat.program.value_types import (
+    Complex as ComplexType,
+)
+from scopecat.program.value_types import (
     Entity as EntityType,
 )
 from scopecat.program.value_types import (
@@ -138,6 +141,7 @@ __all__ = [
     "Axis",
     "BoolType",
     "CapabilityResource",
+    "ComplexType",
     "ComputeInput",
     "ConcreteEntityInput",
     "CoordinateRef",
