@@ -6,6 +6,7 @@ import json
 import sqlite3
 import subprocess
 import sys
+from collections import Counter
 from pathlib import Path
 from typing import cast
 
@@ -154,6 +155,17 @@ def test_fixed_program_lo_sweep_avoids_per_point_durable_job_writes(
             "tuple[int]",
             connection.execute("SELECT COUNT(*) FROM durable_events").fetchone(),
         )[0]
+        measured_payloads = [
+            json.loads(row[0])
+            for row in connection.execute(
+                "SELECT payload_json FROM durable_events "
+                "WHERE kind = 'run_hardware_batch_measured'"
+            )
+        ]
+        finalization_count = connection.execute(
+            "SELECT COUNT(*) FROM durable_events "
+            "WHERE kind = 'run_hardware_finalization_measured'"
+        ).fetchone()[0]
         durable_refs = tuple(
             row[0]
             for row in cast(
@@ -183,7 +195,22 @@ def test_fixed_program_lo_sweep_avoids_per_point_durable_job_writes(
     )
     assert domain_transition_count == 0
     assert measurement_append_count == 1
-    assert durable_event_count < point_count
+    # Measurement events follow physical batches, not 1,000 shots per point.
+    # Existing lifecycle/domain/measurement ledgers retain their previous bound.
+    assert len(measured_payloads) == 5 * point_count + 1
+    assert finalization_count == 1
+    assert (
+        durable_event_count - len(measured_payloads) - finalization_count < point_count
+    )
+    operation_counts = Counter(
+        item["operation"] for payload in measured_payloads for item in payload["costs"]
+    )
+    assert operation_counts == {
+        "invoke": 9 * point_count,
+        "apply": point_count + 5,
+        "prepare": point_count,
+        "collect": point_count,
+    }
     assert cast("int", result["durable_file_count"]) < point_count
     assert not any("program" in ref or "waveform" in ref for ref in durable_refs)
 

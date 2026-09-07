@@ -205,10 +205,17 @@ def test_binary_command_payload_crosses_real_json_http_boundary(
         assert not _payload_object_path(runtime, payload.content_hash).exists()
         [driver] = provider.drivers
         assert driver.consumed_payloads == [_PAYLOAD_BYTES]
-        assert not any(
-            event.kind.startswith("run_hardware_batch_")
+        [event] = [
+            event
             for event in daemon.replay_events(run_id=run_id).items
-        )
+            if event.kind.startswith("run_hardware_batch_")
+        ]
+        assert event.kind == "run_hardware_batch_measured"
+        measured = daemon.get_run_measured_costs(run_id)
+        assert len(measured.operations) == 1
+        assert measured.operations[0].operation == "invoke"
+        assert measured.operations[0].measured is None  # No inferred bus byte count.
+        assert _PAYLOAD_BYTES.hex() not in str(event.payload)
 
 
 def test_direct_invoke_uses_the_same_payload_object_boundary(

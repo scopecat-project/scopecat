@@ -618,6 +618,9 @@ class ObjectInstrumentDriver:
         return DriverSuccess(
             DriverReadback(values=values, metadata=evidence),
             metadata=outcome_metadata,
+            measured_cost=(
+                outcome.measured_cost if isinstance(outcome, DriverSuccess) else None
+            ),
         )
 
     def disconnect(self) -> None:

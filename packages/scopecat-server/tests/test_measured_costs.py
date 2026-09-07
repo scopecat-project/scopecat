@@ -12,6 +12,10 @@ from scopecat.sdk.instruments.driver_adapter import (
     project_acquisition_preparation_outcome,
 )
 
+from scopecat_server.instruments.worker_wire import (
+    join_collect_receipt,
+    split_collect_receipt,
+)
 from scopecat_server.services.measured_costs import measured_costs
 
 
@@ -70,3 +74,5 @@ def test_collect_http_bundle_preserves_measurement() -> None:
         ),
     )
     assert decode_collect_receipt(encode_collect_receipt(receipt)) == receipt
+    frames = split_collect_receipt(receipt)
+    assert join_collect_receipt(frames.header, frames.attachments) == receipt

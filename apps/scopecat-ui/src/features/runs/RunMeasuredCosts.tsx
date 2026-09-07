@@ -27,6 +27,7 @@ export function RunMeasuredCostsContent({
   costs: components["schemas"]["RunMeasuredCosts"];
 }) {
   const operations = costs.operations ?? [];
+  const finalizations = costs.finalizations ?? [];
   return (
     <section aria-label="Measured run costs" className="rounded border border-line p-4 space-y-2">
       <h3 className="font-semibold">Measured run costs</h3>
@@ -36,8 +37,8 @@ export function RunMeasuredCostsContent({
       </p>
       <p>
         Hardware finalization:{" "}
-        {(costs.finalizations ?? []).length
-          ? costs.finalizations!.map((item) => seconds(item.seconds)).join(", ")
+        {finalizations.length
+          ? finalizations.map((item) => seconds(item.seconds)).join(", ")
           : "Unavailable"}{" "}
         · Terminal commit: Unavailable
       </p>

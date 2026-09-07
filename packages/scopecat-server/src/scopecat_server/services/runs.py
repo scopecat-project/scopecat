@@ -70,7 +70,6 @@ from scopecat.daemon.wire import (
     PublishedAnalysisInputPayload,
     RunAttachmentCommand,
 )
-from scopecat.execution.evidence import COMPILATION_COST_KIND, compilation_cost_ref
 from scopecat.kernel.errors import (
     CheckFailed,
     Conflict,
@@ -446,6 +445,11 @@ class RunService:
         return failure_evidence(detail, page.items, truncated=len(page.items) == 128)
 
     def get_run_measured_costs(self, run_id: str) -> RunMeasuredCosts:
+        from scopecat.execution.evidence import (
+            COMPILATION_COST_KIND,
+            compilation_cost_ref,
+        )
+
         from .measured_costs import measured_costs
 
         self.get_run(run_id)

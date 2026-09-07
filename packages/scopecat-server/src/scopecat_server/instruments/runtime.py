@@ -1041,7 +1041,7 @@ class InstrumentRuntime:
                 indeterminate=indeterminate_reason is not None,
             )
             if receipt.problems or receipt.indeterminate or costs:
-                self._record_hardware_batch_problem(
+                self._record_hardware_batch_evidence(
                     run_id,
                     runtime,
                     canonical_request,
@@ -1067,7 +1067,7 @@ class InstrumentRuntime:
             self._payloads.release(payload_scope)
             return receipt
 
-    def _record_hardware_batch_problem(
+    def _record_hardware_batch_evidence(
         self,
         run_id: str,
         runtime: OwnershipRuntime,

@@ -792,7 +792,15 @@ def test_batch_reconciles_state_collects_values_and_replays_once(
             ).items
             if event.kind.startswith("run_hardware_batch_")
         ]
-        assert batch_events == []
+        [measured_event] = batch_events
+        assert measured_event.kind == "run_hardware_batch_measured"
+        measured = runtime.application.runs.get_run_measured_costs(run_id)
+        assert [item.operation for item in measured.operations] == [
+            "prepare",
+            "apply",
+            "collect",
+        ]
+        # Replaying batch-1 and the unchanged batch-2 do not add measurements.
 
 
 def test_batch_prepares_selected_acquisitions_before_trigger_invoke(

@@ -84,6 +84,7 @@ def test_workflow_run_data_access_reads_runs_artifacts_and_datasets(
     assert [entry.id for entry in contents] == [
         "raw-measurements",
         "instrument-state-evidence",
+        "compilation-cost",
     ]
     assert [dataset.id for dataset in measurement_datasets] == ["raw-measurements"]
     assert raw_dataset.dataset_entry.id == "raw-measurements"
