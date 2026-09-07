@@ -4,8 +4,14 @@ from pathlib import Path
 from runpy import run_path
 from typing import Protocol, cast
 
+import pytest
+from pydantic import ValidationError
+from scopecat.api.run import RunHandle
 from scopecat.daemon.client import DaemonClient
 from scopecat.daemon.views import MeasurementTracePreviewQuery
+from scopecat.kernel.errors import SessionClosedError
+from scopecat.measurements.dataset import Dataset
+from scopecat.records.run import ConfigRegistryRunConfigSource, RunSnapshot
 
 
 class _ReferenceLabDaemon(Protocol):
@@ -467,3 +473,33 @@ def test_ragged_scope_data_survives_daemon_boundaries(
         "window_shapes": [[2], [2], [2]],
         "status": "completed",
     }
+
+
+def test_session_lifetime_captures_and_reattaches_without_reacquisition(
+    reference_lab_daemon: _ReferenceLabDaemon,
+) -> None:
+    with DaemonClient(reference_lab_daemon.url) as client:
+        before = {run.run_id for run in client.list_runs(limit=100).items}
+        namespace = run_path(str(NOTEBOOKS / "02_session_lifetime.py"))
+        after = {run.run_id for run in client.list_runs(limit=100).items}
+    snapshot = cast("RunSnapshot", namespace["snapshot"])
+    assert after - before == {snapshot.run_id}
+    assert namespace["session_lifetime_summary"] == {
+        "run_id": snapshot.run_id,
+        "status": "completed",
+        "same_snapshot": True,
+        "same_measurements": True,
+        "records": 1,
+        "sessions_closed": True,
+    }
+    run = cast("RunHandle", namespace["run"])
+    with pytest.raises(SessionClosedError, match=r"lab.get_run"):
+        _ = run.status
+    lazy = cast("Dataset", namespace["lazy_measurements"])
+    with pytest.raises(SessionClosedError, match="session is closed"):
+        _ = lazy.records
+    with pytest.raises(ValidationError, match="frozen_instance"):
+        snapshot.run_id = "changed"
+    assert isinstance(snapshot.config_source, ConfigRegistryRunConfigSource)
+    with pytest.raises(ValidationError, match="frozen_instance"):
+        snapshot.config_source.entry_id = "changed"

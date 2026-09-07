@@ -106,6 +106,7 @@ from scopecat.kernel.errors import (
     RunFailed,
     RunFailure,
     RunIndeterminate,
+    SessionClosedError,
 )
 from scopecat.kernel.point_identity import LogicalPointId
 from scopecat.kernel.points import AcceptedRunPoint
@@ -2142,3 +2143,37 @@ def _terminal_manifest(accepted: RunSnapshot) -> RunSnapshot:
 
 def _model(model: BaseModel, *, status_code: int = 200) -> httpx2.Response:
     return httpx2.Response(status_code, json=model.model_dump(mode="json"))
+
+
+def test_closed_session_guides_lazy_reads_without_http() -> None:
+    requests: list[httpx2.Request] = []
+
+    def handle(request: httpx2.Request) -> httpx2.Response:
+        requests.append(request)
+        return httpx2.Response(200, json={})
+
+    client = DaemonClient("http://daemon.local", transport=httpx2.MockTransport(handle))
+    lab = LabClient(client)
+    run = RunHandle(session=lab, id="retained-run")
+    client.close()
+    assert lab.is_closed
+    with pytest.raises(SessionClosedError, match=r"lab\.get_run\(run_id\)") as raised:
+        _ = run.status
+    assert "run.snapshot before closing" in str(raised.value)
+    assert not requests
+
+
+def test_lab_close_preserves_connection_ownership() -> None:
+    with DaemonClient("http://daemon.local") as supplied:
+        lab = LabClient(supplied)
+        lab.close()
+        lab.close()
+        assert not supplied.is_closed
+        assert not lab.is_closed
+    assert lab.is_closed
+
+    for _ in range(2):
+        with LabClient("http://daemon.local") as owned:
+            assert not owned.is_closed
+        assert owned.is_closed
+        owned.close()

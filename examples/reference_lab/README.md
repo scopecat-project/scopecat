@@ -47,6 +47,7 @@ The scripts are ordinary Python with `# %%` cells and can be followed in order.
 | Script | Demonstrates |
 |---|---|
 | `00_lab_tour.py` | Shared inventory, routing, and parameter rows |
+| `02_session_lifetime.py` | Captured snapshots, explicit connection cleanup, and retained-run reattachment |
 | `05_sample_workflow.py` | Versioned chip registration, exact run binding, and longitudinal sample analysis |
 | `10_direct_control.py` | Live typed clients and multi-device reservation without an experiment run |
 | `20_flux_spectroscopy.py` | Bias scan, complex traces, fit artifacts, and a parameter proposal |

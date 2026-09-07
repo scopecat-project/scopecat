@@ -215,14 +215,23 @@ class RunSession(Protocol):
 
 @dataclass(frozen=True)
 class RunHandle:
-    """Typed handle for a run created by a session."""
+    """Live run identity whose lazy reads use its creating session.
+
+    Retain ``run.id`` to reattach through a new session's ``get_run``. Capture
+    ``snapshot = run.snapshot`` before closing for immutable local state.
+    """
 
     session: RunSession
     id: str
 
     @property
     def snapshot(self) -> RunSnapshot:
-        """Load this run's current identity and terminal state."""
+        """Capture immutable run identity and the outcome currently retained.
+
+        Every access loads fresh state. The returned value performs no HTTP and
+        remains readable after closing the session. A completed run has an
+        outcome; a snapshot taken earlier stays unchanged as the run progresses.
+        """
 
         return self.session.run_operations.load_snapshot(self.id)
 
@@ -320,7 +329,11 @@ class RunHandle:
         )
 
     def measurements(self) -> Dataset:
-        """Open this run's measurement dataset for notebook analysis."""
+        """Open a lazy measurement dataset using this handle's connection.
+
+        Read it while the session is open, or reattach the run in a new session
+        and open its measurements there. Materialized values remain local data.
+        """
 
         entry = self.content("dataset", RAW_MEASUREMENTS_DATASET_ID)
         if entry.kind != MEASUREMENT_DATASET_KIND:

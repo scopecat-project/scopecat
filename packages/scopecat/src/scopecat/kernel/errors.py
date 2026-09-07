@@ -24,6 +24,10 @@ class ScopecatError(Exception):
     """Base error for Scopecat failures."""
 
 
+class SessionClosedError(ScopecatError):
+    """A lazy operation needs the daemon connection that has already closed."""
+
+
 class ProblemFailure(ScopecatError):
     """Base for expected failures described by structured problems."""
 

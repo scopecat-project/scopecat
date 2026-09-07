@@ -209,6 +209,7 @@ from scopecat.kernel.content_identity import (
     sha256_content_hash,
     sha256_content_hash_segments,
 )
+from scopecat.kernel.errors import SessionClosedError
 from scopecat.measurements.recording_arrow import encode_measurement_append
 from scopecat.planning.catalog import InstrumentContractCatalog
 from scopecat.records.config import ConfigProfileSnapshot
@@ -312,6 +313,12 @@ class DaemonClient:
         traceback: TracebackType | None,
     ) -> None:
         self.close()
+
+    @property
+    def is_closed(self) -> bool:
+        """Whether this connection has been closed by its owner."""
+
+        return self._http.is_closed
 
     def close(self) -> None:
         self._http.close()
@@ -2289,6 +2296,13 @@ class DaemonClient:
         content: bytes | Iterable[bytes] | None = None,
         headers: dict[str, str] | None = None,
     ) -> httpx2.Response:
+        if self.is_closed:
+            raise SessionClosedError(
+                "This Scopecat session is closed. Open a new connection with "
+                "sc.open_project(project_root).connect(), then use "
+                "lab.get_run(run_id) to read the retained run. Capture "
+                "run.snapshot before closing to retain its state without HTTP."
+            )
         response = self._http.request(
             method,
             path,

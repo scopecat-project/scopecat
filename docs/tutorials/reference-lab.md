@@ -4,8 +4,10 @@ The reference lab is Scopecat's runnable gallery: a deterministic four-qubit
 project with virtual RF and DC sources, temperature monitor, VNA, shared LOs,
 AWGs, digitizer, timing controller, and oscilloscope.
 
-Complete the [source preview quickstart](../getting-started/quickstart.md) first
-so the Python workspace and GUI are ready.
+The [pilot quickstart](../getting-started/quickstart.md) covers the installed
+starter project. This gallery uses the source workspace: run `uv sync --locked`
+and build its GUI with `pnpm --dir apps/scopecat-ui install --frozen-lockfile`
+and `pnpm --dir apps/scopecat-ui run build` first.
 
 ## Start the lab
 
@@ -39,6 +41,72 @@ It registers and revises a stable chip, binds the active revision to a Ramsey
 run, and publishes a sample-owned conclusion over that exact run. In the
 **Samples** workspace, the run opens the historical revision it actually used,
 while the active sample remains independently visible.
+
+## Keep a notebook connection open across cells
+
+Create one connection in a setup cell and keep it for interactive reads. If you
+rerun this cell, close the old connection before replacing it:
+
+```python
+import scopecat as sc
+from reference_lab.configuration import EXAMPLE_ROOT
+from reference_lab.workflows.temperature_diagnostic import temperature_diagnostic
+
+project = sc.open_project(EXAMPLE_ROOT)
+if "lab" in globals():
+    lab.close()
+lab = project.connect(operator="notebook")
+```
+
+Run one virtual diagnostic in another cell and explicitly capture its state:
+
+```python
+run = lab.run(temperature_diagnostic(), name="Notebook thermometer")
+snapshot = run.snapshot
+run_id = snapshot.run_id
+print(snapshot.status)
+```
+
+`run` is a live handle. Each `run.status` or `run.snapshot` access reads current
+state through its original connection. `snapshot` is an immutable local value;
+it performs no HTTP and remains readable after closing. A terminal snapshot has
+an outcome. A snapshot captured earlier stays unchanged as the run progresses.
+
+Dataset objects also load lazily. Materialize the values needed locally before
+closing, for example `records = run.measurements().records`; an unread dataset
+still needs its connection. Close the kernel's session explicitly when finished:
+
+```python
+lab.close()
+print(snapshot.status)  # Captured state remains usable.
+```
+
+A lazy read through the old handle or an unread dataset now raises
+`SessionClosedError` from `scopecat.kernel.errors`, with reconnection guidance.
+Closing a connection does not stop the daemon or delete the run. To read the
+retained results in a new kernel or after restart, keep the project path and run
+ID and attach through a new connection:
+
+```python
+with sc.open_project(EXAMPLE_ROOT).connect() as lab:
+    retained_run = lab.get_run(run_id)
+    records = retained_run.measurements().records
+```
+
+`get_run` attaches a new handle; it does not execute or resume acquisition. The
+old handle keeps its original lifetime. Supplying a `DaemonClient` directly to
+`LabClient` retains caller ownership: closing that wrapper does not close the
+supplied connection. `lab.is_closed` reports the underlying connection's state.
+
+For a complete executable close/reattach example:
+
+```sh
+uv run python examples/reference_lab/notebooks/02_session_lifetime.py
+```
+
+Its summary confirms the same terminal snapshot and retained measurement after
+both connections have closed. Short scripts should continue using `with` blocks
+so exceptions also release their connections.
 
 ## Inspect and control instruments
 
