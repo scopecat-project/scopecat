@@ -9,6 +9,22 @@ from hashlib import sha256
 from typing import Literal
 
 from scopecat.kernel.json_types import JsonValue
+from scopecat.records.instrument import InstrumentStateSetting
+
+PLANNED_INSTRUMENT_SETTING_LIMIT = 64
+
+
+@dataclass(frozen=True, slots=True)
+class PlannedInstrumentSetting:
+    """A frozen point-plan assignment, not an observed or confirmed device value."""
+
+    point_index: int | None
+    proposal_fingerprint: str
+    operation_index: int
+    assignment_index: int
+    operation_id: str
+    instrument_id: str
+    setting: InstrumentStateSetting
 
 
 @dataclass(frozen=True, slots=True)
@@ -791,6 +807,7 @@ class CompiledArtifactInspection:
 
 
 __all__ = [
+    "PLANNED_INSTRUMENT_SETTING_LIMIT",
     "CompiledArtifactInspection",
     "CompiledInspectionBounds",
     "CompiledInspectionFact",
@@ -810,5 +827,6 @@ __all__ = [
     "CompiledProgramInspectionQuery",
     "CompiledWaveformInspection",
     "CompiledWorkEstimate",
+    "PlannedInstrumentSetting",
     "query_compiled_program_node_index",
 ]

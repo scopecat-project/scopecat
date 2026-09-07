@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 
 from pydantic import JsonValue
 from scopecat.api.lab import LabClient
-from scopecat.application.launch import LaunchRequest
+from scopecat.application.launch import LaunchPreview, LaunchRequest
 from scopecat.daemon.client import DaemonClient
 from scopecat_instruments import temperature_readout
 
@@ -28,6 +28,11 @@ def capture_acceptance_fixtures(
     lab: LabClient, client: DaemonClient
 ) -> dict[str, JsonValue]:
     """Caller owns a fresh isolated daemon; all device access uses its virtual lab."""
+    setting_preview = launch_provider(
+        lab, LaunchRequest(action="preview", experiment="channel-timing", version="1")
+    )
+    assert isinstance(setting_preview, LaunchPreview)
+    assert setting_preview.preflight is not None
     config = bootstrap_config()
     active = lab.config.active()
     launch_preview = launch_provider(
@@ -167,6 +172,15 @@ def capture_acceptance_fixtures(
     return {
         "launch_catalog": CATALOG.model_dump(mode="json"),
         "launch_preview": launch_preview.model_dump(mode="json"),
+        "planned_settings": setting_preview.preflight.stages[0].model_dump(
+            mode="json",
+            include={
+                "planned_settings",
+                "planned_setting_limit",
+                "planned_settings_truncated",
+                "selected_points",
+            },
+        ),
         "diagnostic": diagnostic.model_dump(mode="json"),
         "inspection": inspection.model_dump(mode="json"),
         "reviewed_candidate": reviewed.model_dump(mode="json"),

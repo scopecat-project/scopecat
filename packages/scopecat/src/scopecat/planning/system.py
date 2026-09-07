@@ -30,7 +30,11 @@ from scopecat.execution.program import (
     RunPointInspection,
     RunProgram,
 )
-from scopecat.inspection import CompiledProgramInspectionQuery
+from scopecat.inspection import (
+    PLANNED_INSTRUMENT_SETTING_LIMIT,
+    CompiledProgramInspectionQuery,
+    PlannedInstrumentSetting,
+)
 from scopecat.kernel.errors import CheckFailed, ProviderContractError
 from scopecat.kernel.points import AcceptedRunPoint, PointProposalAttempt
 from scopecat.kernel.problems import (
@@ -91,6 +95,10 @@ from scopecat.program.logical import LogicalDomainExecution, LogicalEffect
 from scopecat.records.config import (
     ConfigProfileSnapshot,
     config_content_hash,
+)
+from scopecat.records.instrument import (
+    InstrumentStateSetting,
+    InterfaceStateMemberTarget,
 )
 from scopecat.sdk.domain.compiler import (
     DomainBatchCandidate,
@@ -1018,14 +1026,44 @@ def _compile_coverage(
                 catalog=catalog,
             ),
         )
+        jobs: list[RunDomainJob] = []
+        settings: list[PlannedInstrumentSetting] = []
+        settings_truncated = False
+        for operation_index, operation in enumerate(selected_operations):
+            if isinstance(operation, RunDomainJob):
+                jobs.append(operation)
+            elif isinstance(operation, RunCoverageEffect) and isinstance(
+                operation.operation, ApplyStateOperation
+            ):
+                state = operation.operation
+                for assignment_index, target in enumerate(state.targets):
+                    if len(settings) == PLANNED_INSTRUMENT_SETTING_LIMIT:
+                        settings_truncated = True
+                        break
+                    settings.append(
+                        PlannedInstrumentSetting(
+                            point_index=point_index,
+                            proposal_fingerprint=candidate.proposal_fingerprint,
+                            operation_index=operation_index,
+                            assignment_index=assignment_index,
+                            operation_id=state.operation_id,
+                            instrument_id=state.instrument_id,
+                            setting=InstrumentStateSetting(
+                                target=InterfaceStateMemberTarget(
+                                    interface_id=target.interface_id,
+                                    component_path=target.component_path,
+                                    property_id=target.property_id,
+                                ),
+                                value=target.value,
+                            ),
+                        )
+                    )
         return RunPointInspection(
             point_index=point_index,
             candidate=candidate,
-            jobs=tuple(
-                operation
-                for operation in selected_operations
-                if isinstance(operation, RunDomainJob)
-            ),
+            jobs=tuple(jobs),
+            planned_settings=tuple(settings),
+            planned_settings_truncated=settings_truncated,
         )
 
     def accept_all(

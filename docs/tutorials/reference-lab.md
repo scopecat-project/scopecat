@@ -171,3 +171,21 @@ Stop the lab when finished:
 ```sh
 uv run scopecat stop examples/reference_lab
 ```
+
+
+## Planned instrument settings in preflight
+
+The launcher preview shows instrument settings from the same frozen, selected
+point as its target inspection. For example, the channel-timing preview shows the
+reference drive source frequency with its planned unit beside the target's
+compiled waveform and timing information. These are planned settings, not
+observed or command-confirmed device values; preview performs no device I/O.
+
+Each experiment preview retains at most 64 assignments for its one inspected
+point. A procedure preflight keeps that budget separately for each declared
+stage. The table preserves point and plan order, reports omitted assignments,
+and distinguishes an inspected point with no settings from a preview that did
+not inspect a point. Free-coordinate previews retain the proposal identity.
+Values and units are preserved from the plan rather than converted for display.
+Changing controls requires a new preview; a previous preview remains evidence
+of its original plan and does not track later configuration changes.

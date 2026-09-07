@@ -6,6 +6,10 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from scopecat.inspection import (
+    PLANNED_INSTRUMENT_SETTING_LIMIT,
+    PlannedInstrumentSetting,
+)
 from scopecat.planning.preview_models import (
     ExperimentPreview,
     ExperimentPreviewDomainInspection,
@@ -80,6 +84,9 @@ class PreflightStage(_PreflightModel):
     selected_point_limit: int
     selected_points: int
     inspections: tuple[ExperimentPreviewDomainInspection, ...] = ()
+    planned_settings: tuple[PlannedInstrumentSetting, ...] = ()
+    planned_setting_limit: int = PLANNED_INSTRUMENT_SETTING_LIMIT
+    planned_settings_truncated: bool = False
 
 
 class PreflightSummary(_PreflightModel):
@@ -232,4 +239,7 @@ def summarize_preflight(
         selected_point_limit=preview.selected_point_limit,
         selected_points=int(preview.selected_point is not None),
         inspections=preview.domain_inspections,
+        planned_settings=preview.planned_settings,
+        planned_setting_limit=preview.planned_setting_limit,
+        planned_settings_truncated=preview.planned_settings_truncated,
     )

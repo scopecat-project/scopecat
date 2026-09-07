@@ -8,8 +8,10 @@ from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING
 
 from scopecat.inspection import (
+    PLANNED_INSTRUMENT_SETTING_LIMIT,
     CompiledArtifactInspection,
     CompiledProgramInspectionQuery,
+    PlannedInstrumentSetting,
 )
 from scopecat.records.costs import RunCompilationCost
 from scopecat.sdk.payloads import PayloadCodecRegistry
@@ -98,6 +100,9 @@ class RunPointInspection:
     point_index: int | None
     candidate: PointProposalAttempt
     jobs: tuple[RunDomainJob, ...]
+    planned_settings: tuple[PlannedInstrumentSetting, ...] = ()
+    planned_setting_limit: int = PLANNED_INSTRUMENT_SETTING_LIMIT
+    planned_settings_truncated: bool = False
 
 
 @dataclass(frozen=True, slots=True)

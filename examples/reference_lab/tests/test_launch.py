@@ -20,6 +20,7 @@ from scopecat.application.launch import (
 )
 from scopecat.daemon.client import DaemonClient, DaemonConflictError
 from scopecat.daemon.endpoint import DAEMON_URL_ENV
+from scopecat.kernel.quantity import Quantity
 from scopecat.planning.preflight import ExactQuantity, PreflightStage, UnknownQuantity
 from scopecat.project import Project, load_project
 from scopecat.records.measurement import MeasurementScalar
@@ -160,7 +161,17 @@ def test_real_http_preview_shares_catalog_and_never_admits_acquisition(
             wall_time = next(cost for cost in stage.costs if cost.metric == "wall_time")
             assert isinstance(wall_time.quantity, UnknownQuantity)
             assert wall_time.scope == "experiment"
+            assert len(stage.planned_settings) <= stage.planned_setting_limit == 64
             if experiment == "channel-timing":
+                [frequency] = [
+                    setting
+                    for setting in stage.planned_settings
+                    if setting.instrument_id == "drive-lo-a"
+                    and setting.setting.target.property_id == "frequency"
+                ]
+                assert frequency.setting.value.root == Quantity(4_850_000_000, "Hz")
+                assert frequency.point_index == 0
+                assert not stage.planned_settings_truncated
                 assert isinstance(stage.shots_per_point_per_entity, ExactQuantity)
                 assert stage.shots_per_point_per_entity.value == 64
                 playback = next(

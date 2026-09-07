@@ -17,6 +17,8 @@ from scopecat.daemon.views import (
     ParameterProposalPage,
     RunResourceView,
 )
+from scopecat.inspection import PlannedInstrumentSetting
+from scopecat.kernel.quantity import Quantity
 from scopecat.kernel.run_outcome import RunOutcome
 from scopecat.records.measurement import MeasurementDatasetSchema, MeasurementScalar
 
@@ -77,3 +79,21 @@ def test_shared_fixture_retains_diagnostic_review_and_entity_contracts() -> None
     assert (
         RunOutcome.model_validate(fixture["resource_cancelled"]).result == "cancelled"
     )
+
+
+def test_shared_fixture_retains_planned_instrument_values() -> None:
+    fixture = cast("dict[str, JsonValue]", json.loads(FIXTURE.read_text()))
+    planned = cast("dict[str, JsonValue]", fixture["planned_settings"])
+    settings = TypeAdapter(tuple[PlannedInstrumentSetting, ...]).validate_python(
+        planned["planned_settings"]
+    )
+    [frequency] = [
+        setting
+        for setting in settings
+        if setting.instrument_id == "drive-lo-a"
+        and setting.setting.target.property_id == "frequency"
+    ]
+    assert frequency.setting.value.root == Quantity(4_850_000_000, "Hz")
+    assert frequency.point_index == 0
+    assert frequency.proposal_fingerprint.startswith("sha256:")
+    assert planned["planned_settings_truncated"] is False

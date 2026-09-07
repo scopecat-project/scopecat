@@ -6,6 +6,7 @@ import { resolve } from "node:path";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { PlannedSettings } from "../features/launch/PlannedSettings";
 import { LaunchWorkspace } from "../features/launch/LaunchWorkspace";
 import type { components } from "../api-schema";
 import { getRunParameterProposals } from "../data/parameter-proposals/api";
@@ -21,6 +22,10 @@ const fixtures = JSON.parse(
     "utf8",
   ),
 ) as {
+  planned_settings: Pick<
+    components["schemas"]["PreflightStage"],
+    "planned_settings" | "planned_setting_limit" | "planned_settings_truncated" | "selected_points"
+  >;
   launch_catalog: components["schemas"]["LaunchCatalog"];
   launch_preview: components["schemas"]["LaunchPreview"];
   diagnostic: components["schemas"]["MeasurementPreview"];
@@ -47,6 +52,12 @@ function serve(value: unknown) {
 }
 
 describe("shared reference-lab acceptance", () => {
+  it("renders the reference planned source frequency without device observation", () => {
+    render(<PlannedSettings stage={fixtures.planned_settings} />);
+    expect(screen.getByText("4850000000 Hz")).toBeVisible();
+    expect(screen.getByText(/drive-lo-a.*frequency/)).toBeVisible();
+    expect(screen.getByText(/not observed or confirmed state/)).toBeVisible();
+  });
   it("uses the real diagnostic and reviewed-calibration catalog in the launcher", async () => {
     vi.stubGlobal(
       "fetch",

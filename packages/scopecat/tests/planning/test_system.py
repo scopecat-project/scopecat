@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
 from dataclasses import dataclass, field, replace
 from typing import Annotated, Literal, Never, cast
 
@@ -56,6 +56,7 @@ from scopecat.execution.local.program import (
 from scopecat.execution.program import (
     RunCoverageCheckpoint,
     RunCoverageEffect,
+    RunCoveredOperation,
     RunDomainJob,
 )
 from scopecat.kernel.errors import CheckFailed, ProviderContractError
@@ -1463,10 +1464,10 @@ def test_point_invariant_state_reuses_only_the_initial_probe(
 def test_large_plan_preview_samples_edges_without_hiding_total_point_count() -> None:
     from scopecat.planning.preflight import ExactQuantity, summarize_preflight
 
-    bound = _bound_program(point_count=10_000)
+    bound = _bound_program(point_count=10_000, state_mode="varying")
     compiler = _DomainCompiler("tests.bounded-preflight", batch_size=32)
     plan = ExperimentSystem(
-        instrument_catalog=_catalog(bound),
+        instrument_catalog=_catalog(bound, TestSignalInstrumentProvider()),
         domain_compiler=compiler,
     ).compile(bound)
     assert compiler.compile_calls == 0
@@ -1485,6 +1486,13 @@ def test_large_plan_preview_samples_edges_without_hiding_total_point_count() -> 
     assert stage.points_per_execution == ExactQuantity(
         value=10_000, unit="points", basis="Static point-plan cardinality"
     )
+    assert stage.planned_settings == preview.planned_settings
+    [setting] = stage.planned_settings
+    assert setting.point_index == 0
+    assert setting.setting.target.property_id == "frequency"
+    assert setting.setting.value.root == Quantity(4.9, "GHz")
+    assert stage.planned_setting_limit == 64
+    assert not stage.planned_settings_truncated
     assert stage.sampled_points == stage.sampled_point_limit == 64
     assert stage.selected_points == stage.selected_point_limit == 1
     assert preview.points_truncated
@@ -2317,3 +2325,84 @@ def test_adaptive_coverage_batches_an_accepted_range_without_inspection(
         isinstance(operation, RunCoverageCheckpoint | RunDomainJob)
         for operation in operations
     )
+
+
+@pytest.mark.parametrize("domain_before_state", [False, True])
+def test_planned_settings_follow_the_selected_frozen_point_and_free_candidate(
+    domain_before_state: bool,
+) -> None:
+    bound = _bound_program(
+        point_count=3, state_mode="varying", domain_before_state=domain_before_state
+    )
+    compiler = _DomainCompiler("tests.planned-settings", batch_size=32)
+    plan = ExperimentSystem(
+        instrument_catalog=_catalog(bound, TestSignalInstrumentProvider()),
+        domain_compiler=compiler,
+    ).compile(bound)
+    preview = build_run_program_preview(plan, point=1)
+    [setting] = preview.planned_settings
+    assert setting.point_index == 1
+    assert setting.setting.target.property_id == "frequency"
+    assert setting.setting.value.root == Quantity(5.1, "GHz")
+    assert setting.operation_index == int(domain_before_state)
+    assert setting.assignment_index == 0
+    assert compiler.compile_calls == 1
+    _assert_no_domain_effects(compiler)
+    candidate = build_run_program_preview(
+        plan, coordinates={"frequency": Quantity(5.25, "GHz")}, coordinate_mode="free"
+    )
+    [changed] = candidate.planned_settings
+    assert candidate.selected_point is not None
+    assert changed.point_index is None
+    assert changed.proposal_fingerprint == candidate.selected_point.proposal_fingerprint
+    assert changed.setting.value.root == Quantity(5.25, "GHz")
+    assert setting.setting.value.root == Quantity(5.1, "GHz")
+    assert compiler.compile_calls == 2
+    _assert_no_domain_effects(compiler)
+
+
+def test_planned_settings_budget_preserves_jobs_and_stream_order(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import scopecat.planning.system as system_module
+
+    original = system_module._validated_coverage
+    observed: list[RunCoveredOperation] = []
+
+    def wide_settings(
+        operations: Iterator[RunCoveredOperation],
+        *,
+        validator: system_module._CoverageValidator,
+    ) -> Iterator[RunCoveredOperation]:
+        for operation in original(operations, validator=validator):
+            observed.append(operation)
+            if isinstance(operation, RunCoverageEffect) and isinstance(
+                operation.operation, ApplyStateOperation
+            ):
+                yield replace(
+                    operation,
+                    operation=replace(
+                        operation.operation, targets=operation.operation.targets * 65
+                    ),
+                )
+            else:
+                yield operation
+
+    monkeypatch.setattr(system_module, "_validated_coverage", wide_settings)
+    bound = _bound_program(state_mode="constant")
+    compiler = _DomainCompiler("tests.setting-budget", batch_size=32)
+    plan = ExperimentSystem(
+        instrument_catalog=_catalog(bound, TestSignalInstrumentProvider()),
+        domain_compiler=compiler,
+    ).compile(bound)
+    inspected = plan.coverage.inspect(0)
+    assert inspected is not None
+    assert inspected.planned_settings_truncated
+    assert len(inspected.planned_settings) == inspected.planned_setting_limit == 64
+    assert [setting.assignment_index for setting in inspected.planned_settings] == list(
+        range(64)
+    )
+    assert len(inspected.jobs) == 1
+    assert sum(isinstance(operation, RunDomainJob) for operation in observed) == 1
+    assert compiler.compile_calls == 1
+    _assert_no_domain_effects(compiler)

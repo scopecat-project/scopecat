@@ -464,6 +464,9 @@
           "initial_proposed_points": 1,
           "inspections": [],
           "label": "Retained temperature diagnostic",
+          "planned_setting_limit": 64,
+          "planned_settings": [],
+          "planned_settings_truncated": false,
           "point_scope": "static_plan",
           "points_per_execution": {
             "basis": "Static point-plan cardinality",
@@ -513,6 +516,488 @@
     "resolved_inputs": {},
     "resources": [],
     "summary": "Retain one thermometer sample without changing device state or default configuration."
+  },
+  "planned_settings": {
+    "planned_setting_limit": 64,
+    "planned_settings": [
+      {
+        "assignment_index": 0,
+        "instrument_id": "drive-awg",
+        "operation_id": "00a7cd13ea69a986c535b2823306f2d5260c226166caee3a0b3a4eb074595f3f.state.0.drive-awg",
+        "operation_index": 0,
+        "point_index": 0,
+        "proposal_fingerprint": "sha256:e9ede1a03ce42a96b42ad30481e1df76d006d87584ed65170be6fa52499a6645",
+        "setting": {
+          "target": {
+            "component_path": [
+              "outputs",
+              "ch1"
+            ],
+            "interface_id": "reference_lab.analog_waveform_output/v1",
+            "kind": "interface",
+            "property_id": "offset"
+          },
+          "value": {
+            "unit": "V",
+            "value": 0.0
+          }
+        }
+      },
+      {
+        "assignment_index": 1,
+        "instrument_id": "drive-awg",
+        "operation_id": "00a7cd13ea69a986c535b2823306f2d5260c226166caee3a0b3a4eb074595f3f.state.0.drive-awg",
+        "operation_index": 0,
+        "point_index": 0,
+        "proposal_fingerprint": "sha256:e9ede1a03ce42a96b42ad30481e1df76d006d87584ed65170be6fa52499a6645",
+        "setting": {
+          "target": {
+            "component_path": [
+              "outputs",
+              "ch3"
+            ],
+            "interface_id": "reference_lab.analog_waveform_output/v1",
+            "kind": "interface",
+            "property_id": "offset"
+          },
+          "value": {
+            "unit": "V",
+            "value": 0.0
+          }
+        }
+      },
+      {
+        "assignment_index": 2,
+        "instrument_id": "drive-awg",
+        "operation_id": "00a7cd13ea69a986c535b2823306f2d5260c226166caee3a0b3a4eb074595f3f.state.0.drive-awg",
+        "operation_index": 0,
+        "point_index": 0,
+        "proposal_fingerprint": "sha256:e9ede1a03ce42a96b42ad30481e1df76d006d87584ed65170be6fa52499a6645",
+        "setting": {
+          "target": {
+            "component_path": [
+              "outputs",
+              "ch5"
+            ],
+            "interface_id": "reference_lab.analog_waveform_output/v1",
+            "kind": "interface",
+            "property_id": "offset"
+          },
+          "value": {
+            "unit": "V",
+            "value": 0.0
+          }
+        }
+      },
+      {
+        "assignment_index": 3,
+        "instrument_id": "drive-awg",
+        "operation_id": "00a7cd13ea69a986c535b2823306f2d5260c226166caee3a0b3a4eb074595f3f.state.0.drive-awg",
+        "operation_index": 0,
+        "point_index": 0,
+        "proposal_fingerprint": "sha256:e9ede1a03ce42a96b42ad30481e1df76d006d87584ed65170be6fa52499a6645",
+        "setting": {
+          "target": {
+            "component_path": [
+              "outputs",
+              "ch7"
+            ],
+            "interface_id": "reference_lab.analog_waveform_output/v1",
+            "kind": "interface",
+            "property_id": "offset"
+          },
+          "value": {
+            "unit": "V",
+            "value": 0.0
+          }
+        }
+      },
+      {
+        "assignment_index": 4,
+        "instrument_id": "drive-awg",
+        "operation_id": "00a7cd13ea69a986c535b2823306f2d5260c226166caee3a0b3a4eb074595f3f.state.0.drive-awg",
+        "operation_index": 0,
+        "point_index": 0,
+        "proposal_fingerprint": "sha256:e9ede1a03ce42a96b42ad30481e1df76d006d87584ed65170be6fa52499a6645",
+        "setting": {
+          "target": {
+            "component_path": [
+              "outputs",
+              "ch2"
+            ],
+            "interface_id": "reference_lab.analog_waveform_output/v1",
+            "kind": "interface",
+            "property_id": "offset"
+          },
+          "value": {
+            "unit": "V",
+            "value": 0.0
+          }
+        }
+      },
+      {
+        "assignment_index": 5,
+        "instrument_id": "drive-awg",
+        "operation_id": "00a7cd13ea69a986c535b2823306f2d5260c226166caee3a0b3a4eb074595f3f.state.0.drive-awg",
+        "operation_index": 0,
+        "point_index": 0,
+        "proposal_fingerprint": "sha256:e9ede1a03ce42a96b42ad30481e1df76d006d87584ed65170be6fa52499a6645",
+        "setting": {
+          "target": {
+            "component_path": [
+              "outputs",
+              "ch4"
+            ],
+            "interface_id": "reference_lab.analog_waveform_output/v1",
+            "kind": "interface",
+            "property_id": "offset"
+          },
+          "value": {
+            "unit": "V",
+            "value": 0.0
+          }
+        }
+      },
+      {
+        "assignment_index": 6,
+        "instrument_id": "drive-awg",
+        "operation_id": "00a7cd13ea69a986c535b2823306f2d5260c226166caee3a0b3a4eb074595f3f.state.0.drive-awg",
+        "operation_index": 0,
+        "point_index": 0,
+        "proposal_fingerprint": "sha256:e9ede1a03ce42a96b42ad30481e1df76d006d87584ed65170be6fa52499a6645",
+        "setting": {
+          "target": {
+            "component_path": [
+              "outputs",
+              "ch6"
+            ],
+            "interface_id": "reference_lab.analog_waveform_output/v1",
+            "kind": "interface",
+            "property_id": "offset"
+          },
+          "value": {
+            "unit": "V",
+            "value": 0.0
+          }
+        }
+      },
+      {
+        "assignment_index": 7,
+        "instrument_id": "drive-awg",
+        "operation_id": "00a7cd13ea69a986c535b2823306f2d5260c226166caee3a0b3a4eb074595f3f.state.0.drive-awg",
+        "operation_index": 0,
+        "point_index": 0,
+        "proposal_fingerprint": "sha256:e9ede1a03ce42a96b42ad30481e1df76d006d87584ed65170be6fa52499a6645",
+        "setting": {
+          "target": {
+            "component_path": [
+              "outputs",
+              "ch8"
+            ],
+            "interface_id": "reference_lab.analog_waveform_output/v1",
+            "kind": "interface",
+            "property_id": "offset"
+          },
+          "value": {
+            "unit": "V",
+            "value": 0.0
+          }
+        }
+      },
+      {
+        "assignment_index": 8,
+        "instrument_id": "drive-awg",
+        "operation_id": "00a7cd13ea69a986c535b2823306f2d5260c226166caee3a0b3a4eb074595f3f.state.0.drive-awg",
+        "operation_index": 0,
+        "point_index": 0,
+        "proposal_fingerprint": "sha256:e9ede1a03ce42a96b42ad30481e1df76d006d87584ed65170be6fa52499a6645",
+        "setting": {
+          "target": {
+            "component_path": [
+              "outputs",
+              "ch9"
+            ],
+            "interface_id": "reference_lab.analog_waveform_output/v1",
+            "kind": "interface",
+            "property_id": "offset"
+          },
+          "value": {
+            "unit": "V",
+            "value": 0.007
+          }
+        }
+      },
+      {
+        "assignment_index": 0,
+        "instrument_id": "readout-awg",
+        "operation_id": "00a7cd13ea69a986c535b2823306f2d5260c226166caee3a0b3a4eb074595f3f.state.0.readout-awg",
+        "operation_index": 1,
+        "point_index": 0,
+        "proposal_fingerprint": "sha256:e9ede1a03ce42a96b42ad30481e1df76d006d87584ed65170be6fa52499a6645",
+        "setting": {
+          "target": {
+            "component_path": [
+              "outputs",
+              "ch1"
+            ],
+            "interface_id": "reference_lab.analog_waveform_output/v1",
+            "kind": "interface",
+            "property_id": "offset"
+          },
+          "value": {
+            "unit": "V",
+            "value": 0.0
+          }
+        }
+      },
+      {
+        "assignment_index": 1,
+        "instrument_id": "readout-awg",
+        "operation_id": "00a7cd13ea69a986c535b2823306f2d5260c226166caee3a0b3a4eb074595f3f.state.0.readout-awg",
+        "operation_index": 1,
+        "point_index": 0,
+        "proposal_fingerprint": "sha256:e9ede1a03ce42a96b42ad30481e1df76d006d87584ed65170be6fa52499a6645",
+        "setting": {
+          "target": {
+            "component_path": [
+              "outputs",
+              "ch2"
+            ],
+            "interface_id": "reference_lab.analog_waveform_output/v1",
+            "kind": "interface",
+            "property_id": "offset"
+          },
+          "value": {
+            "unit": "V",
+            "value": 0.0
+          }
+        }
+      },
+      {
+        "assignment_index": 0,
+        "instrument_id": "drive-lo-a",
+        "operation_id": "00a7cd13ea69a986c535b2823306f2d5260c226166caee3a0b3a4eb074595f3f.state.1.drive-lo-a",
+        "operation_index": 2,
+        "point_index": 0,
+        "proposal_fingerprint": "sha256:e9ede1a03ce42a96b42ad30481e1df76d006d87584ed65170be6fa52499a6645",
+        "setting": {
+          "target": {
+            "component_path": [],
+            "interface_id": "scopecat.rf_output/v2",
+            "kind": "interface",
+            "property_id": "frequency"
+          },
+          "value": {
+            "unit": "Hz",
+            "value": 4850000000.0
+          }
+        }
+      },
+      {
+        "assignment_index": 1,
+        "instrument_id": "drive-lo-a",
+        "operation_id": "00a7cd13ea69a986c535b2823306f2d5260c226166caee3a0b3a4eb074595f3f.state.1.drive-lo-a",
+        "operation_index": 2,
+        "point_index": 0,
+        "proposal_fingerprint": "sha256:e9ede1a03ce42a96b42ad30481e1df76d006d87584ed65170be6fa52499a6645",
+        "setting": {
+          "target": {
+            "component_path": [],
+            "interface_id": "scopecat.rf_output/v2",
+            "kind": "interface",
+            "property_id": "power"
+          },
+          "value": {
+            "unit": "dBm",
+            "value": -10.0
+          }
+        }
+      },
+      {
+        "assignment_index": 2,
+        "instrument_id": "drive-lo-a",
+        "operation_id": "00a7cd13ea69a986c535b2823306f2d5260c226166caee3a0b3a4eb074595f3f.state.1.drive-lo-a",
+        "operation_index": 2,
+        "point_index": 0,
+        "proposal_fingerprint": "sha256:e9ede1a03ce42a96b42ad30481e1df76d006d87584ed65170be6fa52499a6645",
+        "setting": {
+          "target": {
+            "component_path": [],
+            "interface_id": "scopecat.rf_output/v2",
+            "kind": "interface",
+            "property_id": "output_enabled"
+          },
+          "value": true
+        }
+      },
+      {
+        "assignment_index": 3,
+        "instrument_id": "drive-lo-a",
+        "operation_id": "00a7cd13ea69a986c535b2823306f2d5260c226166caee3a0b3a4eb074595f3f.state.1.drive-lo-a",
+        "operation_index": 2,
+        "point_index": 0,
+        "proposal_fingerprint": "sha256:e9ede1a03ce42a96b42ad30481e1df76d006d87584ed65170be6fa52499a6645",
+        "setting": {
+          "target": {
+            "component_path": [],
+            "interface_id": "scopecat.reference_clock/v1",
+            "kind": "interface",
+            "property_id": "reference_source"
+          },
+          "value": "external"
+        }
+      },
+      {
+        "assignment_index": 0,
+        "instrument_id": "drive-lo-b",
+        "operation_id": "00a7cd13ea69a986c535b2823306f2d5260c226166caee3a0b3a4eb074595f3f.state.1.drive-lo-b",
+        "operation_index": 3,
+        "point_index": 0,
+        "proposal_fingerprint": "sha256:e9ede1a03ce42a96b42ad30481e1df76d006d87584ed65170be6fa52499a6645",
+        "setting": {
+          "target": {
+            "component_path": [],
+            "interface_id": "scopecat.rf_output/v2",
+            "kind": "interface",
+            "property_id": "frequency"
+          },
+          "value": {
+            "unit": "Hz",
+            "value": 5050000000.0
+          }
+        }
+      },
+      {
+        "assignment_index": 1,
+        "instrument_id": "drive-lo-b",
+        "operation_id": "00a7cd13ea69a986c535b2823306f2d5260c226166caee3a0b3a4eb074595f3f.state.1.drive-lo-b",
+        "operation_index": 3,
+        "point_index": 0,
+        "proposal_fingerprint": "sha256:e9ede1a03ce42a96b42ad30481e1df76d006d87584ed65170be6fa52499a6645",
+        "setting": {
+          "target": {
+            "component_path": [],
+            "interface_id": "scopecat.rf_output/v2",
+            "kind": "interface",
+            "property_id": "power"
+          },
+          "value": {
+            "unit": "dBm",
+            "value": -10.0
+          }
+        }
+      },
+      {
+        "assignment_index": 2,
+        "instrument_id": "drive-lo-b",
+        "operation_id": "00a7cd13ea69a986c535b2823306f2d5260c226166caee3a0b3a4eb074595f3f.state.1.drive-lo-b",
+        "operation_index": 3,
+        "point_index": 0,
+        "proposal_fingerprint": "sha256:e9ede1a03ce42a96b42ad30481e1df76d006d87584ed65170be6fa52499a6645",
+        "setting": {
+          "target": {
+            "component_path": [],
+            "interface_id": "scopecat.rf_output/v2",
+            "kind": "interface",
+            "property_id": "output_enabled"
+          },
+          "value": true
+        }
+      },
+      {
+        "assignment_index": 3,
+        "instrument_id": "drive-lo-b",
+        "operation_id": "00a7cd13ea69a986c535b2823306f2d5260c226166caee3a0b3a4eb074595f3f.state.1.drive-lo-b",
+        "operation_index": 3,
+        "point_index": 0,
+        "proposal_fingerprint": "sha256:e9ede1a03ce42a96b42ad30481e1df76d006d87584ed65170be6fa52499a6645",
+        "setting": {
+          "target": {
+            "component_path": [],
+            "interface_id": "scopecat.reference_clock/v1",
+            "kind": "interface",
+            "property_id": "reference_source"
+          },
+          "value": "external"
+        }
+      },
+      {
+        "assignment_index": 0,
+        "instrument_id": "readout-lo",
+        "operation_id": "00a7cd13ea69a986c535b2823306f2d5260c226166caee3a0b3a4eb074595f3f.state.2.readout-lo",
+        "operation_index": 4,
+        "point_index": 0,
+        "proposal_fingerprint": "sha256:e9ede1a03ce42a96b42ad30481e1df76d006d87584ed65170be6fa52499a6645",
+        "setting": {
+          "target": {
+            "component_path": [],
+            "interface_id": "scopecat.rf_output/v2",
+            "kind": "interface",
+            "property_id": "frequency"
+          },
+          "value": {
+            "unit": "Hz",
+            "value": 5300000000.0
+          }
+        }
+      },
+      {
+        "assignment_index": 1,
+        "instrument_id": "readout-lo",
+        "operation_id": "00a7cd13ea69a986c535b2823306f2d5260c226166caee3a0b3a4eb074595f3f.state.2.readout-lo",
+        "operation_index": 4,
+        "point_index": 0,
+        "proposal_fingerprint": "sha256:e9ede1a03ce42a96b42ad30481e1df76d006d87584ed65170be6fa52499a6645",
+        "setting": {
+          "target": {
+            "component_path": [],
+            "interface_id": "scopecat.rf_output/v2",
+            "kind": "interface",
+            "property_id": "power"
+          },
+          "value": {
+            "unit": "dBm",
+            "value": -5.0
+          }
+        }
+      },
+      {
+        "assignment_index": 2,
+        "instrument_id": "readout-lo",
+        "operation_id": "00a7cd13ea69a986c535b2823306f2d5260c226166caee3a0b3a4eb074595f3f.state.2.readout-lo",
+        "operation_index": 4,
+        "point_index": 0,
+        "proposal_fingerprint": "sha256:e9ede1a03ce42a96b42ad30481e1df76d006d87584ed65170be6fa52499a6645",
+        "setting": {
+          "target": {
+            "component_path": [],
+            "interface_id": "scopecat.rf_output/v2",
+            "kind": "interface",
+            "property_id": "output_enabled"
+          },
+          "value": true
+        }
+      },
+      {
+        "assignment_index": 3,
+        "instrument_id": "readout-lo",
+        "operation_id": "00a7cd13ea69a986c535b2823306f2d5260c226166caee3a0b3a4eb074595f3f.state.2.readout-lo",
+        "operation_index": 4,
+        "point_index": 0,
+        "proposal_fingerprint": "sha256:e9ede1a03ce42a96b42ad30481e1df76d006d87584ed65170be6fa52499a6645",
+        "setting": {
+          "target": {
+            "component_path": [],
+            "interface_id": "scopecat.reference_clock/v1",
+            "kind": "interface",
+            "property_id": "reference_source"
+          },
+          "value": "external"
+        }
+      }
+    ],
+    "planned_settings_truncated": false,
+    "selected_points": 1
   },
   "resource_cancelled": {
     "certainty": "known",
