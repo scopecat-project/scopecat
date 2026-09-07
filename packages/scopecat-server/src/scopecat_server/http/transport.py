@@ -230,6 +230,7 @@ from scopecat.daemon.wire import (
 )
 from scopecat.planning.catalog import InstrumentContractCatalog
 from scopecat.records.content import ContentEntry
+from scopecat.records.costs import RunMeasuredCosts
 from scopecat.records.instrument import (
     InstrumentStateCacheReadback,
     InstrumentStateReadback,
@@ -1259,6 +1260,10 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
     @app.get(f"{_API_PREFIX}/runs/{{run_id}}")
     def get_run(run_id: str) -> RunDetail:
         return application.runs.get_run(run_id)
+
+    @app.get(f"{_API_PREFIX}/runs/{{run_id}}/measured-costs")
+    def get_run_measured_costs(run_id: str) -> RunMeasuredCosts:
+        return application.runs.get_run_measured_costs(run_id)
 
     @app.get(f"{_API_PREFIX}/runs/{{run_id}}/failure-evidence")
     def get_run_failure_evidence(run_id: str) -> RunFailureEvidence:

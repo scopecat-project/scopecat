@@ -6,6 +6,7 @@ from collections.abc import Callable, Iterable, Mapping, Sequence
 from contextlib import suppress
 from datetime import UTC, datetime, timedelta
 from threading import Lock, RLock, Timer
+from time import perf_counter
 from typing import TYPE_CHECKING, Literal, cast
 
 from pydantic import JsonValue
@@ -49,6 +50,7 @@ from scopecat.records.config import (
     config_content_hash,
     instrument_bindings,
 )
+from scopecat.records.costs import RunFinalizationCost, RunOperationCost
 from scopecat.records.instrument import (
     InstrumentStateCacheReadback,
     InstrumentStateReadback,
@@ -180,6 +182,7 @@ from .commands import (
     observe_members,
     observed_members,
 )
+from .costs import observe_operation
 
 if TYPE_CHECKING:
     from ..command_payloads import CommandPayloadScope, CommandPayloadService
@@ -995,6 +998,7 @@ class InstrumentRuntime:
             problems: list[Problem] = []
             completed_effect_ids: list[str] = []
             effect_receipts: list[JsonValue] = []
+            costs: list[RunOperationCost] = []
             indeterminate_reason: str | None = None
             with runtime.lock:
                 preparation_problems, indeterminate_reason = (
@@ -1004,6 +1008,7 @@ class InstrumentRuntime:
                         runtime,
                         canonical_request.batch.actions,
                         backend_requests,
+                        costs,
                     )
                 )
                 problems.extend(preparation_problems)
@@ -1021,6 +1026,7 @@ class InstrumentRuntime:
                         runtime,
                         canonical_request.batch.actions,
                         backend_requests,
+                        costs,
                     )
                     values.extend(action_values)
                     problems.extend(action_problems)
@@ -1034,7 +1040,7 @@ class InstrumentRuntime:
                 problems=tuple(problems),
                 indeterminate=indeterminate_reason is not None,
             )
-            if receipt.problems or receipt.indeterminate:
+            if receipt.problems or receipt.indeterminate or costs:
                 self._record_hardware_batch_problem(
                     run_id,
                     runtime,
@@ -1042,6 +1048,7 @@ class InstrumentRuntime:
                     receipt,
                     completed_effect_ids=completed_effect_ids,
                     effect_receipts=effect_receipts,
+                    costs=costs,
                 )
             if indeterminate_reason is not None:
                 self._lose_run_runtime(
@@ -1069,9 +1076,11 @@ class InstrumentRuntime:
         *,
         completed_effect_ids: Sequence[str] = (),
         effect_receipts: Sequence[JsonValue] = (),
+        costs: Sequence[RunOperationCost] = (),
     ) -> None:
         receipt_evidence: dict[str, JsonValue] = {
             "sequence": request.sequence,
+            "costs": [cost.model_dump(mode="json") for cost in costs],
             "completed_effect_ids": list(completed_effect_ids),
             "effect_receipts": list(effect_receipts),
             "problem_codes": [item.code for item in receipt.problems],
@@ -1088,8 +1097,14 @@ class InstrumentRuntime:
                     "run_hardware_batch_unknown"
                     if receipt.indeterminate
                     else "run_hardware_batch_failed"
+                    if receipt.problems
+                    else "run_hardware_batch_measured"
                 ),
-                status="unknown" if receipt.indeterminate else "failed",
+                status="unknown"
+                if receipt.indeterminate
+                else "failed"
+                if receipt.problems
+                else "completed",
                 details=receipt_evidence,
             )
         except Exception as audit_error:
@@ -1252,6 +1267,7 @@ class InstrumentRuntime:
         backend_requests: Sequence[
             BackendApplyRequest | BackendInvokeRequest | BackendCollectRequest
         ],
+        costs: list[RunOperationCost],
     ) -> tuple[
         tuple[RunHardwareValue, ...],
         tuple[Problem, ...],
@@ -1272,6 +1288,7 @@ class InstrumentRuntime:
                         runtime,
                         action,
                         cast("BackendApplyRequest", backend_request),
+                        costs,
                     )
                     state_actions.append(state_action)
                     evidence: JsonValue = {
@@ -1285,6 +1302,7 @@ class InstrumentRuntime:
                         runtime,
                         action,
                         cast("BackendInvokeRequest", backend_request),
+                        costs,
                     )
                 else:
                     collected, evidence = self._execute_hardware_collect(
@@ -1292,6 +1310,7 @@ class InstrumentRuntime:
                         runtime,
                         action,
                         cast("BackendCollectRequest", backend_request),
+                        costs,
                     )
                     values.extend(collected)
                 completed_effect_ids.append(action.effect_id)
@@ -1364,6 +1383,7 @@ class InstrumentRuntime:
         backend_requests: Sequence[
             BackendApplyRequest | BackendInvokeRequest | BackendCollectRequest
         ],
+        costs: list[RunOperationCost],
     ) -> tuple[tuple[Problem, ...], str | None]:
         acquisition_plans: dict[str, list[BackendCollectRequest]] = {}
         preparation_actions: dict[str, RunHardwareCollect] = {}
@@ -1382,6 +1402,7 @@ class InstrumentRuntime:
                     runtime,
                     action,
                     BackendAcquisitionPlan(acquisitions=tuple(acquisitions)),
+                    costs,
                 )
             except BackendConflict as error:
                 if context.runtime is not runtime:
@@ -1429,10 +1450,15 @@ class InstrumentRuntime:
         runtime: OwnershipRuntime,
         action: RunHardwareCollect,
         plan: BackendAcquisitionPlan,
+        costs: list[RunOperationCost],
     ) -> None:
         instrument = runtime.instruments[action.instrument_id]
         try:
-            receipt = execute_instrument_acquisition_prepare(instrument, plan)
+            with observe_operation(
+                costs, instrument, action.effect_id, "prepare"
+            ) as observation:
+                receipt = execute_instrument_acquisition_prepare(instrument, plan)
+                observation.receipt(receipt.status, receipt.measured_cost)
         except InstrumentCommandExecutionError as error:
             raise HardwareActionIndeterminate(
                 error.problems
@@ -1461,6 +1487,7 @@ class InstrumentRuntime:
         runtime: OwnershipRuntime,
         action: RunHardwareApply,
         driver_request: BackendApplyRequest,
+        costs: list[RunOperationCost],
     ) -> RunHardwareStateActionReceipt:
         instrument = runtime.instruments[action.instrument_id]
         current = instrument.assumed_state
@@ -1499,11 +1526,15 @@ class InstrumentRuntime:
         if validation_problems:
             raise HardwareActionRejected(validation_problems)
         try:
-            receipt = execute_instrument_apply(
-                instrument,
-                driver_request,
-                assignments=command.assignments,
-            )
+            with observe_operation(
+                costs, instrument, action.effect_id, "apply"
+            ) as observation:
+                receipt = execute_instrument_apply(
+                    instrument,
+                    driver_request,
+                    assignments=command.assignments,
+                )
+                observation.receipt(receipt.status, receipt.measured_cost)
         except InstrumentCommandExecutionError as error:
             raise HardwareActionIndeterminate(
                 error.problems
@@ -1546,10 +1577,15 @@ class InstrumentRuntime:
         runtime: OwnershipRuntime,
         action: RunHardwareInvoke,
         backend_request: BackendInvokeRequest,
+        costs: list[RunOperationCost],
     ) -> dict[str, JsonValue]:
         instrument = runtime.instruments[action.instrument_id]
         try:
-            receipt = execute_instrument_invoke(instrument, backend_request)
+            with observe_operation(
+                costs, instrument, action.effect_id, "invoke"
+            ) as observation:
+                receipt = execute_instrument_invoke(instrument, backend_request)
+                observation.receipt(receipt.status, receipt.measured_cost)
         except InstrumentCommandExecutionError as error:
             raise HardwareActionIndeterminate(
                 error.problems
@@ -1583,6 +1619,7 @@ class InstrumentRuntime:
         runtime: OwnershipRuntime,
         action: RunHardwareCollect,
         driver_request: BackendCollectRequest,
+        costs: list[RunOperationCost],
     ) -> tuple[tuple[RunHardwareValue, ...], dict[str, JsonValue]]:
         command = CollectCommand(
             command_id=action.effect_id,
@@ -1600,11 +1637,15 @@ class InstrumentRuntime:
             raise HardwareActionRejected(validation_problems)
         started_at = datetime.now(UTC)
         try:
-            receipt = execute_instrument_collect(
-                instrument,
-                driver_request,
-                command=command,
-            )
+            with observe_operation(
+                costs, instrument, action.effect_id, "collect"
+            ) as observation:
+                receipt = execute_instrument_collect(
+                    instrument,
+                    driver_request,
+                    command=command,
+                )
+                observation.receipt(receipt.status, receipt.measured_cost)
         except InstrumentCommandExecutionError as error:
             if error.reason == "instrument_collect_receipt_invalid":
                 raise HardwareActionRejected(error.problems) from error
@@ -1687,6 +1728,7 @@ class InstrumentRuntime:
                 return finalization.receipt
 
             self._fence_run(run_id, command.lease_id)
+            finalization_started = perf_counter()
             runtime = context.runtime
             if runtime is None:
                 provision = context.provision
@@ -1726,6 +1768,20 @@ class InstrumentRuntime:
                 receipt=receipt,
             )
             self._payloads.release_owner("run", run_id)
+            self._record_run_operation_event(
+                run_id,
+                token=command.lease_id,
+                instrument_id=None,
+                operation_id=command.operation_id,
+                event_kind="run_hardware_finalization_measured",
+                status="completed",
+                details={
+                    "finalization_cost": RunFinalizationCost(
+                        operation_id=command.operation_id,
+                        seconds=perf_counter() - finalization_started,
+                    ).model_dump(mode="json")
+                },
+            )
             return receipt
 
     def _finalize_run_instruments(

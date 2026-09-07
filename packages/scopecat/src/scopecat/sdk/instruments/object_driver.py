@@ -523,7 +523,9 @@ class ObjectInstrumentDriver:
         implementation = _implemented_operations(type(self))[request.target]
         outcome = _call_operation(self, implementation, request.arguments)
         if isinstance(outcome, DriverSuccess):
-            return DriverSuccess(None, metadata=outcome.metadata)
+            return DriverSuccess(
+                None, metadata=outcome.metadata, measured_cost=outcome.measured_cost
+            )
         if outcome is None:
             return DriverSuccess(None)
         return cast("DriverOutcome[DriverStateReadback | None]", outcome)

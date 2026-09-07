@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
+from time import perf_counter
 
 from scopecat.compiler.bind import bind_program
 from scopecat.compiler.frontend.resolution import (
@@ -16,6 +17,7 @@ from scopecat.planning.compilation import compile_run_program
 from scopecat.planning.system import ExperimentSystem
 from scopecat.program.definitions import ExperimentInvocation
 from scopecat.records.config import ConfigProfileSnapshot
+from scopecat.records.costs import RunCompilationCost
 from scopecat.records.run import RunConfigSource
 from scopecat.records.run_request import RunRequest
 from scopecat.records.sample import SampleSelector
@@ -70,7 +72,8 @@ def plan_experiment_invocation(
 ) -> PlannedRun:
     """Plan one authored invocation against a snapshot without project I/O."""
 
-    return _plan_compiled_run(
+    started = perf_counter()
+    planned = _plan_compiled_run(
         config=config,
         experiment=compile_invocation(
             experiment,
@@ -83,4 +86,12 @@ def plan_experiment_invocation(
         ),
         system=system,
         config_source=config_source,
+    )
+
+    return replace(
+        planned,
+        program=replace(
+            planned.program,
+            compilation_cost=RunCompilationCost(seconds=perf_counter() - started),
+        ),
     )

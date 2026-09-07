@@ -26,6 +26,7 @@ from scopecat.measurements.array_wire import (
     encode_measurement_array,
 )
 from scopecat.program.measurement_types import MeasurementDType
+from scopecat.records.costs import OperationCostMeasurement
 from scopecat.records.instrument import CommandChannelBinding, InstrumentReadback
 from scopecat.records.measurement import (
     MeasurementAcquisitionValue,
@@ -191,6 +192,7 @@ class _CollectReceiptDescriptor(_WireModel):
     problems: tuple[Problem, ...] = ()
     readback: _CollectReadbackDescriptor | None = None
     metadata: JsonMetadata = Field(default_factory=dict)
+    measured_cost: OperationCostMeasurement | None = None
 
 
 class _CollectArrayDescriptor(_WireModel):
@@ -465,6 +467,7 @@ def split_collect_receipt(
             )
         ),
         metadata=receipt.metadata,
+        measured_cost=receipt.measured_cost,
     )
     header = _CollectHeader(
         protocol_version=COLLECT_WIRE_VERSION,
@@ -563,6 +566,7 @@ def join_collect_receipt(
             problems=receipt.problems,
             readback=readback,
             metadata=receipt.metadata,
+            measured_cost=receipt.measured_cost,
         )
     except ValidationError as error:
         raise WorkerWireError("invalid worker collect receipt") from error

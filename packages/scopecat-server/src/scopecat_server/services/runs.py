@@ -70,6 +70,7 @@ from scopecat.daemon.wire import (
     PublishedAnalysisInputPayload,
     RunAttachmentCommand,
 )
+from scopecat.execution.evidence import COMPILATION_COST_KIND, compilation_cost_ref
 from scopecat.kernel.errors import (
     CheckFailed,
     Conflict,
@@ -85,6 +86,7 @@ from scopecat.measurements.datasets import (
 from scopecat.project_state import ProjectStateServices
 from scopecat.records.analysis import AnalysisRecord
 from scopecat.records.content import ContentEntry
+from scopecat.records.costs import RunCompilationCost, RunMeasuredCosts
 from scopecat.records.measurement import (
     MeasurementDataset,
     MeasurementDatasetSchema,
@@ -442,6 +444,24 @@ class RunService:
             limit=128, after=None, run_id=run_id, latest=True
         )
         return failure_evidence(detail, page.items, truncated=len(page.items) == 128)
+
+    def get_run_measured_costs(self, run_id: str) -> RunMeasuredCosts:
+        from .measured_costs import measured_costs
+
+        self.get_run(run_id)
+        page = self._control.list_events(
+            limit=128, after=None, run_id=run_id, latest=True
+        )
+        compilation = (
+            self._runs.read_model(run_id, compilation_cost_ref(), RunCompilationCost)
+            if self._runs.list_contents(
+                run_id, limit=1, kind=COMPILATION_COST_KIND
+            ).items
+            else None
+        )
+        return measured_costs(
+            page.items, compilation=compilation, truncated=len(page.items) == 128
+        )
 
     def get_run_config(self, run_id: str) -> RunConfigView:
         with self._config_errors():

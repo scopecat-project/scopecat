@@ -10,6 +10,7 @@ from scopecat.measurements.datasets import (
     RAW_MEASUREMENTS_DATASET_ID,
 )
 from scopecat.records.content import ContentEntry
+from scopecat.records.costs import RunCompilationCost
 from scopecat.records.execution import (
     InstrumentStateEvidence,
     summarize_instrument_state_evidence,
@@ -17,6 +18,14 @@ from scopecat.records.execution import (
 from scopecat.records.measurement import MeasurementDatasetSchema
 from scopecat.runs.refs import record_content_ref
 from scopecat.sdk.domain.evidence import DomainExecutionEvidence
+
+COMPILATION_COST_ID = "compilation-cost"
+COMPILATION_COST_KIND = "run_compilation_cost"
+
+
+def compilation_cost_ref() -> str:
+    return record_content_ref(record_id=COMPILATION_COST_ID, kind=COMPILATION_COST_KIND)
+
 
 INSTRUMENT_STATE_EVIDENCE_ID = "instrument-state-evidence"
 INSTRUMENT_STATE_EVIDENCE_KIND = "instrument_state_evidence"
@@ -47,6 +56,7 @@ def build_terminal_contents(
     expected_record_count: int | None,
     instrument_state: InstrumentStateEvidence | None,
     domain_execution: DomainExecutionEvidence | None = None,
+    compilation_cost: RunCompilationCost | None = None,
 ) -> tuple[ContentEntry, ...]:
     incomplete_run = outcome.result != "succeeded"
     partial = incomplete_run and (
@@ -83,6 +93,16 @@ def build_terminal_contents(
     elif measurement_count:
         raise ValueError("recorded measurements require a sealed dataset contract")
     records: list[ContentEntry] = []
+    if compilation_cost is not None:
+        records.append(
+            ContentEntry(
+                role="record",
+                id=COMPILATION_COST_ID,
+                kind=COMPILATION_COST_KIND,
+                media_type="application/json",
+                content_hash=model_wire_content_hash(compilation_cost),
+            )
+        )
     if instrument_state is not None:
         records.append(
             ContentEntry(

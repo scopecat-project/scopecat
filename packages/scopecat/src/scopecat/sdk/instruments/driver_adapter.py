@@ -50,17 +50,21 @@ def project_acquisition_preparation_outcome(
     outcome: DriverOutcome[None],
 ) -> AcquisitionPreparationReceipt:
     if isinstance(outcome, DriverSuccess):
-        return AcquisitionPreparationReceipt(metadata=outcome.metadata)
+        return AcquisitionPreparationReceipt(
+            metadata=outcome.metadata, measured_cost=outcome.measured_cost
+        )
     if isinstance(outcome, DriverRejected):
         return AcquisitionPreparationReceipt(
             status="not_prepared",
             problems=outcome.problems,
             metadata=outcome.metadata,
+            measured_cost=outcome.measured_cost,
         )
     return AcquisitionPreparationReceipt(
         status="unknown",
         problems=outcome.problems,
         metadata=outcome.metadata,
+        measured_cost=outcome.measured_cost,
     )
 
 
@@ -130,17 +134,20 @@ def project_apply_outcome(
                 else None
             ),
             metadata=outcome.metadata,
+            measured_cost=outcome.measured_cost,
         )
     if isinstance(outcome, DriverRejected):
         return ApplyReceipt(
             status="not_applied",
             problems=outcome.problems,
             metadata=outcome.metadata,
+            measured_cost=outcome.measured_cost,
         )
     return ApplyReceipt(
         status="unknown",
         problems=outcome.problems,
         metadata=outcome.metadata,
+        measured_cost=outcome.measured_cost,
     )
 
 
@@ -156,17 +163,20 @@ def project_invoke_outcome(
                 else None
             ),
             metadata=outcome.metadata,
+            measured_cost=outcome.measured_cost,
         )
     if isinstance(outcome, DriverRejected):
         return InvokeReceipt(
             status="not_invoked",
             problems=outcome.problems,
             metadata=outcome.metadata,
+            measured_cost=outcome.measured_cost,
         )
     return InvokeReceipt(
         status="unknown",
         problems=outcome.problems,
         metadata=outcome.metadata,
+        measured_cost=outcome.measured_cost,
     )
 
 
@@ -219,17 +229,20 @@ def project_collect_outcome(
                 metadata=outcome.value.metadata,
             ),
             metadata=outcome.metadata,
+            measured_cost=outcome.measured_cost,
         )
     if isinstance(outcome, DriverRejected):
         return CollectReceipt(
             status="not_collected",
             problems=outcome.problems,
             metadata=outcome.metadata,
+            measured_cost=outcome.measured_cost,
         )
     return CollectReceipt(
         status="unknown",
         problems=outcome.problems,
         metadata=outcome.metadata,
+        measured_cost=outcome.measured_cost,
     )
 
 

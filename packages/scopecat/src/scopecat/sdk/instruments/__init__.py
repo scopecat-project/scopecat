@@ -17,6 +17,7 @@ if TYPE_CHECKING:
         TcpipSocketInstrumentConnection,
         VirtualInstrumentConnection,
     )
+    from scopecat.records.costs import OperationCostMeasurement
     from scopecat.records.instrument import (
         CommandChannelBinding,
         InstrumentReadback,
@@ -178,6 +179,7 @@ if TYPE_CHECKING:
 
 
 _EXPORTS: dict[str, tuple[str, str]] = {
+    "OperationCostMeasurement": ("scopecat.records.costs", "OperationCostMeasurement"),
     "AcquisitionPreparationReceipt": (
         "scopecat.sdk.instruments.commands",
         "AcquisitionPreparationReceipt",

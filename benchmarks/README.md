@@ -129,3 +129,22 @@ volume. It does not by itself claim randomized-benchmarking semantics, flux
 lowering, predistortion, or physical-device timing. Those remain separate
 capability and hardware acceptance tracks; adding them must preserve these same
 profile names and continuous-buffer baseline.
+
+### Comparable measured run evidence
+
+Run the hardware-free residency workload with:
+
+```sh
+uv run pytest -q packages/scopecat-server/tests/test_connection_residency_worker.py -k measured_costs_compare
+```
+
+It repeats the same two-point program cold, on the same warm connection, and after
+an explicit idle-device release/reconnect. Every independently admitted run loads
+setup once; the two trigger operations use that loaded program. Assertions compare
+uploaded and reused UTF-8 program-buffer bytes, retained-buffer gauges, acquisition
+construction intervals, connection identity and durable compilation/finalization
+facts. The fixture names its measurements as virtual buffer/scalar work; it does
+not claim physical transfer bandwidth or impose a speed threshold. Waveform
+rendering is unavailable in this fixture. Existing scan benchmarks remain useful
+for target/compiler work and their own phase timing; their estimates and measured
+intervals are not added to these ordinary run records.

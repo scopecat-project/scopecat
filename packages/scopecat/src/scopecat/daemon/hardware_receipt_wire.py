@@ -15,6 +15,7 @@ from scopecat.measurements.array_wire import (
     encode_measurement_array,
 )
 from scopecat.program.measurement_types import MeasurementDType
+from scopecat.records.costs import OperationCostMeasurement
 from scopecat.records.instrument import InstrumentReadback
 from scopecat.records.measurement import (
     InstrumentAcquisitionEvidence,
@@ -81,6 +82,7 @@ class _CollectReceiptWire(_WireModel):
     problems: tuple[Problem, ...] = ()
     readback: _CollectReadbackWire | None = None
     metadata: JsonMetadata = Field(default_factory=dict)
+    measured_cost: OperationCostMeasurement | None = None
 
 
 class _RunHardwareValueWire(_WireModel):
@@ -121,6 +123,7 @@ def encode_collect_receipt(receipt: CollectReceipt) -> bytes:
             )
         ),
         metadata=receipt.metadata,
+        measured_cost=receipt.measured_cost,
     )
     return _encode_bundle(header, attachments)
 
@@ -154,6 +157,7 @@ def decode_collect_receipt(content: bytes) -> CollectReceipt:
                 )
             ),
             metadata=header.metadata,
+            measured_cost=header.measured_cost,
         )
     except ValidationError as error:
         raise HardwareReceiptWireError("invalid decoded collect receipt") from error

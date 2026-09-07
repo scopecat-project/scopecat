@@ -170,3 +170,39 @@ claim the local result was saved. Callers can catch
 remains chained as `__cause__`. Ordinary `RunFailure` subclasses retain their
 existing durable-outcome meaning. No diagnostic or finalization error grants
 permission to retry an unknown trigger, invoke, or other non-idempotent effect.
+
+### Measured operation costs
+
+A driver may attach `OperationCostMeasurement` (from `scopecat.sdk.instruments`)
+to `DriverSuccess`, `DriverRejected`, or `DriverUnknown`. The backend preserves it
+in the operation receipt, including collect's binary transport. Supply facts from
+the actual operation and a meaningful `source`; leave unsupported fields `None`.
+A preflight estimate is never a measured cost. `unavailable_reason` describes the
+missing counters, not a failure of the operation.
+
+`transfer_seconds` and `acquire_seconds` are adapter-observed intervals. They may
+overlap each other and the server's enclosing backend-call wall interval, so they
+must not be added into a total run duration. Uploaded bytes count transferred
+content; reused bytes count content used without another upload. Rendered bytes
+count generated content, while retained bytes describe live storage at that
+observation, a gauge that must not be summed over operations. A byte count of zero
+is a measured zero; `None` is unavailable. Do not count JSON, worker framing or
+spool bytes as device transfer unless that is the explicitly named measurement.
+
+The server retains these facts once per physical operation in its existing batch
+event, even when that batch fails or becomes indeterminate. Saved batches remain
+readable when terminal publication is unconfirmed. Initial client planning wall
+time is separate terminal evidence; it excludes lazy target compilation, which is
+currently unavailable. Successful hardware cleanup/readback/release has its own
+server wall interval. The terminal evidence commit cannot measure its own durable
+completion and is explicitly unavailable. These observations introduce no retry
+or connection-lifetime policy.
+
+The run detail view and `DaemonClient.get_run_measured_costs(run_id)` show the
+latest 128 events, with a partial-history marker when that window is full.
+Connection identity is derived from the actual worker endpoint and connection
+handle. Cold means the first observed connection for that instrument in this
+daemon lifetime; warm means reuse of an existing connection; reconnect means a
+new connection after an earlier observation in that same daemon lifetime. A new
+daemon begins a new context. Connection reuse does **not** promise setup residency
+across independently admitted runs.
