@@ -15,6 +15,7 @@ from scopecat.config.environment import build_config_environment
 from scopecat.execution.program import RunProgram
 from scopecat.planning.compilation import compile_run_program
 from scopecat.planning.system import ExperimentSystem
+from scopecat.program.control_contract import ControlValidationContext
 from scopecat.program.definitions import ExperimentInvocation
 from scopecat.records.config import ConfigProfileSnapshot
 from scopecat.records.costs import RunCompilationCost
@@ -72,6 +73,10 @@ def plan_experiment_invocation(
 ) -> PlannedRun:
     """Plan one authored invocation against a snapshot without project I/O."""
 
+    if experiment.definition.controls is not None:
+        experiment.definition.controls.validate(
+            ControlValidationContext(experiment, config)
+        )
     started = perf_counter()
     planned = _plan_compiled_run(
         config=config,
