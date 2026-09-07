@@ -19,8 +19,9 @@ from scopecat.application.launch import (
     LaunchSubmission,
 )
 from scopecat.daemon.client import DaemonClient, DaemonConflictError
+from scopecat.daemon.endpoint import DAEMON_URL_ENV
 from scopecat.planning.preflight import ExactQuantity, PreflightStage, UnknownQuantity
-from scopecat.project import load_project
+from scopecat.project import Project, load_project
 from scopecat.records.measurement import MeasurementScalar
 from scopecat_server.lifecycle import start_project, stop_project
 from scopecat_testkit.project_loading import isolated_project_imports
@@ -39,16 +40,31 @@ def reference_lab_daemon(
 ) -> Generator[_Daemon]:
     # Gallery notebooks may accept new defaults in their session daemon. Launcher
     # scenarios have their own project so a default request has a stable base.
-    root = tmp_path_factory.mktemp("launch-project")
-    for name in ("config", "src"):
-        shutil.copytree(EXAMPLE_ROOT / name, root / name)
-    shutil.copy2(EXAMPLE_ROOT / "scopecat.toml", root / "scopecat.toml")
-    project = load_project(root / "scopecat.toml")
-    endpoint = start_project(project)
+    roots = [
+        tmp_path_factory.mktemp(name) for name in ("foreign-project", "launch-project")
+    ]
+    projects: list[Project] = []
+    for root in roots:
+        for name in ("config", "src"):
+            shutil.copytree(EXAMPLE_ROOT / name, root / name)
+        shutil.copy2(EXAMPLE_ROOT / "scopecat.toml", root / "scopecat.toml")
+        projects.append(load_project(root / "scopecat.toml"))
+    foreign, project = projects
+    with pytest.MonkeyPatch.context() as patch:
+        patch.delenv(DAEMON_URL_ENV, raising=False)
+        foreign_endpoint = start_project(foreign)
     try:
-        yield _Daemon(endpoint.base_url)
+        # The target daemon itself inherits a live foreign endpoint. Its internal
+        # preview and procedure workers must still use the target's project record.
+        with pytest.MonkeyPatch.context() as patch:
+            patch.setenv(DAEMON_URL_ENV, foreign_endpoint.base_url)
+            endpoint = start_project(project)
+        try:
+            yield _Daemon(endpoint.base_url)
+        finally:
+            stop_project(project)
     finally:
-        stop_project(project)
+        stop_project(foreign)
 
 
 @pytest.fixture

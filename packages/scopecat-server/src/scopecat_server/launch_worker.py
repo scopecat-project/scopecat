@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import contextlib
+import os
 import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 import scopecat as sc
 from scopecat.application.launch import LaunchCatalog, LaunchRequest, LaunchResult
+from scopecat.daemon.endpoint import DAEMON_URL_ENV
 from scopecat.project import load_project
 
 if TYPE_CHECKING:
@@ -23,6 +25,9 @@ def run_procedure(lab: LabClient, procedure_id: str) -> None:
 
 
 def main() -> None:
+    # This internal worker belongs to its spawning project, even when the server
+    # inherited a user's endpoint override for a different interactive session.
+    os.environ.pop(DAEMON_URL_ENV, None)
     if len(sys.argv) == 4 and sys.argv[2] == "--procedure":
         with sc.open_project(Path(sys.argv[1])).connect(
             operator="console-worker"
