@@ -23,6 +23,7 @@ nav = [
     { "Control instruments" = "how-to/control-instruments.md" },
     { "Use measurement data" = "how-to/use-measurement-data.md" },
     { "Manage configuration" = "how-to/manage-configuration.md" },
+    { "Back up and restore" = "how-to/backup-and-restore.md" },
   ] },
   { "Concepts" = [
     "concepts/index.md",

@@ -19,13 +19,12 @@ infrastructure inputs. Runtime state lives in `.scopecat/` and is owned by the
 daemon rather than edited by users.
 
 The runtime directory contains `control.sqlite3`, its SQLite side files, the
-immutable `objects/` store, daemon metadata, and logs. The current early project
-store is rebuild-only across schema changes: the daemon refuses every schema
-version other than the one compiled into it and never migrates or deletes state
-implicitly. Stop the daemon and back up the entire `.scopecat/` directory before
-changing revisions. If historical state matters, inspect or export it with the
-revision that created it before explicitly rebuilding from an empty runtime
-directory and the project's bootstrap configuration.
+immutable `objects/` store, daemon metadata, and logs. The daemon refuses schema
+versions other than its own and never implicitly migrates or deletes state.
+Use the supported [stopped-project snapshot workflow](../how-to/backup-and-restore.md)
+to preserve the database, objects, application/configuration source and installed
+version record together. Retain the matching reader and external dependencies
+when upgrading or starting a new project.
 
 ## Manifest
 

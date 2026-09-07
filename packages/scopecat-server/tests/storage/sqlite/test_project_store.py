@@ -442,7 +442,7 @@ def test_bootstrap_refuses_v52_without_execution_segments(
     store = SQLiteProjectStore(SQLiteDatabase(database), tmp_path / "objects")
     with pytest.raises(
         SchemaVersionError,
-        match="version: 52; expected 62; rebuild it explicitly",
+        match="version: 52; expected 62",
     ):
         store.bootstrap()
 
@@ -453,5 +453,5 @@ def test_bootstrap_refuses_tables_without_a_project_schema(tmp_path: Path) -> No
         connection.execute("CREATE TABLE old_state (value TEXT)")
 
     store = SQLiteProjectStore(SQLiteDatabase(database), tmp_path / "objects")
-    with pytest.raises(SchemaVersionError, match="rebuild it explicitly"):
+    with pytest.raises(SchemaVersionError, match="Preserve the original project"):
         store.bootstrap()

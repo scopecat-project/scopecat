@@ -87,6 +87,19 @@ class ImmutableObjectStore:
         hexdigest = match.group(1)
         return self.root / hexdigest[:2] / hexdigest[2:]
 
+    def verify(self, digest: str) -> None:
+        """Verify stored bytes without retaining the entire object in memory."""
+        path = self.path_for(digest)
+        try:
+            with path.open("rb") as content:
+                actual = hashlib.file_digest(content, "sha256").hexdigest()
+        except FileNotFoundError as error:
+            raise ObjectNotFoundError(path) from error
+        except OSError as error:
+            raise ObjectStoreError(path) from error
+        if f"sha256:{actual}" != digest:
+            raise ObjectCorruptError(path)
+
     def read_cached(self, digest: str) -> bytes:
         """Reuse verified immutable bytes with bounded retained payload and entries.
 
