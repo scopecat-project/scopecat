@@ -33,6 +33,10 @@ from scopecat.daemon.wire import (
     RunRecoveryGroupPage,
     RunRecoveryGroupView,
 )
+from scopecat.measurements.entity_selection import (
+    MeasurementEntitySelection,
+    bind_entity_selection,
+)
 from scopecat.records.execution import (
     DomainJobCheckpointTransition,
     DomainJobInvocationTransition,
@@ -1912,6 +1916,7 @@ class SQLiteMeasurementDatasetRepository:
         snapshot_size: int | None = None,
         include_schema: bool = True,
         variable_ids: Sequence[str] | None = None,
+        entity_selection: MeasurementEntitySelection | None = None,
     ) -> tuple[
         tuple[MeasurementRecord, ...],
         int | None,
@@ -1962,14 +1967,19 @@ class SQLiteMeasurementDatasetRepository:
                         (self._run_id, selected_size, limit, offset),
                     )
                 )
-            items = self._records_from_locations(rows, variable_ids=variable_ids)
+            items = self._records_from_locations(
+                rows, variable_ids=variable_ids, entity_selection=entity_selection
+            )
             next_offset = (
                 offset + len(items) if offset + len(items) < selected_size else None
             )
+            schema = self.measurement_schema() if include_schema else None
+            if schema is not None and entity_selection is not None:
+                schema = bind_entity_selection(schema, entity_selection).schema
             return (
                 items,
                 next_offset,
-                self.measurement_schema() if include_schema else None,
+                schema,
                 selected_size,
             )
         except Exception as error:
@@ -2004,6 +2014,7 @@ class SQLiteMeasurementDatasetRepository:
         point_indices: tuple[int, ...],
         *,
         variable_ids: Sequence[str] | None = None,
+        entity_selection: MeasurementEntitySelection | None = None,
     ) -> tuple[MeasurementRecord, ...]:
         """Read selected logical points from their acquired Arrow rows."""
 
@@ -2036,7 +2047,9 @@ class SQLiteMeasurementDatasetRepository:
                         (self._run_id, json.dumps(selected)),
                     )
                 )
-            records = self._records_from_locations(rows, variable_ids=variable_ids)
+            records = self._records_from_locations(
+                rows, variable_ids=variable_ids, entity_selection=entity_selection
+            )
             records_by_index = {record.point_index: record for record in records}
             return tuple(
                 records_by_index[point_index]
@@ -2053,6 +2066,7 @@ class SQLiteMeasurementDatasetRepository:
         rows: Sequence[sqlite3.Row],
         *,
         variable_ids: Sequence[str] | None,
+        entity_selection: MeasurementEntitySelection | None = None,
     ) -> tuple[MeasurementRecord, ...]:
         from scopecat.measurements.recording_arrow import (
             decode_measurement_record_indices,
@@ -2076,6 +2090,7 @@ class SQLiteMeasurementDatasetRepository:
                 tuple(_integer(row, "row_offset") for row in selected_rows),
                 variable_ids=variable_ids,
                 dataset_schema_hash=dataset_schema_hash,
+                entity_selection=entity_selection,
             )
             records_by_acquisition.update(
                 zip(

@@ -26,6 +26,11 @@ from scopecat.kernel.content_identity import model_wire_content_hash
 from scopecat.kernel.entity import EntityRef, entity_identity, entity_identity_key
 from scopecat.kernel.frozen import thaw_json_value
 from scopecat.kernel.quantity import Quantity
+from scopecat.measurements.entity_selection import (
+    MeasurementEntitySelection,
+    bind_entity_selection,
+    reindex_entity_evidence,
+)
 from scopecat.measurements.traces import Trace, measurement_traces
 from scopecat.program.measurement_types import (
     MeasurementArrayData,
@@ -47,9 +52,6 @@ from scopecat.program.value_types import Array, Payload, Scalar
 from scopecat.program.value_types import Quantity as QuantityType
 from scopecat.records.content import ContentEntry
 from scopecat.records.measurement import (
-    EntityAcquisitionEvidence,
-    MeasurementAcquisitionEvidence,
-    MeasurementAcquisitionEvidenceCatalog,
     MeasurementArray,
     MeasurementArrayAvailability,
     MeasurementArrayUnavailableGroup,
@@ -57,8 +59,6 @@ from scopecat.records.measurement import (
     MeasurementDatasetSchema,
     MeasurementDimension,
     MeasurementEntityIndex,
-    MeasurementEntityProductMetadataOverride,
-    MeasurementEntityProductSource,
     MeasurementPartitionedArray,
     MeasurementProductGridPointDomain,
     MeasurementRecord,
@@ -70,7 +70,6 @@ from scopecat.records.measurement import (
     MeasurementValue,
     MeasurementVariable,
     measurement_point_axis_values,
-    measurement_result_contract_version,
 )
 
 if TYPE_CHECKING:
@@ -1413,73 +1412,18 @@ class Dataset:
         only absent entities use the requested description.
         """
 
-        target_entities = tuple(entities)
-        if not target_entities:
-            raise ValueError("entity reindexing requires at least one target entity")
-        dimension = _require_entity_dimension(self, dimension_id)
-        source_index = cast("MeasurementEntityIndex", dimension.index)
-        source_schema_positions = self._view_dimension_positions[dimension_id]
-        source_entities = tuple(
-            source_index.values[position] for position in source_schema_positions
+        bound = bind_entity_selection(
+            self.schema,
+            MeasurementEntitySelection(
+                dimension_id=dimension_id, entities=tuple(entities)
+            ),
+            source_positions=self._view_dimension_positions.get(dimension_id),
         )
-        source_by_identity = {
-            entity_identity(entity): position
-            for position, entity in enumerate(source_entities)
-        }
-        # Alignment changes positions, not the source's entity descriptions.
-        target_entities = tuple(
-            source_entities[source_by_identity[entity_identity(entity)]]
-            if entity_identity(entity) in source_by_identity
-            else entity
-            for entity in target_entities
-        )
-        target_index = MeasurementEntityIndex(values=target_entities)
-        target_to_source = tuple(
-            source_by_identity.get(entity_identity(entity))
-            for entity in target_entities
-        )
-        target_to_schema = tuple(
-            None
-            if source_position is None
-            else source_schema_positions[source_position]
-            for source_position in target_to_source
-        )
-
-        dimensions = tuple(
-            item.model_copy(
-                update={"size": len(target_entities), "index": target_index}
-            )
-            if item.id == dimension_id
-            else item
-            for item in self.schema.dimensions
-        )
-        variables = tuple(
-            _reindex_entity_variable_source(
-                variable,
-                dimension_id=dimension_id,
-                target_to_schema=target_to_schema,
-            )
-            for variable in self.schema.variables
-        )
-        result = self.schema.result
-        if result is not None:
-            result = result.model_copy(
-                update={
-                    "version": measurement_result_contract_version(
-                        result.id,
-                        result.fields,
-                        variables=variables,
-                        dimensions=dimensions,
-                    )
-                }
-            )
-        schema = self.schema.model_copy(
-            update={
-                "dimensions": dimensions,
-                "variables": variables,
-                "result": result,
-            }
-        )
+        target_entities = bound.selection.entities
+        target_to_source = bound.target_to_source
+        target_to_schema = bound.target_to_schema
+        schema = bound.schema
+        variables = schema.variables
         variable_by_id = {variable.id: variable for variable in variables}
         dimension_sizes = {
             dimension.id: dimension.size for dimension in schema.dimensions
@@ -1490,7 +1434,7 @@ class Dataset:
                 variables=variable_by_id,
                 dimension_sizes=dimension_sizes,
                 dimension_id=dimension_id,
-                source_count=len(source_entities),
+                source_count=bound.source_count,
                 target_to_source=target_to_source,
                 target_to_schema=target_to_schema,
             )
@@ -3068,41 +3012,6 @@ def _derived_measurement_dataset_entry(
     )
 
 
-def _reindex_entity_variable_source(
-    variable: MeasurementVariable,
-    *,
-    dimension_id: str,
-    target_to_schema: Sequence[int | None],
-) -> MeasurementVariable:
-    source = variable.source_entity_products
-    if source is None or source.dimension_id != dimension_id:
-        return variable
-    override_by_index = {
-        override.entity_index: override for override in source.metadata_overrides
-    }
-    overrides = tuple(
-        MeasurementEntityProductMetadataOverride(
-            entity_index=target_index,
-            metadata=override_by_index[schema_index].metadata,
-        )
-        for target_index, schema_index in enumerate(target_to_schema)
-        if schema_index is not None and schema_index in override_by_index
-    )
-    return variable.model_copy(
-        update={
-            "source_entity_products": MeasurementEntityProductSource(
-                dimension_id=dimension_id,
-                product_ids=tuple(
-                    None if schema_index is None else source.product_ids[schema_index]
-                    for schema_index in target_to_schema
-                ),
-                common_metadata=source.common_metadata,
-                metadata_overrides=overrides,
-            )
-        }
-    )
-
-
 def _reindex_record_entities(
     record: MeasurementRecord,
     *,
@@ -3130,29 +3039,14 @@ def _reindex_record_entities(
             source_count=source_count,
             target_to_source=target_to_source,
         )
-    evidence_by_variable: dict[str, MeasurementAcquisitionEvidence] = {}
-    for variable_id in record.acquisition_evidence.variable_refs:
-        evidence = record.acquisition_evidence.for_variable(variable_id)
-        if (
-            isinstance(evidence, EntityAcquisitionEvidence)
-            and evidence.dimension_id == dimension_id
-        ):
-            evidence = evidence.model_copy(
-                update={
-                    "values": tuple(
-                        None if schema_index is None else evidence.values[schema_index]
-                        for schema_index in target_to_schema
-                    )
-                }
-            )
-        if evidence is not None:
-            evidence_by_variable[variable_id] = evidence
     return record.model_copy(
         update={
             "coordinates": coordinates,
             "observables": observables,
-            "acquisition_evidence": MeasurementAcquisitionEvidenceCatalog.create(
-                evidence_by_variable
+            "acquisition_evidence": reindex_entity_evidence(
+                record.acquisition_evidence,
+                dimension_id=dimension_id,
+                target_to_schema=target_to_schema,
             ),
         }
     )

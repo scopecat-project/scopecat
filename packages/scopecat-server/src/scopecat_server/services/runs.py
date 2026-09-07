@@ -830,7 +830,7 @@ class RunService:
 
         variable_ids = tuple(column.variable_id for column in query.columns)
         with self._config_errors():
-            self._runs.read_snapshot(run_id)
+            run_snapshot = self._runs.read_snapshot(run_id)
             items, next_offset, schema, snapshot_size = (
                 SQLiteMeasurementDatasetRepository(
                     self._runs,
@@ -840,6 +840,7 @@ class RunService:
                     offset=query.offset,
                     snapshot_size=query.snapshot_size,
                     variable_ids=variable_ids,
+                    entity_selection=query.entity_selection,
                 )
             )
         if schema is None:
@@ -871,7 +872,17 @@ class RunService:
             )
         except (KeyError, TypeError, ValueError) as error:
             raise BackendConflict(str(error)) from error
-        return table, next_offset, snapshot_size
+        metadata = dict(table.schema.metadata or {})
+        metadata.update(
+            {
+                b"scopecat.run_id": run_id.encode(),
+                b"scopecat.config_content_hash": str(
+                    run_snapshot.config_content_hash
+                ).encode(),
+                b"scopecat.snapshot_size": str(snapshot_size).encode(),
+            }
+        )
+        return table.replace_schema_metadata(metadata), next_offset, snapshot_size
 
     def measurement_preview(
         self,

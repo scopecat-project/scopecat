@@ -17,10 +17,15 @@ import numpy as np
 import pyarrow as pa
 import xarray as xr
 
+from scopecat.kernel.entity import EntityRef
 from scopecat.kernel.frozen import thaw_json_value
 from scopecat.kernel.quantity import Quantity
 from scopecat.measurements.arrow_values import measurement_values_to_arrow_array
 from scopecat.measurements.datasets import MAX_MEASUREMENT_PAGE_SIZE
+from scopecat.measurements.entity_selection import (
+    MeasurementEntitySelection,
+    bind_entity_selection,
+)
 from scopecat.program.measurement_types import MeasurementDType, MeasurementVariableRole
 from scopecat.records.measurement import (
     MeasurementArray,
@@ -99,6 +104,10 @@ class _ProjectionDataset(Protocol):
 
     def to_xarray(self) -> xr.Dataset: ...
 
+    def reindex_entities(
+        self, dimension_id: str, entities: Sequence[EntityRef], /
+    ) -> _ProjectionDataset: ...
+
     def _read_projection_batches(
         self,
         projection: ProjectionSchema,
@@ -161,6 +170,7 @@ class ProjectionSchema:
     diagnostics: ProjectionDiagnostics = "none"
     include_identity: bool = True
     layout: ProjectionLayout = "points"
+    entity_selection: MeasurementEntitySelection | None = None
     schema_id: str = "scopecat.measurement-data-projection.v2"
 
     @property
@@ -180,6 +190,31 @@ class MeasurementDataProjection:
         default_factory=frozenset,
         repr=False,
     )
+
+    def select_entities(
+        self, dimension_id: str, entities: Sequence[EntityRef], /
+    ) -> Self:
+        """Select one entity axis before bounded reads, retaining missing identities.
+
+        Order follows the request. Stored metadata and acquisition evidence remain
+        authoritative; only absent identities use the requested description.
+        """
+        selection = MeasurementEntitySelection(
+            dimension_id=dimension_id, entities=tuple(entities)
+        )
+        bind_entity_selection(self.dataset.schema, selection)
+        return replace(self, schema=replace(self.schema, entity_selection=selection))
+
+    def _selected_local(self) -> Self:
+        selection = self.schema.entity_selection
+        assert selection is not None
+        return replace(
+            self,
+            dataset=self.dataset.reindex_entities(
+                selection.dimension_id, selection.entities
+            ),
+            schema=replace(self.schema, entity_selection=None),
+        )
 
     @property
     def units(self) -> Mapping[str, str | None]:
@@ -278,6 +313,8 @@ class MeasurementDataProjection:
     def _to_local_arrow(self) -> pa.Table:
         """Project an already materialized or sliced dataset locally."""
 
+        if self.schema.entity_selection is not None:
+            return self._selected_local()._to_local_arrow()
         if self.schema.layout == "observations":
             return self._to_observations_arrow()
         return self._to_points_arrow()
@@ -486,9 +523,14 @@ class MeasurementDataProjection:
         )
 
     def _arrow_schema_metadata(self) -> dict[bytes, bytes]:
+        projection = asdict(self.schema)
+        if self.schema.entity_selection is not None:
+            projection["entity_selection"] = self.schema.entity_selection.model_dump(
+                mode="json"
+            )
         return {
             b"scopecat.dataset_id": self.schema.dataset_id.encode(),
-            b"scopecat.projection": _stable_json(asdict(self.schema)).encode(),
+            b"scopecat.projection": _stable_json(projection).encode(),
             b"scopecat.schema": self.dataset.schema.model_dump_json().encode(),
             b"scopecat.metadata": _stable_json(dict(self.dataset.metadata)).encode(),
         }
@@ -523,6 +565,8 @@ class MeasurementDataProjection:
     def to_xarray(self) -> xr.Dataset:
         """Project aliases and units while preserving Xarray dimension semantics."""
 
+        if self.schema.entity_selection is not None:
+            return self._selected_local().to_xarray()
         source = self.dataset.to_xarray()
         point = source.coords["point"]
         coords: dict[str, object] = {

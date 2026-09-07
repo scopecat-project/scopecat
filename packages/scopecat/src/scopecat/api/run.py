@@ -428,6 +428,7 @@ class RunHandle:
                 for field in projection.fields
                 if field.unit is not None
             },
+            entity_selection=projection.entity_selection,
             diagnostics=projection.diagnostics,
             include_identity=projection.include_identity,
             layout=projection.layout,
