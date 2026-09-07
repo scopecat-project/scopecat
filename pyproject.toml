@@ -252,6 +252,7 @@ source_modules = [
   "scopecat_testkit.authoring",
   "scopecat_testkit.bound_program",
   "scopecat_testkit.config_registry",
+  "scopecat_testkit.connection_residency",
   "scopecat_testkit.domain",
   "scopecat_testkit.execution_fakes",
   "scopecat_testkit.expressions",

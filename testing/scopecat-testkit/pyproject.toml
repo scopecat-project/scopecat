@@ -1,7 +1,7 @@
 [project]
 name = "scopecat-testkit"
 version = "0.1.0"
-description = "Private shared test support for the Scopecat workspace."
+description = "Shared test support and adapter qualification fixtures for Scopecat."
 requires-python = ">=3.14"
 dependencies = [
   "pydantic>=2",

@@ -158,7 +158,9 @@ realtime residency invalidations.
 Residency is not an instrument interface property, device readback, or durable
 resume proof. Losing the connection loses the knowledge. The driver remains the
 authority that performs an idempotent ensure and invalidates any lower-level
-cache when its device session is reset.
+cache when its device session is reset. Use the shared
+[connection-residency qualification](connection-residency.md) with a fake native
+client to check setup reuse, reconnect and unknown-trigger behavior.
 
 Residency also does not imply archival. Scopecat does not automatically publish
 compiled programs, waveform payloads, or a run-level catalog of their
