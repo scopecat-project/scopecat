@@ -9,7 +9,7 @@ from typing import Literal, Protocol
 from uuid import uuid4
 
 import httpx2
-from pydantic import JsonValue, ValidationError
+from pydantic import BaseModel, JsonValue, ValidationError
 
 from scopecat.analysis.facts import AnalysisFactSchema
 from scopecat.api._config import LabConfigOperations
@@ -63,6 +63,11 @@ from scopecat.automation import (
     ProcedureWorker,
     RegisteredProcedure,
     RunOutputRef,
+)
+from scopecat.automation.recovery import (
+    ProcedureRecoveryAdapter,
+    ProcedureRecoveryAvailability,
+    ProcedureRecoveryPlan,
 )
 from scopecat.automation.worker import ProcedureNeedsAttention, ProcedureWaitResources
 from scopecat.config.candidates import CandidateConfig
@@ -806,6 +811,49 @@ class LabProcedureOperations:
                 definition=selected.ref,
                 intent=selected.encode_intent(intent),
                 samples=_procedure_sample_selectors(sample, samples),
+            )
+        )
+        return ProcedureHandle(self, receipt.run.procedure_run_id)
+
+    def recovery_availability[SourceIntent: BaseModel, TargetIntent: BaseModel](
+        self,
+        adapter: ProcedureRecoveryAdapter[SourceIntent, TargetIntent],
+        source_id: str,
+    ) -> ProcedureRecoveryAvailability:
+        """Offer one explicit, side-effect-free project adapter's frozen plan."""
+        source = self.snapshot(source_id)
+        try:
+            self._registry.resolve(source.definition)
+            self._registry.resolve(adapter.source.ref)
+            self._registry.resolve(adapter.destination.ref)
+            attempts: list[ProcedureStepAttempt] = []
+            cursor: int | None = None
+            while True:
+                page = self.steps(source_id, limit=200, before=cursor)
+                attempts.extend(page.items)
+                if page.next_cursor is None:
+                    break
+                cursor = page.next_cursor
+            recovery = adapter.source_ref(source, attempts)
+            retained = self._session.get_run(recovery.retained_run.run_id).snapshot
+            plan = adapter.plan(source, attempts, retained)
+        except (ValueError, KeyError) as error:
+            return ProcedureRecoveryAvailability(adapter.id, None, str(error))
+        return ProcedureRecoveryAvailability(adapter.id, plan, None)
+
+    def submit_recovery(
+        self, plan: ProcedureRecoveryPlan, *, request_key: str
+    ) -> ProcedureHandle:
+        """Create a linked run; server rechecks facts atomically before admission."""
+        self._registry.resolve(plan.recovery.definition)
+        destination = self._registry.resolve(plan.definition)
+        receipt = self._client.submit_procedure(
+            ProcedureSubmitCommand(
+                request_key=request_key,
+                definition=destination.ref,
+                intent=destination.encode_intent(plan.intent),
+                samples=plan.samples,
+                recovery=plan.recovery,
             )
         )
         return ProcedureHandle(self, receipt.run.procedure_run_id)

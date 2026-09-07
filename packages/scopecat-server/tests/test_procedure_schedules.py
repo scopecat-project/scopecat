@@ -27,6 +27,7 @@ from scopecat_server.storage.sqlite.procedure_schedules import (
     SQLiteProcedureScheduleStore,
 )
 from scopecat_server.storage.sqlite.project_store import SQLiteProjectStore
+from scopecat_server.storage.sqlite.run_repository import SQLiteRunRepository
 
 _START = datetime(2026, 8, 18, 9, tzinfo=UTC)
 _HASH = "sha256:" + "1" * 64
@@ -67,6 +68,7 @@ def _services(
     now = [_START]
     automation = AutomationService(
         SQLiteAutomationStore(sqlite),
+        runs=SQLiteRunRepository(sqlite, tmp_path / "objects"),
         clock=lambda: now[0],
     )
     store = SQLiteProcedureScheduleStore(sqlite)

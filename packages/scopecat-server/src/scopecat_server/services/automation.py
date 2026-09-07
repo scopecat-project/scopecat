@@ -63,7 +63,8 @@ from scopecat.automation import (
     procedure_intent_hash,
     procedure_step_operation_id,
 )
-from scopecat.automation.models import ProcedureResourceWait
+from scopecat.automation.models import ProcedureRecoverySource, ProcedureResourceWait
+from scopecat.automation.recovery import validate_recovery_source
 from scopecat.automation.wire import (
     ProcedureStepResourceWaitCommand,
     ProcedureStepResourceWaitReceipt,
@@ -86,6 +87,8 @@ from scopecat_server.storage.sqlite.automation import (
 from scopecat_server.storage.sqlite.config_registry import (
     SQLiteConfigRegistryRepository,
 )
+from scopecat_server.storage.sqlite.control_plane import SQLiteControlPlane
+from scopecat_server.storage.sqlite.run_repository import SQLiteRunRepository
 
 from ..errors import BackendConflict, BackendNotFound
 from .resource_waits import ProcedureResourceWaits
@@ -108,6 +111,7 @@ class AutomationService:
         self,
         store: SQLiteAutomationStore,
         *,
+        runs: SQLiteRunRepository,
         lease_ttl: timedelta = _DEFAULT_PROCEDURE_LEASE_TTL,
         clock: Callable[[], datetime] | None = None,
         resource_waits: ProcedureResourceWaits | None = None,
@@ -115,6 +119,7 @@ class AutomationService:
         if lease_ttl <= timedelta(0):
             raise ValueError("procedure lease TTL must be positive")
         self._store = store
+        self._runs = runs
         self._lease_ttl = lease_ttl
         self._clock = clock or _utc_now
         self._resource_waits = resource_waits
@@ -196,6 +201,7 @@ class AutomationService:
                 intent=command.intent,
                 samples=command.samples,
                 expected_config_generation=command.expected_config_generation,
+                recovery=command.recovery,
             )
         )
 
@@ -507,6 +513,7 @@ class AutomationService:
         intent: ProcedureIntent,
         samples: tuple[SampleSelector, ...] = (),
         expected_config_generation: int | None = None,
+        recovery: ProcedureRecoverySource | None = None,
     ) -> ProcedureRun:
         """Admit one idempotent, version-pinned procedure request."""
 
@@ -523,6 +530,7 @@ class AutomationService:
                 intent=intent,
                 samples=samples,
                 expected_config_generation=expected_config_generation,
+                recovery=recovery,
             )
 
     def submit_in_transaction(
@@ -534,6 +542,7 @@ class AutomationService:
         intent: ProcedureIntent,
         samples: tuple[SampleSelector, ...] = (),
         expected_config_generation: int | None = None,
+        recovery: ProcedureRecoverySource | None = None,
         at: datetime | None = None,
         require_new: bool = False,
     ) -> ProcedureRun:
@@ -546,6 +555,7 @@ class AutomationService:
             definition,
             selected_intent,
             samples=samples,
+            recovery=recovery,
         )
         existing = self._store.find_run_by_request_in_transaction(
             connection,
@@ -562,6 +572,31 @@ class AutomationService:
                     "procedure request key already has a durable run"
                 )
             return existing
+        if recovery is not None:
+            source = self._store.read_run_in_transaction(
+                connection, recovery.procedure_run_id
+            )
+            attempts = self._store.all_step_attempts_in_transaction(
+                connection, recovery.procedure_run_id
+            )
+            retained = self._runs.read_snapshot_in_transaction(
+                connection, recovery.retained_run.run_id
+            )
+            child = SQLiteControlPlane(self._store.sqlite).get_run_in_transaction(
+                connection, recovery.retained_run.run_id
+            )
+            if child.admission.submission_id != procedure_step_operation_id(
+                source.procedure_run_id, recovery.run_step.step_key
+            ):
+                raise AutomationConflict(
+                    "recovery run was not acquired by the source step"
+                )
+            try:
+                validate_recovery_source(recovery, source, attempts, retained)
+                if samples != source.samples:
+                    raise ValueError("recovery must preserve source sample bindings")
+            except ValueError as error:
+                raise AutomationConflict(str(error)) from error
         if expected_config_generation is not None:
             registry = SQLiteConfigRegistryRepository(connection)
             if registry.current_generation() != expected_config_generation:
@@ -574,6 +609,7 @@ class AutomationService:
             intent=selected_intent,
             intent_hash=intent_hash,
             samples=samples,
+            recovery=recovery,
             revision=1,
             state="ready",
             created_at=now,

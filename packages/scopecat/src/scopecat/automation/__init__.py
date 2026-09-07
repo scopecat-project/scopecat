@@ -107,6 +107,8 @@ from scopecat.automation.models import (
     ProcedureClosure,
     ProcedureDefinitionRef,
     ProcedureIntent,
+    ProcedureRecoverySource,
+    ProcedureRecoveryStep,
     ProcedureRun,
     ProcedureRunState,
     ProcedureStepAttempt,
@@ -115,6 +117,11 @@ from scopecat.automation.models import (
     ProcedureStepOutputRef,
     RunOutputRef,
     procedure_intent_hash,
+)
+from scopecat.automation.recovery import (
+    ProcedureRecoveryAdapter,
+    ProcedureRecoveryAvailability,
+    ProcedureRecoveryPlan,
 )
 from scopecat.automation.schedule_wire import (
     ProcedureScheduleCancelCommand,
@@ -271,6 +278,11 @@ __all__ = [
     "ProcedureIntent",
     "ProcedureLeaseLostError",
     "ProcedureNeedsAttention",
+    "ProcedureRecoveryAdapter",
+    "ProcedureRecoveryAvailability",
+    "ProcedureRecoveryPlan",
+    "ProcedureRecoverySource",
+    "ProcedureRecoveryStep",
     "ProcedureRegistry",
     "ProcedureRun",
     "ProcedureRunAttentionCommand",

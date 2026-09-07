@@ -33,6 +33,10 @@ def create_application(_project_root: Path) -> LabApplication:
         launch_provider,
         launch_temperature,
     )
+    from reference_lab.workflows.analysis_recovery import (
+        failed_temperature_analysis,
+        recovered_temperature_analysis,
+    )
     from reference_lab.workflows.drag_beta_automatic_publication import (
         DRAG_BETA_PUBLICATION_POLICY_REGISTRY,
     )
@@ -57,6 +61,8 @@ def create_application(_project_root: Path) -> LabApplication:
             launch_temperature,
             launch_channel_timing,
             temperature_diagnostic_procedure,
+            failed_temperature_analysis,
+            recovered_temperature_analysis,
             drag_beta_calibration_procedure,
             drag_beta_verification_procedure,
         ),
