@@ -12,7 +12,7 @@ import pytest
 from fastapi.testclient import TestClient
 from scopecat.api.lab import LabClient
 from scopecat.daemon.client import DaemonClient, DaemonClientError, DaemonConflictError
-from scopecat.kernel.errors import RunFinalizationFailed
+from scopecat.kernel.errors import RunFailed, RunFinalizationFailed
 from scopecat.kernel.state import StateValue
 from scopecat.planning.system import ExperimentSystem
 from scopecat.records.config import instrument_bindings
@@ -28,11 +28,17 @@ from scopecat_testkit.connection_residency import (
     check_connection_residency,
     residency_config,
     residency_experiment,
+    volatile_backend,
 )
 
-from scopecat_server.instruments.backend import InstrumentHandleInvalid
+from scopecat_server.instruments.backend import (
+    InstrumentBackendEndpoint,
+    InstrumentHandleInvalid,
+    LocalInstrumentBackendEndpoint,
+)
 from scopecat_server.instruments.worker import SubprocessInstrumentBackendEndpoint
 from scopecat_server.runtime import LocalDaemonRuntime
+from scopecat_server.storage.sqlite.execution import SQLiteMeasurementDatasetRepository
 
 
 def _worker(project: Path) -> SubprocessInstrumentBackendEndpoint:
@@ -52,7 +58,7 @@ def _worker(project: Path) -> SubprocessInstrumentBackendEndpoint:
 @contextmanager
 def _lab(
     project: Path,
-    endpoint: SubprocessInstrumentBackendEndpoint,
+    endpoint: InstrumentBackendEndpoint,
     target: VolatileProgramTarget,
 ) -> Generator[tuple[LabClient, DaemonClient]]:
     config = residency_config()
@@ -399,3 +405,135 @@ def test_measured_costs_compare_cold_warm_and_explicit_reconnect(
         assert generations[0] == generations[1]
         assert generations[1].isdisjoint(generations[2])
         assert probe.counts() == (3, 6, 6)
+
+
+@pytest.mark.parametrize("fault", ["trigger_unknown", "collect_unknown"])
+@pytest.mark.parametrize("completed", [1, 2])
+def test_default_buffered_measurements_survive_late_unknown_and_restart(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    fault: str,
+    completed: int,
+) -> None:
+    from typing import Literal, cast
+
+    import scopecat.daemon.execution as execution
+
+    # Hold only the transport clock constant: default record/byte budgets remain
+    # untouched, and the second completed point stays in the client tail.
+    monkeypatch.setattr(execution, "monotonic", lambda: 0.0)
+    probe = ResidencyProbe(tmp_path)
+    calls = 0
+    armed = False
+
+    def inject_late_fault() -> None:
+        nonlocal calls
+        if not armed:
+            return
+        calls += 1
+        if calls == completed + 1:
+            probe.inject(cast('Literal["trigger_unknown", "collect_unknown"]', fault))
+
+    target = VolatileProgramTarget(before_trigger=inject_late_fault)
+    with _lab(
+        tmp_path, LocalInstrumentBackendEndpoint(volatile_backend(tmp_path)), target
+    ) as (lab, client):
+        baseline = lab.run(residency_experiment(completed))
+        baseline_preview = client.measurement_preview(baseline.id, limit=completed)
+        expected = baseline_preview.items
+        before = probe.counts()
+        armed = True
+        previous = {item.run_id for item in client.list_runs().items}
+        with pytest.raises(RunFinalizationFailed) as failure:
+            lab.run(residency_experiment(completed + 1))
+        assert failure.value.execution_outcome.certainty == "indeterminate"
+        [run_id] = [
+            item.run_id
+            for item in client.list_runs().items
+            if item.run_id not in previous
+        ]
+        detail = client.get_run(run_id)
+        assert detail.control.state == "attention_required"
+        assert any(item.status == "quarantined" for item in detail.resources)
+        retained_preview = client.measurement_preview(run_id, limit=completed + 1)
+        actual = retained_preview.items
+        assert len(actual) == completed
+        assert baseline_preview.dataset_schema is not None
+        assert retained_preview.dataset_schema is not None
+        assert (
+            retained_preview.dataset_schema.variables
+            == baseline_preview.dataset_schema.variables
+        )
+        assert [
+            (row.point_index, row.coordinates, row.observables) for row in actual
+        ] == [(row.point_index, row.coordinates, row.observables) for row in expected]
+        assert detail.control.completed_point_count == 1
+        [safe_group] = client.get_run_recovery_groups(run_id).items
+        assert safe_group.completion.point_indices == (0,)
+        assert safe_group.completion.output_kind == "measurement"
+        [segment] = client.get_run_execution_segments(run_id).items
+        assert segment.end_point_count == 1
+        assert probe.counts()[1] - before[1] == completed + 1
+        assert probe.counts()[2] - before[2] == completed + (fault == "collect_unknown")
+        counts = probe.counts()
+    with _lab(
+        tmp_path, LocalInstrumentBackendEndpoint(volatile_backend(tmp_path)), target
+    ) as (_lab_again, client):
+        assert client.measurement_preview(run_id, limit=completed + 1).items == actual
+        assert client.get_run_coverage(run_id).completed_point_count == 1
+        assert client.get_run_recovery_groups(run_id).items == (safe_group,)
+        assert client.get_run(run_id).control.state == "attention_required"
+        assert probe.counts() == counts
+
+
+@pytest.mark.parametrize("during_unknown", [False, True])
+def test_measurement_persistence_failure_cannot_publish_checkpoint(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    during_unknown: bool,
+) -> None:
+    import scopecat.daemon.execution as execution
+
+    monkeypatch.setattr(execution, "monotonic", lambda: 0.0)
+    probe = ResidencyProbe(tmp_path)
+    calls = 0
+
+    def fail_append(*_args: object) -> None:
+        raise OSError("injected measurement storage failure")
+
+    def inject_failure() -> None:
+        nonlocal calls
+        calls += 1
+        if calls == (3 if during_unknown else 1):
+            monkeypatch.setattr(
+                SQLiteMeasurementDatasetRepository, "prepare_append", fail_append
+            )
+            if during_unknown:
+                probe.inject("trigger_unknown")
+
+    target = VolatileProgramTarget(before_trigger=inject_failure)
+    with _lab(
+        tmp_path, LocalInstrumentBackendEndpoint(volatile_backend(tmp_path)), target
+    ) as (lab, client):
+        with pytest.raises(RunFinalizationFailed if during_unknown else RunFailed):
+            lab.run(residency_experiment(3))
+        [run] = client.list_runs().items
+        detail = client.get_run(run.run_id)
+        expected = 1 if during_unknown else 0
+        assert detail.control.completed_point_count == expected
+        assert len(client.measurement_preview(run.run_id, limit=3).items) == expected
+        assert probe.counts()[1:] == ((3, 2) if during_unknown else (1, 1))
+        if during_unknown:
+            assert detail.control.state == "attention_required"
+            assert any(
+                resource.status == "quarantined" for resource in detail.resources
+            )
+            evidence = client.get_run_failure_evidence(run.run_id)
+            assert evidence.primary is not None
+            assert evidence.primary.code == "fixture_trigger_response_lost"
+            [retention] = [
+                item
+                for item in evidence.secondary
+                if item.code == "run_measurement_retention_failed"
+            ]
+            assert retention.phase.value == "persistence"

@@ -175,9 +175,10 @@ def _daemon_execution_session(
         lease_supervisor=lease_supervisor,
         on_resource_busy=on_resource_busy,
     )
-    instruments = _DaemonRunInstrumentHost(authority)
-    coverage = _DaemonRunCoverage(authority)
+    measurements = _DaemonMeasurementRepository(authority)
+    instruments = _DaemonRunInstrumentHost(authority, measurements)
     recovery_groups = _DaemonRunRecoveryGroups(authority)
+    coverage = _DaemonRunCoverage(authority, measurements, recovery_groups)
     domain_job_transitions = _DaemonRunDomainJobTransitions(authority)
     domain_proposals = _DaemonRunDomainProposals(authority)
 
@@ -190,7 +191,7 @@ def _daemon_execution_session(
         accepted=snapshot,
         begin=begin,
         commit_terminal=authority.commit_terminal,
-        measurements=_DaemonMeasurementRepository(authority),
+        measurements=measurements,
         instruments=instruments,
         domain_job_transitions=domain_job_transitions,
         coverage=coverage,
@@ -327,15 +328,30 @@ class _LeaseAuthority:
 
 
 class _DaemonRunCoverage:
-    """Coalesce no-dataset point progress before durable daemon writes."""
+    """Coalesce output-backed checkpoints before durable daemon writes."""
 
-    def __init__(self, authority: _LeaseAuthority) -> None:
+    def __init__(
+        self,
+        authority: _LeaseAuthority,
+        measurements: _DaemonMeasurementRepository,
+        recovery_groups: _DaemonRunRecoveryGroups,
+    ) -> None:
         self._authority = authority
+        self._measurements = measurements
+        self._recovery_groups = recovery_groups
+        self._pending_groups: list[RecoveryGroupCompletion] = []
         self._pending_start: int | None = None
         self._pending_count = 0
         self._last_send_at: float | None = None
 
-    def advance(self, *, start_index: int, point_count: int) -> None:
+    def advance(
+        self,
+        *,
+        start_index: int,
+        point_count: int,
+        groups: tuple[RecoveryGroupCompletion, ...] = (),
+    ) -> None:
+        self._pending_groups.extend(groups)
         if point_count < 1:
             raise ValueError("coverage advance must be non-empty")
         if self._pending_start is None:
@@ -347,7 +363,10 @@ class _DaemonRunCoverage:
         if (
             self._last_send_at is None
             or self._pending_count >= _COVERAGE_TRANSPORT_POINT_LIMIT
-            or now - self._last_send_at >= _COVERAGE_TRANSPORT_LATENCY_SECONDS
+            or (
+                not self._measurements.has_dataset
+                and now - self._last_send_at >= _COVERAGE_TRANSPORT_LATENCY_SECONDS
+            )
         ):
             self._send_pending(now=now)
 
@@ -359,6 +378,10 @@ class _DaemonRunCoverage:
         point_count = self._pending_count
         if start_index is None:
             return
+        self._measurements.flush()
+        if self._pending_groups:
+            self._recovery_groups.commit(tuple(self._pending_groups))
+            self._pending_groups.clear()
         state = self._authority.client.advance_run_coverage(
             self._authority.run_id,
             RunCoverageAdvanceCommand(
@@ -592,6 +615,10 @@ class _DaemonMeasurementRepository:
         self._dataset_schema: MeasurementDatasetSchema | None = None
         self._next_acquisition_index: int | None = None
 
+    @property
+    def has_dataset(self) -> bool:
+        return self._header_content_hash is not None
+
     def initialize(
         self,
         header: MeasurementDatasetHeader,
@@ -666,7 +693,13 @@ class _DaemonMeasurementRepository:
         self._last_send_at = monotonic() if now is None else now
         return receipt.durable_receipts
 
+    def transfer_pending(self) -> None:
+        """Hand completed output to the daemon before the next hardware effect."""
+        self._send_pending()
+
     def flush(self) -> tuple[MeasurementDatasetReceipt, ...]:
+        if self._header_content_hash is None:
+            return ()
         receipts = list(self._send_pending())
         receipt = self._authority.client.flush_measurements(
             self._authority.run_id,
@@ -689,8 +722,13 @@ class _DaemonMeasurementRepository:
 class _DaemonRunInstrumentHost:
     """Typed transport proxy for drivers retained by the project daemon."""
 
-    def __init__(self, authority: _LeaseAuthority) -> None:
+    def __init__(
+        self,
+        authority: _LeaseAuthority,
+        measurements: _DaemonMeasurementRepository,
+    ) -> None:
         self._authority = authority
+        self._measurements = measurements
         self._provisioning: RunInstrumentProvisionReceipt | None = None
         self._next_batch_sequence = 0
         self._lock = Lock()
@@ -742,6 +780,7 @@ class _DaemonRunInstrumentHost:
 
     def execute(self, batch: RunHardwareBatch) -> RunHardwareBatchReceipt:
         with self._lock:
+            self._measurements.transfer_pending()
             sequence = self._next_batch_sequence
             receipt = self._authority.client.execute_run_hardware(
                 self._authority.run_id,

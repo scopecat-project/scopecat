@@ -36,7 +36,7 @@ from scopecat.kernel.content_identity import (
     model_wire_content_hash,
     stable_content_hash,
 )
-from scopecat.kernel.problems import Problem
+from scopecat.kernel.problems import Problem, ProblemPhase
 from scopecat.planning.catalog import InstrumentContractCatalog
 from scopecat.planning.provider_binding import resolve_instrument_contract_catalog
 from scopecat.planning.provider_validation import (
@@ -106,7 +106,7 @@ from scopecat.sdk.instruments.execution import (
 )
 from scopecat.sdk.instruments.projection import ProjectedInstrumentState
 from scopecat.sdk.payloads import PayloadCodecCatalog
-from scopecat.sdk.runtime_problems import contextualize_problems
+from scopecat.sdk.runtime_problems import contextualize_problems, problem_from_exception
 
 from scopecat_server.storage.sqlite.control_plane import (
     ControlPlaneConflict,
@@ -203,6 +203,7 @@ class InstrumentRuntime:
         actors: InstrumentActorRegistry,
         shutdown_grace_seconds: float,
         session_lease_ttl: timedelta,
+        retain_measurements_before_fence: Callable[[str, str], None],
     ) -> None:
         if session_lease_ttl.total_seconds() <= 0:
             raise ValueError("instrument session lease TTL must be positive")
@@ -214,6 +215,7 @@ class InstrumentRuntime:
         self._actors = actors
         self._shutdown_grace_seconds = shutdown_grace_seconds
         self._session_lease_ttl = session_lease_ttl
+        self._retain_measurements_before_fence = retain_measurements_before_fence
         self._sessions: dict[str, SessionContext] = {}
         self._run_contexts: dict[str, RunContext] = {}
         self._sessions_lock = RLock()
@@ -3865,14 +3867,36 @@ class InstrumentRuntime:
         reason: str,
     ) -> None:
         try:
-            with suppress(ExecutorLeaseNotHeld):
-                self._control.mark_executor_unknown(
+            try:
+                self._retain_measurements_before_fence(run_id, token)
+            except Exception as error:
+                persistence_problem = problem_from_exception(
+                    "run_measurement_retention_failed",
+                    "Received measurements could not be retained before fencing",
+                    run_id=run_id,
+                    operation_id="measurements.retain-before-fence",
+                    phase=ProblemPhase.PERSISTENCE,
+                    error=error,
+                )
+                self._record_run_operation_event(
                     run_id,
                     token=token,
-                    reason=reason,
+                    operation_id="measurements.retain-before-fence",
+                    instrument_id=None,
+                    event_kind="run_measurement_retention_failed",
+                    status="failed",
+                    details={"problems": [persistence_problem.model_dump(mode="json")]},
                 )
         finally:
-            self._discard_run_state(run_id)
+            try:
+                with suppress(ExecutorLeaseNotHeld):
+                    self._control.mark_executor_unknown(
+                        run_id,
+                        token=token,
+                        reason=reason,
+                    )
+            finally:
+                self._discard_run_state(run_id)
 
     def _record_run_operation_event(
         self,

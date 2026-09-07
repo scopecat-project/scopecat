@@ -152,6 +152,16 @@ def test_fixed_program_lo_sweep_avoids_per_point_durable_job_writes(
                 "SELECT COUNT(*) FROM execution_measurement_appends"
             ).fetchone(),
         )[0]
+        measurement_chunk_counts = tuple(
+            row[0]
+            for row in cast(
+                "list[tuple[int]]",
+                connection.execute(
+                    "SELECT record_count FROM execution_measurement_appends "
+                    "ORDER BY acquisition_start"
+                ).fetchall(),
+            )
+        )
         durable_event_count = cast(
             "tuple[int]",
             connection.execute("SELECT COUNT(*) FROM durable_events").fetchone(),
@@ -204,7 +214,9 @@ def test_fixed_program_lo_sweep_avoids_per_point_durable_job_writes(
         <= 2 * cast("int", result["max_waveform_batch_bytes"])
     )
     assert domain_transition_count == 0
-    assert measurement_append_count == 1
+    # First recoverable checkpoint, then the buffered terminal tail.
+    assert measurement_append_count == 2
+    assert measurement_chunk_counts == (1, point_count - 1)
     # Measurement events follow physical batches, not 1,000 shots per point.
     # Existing lifecycle/domain/measurement ledgers retain their previous bound.
     assert len(measured_batches) == 5 * point_count + 1

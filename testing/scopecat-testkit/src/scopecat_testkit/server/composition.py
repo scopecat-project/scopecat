@@ -313,14 +313,26 @@ class SQLiteTestRunCoverage:
     def __init__(self, runs: SQLiteRunRepository, *, run_id: str) -> None:
         self._runs = runs
         self._coverage = SQLiteRunCoverage(runs, run_id=run_id)
+        self._groups = SQLiteTestRecoveryGroups(runs, run_id=run_id)
+        self._pending_groups: list[RecoveryGroupCompletion] = []
         self._pending: list[tuple[int, int]] = []
 
-    def advance(self, *, start_index: int, point_count: int) -> None:
+    def advance(
+        self,
+        *,
+        start_index: int,
+        point_count: int,
+        groups: tuple[RecoveryGroupCompletion, ...] = (),
+    ) -> None:
         self._pending.append((start_index, point_count))
+        self._pending_groups.extend(groups)
 
     def flush(self) -> None:
         if not self._pending:
             return
+        if self._pending_groups:
+            self._groups.commit(tuple(self._pending_groups))
+            self._pending_groups.clear()
         with SQLiteControlPlane(self._runs.sqlite).write_transaction() as connection:
             for start_index, point_count in self._pending:
                 self._coverage.advance_in_transaction(

@@ -226,7 +226,6 @@ def _execute_run(
             record_content_hashes.extend(
                 measurement_record_content_hash(record) for record in projected.records
             )
-        _advance_coverage(session, points, buffer=coverage_buffer)
         records_by_point = {
             point.ordinal: tuple(
                 record
@@ -243,6 +242,12 @@ def _execute_run(
             records_by_point=records_by_point,
             has_dataset=projection.has_dataset,
             pending=pending_recovery_groups,
+        )
+        _advance_coverage(
+            session,
+            points,
+            buffer=coverage_buffer,
+            pending_recovery_groups=pending_recovery_groups,
         )
         point_state.add_observations(
             project_completed_point_observation(
@@ -520,6 +525,7 @@ def _advance_coverage(
     points: tuple[AcceptedRunPoint, ...],
     *,
     buffer: CanonicalPointBuffer,
+    pending_recovery_groups: list[RecoveryGroupCompletion],
 ) -> None:
     point_indices = tuple(point.ordinal for point in points)
     completed_point_count = buffer.next_index
@@ -530,7 +536,9 @@ def _advance_coverage(
         session.coverage.advance(
             start_index=completed_point_count,
             point_count=len(ready),
+            groups=tuple(pending_recovery_groups),
         )
+        pending_recovery_groups.clear()
 
 
 def _flush_execution_progress(

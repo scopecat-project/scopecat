@@ -118,6 +118,31 @@ class SQLiteRunCoverage:
             )
         if start_index > completed:
             raise ExecutionStateConflict("coverage range is not the next prefix")
+        if _measurement_header_row(connection, self._run_id) is not None:
+            row = _one(
+                connection.execute(
+                    """
+                    SELECT COUNT(DISTINCT point_index) AS count
+                    FROM execution_measurement_records
+                    WHERE run_id = ? AND point_index >= ? AND point_index < ?
+                    """,
+                    (self._run_id, start_index, end_index),
+                )
+            )
+            assert row is not None
+            if _integer(row, "count") != point_count:
+                raise ExecutionStateConflict(
+                    "coverage requires durably acquired measurement points"
+                )
+            # Exact recovery groups have already fixed their records. Publish
+            # other completed points (e.g. adaptive output) using the same
+            # unfixed-acquisition selection as terminal sealing.
+            _finalize_measurement_projection(
+                connection,
+                self._run_id,
+                start_index=start_index,
+                end_index=end_index,
+            )
         connection.execute(
             """
             INSERT INTO execution_coverage(run_id, completed_point_count)
@@ -1833,6 +1858,52 @@ class SQLiteMeasurementDatasetRepository:
                 f"failed to read measurement dataset schema: {error}"
             ) from error
 
+    def measurement_preview(
+        self,
+        *,
+        limit: int,
+    ) -> tuple[
+        tuple[MeasurementRecord, ...], int | None, MeasurementDatasetSchema | None
+    ]:
+        """Read durable output, including the retained tail beyond recovery coverage.
+
+        Fixed group projections win over later acquisitions. An unprojected
+        point uses its latest acquired record, without publishing a recovery
+        proof or changing the stable logical-page watermark.
+        """
+        with self._runs.sqlite.read_connection() as connection:
+            rows = _all(
+                connection.execute(
+                    """
+                    SELECT record.point_index, record.acquisition_index,
+                           record.row_offset, append.acquisition_start, append.ref
+                    FROM execution_measurement_records AS record
+                    JOIN execution_measurement_appends AS append
+                      ON append.run_id = record.run_id
+                     AND append.acquisition_start = record.acquisition_start
+                    WHERE record.run_id = ?
+                      AND record.acquisition_index = COALESCE(
+                        (SELECT projection.acquisition_index
+                         FROM execution_measurement_projection AS projection
+                         WHERE projection.run_id = record.run_id
+                           AND projection.point_index = record.point_index),
+                        (SELECT MAX(acquired.acquisition_index)
+                         FROM execution_measurement_records AS acquired
+                         WHERE acquired.run_id = record.run_id
+                           AND acquired.point_index = record.point_index)
+                      )
+                    ORDER BY record.point_index
+                    LIMIT ?
+                    """,
+                    (self._run_id, limit + 1),
+                )
+            )
+        return (
+            self._records_from_locations(rows[:limit], variable_ids=None),
+            limit if len(rows) > limit else None,
+            self.measurement_schema(),
+        )
+
     def measurement_page(
         self,
         *,
@@ -2232,10 +2303,12 @@ def _measurement_projected_record_count(
 def _finalize_measurement_projection(
     connection: sqlite3.Connection,
     run_id: str,
+    *,
+    start_index: int = 0,
+    end_index: int | None = None,
 ) -> None:
     """Select the latest acquisition for points not fixed by recovery groups."""
 
-    projection_start = _measurement_projected_record_count(connection, run_id)
     rows = _all(
         connection.execute(
             """
@@ -2247,12 +2320,17 @@ def _finalize_measurement_projection(
               ON projection.run_id = record.run_id
              AND projection.point_index = record.point_index
             WHERE record.run_id = ? AND projection.point_index IS NULL
+              AND record.point_index >= ?
+              AND (? IS NULL OR record.point_index < ?)
             GROUP BY record.point_index
             ORDER BY record.point_index
             """,
-            (run_id,),
+            (run_id, start_index, end_index, end_index),
         )
     )
+    if not rows:
+        return
+    projection_start = _measurement_projected_record_count(connection, run_id)
     connection.executemany(
         """
         INSERT INTO execution_measurement_projection(
