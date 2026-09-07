@@ -4,7 +4,7 @@ from collections.abc import Callable, Sequence
 from datetime import timedelta
 from pathlib import Path
 from threading import Event, Thread
-from typing import Never, cast, override
+from typing import Literal, Never, cast, override
 
 import httpx2
 import pytest
@@ -65,6 +65,7 @@ from scopecat.sdk.instruments import (
     DriverRejected,
     DriverScalar,
     DriverSpec,
+    DriverStateObservation,
     DriverStatePatch,
     DriverStateReadback,
     DriverStateReadRequest,
@@ -85,6 +86,7 @@ from scopecat.sdk.instruments import (
     enum_property,
     float_property,
     interface,
+    quantity_property,
     state_readback,
 )
 from scopecat.sdk.instruments.commands import (
@@ -3088,3 +3090,184 @@ def test_explicit_release_disconnects_idle_connection_and_next_session_reconnect
             assert len(provider.drivers) == 2
             assert provider.drivers[1] is not first
             assert not provider.drivers[1].disconnected
+
+
+type _WriteOnlyReply = Literal[
+    "confirmed",
+    "missing",
+    "wrong_value",
+    "wrong_unit",
+    "unsupported",
+    "queried",
+    "rejected",
+    "unknown",
+]
+
+
+class _WriteOnlyConfirmationDriver(_TrackingDriver):
+    """Reference driver with an explicit response, never inferred by the host."""
+
+    def __init__(self, instrument_id: str) -> None:
+        super().__init__(instrument_id)
+        self.reply: _WriteOnlyReply = "confirmed"
+
+    @override
+    def describe(self) -> InstrumentDescription:
+        description = super().describe()
+        description.interfaces[0] = interface(
+            _SET_FREQUENCY.interface_id,
+            properties=[
+                quantity_property(
+                    "frequency",
+                    unit="GHz",
+                    access="write_only",
+                )
+            ],
+        )
+        return description
+
+    @override
+    def read_state(self, request: DriverStateReadRequest) -> DriverStateReadback:
+        # The device cannot query this property, even after a successful write.
+        return super().read_state(
+            DriverStateReadRequest(
+                targets=request.targets - {_SET_FREQUENCY},
+            )
+        )
+
+    @override
+    def apply_state(
+        self,
+        request: DriverStatePatch,
+    ) -> DriverOutcome[DriverStateReadback | None]:
+        self.applied.append(request)
+        if self.reply in ("rejected", "unknown"):
+            problems = (
+                problem(
+                    "reference_write_failed",
+                    "reference write did not confirm state",
+                    phase=ProblemPhase.EXECUTION,
+                ),
+            )
+            return (
+                DriverRejected(problems=problems)
+                if self.reply == "rejected"
+                else DriverUnknown(problems=problems)
+            )
+        if self.reply == "missing":
+            return DriverSuccess(None)
+        return DriverSuccess(
+            DriverStateReadback(
+                observations=(
+                    DriverStateObservation(
+                        target=(
+                            _SET_FREQUENCY
+                            if self.reply != "unsupported"
+                            else InterfaceRef(_SET_FREQUENCY.interface_id).property(
+                                "missing"
+                            )
+                        ),
+                        value=Quantity(
+                            5.0 if self.reply == "wrong_value" else 5.1,
+                            "K" if self.reply == "wrong_unit" else "GHz",
+                        ),
+                        source="hardware_query"
+                        if self.reply == "queried"
+                        else "command_confirmed",
+                    ),
+                )
+            )
+        )
+
+
+def test_write_only_apply_accepts_explicit_command_confirmation(tmp_path: Path) -> None:
+    provider = _TrackingProvider(_WriteOnlyConfirmationDriver)
+    with (
+        _runtime(tmp_path, provider) as runtime,
+        TestClient(runtime.app()) as transport,
+    ):
+        lab = LabClient(_daemon_client(transport))
+        with lab.instruments.open(_raw_instrument("source-0")) as handle:
+            receipt = handle._apply({_SET_FREQUENCY: Quantity(5.1, "GHz")})
+            assert receipt.status == "applied"
+            assert receipt.readback is not None
+            [observation] = receipt.readback.observations
+            assert observation.source == "command_confirmed"
+            assert observation.value.root == Quantity(5.1, "GHz")
+            [driver] = provider.drivers
+            assert len(driver.applied) == 1
+            assert not driver.read_state(
+                DriverStateReadRequest(
+                    targets=frozenset({_SET_FREQUENCY}),
+                )
+            ).observations
+
+
+@pytest.mark.parametrize(
+    "reply",
+    [
+        "missing",
+        "wrong_value",
+        "wrong_unit",
+        "unsupported",
+        "queried",
+        "unknown",
+    ],
+)
+def test_write_only_unconfirmed_apply_is_quarantined_without_retry(
+    tmp_path: Path,
+    reply: _WriteOnlyReply,
+) -> None:
+    provider = _TrackingProvider(_WriteOnlyConfirmationDriver)
+    with (
+        _runtime(tmp_path, provider) as runtime,
+        TestClient(runtime.app()) as transport,
+    ):
+        daemon = _daemon_client(transport)
+        session = daemon.open_instrument_session(
+            InstrumentSessionOpenCommand(
+                operation_id="open-write-only",
+                actor="alice",
+                instrument_ids=("source-0",),
+            )
+        )
+        [driver] = provider.drivers
+        assert isinstance(driver, _WriteOnlyConfirmationDriver)
+        driver.reply = reply
+        if reply == "unknown":
+            receipt = daemon.apply_instrument_state(
+                session.session_id,
+                "source-0",
+                _apply_command(value=5.1),
+            )
+            assert receipt.status == "unknown"
+            assert receipt.readback is None
+        else:
+            with pytest.raises(DaemonConflictError):
+                daemon.apply_instrument_state(
+                    session.session_id,
+                    "source-0",
+                    _apply_command(value=5.1),
+                )
+        assert len(driver.applied) == 1
+        assert driver.disconnect_count == 1
+        [instrument_view] = daemon.list_instruments().items
+        assert instrument_view.availability == "quarantined"
+
+
+def test_write_only_rejected_write_has_no_confirmation_or_retry(tmp_path: Path) -> None:
+    provider = _TrackingProvider(_WriteOnlyConfirmationDriver)
+    with (
+        _runtime(tmp_path, provider) as runtime,
+        TestClient(runtime.app()) as transport,
+    ):
+        lab = LabClient(_daemon_client(transport))
+        with lab.instruments.open(_raw_instrument("source-0")) as handle:
+            [driver] = provider.drivers
+            assert isinstance(driver, _WriteOnlyConfirmationDriver)
+            driver.reply = "rejected"
+            receipt = handle._apply({_SET_FREQUENCY: Quantity(5.1, "GHz")})
+            assert receipt.status == "not_applied"
+            assert receipt.readback is None
+            assert len(driver.applied) == 1
+            assert driver.disconnect_count == 0

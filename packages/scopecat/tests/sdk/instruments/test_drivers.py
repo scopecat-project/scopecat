@@ -27,6 +27,7 @@ from scopecat.records.instrument import (
 )
 from scopecat.records.instrument import (
     InstrumentStateObservation,
+    ObservationSource,
     state_member_target,
     state_observation,
 )
@@ -94,6 +95,7 @@ from scopecat.sdk.instruments.contracts import (
     validate_collect_receipt,
     validate_instrument_description_collection,
     validate_invoke_command,
+    validate_reconciled_state_assignments,
     validate_state_capture,
     validate_state_command,
     validate_state_snapshot,
@@ -2857,3 +2859,60 @@ def _collect_command(
             )
         ],
     )
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "hardware_query",
+        "configured_fixed",
+        "derived",
+        "command_confirmed",
+    ],
+)
+def test_write_only_confirmation_keeps_observable_and_restore_limits(
+    source: ObservationSource,
+) -> None:
+    target = InterfaceRef("test.write_only/v1").property("frequency")
+    description = InstrumentDescription(
+        instrument_id="source-0",
+        implementation_id="tests.write_only",
+        implementation_version="1",
+        interfaces=[
+            interface(
+                target.interface_id,
+                properties=[
+                    quantity_property("frequency", unit="GHz", access="write_only"),
+                ],
+            )
+        ],
+    )
+    snapshot = InstrumentStateSnapshot(
+        instrument_id="source-0",
+        observations=[
+            state_observation(target, StateValue(Quantity(5.1, "GHz")), source=source),
+        ],
+    )
+    problems = validate_state_snapshot(snapshot=snapshot, description=description)
+    assert [item.code for item in problems] == (
+        []
+        if source == "command_confirmed"
+        else ["instrument_driver_snapshot_write_only_property"]
+    )
+    # Explicit confirmation does not make a write-only property observable.
+    assert capture_state_members(description) == ()
+    problems = validate_reconciled_state_assignments(
+        instrument_id="source-0",
+        description=description,
+        baseline=snapshot if source == "command_confirmed" else None,
+        assignments=[
+            InstrumentStateAssignment(
+                resource_id="source-0",
+                target=state_member_target(target),
+                value=StateValue(Quantity(5.1, "GHz")),
+            )
+        ],
+    )
+    assert [item.code for item in problems] == ["instrument_driver_write_only_property"]
+    with pytest.raises(ValidationError, match="restorable"):
+        quantity_property("frequency", unit="GHz", access="write_only", restore=True)
