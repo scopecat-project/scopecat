@@ -122,20 +122,30 @@ describe("shared reference-lab acceptance", () => {
     render(
       <MeasurementDataPreview
         preview={preview}
+        slice={{
+          items: preview.items,
+          schema: preview.schema,
+          selectedPointCount: preview.items.length,
+          offset: 0,
+          windowPointCount: preview.items.length,
+          truncated: false,
+        }}
         sliceError={null}
         slicePending={false}
         fixedAxisIndices={{}}
         onFixedAxisIndexChange={() => {}}
       />,
     );
+    const selector = screen.getByRole("combobox", { name: "Measurement chart" });
     for (const chart of heatmaps) {
+      fireEvent.change(selector, { target: { value: chart.id } });
       expect(screen.getByRole("img", { name: new RegExp(`^${chart.title}:`) })).toBeVisible();
     }
     expect(heatmaps.map((chart) => chart.title)).toEqual([
-      "iq_mean magnitude heatmap",
-      "iq_mean phase heatmap",
-      "iq_mean real heatmap",
-      "iq_mean imaginary heatmap",
+      "Iq Mean magnitude heatmap",
+      "Iq Mean phase heatmap",
+      "Iq Mean real heatmap",
+      "Iq Mean imaginary heatmap",
     ]);
     const real = heatmaps[2]!.series[0]!.points[0]!.color!;
     const imag = heatmaps[3]!.series[0]!.points[0]!.color!;
@@ -143,10 +153,10 @@ describe("shared reference-lab acceptance", () => {
     expect(heatmaps[0]!.series[0]!.points[0]!.color).toBeCloseTo(Math.hypot(real, imag));
     expect(heatmaps[1]!.series[0]!.points[0]!.color).toBeCloseTo(Math.atan2(imag, real));
     expect(heatmaps.map((chart) => chart.colorLabel)).toEqual([
-      "|iq_mean| [ratio]",
-      "phase(iq_mean) [rad]",
-      "Re(iq_mean) [ratio]",
-      "Im(iq_mean) [ratio]",
+      "|Iq Mean| [ratio]",
+      "phase(Iq Mean) [rad]",
+      "Re(Iq Mean) [ratio]",
+      "Im(Iq Mean) [ratio]",
     ]);
   });
 

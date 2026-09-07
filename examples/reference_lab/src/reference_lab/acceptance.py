@@ -93,6 +93,12 @@ def capture_acceptance_fixtures(
         coherent_run.measurements().project({"iq_mean": mean_id}).to_arrow(),  # pyright: ignore[reportUnknownMemberType]
     )
     assert table.column("iq_mean").to_pylist() == expected_values
+    assert table.column("point_index").to_pylist() == [
+        record.point_index for record in coherent_data.records
+    ]
+    assert table.column("logical_point_id").to_pylist() == [
+        record.logical_point_id for record in coherent_data.records
+    ]
 
     before = client.list_runs()
     with lab.review(

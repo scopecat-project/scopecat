@@ -102,10 +102,10 @@ def test_shared_fixture_retains_planned_instrument_values() -> None:
 def test_shared_fixture_retains_complex_scalar_without_a_local_axis() -> None:
     fixture = cast("dict[str, JsonValue]", json.loads(FIXTURE.read_text()))
     preview = MeasurementPreview.model_validate(fixture["coherent_scalar"])
-    assert preview.schema is not None
+    assert preview.dataset_schema is not None
     [mean] = [
         variable
-        for variable in preview.schema.variables
+        for variable in preview.dataset_schema.variables
         if variable.dtype == "complex128"
     ]
     assert mean.dims == ("point",) and mean.unit == "ratio"
