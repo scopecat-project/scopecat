@@ -101,6 +101,10 @@ export function ProgressCard({
                 : `${events.length} durable events`}
             </span>
           </div>
+          <p className="mt-2 text-[0.65rem] text-text-dim">
+            Progress reflects published evidence. Durable checkpoints may lag received output;
+            retained measurements do not confirm a completed recovery group.
+          </p>
         </>
       ) : (
         <div className="flex min-h-[54px] items-center gap-3 rounded-[9px] border border-dashed border-line bg-[rgb(255_255_255_/_1%)] p-3 text-text-dim">

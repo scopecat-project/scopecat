@@ -363,7 +363,10 @@ class _DaemonRunCoverage:
         if (
             self._last_send_at is None
             or self._pending_count >= _COVERAGE_TRANSPORT_POINT_LIMIT
-            or now - self._last_send_at >= _COVERAGE_TRANSPORT_LATENCY_SECONDS
+            or (
+                not self._measurements.has_dataset
+                and now - self._last_send_at >= _COVERAGE_TRANSPORT_LATENCY_SECONDS
+            )
         ):
             self._send_pending(now=now)
 
@@ -611,6 +614,10 @@ class _DaemonMeasurementRepository:
         self._header_content_hash: str | None = None
         self._dataset_schema: MeasurementDatasetSchema | None = None
         self._next_acquisition_index: int | None = None
+
+    @property
+    def has_dataset(self) -> bool:
+        return self._header_content_hash is not None
 
     def initialize(
         self,

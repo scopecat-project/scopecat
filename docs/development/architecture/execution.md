@@ -220,7 +220,13 @@ Measurement ingest distinguishes received records from durable records. The
 existing coalesced coverage checkpoint flushes measurements, commits exact group
 output proofs, then advances the logical prefix. The server rejects a new prefix
 whose actual logical points have not been durably acquired; acquisition count
-alone is insufficient for reordered or repeated points.
+alone is insufficient for reordered or repeated points. For measurement runs,
+durable checkpoints occur at the first completed cut, the 256-point budget, and
+explicit semantic boundaries such as adaptive decisions and terminal completion.
+Elapsed RPC time does not force another measurement checkpoint. A slow, short
+static scan may therefore retain a durable completed count of one until its final
+flush; received output is not a per-point durable progress counter. Runs without
+measurements retain their time-based progress cadence.
 
 Before another hardware batch, the client transfers pending completed output to
 the daemon without forcing a durable write per shot or point. If a later hardware

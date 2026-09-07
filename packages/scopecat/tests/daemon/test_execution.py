@@ -857,3 +857,80 @@ def _outcome() -> RunOutcome:
         certainty="known",
         finished_at=_NOW + timedelta(seconds=2),
     )
+
+
+@pytest.mark.parametrize("has_dataset", [True, False])
+def test_slow_rpc_clock_does_not_force_per_point_measurement_checkpoints(
+    monkeypatch: pytest.MonkeyPatch,
+    has_dataset: bool,
+) -> None:
+    import scopecat.daemon.execution as execution
+
+    now = 0.0
+    monkeypatch.setattr(execution, "monotonic", lambda: now)
+    ranges: list[tuple[int, int]] = []
+    flushes = 0
+
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        nonlocal now, flushes
+        # Each RPC is slower than the progress reporting interval.
+        now += 1.0
+        if request.url.path.endswith("/executor/start"):
+            return _model(_lease())
+        if request.url.path.endswith("/measurements/header"):
+            return _model(_header_receipt(_measurement_header()))
+        if request.url.path.endswith("/measurements/flush"):
+            flushes += 1
+            return _model(
+                MeasurementFlushReceipt(
+                    run_id="run-1",
+                    durable_record_count=0,
+                    durable_receipts=(),
+                )
+            )
+        assert request.url.path.endswith("/coverage/advance")
+        command = RunCoverageAdvanceCommand.model_validate_json(request.content)
+        ranges.append((command.start_index, command.point_count))
+        return _model(
+            RunCoverageState(
+                run_id="run-1",
+                completed_point_count=command.start_index + command.point_count,
+            )
+        )
+
+    with _client(handler) as client:
+        authority = execution._LeaseAuthority(
+            client=client,
+            run_id="run-1",
+            executor_id="test",
+            lease_supervisor=None,
+        )
+        authority.start()
+        measurements = execution._DaemonMeasurementRepository(authority)
+        if has_dataset:
+            measurements.initialize(_measurement_header())
+        coverage = execution._DaemonRunCoverage(
+            authority,
+            measurements,
+            execution._DaemonRunRecoveryGroups(authority),
+        )
+        for point in range(33):
+            now += 1.0
+            coverage.advance(start_index=point, point_count=1)
+        if has_dataset:
+            assert ranges == [(0, 1)]
+            assert flushes == 1
+        else:
+            assert ranges == [(point, 1) for point in range(33)]
+            assert flushes == 0
+        for point in range(33, 257):
+            now += 1.0
+            coverage.advance(start_index=point, point_count=1)
+        if has_dataset:
+            assert ranges == [(0, 1), (1, 256)]
+            assert flushes == 2
+        coverage.advance(start_index=257, point_count=1)
+        coverage.flush()
+        if has_dataset:
+            assert ranges == [(0, 1), (1, 256), (257, 1)]
+            assert flushes == 3
