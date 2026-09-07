@@ -85,6 +85,10 @@ test("reopens an admitted procedure after restart and follows exact retained run
     await page.getByRole("button", { name: "Preview", exact: true }).click();
     await expect(page.getByText("Preview ready", { exact: true })).toBeVisible();
     await page.getByRole("button", { name: "Start acquisition" }).click();
+    // This procedure runs a source acquisition, analysis, and a second acquisition.
+    // Observe each durable milestone instead of spending one UI wait on all three.
+    await expect(page.getByText("source: Completed", { exact: true })).toBeVisible();
+    await expect(page.getByText("candidate: Completed", { exact: true })).toBeVisible();
     await expect(
       page.getByRole("status").filter({ hasText: /^Waiting for review$/ }),
     ).toBeVisible();
@@ -96,6 +100,27 @@ test("reopens an admitted procedure after restart and follows exact retained run
       page.getByRole("heading", { name: "Channel timing candidate", exact: true }),
     ).toBeVisible();
     expect(new URL(page.url()).searchParams.get("procedure")).toBeTruthy();
+  } catch (error) {
+    // Capture the live failure before finally stops the daemon and removes the project.
+    const url = new URL(page.url());
+    const selectedId = url.searchParams.get("procedure");
+    if (selectedId) {
+      const operator = await page.request
+        .get(`${url.origin}/api/v1/procedures/${encodeURIComponent(selectedId)}/operator`)
+        .then(async (response) => ({ status: response.status(), body: await response.text() }))
+        .catch((failure: unknown) => ({ error: String(failure) }));
+      await testInfo.attach("Operator state before cleanup", {
+        body: JSON.stringify(operator, null, 2),
+        contentType: "application/json",
+      });
+    }
+    for (const name of ["daemon.log", "console-worker.log"]) {
+      const body = await readFile(join(project, ".scopecat", name)).catch((failure: unknown) =>
+        Buffer.from(`Log unavailable: ${String(failure)}`),
+      );
+      await testInfo.attach(name, { body, contentType: "text/plain" });
+    }
+    throw error;
   } finally {
     uv(["scopecat", "stop", project]);
     await rm(project, { recursive: true, force: true });
