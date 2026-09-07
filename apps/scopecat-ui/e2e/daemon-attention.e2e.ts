@@ -132,7 +132,10 @@ test("handles naturally expired executors from the GUI", async ({ daemon, page }
   await selectAttentionRun(page, run);
   await assertResourceStatus(page, run, "Quarantined");
   await expect(page.getByRole("alert")).toContainText(
-    "resume this run from Python to create a new execution segment",
+    "Unknown hardware effects cannot be retried here",
+  );
+  await expect(page.getByRole("alert")).toContainText(
+    "reconcile external state using the project workflow",
   );
   await expect(page.getByRole("button", { name: "Requeue", exact: true })).toHaveCount(0);
   await expect(page.getByTestId("execution-segments-card")).toContainText("Interrupted");

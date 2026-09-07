@@ -37,7 +37,7 @@ with project.connect() as lab:
 
 test("reopens an admitted procedure after restart and follows exact retained run and analysis", async ({
   page,
-}) => {
+}, testInfo) => {
   const project = await mkdtemp(join(tmpdir(), "scopecat-operator-e2e-"));
   try {
     const template = join(ROOT, "examples/reference_lab");
@@ -63,7 +63,12 @@ test("reopens an admitted procedure after restart and follows exact retained run
     await page.getByRole("button", { name: /reference_lab.launch_temperature/ }).click();
     await expect(page.getByText("Admitted — not dispatched", { exact: true })).toBeVisible();
     expect(new URL(page.url()).searchParams.get("procedure")).toBe(procedureId);
-    await page.screenshot({ path: "/private/tmp/scopecat-401-reopened.png", fullPage: true });
+    const reopenedScreenshot = testInfo.outputPath("operator-reopened.png");
+    await page.screenshot({ path: reopenedScreenshot, fullPage: true });
+    await testInfo.attach("Reopened procedure", {
+      path: reopenedScreenshot,
+      contentType: "image/png",
+    });
     await page.getByRole("button", { name: "Dispatch existing procedure" }).click();
     await expect(page.getByRole("status").filter({ hasText: /^Completed$/ })).toBeVisible();
     await page.reload();
@@ -72,7 +77,9 @@ test("reopens an admitted procedure after restart and follows exact retained run
     await expect(page.getByTestId("run-status")).toHaveText("Succeeded");
     await expect(page.getByText("Measurement data", { exact: true })).toBeVisible();
 
-    await page.screenshot({ path: "/private/tmp/scopecat-401-retained-run.png", fullPage: true });
+    const runScreenshot = testInfo.outputPath("operator-retained-run.png");
+    await page.screenshot({ path: runScreenshot, fullPage: true });
+    await testInfo.attach("Retained run", { path: runScreenshot, contentType: "image/png" });
     await page.goto(`${endpoint.base_url}/#launch`);
     await page.getByLabel("Experiment", { exact: true }).selectOption("channel-timing");
     await page.getByRole("button", { name: "Preview", exact: true }).click();
