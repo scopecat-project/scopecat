@@ -53,6 +53,7 @@ nav = [
     { "Repository map" = "development/repository-map.md" },
     { "Core workflow evaluations" = "development/workflow-evaluations.md" },
     { "Supervised laboratory pilot roadmap" = "development/lab-pilot-roadmap.md" },
+    { "Pilot work slices and acceptance fixtures" = "development/pilot-work-slices.md" },
     { "Architecture" = [
       "development/architecture/index.md",
       { "Experiment execution" = "development/architecture/execution.md" },

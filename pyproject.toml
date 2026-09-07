@@ -365,6 +365,7 @@ select = [
 
 [tool.ruff.lint.per-file-ignores]
 "apps/scopecat-ui/scripts/export-openapi.py" = ["TID251"]
+"scripts/generate_reference_lab_acceptance.py" = ["TID251"]
 "examples/reference_lab/tests/**/*.py" = ["TID251"]
 "packages/scopecat-server/**/*.py" = ["TID251"]
 "packages/scopecat/src/scopecat/program/point_domain.py" = [

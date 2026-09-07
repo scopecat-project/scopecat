@@ -33,6 +33,9 @@ from reference_lab.workflows.drag_beta_verification import (
     DRAG_BETA_MINIMUM_IMPROVEMENT,
     DragBetaVerification,
 )
+from reference_lab.workflows.temperature_diagnostic import (
+    temperature_diagnostic_procedure,
+)
 
 
 def test_application_registers_exact_drag_beta_procedure_source() -> None:
@@ -41,6 +44,7 @@ def test_application_registers_exact_drag_beta_procedure_source() -> None:
     assert application.procedures.refs == (
         drag_beta_calibration_procedure.ref,
         drag_beta_verification_procedure.ref,
+        temperature_diagnostic_procedure.ref,
     )
     assert (
         application.procedures.resolve(drag_beta_calibration_procedure.ref).ref

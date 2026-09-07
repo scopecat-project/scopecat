@@ -168,3 +168,17 @@ uv run pytest examples/reference_lab/tests
 uv run ruff check examples/reference_lab
 uv run basedpyright examples/reference_lab
 ```
+
+## Shared pilot acceptance fixtures
+
+The [pilot work-slice guide](../../docs/development/pilot-work-slices.md) documents
+isolated project state, per-lane commands, contract ownership and generation.
+`temperature_diagnostic()` in `workflows/temperature_diagnostic.py` retains one
+read-only thermometer sample through the normal run API. The shared fixture
+producer also exercises a reviewed timing candidate, resource wait/cancel and
+entity-indexed analysis using the existing public workflows.
+
+```sh
+uv run python scripts/generate_reference_lab_acceptance.py --check
+uv run pytest examples/reference_lab/tests/test_acceptance.py
+```
