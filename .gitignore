@@ -9,4 +9,5 @@ __pycache__/
 .venv/
 node_modules/
 apps/scopecat-ui/dist/
+dist/scopecat-server/
 site/
