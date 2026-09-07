@@ -2175,8 +2175,8 @@ class DaemonClient:
         | ProcedureStepFailCommand
         | ProcedureStepAttentionCommand
         | ProcedureStepAttentionRetryCommand
-            | ProcedureStepInputWaitCommand
-            | ProcedureStepResourceWaitCommand
+        | ProcedureStepInputWaitCommand
+        | ProcedureStepResourceWaitCommand
         | ProcedureStepInputSubmitCommand,
         suffix: str,
     ) -> str:

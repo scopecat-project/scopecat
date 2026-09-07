@@ -39,6 +39,8 @@ from scopecat.automation.wire import (
     ProcedureStepFailReceipt,
     ProcedureStepInputWaitCommand,
     ProcedureStepInputWaitReceipt,
+    ProcedureStepResourceWaitCommand,
+    ProcedureStepResourceWaitReceipt,
     ProcedureWorkerLeaseAcquireCommand,
     ProcedureWorkerLeaseAcquireReceipt,
     ProcedureWorkerLeaseHeartbeatCommand,
@@ -166,6 +168,12 @@ INTERPRETATION = procedure(
 
 class MemoryProcedureControl:
     """Small wire-faithful control plane for worker behavior tests."""
+
+    def wait_procedure_step_resources(
+        self, command: ProcedureStepResourceWaitCommand
+    ) -> ProcedureStepResourceWaitReceipt:
+        # Resource ownership and child cancellation are exercised by server tests.
+        raise NotImplementedError("this test double has no child-run resource store")
 
     def __init__(self, *, heartbeat_interval: float = 1.0) -> None:
         self._lock = RLock()
