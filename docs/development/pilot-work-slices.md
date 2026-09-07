@@ -58,7 +58,12 @@ by hand into a second set of mocks.
 
 Only explicitly named capture IDs and wall-clock fields are normalized. Scientific
 values, content hashes, entity alignment and proposal deltas remain generated
-production output. Regenerate after changing their producers; inspect the diff.
+production output. The fixture check compares only the coherent scalar IQ mean's
+real/imaginary components with absolute and relative tolerance `1e-12` in `ratio`,
+accounting for native reduction roundoff across platforms. Generation never
+rounds these values; record identity and remote Arrow comparisons within each run
+remain exact. All other fixture fields remain exact. Regenerate after changing
+their producers; inspect the diff.
 
 ## Focused commands by lane
 

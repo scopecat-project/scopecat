@@ -10,7 +10,11 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import cast
 
-from reference_lab.acceptance import acceptance_json, capture_acceptance_fixtures
+from reference_lab.acceptance import (
+    acceptance_json,
+    acceptance_json_matches,
+    capture_acceptance_fixtures,
+)
 from reference_lab.application import create_application
 from reference_lab.configuration import EXAMPLE_ROOT
 from scopecat.daemon.client import DaemonClient
@@ -41,7 +45,7 @@ def main() -> None:
             stop_project(project)
     if cast("bool", args.check):
         expected = OUTPUT.read_text() if OUTPUT.is_file() else ""
-        if expected != content:
+        if not expected or not acceptance_json_matches(expected, content):
             differences = unified_diff(
                 expected.splitlines(),
                 content.splitlines(),

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 from datetime import UTC, datetime
 from typing import Protocol, cast
 
@@ -260,3 +261,45 @@ def _normalize_preview(preview: MeasurementPreview, run_id: str) -> MeasurementP
             ),
         }
     )
+
+
+def acceptance_json_matches(expected: str, actual: str) -> bool:
+    """Compare the golden fixture, allowing only IQ reduction roundoff in ratio.
+
+    Native trigonometry/reduction differs in its final bits across platforms.
+    Captured values and their within-platform identity/Arrow checks stay exact.
+    All non-IQ fields, including identities, schemas and provenance, stay exact.
+    """
+    return _acceptance_value_matches(
+        cast("JsonValue", json.loads(expected)),
+        cast("JsonValue", json.loads(actual)),
+        (),
+    )
+
+
+def _acceptance_value_matches(
+    expected: JsonValue, actual: JsonValue, path: tuple[str | int, ...]
+) -> bool:
+    if type(expected) is not type(actual):
+        return False
+    if isinstance(expected, dict) and isinstance(actual, dict):
+        return expected.keys() == actual.keys() and all(
+            _acceptance_value_matches(value, actual[key], (*path, key))
+            for key, value in expected.items()
+        )
+    if isinstance(expected, list) and isinstance(actual, list):
+        return len(expected) == len(actual) and all(
+            _acceptance_value_matches(left, right, (*path, index))
+            for index, (left, right) in enumerate(zip(expected, actual, strict=True))
+        )
+    if (
+        isinstance(expected, float)
+        and isinstance(actual, float)
+        and len(path) == 7
+        and path[:2] == ("coherent_scalar", "items")
+        and path[3:6] == ("observables", "iq_mean", "value")
+        and path[6] in ("real", "imag")
+    ):
+        # Values have unit ratio; this is a fixture comparison tolerance only.
+        return math.isclose(expected, actual, rel_tol=1e-12, abs_tol=1e-12)
+    return expected == actual

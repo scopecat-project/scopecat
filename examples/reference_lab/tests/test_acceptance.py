@@ -22,6 +22,7 @@ from scopecat.kernel.quantity import Quantity
 from scopecat.kernel.run_outcome import RunOutcome
 from scopecat.records.measurement import MeasurementDatasetSchema, MeasurementScalar
 
+from reference_lab.acceptance import acceptance_json_matches
 from reference_lab.configuration import EXAMPLE_ROOT
 
 FIXTURE = EXAMPLE_ROOT / "fixtures" / "acceptance.json"
@@ -117,3 +118,28 @@ def test_shared_fixture_retains_complex_scalar_without_a_local_axis() -> None:
         values.append(value.value)
     assert any(value.imag != 0 for value in values)
     assert len(set(values)) > 1
+
+
+def test_fixture_comparison_limits_roundoff_to_complex_iq_components() -> None:
+    expected = FIXTURE.read_text()
+    # Use the observed cross-platform CI differences that motivated this tolerance.
+    for real, imag in (
+        ("0.7500000000000002", "1.915134717478395e-15"),
+        ("0.7499999999999999", "1.925543058334256e-15"),
+    ):
+        roundoff = expected.replace('"real": 0.75', f'"real": {real}', 1).replace(
+            '"imag": 2.060851489460447e-15', f'"imag": {imag}', 1
+        )
+        assert roundoff != expected
+        assert acceptance_json_matches(expected, roundoff)
+    changed = expected.replace('"real": 0.75', '"real": 0.750001', 1)
+    assert not acceptance_json_matches(expected, changed)
+    changed_identity = expected.replace(
+        '"logical_point_id": "', '"logical_point_id": "changed-', 1
+    )
+    assert not acceptance_json_matches(expected, changed_identity)
+    changed_coordinate = expected.replace(
+        '"value": 8.0', '"value": 8.000000000000002', 1
+    )
+    assert changed_coordinate != expected
+    assert not acceptance_json_matches(expected, changed_coordinate)
