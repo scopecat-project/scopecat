@@ -115,6 +115,7 @@ class ProcedureClosure(_ProcedureModel):
     """Terminal result of a procedure run."""
 
     status: ProcedureCloseStatus
+    actor: _NonEmptyText | None = None
     closed_at: datetime = Field(default_factory=utc_now)
     reason: str | None = None
 

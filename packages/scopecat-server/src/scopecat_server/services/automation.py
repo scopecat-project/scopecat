@@ -14,6 +14,7 @@ from scopecat.automation import (
     InterpretationOutputRef,
     InterpretationRequest,
     InterpretationResponse,
+    ProcedureCancelCommand,
     ProcedureCloseCommand,
     ProcedureCloseReceipt,
     ProcedureCloseStatus,
@@ -323,6 +324,50 @@ class AutomationService:
             run=transition.run,
             step=transition.attempt,
         )
+
+    def cancel(self, command: ProcedureCancelCommand) -> ProcedureCloseReceipt:
+        """Cancel without worker authority only when no execution is in flight."""
+        with (
+            _translate_store_errors(),
+            self._store.write_transaction() as connection,
+        ):
+            run = self._store.read_run_in_transaction(
+                connection, command.procedure_run_id
+            )
+            if run.closure is not None:
+                if (
+                    run.closure.status == "cancelled"
+                    and run.closure.actor == command.actor
+                    and run.closure.reason == command.reason
+                ):
+                    return ProcedureCloseReceipt(run=run)
+                raise AutomationConflict(
+                    "procedure is already closed with a different result"
+                )
+            self._require_revision(run, command.expected_run_revision)
+            if run.state not in {"ready", "waiting_for_input"}:
+                raise AutomationConflict(
+                    "only ready or waiting-for-input procedures can be cancelled; "
+                    "executing or attention-required procedures need inspection"
+                )
+            now = self._now()
+            updated = _run_state(
+                run,
+                state="closed",
+                at=now,
+                closure=ProcedureClosure(
+                    status="cancelled",
+                    closed_at=now,
+                    actor=command.actor,
+                    reason=command.reason,
+                ),
+            )
+            self._store.replace_run_in_transaction(
+                connection,
+                updated,
+                expected_revision=command.expected_run_revision,
+            )
+            return ProcedureCloseReceipt(run=updated)
 
     def close(self, command: ProcedureCloseCommand) -> ProcedureCloseReceipt:
         return ProcedureCloseReceipt(

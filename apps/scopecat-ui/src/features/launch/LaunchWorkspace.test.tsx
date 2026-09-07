@@ -152,3 +152,49 @@ it("submits selected array members and invalidates the preview when membership c
   fireEvent.change(select);
   expect(screen.queryByText("Preview ready")).toBeNull();
 });
+
+it("cancels a waiting procedure with the observed revision and recorded actor", async () => {
+  window.history.replaceState(null, "", "/?procedure=p1#launch");
+  let cancelled = false;
+  let command: unknown;
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (request: Request) => {
+      const path = new URL(request.url).pathname;
+      if (path.endsWith("/experiment-launcher")) return Response.json({ calibrations: [entry] });
+      if (path.endsWith("/steps"))
+        return Response.json({
+          items: [{ step_key: "review", attempt: 1, state: "waiting_for_input" }],
+          next_cursor: null,
+        });
+      if (path.endsWith("/cancel")) {
+        command = await request.json();
+        cancelled = true;
+        return Response.json({});
+      }
+      return Response.json({
+        procedure_run_id: "p1",
+        revision: 7,
+        state: cancelled ? "closed" : "waiting_for_input",
+        closure: cancelled ? { status: "cancelled", actor: "reviewer", reason: "Stop here" } : null,
+      });
+    }),
+  );
+  mount();
+  fireEvent.click(await screen.findByText("Cancel remaining procedure"));
+  expect(screen.getByRole("button", { name: "Cancel procedure" })).toBeDisabled();
+  fireEvent.change(screen.getByLabelText("Cancellation actor"), { target: { value: "reviewer" } });
+  fireEvent.change(screen.getByLabelText("Cancellation reason"), {
+    target: { value: "Stop here" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Cancel procedure" }));
+  await screen.findByText("Closed by reviewer");
+  expect(screen.getByText("review: Review cancelled")).toBeInTheDocument();
+  expect(command).toEqual({
+    procedure_run_id: "p1",
+    expected_run_revision: 7,
+    actor: "reviewer",
+    reason: "Stop here",
+  });
+  expect(screen.queryByRole("button", { name: "Resume execution" })).toBeNull();
+});

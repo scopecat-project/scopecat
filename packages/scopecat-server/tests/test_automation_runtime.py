@@ -18,6 +18,7 @@ from scopecat.api.procedures import LabProcedureContext, ProcedureLabSession
 from scopecat.automation import (
     ConfigActivationOutputRef,
     InterpretationRequest,
+    ProcedureCancelCommand,
     ProcedureCloseCommand,
     ProcedureContext,
     ProcedureControlError,
@@ -330,7 +331,11 @@ def test_procedure_http_round_trip_persists_pages_and_fences(
             )
 
 
-def test_procedure_http_round_trips_interpretation_input(tmp_path: Path) -> None:
+@pytest.mark.parametrize("cancel", [False, True])
+def test_procedure_http_round_trips_interpretation_input(
+    tmp_path: Path,
+    cancel: bool,
+) -> None:
     with (
         LocalDaemonRuntime(tmp_path) as runtime,
         TestClient(runtime.app()) as transport,
@@ -379,6 +384,34 @@ def test_procedure_http_round_trips_interpretation_input(tmp_path: Path) -> None
         )
         assert waiting.run.state == "waiting_for_input"
         assert waiting.step.interpretation_request == request
+
+        if cancel:
+            command = ProcedureCancelCommand(
+                procedure_run_id=waiting.run.procedure_run_id,
+                expected_run_revision=waiting.run.revision,
+                actor="reviewer",
+                reason="Stop review",
+            )
+            closed = client.cancel_procedure(command).run
+            assert closed.closure is not None and closed.closure.status == "cancelled"
+            assert client.list_procedure_step_attempts(
+                closed.procedure_run_id, ProcedureStepAttemptListQuery()
+            ).items == (waiting.step,)
+            with pytest.raises(DaemonConflictError):
+                client.submit_procedure_step_input(
+                    ProcedureStepInputSubmitCommand(
+                        procedure_run_id=closed.procedure_run_id,
+                        expected_run_revision=closed.revision,
+                        step_key=waiting.step.step_key,
+                        attempt=waiting.step.attempt,
+                        expected_step_revision=waiting.step.revision,
+                        request_hash=waiting.step.intent_hash,
+                        actor="late-reviewer",
+                        actor_kind="human",
+                        value=schema.encode(_ResonatorSelection(resonator="r2")),
+                    )
+                )
+            return
 
         answered = client.submit_procedure_step_input(
             ProcedureStepInputSubmitCommand(
@@ -950,3 +983,51 @@ def _daemon_client(
         "http://testserver",
         transport=httpx2.MockTransport(send),
     )
+
+
+def test_idle_cancellation_is_atomic_and_idempotent(tmp_path: Path) -> None:
+    with (
+        LocalDaemonRuntime(tmp_path) as runtime,
+        TestClient(runtime.app()) as transport,
+        _daemon_client(transport) as client,
+    ):
+        run = _submit(client, "cancel-ready")
+        command = ProcedureCancelCommand(
+            procedure_run_id=run.procedure_run_id,
+            expected_run_revision=run.revision,
+            actor="operator",
+            reason="No longer needed",
+        )
+        closed = client.cancel_procedure(command).run
+        assert closed.closure is not None
+        assert closed.closure.status == "cancelled"
+        assert closed.closure.actor == "operator"
+        assert client.cancel_procedure(command).run == closed
+        with pytest.raises(DaemonConflictError):
+            client.acquire_procedure_worker_lease(
+                ProcedureWorkerLeaseAcquireCommand(
+                    procedure_run_id=closed.procedure_run_id,
+                    worker_id="late-worker",
+                    expected_run_revision=closed.revision,
+                )
+            )
+
+        racing = _submit(client, "cancel-racing")
+        acquired = client.acquire_procedure_worker_lease(
+            ProcedureWorkerLeaseAcquireCommand(
+                procedure_run_id=racing.procedure_run_id,
+                worker_id="running-worker",
+                expected_run_revision=racing.revision,
+            )
+        )
+        for revision in (racing.revision, acquired.run.revision):
+            with pytest.raises(DaemonConflictError):
+                client.cancel_procedure(
+                    ProcedureCancelCommand(
+                        procedure_run_id=racing.procedure_run_id,
+                        expected_run_revision=revision,
+                        actor="operator",
+                        reason="Stop",
+                    )
+                )
+        assert client.get_procedure(racing.procedure_run_id).state == "leased"

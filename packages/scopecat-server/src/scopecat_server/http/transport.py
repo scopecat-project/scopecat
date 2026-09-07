@@ -20,6 +20,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import JsonValue
 from scopecat.application.launch import LaunchRequest, LaunchSubmission
 from scopecat.automation import (
+    ProcedureCancelCommand,
     ProcedureCloseCommand,
     ProcedureCloseReceipt,
     ProcedureRun,
@@ -1171,6 +1172,14 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
     ) -> ProcedureRunAttentionReceipt:
         _require_procedure_run_id(procedure_run_id, command.procedure_run_id)
         return application.automation.require_run_attention(command)
+
+    @app.post(f"{_API_PREFIX}/procedures/{{procedure_run_id}}/cancel")
+    def cancel_procedure(
+        procedure_run_id: str,
+        command: ProcedureCancelCommand,
+    ) -> ProcedureCloseReceipt:
+        _require_procedure_run_id(procedure_run_id, command.procedure_run_id)
+        return application.automation.cancel(command)
 
     @app.post(f"{_API_PREFIX}/procedures/{{procedure_run_id}}/close")
     def close_procedure(

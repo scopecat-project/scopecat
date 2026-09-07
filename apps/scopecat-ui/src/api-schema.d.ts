@@ -599,6 +599,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/procedures/{procedure_run_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel Procedure */
+        post: operations["cancel_procedure_api_v1_procedures__procedure_run_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/procedures/{procedure_run_id}/dispatch": {
         parameters: {
             query?: never;
@@ -4671,6 +4688,21 @@ export interface components {
          * @enum {string}
          */
         ProblemPhase: "definition" | "authoring" | "configuration" | "planning" | "provider_preflight" | "execution" | "persistence" | "analysis";
+        /**
+         * ProcedureCancelCommand
+         * @description Cancel an idle procedure at an exact observed revision.
+         */
+        ProcedureCancelCommand: {
+            actor: components["schemas"]["_NonEmptyText"];
+            /** Expected Run Revision */
+            expected_run_revision: number;
+            procedure_run_id: components["schemas"]["_NonEmptyText"];
+            reason: components["schemas"]["_NonEmptyText"];
+        };
+        /** ProcedureCloseReceipt */
+        ProcedureCloseReceipt: {
+            run: components["schemas"]["ProcedureRun"];
+        };
         /** @enum {string} */
         ProcedureCloseStatus: "succeeded" | "failed" | "cancelled";
         /**
@@ -4678,6 +4710,7 @@ export interface components {
          * @description Terminal result of a procedure run.
          */
         ProcedureClosure: {
+            actor?: components["schemas"]["_NonEmptyText"] | null;
             /**
              * Closed At
              * Format: date-time
@@ -7591,6 +7624,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProcedureRun"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_procedure_api_v1_procedures__procedure_run_id__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                procedure_run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProcedureCancelCommand"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProcedureCloseReceipt"];
                 };
             };
             /** @description Validation Error */

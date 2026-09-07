@@ -490,6 +490,22 @@ class ProcedureRunAttentionReceipt(_WireModel):
         return self
 
 
+class ProcedureCancelCommand(_WireModel):
+    """Cancel an idle procedure at an exact observed revision."""
+
+    procedure_run_id: _NonEmptyText
+    expected_run_revision: int = Field(ge=1)
+    actor: _NonEmptyText
+    reason: _NonEmptyText
+
+    @field_validator("actor", "reason")
+    @classmethod
+    def validate_nonblank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("cancellation actor and reason must be nonblank")
+        return value
+
+
 class ProcedureCloseCommand(_FencedProcedureCommand):
     status: ProcedureCloseStatus
     reason: str | None = None

@@ -119,3 +119,12 @@ The GUI does not replace the procedure's verification or acceptance policy.
 
 Launch forms also support arrays of string enums as multi-select fields. Membership
 changes invalidate previews; procedure progress links to retained analysis results.
+
+The progress view can cancel a ready or review-waiting procedure. It records the
+actor and reason and submits the observed revision; a concurrent worker start or
+review response causes a conflict rather than cancelling a changed execution.
+Completed steps and evidence remain available, and late review input is rejected.
+Python callers use `lab.procedures.get(id).cancel(actor=..., reason=...)`.
+Executing and attention-required procedures cannot use this idle cancellation
+operation. Cancelling a child acquisition remains a separate run operation; it
+does not imply cancellation of its parent procedure or immediate hardware stop.

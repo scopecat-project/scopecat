@@ -288,6 +288,9 @@ function LaunchForm({ entry, onAdmitted }: { entry: Entry; onAdmitted: (id: stri
 }
 
 function ProcedureProgress({ procedureId }: { procedureId: string }) {
+  const [cancelActor, setCancelActor] = useState("");
+  const [cancelReason, setCancelReason] = useState("");
+  const [cancelling, setCancelling] = useState(false);
   const [error, setError] = useState("");
   const status = useQuery({
     queryKey: ["launch-procedure", procedureId],
@@ -309,6 +312,29 @@ function ProcedureProgress({ procedureId }: { procedureId: string }) {
       ),
     refetchInterval: 1000,
   });
+  async function cancel() {
+    if (!status.data) return;
+    setError("");
+    setCancelling(true);
+    try {
+      await apiData(
+        apiClient.POST("/api/v1/procedures/{procedure_run_id}/cancel", {
+          params: { path: { procedure_run_id: procedureId } },
+          body: {
+            procedure_run_id: procedureId,
+            expected_run_revision: status.data.revision,
+            actor: cancelActor,
+            reason: cancelReason,
+          },
+        }),
+      );
+      await status.refetch();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : String(caught));
+    } finally {
+      setCancelling(false);
+    }
+  }
   async function resume() {
     setError("");
     try {
@@ -345,11 +371,42 @@ function ProcedureProgress({ procedureId }: { procedureId: string }) {
           Resume execution
         </button>
       )}
+      {status.data && ["ready", "waiting_for_input"].includes(status.data.state) && (
+        <details>
+          <summary>Cancel remaining procedure</summary>
+          <p>
+            Retains completed results. Cancellation succeeds only before execution or while waiting
+            for review.
+          </p>
+          <label>
+            Cancellation actor
+            <input value={cancelActor} onChange={(event) => setCancelActor(event.target.value)} />
+          </label>
+          <label>
+            Cancellation reason
+            <input value={cancelReason} onChange={(event) => setCancelReason(event.target.value)} />
+          </label>
+          <button
+            type="button"
+            disabled={cancelling || !cancelActor.trim() || !cancelReason.trim()}
+            onClick={() => {
+              void cancel();
+            }}
+          >
+            Cancel procedure
+          </button>
+        </details>
+      )}
+      {status.data?.closure?.actor && <p>Closed by {status.data.closure.actor}</p>}
       {error && <p role="alert">{error}</p>}
       <ul>
         {steps.data?.items.map((step) => (
           <li key={`${step.step_key}:${step.attempt}`}>
-            {step.step_key}: {statusLabel(step.state)} {step.failure_reason}
+            {step.step_key}:{" "}
+            {status.data?.closure?.status === "cancelled" && step.state === "waiting_for_input"
+              ? "Review cancelled"
+              : statusLabel(step.state)}{" "}
+            {step.failure_reason}
             {step.output?.kind === "run" && (
               <a
                 className="ml-2 underline"
@@ -388,6 +445,7 @@ function statusLabel(state: string): string {
     succeeded: "Completed",
     failed: "Failed",
     closed: "Finished",
+    cancelled: "Cancelled",
     running: "Running",
   };
   return labels[state] ?? state.replaceAll("_", " ");
