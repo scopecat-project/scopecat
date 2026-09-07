@@ -168,10 +168,12 @@ export function AnalysisCard({
           detail="Waiting for the daemon's persisted analysis records."
         />
       ) : !analyses || analyses.length === 0 ? (
-        <InlineEmpty
-          title="No analyses saved"
-          detail="Notebook and automated analysis outputs will appear here."
-        />
+        !linkedAnalysis && (
+          <InlineEmpty
+            title="No analyses saved"
+            detail="Notebook and automated analysis outputs will appear here."
+          />
+        )
       ) : (
         <div className="grid gap-2">
           {analyses

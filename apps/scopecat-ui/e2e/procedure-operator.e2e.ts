@@ -63,14 +63,16 @@ test("reopens an admitted procedure after restart and follows exact retained run
     await page.getByRole("button", { name: /reference_lab.launch_temperature/ }).click();
     await expect(page.getByText("Admitted — not dispatched", { exact: true })).toBeVisible();
     expect(new URL(page.url()).searchParams.get("procedure")).toBe(procedureId);
+    await page.screenshot({ path: "/private/tmp/scopecat-401-reopened.png", fullPage: true });
     await page.getByRole("button", { name: "Dispatch existing procedure" }).click();
     await expect(page.getByRole("status").filter({ hasText: /^Completed$/ })).toBeVisible();
     await page.reload();
     await expect(page.getByRole("status").filter({ hasText: /^Completed$/ })).toBeVisible();
     await page.getByRole("link", { name: /^Open retained run:/ }).click();
-    await expect(page.getByTestId("run-status")).toHaveText("Completed");
-    await expect(page.getByRole("heading", { name: "Measurement records" })).toBeVisible();
+    await expect(page.getByTestId("run-status")).toHaveText("Succeeded");
+    await expect(page.getByText("Measurement data", { exact: true })).toBeVisible();
 
+    await page.screenshot({ path: "/private/tmp/scopecat-401-retained-run.png", fullPage: true });
     await page.goto(`${endpoint.base_url}/#launch`);
     await page.getByLabel("Experiment", { exact: true }).selectOption("channel-timing");
     await page.getByRole("button", { name: "Preview", exact: true }).click();

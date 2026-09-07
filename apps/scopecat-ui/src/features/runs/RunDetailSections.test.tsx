@@ -43,6 +43,7 @@ it("opens the exact linked run analysis outside the history page", async () => {
     </QueryClientProvider>,
   );
   expect(await screen.findByRole("heading", { name: "Retained run evidence" })).toBeVisible();
+  expect(screen.queryByText("No analyses saved")).toBeNull();
   expect(get).toHaveBeenCalledWith("original-run", "older-publication", expect.any(AbortSignal));
   client.clear();
 });

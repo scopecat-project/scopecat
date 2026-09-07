@@ -129,14 +129,15 @@ authority across processes.
 Manager membership is retained in `.scopecat/console-procedures.json`. On daemon
 restart, only previously managed, ready procedures are eligible to resume; other
 CLI procedures are not automatically adopted. An observed nonzero worker exit
-pauses automatic dispatch until an explicit Dispatch existing procedure request. Attention
-and closed procedures leave the manager. This is process management, not a
+pauses automatic dispatch until an explicit `Dispatch existing procedure` request.
+Attention and closed procedures leave the manager. This is process management, not a
 hardware recovery or procedure cancellation protocol. Daemon shutdown does not
 forcibly kill hardware workers.
 
 Process output goes to `.scopecat/console-worker.log`. A failed spawn retains the
-procedure ID and reports `dispatch_error`. The progress view offers explicit dispatch and links to exact child runs and analysis publications; its procedure ID remains in the
-URL. Configuration acceptance stays in the declared procedure and review policy.
+procedure ID and reports `dispatch_error`. The progress view offers explicit
+dispatch and links to exact child runs and analysis publications; its procedure ID
+remains in the URL. Configuration acceptance stays in the declared procedure and review policy.
 The generic GUI does not accept calibration parameters itself. Existing projects
 without a provider show an empty state.
 

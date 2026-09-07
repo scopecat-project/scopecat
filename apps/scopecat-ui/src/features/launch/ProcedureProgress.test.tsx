@@ -95,11 +95,9 @@ it.each([
   mount();
   await screen.findByText(label);
   expect(screen.queryByRole("button", { name: "Dispatch existing procedure" })).toBeNull();
-  if (state === "waiting_for_input")
-    expect(screen.getByRole("link", { name: /Review results/ })).toHaveAttribute(
-      "href",
-      "?procedure=p1#decisions",
-    );
+  expect(screen.queryByRole("link", { name: /Review results/ })?.getAttribute("href") ?? null).toBe(
+    state === "waiting_for_input" ? "?procedure=p1#decisions" : null,
+  );
 });
 
 it("shows failed closure and its reason without suggesting retry", async () => {
