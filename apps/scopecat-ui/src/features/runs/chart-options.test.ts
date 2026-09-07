@@ -198,13 +198,26 @@ describe("run chart ECharts options", () => {
 
   it("builds analysis series, axes, tooltip, zoom, and legend from authored content", () => {
     const option = analysisFigureOption({
-      kind: "line",
-      series: [
-        { id: "fit", label: "Fit", x: [-1, 0, 1], y: [2, 3, 2] },
-        { id: "reference", label: "Reference", x: [-1, 1], y: [2.5, 2.5] },
+      total_points: 5,
+      truncated: false,
+      layers: [
+        {
+          id: "data",
+          source: { kind: "dataset", output_id: "data" },
+          projection: { kind: "line", x: "bias", y: "frequency" },
+          total_points: 5,
+          truncated: false,
+          preview: {
+            kind: "line",
+            series: [
+              { id: "fit", label: "Fit", x: [-1, 0, 1], y: [2, 3, 2] },
+              { id: "reference", label: "Reference", x: [-1, 1], y: [2.5, 2.5] },
+            ],
+            x_axis: { label: "Bias", unit: "V" },
+            y_axis: { label: "Frequency", unit: "GHz" },
+          },
+        },
       ],
-      x_axis: { label: "Bias", unit: "V" },
-      y_axis: { label: "Frequency", unit: "GHz" },
     });
 
     expect(option.xAxis).toMatchObject({ name: "Bias (V)", scale: true, type: "value" });
@@ -234,6 +247,72 @@ describe("run chart ECharts options", () => {
         type: "line",
       },
     ]);
+  });
+  it.each(["band", "bars"] as const)("renders mixed layers with declared %s bounds", (style) => {
+    const option = analysisFigureOption({
+      total_points: 4,
+      truncated: false,
+      layers: [
+        {
+          id: "measured",
+          source: { kind: "dataset", output_id: "observations" },
+          projection: { kind: "scatter", x: "x", y: "y" },
+          total_points: 2,
+          truncated: false,
+          preview: {
+            kind: "scatter",
+            x_axis: { label: "Time", unit: "us" },
+            y_axis: { label: "Signal", unit: "V" },
+            series: [{ id: "data", x: [0, 1], y: [1, 2] }],
+          },
+        },
+        {
+          id: "fit",
+          source: { kind: "dataset", output_id: "curve" },
+          projection: {
+            kind: "line",
+            x: "x",
+            y: "y",
+            uncertainty: { lower: "lo", upper: "hi", meaning: "One residual scale", style },
+          },
+          total_points: 2,
+          truncated: false,
+          preview: {
+            kind: "line",
+            x_axis: { label: "Time", unit: "us" },
+            y_axis: { label: "Signal", unit: "V" },
+            series: [
+              { id: "data", x: [0, 1], y: [1, 2], y_lower: [0.9, 1.9], y_upper: [1.1, 2.1] },
+            ],
+          },
+        },
+      ],
+    });
+    const series = optionSeries(option);
+    expect(series).toMatchObject([
+      { id: "measured/data", type: "scatter" },
+      { id: "fit/data", type: "line" },
+      { id: "fit/data/uncertainty", type: "custom", silent: true },
+    ]);
+    expect(series[2]?.data).toEqual(
+      style === "band"
+        ? [[0, 0.9, 1.1, 1, 1.9, 2.1]]
+        : [
+            [0, 0.9, 1.1],
+            [1, 1.9, 2.1],
+          ],
+    );
+    const renderItem = series[2]?.renderItem as CustomSeriesRenderItem;
+    const values = [0, 0.9, 1.1, 1, 1.9, 2.1];
+    const rendered = renderItem(
+      {} as Parameters<CustomSeriesRenderItem>[0],
+      {
+        value: (index: number) => values[index],
+        coord: (value: number[]) => value,
+        visual: () => "#123456",
+      } as unknown as Parameters<CustomSeriesRenderItem>[1],
+    );
+    expect(rendered).toMatchObject({ type: style === "band" ? "polygon" : "group" });
   });
 });
 

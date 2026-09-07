@@ -137,19 +137,26 @@ describe("AnalysisOutputView", () => {
       title: "Resonance fit",
       metadata: {},
       content: {
-        source: { kind: "dataset", output_id: "fits" },
-        projection: { kind: "line", x: "bias", y: "frequency" },
         total_points: 7,
         truncated: true,
-        preview: {
-          kind: "line",
-          x_axis: { label: "Bias", unit: "V" },
-          y_axis: { label: "Frequency", unit: "GHz" },
-          series: [
-            { id: "fit", label: "Fit", x: [-0.1, 0, 0.1], y: [5.0, 5.1, 5.0] },
-            { id: "reference", label: "Reference", x: [-0.1, 0.1], y: [5.05, 5.05] },
-          ],
-        },
+        layers: [
+          {
+            id: "data",
+            source: { kind: "dataset", output_id: "fits" },
+            projection: { kind: "line", x: "bias", y: "frequency" },
+            total_points: 7,
+            truncated: true,
+            preview: {
+              kind: "line",
+              x_axis: { label: "Bias", unit: "V" },
+              y_axis: { label: "Frequency", unit: "GHz" },
+              series: [
+                { id: "fit", label: "Fit", x: [-0.1, 0, 0.1], y: [5.0, 5.1, 5.0] },
+                { id: "reference", label: "Reference", x: [-0.1, 0.1], y: [5.05, 5.05] },
+              ],
+            },
+          },
+        ],
       },
     } satisfies Extract<AnalysisOutput, { kind: "figure" }>;
 
@@ -161,7 +168,7 @@ describe("AnalysisOutputView", () => {
       }),
     ).toBeVisible();
     expect(screen.getByText(/Series: Fit, Reference/)).toBeInTheDocument();
-    expect(screen.getByText("Showing 5 of 7 points")).toBeVisible();
+    expect(screen.getByText("Showing 5 of 7 points across 1 layers")).toBeVisible();
   });
 
   it("preserves opposite finite float extremes in the ECharts option", () => {
@@ -171,20 +178,27 @@ describe("AnalysisOutputView", () => {
       title: "Extreme range",
       metadata: {},
       content: {
-        source: { kind: "dataset", output_id: "extremes" },
-        projection: { kind: "line", x: "x", y: "y" },
         total_points: 2,
         truncated: false,
-        preview: {
-          kind: "line",
-          x_axis: { label: "x" },
-          y_axis: { label: "y" },
-          series: [{ id: "extreme", x: [-1e308, 1e308], y: [1e308, -1e308] }],
-        },
+        layers: [
+          {
+            id: "data",
+            source: { kind: "dataset", output_id: "extremes" },
+            projection: { kind: "line", x: "x", y: "y" },
+            total_points: 2,
+            truncated: false,
+            preview: {
+              kind: "line",
+              x_axis: { label: "x" },
+              y_axis: { label: "y" },
+              series: [{ id: "extreme", x: [-1e308, 1e308], y: [1e308, -1e308] }],
+            },
+          },
+        ],
       },
     } satisfies Extract<AnalysisOutput, { kind: "figure" }>;
 
-    const option = analysisFigureOption(output.content.preview);
+    const option = analysisFigureOption(output.content);
     const [series] = option.series as Array<{ data: number[][]; type: string }>;
 
     expect(series).toMatchObject({ type: "line" });

@@ -84,6 +84,7 @@ from scopecat.records.analysis import (
     AnalysisExecutionOutput,
     AnalysisExecutionOutputReference,
     AnalysisField,
+    AnalysisFigureLayerSpec,
     AnalysisFigureProjection,
     AnalysisFigureViewSpec,
     AnalysisTableViewSpec,
@@ -445,12 +446,15 @@ def test_post_run_commands_are_closed_json_and_bind_proposals_to_runs() -> None:
                 id="fit-curve",
                 title="fit curve",
                 content=AnalysisFigureViewSpec(
-                    source=AnalysisDatasetViewSource(output_id="fits"),
-                    projection=AnalysisFigureProjection(
-                        kind="line",
-                        x="bias",
-                        y="signal",
-                    ),
+                    layers=(
+                        AnalysisFigureLayerSpec(
+                            id="data",
+                            source=AnalysisDatasetViewSource(output_id="fits"),
+                            projection=AnalysisFigureProjection(
+                                kind="line", x="bias", y="signal"
+                            ),
+                        ),
+                    )
                 ),
             ),
             AnalysisParameterProposalOutputPayload(

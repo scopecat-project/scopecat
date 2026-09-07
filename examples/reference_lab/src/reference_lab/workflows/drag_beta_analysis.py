@@ -12,6 +12,12 @@ import polars as pl
 import scopecat as sc
 from scopecat import Quantity
 from scopecat.measurements.results import Dataset
+from scopecat.records.analysis import (
+    AnalysisDatasetViewSource,
+    AnalysisFigureLayerSpec,
+    AnalysisFigureProjection,
+    AnalysisUncertaintyProjection,
+)
 
 from reference_lab.parameters import Q0_DRAG_BETA, Q1_DRAG_BETA
 from reference_lab.workflows.drag_beta_calibration import (
@@ -80,6 +86,40 @@ class DragBetaFit:
     model_id: Annotated[str, sc.AnalysisField(label="Fit model")] = (
         _DRAG_BETA_FIT_MODEL_ID
     )
+
+
+@dataclass(frozen=True, slots=True)
+class DragBetaCurvePoint:
+    beta: Annotated[Quantity, _BETA_FIELD]
+    amplification: Annotated[int, _AMPLIFICATION_FIELD]
+    p1: Annotated[float, _PROBABILITY_FIELD]
+    lower: Annotated[float, sc.AnalysisField(unit="ratio")]
+    upper: Annotated[float, sc.AnalysisField(unit="ratio")]
+
+
+def drag_beta_fit_curve(
+    observations: Sequence[DragBetaObservation], fit: DragBetaFit
+) -> tuple[DragBetaCurvePoint, ...]:
+    """Dense fitted curves with one RMSE residual scale, not confidence intervals."""
+    betas = [_beta_ns(point.beta) for point in observations]
+    result: list[DragBetaCurvePoint] = []
+    for amplification in sorted({point.amplification for point in observations}):
+        for beta in np.linspace(min(betas), max(betas), 81):
+            value = fit.baseline + amplification**2 * (
+                fit.quadratic * float(beta) ** 2
+                + fit.linear * float(beta)
+                + fit.scaled_offset
+            )
+            result.append(
+                DragBetaCurvePoint(
+                    Quantity(float(beta), "ns"),
+                    amplification,
+                    value,
+                    value - fit.rmse,
+                    value + fit.rmse,
+                )
+            )
+    return tuple(result)
 
 
 DRAG_BETA_FIT_SCHEMA = sc.AnalysisFactSchema(
@@ -170,14 +210,45 @@ def drag_beta_analysis(
             id="observations-table",
             title="DRAG beta observations",
         )
-        .figure(
-            dataset="observations",
+        .dataset(
+            "fit-curve",
+            drag_beta_fit_curve(observations, fit),
+            title="Fitted DRAG curves and residual bounds",
+        )
+        .figure_layers(
             id="observations-by-amplification",
-            kind="scatter",
-            x="beta_ns",
-            y="probability_1",
-            series="amplification",
-            title="DRAG beta observations by amplification",
+            title="Measured DRAG probabilities and quadratic fit",
+            layers=(
+                AnalysisFigureLayerSpec(
+                    id="measured",
+                    source=AnalysisDatasetViewSource(output_id="observations"),
+                    projection=AnalysisFigureProjection(
+                        kind="scatter",
+                        x="beta_ns",
+                        y="probability_1",
+                        series="amplification",
+                    ),
+                ),
+                AnalysisFigureLayerSpec(
+                    id="fit",
+                    source=AnalysisDatasetViewSource(output_id="fit-curve"),
+                    projection=AnalysisFigureProjection(
+                        kind="line",
+                        x="beta_ns",
+                        y="probability_1",
+                        series="amplification",
+                        uncertainty=AnalysisUncertaintyProjection(
+                            lower="lower",
+                            upper="upper",
+                            style="band",
+                            meaning=(
+                                "Plus/minus one RMSE residual scale; "
+                                "not a confidence interval"
+                            ),
+                        ),
+                    ),
+                ),
+            ),
         )
         .artifact(
             "fit-report",

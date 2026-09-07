@@ -47,6 +47,7 @@ from scopecat.kernel.run_outcome import RunOutcome
 from scopecat.records.analysis import (
     MAX_ANALYSIS_OUTPUTS,
     AnalysisDatasetDerivation,
+    AnalysisDatasetViewSource,
     AnalysisExecution,
     AnalysisExecutionOutputReference,
     AnalysisFact,
@@ -688,9 +689,19 @@ class AnalysisSaveCommand(_WireModel):
                 AnalysisTableOutputPayload | AnalysisFigureOutputPayload,
             ):
                 continue
-            source = output.content.source
-            if source.output_id not in dataset_ids:
-                raise ValueError("analysis view source must identify a dataset output")
+            sources = (
+                tuple(layer.source for layer in output.content.layers)
+                if isinstance(output, AnalysisFigureOutputPayload)
+                else (output.content.source,)
+            )
+            for source in sources:
+                if (
+                    isinstance(source, AnalysisDatasetViewSource)
+                    and source.output_id not in dataset_ids
+                ):
+                    raise ValueError(
+                        "analysis view source must identify a dataset output"
+                    )
         return self
 
 

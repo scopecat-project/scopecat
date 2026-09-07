@@ -1,11 +1,7 @@
 import { useMemo, useState } from "react";
 import type { AnalysisOutput } from "../../types";
 import { EChart } from "../../ui/EChart";
-import {
-  analysisAxisLabel,
-  analysisFigureOption,
-  type AnalysisFigureContent,
-} from "./chart-options";
+import { analysisAxisLabel, analysisFigureOption } from "./chart-options";
 
 export function AnalysisOutputView({
   output,
@@ -193,40 +189,67 @@ function AnalysisTableView({ content, title }: { content: TableContent; title: s
 type FigureContent = Extract<AnalysisOutput, { kind: "figure" }>["content"];
 
 function AnalysisFigureView({ content, title }: { content: FigureContent; title: string }) {
-  const preview: AnalysisFigureContent = content.preview;
-  const points = preview.series.flatMap((series) =>
-    series.x.map((x, index) => ({ x, y: series.y[index]! })),
-  );
-  const xLabel = analysisAxisLabel(preview.x_axis);
-  const yLabel = analysisAxisLabel(preview.y_axis);
-  const description = `${title}: ${yLabel} by ${xLabel}`;
-  const option = useMemo(() => analysisFigureOption(preview), [preview]);
-
+  const first = content.layers[0]!.preview;
+  const series = content.layers.flatMap((layer) => layer.preview.series);
+  const pointCount = series.reduce((total, item) => total + item.x.length, 0);
+  const xLabel = analysisAxisLabel(first.x_axis);
+  const yLabel = analysisAxisLabel(first.y_axis);
+  const option = useMemo(() => analysisFigureOption(content), [content]);
   return (
     <figure className="m-0 p-[9px]" data-testid="analysis-figure">
-      <figcaption className="mb-1.5 flex flex-wrap items-center justify-between gap-2 text-[0.58rem] text-text-dim">
-        <span>
-          {xLabel} → {yLabel}
-        </span>
-        <span className="rounded border border-line px-1.5 py-1 font-bold tracking-[0.05em] uppercase">
-          {preview.kind}
-        </span>
+      <figcaption className="mb-1.5 text-xs text-text-dim">
+        {xLabel} → {yLabel}
       </figcaption>
-      <div className="rounded-md bg-panel-soft">
-        <EChart
-          ariaLabel={description}
-          height={270}
-          option={option}
-          pointCount={points.length}
-          seriesLabels={preview.series.map((series) => series.label ?? series.id)}
-          seriesCount={preview.series.length}
-        />
-      </div>
-      {content.truncated ? (
-        <p className="mt-2 mb-0 text-[0.58rem] text-text-dim">
-          Showing {points.length} of {content.total_points} points
+      <EChart
+        ariaLabel={`${title}: ${yLabel} by ${xLabel}`}
+        height={270}
+        option={option}
+        pointCount={pointCount}
+        seriesLabels={series.map((item) => item.label ?? item.id)}
+        seriesCount={series.length}
+      />
+      <p className="text-xs text-text-dim">
+        Showing {pointCount} of {content.total_points} points across {content.layers.length} layers
+      </p>
+      {content.truncated && (
+        <p className="text-xs text-text-dim">
+          Preview shows the first rows of each source within its share of the 4,096-point budget.
         </p>
-      ) : null}
+      )}
+      <ul className="text-xs text-text-dim">
+        {content.layers.map((layer) => (
+          <li key={layer.id}>
+            <strong>{layer.id}</strong> · {layer.preview.kind} ·{" "}
+            {layer.preview.series.reduce((n, item) => n + item.x.length, 0)}/{layer.total_points}{" "}
+            points
+            {layer.projection.uncertainty && (
+              <p>
+                {layer.projection.uncertainty.style === "band" ? "Band" : "Error bars"}:{" "}
+                {layer.projection.uncertainty.meaning} (absolute lower/upper bounds)
+              </p>
+            )}
+            <details>
+              <summary>Retained source and projection</summary>
+              {layer.source.kind === "dataset" ? (
+                <p>
+                  Dataset output in this publication: <code>{layer.source.output_id}</code>
+                </p>
+              ) : (
+                <>
+                  <p>
+                    Analysis <code>{layer.source.source.analysis_record_id}</code> · dataset output{" "}
+                    <code>{layer.source.source.output_id}</code>
+                  </p>
+                  <code>{layer.source.dataset.content_hash}</code>
+                </>
+              )}
+              <pre className="overflow-auto">
+                {JSON.stringify({ source: layer.source, projection: layer.projection }, null, 2)}
+              </pre>
+            </details>
+          </li>
+        ))}
+      </ul>
     </figure>
   );
 }

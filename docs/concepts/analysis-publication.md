@@ -36,7 +36,7 @@ kinds of output:
   convention. Published artifacts can be reopened through Python or downloaded
   from the run view.
 - **View** is a bounded table or figure projection for inspection. The author
-  supplies only its source dataset ID and projection; publication generates the
+  supplies dataset sources and projections; publication generates the
   canonical preview, total row/point count, and truncation flag. The cache is
   presentation, not another authoritative scientific result.
 - **Proposal** is a decision output that proposes parameter changes and retains
@@ -109,6 +109,84 @@ published = run.analyze(resonator_fit())
 
 Both paths return `PublishedAnalysis`; there is no separate immediate outcome
 model.
+
+## Layered scientific figures
+
+A figure contains one to sixteen explicitly ordered layers. The existing
+`.figure(...)` convenience method creates a single layer; `.figure_layers(...)`
+combines measured points, a fitted curve, and declared uncertainty in the same
+axes. Fitting methods and scientific acceptance thresholds remain project code.
+
+```python
+from scopecat.records.analysis import (
+    AnalysisDatasetViewSource,
+    AnalysisFigureLayerSpec,
+    AnalysisFigureProjection,
+    AnalysisUncertaintyProjection,
+)
+
+review = (
+    context.result()
+    .dataset("fit-curve", fitted_curve)
+    .figure_layers(
+        layers=(
+            AnalysisFigureLayerSpec(
+                id="measured",
+                source=measured_publication.dataset_view_source("observations"),
+                projection=AnalysisFigureProjection(
+                    kind="scatter", x="bias", y="signal"
+                ),
+            ),
+            AnalysisFigureLayerSpec(
+                id="fit",
+                source=AnalysisDatasetViewSource(output_id="fit-curve"),
+                projection=AnalysisFigureProjection(
+                    kind="line",
+                    x="bias",
+                    y="signal",
+                    uncertainty=AnalysisUncertaintyProjection(
+                        lower="lower",
+                        upper="upper",
+                        style="band",
+                        meaning="95% confidence interval from the project fit",
+                    ),
+                ),
+            ),
+        ),
+    )
+    .save()
+)
+```
+
+A sibling source names an output in this atomic publication. An already
+published source freezes its exact analysis revision, output identity, dataset
+hash, and codec as an input; a later source revision does not change the figure.
+The source accessor reads metadata, without loading the full dataset. Each
+layer exposes its actual source and projection in the review UI.
+
+All layers use the first layer's axis units. Publication converts compatible
+units and rejects incompatible dimensions or a mixture of declared and unknown
+units. Uncertainty columns are absolute lower and upper bounds in compatible
+y-axis units, with a required project-authored meaning. `band` joins adjacent
+bounds in source order; `bars` draws vertical bounds at each point. Neither
+implies a confidence level, fit quality, nor permission to accept a proposal.
+
+The entire figure has a 4,096-point preview budget, divided equally among the
+declared layers; earlier layers receive any remainder. Each layer selects its
+first rows in source order within that share, before conversion to Python
+values. Unused shares are not reassigned. This guarantees every non-empty layer
+has a visible share, and the UI reports both returned and total counts. It is a
+bounded preview, not a representative statistical sample. Full source datasets
+remain separately available. External Arrow inputs still use the existing
+whole-blob storage read: record batches are counted without building a full
+table, and only selected columns and bounded rows enter the preview table.
+This is not storage predicate pushdown or a bound on a single decoded batch.
+
+The layered figure format requires project store version **63**. Version 62
+projects and snapshots must be read or exported with their pinned version 62
+runtime; the version 63 runtime rejects them before modification. There is no
+automatic migration. Keep the original projects and verified snapshots when
+creating a separate version 63 project. See [backup and restore](../how-to/backup-and-restore.md).
 
 ## Compare completed runs
 

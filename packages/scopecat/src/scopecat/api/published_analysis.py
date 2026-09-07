@@ -27,6 +27,8 @@ from scopecat.records.analysis import (
     AnalysisFigureRecordOutput,
     AnalysisFigureView,
     AnalysisParameterProposalRecordOutput,
+    AnalysisPublishedDatasetViewSource,
+    AnalysisPublishedOutputReference,
     AnalysisRecordInput,
     AnalysisRecordOutput,
     AnalysisTableRecordOutput,
@@ -246,6 +248,18 @@ class PublishedAnalysis:
 
     def table(self, id: str) -> AnalysisTableView:
         return self._output(id, AnalysisTableRecordOutput).content
+
+    def dataset_view_source(self, id: str) -> AnalysisPublishedDatasetViewSource:
+        """Freeze a plotting source from metadata without downloading its table."""
+        output = self._output(id, AnalysisDatasetRecordOutput)
+        return AnalysisPublishedDatasetViewSource(
+            source=AnalysisPublishedOutputReference(
+                subject=self.view.analysis.subject,
+                analysis_record_id=self.id,
+                output_id=output.id,
+            ),
+            dataset=output.content,
+        )
 
     def figure(self, id: str) -> AnalysisFigureView:
         return self._output(id, AnalysisFigureRecordOutput).content

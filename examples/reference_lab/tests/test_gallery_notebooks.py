@@ -6,6 +6,7 @@ from typing import Protocol, cast
 
 import pytest
 from pydantic import ValidationError
+from scopecat.api.published_analysis import PublishedAnalysis
 from scopecat.api.run import RunHandle
 from scopecat.daemon.client import DaemonClient
 from scopecat.daemon.views import MeasurementTracePreviewQuery
@@ -411,10 +412,23 @@ def test_drag_calibration_closes_the_reviewed_config_loop(
         "dataset",
         "fact",
         "table",
+        "dataset",
         "figure",
         "artifact",
         "parameter_change_proposal",
     ]
+    figure = cast("PublishedAnalysis", namespace["analysis"]).figure(
+        "observations-by-amplification"
+    )
+    assert [layer.id for layer in figure.layers] == ["measured", "fit"]
+    assert [layer.preview.kind for layer in figure.layers] == ["scatter", "line"]
+    assert figure.layers[0].total_points == 15
+    assert figure.layers[1].total_points == 243
+    assert figure.layers[1].projection.uncertainty is not None
+    assert (
+        "not a confidence interval" in figure.layers[1].projection.uncertainty.meaning
+    )
+    assert all(series.y_lower is not None for series in figure.layers[1].preview.series)
     assert summary["execution_evidence"] == 0
     assert summary["fit_report"] == "drag-beta-fit.md"
     assert summary["proposal_evidence"] == ("quadratic-fit", "observations")

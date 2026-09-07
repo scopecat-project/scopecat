@@ -230,6 +230,40 @@ class DerivedDataset:
             raise ValueError("derived dataset semantic and Arrow schemas disagree")
         return cls(table=table, schema=schema)
 
+    @classmethod
+    def preview_from_arrow_ipc(
+        cls,
+        content: bytes,
+        *,
+        schema: DerivedDatasetSchema,
+        columns: Sequence[str],
+        limit: int,
+    ) -> tuple[DerivedDataset, int]:
+        """Retain only selected columns/rows from IPC batches, never read_all.
+
+        The existing blob port reads whole IPC bytes, and decoding one record
+        batch may touch its full buffers. Only bounded selected data is assembled.
+        """
+        with pa.ipc.open_stream(content) as reader:
+            selected_schema = pa.schema([reader.schema.field(name) for name in columns])
+            batches: list[pa.RecordBatch] = []
+            remaining = limit
+            total_rows = 0
+            for batch in reader:
+                total_rows += batch.num_rows
+                if remaining:
+                    selected = batch.select(columns).slice(0, remaining)
+                    batches.append(selected)
+                    remaining -= selected.num_rows
+            table = pa.Table.from_batches(batches, schema=selected_schema)
+        fields = {field.name: field for field in schema.fields}
+        return cls(
+            table=table,
+            schema=schema.model_copy(
+                update={"fields": tuple(fields[name] for name in columns)}
+            ),
+        ), total_rows
+
     def to_arrow_ipc(self) -> bytes:
         """Encode exact Arrow values for content-addressed run storage."""
 

@@ -153,9 +153,10 @@ def test_active_writer_is_rejected(tmp_path: Path, owner: str) -> None:
     assert not (tmp_path / "snapshot").exists()
 
 
+@pytest.mark.parametrize("version", [62, 999])
 @pytest.mark.parametrize("journal", ["DELETE", "WAL"])
 def test_unknown_schema_rejection_leaves_original_files_unchanged(
-    tmp_path: Path, journal: str
+    tmp_path: Path, journal: str, version: int
 ) -> None:
     root = tmp_path / "source"
     root.mkdir()
@@ -169,13 +170,13 @@ def test_unknown_schema_rejection_leaves_original_files_unchanged(
             "CREATE TABLE project_schema "
             "(singleton INTEGER PRIMARY KEY, version INTEGER)"
         )
-        writer.execute("INSERT INTO project_schema VALUES (1, 999)")
+        writer.execute("INSERT INTO project_schema VALUES (1, ?)", (version,))
         before = _bytes(root)
         store = SQLiteProjectStore(SQLiteDatabase(database), state / "objects")
         with pytest.raises(SchemaVersionError, match="pinned Scopecat reader"):
             store.bootstrap()
         assert _bytes(root) == before
-        with pytest.raises(SchemaVersionError, match="version: 999"):
+        with pytest.raises(SchemaVersionError, match=f"version: {version}"):
             create_snapshot(load_project(root / "scopecat.toml"), tmp_path / "snapshot")
         assert _bytes(root) == before
     assert not (state / "objects").exists()
@@ -292,14 +293,17 @@ def test_verify_checks_object_references_even_with_matching_inventory(
     assert "cannot verify snapshot" in result.output
 
 
-def test_unsupported_snapshot_is_not_modified_or_restored(tmp_path: Path) -> None:
+@pytest.mark.parametrize("version", [62, 999])
+def test_unsupported_snapshot_is_not_modified_or_restored(
+    tmp_path: Path, version: int
+) -> None:
     project = _project(tmp_path / "source")
     snapshot = tmp_path / "snapshot"
     create_snapshot(project, snapshot)
     manifest = verify_snapshot(snapshot)
     database = snapshot / "project/.scopecat/control.sqlite3"
     with closing(sqlite3.connect(database, isolation_level=None)) as connection:
-        connection.execute("UPDATE project_schema SET version = 999")
+        connection.execute("UPDATE project_schema SET version = ?", (version,))
         connection.execute("PRAGMA journal_mode = WAL")
     inventory = dict(manifest.files)
     inventory[".scopecat/control.sqlite3"] = hashlib.sha256(
@@ -307,7 +311,7 @@ def test_unsupported_snapshot_is_not_modified_or_restored(tmp_path: Path) -> Non
     ).hexdigest()
     (snapshot / "manifest.json").write_text(
         manifest.model_copy(
-            update={"files": inventory, "schema_version": 999}
+            update={"files": inventory, "schema_version": version}
         ).model_dump_json()
     )
     before = _bytes(snapshot)
@@ -315,6 +319,6 @@ def test_unsupported_snapshot_is_not_modified_or_restored(tmp_path: Path) -> Non
         app, ["snapshot", "restore", str(snapshot), str(tmp_path / "restored")]
     )
     assert result.exit_code == 1
-    assert "999" in result.output and "pinned Scopecat reader" in result.output
+    assert str(version) in result.output and "pinned Scopecat reader" in result.output
     assert _bytes(snapshot) == before
     assert not (tmp_path / "restored").exists()

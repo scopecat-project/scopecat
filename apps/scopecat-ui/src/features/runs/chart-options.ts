@@ -1,11 +1,14 @@
-import type { CustomSeriesRenderItem, EChartsCoreOption } from "echarts";
+import type {
+  CustomSeriesRenderItem,
+  CustomSeriesOption,
+  LineSeriesOption,
+  ScatterSeriesOption,
+  EChartsCoreOption,
+} from "echarts";
 import type { AnalysisOutput } from "../../types";
 import type { MeasurementChartPlan } from "./measurement-visualization";
 
-export type AnalysisFigureContent = Extract<
-  AnalysisOutput,
-  { kind: "figure" }
->["content"]["preview"];
+export type AnalysisFigureContent = Extract<AnalysisOutput, { kind: "figure" }>["content"];
 
 const SERIES_COLORS = [
   "#80a3cf",
@@ -42,44 +45,111 @@ const SERIES_COLORS = [
   "#a5d6a7",
 ];
 
-export function analysisAxisLabel(axis: AnalysisFigureContent["x_axis"]): string {
+export function analysisAxisLabel(
+  axis: AnalysisFigureContent["layers"][number]["preview"]["x_axis"],
+): string {
   return axis.unit ? `${axis.label} (${axis.unit})` : axis.label;
 }
 
 export function analysisFigureOption(content: AnalysisFigureContent): EChartsCoreOption {
-  const multipleSeries = content.series.length > 1;
+  const first = content.layers[0]!.preview;
+  const entries = content.layers.flatMap((layer) =>
+    layer.preview.series.map((series) => ({ layer, series })),
+  );
+  const labels = entries.map(({ layer, series }) =>
+    content.layers.length > 1
+      ? `${layer.id} · ${series.label ?? series.id}`
+      : (series.label ?? series.id),
+  );
   const axis = (name: string) => valueAxis(name, analysisShortNumber, 36);
-
+  const plotted: (LineSeriesOption | ScatterSeriesOption | CustomSeriesOption)[] = [];
+  entries.forEach(({ layer, series }, index) => {
+    const color = SERIES_COLORS[index % SERIES_COLORS.length];
+    const id = `${layer.id}/${series.id}`;
+    const name = labels[index];
+    plotted.push({
+      data: series.x.map((x, i) => [x, series.y[i]!]),
+      id,
+      name,
+      itemStyle: { color },
+      lineStyle: { color, width: 2 },
+      showSymbol: true,
+      symbolSize: layer.preview.kind === "line" ? 5 : 7.5,
+      type: layer.preview.kind,
+    });
+    const uncertainty = layer.projection.uncertainty;
+    if (uncertainty && series.y_lower && series.y_upper) {
+      const lower = series.y_lower,
+        upper = series.y_upper;
+      const band = uncertainty.style === "band";
+      const data = band
+        ? series.x
+            .slice(0, -1)
+            .map((x, i) => [
+              x,
+              lower[i]!,
+              upper[i]!,
+              series.x[i + 1]!,
+              lower[i + 1]!,
+              upper[i + 1]!,
+            ])
+        : series.x.map((x, i) => [x, lower[i]!, upper[i]!]);
+      plotted.push({
+        type: "custom",
+        clip: true,
+        id: `${id}/uncertainty`,
+        name,
+        data,
+        silent: true,
+        encode: { x: band ? [0, 3] : [0], y: band ? [1, 2, 4, 5] : [1, 2] },
+        renderItem: band ? renderAnalysisBand : renderAnalysisBars,
+        itemStyle: { color },
+        z: 1,
+      });
+    }
+  });
   return {
     animation: false,
     color: SERIES_COLORS,
     dataZoom: insideDataZoom(),
-    grid: { bottom: 52, left: 66, right: 20, top: multipleSeries ? 42 : 18 },
-    legend: multipleSeries
-      ? scrollLegend(content.series.map((series) => series.label ?? series.id))
-      : { show: false },
-    series: content.series.map((series, index) => {
-      const color = SERIES_COLORS[index % SERIES_COLORS.length];
-      return {
-        data: series.x.map((x, pointIndex) => [x, series.y[pointIndex]!]),
-        id: series.id,
-        itemStyle: { color },
-        lineStyle: { color, width: 2 },
-        name: series.label ?? series.id,
-        showSymbol: true,
-        symbolSize: content.kind === "line" ? 5 : 7.5,
-        type: content.kind,
-      };
-    }),
-    tooltip: {
-      axisPointer: { type: "cross" },
-      confine: true,
-      trigger: content.kind === "line" ? "axis" : "item",
-    },
-    xAxis: axis(analysisAxisLabel(content.x_axis)),
-    yAxis: axis(analysisAxisLabel(content.y_axis)),
+    grid: { bottom: 52, left: 66, right: 20, top: entries.length > 1 ? 42 : 18 },
+    legend: entries.length > 1 ? scrollLegend(labels) : { show: false },
+    series: plotted,
+    tooltip: { axisPointer: { type: "cross" }, confine: true, trigger: "axis" },
+    xAxis: axis(analysisAxisLabel(first.x_axis)),
+    yAxis: axis(analysisAxisLabel(first.y_axis)),
   };
 }
+
+const renderAnalysisBand: CustomSeriesRenderItem = (_params, api) => ({
+  type: "polygon",
+  shape: {
+    points: [
+      [0, 1],
+      [0, 2],
+      [3, 5],
+      [3, 4],
+    ].map(([x, y]) => api.coord([api.value(x!), api.value(y!)])),
+  },
+  style: { fill: api.visual("color"), opacity: 0.2 },
+});
+
+const renderAnalysisBars: CustomSeriesRenderItem = (_params, api) => {
+  const lower = api.coord([api.value(0), api.value(1)]);
+  const upper = api.coord([api.value(0), api.value(2)]);
+  return {
+    type: "group",
+    children: [
+      [lower[0]!, lower[1]!, upper[0]!, upper[1]!],
+      [lower[0]! - 4, lower[1]!, lower[0]! + 4, lower[1]!],
+      [upper[0]! - 4, upper[1]!, upper[0]! + 4, upper[1]!],
+    ].map(([x1, y1, x2, y2]) => ({
+      type: "line",
+      shape: { x1, y1, x2, y2 },
+      style: { stroke: api.visual("color"), lineWidth: 1 },
+    })),
+  };
+};
 
 export function measurementChartOption(chart: MeasurementChartPlan): EChartsCoreOption {
   const heatmap = chart.kind === "heatmap";

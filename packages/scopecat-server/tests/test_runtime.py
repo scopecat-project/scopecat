@@ -116,6 +116,7 @@ from scopecat.project_state import ProjectStateServices
 from scopecat.records.analysis import (
     AnalysisDatasetViewSource,
     AnalysisField,
+    AnalysisFigureLayerSpec,
     AnalysisFigureProjection,
     AnalysisFigureViewSpec,
     AnalysisTableViewSpec,
@@ -443,12 +444,15 @@ def _analysis_command(proposal: ParameterChangeProposal) -> AnalysisSaveCommand:
                 id="fit-curve",
                 title="fit curve",
                 content=AnalysisFigureViewSpec(
-                    source=AnalysisDatasetViewSource(output_id="fits"),
-                    projection=AnalysisFigureProjection(
-                        kind="line",
-                        x="bias",
-                        y="signal",
-                    ),
+                    layers=(
+                        AnalysisFigureLayerSpec(
+                            id="data",
+                            source=AnalysisDatasetViewSource(output_id="fits"),
+                            projection=AnalysisFigureProjection(
+                                kind="line", x="bias", y="signal"
+                            ),
+                        ),
+                    )
                 ),
             ),
             AnalysisParameterProposalOutputPayload(
@@ -2274,11 +2278,13 @@ def test_post_run_analysis_policy_acceptance_and_candidate_activation_closed_loo
             {"bias": 1.0, "signal": 3.0},
             {"bias": 2.0, "signal": 4.0},
         ]
-        assert persisted_outputs[2]["content"]["preview"]["series"][0] == {
+        assert persisted_outputs[2]["content"]["layers"][0]["preview"]["series"][0] == {
             "id": "signal",
             "label": "signal",
             "x": [1.0, 2.0],
             "y": [3.0, 4.0],
+            "y_lower": None,
+            "y_upper": None,
         }
         assert persisted_outputs[2]["content"]["total_points"] == 2
         assert not persisted_outputs[2]["content"]["truncated"]
