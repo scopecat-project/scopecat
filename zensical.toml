@@ -48,6 +48,7 @@ nav = [
     { "Instruments" = "extensions/instruments.md" },
     { "Payload codecs" = "extensions/payload-codecs.md" },
     { "Quantum" = "extensions/quantum.md" },
+    { "Connection residency" = "extensions/connection-residency.md" },
   ] },
   { "Development" = [
     "development/index.md",

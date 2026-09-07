@@ -68,6 +68,7 @@ iteration commands, not replacements for the repository CI gate.
 | Execution / resource ownership | `uv run pytest packages/scopecat-server/tests/test_automation_runtime.py -k resource_wait` |
 | Data / entity analysis | `uv run pytest examples/reference_lab/tests/test_gallery_notebooks.py -k entity_axis` |
 | Delivery / isolated startup | `uv run pytest packages/scopecat-server/tests/test_lifecycle.py` |
+| Device / connection residency | `uv run pytest packages/scopecat-server/tests/core_integration/test_connection_residency.py packages/scopecat-server/tests/test_connection_residency_worker.py` |
 | UI consumers | `pnpm --dir apps/scopecat-ui test src/test/reference-lab-acceptance.test.tsx` |
 
 ## Contract producers and shared files
