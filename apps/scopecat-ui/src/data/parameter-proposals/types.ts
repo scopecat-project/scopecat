@@ -2,6 +2,13 @@ export interface ParameterProposalDelta {
   parameterId: string;
   before: unknown;
   after: unknown;
+  cells?: {
+    key: Record<string, unknown>;
+    field: string;
+    before?: unknown;
+    after?: unknown;
+    change_kind: "physical" | "representation" | "added" | "removed";
+  }[];
 }
 
 export interface ParameterProposalApproval {

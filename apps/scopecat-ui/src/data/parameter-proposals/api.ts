@@ -84,6 +84,7 @@ function normalizeProposalView(source: WireProposalView): ParameterProposal {
 function normalizeDelta(source: WireProposalDelta): ParameterProposalDelta {
   return {
     parameterId: source.parameter_id,
+    cells: source.cells ?? undefined,
     before: parameterValue(source.before),
     after: parameterValue(source.after),
   };

@@ -1,3 +1,4 @@
+import { scientificChange, type ScientificChange } from "./quantity-change";
 import type {
   ConfigProfileSnapshot,
   ParameterAtom,
@@ -15,6 +16,7 @@ export type TableDiffStatus = "unchanged" | "changed" | "added" | "removed";
 
 export interface TableCellDiff {
   columnId: string;
+  changeKind?: ScientificChange;
   status: TableDiffStatus;
   before?: ParameterAtom;
   after?: ParameterAtom;
@@ -167,6 +169,7 @@ function diffCell(
   else status = equal(before, after) ? "unchanged" : "changed";
   return {
     columnId,
+    changeKind: status === "changed" ? scientificChange(before, after) : undefined,
     status,
     before,
     after,

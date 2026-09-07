@@ -1,3 +1,4 @@
+import { scientificChange, scientificChangeLabel } from "./quantity-change";
 import { useMemo, useState } from "react";
 import { Braces, CircleDot, GitCompareArrows, Search, Table2 } from "lucide-react";
 import {
@@ -227,7 +228,10 @@ function ParameterValueView({
     return (
       <div className="grid min-h-[118px] place-items-center rounded-[8px] border border-line bg-bg">
         {diff.status !== "unchanged" && before !== undefined && after !== undefined ? (
-          <ValueComparison before={before} after={after} />
+          <div>
+            <ValueComparison before={before} after={after} />
+            <small>{scientificChangeLabel(scientificChange(before, after))}</small>
+          </div>
         ) : (
           <ParameterAtomView value={value.value} prominent />
         )}
@@ -324,8 +328,9 @@ function TableValueView({
                     <td key={column.id} className={cell ? tableCellTone(cell.status) : undefined}>
                       <ParameterAtomView value={displayed!} />
                       {cell?.status === "changed" && (
-                        <small className="mt-1 block max-w-40 overflow-hidden text-[0.48rem] text-ellipsis whitespace-nowrap text-yellow">
-                          was {parameterAtomLabel(cell.before)}
+                        <small className="mt-1 block max-w-56 text-[0.48rem] whitespace-normal text-yellow">
+                          was {parameterAtomLabel(cell.before)} ·{" "}
+                          {scientificChangeLabel(cell.changeKind ?? "physical")}
                         </small>
                       )}
                     </td>

@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 from typing import cast
 
+from scopecat.kernel.units import UNIT_KINDS, UNIT_SCALE_TO_BASE
 from scopecat_server.http.transport import create_app
 from scopecat_server.services.application import DaemonApplication
 
@@ -135,6 +136,18 @@ _COMPONENT_ROOTS = {"CollectReceipt"}
 
 
 def main() -> None:
+    unit_output = OUTPUT.parent.parent / "src" / "unit-registry.json"
+    unit_output.write_text(
+        json.dumps(
+            {
+                unit: {"kind": kind, "scale": UNIT_SCALE_TO_BASE.get(unit)}
+                for unit, kind in sorted(UNIT_KINDS.items())
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
     # Route registration only closes over the backend; schema generation never calls it.
     app = create_app(cast("DaemonApplication", object()))
     openapi = app.openapi()

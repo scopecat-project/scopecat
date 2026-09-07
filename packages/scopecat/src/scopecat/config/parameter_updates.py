@@ -17,22 +17,23 @@ from pydantic import (
 
 from scopecat.config.validation import (
     coerce_parameter_table_cell,
-    coerce_stored_parameter_value,
+    validate_parameter_representation,
 )
 from scopecat.kernel.entity import EntityRef
 from scopecat.kernel.frozen import FrozenMapping
 from scopecat.kernel.quantity import Quantity
-from scopecat.kernel.value_identity import scalar_values_equal
+from scopecat.kernel.value_identity import scalar_identity, scalar_values_equal
 from scopecat.kernel.value_types import Scalar, Table
 from scopecat.records.parameter import (
     ParameterAtomValue,
     ParameterCatalog,
+    ParameterDefinition,
     ParameterSnapshot,
     ScalarParameterValue,
     StoredParameterValue,
     TableParameterValue,
 )
-from scopecat.records.parameter_change import ParameterValueDelta
+from scopecat.records.parameter_change import ParameterCellEdit, ParameterValueDelta
 
 type _ParameterId = Annotated[str, Field(min_length=1)]
 
@@ -239,6 +240,7 @@ def materialize_parameter_updates(
     if not updates:
         msg = "parameter change proposal requires at least one update"
         raise ValueError(msg)
+    definitions = {item.id: item for item in catalog.definitions}
     original = {value.id: value for value in base.values}
     selected = dict(original)
     order = [value.id for value in base.values]
@@ -278,10 +280,8 @@ def materialize_parameter_updates(
     for parameter_id in touched:
         definition = catalog.get(parameter_id)
         assert definition is not None
-        selected[parameter_id] = coerce_stored_parameter_value(
-            definition,
-            selected[parameter_id],
-            path=("parameter_snapshot", "values", parameter_id),
+        selected[parameter_id] = validate_parameter_representation(
+            definition, selected[parameter_id]
         )
     candidate = ParameterSnapshot(
         id=candidate_id,
@@ -292,6 +292,11 @@ def materialize_parameter_updates(
             parameter_id=parameter_id,
             before=original[parameter_id],
             after=selected[parameter_id],
+            cells=parameter_cell_edits(
+                definitions[parameter_id],
+                original[parameter_id],
+                selected[parameter_id],
+            ),
         )
         for parameter_id in touched
         if original[parameter_id] != selected[parameter_id]
@@ -413,6 +418,13 @@ def _apply_table_update(
             values=update.values,
             path=("values",),
         )
+        values.update(
+            {
+                name: value
+                for name, value in update.values.items()
+                if isinstance(value, Quantity)
+            }
+        )
         rows = tuple(
             (dict(row) | values) if index == selected_index else row
             for index, row in enumerate(current.rows)
@@ -488,3 +500,57 @@ def _coerce_table_cells(
         )
         for column_id, value in values.items()
     }
+
+
+def parameter_cell_edits(
+    definition: ParameterDefinition,
+    before: StoredParameterValue,
+    after: StoredParameterValue,
+) -> tuple[ParameterCellEdit, ...] | None:
+    """Project a keyed-table delta by semantic key, retaining exact atom values."""
+    table = definition.value_type
+    if not isinstance(table, Table) or not table.primary_key:
+        return None
+    assert isinstance(before, TableParameterValue)
+    assert isinstance(after, TableParameterValue)
+
+    def rows(
+        value: TableParameterValue,
+    ) -> dict[tuple[tuple[object, ...], ...], Mapping[str, ParameterAtomValue]]:
+        return {
+            tuple(scalar_identity(row[key]) for key in table.primary_key): row
+            for row in value.rows
+        }
+
+    old, new = rows(before), rows(after)
+    edits: list[ParameterCellEdit] = []
+    for identity in dict.fromkeys((*old, *new)):
+        left, right = old.get(identity), new.get(identity)
+        source = right if right is not None else left
+        assert source is not None
+        key = {field: source[field] for field in table.primary_key}
+        for column in table.columns:
+            field = column.id
+            if left is not None and right is not None and left[field] == right[field]:
+                continue
+            previous = left[field] if left is not None else None
+            proposed = right[field] if right is not None else None
+            kind = (
+                "added"
+                if left is None
+                else "removed"
+                if right is None
+                else "representation"
+                if scalar_values_equal(previous, proposed)
+                else "physical"
+            )
+            edits.append(
+                ParameterCellEdit(
+                    key=key,
+                    field=field,
+                    before=previous,
+                    after=proposed,
+                    change_kind=kind,
+                )
+            )
+    return tuple(edits)

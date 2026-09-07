@@ -2,13 +2,23 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from datetime import datetime
+from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    field_serializer,
+    field_validator,
+    model_validator,
+)
 
+from scopecat.kernel.frozen import FrozenMapping
 from scopecat.kernel.run_outcome import utc_now
 from scopecat.records.config import ConfigContentHash
-from scopecat.records.parameter import StoredParameterValue
+from scopecat.records.parameter import ParameterAtomValue, StoredParameterValue
 
 
 class ParameterChangeApprovalRecord(BaseModel):
@@ -31,6 +41,33 @@ class ParameterChangeApprovalRecord(BaseModel):
         return value
 
 
+class ParameterCellEdit(BaseModel):
+    """Exact scientific cell scope retained with a proposal's original base."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    key: Mapping[str, ParameterAtomValue]
+    field: str
+    before: ParameterAtomValue | None = None
+    after: ParameterAtomValue | None = None
+    change_kind: Literal["physical", "representation", "added", "removed"]
+
+    @field_validator("key")
+    @classmethod
+    def freeze_key(
+        cls, value: Mapping[str, ParameterAtomValue]
+    ) -> Mapping[str, ParameterAtomValue]:
+        return FrozenMapping(value.items())
+
+    @field_serializer("key")
+    def serialize_key(
+        self, value: Mapping[str, ParameterAtomValue]
+    ) -> dict[str, object]:
+        return {
+            name: item.model_dump(mode="json") if isinstance(item, BaseModel) else item
+            for name, item in value.items()
+        }
+
+
 class ParameterValueDelta(BaseModel):
     """Durable before/after state for one proposed parameter change.
 
@@ -46,6 +83,8 @@ class ParameterValueDelta(BaseModel):
     parameter_id: str
     before: StoredParameterValue
     after: StoredParameterValue
+    # None means legacy or atomic value; () is authoritative no changed keyed cells.
+    cells: tuple[ParameterCellEdit, ...] | None = None
 
     @model_validator(mode="after")
     def validate_values(self) -> ParameterValueDelta:

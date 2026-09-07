@@ -20,7 +20,7 @@ describe("ConfigParameters", () => {
     fireEvent.click(screen.getByRole("button", { name: /qubits/i }));
     expect(screen.getByText("q0 (logical_qubit)")).toBeInTheDocument();
     expect(screen.getByText("6.6 GHz")).toBeInTheDocument();
-    expect(screen.getByText("was 6.5 GHz")).toBeInTheDocument();
+    expect(screen.getByText(/was 6.5 GHz.*Physical value change/)).toBeInTheDocument();
 
     const advanced = screen.getByText("Advanced · raw snapshot").closest("details");
     expect(advanced).not.toHaveAttribute("open");

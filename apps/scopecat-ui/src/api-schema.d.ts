@@ -4627,6 +4627,25 @@ export interface components {
             id: string;
         };
         /**
+         * ParameterCellEdit
+         * @description Exact scientific cell scope retained with a proposal's original base.
+         */
+        "ParameterCellEdit-Output": {
+            after?: components["schemas"]["ParameterAtomValue-Output"] | null;
+            before?: components["schemas"]["ParameterAtomValue-Output"] | null;
+            /**
+             * Change Kind
+             * @enum {string}
+             */
+            change_kind: "physical" | "representation" | "added" | "removed";
+            /** Field */
+            field: string;
+            /** Key */
+            key: {
+                [key: string]: unknown;
+            };
+        };
+        /**
          * ParameterChangeApprovalRecord
          * @description The one immutable operator approval for a parameter proposal.
          */
@@ -4741,6 +4760,8 @@ export interface components {
         "ParameterValueDelta-Output": {
             after: components["schemas"]["StoredParameterValue-Output"];
             before: components["schemas"]["StoredParameterValue-Output"];
+            /** Cells */
+            cells?: components["schemas"]["ParameterCellEdit-Output"][] | null;
             /** Parameter Id */
             parameter_id: string;
         };
