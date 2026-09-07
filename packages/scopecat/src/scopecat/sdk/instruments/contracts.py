@@ -1374,7 +1374,10 @@ def validate_state_snapshot(
                 )
             )
             continue
-        if property_spec.access == "write_only":
+        if (
+            property_spec.access == "write_only"
+            and observation.source != "command_confirmed"
+        ):
             problems.append(
                 _snapshot_problem(
                     "instrument_driver_snapshot_write_only_property",

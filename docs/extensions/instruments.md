@@ -58,9 +58,34 @@ projections, and measurement-valued driver observation carriers.
 
 An acknowledged setting that the device cannot query is the narrow exception:
 declare it with `write_only_member(...)`. It remains an independently
-addressed sparse state command, but it cannot participate in observation,
-baseline capture, or restoration. This is more honest than claiming a richer
-read/write interface or fabricating cached readback.
+addressed sparse state command. A successful apply can return explicit
+`command_confirmed` observations in its `DriverSuccess(DriverStateReadback(...))`
+receipt. Each observation names the confirmed member and its canonical-unit value;
+this records command confirmation, not independently queried hardware state:
+
+```python
+# Only after the device-specific write/acknowledgement completed successfully.
+return DriverSuccess(
+    DriverStateReadback(
+        observations=(
+            DriverStateObservation(
+                target=SETPOINT,
+                value=confirmed_value,
+                source="command_confirmed",
+            ),
+        )
+    )
+)
+```
+
+The driver owns the evidence supporting `confirmed_value`; the framework never
+infers it from the request. A receipt must confirm every assigned member with the
+requested value. Missing confirmation, unsupported members, invalid values/units,
+and write-only observations claiming `hardware_query` are rejected. Rejected or
+unknown writes produce no confirmed state and are not retried automatically.
+A write-only driver's ordinary `read_state` can still return no observations.
+Command confirmation does not make that property independently observable:
+reconciliation, baseline capture and restoration retain their existing restrictions.
 
 A driver subclasses `ObjectInstrumentDriver` and binds typed methods to member
 declarations with `@read`, `@write`, `@query`, or `@update`. The base class
