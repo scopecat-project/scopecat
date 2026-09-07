@@ -402,7 +402,13 @@ class ProcedureStepInputWaitReceipt(_WireModel):
     def validate_result(self) -> ProcedureStepInputWaitReceipt:
         _validate_step_receipt_alignment(self.run, self.step)
         if (
-            self.run.state != "waiting_for_input"
+            not (
+                self.run.state == "waiting_for_input"
+                or (
+                    self.run.closure is not None
+                    and self.run.closure.status == "cancelled"
+                )
+            )
             or self.step.state != "waiting_for_input"
         ):
             raise ValueError("procedure input wait receipt requires waiting states")
@@ -488,6 +494,28 @@ class ProcedureRunAttentionReceipt(_WireModel):
         if self.run.state != "attention_required":
             raise ValueError("procedure run attention receipt requires attention")
         return self
+
+
+class ProcedureCancelCommand(_WireModel):
+    """Request cancellation at an exact observed revision."""
+
+    procedure_run_id: _NonEmptyText
+    expected_run_revision: int = Field(ge=1)
+    actor: _NonEmptyText
+    reason: _NonEmptyText
+
+    @field_validator("actor", "reason")
+    @classmethod
+    def validate_nonblank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("cancellation actor and reason must be nonblank")
+        return value
+
+
+class ProcedureCancelReceipt(_WireModel):
+    """Current run: a pending request does not mean execution has stopped."""
+
+    run: ProcedureRun
 
 
 class ProcedureCloseCommand(_FencedProcedureCommand):

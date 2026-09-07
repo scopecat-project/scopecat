@@ -30,6 +30,7 @@ from scopecat.automation import (
     InterpretationActorKind,
     InterpretationOutputRef,
     InterpretationRequest,
+    ProcedureCancelCommand,
     ProcedureContext,
     ProcedureRegistry,
     ProcedureRun,
@@ -229,6 +230,10 @@ class ProcedureHandle:
         if attempt.state != "succeeded" or attempt.output is None:
             raise RuntimeError(f"procedure step {step_key!r} has no successful output")
         return attempt.output
+
+    def cancel(self, *, actor: str, reason: str) -> ProcedureHandle:
+        """Cancel idle work or stop after the current step settles."""
+        return self.operations.cancel(self, actor=actor, reason=reason)
 
     def resume(self, *, worker_id: str | None = None) -> ProcedureHandle:
         return self.operations.resume(self, worker_id=worker_id)
@@ -808,6 +813,28 @@ class LabProcedureOperations:
             samples=_procedure_sample_selectors(sample, samples),
         )
         return ProcedureHandle(self, run.procedure_run_id)
+
+    def cancel(
+        self,
+        procedure: str | ProcedureHandle,
+        *,
+        actor: str,
+        reason: str,
+    ) -> ProcedureHandle:
+        """Request cancellation, retaining completed steps and evidence."""
+        procedure_id = (
+            procedure.id if isinstance(procedure, ProcedureHandle) else procedure
+        )
+        run = self._client.get_procedure(procedure_id)
+        self._client.cancel_procedure(
+            ProcedureCancelCommand(
+                procedure_run_id=procedure_id,
+                expected_run_revision=run.revision,
+                actor=actor,
+                reason=reason,
+            )
+        )
+        return ProcedureHandle(self, procedure_id)
 
     def resume(
         self,

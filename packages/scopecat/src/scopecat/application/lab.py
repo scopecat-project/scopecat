@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from scopecat.api.calibration_policy import CalibrationPublicationPolicyRegistry
+from scopecat.application.launch import LaunchProvider
 from scopecat.automation.calibration_definition import CalibrationRegistry
 from scopecat.automation.definition import ProcedureRegistry
 from scopecat.automation.intervals import ProcedureScheduleRegistry
@@ -36,6 +37,8 @@ class LabApplication:
     for already-admitted cohorts. Their registry separately selects the exact
     active bindings used when this application admits new cohorts.
     """
+
+    launch_provider: LaunchProvider | None = field(default=None, repr=False)
 
     build_experiment_system: ExperimentSystemBuilder | None = field(
         default=None,
@@ -75,12 +78,14 @@ class LabApplication:
             Iterable[CalibrationPublicationPolicyRegistration]
             | CalibrationPublicationPolicyRegistry
         ) = (),
+        launch_provider: LaunchProvider | None = None,
     ) -> None:
         object.__setattr__(
             self,
             "build_experiment_system",
             build_experiment_system,
         )
+        object.__setattr__(self, "launch_provider", launch_provider)
         procedure_registry = (
             procedures
             if isinstance(procedures, ProcedureRegistry)

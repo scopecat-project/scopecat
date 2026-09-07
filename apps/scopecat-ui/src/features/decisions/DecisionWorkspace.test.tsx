@@ -42,6 +42,7 @@ describe("DecisionWorkspace", () => {
       "href",
       "/?run=readout-s21#runs",
     );
+    fireEvent.click(screen.getByRole("button", { name: "Edit JSON" }));
     expect(screen.getByLabelText("Structured judgment (JSON)")).toHaveValue(
       JSON.stringify({ resonator: "review this candidate", confidence: 0 }, null, 2),
     );
@@ -77,6 +78,41 @@ describe("DecisionWorkspace", () => {
     expect(screen.getByText(/Decision recorded/)).toBeVisible();
     await waitFor(() => expect(getWaitingProcedures).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(getProcedureSteps).toHaveBeenCalledTimes(2));
+  });
+
+  it("records a boolean review from the form without editing JSON", async () => {
+    const step = waitingStep();
+    step.interpretation_request!.structure = {
+      type: "object",
+      fields: { accept: { type: "bool" }, rationale: { type: "string" } },
+    };
+    step.interpretation_request!.response_template = {
+      accept: false,
+      rationale: "Inspect the fits",
+    };
+    vi.mocked(getProcedureSteps).mockResolvedValue({
+      procedure_run_id: "procedure-1",
+      items: [step],
+    });
+    renderWorkspace();
+    expect(await screen.findByLabelText("accept")).toHaveValue("false");
+    expect(screen.queryByLabelText("Structured judgment (JSON)")).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("rationale"), {
+      target: { value: "Confirmation differs; reject" },
+    });
+    fireEvent.change(screen.getByLabelText("Recorded reviewer"), { target: { value: "operator" } });
+    fireEvent.click(screen.getByRole("button", { name: "Record decision" }));
+    await waitFor(() =>
+      expect(submitProcedureInput).toHaveBeenCalledWith(
+        expect.objectContaining({
+          value: { accept: false, rationale: "Confirmation differs; reject" },
+          expected_run_revision: 4,
+          expected_step_revision: 2,
+          request_hash: hash,
+        }),
+        expect.anything(),
+      ),
+    );
   });
 
   it("explains when no experiment is waiting", async () => {

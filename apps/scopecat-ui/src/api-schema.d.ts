@@ -225,6 +225,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/experiment-launcher": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Experiment Launch Catalog */
+        get: operations["experiment_launch_catalog_api_v1_experiment_launcher_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/experiment-launcher/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Experiment Launch Preview */
+        post: operations["experiment_launch_preview_api_v1_experiment_launcher_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/experiment-launcher/submit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Experiment Launch Submit */
+        post: operations["experiment_launch_submit_api_v1_experiment_launcher_submit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/health": {
         parameters: {
             query?: never;
@@ -525,6 +576,57 @@ export interface paths {
         get: operations["list_procedures_api_v1_procedures_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/procedures/{procedure_run_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Procedure */
+        get: operations["get_procedure_api_v1_procedures__procedure_run_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/procedures/{procedure_run_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel Procedure */
+        post: operations["cancel_procedure_api_v1_procedures__procedure_run_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/procedures/{procedure_run_id}/dispatch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Dispatch Project Procedure */
+        post: operations["dispatch_project_procedure_api_v1_procedures__procedure_run_id__dispatch_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3541,6 +3643,49 @@ export interface components {
         JsonMetadata: {
             [key: string]: components["schemas"]["pydantic__types__JsonValue"];
         };
+        /** LaunchRequest */
+        LaunchRequest: {
+            /**
+             * Action
+             * @enum {string}
+             */
+            action: "list" | "preview" | "submit";
+            /**
+             * Actor
+             * @default operator
+             */
+            actor: string;
+            /** Expected Config Hash */
+            expected_config_hash?: string | null;
+            /** Expected Generation */
+            expected_generation?: number | null;
+            /**
+             * Experiment
+             * @default
+             */
+            experiment: string;
+            /** Inputs */
+            inputs?: {
+                [key: string]: components["schemas"]["pydantic__types__JsonValue"];
+            };
+            /**
+             * Request Key
+             * @default
+             */
+            request_key: string;
+            /** Sample */
+            sample?: string | null;
+        };
+        /**
+         * LaunchSubmission
+         * @description A durable admission, with an independent best-effort worker wakeup.
+         */
+        LaunchSubmission: {
+            /** Dispatch Error */
+            dispatch_error?: string | null;
+            /** Procedure Id */
+            procedure_id: string;
+        };
         /**
          * LinearCoordinatesSpec
          * @description Expected coordinates sampled uniformly between two state values.
@@ -4543,6 +4688,39 @@ export interface components {
          * @enum {string}
          */
         ProblemPhase: "definition" | "authoring" | "configuration" | "planning" | "provider_preflight" | "execution" | "persistence" | "analysis";
+        /**
+         * ProcedureCancelCommand
+         * @description Request cancellation at an exact observed revision.
+         */
+        ProcedureCancelCommand: {
+            actor: components["schemas"]["_NonEmptyText"];
+            /** Expected Run Revision */
+            expected_run_revision: number;
+            procedure_run_id: components["schemas"]["_NonEmptyText"];
+            reason: components["schemas"]["_NonEmptyText"];
+        };
+        /**
+         * ProcedureCancellation
+         * @description Durable request to stop after the current step has settled.
+         */
+        ProcedureCancellation: {
+            actor: components["schemas"]["_NonEmptyText"];
+            reason: components["schemas"]["_NonEmptyText"];
+            /**
+             * Requested At
+             * Format: date-time
+             */
+            requested_at: string;
+            /** Requested Revision */
+            requested_revision: number;
+        };
+        /**
+         * ProcedureCancelReceipt
+         * @description Current run: a pending request does not mean execution has stopped.
+         */
+        ProcedureCancelReceipt: {
+            run: components["schemas"]["ProcedureRun"];
+        };
         /** @enum {string} */
         ProcedureCloseStatus: "succeeded" | "failed" | "cancelled";
         /**
@@ -4550,6 +4728,7 @@ export interface components {
          * @description Terminal result of a procedure run.
          */
         ProcedureClosure: {
+            actor?: components["schemas"]["_NonEmptyText"] | null;
             /**
              * Closed At
              * Format: date-time
@@ -4578,6 +4757,7 @@ export interface components {
         ProcedureRun: {
             /** Attention Reason */
             attention_reason?: string | null;
+            cancellation?: components["schemas"]["ProcedureCancellation"] | null;
             closure?: components["schemas"]["ProcedureClosure"] | null;
             /**
              * Created At
@@ -6793,6 +6973,96 @@ export interface operations {
             };
         };
     };
+    experiment_launch_catalog_api_v1_experiment_launcher_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: components["schemas"]["pydantic__types__JsonValue"];
+                    };
+                };
+            };
+        };
+    };
+    experiment_launch_preview_api_v1_experiment_launcher_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LaunchRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: components["schemas"]["pydantic__types__JsonValue"];
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    experiment_launch_submit_api_v1_experiment_launcher_submit_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LaunchRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LaunchSubmission"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     health_api_v1_health_get: {
         parameters: {
             query?: never;
@@ -7342,6 +7612,103 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProcedureRunPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_procedure_api_v1_procedures__procedure_run_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                procedure_run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProcedureRun"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_procedure_api_v1_procedures__procedure_run_id__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                procedure_run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProcedureCancelCommand"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProcedureCancelReceipt"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    dispatch_project_procedure_api_v1_procedures__procedure_run_id__dispatch_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                procedure_run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LaunchSubmission"];
                 };
             };
             /** @description Validation Error */

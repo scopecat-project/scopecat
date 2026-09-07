@@ -14,6 +14,9 @@ from scopecat.automation import (
     InterpretationOutputRef,
     InterpretationRequest,
     InterpretationResponse,
+    ProcedureCancelCommand,
+    ProcedureCancellation,
+    ProcedureCancelReceipt,
     ProcedureCloseCommand,
     ProcedureCloseReceipt,
     ProcedureCloseStatus,
@@ -324,6 +327,58 @@ class AutomationService:
             step=transition.attempt,
         )
 
+    def cancel(self, command: ProcedureCancelCommand) -> ProcedureCancelReceipt:
+        """Close idle work or request a stop after the running step settles."""
+        with _translate_store_errors(), self._store.write_transaction() as connection:
+            run = self._store.read_run_in_transaction(
+                connection, command.procedure_run_id
+            )
+            if run.cancellation is not None:
+                if (
+                    run.cancellation.actor == command.actor
+                    and run.cancellation.reason == command.reason
+                ):
+                    return ProcedureCancelReceipt(run=run)
+                raise AutomationConflict(
+                    "procedure already has a different cancellation request"
+                )
+            if run.state == "closed":
+                raise AutomationConflict("procedure is already closed")
+            self._require_revision(run, command.expected_run_revision)
+            if run.state == "attention_required":
+                raise AutomationConflict(
+                    "attention-required procedures need inspection"
+                )
+            now = self._now()
+            pending = run.state == "leased"
+            updated = _run_state(
+                run,
+                state=run.state if pending else "closed",
+                at=now,
+                closure=None
+                if pending
+                else ProcedureClosure(
+                    status="cancelled",
+                    closed_at=now,
+                    actor=command.actor,
+                    reason=command.reason,
+                ),
+            )
+            updated = updated.model_copy(
+                update={
+                    "cancellation": ProcedureCancellation(
+                        actor=command.actor,
+                        reason=command.reason,
+                        requested_at=now,
+                        requested_revision=updated.revision,
+                    )
+                }
+            )
+            self._store.replace_run_in_transaction(
+                connection, updated, expected_revision=run.revision
+            )
+            return ProcedureCancelReceipt(run=updated)
+
     def close(self, command: ProcedureCloseCommand) -> ProcedureCloseReceipt:
         return ProcedureCloseReceipt(
             run=self._close(
@@ -600,6 +655,10 @@ class AutomationService:
                 token=token,
                 at=now,
             )
+            if run.cancellation is not None:
+                raise AutomationConflict(
+                    "procedure cancellation requested; no new steps"
+                )
             existing = self._store.latest_step_attempt_in_transaction(
                 connection,
                 procedure_run_id,
@@ -746,7 +805,10 @@ class AutomationService:
                 procedure_run_id,
             )
             if (
-                run.state == "waiting_for_input"
+                (
+                    run.state == "waiting_for_input"
+                    or (run.closure is not None and run.closure.status == "cancelled")
+                )
                 and current.state == "waiting_for_input"
                 and current.interpretation_request == request
                 and lease is None
@@ -770,6 +832,18 @@ class AutomationService:
                 interpretation_request=request,
             )
             updated_run = _run_state(run, state="waiting_for_input", at=now)
+            if run.cancellation is not None:
+                updated_run = _run_state(
+                    run,
+                    state="closed",
+                    at=now,
+                    closure=ProcedureClosure(
+                        status="cancelled",
+                        closed_at=now,
+                        actor=run.cancellation.actor,
+                        reason=run.cancellation.reason,
+                    ),
+                )
             self._store.replace_step_attempt_in_transaction(
                 connection,
                 updated_attempt,
@@ -1185,6 +1259,15 @@ class AutomationService:
             self._store.write_transaction() as connection,
         ):
             run = self._store.read_run_in_transaction(connection, procedure_run_id)
+            if run.cancellation is not None and status in {"succeeded", "cancelled"}:
+                status = "cancelled"
+                reason = run.cancellation.reason
+                closure = ProcedureClosure(
+                    status=status,
+                    closed_at=now,
+                    actor=run.cancellation.actor,
+                    reason=reason,
+                )
             if run.state == "closed":
                 if (
                     run.closure is not None

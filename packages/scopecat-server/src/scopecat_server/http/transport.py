@@ -5,7 +5,11 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import AsyncIterator, Callable
+import json
+import subprocess
+import sys
+from collections.abc import AsyncGenerator, AsyncIterator, Callable
+from contextlib import asynccontextmanager
 from pathlib import Path, PurePosixPath
 from typing import Annotated, Literal, cast, override
 
@@ -13,7 +17,11 @@ from fastapi import FastAPI, Header, HTTPException, Query, Request
 from fastapi import Path as ApiPath
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
+from pydantic import JsonValue
+from scopecat.application.launch import LaunchRequest, LaunchSubmission
 from scopecat.automation import (
+    ProcedureCancelCommand,
+    ProcedureCancelReceipt,
     ProcedureCloseCommand,
     ProcedureCloseReceipt,
     ProcedureRun,
@@ -248,6 +256,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
+from scopecat_server.services.project_workers import ProjectProcedureWorkers
 from scopecat_server.storage.sqlite.connection import SQLiteBusyError
 
 from ..command_payloads import (
@@ -281,7 +290,20 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
 ) -> FastAPI:
     """Create transport routes around an already-composed daemon application."""
 
-    app = FastAPI(title="Scopecat daemon", version="1")
+    project_workers = ProjectProcedureWorkers(
+        lambda: application.project_root,
+        lambda procedure_id: application.automation.get(procedure_id).state,
+    )
+
+    @asynccontextmanager
+    async def lifespan(_app: FastAPI) -> AsyncGenerator[None]:
+        project_workers.start()
+        try:
+            yield
+        finally:
+            project_workers.stop()
+
+    app = FastAPI(title="Scopecat daemon", version="1", lifespan=lifespan)
     app.add_middleware(
         TrustedHostMiddleware,
         allowed_hosts=["127.0.0.1", "localhost", "[::1]", "testserver"],
@@ -291,6 +313,64 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
         max_body_bytes=max_command_body_bytes,
     )
     _install_error_mapping(app)
+
+    def launch_call(command: LaunchRequest) -> dict[str, JsonValue]:
+        try:
+            completed = subprocess.run(  # noqa: S603 - fixed project worker command
+                [
+                    sys.executable,
+                    "-m",
+                    "scopecat_server.launch_worker",
+                    str(application.project_root),
+                ],
+                input=command.model_dump_json(),
+                capture_output=True,
+                text=True,
+                timeout=60,
+                check=False,
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+            )
+        except subprocess.TimeoutExpired as error:
+            raise HTTPException(504, "Experiment preview timed out") from error
+        if completed.returncode:
+            detail = completed.stderr.strip().splitlines()
+            raise HTTPException(
+                422, detail[-1] if detail else "Experiment preview failed"
+            )
+        return cast("dict[str, JsonValue]", json.loads(completed.stdout))
+
+    @app.get(f"{_API_PREFIX}/experiment-launcher")
+    def experiment_launch_catalog() -> dict[str, JsonValue]:
+        return launch_call(LaunchRequest(action="list"))
+
+    @app.post(f"{_API_PREFIX}/experiment-launcher/preview")
+    def experiment_launch_preview(command: LaunchRequest) -> dict[str, JsonValue]:
+        if command.action != "preview":
+            raise HTTPException(422, "Expected preview action")
+        return launch_call(command)
+
+    def dispatch_procedure(procedure_id: str) -> LaunchSubmission:
+        run = application.automation.get(procedure_id)
+        if run.state in {"closed", "attention_required"}:
+            return LaunchSubmission(procedure_id=procedure_id)
+        try:
+            project_workers.dispatch(procedure_id)
+        except OSError as error:
+            return LaunchSubmission(
+                procedure_id=procedure_id, dispatch_error=str(error)
+            )
+        return LaunchSubmission(procedure_id=procedure_id)
+
+    @app.post(f"{_API_PREFIX}/experiment-launcher/submit")
+    def experiment_launch_submit(command: LaunchRequest) -> LaunchSubmission:
+        if command.action != "submit" or not command.request_key.strip():
+            raise HTTPException(422, "Submit requires a request key")
+        admitted = LaunchSubmission.model_validate(launch_call(command))
+        return dispatch_procedure(admitted.procedure_id)
+
+    @app.post(f"{_API_PREFIX}/procedures/{{procedure_run_id}}/dispatch")
+    def dispatch_project_procedure(procedure_run_id: str) -> LaunchSubmission:
+        return dispatch_procedure(procedure_run_id)
 
     @app.get(f"{_API_PREFIX}/health")
     def health() -> DaemonHealth:
@@ -1093,6 +1173,14 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
     ) -> ProcedureRunAttentionReceipt:
         _require_procedure_run_id(procedure_run_id, command.procedure_run_id)
         return application.automation.require_run_attention(command)
+
+    @app.post(f"{_API_PREFIX}/procedures/{{procedure_run_id}}/cancel")
+    def cancel_procedure(
+        procedure_run_id: str,
+        command: ProcedureCancelCommand,
+    ) -> ProcedureCancelReceipt:
+        _require_procedure_run_id(procedure_run_id, command.procedure_run_id)
+        return application.automation.cancel(command)
 
     @app.post(f"{_API_PREFIX}/procedures/{{procedure_run_id}}/close")
     def close_procedure(
