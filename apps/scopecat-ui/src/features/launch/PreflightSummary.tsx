@@ -8,7 +8,7 @@ type Quantity =
 
 function QuantityValue({ quantity }: { quantity: Quantity }) {
   return (
-    <span title={quantity.basis}>
+    <span className="block" title={quantity.basis}>
       {quantity.kind === "exact"
         ? `Exact: ${quantity.value} ${quantity.unit}`
         : quantity.kind === "bounded"
