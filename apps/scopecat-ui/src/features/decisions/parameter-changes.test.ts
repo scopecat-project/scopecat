@@ -51,10 +51,13 @@ it("does not invent scientific edits for an authoritative empty keyed-cell diff"
     { qubit: "q0", frequency: 5 },
     { qubit: "q1", frequency: 6 },
   ];
+  const reordered = [...before];
+  // ES2022 supports reverse; mutate only this explicit copy.
+  reordered.reverse();
   const changes = proposalChanges({
     parameterId: "channels",
     before,
-    after: before.toReversed(),
+    after: reordered,
     cells: [],
   });
   expect(changes).toEqual([
