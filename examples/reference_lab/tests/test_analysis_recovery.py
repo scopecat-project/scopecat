@@ -5,7 +5,11 @@ from collections.abc import Generator
 from pathlib import Path
 
 import pytest
-from scopecat.automation import ProcedureSubmitCommand
+from scopecat.automation import (
+    AnalysisPublicationOutputRef,
+    ProcedureSubmitCommand,
+    RunOutputRef,
+)
 from scopecat.daemon.client import DaemonClient, DaemonConflictError
 from scopecat.project import load_project
 from scopecat_server.lifecycle import start_project, stop_project
@@ -29,7 +33,9 @@ def reference_lab_daemon(tmp_path_factory: pytest.TempPathFactory) -> Generator[
         stop_project(project)
 
 
-def test_failed_analysis_recovers_without_reacquisition(reference_lab_daemon: str):
+def test_failed_analysis_recovers_without_reacquisition(
+    reference_lab_daemon: str,
+) -> None:
     from reference_lab.application import create_application
     from reference_lab.workflows.analysis_recovery import (
         TEMPERATURE_ANALYSIS_RECOVERY,
@@ -49,8 +55,10 @@ def test_failed_analysis_recovers_without_reacquisition(reference_lab_daemon: st
             source.resume()
         original = source.snapshot
         original_history = source.steps().model_dump_json()
+        assert original.closure is not None
         assert original.closure.status == "failed"
         acquired = source.step("sample").output
+        assert isinstance(acquired, RunOutputRef)
         retained = lab.get_run(acquired.run_id)
         original_measurements = retained.measurements()["temperature"].require_values()
         run_ids = {run.id for run in lab.runs().items}
@@ -101,6 +109,21 @@ def test_failed_analysis_recovers_without_reacquisition(reference_lab_daemon: st
             lab.procedures.submit_recovery(plan, request_key="recover-analysis").id
             == recovery.id
         )
+        with (
+            DaemonClient(reference_lab_daemon) as raw,
+            pytest.raises(DaemonConflictError, match="different intent"),
+        ):
+            raw.submit_procedure(
+                ProcedureSubmitCommand(
+                    request_key="recover-analysis",
+                    definition=plan.definition,
+                    intent=plan.intent,
+                    samples=plan.samples,
+                    recovery=plan.recovery.model_copy(
+                        update={"adapter_id": "different-adapter"}
+                    ),
+                )
+            )
         assert {run.id for run in lab.runs().items} == run_ids
         assert (
             retained.measurements()["temperature"].require_values()
@@ -109,6 +132,12 @@ def test_failed_analysis_recovers_without_reacquisition(reference_lab_daemon: st
         assert source.snapshot == original
         assert source.steps().model_dump_json() == original_history
         output = recovery.step("summary").output
+        assert isinstance(output, AnalysisPublicationOutputRef)
         publication = retained.published_analysis(output.analysis_record_id)
-        assert publication.fact("temperature").value["kelvin"] > 0
+        value = publication.fact("temperature").value
+        assert isinstance(value, dict)
+        assert value["unit"] == "K"
+        kelvin = value["value"]
+        assert isinstance(kelvin, float)
+        assert kelvin > 0
         assert publication.inputs

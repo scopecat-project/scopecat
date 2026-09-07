@@ -19,7 +19,7 @@ def temperature_summary(context: sc.AnalysisContext, *, fail: bool) -> sc.Analys
         raise ValueError("demonstration software analysis failure")
     value = context.measurements()["temperature"].require_magnitudes("K")[0]
     return context.result("Retained temperature summary").fact(
-        "temperature", {"kelvin": float(cast("float", value))}
+        "temperature", sc.Quantity(float(cast("float", value)), "K")
     )
 
 

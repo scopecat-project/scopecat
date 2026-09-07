@@ -19,7 +19,9 @@ NOW = datetime(2026, 1, 1, tzinfo=UTC)
 REF = ProcedureDefinitionRef(id="source", version="1", fingerprint="sha256:" + "1" * 64)
 
 
-def _facts():
+def _facts() -> tuple[
+    ProcedureRecoverySource, ProcedureRun, tuple[ProcedureStepAttempt, ...], RunSnapshot
+]:
     run_ref = RunOutputRef(run_id="completed-run")
     source = ProcedureRun(
         procedure_run_id="failed-procedure",
@@ -35,16 +37,13 @@ def _facts():
             status="failed", closed_at=NOW, reason="analysis failed"
         ),
     )
-    common = {
-        "procedure_run_id": source.procedure_run_id,
-        "attempt": 1,
-        "revision": 2,
-        "started_at": NOW,
-        "updated_at": NOW,
-        "finished_at": NOW,
-    }
     acquired = ProcedureStepAttempt(
-        **common,
+        procedure_run_id=source.procedure_run_id,
+        attempt=1,
+        revision=2,
+        started_at=NOW,
+        updated_at=NOW,
+        finished_at=NOW,
         step_key="acquire",
         operation="run",
         intent_hash="sha256:" + "2" * 64,
@@ -52,7 +51,12 @@ def _facts():
         output=run_ref,
     )
     failed = ProcedureStepAttempt(
-        **common,
+        procedure_run_id=source.procedure_run_id,
+        attempt=1,
+        revision=2,
+        started_at=NOW,
+        updated_at=NOW,
+        finished_at=NOW,
         step_key="fit",
         operation="analysis",
         intent_hash="sha256:" + "3" * 64,
@@ -61,7 +65,7 @@ def _facts():
         inputs=(run_ref,),
     )
 
-    def step_ref(step):
+    def step_ref(step: ProcedureStepAttempt) -> ProcedureRecoveryStep:
         return ProcedureRecoveryStep(
             step_key=step.step_key,
             attempt=step.attempt,
@@ -97,12 +101,14 @@ def test_link_changes_only_recovery_hash_and_old_json_remains_readable():
     validate_recovery_source(recovery, source, attempts, run)
     old = source.model_dump(mode="json", exclude={"recovery"})
     assert ProcedureRun.model_validate(old) == source
-    assert procedure_intent_hash(REF, {}) == source.intent_hash
+    assert procedure_intent_hash(REF, {}) == (
+        "sha256:65d6536e989e922293aadaf8a567e93a4a9257ffeeb0364244cc21832a1e3532"
+    )
     assert procedure_intent_hash(REF, {}, recovery=recovery) != source.intent_hash
 
 
 @pytest.mark.parametrize("operation", ["config_activation", "config_publish"])
-def test_any_acceptance_attempt_is_excluded(operation):
+def test_any_acceptance_attempt_is_excluded(operation: str) -> None:
     recovery, source, attempts, run = _facts()
     forbidden = attempts[1].model_copy(
         update={"step_key": "accept", "operation": operation, "inputs": ()}
@@ -143,7 +149,9 @@ def test_earlier_unknown_cannot_be_hidden_by_later_success():
         ({"retained_run": RunOutputRef(run_id="other-run")}, "successful run step"),
     ],
 )
-def test_changed_source_or_output_contract_rejected(change, reason):
+def test_changed_source_or_output_contract_rejected(
+    change: dict[str, object], reason: str
+) -> None:
     recovery, source, attempts, run = _facts()
     with pytest.raises(ValueError, match=reason):
         validate_recovery_source(

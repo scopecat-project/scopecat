@@ -275,3 +275,39 @@ it("does not label a run cancellation request as completion", () => {
   );
   expect(screen.queryByRole("status")).toBeNull();
 });
+
+it("links the immutable failed source and retained acquisition of a recovery", async () => {
+  const data = view();
+  data.procedure.recovery = {
+    adapter_id: "analysis-only",
+    procedure_run_id: "old-failure",
+    revision: 7,
+    definition: data.procedure.definition,
+    run_step: {
+      step_key: "sample",
+      attempt: 1,
+      revision: 2,
+      intent_hash: "sha256:" + "3".repeat(64),
+    },
+    failed_analysis_step: {
+      step_key: "summary",
+      attempt: 1,
+      revision: 2,
+      intent_hash: "sha256:" + "4".repeat(64),
+    },
+    retained_run: { kind: "run", run_id: "retained-sample" },
+  };
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => Response.json(data)),
+  );
+  mount();
+  expect(await screen.findByRole("link", { name: "failed procedure old-failure" })).toHaveAttribute(
+    "href",
+    "?procedure=old-failure#launch",
+  );
+  expect(screen.getByRole("link", { name: "retained run retained-sample" })).toHaveAttribute(
+    "href",
+    "?run=retained-sample#runs",
+  );
+});

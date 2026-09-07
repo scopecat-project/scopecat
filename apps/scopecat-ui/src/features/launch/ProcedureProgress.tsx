@@ -93,6 +93,25 @@ export function ProcedureProgress({ procedureId }: { procedureId: string }) {
                   ? "Managed by the console; ready work can continue when a worker is available."
                   : "No console worker is assigned to this admitted procedure."}
           </p>
+          {run.recovery && (
+            <p>
+              Recovery from{" "}
+              <a
+                className="underline"
+                href={`?procedure=${encodeURIComponent(run.recovery.procedure_run_id)}#launch`}
+              >
+                failed procedure {run.recovery.procedure_run_id}
+              </a>{" "}
+              using{" "}
+              <a
+                className="underline"
+                href={`?run=${encodeURIComponent(run.recovery.retained_run.run_id)}#runs`}
+              >
+                retained run {run.recovery.retained_run.run_id}
+              </a>
+              . The original failure history is unchanged.
+            </p>
+          )}
           {(run.attention_reason || run.closure?.reason) && (
             <p>{run.attention_reason ?? run.closure?.reason}</p>
           )}

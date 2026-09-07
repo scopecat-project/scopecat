@@ -5212,6 +5212,32 @@ export interface components {
             steps: components["schemas"]["ProcedureStepAttemptPage"];
         };
         /**
+         * ProcedureRecoverySource
+         * @description Audited link to one closed software failure; never authority to retry it.
+         */
+        ProcedureRecoverySource: {
+            adapter_id: components["schemas"]["_NonEmptyText"];
+            definition: components["schemas"]["ProcedureDefinitionRef"];
+            failed_analysis_step: components["schemas"]["ProcedureRecoveryStep"];
+            procedure_run_id: components["schemas"]["_NonEmptyText"];
+            retained_run: components["schemas"]["RunOutputRef"];
+            /** Revision */
+            revision: number;
+            run_step: components["schemas"]["ProcedureRecoveryStep"];
+        };
+        /**
+         * ProcedureRecoveryStep
+         * @description Exact immutable attempt whose contract is retained across recovery.
+         */
+        ProcedureRecoveryStep: {
+            /** Attempt */
+            attempt: number;
+            intent_hash: components["schemas"]["Sha256ContentHash"];
+            /** Revision */
+            revision: number;
+            step_key: components["schemas"]["_NonEmptyText"];
+        };
+        /**
          * ProcedureResourceWait
          * @description Exact unstarted child retained while its worker is released.
          */
@@ -5237,6 +5263,7 @@ export interface components {
             intent: components["schemas"]["ProcedureIntent-Output"];
             intent_hash: components["schemas"]["Sha256ContentHash"];
             procedure_run_id: components["schemas"]["_NonEmptyText"];
+            recovery?: components["schemas"]["ProcedureRecoverySource"] | null;
             request_key: components["schemas"]["_NonEmptyText"];
             resource_wait?: components["schemas"]["ProcedureResourceWait"] | null;
             /** Revision */
