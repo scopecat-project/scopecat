@@ -6,8 +6,14 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+from scopecat.daemon.endpoint import DAEMON_URL_ENV
 
-def test_reference_lab_snapshot_roundtrip_in_fresh_processes() -> None:
+
+def test_reference_lab_snapshot_roundtrip_in_fresh_processes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv(DAEMON_URL_ENV, "http://127.0.0.1:1")
     root = Path(__file__).resolve().parents[3]
     result = subprocess.run(  # noqa: S603 - fixed interpreter and local test fixture
         [

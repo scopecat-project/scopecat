@@ -3,10 +3,14 @@
 from __future__ import annotations
 
 import json
-from typing import Protocol, cast
+import os
+import subprocess
+import sys
+from pathlib import Path
+from typing import cast
 
 from pydantic import JsonValue, TypeAdapter
-from scopecat.daemon.client import DaemonClient
+from scopecat.daemon.endpoint import DAEMON_URL_ENV
 from scopecat.daemon.reviews import ReviewSessionView
 from scopecat.daemon.views import (
     MeasurementPreview,
@@ -16,26 +20,30 @@ from scopecat.daemon.views import (
 from scopecat.kernel.run_outcome import RunOutcome
 from scopecat.records.measurement import MeasurementDatasetSchema, MeasurementScalar
 
-from reference_lab.acceptance import acceptance_json, capture_acceptance_fixtures
-from reference_lab.application import create_application
 from reference_lab.configuration import EXAMPLE_ROOT
 
 FIXTURE = EXAMPLE_ROOT / "fixtures" / "acceptance.json"
 
 
-class _Daemon(Protocol):
-    url: str
-
-
-def test_shared_fixture_is_current_python_and_http_behavior(
-    reference_lab_daemon: _Daemon,
-) -> None:
-    with (
-        create_application(EXAMPLE_ROOT).connect(reference_lab_daemon.url) as lab,
-        DaemonClient(reference_lab_daemon.url) as client,
-    ):
-        captured = capture_acceptance_fixtures(lab, client)
-    assert acceptance_json(captured) == FIXTURE.read_text()
+def test_shared_fixture_is_current_python_and_http_behavior() -> None:
+    # Capture requires fresh configuration and virtual device state. Reuse the
+    # generator's isolated project even after other session tests have run.
+    root = Path(__file__).resolve().parents[3]
+    environment = dict(os.environ)
+    environment.pop(DAEMON_URL_ENV, None)
+    result = subprocess.run(  # noqa: S603 - fixed interpreter and local generator
+        [
+            sys.executable,
+            str(root / "scripts/generate_reference_lab_acceptance.py"),
+            "--check",
+        ],
+        env=environment,
+        capture_output=True,
+        text=True,
+        timeout=120,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
 
 
 def test_shared_fixture_retains_diagnostic_review_and_entity_contracts() -> None:
