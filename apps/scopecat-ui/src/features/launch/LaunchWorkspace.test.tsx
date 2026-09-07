@@ -18,7 +18,7 @@ it("shows a durable resource wait and its cancelled child without calling it run
     "fetch",
     vi.fn(async (request: Request) => {
       const path = new URL(request.url).pathname;
-      if (path.endsWith("/experiment-launcher")) return Response.json({ calibrations: [] });
+      if (path.endsWith("/experiment-launcher")) return Response.json({ entries: [] });
       if (path.endsWith("/steps"))
         return Response.json({
           items: [{ step_key: "child", attempt: 1, state: "running" }],
@@ -53,6 +53,10 @@ it("shows a durable resource wait and its cancelled child without calling it run
 });
 const entry = {
   id: "rabi",
+  version: "1",
+  actions: ["preview"],
+  kind: "calibration",
+  configuration_effect: "candidate",
   title: "Rabi",
   description: "Configured pulse",
   request: {
@@ -62,6 +66,21 @@ const entry = {
       amplitude_max: { type: "number", title: "Amplitude", maximum: 0.9 },
     },
   },
+};
+const previewResult = {
+  experiment_id: "rabi",
+  request_hash: "sha256:" + "a".repeat(64),
+  point_count: 2,
+  config_source: {
+    kind: "config_registry",
+    selector: "active",
+    entry_id: "baseline",
+    config_ref: "baseline",
+    content_hash: "sha256:" + "b".repeat(64),
+    registry_generation: 1,
+  },
+  summary: "Configured pulse",
+  resolved_inputs: {},
 };
 function mount() {
   render(
@@ -75,8 +94,8 @@ function mount() {
 it("previews a typed request and clears results after edits", async () => {
   const fetcher = vi
     .fn()
-    .mockResolvedValueOnce(Response.json({ calibrations: [entry] }))
-    .mockResolvedValueOnce(Response.json({ configuration_writeback: false }));
+    .mockResolvedValueOnce(Response.json({ entries: [entry] }))
+    .mockResolvedValueOnce(Response.json(previewResult));
   vi.stubGlobal("fetch", fetcher);
   mount();
   fireEvent.change(await screen.findByLabelText("Qubit"), { target: { value: "Q12" } });
@@ -89,16 +108,18 @@ it("previews a typed request and clears results after edits", async () => {
     actor: "operator",
     request_key: "",
     experiment: "rabi",
+    version: "1",
+    sample: null,
     inputs: { qubit: "Q12", amplitude_max: 0.4 },
   });
   fireEvent.change(screen.getByLabelText("Amplitude"), { target: { value: "0.3" } });
   await waitFor(() => expect(screen.queryByText("Preview ready")).toBeNull());
 });
-it("shows a project without registered calibrations", async () => {
-  vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({ calibrations: [] })));
+it("shows a project without registered experiments", async () => {
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({ entries: [] })));
   mount();
   expect(
-    await screen.findByText("This project has no calibration preview provider."),
+    await screen.findByText("This project has no registered experiments."),
   ).toBeInTheDocument();
 });
 it("shows compilation failure without a successful preview", async () => {
@@ -106,7 +127,7 @@ it("shows compilation failure without a successful preview", async () => {
     "fetch",
     vi
       .fn()
-      .mockResolvedValueOnce(Response.json({ calibrations: [entry] }))
+      .mockResolvedValueOnce(Response.json({ entries: [entry] }))
       .mockResolvedValueOnce(Response.json({ detail: "binding unavailable" }, { status: 422 })),
   );
   mount();
@@ -125,9 +146,8 @@ it("retains the submission key after a lost response and opens durable progress"
     vi.fn(async (request: Request) => {
       const path = new URL(request.url).pathname;
       if (path.endsWith("/experiment-launcher"))
-        return Response.json({ calibrations: [{ ...entry, can_submit: true }] });
-      if (path.endsWith("/preview"))
-        return Response.json({ config_source: { content_hash: "hash", registry_generation: 1 } });
+        return Response.json({ entries: [{ ...entry, actions: ["preview", "submit"] }] });
+      if (path.endsWith("/preview")) return Response.json(previewResult);
       if (path.endsWith("/submit")) {
         submitted.push(await request.json());
         if (submitted.length === 1) throw new TypeError("connection lost");
@@ -160,7 +180,7 @@ it("submits selected array members and invalidates the preview when membership c
     .fn()
     .mockResolvedValueOnce(
       Response.json({
-        calibrations: [
+        entries: [
           {
             ...entry,
             id: "allxy",
@@ -178,7 +198,7 @@ it("submits selected array members and invalidates the preview when membership c
         ],
       }),
     )
-    .mockResolvedValueOnce(Response.json({ configuration_writeback: false }));
+    .mockResolvedValueOnce(Response.json(previewResult));
   vi.stubGlobal("fetch", fetcher);
   mount();
   const select = (await screen.findByLabelText("Qubits")) as HTMLSelectElement;
@@ -203,7 +223,7 @@ it("cancels a waiting procedure with the observed revision and recorded actor", 
     "fetch",
     vi.fn(async (request: Request) => {
       const path = new URL(request.url).pathname;
-      if (path.endsWith("/experiment-launcher")) return Response.json({ calibrations: [entry] });
+      if (path.endsWith("/experiment-launcher")) return Response.json({ entries: [entry] });
       if (path.endsWith("/steps"))
         return Response.json({
           items: [{ step_key: "review", attempt: 1, state: "waiting_for_input" }],
@@ -248,7 +268,7 @@ it("keeps a running cancellation pending instead of reporting a stopped procedur
     "fetch",
     vi.fn(async (request: Request) => {
       const path = new URL(request.url).pathname;
-      if (path.endsWith("/experiment-launcher")) return Response.json({ calibrations: [entry] });
+      if (path.endsWith("/experiment-launcher")) return Response.json({ entries: [entry] });
       if (path.endsWith("/steps")) return Response.json({ items: [], next_cursor: null });
       if (path.endsWith("/cancel")) {
         pending = true;
@@ -271,4 +291,58 @@ it("keeps a running cancellation pending instead of reporting a stopped procedur
   await screen.findByText("Cancellation requested — finishing current step");
   expect(screen.queryByText("Cancelled")).toBeNull();
   expect(screen.queryByRole("button", { name: "Stop after current step" })).toBeNull();
+});
+
+it.each(["Operator", "Sample ID"])("invalidates preview after changing %s", async (label) => {
+  vi.stubGlobal(
+    "fetch",
+    vi
+      .fn()
+      .mockResolvedValueOnce(
+        Response.json({ entries: [{ ...entry, actions: ["preview", "submit"] }] }),
+      )
+      .mockResolvedValueOnce(Response.json(previewResult)),
+  );
+  mount();
+  fireEvent.change(await screen.findByLabelText("Qubit"), { target: { value: "Q12" } });
+  fireEvent.change(screen.getByLabelText("Amplitude"), { target: { value: "0.4" } });
+  fireEvent.click(screen.getByRole("button", { name: "Preview" }));
+  await screen.findByText("Preview ready");
+  expect(screen.getByRole("button", { name: "Start acquisition" })).toBeEnabled();
+  fireEvent.change(screen.getByLabelText(label), { target: { value: "changed" } });
+  expect(screen.queryByText("Preview ready")).toBeNull();
+  expect(screen.getByRole("button", { name: "Start acquisition" })).toBeDisabled();
+});
+
+it.each([{ type: "integer", enum: [1, 2] }, { type: ["number", "null"] }, false])(
+  "reports unsupported project controls explicitly",
+  async (field) => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        Response.json({
+          entries: [
+            {
+              ...entry,
+              request: { properties: { custom: field } },
+            },
+          ],
+        }),
+      ),
+    );
+    mount();
+    expect(await screen.findByRole("alert")).toHaveTextContent("project-specific form");
+    expect(screen.getByRole("button", { name: "Preview" })).toBeDisabled();
+  },
+);
+
+it("does not offer actions absent from catalog capabilities", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn().mockResolvedValue(Response.json({ entries: [{ ...entry, actions: [] }] })),
+  );
+  mount();
+  await screen.findByLabelText("Qubit");
+  expect(screen.queryByRole("button", { name: "Preview" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Start acquisition" })).toBeNull();
 });

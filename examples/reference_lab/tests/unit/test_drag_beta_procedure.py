@@ -17,6 +17,7 @@ from scopecat.records.run import ConfigRegistryRunConfigSource, RunConfigSource
 
 from reference_lab.application import create_application
 from reference_lab.configuration import EXAMPLE_ROOT, bootstrap_config
+from reference_lab.launch import launch_channel_timing, launch_temperature
 from reference_lab.workflows.drag_beta_experiment import DragBetaQubit
 from reference_lab.workflows.drag_beta_freshness import drag_beta_freshness_calibration
 from reference_lab.workflows.drag_beta_procedure import (
@@ -44,6 +45,8 @@ def test_application_registers_exact_drag_beta_procedure_source() -> None:
     assert application.procedures.refs == (
         drag_beta_calibration_procedure.ref,
         drag_beta_verification_procedure.ref,
+        launch_channel_timing.ref,
+        launch_temperature.ref,
         temperature_diagnostic_procedure.ref,
     )
     assert (

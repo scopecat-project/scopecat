@@ -3,8 +3,10 @@
 import "@testing-library/jest-dom/vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { LaunchWorkspace } from "../features/launch/LaunchWorkspace";
 import type { components } from "../api-schema";
 import { getRunParameterProposals } from "../data/parameter-proposals/api";
 import { getReview } from "../features/reviews/review-api";
@@ -19,6 +21,8 @@ const fixtures = JSON.parse(
     "utf8",
   ),
 ) as {
+  launch_catalog: components["schemas"]["LaunchCatalog"];
+  launch_preview: components["schemas"]["LaunchPreview"];
   diagnostic: components["schemas"]["MeasurementPreview"];
   inspection: components["schemas"]["ReviewSessionView"];
   reviewed_candidate: components["schemas"]["ParameterProposalPage"];
@@ -43,6 +47,35 @@ function serve(value: unknown) {
 }
 
 describe("shared reference-lab acceptance", () => {
+  it("uses the real diagnostic and reviewed-calibration catalog in the launcher", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((request: Request) =>
+        Promise.resolve(
+          Response.json(
+            new URL(request.url).pathname.endsWith("/preview")
+              ? fixtures.launch_preview
+              : fixtures.launch_catalog,
+          ),
+        ),
+      ),
+    );
+    render(
+      <QueryClientProvider
+        client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+      >
+        <LaunchWorkspace />
+      </QueryClientProvider>,
+    );
+    await screen.findByRole("option", { name: "Q1 channel timing candidate" });
+    fireEvent.click(screen.getByRole("button", { name: "Preview" }));
+    await screen.findByText("Preview ready");
+    expect(
+      screen.getByText("This procedure does not change the default configuration."),
+    ).toBeVisible();
+    expect(screen.getByRole("button", { name: "Start acquisition" })).toBeEnabled();
+  });
+
   it("renders the retained read-only thermometer sample through the real API adapter", async () => {
     serve(fixtures.diagnostic);
     const preview = await getMeasurementPreview("acceptance-diagnostic");

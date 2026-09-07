@@ -3643,6 +3643,104 @@ export interface components {
         JsonMetadata: {
             [key: string]: components["schemas"]["pydantic__types__JsonValue"];
         };
+        /** LaunchCatalog */
+        LaunchCatalog: {
+            /**
+             * Entries
+             * @default []
+             */
+            entries: components["schemas"]["LaunchCatalogEntry"][];
+        };
+        /** LaunchCatalogEntry */
+        LaunchCatalogEntry: {
+            /** Actions */
+            actions: ("preview" | "submit")[];
+            /**
+             * Configuration Effect
+             * @enum {string}
+             */
+            configuration_effect: "none" | "candidate" | "activation_after_review";
+            /** Description */
+            description: string;
+            /** Id */
+            id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "diagnostic" | "calibration";
+            request: components["schemas"]["LaunchInputSchema"];
+            review?: components["schemas"]["InterpretationRequest"] | null;
+            /** Title */
+            title: string;
+            /** Version */
+            version: string;
+        };
+        /**
+         * LaunchField
+         * @description The small console form surface; additional project JSON Schema is retained.
+         */
+        LaunchField: {
+            default?: components["schemas"]["pydantic__types__JsonValue"];
+            /** Description */
+            description?: string | null;
+            /** Enum */
+            enum?: components["schemas"]["pydantic__types__JsonValue"][] | null;
+            /** Exclusiveminimum */
+            exclusiveMinimum?: number | null;
+            /** Items */
+            items?: components["schemas"]["LaunchField"] | boolean | (components["schemas"]["LaunchField"] | boolean)[] | null;
+            /** Maximum */
+            maximum?: number | null;
+            /** Minimum */
+            minimum?: number | null;
+            /** Title */
+            title?: string | null;
+            /** Type */
+            type?: string | string[] | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * LaunchInputSchema
+         * @description Project-owned top-level request schema, rendered only for supported fields.
+         */
+        LaunchInputSchema: {
+            /** Properties */
+            properties?: {
+                [key: string]: components["schemas"]["LaunchField"] | boolean;
+            };
+            /** Required */
+            required?: string[];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * LaunchPreview
+         * @description Compile-only evidence for exactly one request and immutable configuration.
+         */
+        LaunchPreview: {
+            config_source: components["schemas"]["ConfigRegistryRunConfigSource"];
+            /** Experiment Id */
+            experiment_id: string;
+            /**
+             * Point Count
+             * @description Initial point count of the first previewed experiment, not a procedure total.
+             */
+            point_count: number;
+            request_hash: components["schemas"]["Sha256ContentHash"];
+            /** Resolved Inputs */
+            resolved_inputs?: {
+                [key: string]: components["schemas"]["pydantic__types__JsonValue"];
+            };
+            /**
+             * Resources
+             * @default []
+             */
+            resources: string[];
+            /** Summary */
+            summary: string;
+        };
         /** LaunchRequest */
         LaunchRequest: {
             /**
@@ -3655,10 +3753,8 @@ export interface components {
              * @default operator
              */
             actor: string;
-            /** Expected Config Hash */
-            expected_config_hash?: string | null;
-            /** Expected Generation */
-            expected_generation?: number | null;
+            config_source?: components["schemas"]["ConfigRegistryRunConfigSource"] | null;
+            expected_request_hash?: components["schemas"]["Sha256ContentHash"] | null;
             /**
              * Experiment
              * @default
@@ -3675,10 +3771,15 @@ export interface components {
             request_key: string;
             /** Sample */
             sample?: string | null;
+            /**
+             * Version
+             * @default
+             */
+            version: string;
         };
         /**
          * LaunchSubmission
-         * @description A durable admission, with an independent best-effort worker wakeup.
+         * @description Durable procedure identity; existing steps retain its output references.
          */
         LaunchSubmission: {
             /** Dispatch Error */
@@ -7012,9 +7113,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: components["schemas"]["pydantic__types__JsonValue"];
-                    };
+                    "application/json": components["schemas"]["LaunchCatalog"];
                 };
             };
         };
@@ -7038,9 +7137,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: components["schemas"]["pydantic__types__JsonValue"];
-                    };
+                    "application/json": components["schemas"]["LaunchPreview"];
                 };
             };
             /** @description Validation Error */

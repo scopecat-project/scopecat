@@ -53,6 +53,7 @@ class ProcedureSubmitCommand(_WireModel):
     definition: ProcedureDefinitionRef
     intent: ProcedureIntent
     samples: tuple[SampleSelector, ...] = ()
+    expected_config_generation: int | None = Field(default=None, ge=1)
 
     @property
     def intent_hash(self) -> Sha256ContentHash:

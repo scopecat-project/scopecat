@@ -253,7 +253,7 @@ export default function App() {
             onClick={() => selectView("launch")}
           >
             <Activity size={15} aria-hidden="true" />
-            Calibrations
+            Experiments
           </button>
           <button
             type="button"
@@ -428,7 +428,7 @@ export default function App() {
             />
           </Suspense>
         ) : view === "launch" ? (
-          <Suspense fallback={<p>Loading calibrations…</p>}>
+          <Suspense fallback={<p>Loading experiments…</p>}>
             <LaunchWorkspace />
           </Suspense>
         ) : view === "decisions" ? (

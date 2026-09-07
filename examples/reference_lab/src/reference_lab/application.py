@@ -28,6 +28,11 @@ def create_application(_project_root: Path) -> LabApplication:
     from scopecat.application import LabApplication
 
     from reference_lab.lab import reference_lab_system
+    from reference_lab.launch import (
+        launch_channel_timing,
+        launch_provider,
+        launch_temperature,
+    )
     from reference_lab.workflows.drag_beta_automatic_publication import (
         DRAG_BETA_PUBLICATION_POLICY_REGISTRY,
     )
@@ -43,11 +48,14 @@ def create_application(_project_root: Path) -> LabApplication:
     )
 
     return LabApplication(
+        launch_provider=launch_provider,
         build_experiment_system=lambda config, instrument_catalog: reference_lab_system(
             config=config,
             instrument_catalog=instrument_catalog,
         ),
         procedures=(
+            launch_temperature,
+            launch_channel_timing,
             temperature_diagnostic_procedure,
             drag_beta_calibration_procedure,
             drag_beta_verification_procedure,

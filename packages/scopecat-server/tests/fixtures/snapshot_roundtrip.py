@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -23,7 +24,7 @@ from unittest.mock import patch
 from pydantic import JsonValue
 from scopecat.automation import ProcedureRunListQuery
 from scopecat.daemon.client import DaemonClient
-from scopecat.daemon.endpoint import resolve_daemon_endpoint
+from scopecat.daemon.endpoint import DAEMON_URL_ENV, resolve_daemon_endpoint
 from scopecat.project import load_project
 
 from scopecat_server.lifecycle import start_project, stop_project
@@ -118,7 +119,13 @@ def _capture_process(
     ]
     if seed:
         command.append("--seed")
-    subprocess.run(command, check=True)  # noqa: S603 - fixed interpreter and local script
+    # Each capture belongs to its copied project, including under pytest's
+    # reference-lab session fixture or a shell with an endpoint override.
+    environment = dict(os.environ)
+    environment.pop(DAEMON_URL_ENV, None)
+    subprocess.run(  # noqa: S603 - fixed interpreter and local script
+        command, check=True, env=environment
+    )
     return cast("dict[str, JsonValue]", json.loads(output.read_text(encoding="utf-8")))
 
 

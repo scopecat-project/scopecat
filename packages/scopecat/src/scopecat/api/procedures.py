@@ -789,13 +789,20 @@ class LabProcedureOperations:
         intent: object,
         *,
         request_key: str,
+        expected_config_generation: int | None = None,
         sample: str | SampleSelector | None = None,
         samples: tuple[SampleSelector, ...] = (),
     ) -> ProcedureHandle:
+        """Admit durable intent, optionally fencing new work to a config generation.
+
+        An exact request-key retry returns its existing procedure even if the
+        active configuration has since changed.
+        """
         selected = self._registry.resolve(definition.ref)
         receipt = self._client.submit_procedure(
             ProcedureSubmitCommand(
                 request_key=request_key,
+                expected_config_generation=expected_config_generation,
                 definition=selected.ref,
                 intent=selected.encode_intent(intent),
                 samples=_procedure_sample_selectors(sample, samples),

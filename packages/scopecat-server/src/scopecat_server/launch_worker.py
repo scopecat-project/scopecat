@@ -3,14 +3,12 @@
 from __future__ import annotations
 
 import contextlib
-import json
 import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 import scopecat as sc
-from pydantic import JsonValue
-from scopecat.application.launch import LaunchRequest
+from scopecat.application.launch import LaunchCatalog, LaunchRequest, LaunchResult
 from scopecat.project import load_project
 
 if TYPE_CHECKING:
@@ -35,15 +33,15 @@ def main() -> None:
     root = Path(sys.argv[1]).resolve()
     with contextlib.redirect_stdout(sys.stderr):
         application = load_project(root / "scopecat.toml").load_application()
-        result: dict[str, JsonValue]
+        result: LaunchResult
         if application.launch_provider is None:
-            result = {"calibrations": []}
+            result = LaunchCatalog()
             if request.action != "list":
                 raise ValueError("project has no experiment preview provider")
         else:
             with sc.open_project(root).connect(operator=request.actor) as lab:
                 result = application.launch_provider(lab, request)
-    print(json.dumps(result, allow_nan=False))
+    print(result.model_dump_json())
 
 
 if __name__ == "__main__":
