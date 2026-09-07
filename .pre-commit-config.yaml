@@ -7,12 +7,12 @@ repos:
       - id: check-yaml
       - id: check-added-large-files
   - repo: https://github.com/tombi-toml/tombi-pre-commit
-    rev: 1c6e088eb48854d65499ae12c0e7ec2f1737d0f8  # frozen: v1.5.0
+    rev: 84223797550a899b3a0d89179934e5f91b8ee4d1  # frozen: v1.5.1
     hooks:
       - id: tombi-format
         args: ["--offline"]
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: 1f1e8bf348ff38fc88619a38d3ca4d9c56abea49  # frozen: v0.16.5
+    rev: 321478e58f4938179c6b86e4ddfa923d1547a49b  # frozen: v0.16.6
     hooks:
       - id: ruff-check
         args: [--fix]

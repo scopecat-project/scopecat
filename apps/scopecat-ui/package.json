@@ -2,7 +2,7 @@
   "name": "scopecat-ui",
   "private": true,
   "version": "0.1.0",
-  "packageManager": "pnpm@12.3.1+sha512.3c14c15408d1489d350f8ed7f93361d26cc707054f6849a4eea3bb7407ff4fe4564b413a1c421a773a176ab1168a8df1c7d548f2cd0dc7d344f58c4e680a5b18",
+  "packageManager": "pnpm@12.3.2+sha512.82f9035314646eea981adec85c711a21ab5f3b05659b3f9ce9d270cbb93e8a0f614da17922bae097902e2b860ee8eb6d5c1a7e89299a16877c0c243f36b8e15b",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -24,7 +24,7 @@
     "@tanstack/react-query": "5.102.8",
     "apache-arrow": "21.2.0",
     "echarts": "6.1.0",
-    "lucide-react": "1.39.0",
+    "lucide-react": "1.40.0",
     "openapi-fetch": "0.17.0",
     "react": "19.2.8",
     "react-dom": "19.2.8",
@@ -37,7 +37,7 @@
     "@testing-library/react": "16.3.3",
     "@types/node": "24.13.3",
     "@types/react": "19.2.18",
-    "@types/react-dom": "19.2.5",
+    "@types/react-dom": "19.2.7",
     "@typescript/native": "npm:typescript@7.0.2",
     "@vitejs/plugin-react": "6.1.1",
     "jsdom": "30.0.1",
@@ -48,6 +48,6 @@
     "tailwindcss": "4.3.3",
     "typescript": "npm:@typescript/typescript6@6.0.2",
     "vite": "8.2.2",
-    "vitest": "4.1.11"
+    "vitest": "5.0.0"
   }
 }

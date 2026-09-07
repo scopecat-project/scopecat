@@ -47,10 +47,6 @@ vi.mock("echarts/renderers", () => ({ SVGRenderer: runtime.components.svgRendere
 import { EChartRuntime } from "./EChartRuntime";
 
 beforeEach(() => {
-  runtime.init.mockClear();
-  runtime.chart.dispose.mockClear();
-  runtime.chart.resize.mockClear();
-  runtime.chart.setOption.mockClear();
   runtime.init.mockReturnValue(runtime.chart);
   vi.stubGlobal("ResizeObserver", undefined);
 });
@@ -61,7 +57,10 @@ afterEach(() => {
 });
 
 describe("EChartRuntime", () => {
-  it("registers the custom chart and the exact modular ECharts features", () => {
+  it("registers the custom chart and the exact modular ECharts features", async () => {
+    vi.resetModules();
+    await import("./EChartRuntime");
+
     expect(runtime.use).toHaveBeenCalledTimes(1);
     expect(runtime.use).toHaveBeenCalledWith([
       runtime.components.customChart,

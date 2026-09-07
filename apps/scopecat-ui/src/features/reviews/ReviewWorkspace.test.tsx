@@ -32,7 +32,6 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
-  vi.clearAllMocks();
 });
 
 describe("ReviewWorkspace", () => {

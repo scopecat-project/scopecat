@@ -32,7 +32,6 @@ vi.mock("../../data/parameter-proposals/api", async (importOriginal) => {
 
 afterEach(() => {
   cleanup();
-  vi.clearAllMocks();
   vi.unstubAllGlobals();
 });
 

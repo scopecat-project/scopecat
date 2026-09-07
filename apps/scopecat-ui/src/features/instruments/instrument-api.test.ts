@@ -31,7 +31,6 @@ vi.mock("../config/config-api", () => ({
 }));
 
 afterEach(() => {
-  vi.clearAllMocks();
   vi.unstubAllGlobals();
 });
 
