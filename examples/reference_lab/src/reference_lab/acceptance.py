@@ -7,10 +7,12 @@ from datetime import UTC, datetime
 
 from pydantic import JsonValue
 from scopecat.api.lab import LabClient
+from scopecat.application.launch import LaunchRequest
 from scopecat.daemon.client import DaemonClient
 from scopecat_instruments import temperature_readout
 
 from reference_lab.configuration import bootstrap_config
+from reference_lab.launch import CATALOG, launch_provider
 from reference_lab.parameters import CHANNEL_DELAY, Q1_CHANNEL_CALIBRATION
 from reference_lab.workflows.ramsey_experiments import parallel_raw_ramsey
 from reference_lab.workflows.temperature_diagnostic import (
@@ -28,6 +30,14 @@ def capture_acceptance_fixtures(
     """Caller owns a fresh isolated daemon; all device access uses its virtual lab."""
     config = bootstrap_config()
     active = lab.config.active()
+    launch_preview = launch_provider(
+        lab,
+        LaunchRequest(
+            action="preview",
+            experiment="temperature",
+            version="1",
+        ),
+    )
     diagnostic_run = lab.run(temperature_diagnostic(), config=config)
     assert diagnostic_run.status == "completed"
     assert lab.config.active() == active
@@ -155,6 +165,8 @@ def capture_acceptance_fixtures(
         update={"run_id": "acceptance-waiting", "finished_at": FIXTURE_TIME}
     )
     return {
+        "launch_catalog": CATALOG.model_dump(mode="json"),
+        "launch_preview": launch_preview.model_dump(mode="json"),
         "diagnostic": diagnostic.model_dump(mode="json"),
         "inspection": inspection.model_dump(mode="json"),
         "reviewed_candidate": reviewed.model_dump(mode="json"),

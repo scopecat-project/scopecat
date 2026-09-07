@@ -328,6 +328,91 @@
     "title": "Temperature diagnostic",
     "updated_at": "2026-09-01T00:00:00Z"
   },
+  "launch_catalog": {
+    "entries": [
+      {
+        "actions": [
+          "preview",
+          "submit"
+        ],
+        "configuration_effect": "none",
+        "description": "Retain one thermometer sample without changing device state or default configuration.",
+        "id": "temperature",
+        "kind": "diagnostic",
+        "request": {
+          "additionalProperties": false,
+          "properties": {},
+          "title": "DiagnosticRequest",
+          "type": "object"
+        },
+        "review": null,
+        "title": "Temperature diagnostic",
+        "version": "1"
+      },
+      {
+        "actions": [
+          "preview",
+          "submit"
+        ],
+        "configuration_effect": "candidate",
+        "description": "Measure, propose a timing change, run its candidate and request review. Accepting it as default remains a separate operator action.",
+        "id": "channel-timing",
+        "kind": "calibration",
+        "request": {
+          "additionalProperties": false,
+          "properties": {
+            "delay_ns": {
+              "default": 1.0,
+              "maximum": 10.0,
+              "minimum": 0.1,
+              "title": "Q1 channel delay (ns)",
+              "type": "number"
+            }
+          },
+          "title": "TimingRequest",
+          "type": "object"
+        },
+        "review": {
+          "instructions": "Review the source and candidate runs. Configuration acceptance is a separate action in the run's parameter proposals.",
+          "metadata": {},
+          "response_template": null,
+          "schema_codec": "scopecat.analysis-fact-schema.v1",
+          "schema_hash": "sha256:883d70a0d3ea73df08178493624f7f07abe2dd3e5ff08e286079c6f4adcdc98e",
+          "schema_id": "reference_lab.channel_timing_review.v1",
+          "structure": {
+            "fields": {
+              "accepted": {
+                "type": "bool"
+              },
+              "note": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "title": "Review q1 channel timing"
+        },
+        "title": "Q1 channel timing candidate",
+        "version": "1"
+      }
+    ]
+  },
+  "launch_preview": {
+    "config_source": {
+      "config_ref": "config-registry/configs/daemon-15248161728d3097f23ae3b6e8109e20a2a2ec2b720eafcceefc89943acd302e.config-profile-snapshot.json",
+      "content_hash": "sha256:15248161728d3097f23ae3b6e8109e20a2a2ec2b720eafcceefc89943acd302e",
+      "entry_id": "daemon-15248161728d3097f23ae3b6e8109e20a2a2ec2b720eafcceefc89943acd302e",
+      "kind": "config_registry",
+      "registry_generation": 1,
+      "selector": "active"
+    },
+    "experiment_id": "temperature",
+    "point_count": 1,
+    "request_hash": "sha256:2280b9acef34da8b74f82088be27aa7a34694d6e1aca4379028f951c1a0ffc20",
+    "resolved_inputs": {},
+    "resources": [],
+    "summary": "Retain one thermometer sample without changing device state or default configuration."
+  },
   "resource_cancelled": {
     "certainty": "known",
     "finished_at": "2026-09-01T00:00:00Z",

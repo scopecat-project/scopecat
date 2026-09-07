@@ -71,26 +71,46 @@ it retains the project and reports the daemon log for manual cleanup.
 
 ## Project calibration launch
 
-The Calibrations page discovers entries from the optional
-`LabApplication.launch_provider` callback. A callback receives a connected
-`LabClient` and a validated `LaunchRequest` (`list`, `preview` or `submit`). `list` returns
-`calibrations` entries with `id`, `title`, `description`, and a JSON Schema
-`request` object. The initial form supports scalar string, number, integer and
-boolean properties, required fields, defaults and string enums. Projects should
-advertise only inputs supported by this form. `preview` receives the entry ID and
-its input values; the provider validates the project request and compiles against
-configuration. Its returned JSON becomes the expandable preview detail. For
-submittable entries it must include `config_source.content_hash` and
-`config_source.registry_generation`; the GUI passes these back as
-`expected_config_hash` and `expected_generation`. The provider must reject a
-changed active configuration before admitting the procedure.
+The Experiments page discovers entries from the optional
+`LabApplication.launch_provider` callback. It receives a connected `LabClient`
+and validated `LaunchRequest`, and returns the matching typed `LaunchCatalog`,
+`LaunchPreview` or `LaunchSubmission` from `scopecat.application.launch`.
+The HTTP endpoints expose those models through generated OpenAPI types.
+
+Catalog entries carry a stable ID/version, explicit `actions`, diagnostic or
+calibration `kind`, independent `configuration_effect`, and project-owned request
+and optional review schemas. Review does not imply writeback: a diagnostic may
+require judgment while leaving configuration unchanged. The reference lab exposes
+one thermometer diagnostic and a q1 timing candidate requiring review; accepting
+that candidate as default remains a separate operation in parameter proposals.
+
+The form renders scalar string/number/integer/boolean fields and string-enum arrays.
+Other valid project schemas (including numeric enums and nullable type unions)
+remain available in the catalog, but the console explicitly directs the operator
+to a project-specific form/Python workflow. It does not cast arbitrary catalog JSON
+into a second local entry type or implement a general schema renderer.
+
+Preview only reads and compiles, returning its exact request hash, immutable active
+configuration binding and bounded first-experiment summary. The form invalidates
+preview after input, sample, actor or catalog-version changes. Submission includes
+the same binding/hash and one retry key. The project resolves the immutable config
+entry rather than silently switching to the latest default, and calls
+`lab.procedures.submit(..., expected_config_generation=...)`. The existing admission
+transaction resolves an exact retry before checking the current generation for new
+work. Reusing a key with different intent conflicts; retrying an admitted request
+still returns its procedure after the default changes.
 
 Callbacks run in a separate project process using the daemon interpreter, with
-a 60-second timeout. `list` and `preview` only read and compile. An entry may set
-`can_submit: true`; its `submit` callback validates the preview configuration
-hash/generation and calls `lab.procedures.submit`, returning `procedure_id`.
-Callbacks must not acquire data or activate configuration inside this bounded
-request. This is a trusted project-code contract, not a sandbox.
+a 60-second timeout. They must not acquire data or activate configuration inside
+this bounded request. This is a trusted project-code contract, not a sandbox.
+The durable `procedure_id` in a submission receipt leads to existing procedure
+steps and their run/analysis/configuration output references. A best-effort dispatch
+failure retains that ID and exposes `dispatch_error`; Resume execution retries the
+existing procedure instead of admitting another.
+
+`LaunchWorkspace` owns catalog selection, `LaunchForm` owns its form/request,
+`PreflightSummary` renders preview evidence, and `ProcedureProgress` consumes the
+existing procedure status/review/cancel APIs.
 
 The server manages project processes for explicitly dispatched procedures, with
 at most two live workers. A worker runs the normal durable `resume` operation

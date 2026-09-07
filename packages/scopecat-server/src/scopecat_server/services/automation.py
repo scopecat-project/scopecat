@@ -83,6 +83,9 @@ from scopecat_server.storage.sqlite.automation import (
 from scopecat_server.storage.sqlite.automation import (
     ProcedureStepAttemptPage as StoredProcedureStepAttemptPage,
 )
+from scopecat_server.storage.sqlite.config_registry import (
+    SQLiteConfigRegistryRepository,
+)
 
 from ..errors import BackendConflict, BackendNotFound
 from .resource_waits import ProcedureResourceWaits
@@ -192,6 +195,7 @@ class AutomationService:
                 request_key=command.request_key,
                 intent=command.intent,
                 samples=command.samples,
+                expected_config_generation=command.expected_config_generation,
             )
         )
 
@@ -492,6 +496,7 @@ class AutomationService:
         request_key: str,
         intent: ProcedureIntent,
         samples: tuple[SampleSelector, ...] = (),
+        expected_config_generation: int | None = None,
     ) -> ProcedureRun:
         """Admit one idempotent, version-pinned procedure request."""
 
@@ -507,6 +512,7 @@ class AutomationService:
                 request_key=request_key,
                 intent=intent,
                 samples=samples,
+                expected_config_generation=expected_config_generation,
             )
 
     def submit_in_transaction(
@@ -517,6 +523,7 @@ class AutomationService:
         request_key: str,
         intent: ProcedureIntent,
         samples: tuple[SampleSelector, ...] = (),
+        expected_config_generation: int | None = None,
         at: datetime | None = None,
         require_new: bool = False,
     ) -> ProcedureRun:
@@ -545,6 +552,10 @@ class AutomationService:
                     "procedure request key already has a durable run"
                 )
             return existing
+        if expected_config_generation is not None:
+            registry = SQLiteConfigRegistryRepository(connection)
+            if registry.current_generation() != expected_config_generation:
+                raise AutomationConflict("active configuration changed since preview")
         now = self._now() if at is None else _require_aware_time(at)
         run = ProcedureRun(
             procedure_run_id=f"procedure-{uuid4().hex}",

@@ -1025,7 +1025,7 @@ function canonicalQueryCallCounts(): number[] {
 it("retains the calibration route and procedure when navigating back", async () => {
   window.history.replaceState(null, "", "/?procedure=p1#configuration");
   renderApp();
-  fireEvent.click(await screen.findByRole("button", { name: "Calibrations" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Experiments" }));
   expect(await screen.findByText("Calibration launcher")).toBeVisible();
   expect(window.location.hash).toBe("#launch");
   expect(new URLSearchParams(window.location.search).get("procedure")).toBe("p1");

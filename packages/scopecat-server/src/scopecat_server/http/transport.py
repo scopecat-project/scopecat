@@ -5,7 +5,6 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import subprocess
 import sys
 from collections.abc import AsyncGenerator, AsyncIterator, Callable
@@ -17,8 +16,12 @@ from fastapi import FastAPI, Header, HTTPException, Query, Request
 from fastapi import Path as ApiPath
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import JsonValue
-from scopecat.application.launch import LaunchRequest, LaunchSubmission
+from scopecat.application.launch import (
+    LaunchCatalog,
+    LaunchPreview,
+    LaunchRequest,
+    LaunchSubmission,
+)
 from scopecat.automation import (
     ProcedureCancelCommand,
     ProcedureCancelReceipt,
@@ -318,7 +321,7 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
     )
     _install_error_mapping(app)
 
-    def launch_call(command: LaunchRequest) -> dict[str, JsonValue]:
+    def launch_call(command: LaunchRequest) -> str:
         try:
             completed = subprocess.run(  # noqa: S603 - fixed project worker command
                 [
@@ -341,17 +344,19 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
             raise HTTPException(
                 422, detail[-1] if detail else "Experiment preview failed"
             )
-        return cast("dict[str, JsonValue]", json.loads(completed.stdout))
+        return completed.stdout
 
     @app.get(f"{_API_PREFIX}/experiment-launcher")
-    def experiment_launch_catalog() -> dict[str, JsonValue]:
-        return launch_call(LaunchRequest(action="list"))
+    def experiment_launch_catalog() -> LaunchCatalog:
+        return LaunchCatalog.model_validate_json(
+            launch_call(LaunchRequest(action="list"))
+        )
 
     @app.post(f"{_API_PREFIX}/experiment-launcher/preview")
-    def experiment_launch_preview(command: LaunchRequest) -> dict[str, JsonValue]:
+    def experiment_launch_preview(command: LaunchRequest) -> LaunchPreview:
         if command.action != "preview":
             raise HTTPException(422, "Expected preview action")
-        return launch_call(command)
+        return LaunchPreview.model_validate_json(launch_call(command))
 
     def dispatch_procedure(procedure_id: str) -> LaunchSubmission:
         run = application.automation.get(procedure_id)
@@ -369,7 +374,7 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
     def experiment_launch_submit(command: LaunchRequest) -> LaunchSubmission:
         if command.action != "submit" or not command.request_key.strip():
             raise HTTPException(422, "Submit requires a request key")
-        admitted = LaunchSubmission.model_validate(launch_call(command))
+        admitted = LaunchSubmission.model_validate_json(launch_call(command))
         return dispatch_procedure(admitted.procedure_id)
 
     @app.post(f"{_API_PREFIX}/procedures/{{procedure_run_id}}/dispatch")

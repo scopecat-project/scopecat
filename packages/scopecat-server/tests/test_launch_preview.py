@@ -8,8 +8,29 @@ from unittest.mock import Mock, patch
 
 import pytest
 from fastapi.testclient import TestClient
+from scopecat.application.launch import LaunchRequest
+from scopecat.records.run import ConfigRegistryRunConfigSource
 
 from scopecat_server.http.transport import create_app
+
+
+def _submission_request() -> dict[str, object]:
+    request = LaunchRequest(action="preview", experiment="diagnostic", version="1")
+    return request.model_copy(
+        update={
+            "action": "submit",
+            "request_key": "one",
+            "expected_request_hash": request.request_hash,
+            "config_source": ConfigRegistryRunConfigSource(
+                selector="active",
+                entry_id="baseline",
+                config_ref="baseline",
+                content_hash="sha256:" + "a" * 64,
+                registry_generation=1,
+            ),
+        }
+    ).model_dump(mode="json")
+
 
 if TYPE_CHECKING:
     from scopecat.api.lab import LabClient
@@ -31,10 +52,10 @@ def client() -> TestClient:
 def test_catalog_runs_a_fixed_separate_worker() -> None:
     with patch("scopecat_server.http.transport.subprocess.run") as run:
         run.return_value = SimpleNamespace(
-            returncode=0, stdout='{"calibrations": []}', stderr=""
+            returncode=0, stdout='{"entries": []}', stderr=""
         )
         response = client().get("/api/v1/experiment-launcher")
-        assert response.json() == {"calibrations": []}
+        assert response.json() == {"entries": []}
         assert run.call_args.args[0][1:3] == [
             "-m",
             "scopecat_server.launch_worker",
@@ -49,7 +70,12 @@ def test_preview_failure_is_visible_and_start_is_not_supported() -> None:
         )
         response = client().post(
             "/api/v1/experiment-launcher/preview",
-            json={"action": "preview", "experiment": "rabi", "inputs": {}},
+            json={
+                "action": "preview",
+                "experiment": "rabi",
+                "version": "1",
+                "inputs": {},
+            },
         )
         assert response.status_code == 422
         assert response.json()["detail"] == "ValueError: bad target"
@@ -84,7 +110,7 @@ def test_worker_loads_manifest_file_and_supports_empty_project(
         )
         launch_worker.main()
         load.assert_called_once_with(tmp_path / "scopecat.toml")
-    assert capsys.readouterr().out.strip() == '{"calibrations": []}'
+    assert capsys.readouterr().out.strip() == '{"entries":[]}'
 
 
 def test_admission_survives_dispatch_failure(tmp_path: Path) -> None:
@@ -109,7 +135,7 @@ def test_admission_survives_dispatch_failure(tmp_path: Path) -> None:
         )
         result = TestClient(app).post(
             "/api/v1/experiment-launcher/submit",
-            json={"action": "submit", "request_key": "one"},
+            json=_submission_request(),
         )
     assert result.status_code == 200
     assert result.json() == {"procedure_id": "p1", "dispatch_error": "cannot spawn"}
@@ -252,3 +278,14 @@ def test_http_lifespan_starts_and_stops_manager() -> None:
             manager.return_value.start.assert_called_once()
             manager.return_value.stop.assert_not_called()
         manager.return_value.stop.assert_called_once()
+
+
+def test_catalog_rejects_a_submission_shaped_worker_result() -> None:
+    from pydantic import ValidationError
+
+    with patch("scopecat_server.http.transport.subprocess.run") as run:
+        run.return_value = SimpleNamespace(
+            returncode=0, stdout='{"procedure_id":"wrong-action"}', stderr=""
+        )
+        with pytest.raises(ValidationError):
+            client().get("/api/v1/experiment-launcher")
