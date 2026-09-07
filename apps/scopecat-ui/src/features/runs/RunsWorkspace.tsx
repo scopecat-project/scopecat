@@ -295,7 +295,15 @@ export function RunsWorkspace({
   const selectedTraceEntityIndices = selectedTracePlan?.entityAxisId
     ? currentMeasurementEntitySelection[selectedTracePlan.entityAxisId]
     : undefined;
-  const measurementTraceEntityKey = JSON.stringify(selectedTraceEntityIndices ?? null);
+  const traceEntityAxis = measurements?.schema?.dimensions.find(
+    (dimension) => dimension.id === selectedTracePlan?.entityAxisId,
+  );
+  const traceEntityIndex =
+    traceEntityAxis?.index?.kind === "entity" ? traceEntityAxis.index.values : undefined;
+  const selectedTraceEntities = selectedTraceEntityIndices?.flatMap((index) =>
+    traceEntityIndex?.[index] ? [traceEntityIndex[index]] : [],
+  );
+  const measurementTraceEntityKey = JSON.stringify(selectedTraceEntities ?? null);
   const measurementSliceQuery = useQuery({
     queryKey: ["measurement-slice", selectedRunId, measurementSliceKey, measurementSliceOffset],
     queryFn: ({ signal }) =>
@@ -326,7 +334,7 @@ export function RunsWorkspace({
             : {}),
           fixedAxisIndices: measurementFixedAxisIndices,
           valueMode: selectedTracePlan!.valueMode,
-          ...(selectedTraceEntityIndices ? { entityIndices: selectedTraceEntityIndices } : {}),
+          ...(selectedTraceEntities ? { entities: selectedTraceEntities } : {}),
         },
         signal,
       ),

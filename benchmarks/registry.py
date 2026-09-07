@@ -6,6 +6,12 @@ from .model import BenchmarkCase
 
 BENCHMARK_CASES = (
     BenchmarkCase(
+        id="entity-reads",
+        kind="component",
+        module="benchmarks.component.entity_reads",
+        summary="Selected entity wire, native chunk, working set, and sampled RSS",
+    ),
+    BenchmarkCase(
         id="scan-execution",
         kind="e2e",
         module="benchmarks.e2e.scan_execution",

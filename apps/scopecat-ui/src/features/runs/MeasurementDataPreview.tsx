@@ -332,6 +332,9 @@ export function MeasurementDataPreview({
 
       {tracePlans.length > 0 && (
         <div className="border-b border-line p-2.5" data-testid="measurement-trace-preview">
+          <p className="mb-2 text-xs text-text-dim">
+            Each query reads a finite saved snapshot; refreshing issues a new query.
+          </p>
           <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2 text-[0.59rem] text-text-dim">
             <label className="flex items-center gap-2 font-bold tracking-[0.04em] uppercase">
               Trace

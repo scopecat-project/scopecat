@@ -714,7 +714,7 @@ describe("config provenance navigation", () => {
         expect.objectContaining({
           observableId: "response",
           coordinateId: "frequency",
-          entityIndices: [1],
+          entities: [expect.objectContaining({ kind: "qubit", id: "q1" })],
         }),
         expect.any(AbortSignal),
       ),

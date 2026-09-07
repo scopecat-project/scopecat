@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from math import prod
+from typing import cast
 
 import numpy as np
 from numpy.typing import NDArray
@@ -34,7 +35,9 @@ def select_availability(
     dimension_id: str,
 ) -> tuple[MeasurementArrayUnavailableGroup, ...]:
     source_to_target = {
-        int(source): target for target, source in enumerate(indices) if source >= 0
+        int(source): target
+        for target, source in enumerate(cast("list[int]", indices.tolist()))
+        if source >= 0
     }
     selected: list[MeasurementArrayUnavailableGroup] = []
     for group in groups:

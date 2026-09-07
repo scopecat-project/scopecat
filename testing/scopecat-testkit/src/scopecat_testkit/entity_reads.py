@@ -21,11 +21,13 @@ from scopecat.records.measurement import (
     MeasurementVariable,
 )
 
+_DEFAULT_ENTITY_ORDER = tuple(range(8))
+
 
 def wide_entity_measurements(
     *,
     run_id: str = "run-wide",
-    entity_order: tuple[int, ...] = tuple(range(8)),
+    entity_order: tuple[int, ...] = _DEFAULT_ENTITY_ORDER,
     point_count: int = 2,
     sample_count: int = 16,
     complex_values: bool = False,
@@ -57,7 +59,7 @@ def wide_entity_measurements(
                 role="coordinate",
                 dtype="float64",
                 unit="s",
-                dims=("point", "sample"),
+                dims=("point", "entity", "sample"),
             ),
             MeasurementVariable(
                 id="signal",
@@ -91,7 +93,7 @@ def wide_entity_measurements(
             for entity in entities
         ),
     )
-    records = []
+    records: list[MeasurementRecord] = []
     for point in range(point_count):
         values = (
             np.asarray(entity_order, dtype=np.float64)[:, None] * 100
@@ -109,7 +111,11 @@ def wide_entity_measurements(
                 logical_point_id=f"point-{point}",
                 coordinates={
                     "time": MeasurementArray.create(
-                        values=np.arange(sample_count, dtype=np.float64), unit="s"
+                        values=np.broadcast_to(
+                            np.arange(sample_count, dtype=np.float64),
+                            (len(entities), sample_count),
+                        ),
+                        unit="s",
                     )
                 },
                 observables={

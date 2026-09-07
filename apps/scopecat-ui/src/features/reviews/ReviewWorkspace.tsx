@@ -386,7 +386,7 @@ function inspectionQueryCommand(
     };
   }
   return {
-    coordinates: point.coordinates as NonNullable<ReviewCompileCommand["coordinates"]>,
+    coordinates: point.coordinates,
     coordinate_mode: "free",
     inspection_query: inspectionQuery,
   };

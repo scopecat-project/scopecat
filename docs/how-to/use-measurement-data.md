@@ -341,8 +341,48 @@ Small pages can revisit the same stored Arrow chunk. The daemon's run repository
 reuses verified chunk bytes with a 16 MiB payload limit and at most 32 entries;
 least-recently-used entries are evicted and oversized chunks are not retained.
 This bounds retained cache payload, not total process memory or a caller's decoded
-arrays. A cold read still loads a whole chunk before row/variable projection;
-entity selection does not yet push down into that chunk read.
+arrays. A cold read still loads a whole immutable blob and its native Arrow chunk.
+Row, variable, and entity projection happen before copying selected values into
+NumPy; this is not storage-level entity pushdown.
+
+Select one declared entity dimension before opening a reader:
+
+```python
+from scopecat.kernel.entity import EntityRef
+
+wanted = (EntityRef(kind="qubit", id="q7"), EntityRef(kind="qubit", id="q0"))
+for run in runs:
+    reader = (
+        run.measurements()
+        .project({"signal": "signal"}, diagnostics="full")
+        .select_entities("entity", wanted)
+        .to_record_batch_reader(batch_size=10)
+    )
+    for batch in reader:
+        analyze_arrow(batch)
+```
+
+Each run is read independently. Selection preserves requested `(kind, id)` order
+regardless of the stored order. Existing entities retain their stored descriptions and source products. Native
+selected records and the trace response also retain acquisition evidence; the Arrow
+table uses its existing availability diagnostics and schema provenance, rather than
+adding acquisition receipt columns. Missing entities retain the requested
+description, produce unavailable values with `entity_alignment="absent"`, and have
+no fabricated acquisition evidence. This uses the same alignment as
+`Dataset.reindex_entities`; it is a single-dimension selection, not a multi-run join.
+The HTTP Arrow and trace interfaces accept at most 32 selected entities per query,
+including missing identities. Point page size is a separate bound.
+
+Arrow schema metadata carries the selected measurement schema, `scopecat.run_id`,
+`scopecat.config_content_hash`, and the first page's `scopecat.snapshot_size`.
+A reader pins that count for subsequent pages. Refreshing the operator trace panel
+issues another finite query; it does not subscribe to live updates.
+
+Selection bounds copied value arrays and serialized response width. Whole blob
+bytes, native Arrow buffers, and wide metadata/evidence sidecars can still be read.
+The `entity-reads` component benchmark reports those costs separately from selected
+value bytes, serialized IPC payload bytes, and sampled process RSS. Buffer sizes
+are not peak RAM measurements.
 
 Reuse is keyed by the currently resolved content digest, not a run-local path.
 Cache hits check file identity, size and change timestamps; misses use the normal

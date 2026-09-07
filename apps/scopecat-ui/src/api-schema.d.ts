@@ -1441,10 +1441,10 @@ export interface components {
          * AdaptiveRegionSpec
          * @description One stable outer-domain region admitted for adaptive extension.
          */
-        "AdaptiveRegionSpec-Output": {
+        AdaptiveRegionSpec: {
             /** Coordinates */
             coordinates: {
-                [key: string]: components["schemas"]["PointCoordinateValue-Output"];
+                [key: string]: components["schemas"]["PointCoordinateValue"];
             };
             /** Id */
             id: string;
@@ -2613,7 +2613,7 @@ export interface components {
             /** Id */
             id: string;
             parameter_snapshot: components["schemas"]["ParameterSnapshot-Input"];
-            system: components["schemas"]["SystemSpec-Input"];
+            system: components["schemas"]["SystemSpec"];
         };
         /**
          * ConfigProfileSnapshot
@@ -2623,7 +2623,7 @@ export interface components {
             /** Id */
             id: string;
             parameter_snapshot: components["schemas"]["ParameterSnapshot-Output"];
-            system: components["schemas"]["SystemSpec-Output"];
+            system: components["schemas"]["SystemSpec"];
         };
         /**
          * ConfigPublishCommand
@@ -2846,7 +2846,7 @@ export interface components {
         DeleteParameterRows: {
             /** Key */
             key: {
-                [key: string]: components["schemas"]["ParameterAtomValue-Input"];
+                [key: string]: components["schemas"]["ParameterAtomValue"];
             };
             /**
              * @description discriminator enum property added by openapi-typescript
@@ -3018,7 +3018,7 @@ export interface components {
          * EntityRef
          * @description Reference to a domain entity without making the domain core vocabulary.
          */
-        "EntityRef-Input": {
+        EntityRef: {
             /** Id */
             id: string;
             /** Kind */
@@ -3027,18 +3027,6 @@ export interface components {
             metadata?: {
                 [key: string]: unknown;
             };
-        };
-        /**
-         * EntityRef
-         * @description Reference to a domain entity without making the domain core vocabulary.
-         */
-        "EntityRef-Output": {
-            /** Id */
-            id: string;
-            /** Kind */
-            kind?: string | null;
-            /** Metadata */
-            metadata?: unknown;
         };
         /** EventPage */
         EventPage: {
@@ -3133,7 +3121,7 @@ export interface components {
             parameter_id: components["schemas"]["_ParameterId"];
             /** Rows */
             rows: {
-                [key: string]: components["schemas"]["ParameterAtomValue-Input"];
+                [key: string]: components["schemas"]["ParameterAtomValue"];
             }[];
         };
         /**
@@ -4150,7 +4138,7 @@ export interface components {
         "MeasurementDimension-Output": {
             /** Id */
             id: string;
-            index?: components["schemas"]["MeasurementEntityIndex-Output"] | null;
+            index?: components["schemas"]["MeasurementEntityIndex"] | null;
             /** Kind */
             kind: string;
             /** Label */
@@ -4174,7 +4162,7 @@ export interface components {
          * MeasurementEntityIndex
          * @description Ordered durable entity labels for one fixed measurement dimension.
          */
-        "MeasurementEntityIndex-Output": {
+        MeasurementEntityIndex: {
             /**
              * Kind
              * @default entity
@@ -4182,7 +4170,7 @@ export interface components {
              */
             kind: "entity";
             /** Values */
-            values: components["schemas"]["EntityRef-Output"][];
+            values: components["schemas"]["EntityRef"][];
         };
         /**
          * MeasurementEntityProductMetadataOverride
@@ -4478,7 +4466,7 @@ export interface components {
          * @description One bounded point/entity trace selection with no plottable samples.
          */
         MeasurementTraceFailure: {
-            entity?: components["schemas"]["EntityRef-Output"] | null;
+            entity?: components["schemas"]["EntityRef"] | null;
             /** Entity Index */
             entity_index?: number | null;
             evidence?: components["schemas"]["InstrumentAcquisitionEvidence"] | null;
@@ -4569,7 +4557,7 @@ export interface components {
             /** @default minmax */
             downsampling: components["schemas"]["TraceDownsampling"];
             /** Entities */
-            entities?: components["schemas"]["EntityRef-Input"][] | null;
+            entities?: components["schemas"]["EntityRef"][] | null;
             /** Entity Indices */
             entity_indices?: number[] | null;
             /** Fixed Axis Indices */
@@ -4599,7 +4587,7 @@ export interface components {
         MeasurementTraceSeries: {
             /** Available Sample Count */
             available_sample_count: number;
-            entity?: components["schemas"]["EntityRef-Output"] | null;
+            entity?: components["schemas"]["EntityRef"] | null;
             /** Entity Index */
             entity_index?: number | null;
             evidence?: components["schemas"]["InstrumentAcquisitionEvidence"] | null;
@@ -4760,7 +4748,7 @@ export interface components {
              * @enum {string}
              */
             coordinate_mode: "snap" | "free";
-            fragment: components["schemas"]["RunDomainFragmentView-Output"];
+            fragment: components["schemas"]["RunDomainFragmentView"];
             /** Region Count */
             region_count: number;
             /**
@@ -4773,12 +4761,11 @@ export interface components {
             request_fingerprint: string;
             /** Request Id */
             request_id: string;
-            requested_fragment: components["schemas"]["RunDomainFragmentView-Output"];
+            requested_fragment: components["schemas"]["RunDomainFragmentView"];
         };
         /** @enum {string} */
         OperatorRegionScope: "current" | "selected" | "all";
-        "ParameterAtomValue-Input": components["schemas"]["scopecat__kernel__quantity__Quantity"] | components["schemas"]["EntityRef-Input"] | boolean | number | string;
-        "ParameterAtomValue-Output": components["schemas"]["scopecat__kernel__quantity__Quantity"] | components["schemas"]["EntityRef-Output"] | boolean | number | string;
+        ParameterAtomValue: components["schemas"]["scopecat__kernel__quantity__Quantity"] | components["schemas"]["EntityRef"] | boolean | number | string;
         /**
          * ParameterCatalog
          * @description Authored parameter schema in one shape-independent namespace.
@@ -4794,8 +4781,8 @@ export interface components {
          * @description Exact scientific cell scope retained with a proposal's original base.
          */
         "ParameterCellEdit-Output": {
-            after?: components["schemas"]["ParameterAtomValue-Output"] | null;
-            before?: components["schemas"]["ParameterAtomValue-Output"] | null;
+            after?: components["schemas"]["ParameterAtomValue"] | null;
+            before?: components["schemas"]["ParameterAtomValue"] | null;
             /**
              * Change Kind
              * @enum {string}
@@ -4944,7 +4931,7 @@ export interface components {
          * PointCoordinateSpec
          * @description Admissibility and authored sampling facts for one point coordinate.
          */
-        "PointCoordinateSpec-Output": {
+        PointCoordinateSpec: {
             /** Choices */
             choices?: string[] | null;
             /** Dimension */
@@ -4967,7 +4954,7 @@ export interface components {
              * Sampled Values
              * @default []
              */
-            sampled_values: components["schemas"]["PointCoordinateValue-Output"][];
+            sampled_values: components["schemas"]["PointCoordinateValue"][];
             /**
              * Sampled Values Truncated
              * @default false
@@ -4976,7 +4963,7 @@ export interface components {
             /** Unit */
             unit?: string | null;
         };
-        "PointCoordinateValue-Output": boolean | number | string | components["schemas"]["scopecat__kernel__quantity__Quantity"] | components["schemas"]["EntityRef-Output"] | null;
+        PointCoordinateValue: boolean | number | string | components["schemas"]["scopecat__kernel__quantity__Quantity"] | components["schemas"]["EntityRef"] | null;
         /** @enum {string} */
         PointProposalSource: "author" | "optimizer" | "operator";
         /** PreflightCost */
@@ -5478,7 +5465,7 @@ export interface components {
              * @enum {string}
              */
             coordinate_mode: "snap" | "free";
-            fragment: components["schemas"]["RunDomainFragmentView-Output"];
+            fragment: components["schemas"]["RunDomainFragmentView"];
             /** Region Count */
             region_count: number;
             /**
@@ -5487,7 +5474,7 @@ export interface components {
              */
             region_ids: string[];
             region_scope: components["schemas"]["OperatorRegionScope"];
-            requested_fragment: components["schemas"]["RunDomainFragmentView-Output"];
+            requested_fragment: components["schemas"]["RunDomainFragmentView"];
             /** Total Point Count */
             total_point_count: number;
         };
@@ -5558,7 +5545,7 @@ export interface components {
              * @default []
              */
             inspections: components["schemas"]["ReviewInspectionView-Output"][];
-            point?: components["schemas"]["ReviewPointView-Output"] | null;
+            point?: components["schemas"]["ReviewPointView"] | null;
             /** Request Id */
             request_id: string;
         };
@@ -5568,7 +5555,7 @@ export interface components {
             coordinate_mode: components["schemas"]["ReviewCoordinateMode"];
             /** Coordinates */
             coordinates?: {
-                [key: string]: components["schemas"]["ReviewCoordinateValue-Input"];
+                [key: string]: components["schemas"]["ReviewCoordinateValue"];
             } | null;
             inspection_query?: components["schemas"]["CompiledProgramInspectionQuery"] | null;
             /** Point Index */
@@ -5589,8 +5576,7 @@ export interface components {
         };
         /** @enum {string} */
         ReviewCoordinateMode: "exact" | "snap" | "free";
-        "ReviewCoordinateValue-Input": boolean | number | string | components["schemas"]["scopecat__kernel__quantity__Quantity"] | components["schemas"]["EntityRef-Input"] | null;
-        "ReviewCoordinateValue-Output": boolean | number | string | components["schemas"]["scopecat__kernel__quantity__Quantity"] | components["schemas"]["EntityRef-Output"] | null;
+        ReviewCoordinateValue: boolean | number | string | components["schemas"]["scopecat__kernel__quantity__Quantity"] | components["schemas"]["EntityRef"] | null;
         /** ReviewInspectionView */
         "ReviewInspectionView-Output": {
             /** Artifact Fingerprint */
@@ -5606,10 +5592,10 @@ export interface components {
             target_id: string;
         };
         /** ReviewPointView */
-        "ReviewPointView-Output": {
+        ReviewPointView: {
             /** Coordinates */
             coordinates: {
-                [key: string]: components["schemas"]["ReviewCoordinateValue-Output"];
+                [key: string]: components["schemas"]["ReviewCoordinateValue"];
             };
             /** Point Index */
             point_index?: number | null;
@@ -5635,7 +5621,7 @@ export interface components {
             /** Active */
             active: boolean;
             /** Coordinates */
-            coordinates: components["schemas"]["PointCoordinateSpec-Output"][];
+            coordinates: components["schemas"]["PointCoordinateSpec"][];
             /**
              * Created At
              * Format: date-time
@@ -5657,7 +5643,7 @@ export interface components {
              * Planned Points
              * @default []
              */
-            planned_points: components["schemas"]["ReviewPointView-Output"][];
+            planned_points: components["schemas"]["ReviewPointView"][];
             /**
              * Planned Points Truncated
              * @default false
@@ -5909,19 +5895,12 @@ export interface components {
             /** Span */
             span: number | components["schemas"]["scopecat__kernel__quantity__Quantity"];
         };
-        "RunDomainAxisSourceView-Input": components["schemas"]["RunDomainValuesSourceView-Input"] | components["schemas"]["RunDomainRangeSourceView"] | components["schemas"]["RunDomainAroundSourceView"];
-        "RunDomainAxisSourceView-Output": components["schemas"]["RunDomainValuesSourceView-Output"] | components["schemas"]["RunDomainRangeSourceView"] | components["schemas"]["RunDomainAroundSourceView"];
+        RunDomainAxisSourceView: components["schemas"]["RunDomainValuesSourceView"] | components["schemas"]["RunDomainRangeSourceView"] | components["schemas"]["RunDomainAroundSourceView"];
         /** RunDomainAxisView */
-        "RunDomainAxisView-Input": {
+        RunDomainAxisView: {
             /** Axis Id */
             axis_id: string;
-            source: components["schemas"]["RunDomainAxisSourceView-Input"];
-        };
-        /** RunDomainAxisView */
-        "RunDomainAxisView-Output": {
-            /** Axis Id */
-            axis_id: string;
-            source: components["schemas"]["RunDomainAxisSourceView-Output"];
+            source: components["schemas"]["RunDomainAxisSourceView"];
         };
         /**
          * RunDomainDecisionPage
@@ -5961,7 +5940,7 @@ export interface components {
              * @enum {string}
              */
             outcome: "accepted" | "rejected";
-            proposal: components["schemas"]["RunDomainProposalAttemptView-Output"];
+            proposal: components["schemas"]["RunDomainProposalAttemptView"];
             /** Proposal Index */
             proposal_index: number;
             /** Reason */
@@ -5987,7 +5966,7 @@ export interface components {
         /** RunDomainFragmentInput */
         RunDomainFragmentInput: {
             /** Axes */
-            axes: components["schemas"]["RunDomainAxisView-Input"][];
+            axes: components["schemas"]["RunDomainAxisView"][];
             /**
              * Layout
              * @enum {string}
@@ -5995,9 +5974,9 @@ export interface components {
             layout: "grid" | "point_cloud";
         };
         /** RunDomainFragmentView */
-        "RunDomainFragmentView-Output": {
+        RunDomainFragmentView: {
             /** Axes */
-            axes: components["schemas"]["RunDomainAxisView-Output"][];
+            axes: components["schemas"]["RunDomainAxisView"][];
             /** Fragment Fingerprint */
             fragment_fingerprint: string;
             /**
@@ -6009,12 +5988,12 @@ export interface components {
             point_count: number;
         };
         /** RunDomainProposalAttemptView */
-        "RunDomainProposalAttemptView-Output": {
+        RunDomainProposalAttemptView: {
             /** Based On Region Revisions */
             based_on_region_revisions?: {
                 [key: string]: number;
             };
-            fragment: components["schemas"]["RunDomainFragmentView-Output"];
+            fragment: components["schemas"]["RunDomainFragmentView"];
             /** Proposal Fingerprint */
             proposal_fingerprint: string;
             /**
@@ -6091,24 +6070,14 @@ export interface components {
             region_scope: components["schemas"]["OperatorRegionScope"];
         };
         /** RunDomainValuesSourceView */
-        "RunDomainValuesSourceView-Input": {
+        RunDomainValuesSourceView: {
             /**
              * @description discriminator enum property added by openapi-typescript
              * @enum {string}
              */
             kind: "values";
             /** Values */
-            values: components["schemas"]["RunPointCoordinateValue-Input"][];
-        };
-        /** RunDomainValuesSourceView */
-        "RunDomainValuesSourceView-Output": {
-            /**
-             * @description discriminator enum property added by openapi-typescript
-             * @enum {string}
-             */
-            kind: "values";
-            /** Values */
-            values: components["schemas"]["RunPointCoordinateValue-Output"][];
+            values: components["schemas"]["RunPointCoordinateValue"][];
         };
         /**
          * RunExecutionSegment
@@ -6332,7 +6301,7 @@ export interface components {
              * Adaptive Regions
              * @default []
              */
-            adaptive_regions: components["schemas"]["AdaptiveRegionSpec-Output"][];
+            adaptive_regions: components["schemas"]["AdaptiveRegionSpec"][];
             /**
              * Adaptive Regions Truncated
              * @default false
@@ -6344,7 +6313,7 @@ export interface components {
              * Coordinates
              * @default []
              */
-            coordinates: components["schemas"]["PointCoordinateSpec-Output"][];
+            coordinates: components["schemas"]["PointCoordinateSpec"][];
             /** Experiment Id */
             experiment_id: string;
             /** Experiment Kind */
@@ -6376,7 +6345,7 @@ export interface components {
              * @default []
              */
             sampled_points: {
-                [key: string]: components["schemas"]["PointCoordinateValue-Output"];
+                [key: string]: components["schemas"]["PointCoordinateValue"];
             }[];
             /**
              * Sampled Points Truncated
@@ -6384,8 +6353,7 @@ export interface components {
              */
             sampled_points_truncated: boolean;
         };
-        "RunPointCoordinateValue-Input": boolean | number | string | components["schemas"]["scopecat__kernel__quantity__Quantity"] | components["schemas"]["EntityRef-Input"] | null;
-        "RunPointCoordinateValue-Output": boolean | number | string | components["schemas"]["scopecat__kernel__quantity__Quantity"] | components["schemas"]["EntityRef-Output"] | null;
+        RunPointCoordinateValue: boolean | number | string | components["schemas"]["scopecat__kernel__quantity__Quantity"] | components["schemas"]["EntityRef"] | null;
         /**
          * RunPointPlanView
          * @description Durable adaptive point inventory and domain-decision progress.
@@ -6687,7 +6655,7 @@ export interface components {
          */
         SampleRevision: {
             actor: components["schemas"]["_NonEmptyText"];
-            content: components["schemas"]["SampleRevisionDraft-Output"];
+            content: components["schemas"]["SampleRevisionDraft"];
             content_hash: components["schemas"]["Sha256ContentHash"];
             /**
              * Note
@@ -6707,7 +6675,7 @@ export interface components {
          * SampleRevisionDraft
          * @description Complete user-owned content for the next immutable sample revision.
          */
-        "SampleRevisionDraft-Output": {
+        SampleRevisionDraft: {
             /**
              * Aliases
              * @default []
@@ -6737,7 +6705,7 @@ export interface components {
              * @default []
              */
             tags: components["schemas"]["_NonEmptyText"][];
-            topology?: components["schemas"]["Topology-Output"] | null;
+            topology?: components["schemas"]["Topology"] | null;
         };
         /**
          * SampleRevisionPage
@@ -6799,7 +6767,7 @@ export interface components {
          * ScalarParameterValue
          * @description One stored scalar parameter value.
          */
-        "ScalarParameterValue-Input": {
+        ScalarParameterValue: {
             /** Id */
             id: string;
             /**
@@ -6807,21 +6775,7 @@ export interface components {
              * @enum {string}
              */
             shape: "scalar";
-            value: components["schemas"]["ParameterAtomValue-Input"];
-        };
-        /**
-         * ScalarParameterValue
-         * @description One stored scalar parameter value.
-         */
-        "ScalarParameterValue-Output": {
-            /** Id */
-            id: string;
-            /**
-             * @description discriminator enum property added by openapi-typescript
-             * @enum {string}
-             */
-            shape: "scalar";
-            value: components["schemas"]["ParameterAtomValue-Output"];
+            value: components["schemas"]["ParameterAtomValue"];
         };
         "scopecat__kernel__json_types__JsonValue-Output": string | boolean | number | components["schemas"]["scopecat__kernel__json_types__JsonValue-Output"][] | {
             [key: string]: components["schemas"]["scopecat__kernel__json_types__JsonValue-Output"];
@@ -6963,13 +6917,13 @@ export interface components {
             /** Run Id */
             run_id?: string | null;
         };
-        "StoredParameterValue-Input": components["schemas"]["ScalarParameterValue-Input"] | components["schemas"]["TableParameterValue-Input"];
-        "StoredParameterValue-Output": components["schemas"]["ScalarParameterValue-Output"] | components["schemas"]["TableParameterValue-Output"];
+        "StoredParameterValue-Input": components["schemas"]["ScalarParameterValue"] | components["schemas"]["TableParameterValue-Input"];
+        "StoredParameterValue-Output": components["schemas"]["ScalarParameterValue"] | components["schemas"]["TableParameterValue-Output"];
         /**
          * SystemSpec
          * @description Stable system topology and logical parameter definitions.
          */
-        "SystemSpec-Input": {
+        SystemSpec: {
             domain_target: components["schemas"]["DomainTargetBinding"] | null;
             /** Id */
             id: string;
@@ -6978,22 +6932,7 @@ export interface components {
             /** Primary Entity Id */
             primary_entity_id: string;
             routing?: components["schemas"]["RoutingGraph"];
-            topology: components["schemas"]["Topology-Input"];
-        };
-        /**
-         * SystemSpec
-         * @description Stable system topology and logical parameter definitions.
-         */
-        "SystemSpec-Output": {
-            domain_target: components["schemas"]["DomainTargetBinding"] | null;
-            /** Id */
-            id: string;
-            instrument_registry: components["schemas"]["InstrumentRegistry"];
-            parameter_catalog: components["schemas"]["ParameterCatalog"];
-            /** Primary Entity Id */
-            primary_entity_id: string;
-            routing?: components["schemas"]["RoutingGraph"];
-            topology: components["schemas"]["Topology-Output"];
+            topology: components["schemas"]["Topology"];
         };
         /**
          * TableParameterValue
@@ -7004,7 +6943,7 @@ export interface components {
             id: string;
             /** Rows */
             rows?: {
-                [key: string]: components["schemas"]["ParameterAtomValue-Input"];
+                [key: string]: components["schemas"]["ParameterAtomValue"];
             }[];
             /**
              * @description discriminator enum property added by openapi-typescript
@@ -7063,18 +7002,11 @@ export interface components {
             port: number;
         };
         /** Topology */
-        "Topology-Input": {
+        Topology: {
             /** Connections */
             connections?: components["schemas"]["TopologyConnection"][];
             /** Entities */
-            entities?: components["schemas"]["EntityRef-Input"][];
-        };
-        /** Topology */
-        "Topology-Output": {
-            /** Connections */
-            connections?: components["schemas"]["TopologyConnection"][];
-            /** Entities */
-            entities?: components["schemas"]["EntityRef-Output"][];
+            entities?: components["schemas"]["EntityRef"][];
         };
         /**
          * TopologyConnection
@@ -7115,7 +7047,7 @@ export interface components {
         UpdateParameterRows: {
             /** Key */
             key: {
-                [key: string]: components["schemas"]["ParameterAtomValue-Input"];
+                [key: string]: components["schemas"]["ParameterAtomValue"];
             };
             /**
              * @description discriminator enum property added by openapi-typescript
@@ -7125,7 +7057,7 @@ export interface components {
             parameter_id: components["schemas"]["_ParameterId"];
             /** Values */
             values: {
-                [key: string]: components["schemas"]["ParameterAtomValue-Input"];
+                [key: string]: components["schemas"]["ParameterAtomValue"];
             };
         };
         /** ValidationError */
