@@ -1081,12 +1081,19 @@ class InstrumentRuntime:
         receipt_evidence: dict[str, JsonValue] = {
             "sequence": request.sequence,
             "costs": [cost.model_dump(mode="json") for cost in costs],
-            "completed_effect_ids": list(completed_effect_ids),
-            "effect_receipts": list(effect_receipts),
-            "problem_codes": [item.code for item in receipt.problems],
-            "problems": [item.model_dump(mode="json") for item in receipt.problems],
-            "value_ids": [value.value_id for value in receipt.values],
         }
+        if receipt.problems or receipt.indeterminate:
+            receipt_evidence.update(
+                {
+                    "completed_effect_ids": list(completed_effect_ids),
+                    "effect_receipts": list(effect_receipts),
+                    "problem_codes": [item.code for item in receipt.problems],
+                    "problems": [
+                        item.model_dump(mode="json") for item in receipt.problems
+                    ],
+                    "value_ids": [value.value_id for value in receipt.values],
+                }
+            )
         try:
             self._record_run_operation_event(
                 run_id,

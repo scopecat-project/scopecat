@@ -211,6 +211,7 @@ def test_binary_command_payload_crosses_real_json_http_boundary(
             if event.kind.startswith("run_hardware_batch_")
         ]
         assert event.kind == "run_hardware_batch_measured"
+        assert set(event.payload) == {"operation_id", "status", "sequence", "costs"}
         measured = daemon.get_run_measured_costs(run_id)
         assert len(measured.operations) == 1
         assert measured.operations[0].operation == "invoke"
