@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import os
 import subprocess
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, cast
@@ -61,6 +63,7 @@ def test_catalog_runs_a_fixed_separate_worker() -> None:
             "scopecat_server.launch_worker",
         ]
         assert '"action":"list"' in run.call_args.kwargs["input"]
+        assert run.call_args.kwargs["encoding"] == "utf-8"
 
 
 def test_preview_failure_is_visible_and_start_is_not_supported() -> None:
@@ -293,3 +296,53 @@ def test_catalog_rejects_a_submission_shaped_worker_result() -> None:
         )
         with pytest.raises(ValidationError):
             client().get("/api/v1/experiment-launcher")
+
+
+def test_worker_json_protocol_is_utf8_under_ascii_process_defaults(
+    tmp_path: Path,
+) -> None:
+    script = """
+import contextlib
+import runpy
+import sys
+from types import SimpleNamespace
+from unittest.mock import patch
+from scopecat.application.launch import (
+    LaunchCatalog, LaunchCatalogEntry, LaunchInputSchema,
+)
+
+def provider(lab, request):
+    assert request.actor == "操作者 → μ"
+    print(request.actor)
+    return LaunchCatalog(entries=(LaunchCatalogEntry(
+        id="diagnostic", version="1", title=request.actor,
+        description="测量 → 结果", actions=("preview",), kind="diagnostic",
+        configuration_effect="none", request=LaunchInputSchema(),
+    ),))
+
+with (
+    patch("scopecat.project.load_project") as load,
+    patch("scopecat.open_project") as opened,
+):
+    load.return_value.load_application.return_value = SimpleNamespace(
+        launch_provider=provider
+    )
+    opened.return_value.connect.return_value = contextlib.nullcontext(None)
+    sys.argv = ["launch_worker", sys.argv[1]]
+    runpy.run_module("scopecat_server.launch_worker", run_name="__main__")
+"""
+    result = subprocess.run(  # noqa: S603 - fixed test interpreter and script
+        [sys.executable, "-c", script, str(tmp_path)],
+        input=LaunchRequest(action="list", actor="操作者 → μ").model_dump_json(),
+        capture_output=True,
+        encoding="utf-8",
+        env={**os.environ, "PYTHONIOENCODING": "ascii"},
+        check=True,
+        timeout=15,
+    )
+    from scopecat.application.launch import LaunchCatalog
+
+    catalog = LaunchCatalog.model_validate_json(result.stdout)
+    assert catalog.entries[0].title == "操作者 → μ"
+    assert catalog.entries[0].description == "测量 → 结果"
+    assert result.stderr.strip() == "操作者 → μ"

@@ -363,6 +363,7 @@ function reviewSession(): ReviewSession {
           content: {
             schema_id: "scopecat.compiled_artifact_inspection.v2",
             kind: "reference_lab.list_mode.v1",
+            work_estimates: [],
             facts: [{ id: "sample_rate_hz", value: 1_000_000_000, unit: "Hz" }],
             point_count: 1,
             points_truncated: false,

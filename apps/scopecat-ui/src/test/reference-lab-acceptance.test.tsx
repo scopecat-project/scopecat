@@ -73,6 +73,9 @@ describe("shared reference-lab acceptance", () => {
     expect(
       screen.getByText("This procedure does not change the default configuration."),
     ).toBeVisible();
+    expect(screen.getAllByText("Retained (planned dataset)")).toHaveLength(2);
+    expect(screen.getByText("Unknown (s)")).toBeVisible();
+    expect(screen.getByText(/1\/64 displayed points; 1\/1 selected points/)).toBeVisible();
     expect(screen.getByRole("button", { name: "Start acquisition" })).toBeEnabled();
   });
 

@@ -18,11 +18,18 @@ from scopecat.application.launch import (
     LaunchSubmission,
 )
 from scopecat.automation import InterpretationRequest, procedure
+from scopecat.config.parameter_updates import materialize_parameter_updates
+from scopecat.planning.preflight import (
+    ExactQuantity,
+    PreflightSummary,
+    summarize_preflight,
+)
+from scopecat.records.config import config_content_hash
 from scopecat.records.content import Sha256ContentHash
 from scopecat.records.run import ConfigRegistryRunConfigSource
 
 from reference_lab.parameters import CHANNEL_DELAY, Q1_CHANNEL_CALIBRATION
-from reference_lab.workflows.ramsey_experiments import parallel_raw_ramsey
+from reference_lab.workflows.ramsey_experiments import RAMSEY_SHOTS, parallel_raw_ramsey
 from reference_lab.workflows.temperature_diagnostic import (
     TemperatureDiagnosticIntent,
     temperature_diagnostic,
@@ -177,11 +184,99 @@ def launch_provider(lab: LabClient, request: LaunchRequest) -> LaunchResult:
         config, source = lab.config.resolve_with_source("active")
         assert isinstance(source, ConfigRegistryRunConfigSource)
         preview = lab.preview(invocation, config=config)
+        stages = [
+            summarize_preflight(
+                preview,
+                stage_id="diagnostic" if entry.kind == "diagnostic" else "source",
+                label="Retained temperature diagnostic"
+                if entry.kind == "diagnostic"
+                else "Accepted-configuration source run",
+                configuration="accepted",
+                config_content_hash=source.content_hash,
+                configuration_meaning=(
+                    "Uses the reviewed active configuration; no default changes."
+                ),
+                executions=ExactQuantity(
+                    value=1,
+                    unit="runs",
+                    basis=(
+                        "Declared workflow stage; cancellation or failure may "
+                        "prevent execution"
+                    ),
+                ),
+                shots_per_point_per_entity=None
+                if entry.kind == "diagnostic"
+                else ExactQuantity(
+                    value=RAMSEY_SHOTS,
+                    unit="shots",
+                    basis="Ramsey invocation.with_shots per point and entity",
+                ),
+                entity_ids=("cryostat",)
+                if entry.kind == "diagnostic"
+                else ("q0", "q1"),
+            )
+        ]
+        if isinstance(inputs, TimingRequest):
+            parameters, _ = materialize_parameter_updates(
+                catalog=config.parameter_catalog,
+                base=config.parameter_snapshot,
+                updates=(
+                    Q1_CHANNEL_CALIBRATION[CHANNEL_DELAY].update(inputs.delay_ns),
+                ),
+                candidate_id="preflight-channel-timing.parameters",
+            )
+            candidate = config.model_copy(
+                update={
+                    "id": "preflight-channel-timing",
+                    "parameter_snapshot": parameters,
+                }
+            )
+            candidate_preview = lab.preview(invocation, config=candidate)
+            stages.append(
+                summarize_preflight(
+                    candidate_preview,
+                    stage_id="candidate",
+                    label="Proposed-configuration verification run",
+                    configuration="proposed_candidate",
+                    config_content_hash=config_content_hash(candidate),
+                    configuration_meaning=(
+                        "Compiles the proposed delay; has not run or been "
+                        "verified. Default acceptance remains a separate action."
+                    ),
+                    executions=ExactQuantity(
+                        value=1,
+                        unit="runs",
+                        basis=(
+                            "Declared candidate stage after source analysis; not a "
+                            "promise of completion"
+                        ),
+                    ),
+                    shots_per_point_per_entity=ExactQuantity(
+                        value=RAMSEY_SHOTS,
+                        unit="shots",
+                        basis="Ramsey invocation.with_shots per point and entity",
+                    ),
+                    entity_ids=("q0", "q1"),
+                )
+            )
         return LaunchPreview(
             experiment_id=entry.id,
             request_hash=request.request_hash,
             config_source=source,
             point_count=preview.initial_point_count,
+            preflight=PreflightSummary(
+                stages=tuple(stages),
+                scope_basis=(
+                    "One diagnostic run. No configuration writes."
+                    if entry.kind == "diagnostic"
+                    else (
+                        "Source run, analysis, proposed-configuration run, "
+                        "then review. "
+                        "Point counts are per stage; preview does not validate a "
+                        "physical outcome."
+                    )
+                ),
+            ),
             summary=entry.description,
             resolved_inputs=inputs.model_dump(mode="json"),
         )

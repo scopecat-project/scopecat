@@ -17,6 +17,7 @@ from pydantic import (
 
 from scopecat.automation.interpretations import InterpretationRequest
 from scopecat.kernel.content_identity import sha256_json_hash
+from scopecat.planning.preflight import PreflightSummary
 from scopecat.records.content import Sha256ContentHash
 from scopecat.records.run import ConfigRegistryRunConfigSource
 
@@ -139,6 +140,7 @@ class LaunchPreview(BaseModel):
             "not a procedure total."
         ),
     )
+    preflight: PreflightSummary | None = None
     resources: tuple[str, ...] = ()
     summary: str
     resolved_inputs: dict[str, JsonValue] = Field(default_factory=dict)

@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import shutil
 import time
-from typing import Protocol
+from collections.abc import Generator
+from dataclasses import dataclass
 
 import httpx2
 import pytest
 from pydantic import ValidationError
+from scopecat.api.run import RunHandle
 from scopecat.application import LabApplication
 from scopecat.application.launch import (
     LaunchCatalog,
@@ -16,15 +19,52 @@ from scopecat.application.launch import (
     LaunchSubmission,
 )
 from scopecat.daemon.client import DaemonClient, DaemonConflictError
-from scopecat.project import load_project
+from scopecat.daemon.endpoint import DAEMON_URL_ENV
+from scopecat.planning.preflight import ExactQuantity, PreflightStage, UnknownQuantity
+from scopecat.project import Project, load_project
 from scopecat.records.measurement import MeasurementScalar
+from scopecat_server.lifecycle import start_project, stop_project
 from scopecat_testkit.project_loading import isolated_project_imports
 
 from reference_lab.configuration import EXAMPLE_ROOT
 
 
-class _Daemon(Protocol):
+@dataclass(frozen=True)
+class _Daemon:
     url: str
+
+
+@pytest.fixture(scope="module")
+def reference_lab_daemon(
+    tmp_path_factory: pytest.TempPathFactory,
+) -> Generator[_Daemon]:
+    # Gallery notebooks may accept new defaults in their session daemon. Launcher
+    # scenarios have their own project so a default request has a stable base.
+    roots = [
+        tmp_path_factory.mktemp(name) for name in ("foreign-project", "launch-project")
+    ]
+    projects: list[Project] = []
+    for root in roots:
+        for name in ("config", "src"):
+            shutil.copytree(EXAMPLE_ROOT / name, root / name)
+        shutil.copy2(EXAMPLE_ROOT / "scopecat.toml", root / "scopecat.toml")
+        projects.append(load_project(root / "scopecat.toml"))
+    foreign, project = projects
+    with pytest.MonkeyPatch.context() as patch:
+        patch.delenv(DAEMON_URL_ENV, raising=False)
+        foreign_endpoint = start_project(foreign)
+    try:
+        # The target daemon itself inherits a live foreign endpoint. Its internal
+        # preview and procedure workers must still use the target's project record.
+        with pytest.MonkeyPatch.context() as patch:
+            patch.setenv(DAEMON_URL_ENV, foreign_endpoint.base_url)
+            endpoint = start_project(project)
+        try:
+            yield _Daemon(endpoint.base_url)
+        finally:
+            stop_project(project)
+    finally:
+        stop_project(foreign)
 
 
 @pytest.fixture
@@ -53,6 +93,28 @@ def submit_request(
     )
 
 
+def assert_retained_shapes(stage: PreflightStage, run: RunHandle) -> None:
+    schema = run.measurements().schema
+    dimensions = {dimension.id: dimension.size for dimension in schema.dimensions}
+    variables = {
+        variable.id: variable
+        for variable in schema.variables
+        if variable.role == "observable"
+    }
+    retained = [
+        product for product in stage.products if product.retention == "retained"
+    ]
+    assert {product.id for product in retained} == set(variables)
+    for product in retained:
+        variable = variables[product.id]
+        assert product.dims == tuple(variable.dims)
+        assert product.shape == tuple(
+            dimensions[dimension] for dimension in variable.dims
+        )
+        assert product.dtype == variable.dtype
+        assert product.unit == variable.unit
+
+
 @pytest.mark.parametrize("experiment", ["temperature", "channel-timing"])
 def test_real_http_preview_shares_catalog_and_never_admits_acquisition(
     reference_lab_daemon: _Daemon,
@@ -71,7 +133,7 @@ def test_real_http_preview_shares_catalog_and_never_admits_acquisition(
         ) as http,
     ):
         response = http.get("/api/v1/experiment-launcher")
-        response.raise_for_status()
+        assert response.is_success, response.text
         assert LaunchCatalog.model_validate(response.json()) == CATALOG
         before = client.list_runs()
         active = lab.config.active()
@@ -79,9 +141,41 @@ def test_real_http_preview_shares_catalog_and_never_admits_acquisition(
         response = http.post(
             "/api/v1/experiment-launcher/preview", json=request.model_dump(mode="json")
         )
-        response.raise_for_status()
+        assert response.is_success, response.text
         preview = LaunchPreview.model_validate(response.json())
-        assert preview == provider(lab, request)
+        repeated = provider(lab, request)
+        assert isinstance(repeated, LaunchPreview)
+        # Target inspection includes per-compilation timing/cache diagnostics.
+        exclude = {"preflight": {"stages": {"__all__": {"inspections"}}}}
+        assert preview.model_dump(exclude=exclude) == repeated.model_dump(
+            exclude=exclude
+        )
+        assert preview.preflight is not None
+        assert len(preview.preflight.stages) == (
+            1 if experiment == "temperature" else 2
+        )
+        assert all(stage.selected_points <= 1 for stage in preview.preflight.stages)
+        assert all(stage.sampled_points <= 64 for stage in preview.preflight.stages)
+        for stage in preview.preflight.stages:
+            wall_time = next(cost for cost in stage.costs if cost.metric == "wall_time")
+            assert isinstance(wall_time.quantity, UnknownQuantity)
+            assert wall_time.scope == "experiment"
+            if experiment == "channel-timing":
+                assert isinstance(stage.shots_per_point_per_entity, ExactQuantity)
+                assert stage.shots_per_point_per_entity.value == 64
+                playback = next(
+                    cost
+                    for cost in stage.costs
+                    if cost.metric == "waveform_playback_time"
+                )
+                assert isinstance(playback.quantity, ExactQuantity)
+                assert playback.quantity.value > 0
+                assert playback.quantity.unit == "s"
+                assert playback.scope == "inspected_artifact"
+                assert playback.target_id == stage.inspections[0].target_id
+                assert playback.artifact_fingerprint == (
+                    stage.inspections[0].artifact_fingerprint
+                )
         assert preview.point_count == (1 if experiment == "temperature" else 2)
         assert preview.config_source.entry_id == active.entry.id
         assert client.list_runs() == before
@@ -120,6 +214,8 @@ def test_submission_fences_new_stale_work_but_replays_exact_admission(
         run = lab.get_run(output.run_id)
         assert run.status == "completed"
         assert run.snapshot.config_source == preview.config_source
+        assert preview.preflight is not None
+        assert_retained_shapes(preview.preflight.stages[0], run)
         records = run.measurements().records
         temperature = records[0].observables["temperature"]
         assert isinstance(temperature, MeasurementScalar) and temperature.unit == "K"
@@ -157,6 +253,15 @@ def test_candidate_uses_existing_review_state_and_retains_result_references(
             candidate_source is not None
             and candidate_source.kind == "analysis_candidate"
         )
+        assert preview.preflight is not None
+        assert [stage.configuration for stage in preview.preflight.stages] == [
+            "accepted",
+            "proposed_candidate",
+        ]
+        for stage in preview.preflight.stages:
+            output = handle.output(stage.id)
+            assert output.kind == "run"
+            assert_retained_shapes(stage, lab.get_run(output.run_id))
         review = handle.step("review").interpretation_request
         assert review is not None and review.schema_id == TIMING_REVIEW.id
         handle.respond(
@@ -192,7 +297,7 @@ def test_http_submission_dispatches_the_same_durable_diagnostic(
             "/api/v1/experiment-launcher/submit",
             json=command.model_dump(mode="json"),
         )
-        response.raise_for_status()
+        assert response.is_success, response.text
         admitted = LaunchSubmission.model_validate(response.json())
         assert admitted.dispatch_error is None
         handle = lab.procedures.get(admitted.procedure_id)
@@ -210,3 +315,48 @@ def test_http_submission_dispatches_the_same_durable_diagnostic(
         )
         retry.raise_for_status()
         assert LaunchSubmission.model_validate(retry.json()) == admitted
+
+
+def test_noop_candidate_preview_reports_reason_without_admitting_work(
+    reference_lab_daemon: _Daemon,
+    launch_application: LabApplication,
+) -> None:
+    from scopecat.config.parameter_updates import materialize_parameter_updates
+
+    from reference_lab.parameters import CHANNEL_DELAY, Q1_CHANNEL_CALIBRATION
+
+    with (
+        launch_application.connect(reference_lab_daemon.url) as lab,
+        DaemonClient(reference_lab_daemon.url) as client,
+        httpx2.Client(
+            base_url=reference_lab_daemon.url, trust_env=False, timeout=30
+        ) as http,
+    ):
+        original = lab.config.active().config
+        parameters, _ = materialize_parameter_updates(
+            catalog=original.parameter_catalog,
+            base=original.parameter_snapshot,
+            updates=(Q1_CHANNEL_CALIBRATION[CHANNEL_DELAY].update(1.0),),
+            candidate_id="already-at-requested-delay",
+        )
+        lab.config.set_default(
+            original.model_copy(update={"parameter_snapshot": parameters})
+        )
+        try:
+            before = client.list_runs()
+            response = http.post(
+                "/api/v1/experiment-launcher/preview",
+                json={
+                    "action": "preview",
+                    "experiment": "channel-timing",
+                    "version": "1",
+                },
+            )
+            assert response.status_code == 422, response.text
+            assert (
+                "parameter change proposal does not change the base snapshot"
+                in response.text
+            )
+            assert client.list_runs() == before
+        finally:
+            lab.config.set_default(original)

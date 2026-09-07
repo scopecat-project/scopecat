@@ -1037,6 +1037,11 @@ def test_planning_keeps_compute_outputs_out_of_local_acquisition() -> None:
     assert normalize.inputs == ("input",)
     assert normalize.demanded_by == ("compute:summarize",)
     assert summarize.demanded_by == ("record:derived",)
+    assert [(product.id, product.shape) for product in preview.transient_products] == [
+        ("source", ()),
+        ("middle", ()),
+    ]
+    assert [record.id for record in preview.records] == ["derived"]
 
 
 def test_domain_target_partitions_complete_point_space_by_capacity() -> None:
@@ -1456,21 +1461,39 @@ def test_point_invariant_state_reuses_only_the_initial_probe(
 
 
 def test_large_plan_preview_samples_edges_without_hiding_total_point_count() -> None:
-    bound = _bound_program(domain_product_count=0, point_count=300)
+    from scopecat.planning.preflight import ExactQuantity, summarize_preflight
+
+    bound = _bound_program(point_count=10_000)
+    compiler = _DomainCompiler("tests.bounded-preflight", batch_size=32)
     plan = ExperimentSystem(
-        instrument_catalog=_catalog(bound, _TrackingProvider())
+        instrument_catalog=_catalog(bound),
+        domain_compiler=compiler,
     ).compile(bound)
-
+    assert compiler.compile_calls == 0
     preview = build_run_program_preview(plan)
-
-    assert preview.point_count == 300
-    assert preview.total_point_count == 300
+    stage = summarize_preflight(
+        preview,
+        stage_id="source",
+        label="Large source scan",
+        config_content_hash=plan.config_content_hash,
+        configuration="accepted",
+        configuration_meaning="Read-only source configuration",
+        executions=ExactQuantity(value=1, unit="runs", basis="Declared test workflow"),
+    )
+    assert compiler.compile_calls == 1
+    assert compiler.compile_requests[0].point_ordinals == (0,)
+    assert stage.points_per_execution == ExactQuantity(
+        value=10_000, unit="points", basis="Static point-plan cardinality"
+    )
+    assert stage.sampled_points == stage.sampled_point_limit == 64
+    assert stage.selected_points == stage.selected_point_limit == 1
     assert preview.points_truncated
-    assert len(preview.points) == 64
     assert tuple(point.point_index for point in preview.points) == (
         *range(32),
-        *range(268, 300),
+        *range(9968, 10_000),
     )
+    assert stage.shots_per_point_per_entity.kind == "unknown"
+    assert all(cost.quantity.kind == "unknown" for cost in stage.costs)
 
 
 def test_run_requirements_and_host_order_include_only_used_local_instruments() -> None:
@@ -2220,6 +2243,28 @@ def test_adaptive_plan_uses_an_open_point_extent_with_a_hard_limit() -> None:
     assert preview.initial_point_count == 2
     assert preview.point_limit == 5
     assert preview.records[0].shape[0] is None
+    from scopecat.planning.preflight import (
+        BoundedQuantity,
+        ExactQuantity,
+        summarize_preflight,
+    )
+
+    stage = summarize_preflight(
+        preview,
+        stage_id="adaptive",
+        label="Adaptive scan",
+        configuration="accepted",
+        config_content_hash=plan.config_content_hash,
+        configuration_meaning="Read only",
+        executions=ExactQuantity(value=1, unit="runs", basis="Declared stage"),
+    )
+    assert stage.point_scope == "adaptive_limit"
+    assert stage.initial_proposed_points == 2
+    assert isinstance(stage.points_per_execution, BoundedQuantity)
+    assert (stage.points_per_execution.lower, stage.points_per_execution.upper) == (
+        0,
+        5,
+    )
     assert plan.coverage.is_durable_cut(5)
     assert not plan.coverage.is_durable_cut(-1)
 
