@@ -160,6 +160,10 @@ class _ProcedureInputRecorded(Exception):
         super().__init__("procedure is waiting for interpretation input")
 
 
+class _ProcedureCancellationRequested(BaseException):
+    """Stop at a settled durable boundary without running another effect."""
+
+
 class _ProcedureYieldRequested(BaseException):
     """Leave execution before starting another durable step."""
 
@@ -257,6 +261,8 @@ class ProcedureContext:
                 )
             ),
         )
+        if completed.run.cancellation is not None:
+            raise _ProcedureCancellationRequested
         durable_output = completed.step.output
         if durable_output is None:
             raise RuntimeError("completed procedure step has no output")
@@ -476,6 +482,10 @@ class ProcedureWorker:
             try:
                 selected_context = self._context_factory(context)
                 definition.run(selected_context, acquired.run.intent)
+            except _ProcedureCancellationRequested:
+                return self._close(
+                    authority, status="cancelled", reason="Cancellation requested"
+                )
             except _ProcedureYieldRequested:
                 return self._release(authority)
             except _ProcedureAttentionRecorded as recorded:
@@ -645,7 +655,29 @@ class _ProcedureLeaseAuthority:
             with self._state_lock:
                 run = self._run
                 lease = self._lease
-            receipt = _control_call(operation, lambda: call(run, lease))
+            if (
+                operation in {"begin_step", "begin_interpretation"}
+                and run.cancellation is not None
+            ):
+                raise _ProcedureCancellationRequested
+            try:
+                receipt = _control_call(operation, lambda: call(run, lease))
+            except ProcedureControlError:
+                # A cancellation request is the one external write allowed while
+                # this lease is live. Retry only that exact revision transition;
+                # never re-execute the effect or relax ordinary stale-write checks.
+                latest = self._control.get_procedure(run.procedure_run_id)
+                if not (
+                    latest.state == "leased"
+                    and latest.cancellation is not None
+                    and latest.revision == run.revision + 1
+                    and latest.cancellation.requested_revision == latest.revision
+                ):
+                    raise
+                self._adopt(latest)
+                if operation in {"begin_step", "begin_interpretation"}:
+                    raise _ProcedureCancellationRequested from None
+                receipt = _control_call(operation, lambda: call(latest, lease))
             self._adopt(receipt.run)
             return receipt
 

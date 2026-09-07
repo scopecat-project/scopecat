@@ -15,6 +15,7 @@ from pydantic import BaseModel, ValidationError
 
 from scopecat.automation import (
     ProcedureCancelCommand,
+    ProcedureCancelReceipt,
     ProcedureCloseCommand,
     ProcedureCloseReceipt,
     ProcedureRun,
@@ -775,11 +776,11 @@ class DaemonClient:
 
     def cancel_procedure(
         self, command: ProcedureCancelCommand
-    ) -> ProcedureCloseReceipt:
+    ) -> ProcedureCancelReceipt:
         return self._post_idempotent_model(
             self._procedure_path(command.procedure_run_id, "cancel"),
             command,
-            ProcedureCloseReceipt,
+            ProcedureCancelReceipt,
         )
 
     def close_procedure(

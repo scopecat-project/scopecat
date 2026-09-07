@@ -4690,7 +4690,7 @@ export interface components {
         ProblemPhase: "definition" | "authoring" | "configuration" | "planning" | "provider_preflight" | "execution" | "persistence" | "analysis";
         /**
          * ProcedureCancelCommand
-         * @description Cancel an idle procedure at an exact observed revision.
+         * @description Request cancellation at an exact observed revision.
          */
         ProcedureCancelCommand: {
             actor: components["schemas"]["_NonEmptyText"];
@@ -4699,8 +4699,26 @@ export interface components {
             procedure_run_id: components["schemas"]["_NonEmptyText"];
             reason: components["schemas"]["_NonEmptyText"];
         };
-        /** ProcedureCloseReceipt */
-        ProcedureCloseReceipt: {
+        /**
+         * ProcedureCancellation
+         * @description Durable request to stop after the current step has settled.
+         */
+        ProcedureCancellation: {
+            actor: components["schemas"]["_NonEmptyText"];
+            reason: components["schemas"]["_NonEmptyText"];
+            /**
+             * Requested At
+             * Format: date-time
+             */
+            requested_at: string;
+            /** Requested Revision */
+            requested_revision: number;
+        };
+        /**
+         * ProcedureCancelReceipt
+         * @description Current run: a pending request does not mean execution has stopped.
+         */
+        ProcedureCancelReceipt: {
             run: components["schemas"]["ProcedureRun"];
         };
         /** @enum {string} */
@@ -4739,6 +4757,7 @@ export interface components {
         ProcedureRun: {
             /** Attention Reason */
             attention_reason?: string | null;
+            cancellation?: components["schemas"]["ProcedureCancellation"] | null;
             closure?: components["schemas"]["ProcedureClosure"] | null;
             /**
              * Created At
@@ -7658,7 +7677,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ProcedureCloseReceipt"];
+                    "application/json": components["schemas"]["ProcedureCancelReceipt"];
                 };
             };
             /** @description Validation Error */

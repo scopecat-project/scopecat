@@ -23,6 +23,7 @@ from scopecat.automation import (
     ProcedureContext,
     ProcedureControlError,
     ProcedureDefinitionRef,
+    ProcedureNeedsAttention,
     ProcedureRegistry,
     ProcedureRun,
     ProcedureRunAttentionCommand,
@@ -331,10 +332,10 @@ def test_procedure_http_round_trip_persists_pages_and_fences(
             )
 
 
-@pytest.mark.parametrize("cancel", [False, True])
+@pytest.mark.parametrize("mode", ["answer", "cancel", "cancel_publishing"])
 def test_procedure_http_round_trips_interpretation_input(
     tmp_path: Path,
-    cancel: bool,
+    mode: str,
 ) -> None:
     with (
         LocalDaemonRuntime(tmp_path) as runtime,
@@ -371,21 +372,37 @@ def test_procedure_http_round_trips_interpretation_input(
                 intent_hash=request.request_hash,
             )
         )
+        wait_revision = begun.run.revision
+        if mode == "cancel_publishing":
+            pending = client.cancel_procedure(
+                ProcedureCancelCommand(
+                    procedure_run_id=submitted.procedure_run_id,
+                    expected_run_revision=wait_revision,
+                    actor="operator",
+                    reason="No review needed",
+                )
+            ).run
+            wait_revision = pending.revision
         waiting = client.wait_procedure_step_input(
             ProcedureStepInputWaitCommand(
                 procedure_run_id=submitted.procedure_run_id,
                 lease_token=acquired.lease.lease_token,
-                expected_run_revision=begun.run.revision,
+                expected_run_revision=wait_revision,
                 step_key=begun.step.step_key,
                 attempt=begun.step.attempt,
                 expected_step_revision=begun.step.revision,
                 request=request,
             )
         )
+        if mode == "cancel_publishing":
+            assert waiting.run.closure is not None
+            assert waiting.run.closure.status == "cancelled"
+            assert waiting.step.interpretation_request == request
+            return
         assert waiting.run.state == "waiting_for_input"
         assert waiting.step.interpretation_request == request
 
-        if cancel:
+        if mode == "cancel":
             command = ProcedureCancelCommand(
                 procedure_run_id=waiting.run.procedure_run_id,
                 expected_run_revision=waiting.run.revision,
@@ -1020,7 +1037,7 @@ def test_idle_cancellation_is_atomic_and_idempotent(tmp_path: Path) -> None:
                 expected_run_revision=racing.revision,
             )
         )
-        for revision in (racing.revision, acquired.run.revision):
+        for revision in (racing.revision,):
             with pytest.raises(DaemonConflictError):
                 client.cancel_procedure(
                     ProcedureCancelCommand(
@@ -1031,3 +1048,101 @@ def test_idle_cancellation_is_atomic_and_idempotent(tmp_path: Path) -> None:
                     )
                 )
         assert client.get_procedure(racing.procedure_run_id).state == "leased"
+        live = client.get_procedure(racing.procedure_run_id)
+        pending = client.cancel_procedure(
+            ProcedureCancelCommand(
+                procedure_run_id=live.procedure_run_id,
+                expected_run_revision=live.revision,
+                actor="operator",
+                reason="Stop",
+            )
+        ).run
+        with pytest.raises(DaemonConflictError, match="no new steps"):
+            # A queued worker cannot begin an effect after the request wins.
+            client.begin_procedure_step(
+                ProcedureStepBeginCommand(
+                    procedure_run_id=live.procedure_run_id,
+                    expected_run_revision=pending.revision,
+                    lease_token=acquired.lease.lease_token,
+                    step_key="late",
+                    operation="run",
+                    intent_hash=_FIRST_STEP_HASH,
+                )
+            )
+
+
+@pytest.mark.parametrize("outcome", ["success", "failure", "unknown"])
+def test_running_cancellation_settles_current_step_without_starting_next(
+    tmp_path: Path,
+    outcome: str,
+) -> None:
+    effects: list[str] = []
+    with (
+        LocalDaemonRuntime(tmp_path) as runtime,
+        TestClient(runtime.app()) as transport,
+        _daemon_client(transport) as client,
+    ):
+        run = client.submit_procedure(
+            ProcedureSubmitCommand(
+                request_key="running-cancel",
+                definition=_TWO_STEP_PROCEDURE.ref,
+                intent=_TWO_STEP_PROCEDURE.encode_intent(
+                    {"first_run_id": "first-child", "second_run_id": "second-child"}
+                ),
+            )
+        ).run
+
+        def first(_operation_id: str) -> RunOutputRef:
+            effects.append("first")
+            live = client.get_procedure(run.procedure_run_id)
+            command = ProcedureCancelCommand(
+                procedure_run_id=live.procedure_run_id,
+                expected_run_revision=live.revision,
+                actor="operator",
+                reason="Enough data",
+            )
+            pending = client.cancel_procedure(command).run
+            assert pending.state == "leased" and pending.closure is None
+            assert pending.cancellation is not None
+            assert client.cancel_procedure(command).run == pending
+            effects.append("settled")
+            if outcome == "failure":
+                raise ValueError("known failure")
+            if outcome == "unknown":
+                raise ProcedureNeedsAttention("cleanup unconfirmed")
+            return RunOutputRef(run_id="first-child")
+
+        def second(_operation_id: str) -> RunOutputRef:
+            effects.append("second")
+            return RunOutputRef(run_id="second-child")
+
+        worker = ProcedureWorker(
+            client,
+            ProcedureRegistry((_TWO_STEP_PROCEDURE,)),
+            context_factory=lambda durable: _TwoStepWorkerContext(
+                durable, first, second
+            ),
+        )
+        if outcome == "failure":
+            with pytest.raises(ValueError, match="known failure"):
+                worker.resume_snapshot(run, worker_id="cancel-worker")
+        else:
+            worker.resume_snapshot(run, worker_id="cancel-worker")
+        final = client.get_procedure(run.procedure_run_id)
+        assert effects == ["first", "settled"]
+        assert final.cancellation is not None
+        if outcome == "unknown":
+            assert final.state == "attention_required"
+            assert final.closure is None
+        else:
+            assert final.closure is not None
+            assert final.closure.status == (
+                "cancelled" if outcome == "success" else "failed"
+            )
+        steps = client.list_procedure_step_attempts(
+            run.procedure_run_id, ProcedureStepAttemptListQuery()
+        ).items
+        assert len(steps) == 1
+        if outcome == "success":
+            assert steps[0].output == RunOutputRef(run_id="first-child")
+            assert final.closure is not None and final.closure.actor == "operator"

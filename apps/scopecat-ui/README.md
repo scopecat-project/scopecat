@@ -120,11 +120,23 @@ The GUI does not replace the procedure's verification or acceptance policy.
 Launch forms also support arrays of string enums as multi-select fields. Membership
 changes invalidate previews; procedure progress links to retained analysis results.
 
-The progress view can cancel a ready or review-waiting procedure. It records the
-actor and reason and submits the observed revision; a concurrent worker start or
-review response causes a conflict rather than cancelling a changed execution.
+The progress view cancels idle work immediately or requests **Stop after current
+step** while a procedure is executing. Both record actor, reason and the observed
+revision. A pending request retains the leased/running state and is not a claim
+that hardware has stopped. After the current durable effect returns and its
+output is retained, the worker closes the procedure as cancelled without starting
+another step. A request arriving between steps also blocks the next step.
+
+Python callers use `lab.procedures.get(id).cancel(actor=..., reason=...)` and inspect
+`handle.snapshot.cancellation` and `closure` separately. The request is durable
+across reconnects. Worker failure remains failed; uncertain cleanup remains
+attention-required. Cancellation does not turn these into successful stops or
+authorize retries. An unresponsive worker remains pending until its outcome can
+be established; no process is killed and no elapsed-time promise is made.
+
 Completed steps and evidence remain available, and late review input is rejected.
-Python callers use `lab.procedures.get(id).cancel(actor=..., reason=...)`.
-Executing and attention-required procedures cannot use this idle cancellation
-operation. Cancelling a child acquisition remains a separate run operation; it
-does not imply cancellation of its parent procedure or immediate hardware stop.
+Immediate interruption of a child acquisition remains a separate run operation;
+it does not imply cancellation of its parent procedure. This API stops at durable
+step boundaries, so an already-started step (including configuration activation)
+is allowed to finish. Project code should express separate effects as separate
+steps rather than hide a whole experiment sequence inside one effect.

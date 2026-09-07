@@ -21,6 +21,7 @@ from pydantic import JsonValue
 from scopecat.application.launch import LaunchRequest, LaunchSubmission
 from scopecat.automation import (
     ProcedureCancelCommand,
+    ProcedureCancelReceipt,
     ProcedureCloseCommand,
     ProcedureCloseReceipt,
     ProcedureRun,
@@ -1177,7 +1178,7 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
     def cancel_procedure(
         procedure_run_id: str,
         command: ProcedureCancelCommand,
-    ) -> ProcedureCloseReceipt:
+    ) -> ProcedureCancelReceipt:
         _require_procedure_run_id(procedure_run_id, command.procedure_run_id)
         return application.automation.cancel(command)
 

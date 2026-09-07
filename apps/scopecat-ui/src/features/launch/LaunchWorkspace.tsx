@@ -353,7 +353,11 @@ function ProcedureProgress({ procedureId }: { procedureId: string }) {
       <h3>Procedure progress</h3>
       <p>{procedureId}</p>
       {status.error && <p role="alert">{status.error.message}</p>}
-      <p>{status.data && statusLabel(status.data.closure?.status ?? status.data.state)}</p>
+      <p>
+        {status.data?.state === "leased" && status.data.cancellation
+          ? "Cancellation requested — finishing current step"
+          : status.data && statusLabel(status.data.closure?.status ?? status.data.state)}
+      </p>
       {(status.data?.attention_reason || status.data?.closure?.reason) && (
         <p>{status.data.attention_reason ?? status.data.closure?.reason}</p>
       )}
@@ -371,32 +375,37 @@ function ProcedureProgress({ procedureId }: { procedureId: string }) {
           Resume execution
         </button>
       )}
-      {status.data && ["ready", "waiting_for_input"].includes(status.data.state) && (
-        <details>
-          <summary>Cancel remaining procedure</summary>
-          <p>
-            Retains completed results. Cancellation succeeds only before execution or while waiting
-            for review.
-          </p>
-          <label>
-            Cancellation actor
-            <input value={cancelActor} onChange={(event) => setCancelActor(event.target.value)} />
-          </label>
-          <label>
-            Cancellation reason
-            <input value={cancelReason} onChange={(event) => setCancelReason(event.target.value)} />
-          </label>
-          <button
-            type="button"
-            disabled={cancelling || !cancelActor.trim() || !cancelReason.trim()}
-            onClick={() => {
-              void cancel();
-            }}
-          >
-            Cancel procedure
-          </button>
-        </details>
-      )}
+      {status.data &&
+        !status.data.cancellation &&
+        ["ready", "waiting_for_input", "leased"].includes(status.data.state) && (
+          <details>
+            <summary>Cancel remaining procedure</summary>
+            <p>
+              Retains completed results. A running step completes and settles before the procedure
+              stops.
+            </p>
+            <label>
+              Cancellation actor
+              <input value={cancelActor} onChange={(event) => setCancelActor(event.target.value)} />
+            </label>
+            <label>
+              Cancellation reason
+              <input
+                value={cancelReason}
+                onChange={(event) => setCancelReason(event.target.value)}
+              />
+            </label>
+            <button
+              type="button"
+              disabled={cancelling || !cancelActor.trim() || !cancelReason.trim()}
+              onClick={() => {
+                void cancel();
+              }}
+            >
+              {status.data.state === "leased" ? "Stop after current step" : "Cancel procedure"}
+            </button>
+          </details>
+        )}
       {status.data?.closure?.actor && <p>Closed by {status.data.closure.actor}</p>}
       {error && <p role="alert">{error}</p>}
       <ul>

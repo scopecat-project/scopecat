@@ -232,7 +232,7 @@ class ProcedureHandle:
         return attempt.output
 
     def cancel(self, *, actor: str, reason: str) -> ProcedureHandle:
-        """Cancel a ready or review-waiting procedure; executing runs are rejected."""
+        """Cancel idle work or stop after the current step settles."""
         return self.operations.cancel(self, actor=actor, reason=reason)
 
     def resume(self, *, worker_id: str | None = None) -> ProcedureHandle:
@@ -821,7 +821,7 @@ class LabProcedureOperations:
         actor: str,
         reason: str,
     ) -> ProcedureHandle:
-        """Cancel only an idle procedure, retaining completed steps and evidence."""
+        """Request cancellation, retaining completed steps and evidence."""
         procedure_id = (
             procedure.id if isinstance(procedure, ProcedureHandle) else procedure
         )

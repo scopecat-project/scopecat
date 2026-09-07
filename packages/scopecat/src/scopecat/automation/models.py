@@ -191,6 +191,15 @@ type ProcedureStepOutputRef = Annotated[
 ]
 
 
+class ProcedureCancellation(_ProcedureModel):
+    """Durable request to stop after the current step has settled."""
+
+    actor: _NonEmptyText
+    reason: _NonEmptyText
+    requested_at: datetime
+    requested_revision: int = Field(ge=1)
+
+
 class ProcedureRun(_ProcedureModel):
     """Current durable state of one version-pinned procedure invocation."""
 
@@ -206,6 +215,7 @@ class ProcedureRun(_ProcedureModel):
     updated_at: datetime = Field(default_factory=utc_now)
     attention_reason: str | None = None
     closure: ProcedureClosure | None = None
+    cancellation: ProcedureCancellation | None = None
 
     @field_validator("samples")
     @classmethod
@@ -235,6 +245,11 @@ class ProcedureRun(_ProcedureModel):
         if self.updated_at < self.created_at:
             raise ValueError("procedure run cannot be updated before it is created")
 
+        if self.cancellation is not None:
+            if self.cancellation.requested_revision > self.revision:
+                raise ValueError("cancellation revision cannot be in the future")
+            if not self.created_at <= self.cancellation.requested_at <= self.updated_at:
+                raise ValueError("cancellation time must be within the run lifetime")
         if self.state == "attention_required":
             if self.attention_reason is None or not self.attention_reason.strip():
                 raise ValueError("attention-required procedure run requires a reason")

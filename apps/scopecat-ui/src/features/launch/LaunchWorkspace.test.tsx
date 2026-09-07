@@ -198,3 +198,35 @@ it("cancels a waiting procedure with the observed revision and recorded actor", 
   });
   expect(screen.queryByRole("button", { name: "Resume execution" })).toBeNull();
 });
+
+it("keeps a running cancellation pending instead of reporting a stopped procedure", async () => {
+  window.history.replaceState(null, "", "/?procedure=p1#launch");
+  let pending = false;
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (request: Request) => {
+      const path = new URL(request.url).pathname;
+      if (path.endsWith("/experiment-launcher")) return Response.json({ calibrations: [entry] });
+      if (path.endsWith("/steps")) return Response.json({ items: [], next_cursor: null });
+      if (path.endsWith("/cancel")) {
+        pending = true;
+        return Response.json({});
+      }
+      return Response.json({
+        procedure_run_id: "p1",
+        revision: 7,
+        state: "leased",
+        closure: null,
+        cancellation: pending ? { actor: "operator", reason: "Enough" } : null,
+      });
+    }),
+  );
+  mount();
+  fireEvent.click(await screen.findByText("Cancel remaining procedure"));
+  fireEvent.change(screen.getByLabelText("Cancellation actor"), { target: { value: "operator" } });
+  fireEvent.change(screen.getByLabelText("Cancellation reason"), { target: { value: "Enough" } });
+  fireEvent.click(screen.getByRole("button", { name: "Stop after current step" }));
+  await screen.findByText("Cancellation requested — finishing current step");
+  expect(screen.queryByText("Cancelled")).toBeNull();
+  expect(screen.queryByRole("button", { name: "Stop after current step" })).toBeNull();
+});

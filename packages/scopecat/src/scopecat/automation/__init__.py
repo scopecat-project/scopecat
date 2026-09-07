@@ -102,6 +102,7 @@ from scopecat.automation.models import (
     ConfigActivationOutputRef,
     ConfigPublishOutputRef,
     InterpretationOutputRef,
+    ProcedureCancellation,
     ProcedureCloseStatus,
     ProcedureClosure,
     ProcedureDefinitionRef,
@@ -136,6 +137,7 @@ from scopecat.automation.schedules import (
 )
 from scopecat.automation.wire import (
     ProcedureCancelCommand,
+    ProcedureCancelReceipt,
     ProcedureCloseCommand,
     ProcedureCloseReceipt,
     ProcedureRunAttentionCommand,
@@ -253,6 +255,8 @@ __all__ = [
     "IntervalOccurrence",
     "IntervalTrigger",
     "ProcedureCancelCommand",
+    "ProcedureCancelReceipt",
+    "ProcedureCancellation",
     "ProcedureCloseCommand",
     "ProcedureCloseReceipt",
     "ProcedureCloseStatus",
