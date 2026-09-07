@@ -8,6 +8,7 @@ from typing import Protocol
 import httpx2
 import pytest
 from pydantic import ValidationError
+from scopecat.application import LabApplication
 from scopecat.application.launch import (
     LaunchCatalog,
     LaunchPreview,
@@ -15,15 +16,27 @@ from scopecat.application.launch import (
     LaunchSubmission,
 )
 from scopecat.daemon.client import DaemonClient, DaemonConflictError
+from scopecat.project import load_project
 from scopecat.records.measurement import MeasurementScalar
+from scopecat_testkit.project_loading import isolated_project_imports
 
-from reference_lab.application import create_application
 from reference_lab.configuration import EXAMPLE_ROOT
-from reference_lab.launch import CATALOG, TIMING_REVIEW, TimingReview, launch_provider
 
 
 class _Daemon(Protocol):
     url: str
+
+
+@pytest.fixture
+def launch_application() -> LabApplication:
+    # Reproduce a preceding manifest-discovery test and its import cleanup,
+    # independent of xdist scheduling. Collection-time project imports are stale.
+    with isolated_project_imports():
+        load_project(EXAMPLE_ROOT / "scopecat.toml").load_bootstrap()
+    # Compose the callback and registry from the same current project imports.
+    from reference_lab.application import create_application
+
+    return create_application(EXAMPLE_ROOT)
 
 
 def submit_request(
@@ -43,10 +56,15 @@ def submit_request(
 @pytest.mark.parametrize("experiment", ["temperature", "channel-timing"])
 def test_real_http_preview_shares_catalog_and_never_admits_acquisition(
     reference_lab_daemon: _Daemon,
+    launch_application: LabApplication,
     experiment: str,
 ) -> None:
+    from reference_lab.launch import CATALOG
+
+    provider = launch_application.launch_provider
+    assert provider is not None
     with (
-        create_application(EXAMPLE_ROOT).connect(reference_lab_daemon.url) as lab,
+        launch_application.connect(reference_lab_daemon.url) as lab,
         DaemonClient(reference_lab_daemon.url) as client,
         httpx2.Client(
             base_url=reference_lab_daemon.url, trust_env=False, timeout=30
@@ -63,7 +81,7 @@ def test_real_http_preview_shares_catalog_and_never_admits_acquisition(
         )
         response.raise_for_status()
         preview = LaunchPreview.model_validate(response.json())
-        assert preview == launch_provider(lab, request)
+        assert preview == provider(lab, request)
         assert preview.point_count == (1 if experiment == "temperature" else 2)
         assert preview.config_source.entry_id == active.entry.id
         assert client.list_runs() == before
@@ -72,26 +90,29 @@ def test_real_http_preview_shares_catalog_and_never_admits_acquisition(
 
 def test_submission_fences_new_stale_work_but_replays_exact_admission(
     reference_lab_daemon: _Daemon,
+    launch_application: LabApplication,
 ) -> None:
-    with create_application(EXAMPLE_ROOT).connect(reference_lab_daemon.url) as lab:
+    provider = launch_application.launch_provider
+    assert provider is not None
+    with launch_application.connect(reference_lab_daemon.url) as lab:
         request = LaunchRequest(action="preview", experiment="temperature", version="1")
-        preview = launch_provider(lab, request)
+        preview = provider(lab, request)
         assert isinstance(preview, LaunchPreview)
         command = submit_request(request, preview, "launch-retry")
-        admitted = launch_provider(lab, command)
+        admitted = provider(lab, command)
         assert isinstance(admitted, LaunchSubmission)
         original_config = lab.config.active().config
         lab.config.set_default(original_config)
-        assert launch_provider(lab, command) == admitted
+        assert provider(lab, command) == admitted
         with pytest.raises(DaemonConflictError, match="active configuration changed"):
-            launch_provider(lab, submit_request(request, preview, "new-stale-request"))
+            provider(lab, submit_request(request, preview, "new-stale-request"))
         changed = request.model_copy(update={"actor": "another-operator"})
         with pytest.raises(ValidationError, match="request changed"):
             submit_request(changed, preview, "launch-retry")
-        new_preview = launch_provider(lab, changed)
+        new_preview = provider(lab, changed)
         assert isinstance(new_preview, LaunchPreview)
         with pytest.raises(DaemonConflictError, match="different intent"):
-            launch_provider(lab, submit_request(changed, new_preview, "launch-retry"))
+            provider(lab, submit_request(changed, new_preview, "launch-retry"))
         handle = lab.procedures.get(admitted.procedure_id).resume()
         assert handle.state == "closed"
         output = handle.output("diagnostic")
@@ -99,21 +120,29 @@ def test_submission_fences_new_stale_work_but_replays_exact_admission(
         run = lab.get_run(output.run_id)
         assert run.status == "completed"
         assert run.snapshot.config_source == preview.config_source
-        temperature = run.measurements().records[0].observables["temperature"]
-        assert isinstance(temperature, MeasurementScalar) and temperature.value == 0.02
+        records = run.measurements().records
+        temperature = records[0].observables["temperature"]
+        assert isinstance(temperature, MeasurementScalar) and temperature.unit == "K"
+        with DaemonClient(reference_lab_daemon.url) as client:
+            assert client.measurement_preview(run.id).items == records
 
 
 def test_candidate_uses_existing_review_state_and_retains_result_references(
     reference_lab_daemon: _Daemon,
+    launch_application: LabApplication,
 ) -> None:
-    with create_application(EXAMPLE_ROOT).connect(reference_lab_daemon.url) as lab:
+    from reference_lab.launch import TIMING_REVIEW, TimingReview
+
+    provider = launch_application.launch_provider
+    assert provider is not None
+    with launch_application.connect(reference_lab_daemon.url) as lab:
         request = LaunchRequest(
             action="preview", experiment="channel-timing", version="1"
         )
-        preview = launch_provider(lab, request)
+        preview = provider(lab, request)
         assert isinstance(preview, LaunchPreview)
         before = lab.config.active()
-        admitted = launch_provider(
+        admitted = provider(
             lab, submit_request(request, preview, "launch-reviewed-candidate")
         )
         assert isinstance(admitted, LaunchSubmission)
@@ -143,9 +172,10 @@ def test_candidate_uses_existing_review_state_and_retains_result_references(
 
 def test_http_submission_dispatches_the_same_durable_diagnostic(
     reference_lab_daemon: _Daemon,
+    launch_application: LabApplication,
 ) -> None:
     with (
-        create_application(EXAMPLE_ROOT).connect(reference_lab_daemon.url) as lab,
+        launch_application.connect(reference_lab_daemon.url) as lab,
         httpx2.Client(
             base_url=reference_lab_daemon.url, trust_env=False, timeout=30
         ) as http,
