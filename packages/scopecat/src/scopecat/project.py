@@ -204,7 +204,14 @@ def _load_project_factory(
         before = frozenset(sys.modules)
         inserted_paths = _add_project_import_paths(root)
         try:
-            module = import_module(module_name)
+            try:
+                module = import_module(module_name)
+            except ModuleNotFoundError as error:
+                raise ProjectCodeLoadError(
+                    f"cannot load project {subject} {spec!r}: missing Python "
+                    f"module {error.name!r}. Install the project's application "
+                    "dependencies in the Python environment running Scopecat."
+                ) from error
             if not _module_belongs_to_project(module, root):
                 raise ProjectCodeLoadError(
                     f"project {subject} module {module_name!r} resolved outside "

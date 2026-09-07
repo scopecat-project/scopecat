@@ -24,8 +24,13 @@ from scopecat.kernel.entity import EntityRef
 from scopecat.records.config import (
     ConfigProfileSnapshot,
     InstrumentRegistry,
+    InstrumentSpec,
+    ResourceRoute,
+    RoutingEndpoint,
+    RoutingGraph,
     SystemSpec,
     Topology,
+    VirtualInstrumentConnection,
     snapshot_config_profile,
 )
 from scopecat.records.parameter import (
@@ -49,7 +54,34 @@ def bootstrap_config() -> ConfigProfileSnapshot:
             topology=Topology(
                 entities=[EntityRef(id="subject", kind="logical_subject")],
             ),
-            instrument_registry=InstrumentRegistry(instruments=[]),
+            instrument_registry=InstrumentRegistry(
+                instruments=[
+                    InstrumentSpec(
+                        id="thermometer",
+                        exclusivity_key="thermometer",
+                        driver_id="scopecat.virtual.temperature_monitor",
+                        connection=VirtualInstrumentConnection(),
+                        run_start="preserve",
+                        success_action="release",
+                        failure_action="abort_and_release",
+                    ),
+                ]
+            ),
+            routing=RoutingGraph(
+                routes=[
+                    ResourceRoute(
+                        id="thermometer",
+                        instrument_id="thermometer",
+                        entity_ids=["subject"],
+                        endpoints=[
+                            RoutingEndpoint(
+                                interface_id="scopecat.temperature_readout/v1",
+                                entity_id="subject",
+                            )
+                        ],
+                    ),
+                ]
+            ),
             domain_target=None,
             parameter_catalog=ParameterCatalog(
                 id="parameters",
@@ -115,37 +147,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from scopecat.sdk.instruments import (
-    DriverCatalog,
-    InstrumentBackend,
-    InstrumentConnectionContext,
-    InstrumentDriver,
-    InstrumentProviderContext,
-    InstrumentProviderDescription,
-)
-
-
-class LocalProvider:
-    """Let the starter experiment run before real instruments are connected."""
-
-    provider_id = "scopecat-lab.local"
-    driver_catalog = DriverCatalog(provider_id=provider_id)
-
-    def describe(
-        self,
-        _context: InstrumentProviderContext,
-    ) -> InstrumentProviderDescription:
-        return InstrumentProviderDescription(provider_id=self.provider_id)
-
-    def connect(
-        self,
-        context: InstrumentConnectionContext,
-    ) -> InstrumentDriver:
-        raise RuntimeError(f"no instrument is configured: {context.binding.id}")
+from scopecat.sdk.instruments import InstrumentBackend
+from scopecat_instruments import ConfiguredInstrumentProvider
 
 
 def create_backend(_project_root: Path) -> InstrumentBackend:
-    provider = LocalProvider()
+    provider = ConfiguredInstrumentProvider(seed=0)
     return InstrumentBackend(
         provider=provider,
         driver_catalog=provider.driver_catalog,
@@ -155,20 +162,29 @@ def create_backend(_project_root: Path) -> InstrumentBackend:
 __all__ = ["create_backend"]
 ''',
     "notebooks/01_first_run.py": '''\
-"""Run the smallest experiment through the project daemon."""
+"""Retain one virtual thermometer sample through the project daemon."""
 
 from __future__ import annotations
 
 from pathlib import Path
+from urllib.parse import urlencode
 
 import scopecat as sc
+from scopecat.daemon.endpoint import resolve_daemon_endpoint
+from scopecat.kernel.entity import EntityRef
+from scopecat_instruments import TemperatureSampleProducts, temperature_readout
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
 @sc.experiment
-def first_run(_experiment: sc.ExperimentContext) -> None:
-    """Close the daemon, notebook, history, and GUI loop without hardware."""
+def first_run(experiment: sc.ExperimentContext) -> TemperatureSampleProducts:
+    """Read the virtual thermometer without applying instrument state."""
+
+    thermometer = temperature_readout(
+        experiment, for_=sc.one(EntityRef(id="subject", kind="logical_subject"))
+    )
+    return thermometer.sample()
 
 
 # %%
@@ -178,6 +194,7 @@ with project.connect() as lab:
     summary = {"run_id": run.id, "status": run.status}
 
 print(summary)
+print(resolve_daemon_endpoint(PROJECT_ROOT) + "/?" + urlencode({"run": run.id}))
 ''',
 }
 

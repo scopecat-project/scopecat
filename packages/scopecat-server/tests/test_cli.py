@@ -166,7 +166,8 @@ def test_config_check_reports_bootstrap_import_error(tmp_path: Path) -> None:
 
     assert result.exit_code == 1
     assert "error:" in result.output
-    assert "No module named 'missing_cli_bootstrap'" in result.output
+    assert "missing Python module 'missing_cli_bootstrap'" in result.output
+    assert "application dependencies" in result.output
 
 
 def test_hidden_executor_lease_ttl_option_reaches_start_and_serve(

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import os
 import stat
 import subprocess
@@ -11,6 +12,7 @@ from pathlib import Path
 import httpx2
 import pytest
 from scopecat.config.resolution import validate_config_profile
+from scopecat.daemon.client import DaemonClient
 from scopecat.daemon.endpoint import (
     DAEMON_URL_ENV,
     DaemonEndpointRecord,
@@ -22,6 +24,7 @@ from scopecat.project import (
     load_instrument_backend_factory,
     open_project,
 )
+from scopecat.records.measurement import MeasurementScalar
 from scopecat.records.parameter import ScalarParameterValue
 from scopecat_testkit.project_loading import isolated_project_imports
 from typer.testing import CliRunner
@@ -86,7 +89,10 @@ def test_init_creates_runnable_python_project_and_does_not_overwrite(
         project.instrument_backend_spec,
         project.root,
     )
-    assert create_backend(project.root).provider.provider_id == "scopecat-lab.local"
+    assert (
+        create_backend(project.root).provider.provider_id
+        == "scopecat.instruments.configured"
+    )
 
     with pytest.raises(DaemonLifecycleError, match="already initialized"):
         initialize_project(tmp_path)
@@ -284,6 +290,17 @@ def test_cli_daemon_first_use_loop_uses_dynamic_port_and_cleans_record(
         )
         assert first_run.returncode == 0, first_run.stderr
         assert "'status': 'completed'" in first_run.stdout
+        summary_line, console_url = first_run.stdout.strip().splitlines()
+        summary = ast.literal_eval(summary_line)
+        run_id = str(summary["run_id"])
+        assert console_url == f"{record.base_url}/?run={run_id}"
+        with DaemonClient(record.base_url) as client:
+            preview = client.measurement_preview(run_id)
+        [measurement] = preview.items
+        temperature = measurement.observables["temperature"]
+        assert isinstance(temperature, MeasurementScalar)
+        assert temperature.value == 0.02 and temperature.unit == "K"
+        assert measurement.acquisition_evidence.events[0].instrument_id == "thermometer"
 
         status = runner.invoke(app, ["status", str(tmp_path)])
         assert status.exit_code == 0, status.output
@@ -305,6 +322,15 @@ def test_cli_daemon_first_use_loop_uses_dynamic_port_and_cleans_record(
 
         stopped = runner.invoke(app, ["stop", str(tmp_path)])
         assert stopped.exit_code == 0, stopped.output
+        restarted = runner.invoke(
+            app,
+            ["start", str(tmp_path), "--static-dir", str(static_dir)],
+        )
+        assert restarted.exit_code == 0, restarted.output
+        restored_record = read_daemon_endpoint_record(tmp_path)
+        assert restored_record is not None
+        with DaemonClient(restored_record.base_url) as client:
+            assert client.measurement_preview(run_id) == preview
     finally:
         if daemon_record_path(tmp_path).exists():
             stop_project(project)
