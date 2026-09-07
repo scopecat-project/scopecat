@@ -58,11 +58,28 @@ from scopecat.sdk.payloads import PayloadCodecCatalog
 class InstrumentBackendError(RuntimeError):
     """Base error for backend endpoint failures."""
 
+    def __init__(
+        self,
+        message: str,
+        *,
+        diagnostic: dict[str, str | int] | None = None,
+        problems: tuple[Problem, ...] = (),
+    ) -> None:
+        self.problems = problems
+        self.diagnostic = diagnostic
+        super().__init__(message)
+
 
 class InstrumentBackendRejected(InstrumentBackendError):
-    def __init__(self, message: str, *, problems: tuple[Problem, ...]) -> None:
+    def __init__(
+        self,
+        message: str,
+        *,
+        problems: tuple[Problem, ...],
+        diagnostic: dict[str, str | int] | None = None,
+    ) -> None:
         self.problems = problems
-        super().__init__(message)
+        super().__init__(message, diagnostic=diagnostic, problems=problems)
 
 
 class InstrumentBackendUnavailable(InstrumentBackendError):

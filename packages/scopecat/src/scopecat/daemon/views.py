@@ -303,6 +303,23 @@ class RunDetail(RunSummary):
     resources: tuple[RunResourceView, ...] = ()
 
 
+class WorkerDiagnosticLink(_ViewModel):
+    generation: str
+    request_id: int | None = None
+    operation: str | None = None
+    instrument_id: str | None = None
+    retention: Literal["retained", "unavailable_active_quota"]
+    href: str | None = None
+
+
+class RunFailureEvidence(_ViewModel):
+    primary: Problem | None = None
+    secondary: tuple[Problem, ...] = ()
+    diagnostics: tuple[WorkerDiagnosticLink, ...] = ()
+    terminal_persistence: Literal["confirmed", "unconfirmed"]
+    truncated: bool = False
+
+
 class RunConfigView(_ViewModel):
     """The immutable configuration snapshot accepted with one run."""
 

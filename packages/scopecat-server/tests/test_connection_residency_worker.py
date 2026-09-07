@@ -11,7 +11,8 @@ import psutil
 import pytest
 from fastapi.testclient import TestClient
 from scopecat.api.lab import LabClient
-from scopecat.daemon.client import DaemonClient, DaemonConflictError
+from scopecat.daemon.client import DaemonClient, DaemonClientError, DaemonConflictError
+from scopecat.kernel.errors import RunFinalizationFailed
 from scopecat.kernel.state import StateValue
 from scopecat.planning.system import ExperimentSystem
 from scopecat.records.config import instrument_bindings
@@ -92,10 +93,13 @@ def _assert_fenced_unknown(
     run: Callable[[], RunSnapshot], client: DaemonClient, problem_code: str | None
 ) -> None:
     previous = {item.run_id for item in client.list_runs().items}
-    # Current daemon finalization surfaces the revoked lease after preserving the
-    # original hardware uncertainty. Qualify actual evidence, not a relabeled error.
-    with pytest.raises(DaemonConflictError, match="lease is absent, stale, or expired"):
+    with pytest.raises(RunFinalizationFailed) as failed:
         run()
+    assert failed.value.terminal_persistence == "unconfirmed"
+    assert isinstance(failed.value.__cause__, DaemonConflictError)
+    assert failed.value.finalization_problems[-1].code == "run_terminal_commit_failed"
+    if problem_code is not None:
+        assert failed.value.problems[0].code == problem_code
     [run_id] = [
         item.run_id for item in client.list_runs().items if item.run_id not in previous
     ]
@@ -232,3 +236,95 @@ def test_worker_generation_rejects_predecessors_loaded_handle(tmp_path: Path) ->
         assert ResidencyProbe(tmp_path).counts() == (1, 0, 0)
     finally:
         second.shutdown()
+
+
+@pytest.mark.parametrize("raised", [False, True])
+def test_acquisition_failure_precedes_cleanup_with_saved_diagnostic_links(
+    tmp_path: Path,
+    raised: bool,
+) -> None:
+    source = tmp_path / "src"
+    source.mkdir()
+    if raised:
+        (tmp_path / "raise-acquisition").touch()
+    (source / "dual_failure.py").write_text(
+        """
+import os
+from scopecat.sdk.instruments import (
+    DriverRejected, DriverCatalog, InstrumentBackend, DriverFault,
+)
+from scopecat.sdk.problems import ProblemPhase, problem
+from scopecat_testkit.connection_residency import (
+    VolatileProgramDriver, VolatileProgramProvider, ResidencyProbe,
+)
+
+class Driver(VolatileProgramDriver):
+    def collect(self, request):
+        self.probe.record(self.connection, "collect", self.loaded)
+        print("native detector acquiring", flush=True)
+        os.write(2, bytes([100, 255, 10]))
+        failure = problem(
+            "fixture_acquisition_failed", "Detector acquisition failed",
+            phase=ProblemPhase.EXECUTION,
+        )
+        if (self.probe.root / "raise-acquisition").exists():
+            raise DriverFault(failure)
+        return DriverRejected((failure,))
+    def abort(self):
+        self.probe.record(self.connection, "abort", self.loaded)
+        raise RuntimeError("vendor abort link failure " * 1000)
+
+class Provider(VolatileProgramProvider):
+    def connect(self, context):
+        return Driver(self.probe, context.binding.id)
+
+def create_backend(root):
+    provider = Provider(ResidencyProbe(root))
+    return InstrumentBackend(
+        provider=provider,
+        driver_catalog=DriverCatalog(provider_id=provider.provider_id),
+    )
+""",
+        encoding="utf-8",
+    )
+    endpoint = SubprocessInstrumentBackendEndpoint(
+        tmp_path, "dual_failure:create_backend"
+    )
+    with _lab(tmp_path, endpoint, VolatileProgramTarget()) as (lab, client):
+        with pytest.raises(RunFinalizationFailed) as failed:
+            lab.run(residency_experiment(2))
+        assert failed.value.problems[0].code == "fixture_acquisition_failed"
+        assert failed.value.terminal_persistence == "unconfirmed"
+        [saved] = client.list_runs().items
+        assert saved.control.state == "attention_required"
+        evidence = client.get_run_failure_evidence(saved.run_id)
+        assert evidence.primary is not None
+        assert evidence.primary.code == "fixture_acquisition_failed"
+        assert evidence.terminal_persistence == "unconfirmed"
+        assert "run_instrument_abort_unknown" in [
+            item.code for item in evidence.secondary
+        ]
+        assert len(evidence.diagnostics) == 2
+        assert {item.operation for item in evidence.diagnostics} == {"collect", "abort"}
+        assert all(
+            item.href and item.instrument_id == "source-0"
+            for item in evidence.diagnostics
+        )
+        display = client.get_worker_diagnostics(evidence.diagnostics[0].generation)
+        assert b"vendor abort link failure" in display
+        assert b"native detector acquiring" in display
+        assert "\ufffd" in display.decode("utf-8")
+        raw = client.get_worker_diagnostics(
+            evidence.diagnostics[0].generation, raw=True
+        )
+        assert len(raw) <= 256 * 1024
+        assert b"vendor abort link failure" not in evidence.model_dump_json().encode()
+        for invalid in ("not-a-generation", "../config", "a" * 33):
+            with pytest.raises((DaemonClientError, httpx2.HTTPStatusError)) as rejected:
+                client.get_worker_diagnostics(invalid)
+            assert rejected.value.response.status_code in (404, 422)
+        with pytest.raises((DaemonClientError, httpx2.HTTPStatusError)) as absent:
+            client.get_worker_diagnostics("0" * 32)
+        assert absent.value.response.status_code == 410
+        assert ResidencyProbe(tmp_path).counts() == (1, 1, 1)
+    assert ResidencyProbe(tmp_path).counts() == (1, 1, 1)

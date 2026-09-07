@@ -55,6 +55,7 @@ from scopecat.kernel.errors import (
     ProblemFailure,
     RunCancelled,
     RunFailed,
+    RunFinalizationFailed,
     RunIndeterminate,
 )
 from scopecat.kernel.points import AcceptedRunPoint
@@ -281,7 +282,8 @@ def _execute_run(
         domain_problems, domain_uncertain, domain_interruption = (
             _domain_failure_problems(unit, error, run_id=run_id)
         )
-        problems.extend(domain_problems)
+        # Domain failure happened before transition flushing and hardware cleanup.
+        problems[:0] = domain_problems
         if domain_uncertain:
             certainty = "indeterminate"
         if domain_interruption is not None:
@@ -384,14 +386,29 @@ def _execute_run(
         domain_execution=domain_execution,
     )
     models = _terminal_evidence_model_writes(instrument_state, domain_execution)
-    snapshot = session.commit_terminal(
-        TerminalRunCommit(
-            run_id=run_id,
-            outcome=outcome,
-            contents=contents,
-            models=tuple(models),
+    try:
+        snapshot = session.commit_terminal(
+            TerminalRunCommit(
+                run_id=run_id,
+                outcome=outcome,
+                contents=contents,
+                models=tuple(models),
+            )
         )
-    )
+    except Exception as error:
+        raise RunFinalizationFailed(
+            execution_outcome=outcome,
+            finalization_problems=(
+                problem_from_exception(
+                    "run_terminal_commit_failed",
+                    "Run finalization failed; terminal persistence is unconfirmed",
+                    run_id=run_id,
+                    operation_id="execution-plan.terminal",
+                    phase=ProblemPhase.PERSISTENCE,
+                    error=error,
+                ),
+            ),
+        ) from error
     committed_outcome = snapshot.outcome
     if committed_outcome is None:
         raise AssertionError("terminal commit returned a non-terminal snapshot")

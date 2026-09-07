@@ -22,7 +22,7 @@ from scopecat.execution.evidence import (
 )
 from scopecat.execution.local.program import CollectOperation
 from scopecat.execution.program import RunHostBinding
-from scopecat.kernel.errors import ProviderContractError
+from scopecat.kernel.errors import ProviderContractError, RunFinalizationFailed
 from scopecat.kernel.problems import (
     Problem,
     ProblemPhase,
@@ -334,7 +334,7 @@ def test_terminal_commit_does_not_publish_snapshot_after_content_write_failure(
         fail_terminal_commit,
     )
 
-    with pytest.raises(OSError, match="injected terminal persistence"):
+    with pytest.raises(RunFinalizationFailed) as failed:
         execute_bound_run(
             config=load_config(),
             experiment=load_experiment(),
@@ -342,6 +342,10 @@ def test_terminal_commit_does_not_publish_snapshot_after_content_write_failure(
             project_root=tmp_path,
         )
 
+    assert failed.value.terminal_persistence == "unconfirmed"
+    assert isinstance(failed.value.__cause__, OSError)
+    assert "injected terminal persistence" in str(failed.value.__cause__)
+    assert failed.value.finalization_problems[0].code == "run_terminal_commit_failed"
     storage = sqlite_run_repository(tmp_path)
     manifest = storage.list_runs()[0]
     assert manifest.outcome is None

@@ -96,6 +96,7 @@ _OPERATIONS = {
     ),
     ("/api/v1/runs", "get"),
     ("/api/v1/runs/{run_id}", "get"),
+    ("/api/v1/runs/{run_id}/failure-evidence", "get"),
     ("/api/v1/runs/{run_id}/analyses", "get"),
     ("/api/v1/runs/{run_id}/analyses/{selector}", "get"),
     ("/api/v1/runs/{run_id}/artifacts/{selector}/bytes", "get"),

@@ -127,3 +127,46 @@ The [instrument control guide](../how-to/control-instruments.md) shows the
 resulting live and symbolic user experience. Keep driver-specific command and
 transport details beside their code; only cross-cutting user concepts belong in
 the main documentation site.
+
+## Inspect worker failures and vendor output
+
+Instrument workers capture Python stdout/stderr and native bytes written to file
+descriptors 1 and 2 before loading project driver code. RPC frames use a separate
+channel. Display text decodes UTF-8 with replacement; the downloadable raw JSONL
+preserves original bytes as base64, including invalid UTF-8. Native output carries
+its worker generation, stream and **sampled** active request contexts. A native
+read may happen after its originating call finished, so these samples do not
+prove which overlapping request emitted a chunk. Python output and structured
+failures carry the current request and instrument context when available.
+
+Each project retains at most eight generation files, each containing the first
+256 KiB of encoded diagnostics. Display responses are capped at 64 KiB. Completed
+old generations are pruned under a retention lock; active generations are kept.
+If every slot is in use, the new worker drains output without retaining it and
+reports that quota condition without an evidence link. Reaching the byte limit
+also stops retention, not draining, so a noisy vendor cannot block merely because
+its log quota was reached. A diagnostic write I/O failure also switches to
+discarding bytes while continuing to drain; the retained prefix may be incomplete. The display identifies truncation and links to the
+bounded raw representation with `?raw=true`.
+
+Only bytes delivered during capture are retained. Vendor-owned C stdio or custom
+memory buffers that have not been flushed are not saved evidence. Drivers remain
+responsible for their native buffer policy. Worker shutdown redirects late
+native/atexit output to the null device so it cannot leak into daemon output; it
+does not infer vendor-specific flushing or repeat operations.
+
+The run inspector shows the causal operation problem first and additional cleanup
+failures separately, with links to retained diagnostics. The public daemon client
+provides `get_run_failure_evidence(run_id)` and
+`get_worker_diagnostics(generation, raw=False)`. Diagnostic URLs accept only the
+controlled generation identifier, never a filesystem path. A pruned generation
+returns HTTP 410 rather than implying its bytes are still retained.
+
+A failed terminal write must not replace the original acquisition problem or
+claim the local result was saved. Callers can catch
+`RunFinalizationFailed` from `scopecat.kernel.errors`, inspect its
+`execution_outcome` and `finalization_problems`, then query the saved run. Its
+`terminal_persistence` is `"unconfirmed"`; the original terminal-write exception
+remains chained as `__cause__`. Ordinary `RunFailure` subclasses retain their
+existing durable-outcome meaning. No diagnostic or finalization error grants
+permission to retry an unknown trigger, invoke, or other non-idempotent effect.

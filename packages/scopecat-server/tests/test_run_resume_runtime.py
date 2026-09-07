@@ -11,6 +11,7 @@ import scopecat.daemon.execution as daemon_execution_module
 from fastapi.testclient import TestClient
 from scopecat.api.lab import LabClient
 from scopecat.daemon.client import DaemonClient
+from scopecat.kernel.errors import RunFinalizationFailed
 from scopecat.measurements.datasets import RAW_MEASUREMENTS_DATASET_ID
 from scopecat.sdk.instruments import (
     DriverCatalog,
@@ -103,9 +104,12 @@ def test_static_run_resumes_end_to_end_after_daemon_restart(
             return translated
 
         lab = LabClient(_daemon_client(send))
-        with pytest.raises(httpx2.TransportError):
+        with pytest.raises(RunFinalizationFailed) as failed:
             lab.run(load_invocation())
 
+        assert failed.value.terminal_persistence == "unconfirmed"
+        assert isinstance(failed.value.__cause__, httpx2.TransportError)
+        assert failed.value.execution_outcome.certainty == "indeterminate"
         assert run_id is not None
         coverage = first_runtime.application.executor.run_coverage(run_id)
         assert coverage.completed_point_count == 0

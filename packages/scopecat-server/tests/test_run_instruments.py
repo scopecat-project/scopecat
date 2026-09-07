@@ -166,6 +166,7 @@ class _Driver(SignalInstrumentDriver):
         self.fail_action: _FailAction = fail_action
         self.apply_barrier = apply_barrier
         self.read_count = 0
+        self.apply_call_count = 0
         self.abort_count = 0
         self.disconnect_count = 0
 
@@ -176,6 +177,7 @@ class _Driver(SignalInstrumentDriver):
 
     @override
     def apply_state(self, request: DriverStatePatch):  # type: ignore[no-untyped-def]
+        self.apply_call_count += 1
         if self.apply_barrier is not None:
             self.apply_barrier.wait(timeout=2)
         if self.fail_action == "apply":
@@ -1592,23 +1594,99 @@ def test_unknown_driver_action_quarantines_and_discards_run_state(
         instruments = runtime.application.instruments
         instruments.provision_run(run_id, _provision(lease_id))
 
-        with pytest.raises(BackendConflict, match="unknown state"):
+        receipt = instruments.execute_run_hardware(
+            run_id,
+            _batch_command(
+                lease_id,
+                "batch-1",
+                _apply_action("source-0", effect_id="apply-1"),
+            ),
+        )
+        assert receipt.indeterminate
+        [issue] = receipt.problems
+        assert issue.code == "instrument_apply_unknown"
+        [saved] = [
+            event
+            for event in runtime.application.runs.list_events(
+                limit=100, after=None, run_id=run_id
+            ).items
+            if event.kind == "run_hardware_batch_unknown"
+        ]
+        assert saved.payload["problems"] == [issue.model_dump(mode="json")]
+
+        [driver] = provider.drivers
+        assert driver.apply_call_count == 1
+        events_before = runtime.application.runs.list_events(
+            limit=100, after=None, run_id=run_id
+        ).items
+        with pytest.raises(BackendConflict, match=r"not provisioned|lease"):
             instruments.execute_run_hardware(
                 run_id,
                 _batch_command(
                     lease_id,
-                    "batch-1",
-                    _apply_action("source-0", effect_id="apply-1"),
+                    "stale-after-unknown",
+                    _apply_action("source-0", effect_id="stale-apply"),
                 ),
             )
-
-        [driver] = provider.drivers
+        assert driver.apply_call_count == 1
+        assert (
+            runtime.application.runs.list_events(
+                limit=100, after=None, run_id=run_id
+            ).items
+            == events_before
+        )
         assert driver.abort_count == 1
         assert driver.disconnect_count == 1
         assert runtime.application.executor._control.get_run(run_id).state == (
             "attention_required"
         )
         _assert_run_state_discarded(instruments, run_id)
+
+
+@pytest.mark.parametrize("quarantine_fails", [False, True])
+def test_unknown_action_audit_failure_still_discards_runtime(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, quarantine_fails: bool
+) -> None:
+    provider = _Provider(fail_action="apply")
+    with _runtime(tmp_path, provider) as runtime:
+        run_id, lease_id = _start_run(runtime, load_config())
+        instruments = runtime.application.instruments
+        instruments.provision_run(run_id, _provision(lease_id))
+        audit_error = OSError("audit disk unavailable")
+
+        def fail_audit(*args: object, **kwargs: object) -> None:
+            raise audit_error
+
+        def fail_quarantine(*args: object, **kwargs: object) -> None:
+            raise OSError("quarantine disk unavailable")
+
+        monkeypatch.setattr(instruments, "_record_run_operation_event", fail_audit)
+        if quarantine_fails:
+            monkeypatch.setattr(
+                instruments._control, "mark_executor_unknown", fail_quarantine
+            )
+        command = _batch_command(
+            lease_id, "audit-failure", _apply_action("source-0", effect_id="apply-1")
+        )
+        with pytest.raises(OSError, match="audit disk unavailable") as caught:
+            instruments.execute_run_hardware(run_id, command)
+        assert caught.value is audit_error
+        if quarantine_fails:
+            assert isinstance(caught.value.__cause__, OSError)
+            assert str(caught.value.__cause__) == "quarantine disk unavailable"
+        _assert_run_state_discarded(instruments, run_id)
+        [driver] = provider.drivers
+        assert driver.apply_call_count == 1
+        assert driver.abort_count == driver.disconnect_count == 1
+        with pytest.raises(BackendConflict, match=r"not provisioned|lease"):
+            instruments.execute_run_hardware(run_id, command)
+        assert driver.apply_call_count == 1
+        assert not any(
+            event.kind == "run_hardware_batch_unknown"
+            for event in runtime.application.runs.list_events(
+                limit=100, after=None, run_id=run_id
+            ).items
+        )
 
 
 def test_unknown_collect_receipt_preserves_driver_diagnostics(
@@ -1675,21 +1753,53 @@ def test_unknown_invoke_quarantines_and_discards_run_state(
             content=b'{"samples":[0.0]}',
         )
 
-        with pytest.raises(BackendConflict, match="unknown state"):
+        receipt = instruments.execute_run_hardware(
+            run_id,
+            _batch_command(
+                lease_id,
+                "invoke-unknown",
+                _invoke_action(
+                    "source-0",
+                    effect_id="invoke-unknown-1",
+                    payload=payload,
+                ),
+            ),
+        )
+        assert receipt.indeterminate
+        [issue] = receipt.problems
+        assert issue.code == "instrument_invoke_unknown"
+        [saved] = [
+            event
+            for event in runtime.application.runs.list_events(
+                limit=100, after=None, run_id=run_id
+            ).items
+            if event.kind == "run_hardware_batch_unknown"
+        ]
+        assert saved.payload["problems"] == [issue.model_dump(mode="json")]
+
+        [driver] = provider.drivers
+        assert len(driver.invoked) == 1
+        events_before = runtime.application.runs.list_events(
+            limit=100, after=None, run_id=run_id
+        ).items
+        with pytest.raises(BackendConflict, match=r"not provisioned|lease"):
             instruments.execute_run_hardware(
                 run_id,
                 _batch_command(
                     lease_id,
-                    "invoke-unknown",
+                    "stale-after-unknown",
                     _invoke_action(
-                        "source-0",
-                        effect_id="invoke-unknown-1",
-                        payload=payload,
+                        "source-0", effect_id="stale-invoke", payload=payload
                     ),
                 ),
             )
-
-        [driver] = provider.drivers
+        assert len(driver.invoked) == 1
+        assert (
+            runtime.application.runs.list_events(
+                limit=100, after=None, run_id=run_id
+            ).items
+            == events_before
+        )
         assert len(driver.invoked) == 1
         assert driver.abort_count == 1
         assert driver.disconnect_count == 1

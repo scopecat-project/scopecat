@@ -163,6 +163,7 @@ from scopecat.daemon.views import (
     RunContentPage,
     RunDatasetBytesView,
     RunDetail,
+    RunFailureEvidence,
     RunRequestView,
     RunSummaryPage,
     SampleAnalysisPage,
@@ -1258,6 +1259,32 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
     @app.get(f"{_API_PREFIX}/runs/{{run_id}}")
     def get_run(run_id: str) -> RunDetail:
         return application.runs.get_run(run_id)
+
+    @app.get(f"{_API_PREFIX}/runs/{{run_id}}/failure-evidence")
+    def get_run_failure_evidence(run_id: str) -> RunFailureEvidence:
+        return application.runs.get_run_failure_evidence(run_id)
+
+    @app.get(
+        f"{_API_PREFIX}/instrument-workers/{{generation}}/diagnostics",
+        response_class=Response,
+    )
+    def get_worker_diagnostics(
+        generation: Annotated[str, ApiPath(pattern=r"^[0-9a-f]{32}$")],
+        raw: bool = False,
+    ) -> Response:
+        from scopecat_server.instruments.worker_output import read_diagnostic
+
+        try:
+            content = read_diagnostic(application.project_root, generation, raw=raw)
+        except FileNotFoundError as error:
+            raise HTTPException(
+                status_code=410, detail="Worker diagnostics are no longer retained"
+            ) from error
+        return Response(
+            content,
+            media_type="application/x-ndjson" if raw else "text/plain",
+            headers={"X-Content-Type-Options": "nosniff"},
+        )
 
     @app.post(f"{_API_PREFIX}/runs/{{run_id}}/cancel")
     def cancel_run(run_id: str) -> RunCancellationReceipt:

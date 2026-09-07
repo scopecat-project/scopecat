@@ -15,6 +15,7 @@ import type {
   RunAnalysisSummary,
 } from "../../types";
 import { RunProposals } from "../proposals/RunProposals";
+import { RunFailureEvidence } from "./RunFailureEvidence";
 import { RunDomainDecisionCard } from "./RunDomainDecisionCard";
 import type {
   MeasurementEntitySelection,
@@ -176,6 +177,7 @@ export function RunDetail({
           </div>
         </dl>
       </header>
+      <RunFailureEvidence runId={run.runId} />
 
       {run.samples.length > 0 && (
         <section

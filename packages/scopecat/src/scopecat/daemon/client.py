@@ -141,6 +141,7 @@ from scopecat.daemon.views import (
     RunContentPage,
     RunDatasetBytesView,
     RunDetail,
+    RunFailureEvidence,
     RunRequestView,
     RunSummaryPage,
     SampleAnalysisPage,
@@ -1722,6 +1723,20 @@ class DaemonClient:
         return self._get_model(
             f"{_API_PREFIX}/runs/{quote(run_id, safe='')}/coverage",
             RunCoverageState,
+        )
+
+    def get_worker_diagnostics(self, generation: str, *, raw: bool = False) -> bytes:
+        return self._request(
+            "GET",
+            f"{_API_PREFIX}/instrument-workers/"
+            f"{quote(generation, safe='')}/diagnostics",
+            params={"raw": "true" if raw else "false"},
+        ).content
+
+    def get_run_failure_evidence(self, run_id: str) -> RunFailureEvidence:
+        return self._get_model(
+            f"{_API_PREFIX}/runs/{quote(run_id, safe='')}/failure-evidence",
+            RunFailureEvidence,
         )
 
     def get_run_execution_segments(
