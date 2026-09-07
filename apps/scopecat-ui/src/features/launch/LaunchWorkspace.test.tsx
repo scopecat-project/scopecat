@@ -7,7 +7,49 @@ import { LaunchWorkspace } from "./LaunchWorkspace";
 
 afterEach(() => {
   cleanup();
+  window.history.replaceState(null, "", "/");
   vi.unstubAllGlobals();
+});
+
+it("shows a durable resource wait and its cancelled child without calling it running", async () => {
+  window.history.replaceState(null, "", "/?procedure=p1#launch");
+  let cancelled = false;
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (request: Request) => {
+      const path = new URL(request.url).pathname;
+      if (path.endsWith("/experiment-launcher")) return Response.json({ calibrations: [] });
+      if (path.endsWith("/steps"))
+        return Response.json({
+          items: [{ step_key: "child", attempt: 1, state: "running" }],
+          next_cursor: null,
+        });
+      if (path.endsWith("/cancel")) {
+        cancelled = true;
+        return Response.json({});
+      }
+      return Response.json({
+        procedure_run_id: "p1",
+        revision: 7,
+        state: cancelled ? "closed" : "ready",
+        resource_wait: { step_key: "child", run_id: "run-child" },
+        closure: cancelled ? { status: "cancelled", actor: "operator" } : null,
+      });
+    }),
+  );
+  mount();
+  await screen.findByText("Waiting for resources");
+  expect(screen.getByRole("link", { name: /Inspect waiting child/ })).toHaveAttribute(
+    "href",
+    "?run=run-child#runs",
+  );
+  fireEvent.click(screen.getByText("Cancel remaining procedure"));
+  fireEvent.change(screen.getByLabelText("Cancellation actor"), { target: { value: "operator" } });
+  fireEvent.change(screen.getByLabelText("Cancellation reason"), {
+    target: { value: "Stop waiting" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Cancel procedure" }));
+  await screen.findByText("child: Cancelled before acquisition");
 });
 const entry = {
   id: "rabi",

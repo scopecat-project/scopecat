@@ -356,8 +356,15 @@ function ProcedureProgress({ procedureId }: { procedureId: string }) {
       <p>
         {status.data?.state === "leased" && status.data.cancellation
           ? "Cancellation requested — finishing current step"
-          : status.data && statusLabel(status.data.closure?.status ?? status.data.state)}
+          : status.data?.state === "ready" && status.data.resource_wait
+            ? "Waiting for resources"
+            : status.data && statusLabel(status.data.closure?.status ?? status.data.state)}
       </p>
+      {status.data?.resource_wait && (
+        <a href={`?run=${encodeURIComponent(status.data.resource_wait.run_id)}#runs`}>
+          Inspect waiting child run: {status.data.resource_wait.run_id}
+        </a>
+      )}
       {(status.data?.attention_reason || status.data?.closure?.reason) && (
         <p>{status.data.attention_reason ?? status.data.closure?.reason}</p>
       )}
@@ -412,9 +419,15 @@ function ProcedureProgress({ procedureId }: { procedureId: string }) {
         {steps.data?.items.map((step) => (
           <li key={`${step.step_key}:${step.attempt}`}>
             {step.step_key}:{" "}
-            {status.data?.closure?.status === "cancelled" && step.state === "waiting_for_input"
-              ? "Review cancelled"
-              : statusLabel(step.state)}{" "}
+            {status.data?.resource_wait?.step_key === step.step_key &&
+            status.data.closure?.status === "cancelled"
+              ? "Cancelled before acquisition"
+              : status.data?.resource_wait?.step_key === step.step_key &&
+                  status.data.state === "ready"
+                ? "Waiting for resources"
+                : status.data?.closure?.status === "cancelled" && step.state === "waiting_for_input"
+                  ? "Review cancelled"
+                  : statusLabel(step.state)}{" "}
             {step.failure_reason}
             {step.output?.kind === "run" && (
               <a

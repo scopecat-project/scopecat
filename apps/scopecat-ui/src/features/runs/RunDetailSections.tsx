@@ -326,7 +326,7 @@ function RunAnalysisItem({ analysis, runId }: { analysis: RunAnalysisSummary; ru
   );
 }
 
-export function ResourceCard({ run }: { run: ProjectRun }) {
+export function ResourceCard({ run }: { run: Pick<ProjectRun, "resources"> }) {
   return (
     <article className={detailCard}>
       <CardHeading
@@ -355,6 +355,14 @@ export function ResourceCard({ run }: { run: ProjectRun }) {
                 <small className="overflow-hidden text-[0.6rem] text-ellipsis whitespace-nowrap text-text-dim">
                   {titleCase(resource.kind)}
                 </small>
+                {resource.blockedBy && (
+                  <small className="break-all text-[0.6rem] text-yellow">
+                    Blocked by{" "}
+                    {resource.blockedBy.ownerKind === "run" ? "run" : "interactive session"}{" "}
+                    {resource.blockedBy.ownerId}
+                    {resource.blockedBy.status === "quarantined" && " — reconciliation required"}
+                  </small>
+                )}
               </span>
               <span
                 className={classes(
@@ -893,7 +901,7 @@ const previewContent =
   "m-0 max-h-[260px] overflow-auto p-2.5 text-[0.6rem] leading-normal text-[#aebfd0] [scrollbar-color:#344252_transparent] [scrollbar-width:thin]";
 
 function leaseStatusClass(status?: string): string {
-  if (status === "quarantined") {
+  if (status === "quarantined" || status === "blocked") {
     return "border-[rgb(237_201_111_/_20%)] bg-yellow-soft text-yellow";
   }
   if (status === "required") {

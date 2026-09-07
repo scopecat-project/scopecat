@@ -6,12 +6,12 @@ from types import SimpleNamespace
 from typing import TYPE_CHECKING, cast
 from unittest.mock import Mock, patch
 
+import pytest
 from fastapi.testclient import TestClient
 
 from scopecat_server.http.transport import create_app
 
 if TYPE_CHECKING:
-    import pytest
     from scopecat.api.lab import LabClient
 
     from scopecat_server.services.application import DaemonApplication
@@ -145,10 +145,15 @@ def test_worker_exits_at_review_without_polling() -> None:
     handle.resume.assert_called_once()
 
 
-def test_manager_recovers_waiting_members_and_bounds_processes(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    "waiting_state", ["waiting_for_input", "waiting_for_resources"]
+)
+def test_manager_recovers_waiting_members_and_bounds_processes(
+    tmp_path: Path, waiting_state: str
+) -> None:
     from scopecat_server.services.project_workers import ProjectProcedureWorkers
 
-    states = {"p1": "waiting_for_input", "p2": "ready"}
+    states = {"p1": waiting_state, "p2": "ready"}
     manager = ProjectProcedureWorkers(
         lambda: tmp_path, states.__getitem__, max_workers=1
     )

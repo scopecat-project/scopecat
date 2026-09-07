@@ -63,6 +63,11 @@ from scopecat.automation import (
     procedure_intent_hash,
     procedure_step_operation_id,
 )
+from scopecat.automation.models import ProcedureResourceWait
+from scopecat.automation.wire import (
+    ProcedureStepResourceWaitCommand,
+    ProcedureStepResourceWaitReceipt,
+)
 from scopecat.records.content import Sha256ContentHash
 from scopecat.records.sample import SampleSelector
 
@@ -80,6 +85,7 @@ from scopecat_server.storage.sqlite.automation import (
 )
 
 from ..errors import BackendConflict, BackendNotFound
+from .resource_waits import ProcedureResourceWaits
 
 _DEFAULT_PROCEDURE_LEASE_TTL = timedelta(seconds=30)
 
@@ -101,12 +107,83 @@ class AutomationService:
         *,
         lease_ttl: timedelta = _DEFAULT_PROCEDURE_LEASE_TTL,
         clock: Callable[[], datetime] | None = None,
+        resource_waits: ProcedureResourceWaits | None = None,
     ) -> None:
         if lease_ttl <= timedelta(0):
             raise ValueError("procedure lease TTL must be positive")
         self._store = store
         self._lease_ttl = lease_ttl
         self._clock = clock or _utc_now
+        self._resource_waits = resource_waits
+
+    def worker_state(self, procedure_id: str) -> str:
+        with self._store.sqlite.read_connection() as connection:
+            run = self._store.read_run_in_transaction(connection, procedure_id)
+            if (
+                run.state == "ready"
+                and run.resource_wait is not None
+                and (
+                    self._resource_waits is None
+                    or not self._resource_waits.ready(
+                        connection, run.resource_wait.run_id
+                    )
+                )
+            ):
+                return "waiting_for_resources"
+            return run.state
+
+    def wait_step_resources(
+        self, command: ProcedureStepResourceWaitCommand
+    ) -> ProcedureStepResourceWaitReceipt:
+        with _translate_store_errors(), self._store.write_transaction() as connection:
+            run = self._store.read_run_in_transaction(
+                connection, command.procedure_run_id
+            )
+            wait = ProcedureResourceWait(
+                step_key=command.step_key, run_id=command.run_id
+            )
+            if run.resource_wait == wait and run.state in {"ready", "closed"}:
+                return ProcedureStepResourceWaitReceipt(run=run)
+            now = self._now()
+            run = self._leased_run(
+                connection, command.procedure_run_id, token=command.lease_token, at=now
+            )
+            self._require_revision(run, command.expected_run_revision)
+            step = self._store.read_step_attempt_in_transaction(
+                connection, command.procedure_run_id, command.step_key, command.attempt
+            )
+            self._require_attempt_revision(step, command.expected_step_revision)
+            if (
+                step.operation != "run"
+                or step.state != "running"
+                or self._resource_waits is None
+            ):
+                raise AutomationConflict("resource wait requires a running child step")
+            self._resource_waits.validate(
+                connection, command.procedure_run_id, command.step_key, command.run_id
+            )
+            updated = _run_state(run, state="ready", at=now)
+            if run.cancellation is not None:
+                self._resource_waits.cancel(connection, command.run_id)
+                updated = _run_state(
+                    run,
+                    state="closed",
+                    at=now,
+                    closure=ProcedureClosure(
+                        status="cancelled",
+                        closed_at=now,
+                        actor=run.cancellation.actor,
+                        reason=run.cancellation.reason,
+                    ),
+                )
+            updated = updated.model_copy(update={"resource_wait": wait})
+            self._store.replace_run_in_transaction(
+                connection, updated, expected_revision=run.revision
+            )
+            self._store.delete_lease_in_transaction(
+                connection, run.procedure_run_id, token=command.lease_token
+            )
+            return ProcedureStepResourceWaitReceipt(run=updated)
 
     def submit(self, command: ProcedureSubmitCommand) -> ProcedureSubmitReceipt:
         return ProcedureSubmitReceipt(
@@ -351,6 +428,24 @@ class AutomationService:
                 )
             now = self._now()
             pending = run.state == "leased"
+            if run.resource_wait is not None:
+                assert self._resource_waits is not None
+                child_cancelled = self._resource_waits.cancel(
+                    connection, run.resource_wait.run_id
+                )
+                if child_cancelled:
+                    pending = False
+                    lease = self._store.read_lease_in_transaction(
+                        connection, run.procedure_run_id
+                    )
+                    if lease is not None:
+                        self._store.delete_lease_in_transaction(
+                            connection, run.procedure_run_id, token=lease.token
+                        )
+                elif not pending:
+                    raise AutomationConflict(
+                        "waiting child has begun execution; inspect its owner"
+                    )
             updated = _run_state(
                 run,
                 state=run.state if pending else "closed",
@@ -524,7 +619,14 @@ class AutomationService:
                 return current_lease
             self._require_revision(run, expected_revision)
             if run.state == "ready":
-                pass
+                if run.resource_wait is not None:
+                    assert self._resource_waits is not None
+                    if not self._resource_waits.ready(
+                        connection, run.resource_wait.run_id
+                    ):
+                        raise AutomationConflict(
+                            "procedure is waiting for child resources or reconciliation"
+                        )
             elif run.state == "leased":
                 if current_lease is not None and current_lease.expires_at > now:
                     raise AutomationConflict("procedure run already has a live lease")
@@ -760,6 +862,8 @@ class AutomationService:
                 output=output,
             )
             updated_run = _run_state(run, state="leased", at=now)
+            if run.resource_wait is not None and run.resource_wait.step_key == step_key:
+                updated_run = updated_run.model_copy(update={"resource_wait": None})
             self._store.replace_step_attempt_in_transaction(
                 connection,
                 updated_attempt,

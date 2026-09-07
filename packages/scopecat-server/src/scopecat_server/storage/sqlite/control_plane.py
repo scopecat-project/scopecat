@@ -52,6 +52,10 @@ class ExecutorLeaseNotHeld(ControlPlaneConflict):
     """The executor fencing token is absent, stale, or expired."""
 
 
+class RunResourcesBusy(ControlPlaneConflict):
+    """Another execution or instrument session owns a required resource."""
+
+
 class InstrumentSessionNotActive(ControlPlaneConflict):
     """The daemon-owned interactive session is not active."""
 
@@ -352,6 +356,17 @@ class SQLiteControlPlane:
             )
         return updated
 
+    def reject_queued_run_in_transaction(
+        self, connection: sqlite3.Connection, run_id: str, *, at: datetime
+    ) -> ControlRun:
+        """Close an admission rejected before ownership, after its failed outcome."""
+        current = _run(self._require_run(connection, run_id))
+        if current.state != "queued":
+            raise ControlPlaneConflict("execution rejection requires a queued run")
+        return self._update_scheduler_state_in_transaction(
+            connection, current, state="closed", at=at
+        )
+
     def request_run_cancellation_in_transaction(
         self,
         connection: sqlite3.Connection,
@@ -536,7 +551,7 @@ class SQLiteControlPlane:
                 )
             )
             if row is not None:
-                raise ControlPlaneConflict("run resources are busy")
+                raise RunResourcesBusy("run resources are busy")
 
         segment_id = f"segment-{uuid4().hex}"
         ordinal_row = _one(

@@ -325,6 +325,14 @@ class ProcedureStepCompleteCommand(_FencedProcedureStepCommand):
     output: ProcedureStepOutputRef
 
 
+class ProcedureStepResourceWaitCommand(_FencedProcedureStepCommand):
+    run_id: _NonEmptyText
+
+
+class ProcedureStepResourceWaitReceipt(_WireModel):
+    run: ProcedureRun
+
+
 class ProcedureStepCompleteReceipt(_WireModel):
     run: ProcedureRun
     step: ProcedureStepAttempt

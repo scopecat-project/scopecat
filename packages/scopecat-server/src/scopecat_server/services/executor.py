@@ -7,7 +7,7 @@ from collections.abc import Generator
 from contextlib import contextmanager
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 from pydantic import JsonValue, RootModel
 from scopecat.control.models import (
@@ -61,6 +61,7 @@ from scopecat_server.storage.sqlite.control_plane import (
     ControlPlaneConflict,
     ControlPlaneNotFound,
     ExecutorLeaseNotHeld,
+    RunResourcesBusy,
     SQLiteControlPlane,
 )
 from scopecat_server.storage.sqlite.execution import (
@@ -122,6 +123,7 @@ class ExecutorService:
         return self._start_execution(
             run_id,
             executor_id=request.executor_id,
+            on_resource_busy=request.on_resource_busy,
         )
 
     def heartbeat_executor(
@@ -704,6 +706,7 @@ class ExecutorService:
         run_id: str,
         *,
         executor_id: str,
+        on_resource_busy: Literal["keep_queued", "fail"],
     ) -> ExecutorLease:
         try:
             with self._control.write_transaction() as connection:
@@ -734,20 +737,60 @@ class ExecutorService:
                     raise ControlPlaneConflict(
                         "run snapshot is not ready to start execution"
                     )
-                lease = self._control.start_execution_in_transaction(
-                    connection,
-                    run_id,
-                    executor_id=executor_id,
-                    ttl=self._lease_ttl,
-                )
-                return self._wire_lease(
-                    lease,
-                    cancellation_requested_at=current.cancellation_requested_at,
-                )
+                try:
+                    lease = self._control.start_execution_in_transaction(
+                        connection,
+                        run_id,
+                        executor_id=executor_id,
+                        ttl=self._lease_ttl,
+                    )
+                except RunResourcesBusy:
+                    if on_resource_busy == "keep_queued":
+                        raise
+                    self._fail_resource_rejection(connection, run_id)
+                else:
+                    return self._wire_lease(
+                        lease,
+                        cancellation_requested_at=current.cancellation_requested_at,
+                    )
+            # Report rejection only after committing the terminal state. Raising
+            # inside the transaction would roll it back and leave an orphan queue.
+            raise BackendConflict("run resources are busy")
         except ControlPlaneNotFound as error:
             raise BackendNotFound(str(error)) from error
         except ControlPlaneConflict as error:
             raise BackendConflict(str(error)) from error
+
+    def _fail_resource_rejection(
+        self, connection: sqlite3.Connection, run_id: str
+    ) -> None:
+        finished_at = datetime.now(tz=UTC)
+        outcome = RunOutcome(
+            run_id=run_id,
+            result="failed",
+            certainty="known",
+            finished_at=finished_at,
+            problems=(
+                problem(
+                    "run_resources_busy",
+                    "run resources are busy; execution did not start",
+                    phase=ProblemPhase.EXECUTION,
+                ),
+            ),
+        )
+        prepared = self._runs.prepare_terminal_commit(
+            TerminalRunCommit(run_id=run_id, outcome=outcome)
+        )
+        self._point_plans.abandon_in_transaction(
+            connection,
+            run_id,
+            operation_id="point-plan.terminal.resource-rejection",
+            reason="run resources are busy",
+        )
+        self._runs.commit_prepared_terminal_in_transaction(connection, prepared)
+        self._control.reject_queued_run_in_transaction(
+            connection, run_id, at=finished_at
+        )
 
     def fence_executor(self, run_id: str, token: str) -> ControlExecutorLease:
         try:

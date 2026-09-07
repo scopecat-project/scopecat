@@ -91,6 +91,10 @@ from scopecat.automation.calibration_wire import (
     CalibrationStatusQuery,
     CalibrationStatusReceipt,
 )
+from scopecat.automation.wire import (
+    ProcedureStepResourceWaitCommand,
+    ProcedureStepResourceWaitReceipt,
+)
 from scopecat.control.models import (
     ControlRunState,
     EventPage,
@@ -292,7 +296,7 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
 
     project_workers = ProjectProcedureWorkers(
         lambda: application.project_root,
-        lambda procedure_id: application.automation.get(procedure_id).state,
+        lambda procedure_id: application.automation.worker_state(procedure_id),
     )
 
     @asynccontextmanager
@@ -1125,6 +1129,25 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
             command.attempt,
         )
         return application.automation.wait_step_input(command)
+
+    @app.post(
+        f"{_API_PREFIX}/procedures/{{procedure_run_id}}/steps/{{step_key:path}}/attempts/{{attempt}}/resources/wait"
+    )
+    def wait_procedure_step_resources(
+        procedure_run_id: str,
+        step_key: str,
+        attempt: Annotated[int, ApiPath(ge=1)],
+        command: ProcedureStepResourceWaitCommand,
+    ) -> ProcedureStepResourceWaitReceipt:
+        _require_procedure_step_identity(
+            procedure_run_id,
+            step_key,
+            attempt,
+            command.procedure_run_id,
+            command.step_key,
+            command.attempt,
+        )
+        return application.automation.wait_step_resources(command)
 
     @app.post(
         f"{_API_PREFIX}/procedures/{{procedure_run_id}}/steps/{{step_key:path}}/"

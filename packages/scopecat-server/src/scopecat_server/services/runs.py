@@ -48,6 +48,7 @@ from scopecat.daemon.views import (
     RunDetail,
     RunPlanView,
     RunRequestView,
+    RunResourceBlocker,
     RunResourceView,
     RunSummary,
     RunSummaryPage,
@@ -358,7 +359,6 @@ class RunService:
                     for claim in self._control.list_resource_claims_in_transaction(
                         connection
                     )
-                    if claim.owner_kind == "run" and claim.owner_id == run_id
                 }
                 executor_lease = self._control.executor_lease_for_run_in_transaction(
                     connection,
@@ -374,36 +374,50 @@ class RunService:
                 )
         except ControlPlaneNotFound as error:
             raise BackendNotFound(str(error)) from error
-        resources = tuple(
-            RunResourceView(
-                resource=RunResourceRequirement(
-                    kind=logical_resource.kind,
-                    id=logical_resource.id,
-                ),
-                status=(
-                    claim.status
-                    if (
-                        claim := claims.get(
-                            (canonical_resource.kind, canonical_resource.id)
+        resources: list[RunResourceView] = []
+        for logical_resource, canonical_resource in zip(
+            control.admission.plan.run_resource_requirements,
+            control.admission.resource_claims,
+            strict=True,
+        ):
+            claim = claims.get((canonical_resource.kind, canonical_resource.id))
+            if control.state == "closed":
+                claim = None
+            owned = (
+                claim is not None
+                and claim.owner_kind == "run"
+                and claim.owner_id == run_id
+            )
+            resources.append(
+                RunResourceView(
+                    resource=RunResourceRequirement(
+                        kind=logical_resource.kind,
+                        id=logical_resource.id,
+                    ),
+                    status=(
+                        (claim.status if owned else "blocked")
+                        if claim is not None
+                        else ("released" if control.state == "closed" else "required")
+                    ),
+                    expires_at=(
+                        executor_lease.expires_at
+                        if claim is not None
+                        and owned
+                        and claim.status == "active"
+                        and executor_lease is not None
+                        else None
+                    ),
+                    blocked_by=(
+                        RunResourceBlocker(
+                            owner_kind=claim.owner_kind,
+                            owner_id=claim.owner_id,
+                            status=claim.status,
                         )
-                    )
-                    is not None
-                    else ("released" if control.state == "closed" else "required")
-                ),
-                expires_at=(
-                    executor_lease.expires_at
-                    if claim is not None
-                    and claim.status == "active"
-                    and executor_lease is not None
-                    else None
-                ),
+                        if claim is not None and not owned
+                        else None
+                    ),
+                )
             )
-            for logical_resource, canonical_resource in zip(
-                control.admission.plan.run_resource_requirements,
-                control.admission.resource_claims,
-                strict=True,
-            )
-        )
         return RunDetail(
             control=_run_control_view(
                 control,
@@ -411,7 +425,7 @@ class RunService:
                 point_plan=point_plan,
             ),
             snapshot=snapshot,
-            resources=resources,
+            resources=tuple(resources),
         )
 
     def get_run_config(self, run_id: str) -> RunConfigView:

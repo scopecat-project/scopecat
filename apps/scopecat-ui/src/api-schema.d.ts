@@ -4751,6 +4751,14 @@ export interface components {
             [key: string]: components["schemas"]["pydantic__types__JsonValue"];
         };
         /**
+         * ProcedureResourceWait
+         * @description Exact unstarted child retained while its worker is released.
+         */
+        ProcedureResourceWait: {
+            run_id: components["schemas"]["_NonEmptyText"];
+            step_key: components["schemas"]["_NonEmptyText"];
+        };
+        /**
          * ProcedureRun
          * @description Current durable state of one version-pinned procedure invocation.
          */
@@ -4769,6 +4777,7 @@ export interface components {
             intent_hash: components["schemas"]["Sha256ContentHash"];
             procedure_run_id: components["schemas"]["_NonEmptyText"];
             request_key: components["schemas"]["_NonEmptyText"];
+            resource_wait?: components["schemas"]["ProcedureResourceWait"] | null;
             /** Revision */
             revision: number;
             /**
@@ -5844,6 +5853,20 @@ export interface components {
             record: components["schemas"]["ContentEntry"];
         };
         /**
+         * RunResourceBlocker
+         * @description Current competing owner, without authority or canonical resource keys.
+         */
+        RunResourceBlocker: {
+            /** Owner Id */
+            owner_id: string;
+            owner_kind: components["schemas"]["ResourceOwnerKind"];
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "active" | "quarantined";
+        };
+        /**
          * RunResourceRequirement
          * @description Logical resource identity requested by a run plan.
          */
@@ -5855,9 +5878,10 @@ export interface components {
         };
         /**
          * RunResourceView
-         * @description Logical resource state without scheduler identity or authority.
+         * @description Logical resource state and competing owner, without execution authority.
          */
         RunResourceView: {
+            blocked_by?: components["schemas"]["RunResourceBlocker"] | null;
             /** Expires At */
             expires_at?: string | null;
             resource: components["schemas"]["RunResourceRequirement"];
@@ -5865,7 +5889,7 @@ export interface components {
              * Status
              * @enum {string}
              */
-            status: "required" | "active" | "quarantined" | "released";
+            status: "required" | "blocked" | "active" | "quarantined" | "released";
         };
         /**
          * RunSnapshot

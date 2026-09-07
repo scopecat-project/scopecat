@@ -31,6 +31,8 @@ from scopecat.automation.wire import (
     ProcedureStepFailReceipt,
     ProcedureStepInputWaitCommand,
     ProcedureStepInputWaitReceipt,
+    ProcedureStepResourceWaitCommand,
+    ProcedureStepResourceWaitReceipt,
     ProcedureSubmitCommand,
     ProcedureSubmitReceipt,
     ProcedureWorkerLease,
@@ -54,6 +56,10 @@ class ProcedureControl(Protocol):
     ) -> ProcedureSubmitReceipt: ...
 
     def get_procedure(self, procedure_run_id: str) -> ProcedureRun: ...
+
+    def wait_procedure_step_resources(
+        self, command: ProcedureStepResourceWaitCommand
+    ) -> ProcedureStepResourceWaitReceipt: ...
 
     def acquire_procedure_worker_lease(
         self,
@@ -164,6 +170,18 @@ class _ProcedureCancellationRequested(BaseException):
     """Stop at a settled durable boundary without running another effect."""
 
 
+class ProcedureWaitResources(Exception):
+    def __init__(self, run_id: str) -> None:
+        self.run_id = run_id
+        super().__init__(f"waiting for resources for {run_id}")
+
+
+class _ProcedureResourcesRecorded(BaseException):
+    def __init__(self, run: ProcedureRun) -> None:
+        self.run = run
+        super().__init__("procedure is waiting for resources")
+
+
 class _ProcedureYieldRequested(BaseException):
     """Leave execution before starting another durable step."""
 
@@ -240,6 +258,23 @@ class ProcedureContext:
         self._authority.require_live()
         try:
             output = effect(begun.operation_id)
+        except ProcedureWaitResources as error:
+            child_run_id = error.run_id
+            receipt = self._authority.fenced_call(
+                "wait_resources",
+                lambda run, lease: self._control.wait_procedure_step_resources(
+                    ProcedureStepResourceWaitCommand(
+                        procedure_run_id=run.procedure_run_id,
+                        lease_token=lease.lease_token,
+                        expected_run_revision=run.revision,
+                        step_key=begun.step.step_key,
+                        attempt=begun.step.attempt,
+                        expected_step_revision=begun.step.revision,
+                        run_id=child_run_id,
+                    )
+                ),
+            )
+            raise _ProcedureResourcesRecorded(receipt.run) from error
         except ProcedureNeedsAttention as error:
             receipt = self._record_step_attention(begun, error.reason)
             raise _ProcedureAttentionRecorded(receipt.run) from error
@@ -492,6 +527,8 @@ class ProcedureWorker:
                 return recorded.run
             except _ProcedureInputRecorded as recorded:
                 return recorded.run
+            except _ProcedureResourcesRecorded as recorded:
+                return recorded.run
             except ProcedureNeedsAttention as error:
                 return self._require_run_attention(authority, error.reason)
             except ProcedureControlError, ProcedureLeaseLostError:
@@ -591,6 +628,7 @@ type _FencedReceipt = (
     | ProcedureStepFailReceipt
     | ProcedureStepAttentionReceipt
     | ProcedureStepInputWaitReceipt
+    | ProcedureStepResourceWaitReceipt
     | ProcedureRunAttentionReceipt
     | ProcedureCloseReceipt
     | ProcedureWorkerLeaseReleaseReceipt
@@ -667,6 +705,12 @@ class _ProcedureLeaseAuthority:
                 # this lease is live. Retry only that exact revision transition;
                 # never re-execute the effect or relax ordinary stale-write checks.
                 latest = self._control.get_procedure(run.procedure_run_id)
+                if (
+                    latest.closure is not None
+                    and latest.closure.status == "cancelled"
+                    and latest.resource_wait is not None
+                ):
+                    raise _ProcedureResourcesRecorded(latest) from None
                 if not (
                     latest.state == "leased"
                     and latest.cancellation is not None

@@ -777,6 +777,7 @@ class ExecutorStartRequest(_WireModel):
     """Start one daemon-owned execution session."""
 
     executor_id: NonEmptyText
+    on_resource_busy: Literal["keep_queued", "fail"] = "keep_queued"
 
 
 class ExecutorLease(_WireModel):
