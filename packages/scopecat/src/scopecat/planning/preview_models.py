@@ -5,7 +5,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
-from scopecat.inspection import CompiledArtifactInspection
+from scopecat.inspection import (
+    PLANNED_INSTRUMENT_SETTING_LIMIT,
+    CompiledArtifactInspection,
+    PlannedInstrumentSetting,
+)
 from scopecat.program.measurement_types import MeasurementVariableRole
 from scopecat.records.measurement import MeasurementDatasetSchema
 
@@ -147,6 +151,9 @@ class ExperimentPreview:
     point_schedule: ExperimentPreviewPointSchedule | None = None
     selected_point: ExperimentPreviewPoint | None = None
     domain_inspections: tuple[ExperimentPreviewDomainInspection, ...] = ()
+    planned_settings: tuple[PlannedInstrumentSetting, ...] = ()
+    planned_setting_limit: int = PLANNED_INSTRUMENT_SETTING_LIMIT
+    planned_settings_truncated: bool = False
     computes: tuple[ExperimentPreviewCompute, ...] = ()
     bindings: tuple[ExperimentPreviewBinding, ...] = ()
     binding_edges: tuple[ExperimentPreviewBindingEdge, ...] = ()

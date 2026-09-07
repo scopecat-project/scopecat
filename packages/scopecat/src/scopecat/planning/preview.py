@@ -136,6 +136,12 @@ def build_run_program_preview(
             )
         ),
         domain_inspections=domain_inspections,
+        planned_settings=()
+        if point_inspection is None
+        else point_inspection.planned_settings,
+        planned_settings_truncated=(
+            point_inspection is not None and point_inspection.planned_settings_truncated
+        ),
         computes=_preview_computes(program),
         bindings=bindings,
         binding_edges=binding_edges,

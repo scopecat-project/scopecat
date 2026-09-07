@@ -35,6 +35,9 @@ const preview: LaunchPreview = {
 };
 const stage: components["schemas"]["PreflightStage"] = {
   inspections: [],
+  planned_settings: [],
+  planned_setting_limit: 64,
+  planned_settings_truncated: false,
   id: "candidate",
   label: "Proposed candidate run",
   experiment_id: "ramsey",
@@ -125,4 +128,80 @@ it("reports an absent project summary without inventing zero work", () => {
   render(<PreflightSummary entry={entry} preview={preview} />);
   expect(screen.getByText(/Detailed preflight not provided/)).toBeVisible();
   expect(screen.queryByText(/Exact:/)).not.toBeInTheDocument();
+});
+
+it("shows planned settings with unit, order and truncation without claiming readback", () => {
+  render(
+    <PreflightSummary
+      entry={entry}
+      preview={{
+        ...preview,
+        preflight: {
+          scope_basis: "Selected frozen plan",
+          stages: [
+            {
+              ...stage,
+              planned_setting_limit: 64,
+              planned_settings_truncated: true,
+              planned_settings: [
+                {
+                  point_index: 3,
+                  proposal_fingerprint: "proposal",
+                  operation_index: 2,
+                  assignment_index: 0,
+                  operation_id: "setup",
+                  instrument_id: "signal-source",
+                  setting: {
+                    target: {
+                      kind: "interface",
+                      interface_id: "rf-output/v1",
+                      component_path: ["channels", "1"],
+                      property_id: "frequency",
+                    },
+                    value: { value: 5000000000, unit: "Hz" },
+                  },
+                },
+              ],
+            },
+          ],
+        },
+      }}
+    />,
+  );
+  expect(screen.getByRole("region", { name: "Planned instrument settings" })).toBeVisible();
+  expect(screen.getByText("5000000000 Hz")).toBeVisible();
+  expect(screen.getByText(/Point 3.*3.1/)).toBeVisible();
+  expect(screen.getByText(/signal-source.*channels\/1.*frequency/)).toBeVisible();
+  expect(screen.getByText(/not observed or confirmed state/)).toBeVisible();
+  expect(screen.getByText(/first 64 planned settings.*omitted/)).toBeVisible();
+});
+
+it("distinguishes an uninspected point from an inspected point with no settings", () => {
+  const view = render(
+    <PreflightSummary
+      entry={entry}
+      preview={{
+        ...preview,
+        preflight: {
+          scope_basis: "No selected point",
+          stages: [{ ...stage, selected_points: 0 }],
+        },
+      }}
+    />,
+  );
+  expect(screen.getByText(/No point was inspected.*settings are unknown/)).toBeVisible();
+  expect(screen.queryByText("No instrument settings in the selected point.")).toBeNull();
+  view.rerender(
+    <PreflightSummary
+      entry={entry}
+      preview={{
+        ...preview,
+        preflight: {
+          scope_basis: "Selected point",
+          stages: [stage],
+        },
+      }}
+    />,
+  );
+  expect(screen.getByText("No instrument settings in the selected point.")).toBeVisible();
 });

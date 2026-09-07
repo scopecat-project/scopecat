@@ -1,5 +1,6 @@
 import type { components } from "../../api-schema";
 import type { LaunchCatalogEntry, LaunchPreview } from "./launch-api";
+import { PlannedSettings } from "./PlannedSettings";
 
 type Quantity =
   | components["schemas"]["ExactQuantity"]
@@ -140,6 +141,7 @@ export function PreflightSummary({
                   </li>
                 ))}
               </ul>
+              <PlannedSettings stage={stage} />
               <details>
                 <summary>Selected-point inspection and configuration fingerprint</summary>
                 <pre className="overflow-auto text-xs p-3">

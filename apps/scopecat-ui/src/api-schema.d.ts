@@ -4925,6 +4925,25 @@ export interface components {
         };
         PersistableScalarWire: components["schemas"]["_PersistableScalarModel"];
         PersistableValueType: components["schemas"]["_PersistableValueTypeWire"];
+        /**
+         * PlannedInstrumentSetting
+         * @description A frozen point-plan assignment, not an observed or confirmed device value.
+         */
+        PlannedInstrumentSetting: {
+            /** Assignment Index */
+            assignment_index: number;
+            /** Instrument Id */
+            instrument_id: string;
+            /** Operation Id */
+            operation_id: string;
+            /** Operation Index */
+            operation_index: number;
+            /** Point Index */
+            point_index: number | null;
+            /** Proposal Fingerprint */
+            proposal_fingerprint: string;
+            setting: components["schemas"]["InstrumentStateSetting"];
+        };
         /** @enum {string} */
         PointCoordinateKind: "bool" | "int" | "float" | "string" | "quantity" | "entity";
         /**
@@ -5028,6 +5047,21 @@ export interface components {
             inspections: components["schemas"]["ExperimentPreviewDomainInspection"][];
             /** Label */
             label: string;
+            /**
+             * Planned Setting Limit
+             * @default 64
+             */
+            planned_setting_limit: number;
+            /**
+             * Planned Settings
+             * @default []
+             */
+            planned_settings: components["schemas"]["PlannedInstrumentSetting"][];
+            /**
+             * Planned Settings Truncated
+             * @default false
+             */
+            planned_settings_truncated: boolean;
             /**
              * Point Scope
              * @enum {string}
