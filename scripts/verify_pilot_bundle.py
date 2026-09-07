@@ -175,6 +175,14 @@ def _installed_journey(bundle: Path) -> None:
             assert client.measurement_preview(run_id) == preview
         assert "running" in _run([*cli, "status", str(project_root)], cwd=project_root)
         print(f"installed GUI, virtual measurement {run_id}, and restart verified")
+    except Exception:
+        log = project_root / ".scopecat" / "daemon.log"
+        if log.is_file():
+            with log.open("rb") as stream:
+                stream.seek(max(0, log.stat().st_size - 16_384))
+                tail = stream.read().decode("utf-8", errors="replace")
+            print(f"Daemon log tail ({log}):\n{tail}", file=sys.stderr)
+        raise
     finally:
         stop_project(project)
     assert read_daemon_endpoint_record(project_root) is None

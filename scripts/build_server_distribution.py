@@ -142,14 +142,13 @@ def _build(output: Path) -> None:
                 ).decode()
             )
             packages[str(metadata["Name"])] = str(metadata["Version"])
+    # uv's output-directory marker is build metadata, not a distributable artifact.
+    (output / ".gitignore").unlink(missing_ok=True)
+    artifact_files = (*wheels, *output.glob("*.tar.gz"), output / "requirements.txt")
     manifest = {
         **build_info,
         "packages": packages,
-        "files": {
-            path.name: _sha256(path)
-            for path in sorted(output.iterdir())
-            if path.is_file()
-        },
+        "files": {path.name: _sha256(path) for path in sorted(artifact_files)},
     }
     (output / "manifest.json").write_text(
         json.dumps(manifest, indent=2) + "\n",
