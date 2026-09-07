@@ -211,6 +211,11 @@ function AnalysisFigureView({ content, title }: { content: FigureContent; title:
       <p className="text-xs text-text-dim">
         Showing {pointCount} of {content.total_points} points across {content.layers.length} layers
       </p>
+      {content.truncated && (
+        <p className="text-xs text-text-dim">
+          Preview shows the first rows of each source within its share of the 4,096-point budget.
+        </p>
+      )}
       <ul className="text-xs text-text-dim">
         {content.layers.map((layer) => (
           <li key={layer.id}>

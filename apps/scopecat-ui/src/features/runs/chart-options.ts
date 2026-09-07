@@ -96,6 +96,7 @@ export function analysisFigureOption(content: AnalysisFigureContent): EChartsCor
         : series.x.map((x, i) => [x, lower[i]!, upper[i]!]);
       plotted.push({
         type: "custom",
+        clip: true,
         id: `${id}/uncertainty`,
         name,
         data,
