@@ -221,7 +221,7 @@ def launch_provider(lab: LabClient, request: LaunchRequest) -> LaunchResult:
                 catalog=config.parameter_catalog,
                 base=config.parameter_snapshot,
                 updates=(
-                    Q1_CHANNEL_CALIBRATION.update(CHANNEL_DELAY.value(inputs.delay_ns)),
+                    Q1_CHANNEL_CALIBRATION[CHANNEL_DELAY].update(inputs.delay_ns),
                 ),
                 candidate_id="preflight-channel-timing.parameters",
             )

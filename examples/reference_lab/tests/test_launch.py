@@ -336,7 +336,7 @@ def test_noop_candidate_preview_reports_reason_without_admitting_work(
         parameters, _ = materialize_parameter_updates(
             catalog=original.parameter_catalog,
             base=original.parameter_snapshot,
-            updates=(Q1_CHANNEL_CALIBRATION.update(CHANNEL_DELAY.value(1.0)),),
+            updates=(Q1_CHANNEL_CALIBRATION[CHANNEL_DELAY].update(1.0),),
             candidate_id="already-at-requested-delay",
         )
         lab.config.set_default(
