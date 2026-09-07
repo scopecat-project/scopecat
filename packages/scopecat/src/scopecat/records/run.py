@@ -13,7 +13,7 @@ from scopecat.records.sample import SampleBinding
 
 
 class ConfigRegistryRunConfigSource(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     kind: Literal["config_registry"] = "config_registry"
     selector: str
@@ -26,7 +26,7 @@ class ConfigRegistryRunConfigSource(BaseModel):
 class AnalysisCandidateRunConfigSource(BaseModel):
     """Analysis candidate resolved for one run without becoming the default."""
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     kind: Literal["analysis_candidate"] = "analysis_candidate"
     source_run_id: str

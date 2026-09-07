@@ -211,7 +211,19 @@ class LabClient:
         del exc_type, exc_value, traceback
         self.close()
 
+    @property
+    def is_closed(self) -> bool:
+        """Whether the underlying daemon connection is closed."""
+
+        return self._client.is_closed
+
     def close(self) -> None:
+        """Close an owned connection; a supplied DaemonClient remains caller-owned.
+
+        Live handles and lazy datasets require that connection. Values explicitly
+        loaded before closing, including run snapshots, remain ordinary local data.
+        """
+
         if self._owns_client:
             self._client.close()
 
@@ -342,6 +354,12 @@ class LabClient:
         )
 
     def get_run(self, run: RunSelector | RunHandle) -> RunHandle:
+        """Attach a live handle to a retained run without executing acquisition.
+
+        Pass the ID saved from a previous session (or its handle). Reads use this
+        connection; the previous handle keeps its original connection lifetime.
+        """
+
         run_id = run_handle_id(run)
         self._control.run_detail(run_id)
         return RunHandle(session=self, id=run_id)
