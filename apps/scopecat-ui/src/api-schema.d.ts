@@ -1969,6 +1969,95 @@ export interface components {
             state: "queued" | "closed";
         };
         /**
+         * AxisAroundSourceRecord
+         * @description Persisted fixed-count axis centered on a scalar expression.
+         */
+        "AxisAroundSourceRecord-Input": {
+            center: components["schemas"]["RunRequestScalarValue-Input"];
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "around";
+            /** Points */
+            points: number;
+            span: components["schemas"]["RunRequestQuantity"];
+        };
+        /**
+         * AxisAroundSourceRecord
+         * @description Persisted fixed-count axis centered on a scalar expression.
+         */
+        "AxisAroundSourceRecord-Output": {
+            center: components["schemas"]["RunRequestScalarValue-Output"];
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "around";
+            /** Points */
+            points: number;
+            span: components["schemas"]["RunRequestQuantity"];
+        };
+        /**
+         * AxisRangeSourceRecord
+         * @description Persisted fixed-count linear axis between two endpoints.
+         */
+        AxisRangeSourceRecord: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "range";
+            /** Points */
+            points: number;
+            start: components["schemas"]["RunRequestRangeValue"];
+            stop: components["schemas"]["RunRequestRangeValue"];
+        };
+        /**
+         * AxisRecord
+         * @description Persisted axis source and its optional parameter-cell overlay.
+         */
+        "AxisRecord-Output": {
+            /** Axis Id */
+            axis_id: string;
+            /**
+             * Mode
+             * @default scan
+             * @enum {string}
+             */
+            mode: "fixed" | "scan";
+            overlay?: components["schemas"]["RunRequestParameterLookupValue-Output"] | null;
+            source: components["schemas"]["AxisSourceRecord-Output"];
+        };
+        "AxisSourceRecord-Input": components["schemas"]["AxisValuesSourceRecord-Input"] | components["schemas"]["AxisAroundSourceRecord-Input"] | components["schemas"]["AxisRangeSourceRecord"];
+        "AxisSourceRecord-Output": components["schemas"]["AxisValuesSourceRecord-Output"] | components["schemas"]["AxisAroundSourceRecord-Output"] | components["schemas"]["AxisRangeSourceRecord"];
+        /**
+         * AxisValuesSourceRecord
+         * @description Persisted explicit values for one axis.
+         */
+        "AxisValuesSourceRecord-Input": {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "values";
+            /** Values */
+            values: components["schemas"]["RunRequestScalarValue-Input"][];
+        };
+        /**
+         * AxisValuesSourceRecord
+         * @description Persisted explicit values for one axis.
+         */
+        "AxisValuesSourceRecord-Output": {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "values";
+            /** Values */
+            values: components["schemas"]["RunRequestScalarValue-Output"][];
+        };
+        /**
          * BlobPayloadBody
          * @description Content-addressed locator resolved by the payload transport boundary.
          */
@@ -2807,6 +2896,20 @@ export interface components {
             } | null;
             /** Title */
             title?: string | null;
+        };
+        /**
+         * ControlEdit
+         * @description Choose one existing scalar or axis source; no hidden inactive value.
+         */
+        ControlEdit: {
+            axis?: components["schemas"]["AxisSourceRecord-Input"] | null;
+            /**
+             * Mode
+             * @enum {string}
+             */
+            mode: "fixed" | "scan" | "default";
+            /** Value */
+            value?: number | components["schemas"]["scopecat__kernel__quantity__Quantity"] | null;
         };
         /** @enum {string} */
         ControlRunState: "queued" | "leased" | "attention_required" | "closed";
@@ -3815,6 +3918,11 @@ export interface components {
              * @enum {string}
              */
             configuration_effect: "none" | "candidate" | "activation_after_review";
+            /**
+             * Controls
+             * @default []
+             */
+            controls: components["schemas"]["LaunchControl"][];
             /** Description */
             description: string;
             /** Id */
@@ -3830,6 +3938,47 @@ export interface components {
             title: string;
             /** Version */
             version: string;
+        };
+        /** LaunchControl */
+        LaunchControl: {
+            /** Default */
+            default: number | components["schemas"]["scopecat__kernel__quantity__Quantity"] | null;
+            /** Group */
+            group: string;
+            /** Id */
+            id: string;
+            /** Maximum */
+            maximum: number | null;
+            /** Minimum */
+            minimum: number | null;
+            /**
+             * Ownership
+             * @enum {string}
+             */
+            ownership: "editable" | "derived" | "configuration";
+            /** Provenance */
+            provenance: string;
+            /** Scannable */
+            scannable: boolean;
+            /** Title */
+            title: string;
+            /** Unit */
+            unit: string | null;
+        };
+        /** LaunchControlValue */
+        LaunchControlValue: {
+            axis?: components["schemas"]["AxisRecord-Output"] | null;
+            /** Id */
+            id: string;
+            /** Provenance */
+            provenance: string;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "fixed" | "scanned" | "derived" | "configuration";
+            /** Value */
+            value?: number | components["schemas"]["scopecat__kernel__quantity__Quantity"] | null;
         };
         /**
          * LaunchField
@@ -3876,6 +4025,11 @@ export interface components {
          */
         LaunchPreview: {
             config_source: components["schemas"]["ConfigRegistryRunConfigSource"];
+            /**
+             * Controls
+             * @default []
+             */
+            controls: components["schemas"]["LaunchControlValue"][];
             /** Experiment Id */
             experiment_id: string;
             /**
@@ -3910,6 +4064,10 @@ export interface components {
              */
             actor: string;
             config_source?: components["schemas"]["ConfigRegistryRunConfigSource"] | null;
+            /** Control Edits */
+            control_edits?: {
+                [key: string]: components["schemas"]["ControlEdit"];
+            };
             expected_request_hash?: components["schemas"]["Sha256ContentHash"] | null;
             /**
              * Experiment
@@ -6447,6 +6605,141 @@ export interface components {
             };
             record: components["schemas"]["ContentEntry"];
         };
+        /** @enum {string} */
+        RunRequestBinaryOperator: "+" | "-" | "*" | "/";
+        /** RunRequestBinaryValue */
+        "RunRequestBinaryValue-Input": {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "binary";
+            left: components["schemas"]["RunRequestScalarValue-Input"];
+            operator: components["schemas"]["RunRequestBinaryOperator"];
+            right: components["schemas"]["RunRequestScalarValue-Input"];
+        };
+        /** RunRequestBinaryValue */
+        "RunRequestBinaryValue-Output": {
+            /**
+             * Kind
+             * @default binary
+             * @constant
+             */
+            kind: "binary";
+            left: components["schemas"]["RunRequestScalarValue-Output"];
+            operator: components["schemas"]["RunRequestBinaryOperator"];
+            right: components["schemas"]["RunRequestScalarValue-Output"];
+        };
+        /**
+         * RunRequestComplexValue
+         * @description Closed finite complex authoring value, independent of JSON metadata.
+         */
+        RunRequestComplexValue: {
+            /** Imag */
+            imag: number;
+            /**
+             * Kind
+             * @constant
+             */
+            kind: "complex";
+            /** Real */
+            real: number;
+        };
+        /**
+         * RunRequestEntityRef
+         * @description Closed durable projection of an authoring ``EntityRef``.
+         */
+        "RunRequestEntityRef-Input": {
+            /** Entity Id */
+            entity_id: string;
+            /** Entity Kind */
+            entity_kind?: string | null;
+            /**
+             * Kind
+             * @default entity
+             * @constant
+             */
+            kind: "entity";
+            /** Metadata */
+            metadata?: {
+                [key: string]: components["schemas"]["RunRequestJsonValue-Input"];
+            };
+        };
+        /**
+         * RunRequestEntityRef
+         * @description Closed durable projection of an authoring ``EntityRef``.
+         */
+        "RunRequestEntityRef-Output": {
+            /** Entity Id */
+            entity_id: string;
+            /** Entity Kind */
+            entity_kind?: string | null;
+            /**
+             * Kind
+             * @default entity
+             * @constant
+             */
+            kind: "entity";
+            /** Metadata */
+            metadata?: {
+                [key: string]: components["schemas"]["RunRequestJsonValue-Output"];
+            };
+        };
+        "RunRequestExpressionValue-Input": components["schemas"]["RunRequestParameterValue"] | components["schemas"]["RunRequestParameterLookupValue-Input"] | components["schemas"]["RunRequestBinaryValue-Input"];
+        "RunRequestExpressionValue-Output": components["schemas"]["RunRequestParameterValue"] | components["schemas"]["RunRequestParameterLookupValue-Output"] | components["schemas"]["RunRequestBinaryValue-Output"];
+        "RunRequestJsonValue-Input": string | boolean | number | components["schemas"]["RunRequestJsonValue-Input"][] | {
+            [key: string]: components["schemas"]["RunRequestJsonValue-Input"];
+        } | null;
+        "RunRequestJsonValue-Output": string | boolean | number | components["schemas"]["RunRequestJsonValue-Output"][] | {
+            [key: string]: components["schemas"]["RunRequestJsonValue-Output"];
+        } | null;
+        /** RunRequestParameterLookupValue */
+        "RunRequestParameterLookupValue-Input": {
+            /** Column */
+            column: string;
+            /** Key */
+            key: {
+                [key: string]: components["schemas"]["RunRequestScalarValue-Input"];
+            };
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "parameter_lookup";
+            /** Table Id */
+            table_id: string;
+        };
+        /** RunRequestParameterLookupValue */
+        "RunRequestParameterLookupValue-Output": {
+            /** Column */
+            column: string;
+            /** Key */
+            key: {
+                [key: string]: components["schemas"]["RunRequestScalarValue-Output"];
+            };
+            /**
+             * Kind
+             * @default parameter_lookup
+             * @constant
+             */
+            kind: "parameter_lookup";
+            /** Table Id */
+            table_id: string;
+        };
+        /** RunRequestParameterValue */
+        RunRequestParameterValue: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "parameter";
+            /** Parameter Id */
+            parameter_id: string;
+        };
+        RunRequestQuantity: components["schemas"]["scopecat__kernel__quantity__Quantity"];
+        RunRequestRangeValue: components["schemas"]["scopecat__kernel__quantity__Quantity"] | number;
+        "RunRequestScalarValue-Input": components["schemas"]["scopecat__kernel__quantity__Quantity"] | components["schemas"]["RunRequestEntityRef-Input"] | components["schemas"]["RunRequestComplexValue"] | components["schemas"]["RunRequestExpressionValue-Input"] | string | boolean | number | null;
+        "RunRequestScalarValue-Output": components["schemas"]["scopecat__kernel__quantity__Quantity"] | components["schemas"]["RunRequestEntityRef-Output"] | components["schemas"]["RunRequestComplexValue"] | components["schemas"]["RunRequestExpressionValue-Output"] | string | boolean | number | null;
         /**
          * RunResourceBlocker
          * @description Current competing owner, without authority or canonical resource keys.

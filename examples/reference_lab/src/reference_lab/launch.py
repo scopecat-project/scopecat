@@ -16,6 +16,7 @@ from scopecat.application.launch import (
     LaunchRequest,
     LaunchResult,
     LaunchSubmission,
+    validate_launch_control_edits,
 )
 from scopecat.automation import InterpretationRequest, procedure
 from scopecat.config.parameter_updates import materialize_parameter_updates
@@ -28,6 +29,8 @@ from scopecat.records.config import config_content_hash
 from scopecat.records.content import Sha256ContentHash
 from scopecat.records.run import ConfigRegistryRunConfigSource
 
+from reference_lab.control_launch import CONTROL_ENTRY, control_launch
+from reference_lab.launch_config import launch_config
 from reference_lab.parameters import CHANNEL_DELAY, Q1_CHANNEL_CALIBRATION
 from reference_lab.workflows.ramsey_experiments import RAMSEY_SHOTS, parallel_raw_ramsey
 from reference_lab.workflows.temperature_diagnostic import (
@@ -155,6 +158,7 @@ CATALOG = LaunchCatalog(
                 instructions=REVIEW_INSTRUCTIONS,
             ),
         ),
+        CONTROL_ENTRY,
     )
 )
 
@@ -169,6 +173,9 @@ def launch_provider(lab: LabClient, request: LaunchRequest) -> LaunchResult:
         raise ValueError("unknown experiment or changed catalog version")
     if request.action not in entry.actions:
         raise ValueError(f"{request.action} is not supported for {entry.id}")
+    validate_launch_control_edits(CATALOG, request)
+    if entry.id == CONTROL_ENTRY.id:
+        return control_launch(lab, request)
     inputs = (
         DiagnosticRequest if entry.kind == "diagnostic" else TimingRequest
     ).model_validate(request.inputs)
@@ -181,8 +188,7 @@ def launch_provider(lab: LabClient, request: LaunchRequest) -> LaunchResult:
         launch_temperature if entry.kind == "diagnostic" else launch_channel_timing
     )
     if request.action == "preview":
-        config, source = lab.config.resolve_with_source("active")
-        assert isinstance(source, ConfigRegistryRunConfigSource)
+        config, source = launch_config(lab, request)
         preview = lab.preview(invocation, config=config)
         stages = [
             summarize_preflight(
@@ -280,25 +286,10 @@ def launch_provider(lab: LabClient, request: LaunchRequest) -> LaunchResult:
             summary=entry.description,
             resolved_inputs=inputs.model_dump(mode="json"),
         )
-    source = request.config_source
-    assert source is not None and source.registry_generation is not None
-    snapshot = lab.config.entry(source.entry_id)
-    if (
-        source.selector != "active"
-        or source.config_ref != snapshot.entry.config_ref
-        or source.content_hash != snapshot.entry.content_hash
-    ):
-        raise ValueError(
-            "preview configuration reference does not match its immutable snapshot"
-        )
-    active = lab.config.active()
-    if (
-        active.activation.generation == source.registry_generation
-        and active.entry.id != source.entry_id
-    ):
-        raise ValueError("preview configuration binding does not match its generation")
+    config, source = launch_config(lab, request)
+    assert source.registry_generation is not None
     intent = LaunchIntent(
-        initial_config=snapshot.config,
+        initial_config=config,
         config_source=source,
         request_hash=request.request_hash,
         actor=request.actor,

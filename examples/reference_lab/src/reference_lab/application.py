@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 from scopecat.application import LabBootstrap
 
 from reference_lab.configuration import bootstrap_config
+from reference_lab.control_launch import launch_frequency_amplitude
 
 if TYPE_CHECKING:
     from scopecat.application import LabApplication
@@ -58,6 +59,7 @@ def create_application(_project_root: Path) -> LabApplication:
             instrument_catalog=instrument_catalog,
         ),
         procedures=(
+            launch_frequency_amplitude,
             launch_temperature,
             launch_channel_timing,
             temperature_diagnostic_procedure,

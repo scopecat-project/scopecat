@@ -311,6 +311,353 @@
     ],
     "truncated": false
   },
+  "controls_scalar": {
+    "config_source": {
+      "config_ref": "config-registry/configs/daemon-15248161728d3097f23ae3b6e8109e20a2a2ec2b720eafcceefc89943acd302e.config-profile-snapshot.json",
+      "content_hash": "sha256:15248161728d3097f23ae3b6e8109e20a2a2ec2b720eafcceefc89943acd302e",
+      "entry_id": "daemon-15248161728d3097f23ae3b6e8109e20a2a2ec2b720eafcceefc89943acd302e",
+      "kind": "config_registry",
+      "registry_generation": 1,
+      "selector": "active"
+    },
+    "controls": [
+      {
+        "axis": {
+          "axis_id": "frequency",
+          "mode": "fixed",
+          "overlay": null,
+          "source": {
+            "kind": "values",
+            "values": [
+              {
+                "unit": "GHz",
+                "value": 4.9
+              }
+            ]
+          }
+        },
+        "id": "frequency",
+        "provenance": "Invocation axis edit",
+        "state": "fixed",
+        "value": {
+          "unit": "GHz",
+          "value": 4.9
+        }
+      },
+      {
+        "axis": {
+          "axis_id": "amplitude",
+          "mode": "fixed",
+          "overlay": null,
+          "source": {
+            "kind": "values",
+            "values": [
+              {
+                "unit": "V",
+                "value": 0.1
+              }
+            ]
+          }
+        },
+        "id": "amplitude",
+        "provenance": "Matches declared default: Reference model low-amplitude default",
+        "state": "fixed",
+        "value": {
+          "unit": "V",
+          "value": 0.1
+        }
+      },
+      {
+        "axis": null,
+        "id": "reference_frequency",
+        "provenance": "Accepted qubits[q0].drive_carrier_frequency; also used by the signal compute",
+        "state": "configuration",
+        "value": {
+          "unit": "GHz",
+          "value": 4.8
+        }
+      },
+      {
+        "axis": null,
+        "id": "maximum_detuning",
+        "provenance": "Maximum requested frequency offset from the reviewed carrier",
+        "state": "derived",
+        "value": {
+          "unit": "GHz",
+          "value": 0.10000000000000053
+        }
+      }
+    ],
+    "experiment_id": "frequency-amplitude",
+    "point_count": 1,
+    "preflight": {
+      "scope_basis": "One analytic model run; all selected grid points.",
+      "stages": [
+        {
+          "config_content_hash": "sha256:15248161728d3097f23ae3b6e8109e20a2a2ec2b720eafcceefc89943acd302e",
+          "configuration": "accepted",
+          "configuration_meaning": "Uses the reviewed q0 carrier without changing configuration.",
+          "costs": [
+            {
+              "artifact_fingerprint": null,
+              "metric": "wall_time",
+              "quantity": {
+                "basis": "No experiment wall-time bound supplied; queue, transfer and host time are not inferred",
+                "kind": "unknown",
+                "unit": "s"
+              },
+              "scope": "experiment",
+              "target_id": null
+            },
+            {
+              "artifact_fingerprint": null,
+              "metric": "retained_bytes",
+              "quantity": {
+                "basis": "Dataset encoding, evidence and storage overhead have not been estimated",
+                "kind": "unknown",
+                "unit": "bytes"
+              },
+              "scope": "experiment",
+              "target_id": null
+            },
+            {
+              "artifact_fingerprint": null,
+              "metric": "batches",
+              "quantity": {
+                "basis": "Selected-artifact capacity does not establish the full experiment batch partition",
+                "kind": "unknown",
+                "unit": "batches"
+              },
+              "scope": "experiment",
+              "target_id": null
+            }
+          ],
+          "entity_ids": null,
+          "executions": {
+            "basis": "One declared analytic model run",
+            "kind": "exact",
+            "unit": "runs",
+            "value": 1.0
+          },
+          "experiment_id": "reference_lab.frequency_amplitude",
+          "id": "signal",
+          "initial_proposed_points": 1,
+          "inspections": [],
+          "label": "Configured signal model",
+          "planned_setting_limit": 64,
+          "planned_settings": [],
+          "planned_settings_truncated": false,
+          "point_scope": "static_plan",
+          "points_per_execution": {
+            "basis": "Static point-plan cardinality",
+            "kind": "exact",
+            "unit": "points",
+            "value": 1.0
+          },
+          "products": [
+            {
+              "dims": [
+                "point"
+              ],
+              "dtype": "float64",
+              "id": "response",
+              "retention": "retained",
+              "shape": [
+                1
+              ],
+              "unit": "V"
+            }
+          ],
+          "sampled_point_limit": 64,
+          "sampled_points": 1,
+          "selected_point_limit": 1,
+          "selected_points": 1,
+          "shots_per_point_per_entity": {
+            "basis": "No shot count declared by the project",
+            "kind": "unknown",
+            "unit": "shots"
+          }
+        }
+      ]
+    },
+    "request_hash": "sha256:bc4e261f25a3207a80d31817b9e83091b2e9a8855fed6236511e10e88bfc00f0",
+    "resolved_inputs": {},
+    "resources": [],
+    "summary": "Preview fixed or scanned signal controls against the reviewed q0 carrier. This analytic model makes no device calls."
+  },
+  "controls_scan": {
+    "config_source": {
+      "config_ref": "config-registry/configs/daemon-15248161728d3097f23ae3b6e8109e20a2a2ec2b720eafcceefc89943acd302e.config-profile-snapshot.json",
+      "content_hash": "sha256:15248161728d3097f23ae3b6e8109e20a2a2ec2b720eafcceefc89943acd302e",
+      "entry_id": "daemon-15248161728d3097f23ae3b6e8109e20a2a2ec2b720eafcceefc89943acd302e",
+      "kind": "config_registry",
+      "registry_generation": 1,
+      "selector": "active"
+    },
+    "controls": [
+      {
+        "axis": {
+          "axis_id": "frequency",
+          "overlay": null,
+          "source": {
+            "kind": "range",
+            "points": 3,
+            "start": {
+              "unit": "GHz",
+              "value": 4.7
+            },
+            "stop": {
+              "unit": "GHz",
+              "value": 4.9
+            }
+          }
+        },
+        "id": "frequency",
+        "provenance": "Invocation axis edit",
+        "state": "scanned",
+        "value": null
+      },
+      {
+        "axis": {
+          "axis_id": "amplitude",
+          "overlay": null,
+          "source": {
+            "kind": "values",
+            "values": [
+              {
+                "unit": "V",
+                "value": 0.05
+              },
+              {
+                "unit": "V",
+                "value": 0.1
+              }
+            ]
+          }
+        },
+        "id": "amplitude",
+        "provenance": "Invocation axis edit",
+        "state": "scanned",
+        "value": null
+      },
+      {
+        "axis": null,
+        "id": "reference_frequency",
+        "provenance": "Accepted qubits[q0].drive_carrier_frequency; also used by the signal compute",
+        "state": "configuration",
+        "value": {
+          "unit": "GHz",
+          "value": 4.8
+        }
+      },
+      {
+        "axis": null,
+        "id": "maximum_detuning",
+        "provenance": "Maximum requested frequency offset from the reviewed carrier",
+        "state": "derived",
+        "value": {
+          "unit": "GHz",
+          "value": 0.10000000000000053
+        }
+      }
+    ],
+    "experiment_id": "frequency-amplitude",
+    "point_count": 6,
+    "preflight": {
+      "scope_basis": "One analytic model run; all selected grid points.",
+      "stages": [
+        {
+          "config_content_hash": "sha256:15248161728d3097f23ae3b6e8109e20a2a2ec2b720eafcceefc89943acd302e",
+          "configuration": "accepted",
+          "configuration_meaning": "Uses the reviewed q0 carrier without changing configuration.",
+          "costs": [
+            {
+              "artifact_fingerprint": null,
+              "metric": "wall_time",
+              "quantity": {
+                "basis": "No experiment wall-time bound supplied; queue, transfer and host time are not inferred",
+                "kind": "unknown",
+                "unit": "s"
+              },
+              "scope": "experiment",
+              "target_id": null
+            },
+            {
+              "artifact_fingerprint": null,
+              "metric": "retained_bytes",
+              "quantity": {
+                "basis": "Dataset encoding, evidence and storage overhead have not been estimated",
+                "kind": "unknown",
+                "unit": "bytes"
+              },
+              "scope": "experiment",
+              "target_id": null
+            },
+            {
+              "artifact_fingerprint": null,
+              "metric": "batches",
+              "quantity": {
+                "basis": "Selected-artifact capacity does not establish the full experiment batch partition",
+                "kind": "unknown",
+                "unit": "batches"
+              },
+              "scope": "experiment",
+              "target_id": null
+            }
+          ],
+          "entity_ids": null,
+          "executions": {
+            "basis": "One declared analytic model run",
+            "kind": "exact",
+            "unit": "runs",
+            "value": 1.0
+          },
+          "experiment_id": "reference_lab.frequency_amplitude",
+          "id": "signal",
+          "initial_proposed_points": 6,
+          "inspections": [],
+          "label": "Configured signal model",
+          "planned_setting_limit": 64,
+          "planned_settings": [],
+          "planned_settings_truncated": false,
+          "point_scope": "static_plan",
+          "points_per_execution": {
+            "basis": "Static point-plan cardinality",
+            "kind": "exact",
+            "unit": "points",
+            "value": 6.0
+          },
+          "products": [
+            {
+              "dims": [
+                "point"
+              ],
+              "dtype": "float64",
+              "id": "response",
+              "retention": "retained",
+              "shape": [
+                6
+              ],
+              "unit": "V"
+            }
+          ],
+          "sampled_point_limit": 64,
+          "sampled_points": 6,
+          "selected_point_limit": 1,
+          "selected_points": 1,
+          "shots_per_point_per_entity": {
+            "basis": "No shot count declared by the project",
+            "kind": "unknown",
+            "unit": "shots"
+          }
+        }
+      ]
+    },
+    "request_hash": "sha256:9b37f815398dff89e249e148ceedfe2b4fd5a03900060f2ae6cf528a621875ea",
+    "resolved_inputs": {},
+    "resources": [],
+    "summary": "Preview fixed or scanned signal controls against the reviewed q0 carrier. This analytic model makes no device calls."
+  },
   "diagnostic": {
     "dataset_schema": {
       "dataset_id": "raw-measurements",
@@ -648,6 +995,7 @@
           "submit"
         ],
         "configuration_effect": "none",
+        "controls": [],
         "description": "Retain one thermometer sample without changing device state or default configuration.",
         "id": "temperature",
         "kind": "diagnostic",
@@ -667,6 +1015,7 @@
           "submit"
         ],
         "configuration_effect": "candidate",
+        "controls": [],
         "description": "Measure, propose a timing change, run its candidate and request review. Accepting it as default remains a separate operator action.",
         "id": "channel-timing",
         "kind": "calibration",
@@ -706,6 +1055,78 @@
         },
         "title": "Q1 channel timing candidate",
         "version": "1"
+      },
+      {
+        "actions": [
+          "preview",
+          "submit"
+        ],
+        "configuration_effect": "none",
+        "controls": [
+          {
+            "default": {
+              "unit": "GHz",
+              "value": 4.8
+            },
+            "group": "Signal",
+            "id": "frequency",
+            "maximum": 5.5,
+            "minimum": 4.5,
+            "ownership": "editable",
+            "provenance": "Reference model operating frequency",
+            "scannable": true,
+            "title": "Frequency",
+            "unit": "GHz"
+          },
+          {
+            "default": {
+              "unit": "V",
+              "value": 0.1
+            },
+            "group": "Signal",
+            "id": "amplitude",
+            "maximum": 0.5,
+            "minimum": 0.0,
+            "ownership": "editable",
+            "provenance": "Reference model low-amplitude default",
+            "scannable": true,
+            "title": "Amplitude",
+            "unit": "V"
+          },
+          {
+            "default": null,
+            "group": "Configuration",
+            "id": "reference_frequency",
+            "maximum": null,
+            "minimum": null,
+            "ownership": "configuration",
+            "provenance": "Accepted qubits[q0].drive_carrier_frequency; also used by the signal compute",
+            "scannable": false,
+            "title": "Reviewed carrier",
+            "unit": "GHz"
+          },
+          {
+            "default": null,
+            "group": "Derived",
+            "id": "maximum_detuning",
+            "maximum": null,
+            "minimum": null,
+            "ownership": "derived",
+            "provenance": "Maximum requested frequency offset from the reviewed carrier",
+            "scannable": false,
+            "title": "Maximum detuning",
+            "unit": "GHz"
+          }
+        ],
+        "description": "Preview fixed or scanned signal controls against the reviewed q0 carrier. This analytic model makes no device calls.",
+        "id": "frequency-amplitude",
+        "kind": "diagnostic",
+        "request": {
+          "properties": {}
+        },
+        "review": null,
+        "title": "Frequency / amplitude model",
+        "version": "1"
       }
     ]
   },
@@ -718,6 +1139,7 @@
       "registry_generation": 1,
       "selector": "active"
     },
+    "controls": [],
     "experiment_id": "temperature",
     "point_count": 1,
     "preflight": {

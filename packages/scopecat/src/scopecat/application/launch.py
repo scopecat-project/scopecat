@@ -15,6 +15,7 @@ from pydantic import (
     model_validator,
 )
 
+from scopecat.application.controls import ControlEdit, LaunchControl, LaunchControlValue
 from scopecat.automation.interpretations import InterpretationRequest
 from scopecat.kernel.content_identity import sha256_json_hash
 from scopecat.planning.preflight import PreflightSummary
@@ -71,6 +72,7 @@ class LaunchCatalogEntry(BaseModel):
     configuration_effect: Literal["none", "candidate", "activation_after_review"]
     request: LaunchInputSchema
     review: InterpretationRequest | None = None
+    controls: tuple[LaunchControl, ...] = ()
 
 
 class LaunchCatalog(BaseModel):
@@ -87,6 +89,7 @@ class LaunchRequest(BaseModel):
     sample: str | None = None
     actor: str = "operator"
     inputs: dict[str, JsonValue] = Field(default_factory=dict)
+    control_edits: dict[str, ControlEdit] = Field(default_factory=dict)
     expected_request_hash: Sha256ContentHash | None = None
     config_source: ConfigRegistryRunConfigSource | None = None
 
@@ -122,6 +125,16 @@ class LaunchRequest(BaseModel):
                 "inputs": self.inputs,
                 "sample": self.sample,
                 "actor": self.actor,
+                **(
+                    {
+                        "control_edits": {
+                            name: edit.model_dump(mode="json")
+                            for name, edit in self.control_edits.items()
+                        }
+                    }
+                    if self.control_edits
+                    else {}
+                ),
             }
         )
 
@@ -144,6 +157,7 @@ class LaunchPreview(BaseModel):
     resources: tuple[str, ...] = ()
     summary: str
     resolved_inputs: dict[str, JsonValue] = Field(default_factory=dict)
+    controls: tuple[LaunchControlValue, ...] = ()
 
 
 class LaunchSubmission(BaseModel):
@@ -156,3 +170,30 @@ class LaunchSubmission(BaseModel):
 
 type LaunchResult = LaunchCatalog | LaunchPreview | LaunchSubmission
 type LaunchProvider = Callable[[LabClient, LaunchRequest], LaunchResult]
+
+
+def validate_launch_control_edits(
+    catalog: LaunchCatalog, request: LaunchRequest
+) -> None:
+    """Reject edits outside the maintained declaration at either entry point."""
+    if not request.control_edits:
+        return
+    entry = next(
+        (
+            entry
+            for entry in catalog.entries
+            if entry.id == request.experiment and entry.version == request.version
+        ),
+        None,
+    )
+    if entry is None:
+        raise ValueError("unknown experiment or changed control catalog version")
+    fields = {field.id: field for field in entry.controls}
+    for name, edit in request.control_edits.items():
+        if name not in fields:
+            raise ValueError(f"unknown control {name!r} for {entry.id}")
+        field = fields[name]
+        if field.ownership != "editable":
+            raise ValueError(f"{name} is {field.ownership}-owned")
+        if edit.mode == "scan" and not field.scannable:
+            raise ValueError(f"{name} is not scannable")

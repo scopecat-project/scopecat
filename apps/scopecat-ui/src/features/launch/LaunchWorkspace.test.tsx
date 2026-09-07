@@ -74,6 +74,7 @@ const entry = {
   actions: ["preview"],
   kind: "calibration",
   configuration_effect: "candidate",
+  controls: [],
   title: "Rabi",
   description: "Configured pulse",
   request: {
@@ -98,6 +99,7 @@ const previewResult = {
   },
   summary: "Configured pulse",
   resolved_inputs: {},
+  controls: [],
 };
 function mount() {
   render(
@@ -128,6 +130,7 @@ it("previews a typed request and clears results after edits", async () => {
     version: "1",
     sample: null,
     inputs: { qubit: "Q12", amplitude_max: 0.4 },
+    control_edits: {},
   });
   fireEvent.change(screen.getByLabelText("Amplitude"), { target: { value: "0.3" } });
   await waitFor(() => expect(screen.queryByText("Preview ready")).toBeNull());

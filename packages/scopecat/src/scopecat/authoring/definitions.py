@@ -1306,6 +1306,28 @@ def _module_from_function[ResultT, **P](
     )
 
 
+def _apply_control_defaults(
+    controls: ControlSet,
+    contract: _ExperimentContract,
+    input_defaults: dict[str, RuntimeInput],
+    required_inputs: list[str],
+) -> None:
+    for control in controls.fields:
+        if control.ownership != "editable" or control.scannable:
+            continue
+        if control.id not in contract.runtime_names:
+            raise ValueError(f"control {control.id!r} needs a declared Input parameter")
+        declared_type = dict(contract.runtime_arguments)[control.id].value_type
+        if declared_type != control.value_type:
+            raise TypeError(
+                f"control {control.id!r} type must match its Input declaration"
+            )
+        if control.id in input_defaults:
+            raise ValueError("declare controlled defaults only on Control")
+        input_defaults[control.id] = control.default
+        required_inputs.remove(control.id)
+
+
 def _experiment_from_function[ResultT, **P](
     fn: Callable[Concatenate[ExperimentContext, P], ResultT],
     *,
@@ -1332,17 +1354,7 @@ def _experiment_from_function[ResultT, **P](
         else:
             input_defaults[parameter.name] = cast("RuntimeInput", default)
     if controls is not None:
-        for control in controls.fields:
-            if control.ownership != "editable" or control.scannable:
-                continue
-            if control.id not in runtime_names:
-                raise ValueError(
-                    f"control {control.id!r} needs a declared Input parameter"
-                )
-            if control.id in input_defaults:
-                raise ValueError("declare controlled defaults only on Control")
-            input_defaults[control.id] = control.default
-            required_inputs.remove(control.id)
+        _apply_control_defaults(controls, contract, input_defaults, required_inputs)
     selected_metadata = dict(metadata or {})
     doc = inspect.getdoc(fn)
     if doc is not None:
