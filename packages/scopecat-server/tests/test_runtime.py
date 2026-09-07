@@ -2684,6 +2684,101 @@ def test_executor_start_is_atomic_idempotent_and_quiet_when_resources_busy(
         ] == ["run_admitted"]
 
 
+def test_queued_run_reports_owner_and_cancellation_does_not_touch_it(
+    tmp_path: Path,
+) -> None:
+    with LocalDaemonRuntime(tmp_path, bootstrap_config=_config()) as runtime:
+        executor = runtime.application.executor
+        owner = runtime.application.submit_run(_submission("visible-owner"))
+        lease = executor.start_executor(
+            owner.run_id, ExecutorStartRequest(executor_id="owner")
+        )
+        waiting = runtime.application.submit_run(_submission("visible-waiter"))
+        resource = runtime.application.runs.get_run(waiting.run_id).resources[0]
+        assert resource.status == "blocked"
+        assert resource.blocked_by is not None
+        assert resource.blocked_by.owner_kind == "run"
+        assert resource.blocked_by.owner_id == owner.run_id
+        assert resource.blocked_by.status == "active"
+        assert resource.expires_at is None
+        executor.cancel_run(waiting.run_id)
+        closed = runtime.application.runs.get_run(waiting.run_id).resources[0]
+        assert closed.status == "released" and closed.blocked_by is None
+        assert (
+            executor.start_executor(
+                owner.run_id, ExecutorStartRequest(executor_id="owner")
+            )
+            == lease
+        )
+        assert _control_run(runtime, owner.run_id).cancellation_requested_at is None
+
+        next_waiter = runtime.application.submit_run(_submission("next-waiter"))
+        executor.commit_terminal(
+            owner.run_id,
+            TerminalRunCommitCommand(
+                lease_id=lease.lease_id,
+                outcome=RunOutcome(
+                    run_id=owner.run_id,
+                    result="failed",
+                    certainty="known",
+                    finished_at=datetime.now(tz=UTC),
+                    problems=(
+                        problem(
+                            "test_owner_finished",
+                            "owner finished",
+                            phase=ProblemPhase.EXECUTION,
+                        ),
+                    ),
+                ),
+            ),
+        )
+        available = runtime.application.runs.get_run(next_waiter.run_id).resources[0]
+        assert available.status == "required" and available.blocked_by is None
+        executor.start_executor(
+            next_waiter.run_id, ExecutorStartRequest(executor_id="next")
+        )
+        acquired = runtime.application.runs.get_run(next_waiter.run_id).resources[0]
+        assert acquired.status == "active" and acquired.blocked_by is None
+
+
+def test_queued_run_reports_quarantined_owner_after_restart(tmp_path: Path) -> None:
+    with LocalDaemonRuntime(tmp_path, bootstrap_config=_config()) as runtime:
+        owner = runtime.application.submit_run(_submission("restart-owner"))
+        runtime.application.executor.start_executor(
+            owner.run_id, ExecutorStartRequest(executor_id="owner")
+        )
+        waiting = runtime.application.submit_run(_submission("restart-waiter"))
+    with LocalDaemonRuntime(tmp_path) as reopened:
+        detail = reopened.application.runs.get_run(waiting.run_id)
+        assert detail.control.state == "queued"
+        blocker = detail.resources[0].blocked_by
+        assert detail.resources[0].status == "blocked"
+        assert blocker is not None and blocker.owner_id == owner.run_id
+        assert blocker.status == "quarantined"
+        assert _control_run(reopened, owner.run_id).state == "attention_required"
+
+
+def test_queued_run_reports_interactive_session_blocker(tmp_path: Path) -> None:
+    with LocalDaemonRuntime(tmp_path, bootstrap_config=_config()) as runtime:
+        active = runtime.application.config.get_active_config()
+        session = runtime.application.executor._control.open_instrument_session(
+            operation_id="visible-session",
+            actor="operator",
+            config_entry_id=active.entry.id,
+            config_content_hash=active.entry.content_hash,
+            instrument_ids=("source-0",),
+            exclusivity_keys=("source-0",),
+            expected_config_generation=active.activation.generation,
+            ttl=timedelta(seconds=30),
+        )
+        waiting = runtime.application.submit_run(_submission("session-waiter"))
+        resource = runtime.application.runs.get_run(waiting.run_id).resources[0]
+        assert resource.status == "blocked"
+        assert resource.blocked_by is not None
+        assert resource.blocked_by.owner_kind == "instrument_session"
+        assert resource.blocked_by.owner_id == session.session_id
+
+
 def test_resource_rejection_closes_only_the_unstarted_contender(tmp_path: Path) -> None:
     with LocalDaemonRuntime(tmp_path, bootstrap_config=_config()) as runtime:
         executor = runtime.application.executor

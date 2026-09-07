@@ -262,12 +262,21 @@ class RunControlView(_ViewModel):
         return self.admission.run_id
 
 
+class RunResourceBlocker(_ViewModel):
+    """Current competing owner, without authority or canonical resource keys."""
+
+    owner_kind: ResourceOwnerKind
+    owner_id: str
+    status: Literal["active", "quarantined"]
+
+
 class RunResourceView(_ViewModel):
-    """Logical resource state without scheduler identity or authority."""
+    """Logical resource state and competing owner, without execution authority."""
 
     resource: RunResourceRequirement
-    status: Literal["required", "active", "quarantined", "released"]
+    status: Literal["required", "blocked", "active", "quarantined", "released"]
     expires_at: datetime | None = None
+    blocked_by: RunResourceBlocker | None = None
 
 
 class RunSummary(_ViewModel):
@@ -834,6 +843,7 @@ __all__ = [
     "RunDetail",
     "RunPlanView",
     "RunRequestView",
+    "RunResourceBlocker",
     "RunResourceView",
     "RunSummary",
     "RunSummaryPage",

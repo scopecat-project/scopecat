@@ -475,3 +475,19 @@ The next safe increments are:
 A DAG becomes useful only when fan-out and dependency scheduling are real
 requirements. Until then, persisted imperative checkpoints remain the smaller
 and clearer model.
+
+### Resource waiting boundary
+
+Current run detail exposes competing owners through `resources[].blocked_by`.
+This is an observational read model; it neither reserves hardware nor schedules
+the waiting run. New synchronous runs still use terminal rejection on contention.
+
+Automatic procedure waiting remains unimplemented. Its durable boundary must
+retain the exact admitted child run and unfinished step before releasing the
+worker. A later worker must replay that same child, with an atomic check that it
+has not begun execution or been cancelled. Cancelling a waiting parent must close
+its unstarted child in the same transaction; an already-started child continues
+to follow the current-step cancellation contract. Restart may make an unstarted
+wait eligible again, but must not turn an unknown execution outcome or a
+quarantined resource into permission to retry. Resource-owner lookup, wakeups,
+and these transitions belong to framework services, not project scripts.

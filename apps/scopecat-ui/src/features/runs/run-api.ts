@@ -611,6 +611,13 @@ function normalizeRunResource(resource: RunResourceView): RunResource {
     id: resource.resource.id,
     kind: resource.resource.kind ?? "instrument",
     status: resource.status,
+    blockedBy: resource.blocked_by
+      ? {
+          ownerKind: resource.blocked_by.owner_kind,
+          ownerId: resource.blocked_by.owner_id,
+          status: resource.blocked_by.status,
+        }
+      : undefined,
   };
 }
 

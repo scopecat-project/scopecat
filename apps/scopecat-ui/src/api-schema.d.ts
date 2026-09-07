@@ -5844,6 +5844,20 @@ export interface components {
             record: components["schemas"]["ContentEntry"];
         };
         /**
+         * RunResourceBlocker
+         * @description Current competing owner, without authority or canonical resource keys.
+         */
+        RunResourceBlocker: {
+            /** Owner Id */
+            owner_id: string;
+            owner_kind: components["schemas"]["ResourceOwnerKind"];
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "active" | "quarantined";
+        };
+        /**
          * RunResourceRequirement
          * @description Logical resource identity requested by a run plan.
          */
@@ -5858,6 +5872,7 @@ export interface components {
          * @description Logical resource state without scheduler identity or authority.
          */
         RunResourceView: {
+            blocked_by?: components["schemas"]["RunResourceBlocker"] | null;
             /** Expires At */
             expires_at?: string | null;
             resource: components["schemas"]["RunResourceRequirement"];
@@ -5865,7 +5880,7 @@ export interface components {
              * Status
              * @enum {string}
              */
-            status: "required" | "active" | "quarantined" | "released";
+            status: "required" | "blocked" | "active" | "quarantined" | "released";
         };
         /**
          * RunSnapshot

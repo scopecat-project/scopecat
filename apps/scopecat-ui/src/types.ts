@@ -28,6 +28,11 @@ export interface RunResource {
   id: string;
   kind: string;
   status?: string;
+  blockedBy?: {
+    ownerKind: "run" | "instrument_session";
+    ownerId: string;
+    status: "active" | "quarantined";
+  };
 }
 
 export interface ContentEntry {

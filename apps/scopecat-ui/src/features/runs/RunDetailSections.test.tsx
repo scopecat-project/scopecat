@@ -4,9 +4,54 @@ import "@testing-library/jest-dom/vitest";
 import { cleanup, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import type { RunExecutionSegmentPage } from "../../api-contract";
-import { ExecutionSegmentsCard } from "./RunDetailSections";
+import { ExecutionSegmentsCard, ResourceCard } from "./RunDetailSections";
 
 afterEach(cleanup);
+
+describe("ResourceCard", () => {
+  it("identifies the competing run and reconciliation requirement", () => {
+    render(
+      <ResourceCard
+        run={{
+          resources: [
+            {
+              id: "drive",
+              kind: "instrument",
+              status: "blocked",
+              blockedBy: { ownerKind: "run", ownerId: "run-owner", status: "quarantined" },
+            },
+          ],
+        }}
+      />,
+    );
+    expect(screen.getByText("Blocked")).toBeVisible();
+    expect(screen.getByText(/Blocked by run run-owner/)).toBeVisible();
+    expect(screen.getByText(/reconciliation required/)).toBeVisible();
+  });
+
+  it("identifies an interactive session without implying automatic execution", () => {
+    render(
+      <ResourceCard
+        run={{
+          resources: [
+            {
+              id: "drive",
+              kind: "instrument",
+              status: "blocked",
+              blockedBy: {
+                ownerKind: "instrument_session",
+                ownerId: "session-owner",
+                status: "active",
+              },
+            },
+          ],
+        }}
+      />,
+    );
+    expect(screen.getByText(/Blocked by interactive session session-owner/)).toBeVisible();
+    expect(screen.queryByText(/reconciliation required/)).not.toBeInTheDocument();
+  });
+});
 
 describe("ExecutionSegmentsCard", () => {
   it("shows resume boundaries in execution order", () => {

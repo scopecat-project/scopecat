@@ -11,6 +11,18 @@ Submit a new invocation after the owner finishes; this is not automatic waiting.
 Explicit `lab.resume(...)` retains the existing queued run on resource contention
 so a failed recovery attempt does not discard its earlier measurements.
 
+Inspect a queued run with `lab.control.run_detail(run_id).resources`, or the
+Resources card in the GUI. A `blocked` resource includes `blocked_by.owner_kind`
+(`run` or `instrument_session`), `owner_id`, and `status`. A quarantined owner
+requires reconciliation; its expired execution process does not make the device
+available. These fields describe a current read snapshot, not a reservation or
+permission to execute. `required` means no competing claim was observed and does
+not imply that an automatic worker is waiting to start the run.
+
+Cancelling a queued run leaves its former owner's execution unchanged. Once the
+queued run is closed, its resources show `released` even if another run still
+owns those devices. No historical blocker is inferred from current ownership.
+
 First reconcile the physical instruments outside Scopecat. This means checking
 that it is safe to acquire and program them again; durable measurement coverage
 does not prove their current state.
