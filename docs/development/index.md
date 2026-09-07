@@ -36,6 +36,7 @@ uv run --locked --package reference-lab --group test pytest examples/reference_l
 
 - [Repository map](repository-map.md)
 - [Core workflow evaluations](workflow-evaluations.md)
+- [Supervised laboratory pilot roadmap](lab-pilot-roadmap.md)
 - [Architecture](architecture/index.md)
 - [Scalability benchmarks](scalability.md)
 - [Project charter](project-charter.md)
