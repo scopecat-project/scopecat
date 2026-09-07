@@ -408,6 +408,107 @@
     },
     "experiment_id": "temperature",
     "point_count": 1,
+    "preflight": {
+      "scope_basis": "One diagnostic run. No configuration writes.",
+      "stages": [
+        {
+          "config_content_hash": "sha256:15248161728d3097f23ae3b6e8109e20a2a2ec2b720eafcceefc89943acd302e",
+          "configuration": "accepted",
+          "configuration_meaning": "Uses the reviewed active configuration; no default changes.",
+          "costs": [
+            {
+              "artifact_fingerprint": null,
+              "metric": "wall_time",
+              "quantity": {
+                "basis": "No experiment wall-time bound supplied; queue, transfer and host time are not inferred",
+                "kind": "unknown",
+                "unit": "s"
+              },
+              "scope": "experiment",
+              "target_id": null
+            },
+            {
+              "artifact_fingerprint": null,
+              "metric": "retained_bytes",
+              "quantity": {
+                "basis": "Dataset encoding, evidence and storage overhead have not been estimated",
+                "kind": "unknown",
+                "unit": "bytes"
+              },
+              "scope": "experiment",
+              "target_id": null
+            },
+            {
+              "artifact_fingerprint": null,
+              "metric": "batches",
+              "quantity": {
+                "basis": "Selected-artifact capacity does not establish the full experiment batch partition",
+                "kind": "unknown",
+                "unit": "batches"
+              },
+              "scope": "experiment",
+              "target_id": null
+            }
+          ],
+          "entity_ids": [
+            "cryostat"
+          ],
+          "executions": {
+            "basis": "Declared workflow stage; cancellation or failure may prevent execution",
+            "kind": "exact",
+            "unit": "runs",
+            "value": 1.0
+          },
+          "experiment_id": "reference_lab.temperature_diagnostic",
+          "id": "diagnostic",
+          "initial_proposed_points": 1,
+          "inspections": [],
+          "label": "Retained temperature diagnostic",
+          "point_scope": "static_plan",
+          "points_per_execution": {
+            "basis": "Static point-plan cardinality",
+            "kind": "exact",
+            "unit": "points",
+            "value": 1.0
+          },
+          "products": [
+            {
+              "dims": [
+                "point"
+              ],
+              "dtype": "float64",
+              "id": "temperature",
+              "retention": "retained",
+              "shape": [
+                1
+              ],
+              "unit": "K"
+            },
+            {
+              "dims": [
+                "point"
+              ],
+              "dtype": "float64",
+              "id": "resistance",
+              "retention": "retained",
+              "shape": [
+                1
+              ],
+              "unit": "Ohm"
+            }
+          ],
+          "sampled_point_limit": 64,
+          "sampled_points": 1,
+          "selected_point_limit": 1,
+          "selected_points": 1,
+          "shots_per_point_per_entity": {
+            "basis": "No shot count declared by the project",
+            "kind": "unknown",
+            "unit": "shots"
+          }
+        }
+      ]
+    },
     "request_hash": "sha256:2280b9acef34da8b74f82088be27aa7a34694d6e1aca4379028f951c1a0ffc20",
     "resolved_inputs": {},
     "resources": [],

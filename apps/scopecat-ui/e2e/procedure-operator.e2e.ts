@@ -84,6 +84,21 @@ test("reopens an admitted procedure after restart and follows exact retained run
     await page.getByLabel("Experiment", { exact: true }).selectOption("channel-timing");
     await page.getByRole("button", { name: "Preview", exact: true }).click();
     await expect(page.getByText("Preview ready", { exact: true })).toBeVisible();
+    const sourceScope = page.getByRole("region", { name: "Accepted-configuration source run" });
+    const candidateScope = page.getByRole("region", {
+      name: "Proposed-configuration verification run",
+    });
+    await expect(sourceScope.getByText(/^Exact: 64 shots/)).toBeVisible();
+    await expect(candidateScope.getByText(/^Exact: 64 shots/)).toBeVisible();
+    await expect(candidateScope.getByText(/^Unknown \(s\)/)).toBeVisible();
+    await expect(candidateScope.getByText("Retained (planned dataset)")).toBeVisible();
+    await expect(candidateScope.getByText(/has not run or been verified/)).toBeVisible();
+    const preflightScreenshot = testInfo.outputPath("bounded-preflight.png");
+    await page.screenshot({ path: preflightScreenshot, fullPage: true });
+    await testInfo.attach("Bounded source and candidate preflight", {
+      path: preflightScreenshot,
+      contentType: "image/png",
+    });
     await page.getByRole("button", { name: "Start acquisition" }).click();
     // This procedure runs a source acquisition, analysis, and a second acquisition.
     // Observe each durable milestone instead of spending one UI wait on all three.

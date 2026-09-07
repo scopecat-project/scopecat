@@ -17,7 +17,7 @@ from scopecat.application.launch import (
     LaunchSubmission,
 )
 from scopecat.daemon.client import DaemonClient, DaemonConflictError
-from scopecat.planning.preflight import PreflightStage
+from scopecat.planning.preflight import ExactQuantity, PreflightStage, UnknownQuantity
 from scopecat.project import load_project
 from scopecat.records.measurement import MeasurementScalar
 from scopecat_testkit.project_loading import isolated_project_imports
@@ -118,6 +118,26 @@ def test_real_http_preview_shares_catalog_and_never_admits_acquisition(
         )
         assert all(stage.selected_points <= 1 for stage in preview.preflight.stages)
         assert all(stage.sampled_points <= 64 for stage in preview.preflight.stages)
+        for stage in preview.preflight.stages:
+            wall_time = next(cost for cost in stage.costs if cost.metric == "wall_time")
+            assert isinstance(wall_time.quantity, UnknownQuantity)
+            assert wall_time.scope == "experiment"
+            if experiment == "channel-timing":
+                assert isinstance(stage.shots_per_point_per_entity, ExactQuantity)
+                assert stage.shots_per_point_per_entity.value == 64
+                playback = next(
+                    cost
+                    for cost in stage.costs
+                    if cost.metric == "waveform_playback_time"
+                )
+                assert isinstance(playback.quantity, ExactQuantity)
+                assert playback.quantity.value > 0
+                assert playback.quantity.unit == "s"
+                assert playback.scope == "inspected_artifact"
+                assert playback.target_id == stage.inspections[0].target_id
+                assert playback.artifact_fingerprint == (
+                    stage.inspections[0].artifact_fingerprint
+                )
         assert preview.point_count == (1 if experiment == "temperature" else 2)
         assert preview.config_source.entry_id == active.entry.id
         assert client.list_runs() == before
