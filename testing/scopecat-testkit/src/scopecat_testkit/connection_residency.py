@@ -118,11 +118,15 @@ class ResidencyProbe:
         )
         return setup, trigger, collect
 
-    def inject(self, fault: Literal["setup_rejected", "trigger_unknown"]) -> None:
+    def inject(
+        self, fault: Literal["setup_rejected", "trigger_unknown", "collect_unknown"]
+    ) -> None:
         self.root.mkdir(parents=True, exist_ok=True)
         (self.root / fault).touch()
 
-    def consume(self, fault: Literal["setup_rejected", "trigger_unknown"]) -> bool:
+    def consume(
+        self, fault: Literal["setup_rejected", "trigger_unknown", "collect_unknown"]
+    ) -> bool:
         path = self.root / fault
         if not path.exists():
             return False
@@ -234,6 +238,17 @@ class VolatileProgramDriver:
                 for result in request.results
             }
         )
+
+        if self.probe.consume("collect_unknown"):
+            return DriverUnknown(
+                (
+                    problem(
+                        "fixture_collect_response_lost",
+                        "virtual collect executed but its response was lost",
+                        phase=ProblemPhase.EXECUTION,
+                    ),
+                )
+            )
         return DriverSuccess(
             readback,
             measured_cost=OperationCostMeasurement(

@@ -45,7 +45,13 @@ def _no_completed_recovery_groups() -> tuple[RecoveryGroupCompletion, ...]:
 class RunCoverageWriter(Protocol):
     """Commit bounded contiguous logical-point progress."""
 
-    def advance(self, *, start_index: int, point_count: int) -> None: ...
+    def advance(
+        self,
+        *,
+        start_index: int,
+        point_count: int,
+        groups: tuple[RecoveryGroupCompletion, ...] = (),
+    ) -> None: ...
 
     def flush(self) -> None: ...
 

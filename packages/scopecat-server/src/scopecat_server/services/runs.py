@@ -883,14 +883,10 @@ class RunService:
 
         with self._config_errors():
             self._runs.read_snapshot(run_id)
-            items, next_offset, live_schema, _ = SQLiteMeasurementDatasetRepository(
+            items, next_offset, live_schema = SQLiteMeasurementDatasetRepository(
                 self._runs,
                 run_id=run_id,
-            ).measurement_page(
-                limit=limit,
-                offset=0,
-                include_schema=True,
-            )
+            ).measurement_preview(limit=limit)
         try:
             dataset = self._runs.read_content(
                 run_id,

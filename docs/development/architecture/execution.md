@@ -216,6 +216,26 @@ groups even beyond the watermark. This does not make an interrupted group
 complete, and does not enable continuation of an already-started domain target;
 target-aware recovery remains a separate contract.
 
+Measurement ingest distinguishes received records from durable records. The
+existing coalesced coverage checkpoint flushes measurements, commits exact group
+output proofs, then advances the logical prefix. The server rejects a new prefix
+whose actual logical points have not been durably acquired; acquisition count
+alone is insufficient for reordered or repeated points.
+
+Before another hardware batch, the client transfers pending completed output to
+the daemon without forcing a durable write per shot or point. If a later hardware
+result is unknown, the daemon attempts to retain that received tail before
+revoking the executor lease. Retention failure is a separate persistence problem;
+quarantine and fencing still occur. A process crash can still lose merely received
+records. No unknown hardware operation is replayed to reconstruct output.
+
+The bounded measurement preview includes durable acquisitions beyond the safe
+coverage prefix: fixed group output wins, otherwise the latest acquisition is
+shown. This preview neither seals a dataset nor certifies a recovery group.
+Catalog readers and stable logical pages continue to use their published
+projection. A retained tail therefore does not authorize continuation or make
+terminal persistence confirmed.
+
 One `ExperimentSystem` owns one domain compiler. The compiler may internally
 route supported dialects or invoke a lower-level target compiler after resolving
 inputs. Planning calls `prepare_batch` once per candidate window and receives a

@@ -609,6 +609,12 @@ class ExecutorService:
             receipts.append(receipt)
         return tuple(receipts)
 
+    def retain_measurements_before_fence(self, run_id: str, token: str) -> None:
+        """Persist received output while the failing executor still owns its lease."""
+        if not self._active_measurements.preview(run_id).active:
+            return
+        self._flush_measurements(run_id, token=token, force=True)
+
     def _measurement_repository(
         self,
         run_id: str,

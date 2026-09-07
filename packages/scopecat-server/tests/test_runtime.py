@@ -4244,6 +4244,21 @@ def test_effect_is_fenced_and_terminal_updates_control(
         pending_preview = client.get(f"/api/v1/runs/{run_id}/measurements/preview")
         live_preview = client.get(f"/api/v1/runs/{run_id}/measurements/live")
         pending_coverage = client.get(f"/api/v1/runs/{run_id}/coverage")
+        premature_coverage = client.post(
+            f"/api/v1/runs/{run_id}/coverage/advance",
+            json=RunCoverageAdvanceCommand(
+                lease_id=lease.lease_id,
+                start_index=0,
+                point_count=4,
+            ).model_dump(mode="json"),
+        )
+        assert premature_coverage.status_code == 409
+        assert (
+            client.get(f"/api/v1/runs/{run_id}/coverage").json()[
+                "completed_point_count"
+            ]
+            == 0
+        )
         flush_response = client.post(
             f"/api/v1/runs/{run_id}/measurements/flush",
             json=MeasurementFlushCommand(

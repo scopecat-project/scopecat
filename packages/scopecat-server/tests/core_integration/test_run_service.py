@@ -118,11 +118,20 @@ class _UnusedOptimizer:
 
 
 class _MemoryCoverage:
-    def __init__(self, completed: int = 0) -> None:
+    def __init__(self, recovery: _MemoryRecoveryGroups, completed: int = 0) -> None:
+        self.recovery = recovery
+        self.groups: list[RecoveryGroupCompletion] = []
         self.completed = completed
         self._pending: list[tuple[int, int]] = []
 
-    def advance(self, *, start_index: int, point_count: int) -> None:
+    def advance(
+        self,
+        *,
+        start_index: int,
+        point_count: int,
+        groups: tuple[RecoveryGroupCompletion, ...] = (),
+    ) -> None:
+        self.groups.extend(groups)
         expected_start = self.completed + sum(
             pending_count for _, pending_count in self._pending
         )
@@ -130,6 +139,8 @@ class _MemoryCoverage:
         self._pending.append((start_index, point_count))
 
     def flush(self) -> None:
+        self.recovery.commit(tuple(self.groups))
+        self.groups.clear()
         self.completed += sum(point_count for _, point_count in self._pending)
         self._pending.clear()
 
@@ -241,8 +252,8 @@ def test_static_execution_continues_only_the_durable_point_suffix(
         repository=services.runs,
     )
     baseline_measurements = FakeMeasurementDatasetRepository()
-    baseline_coverage = _MemoryCoverage()
     baseline_recovery = _MemoryRecoveryGroups()
+    baseline_coverage = _MemoryCoverage(baseline_recovery)
     execute_admitted_run(
         program=planned.program,
         session=replace(
@@ -281,8 +292,8 @@ def test_static_execution_continues_only_the_durable_point_suffix(
     continued_measurements.initialize(header)
     first_record = baseline_records[0].model_copy(update={"run_id": accepted.run_id})
     continued_measurements.seed_prior_records((first_record,))
-    continued_coverage = _MemoryCoverage(completed=1)
     continued_recovery = _MemoryRecoveryGroups()
+    continued_coverage = _MemoryCoverage(continued_recovery, completed=1)
 
     completed = execute_admitted_run(
         program=planned.program,
@@ -317,7 +328,17 @@ def test_sparse_unrecorded_recovery_skips_exact_completed_group(
     class CoverageWriter:
         completed = 0
 
-        def advance(self, *, start_index: int, point_count: int) -> None:
+        def __init__(self, recovery: RecoveryWriter) -> None:
+            self.recovery = recovery
+
+        def advance(
+            self,
+            *,
+            start_index: int,
+            point_count: int,
+            groups: tuple[RecoveryGroupCompletion, ...] = (),
+        ) -> None:
+            self.recovery.commit(groups)
             assert start_index == self.completed
             self.completed += point_count
 
@@ -392,8 +413,8 @@ def test_sparse_unrecorded_recovery_skips_exact_completed_group(
         request=planned.request,
         repository=services.runs,
     )
-    interrupted_coverage = CoverageWriter()
     interrupted_recovery = RecoveryWriter()
+    interrupted_coverage = CoverageWriter(interrupted_recovery)
 
     def interrupted_operations(
         _start_point_count: int,
@@ -435,8 +456,8 @@ def test_sparse_unrecorded_recovery_skips_exact_completed_group(
         request=planned.request,
         repository=services.runs,
     )
-    coverage = CoverageWriter()
     recovery = RecoveryWriter()
+    coverage = CoverageWriter(recovery)
 
     snapshot = execute_admitted_run(
         program=program,
@@ -511,8 +532,8 @@ def test_execution_retains_measurements_before_logical_block_cuts(
         repository=services.runs,
     )
     interrupted_measurements = FakeMeasurementDatasetRepository()
-    interrupted_coverage = _MemoryCoverage()
     interrupted_recovery = _MemoryRecoveryGroups()
+    interrupted_coverage = _MemoryCoverage(interrupted_recovery)
     with pytest.raises(_InjectedInterruption):
         execute_admitted_run(
             program=replace(
@@ -544,8 +565,8 @@ def test_execution_retains_measurements_before_logical_block_cuts(
         repository=services.runs,
     )
     completed_measurements = FakeMeasurementDatasetRepository()
-    completed_coverage = _MemoryCoverage()
     completed_recovery = _MemoryRecoveryGroups()
+    completed_coverage = _MemoryCoverage(completed_recovery)
     snapshot = execute_admitted_run(
         program=replace(
             planned.program,

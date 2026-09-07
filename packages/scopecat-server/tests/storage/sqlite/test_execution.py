@@ -55,6 +55,7 @@ from scopecat_server.storage.sqlite.execution import (
     SQLiteDomainJobTransitions,
     SQLiteMeasurementDatasetRepository,
     SQLiteRecoveryGroups,
+    SQLiteRunCoverage,
     SQLiteRunPointLedger,
 )
 from scopecat_server.storage.sqlite.project_store import SQLiteProjectStore
@@ -1313,3 +1314,81 @@ def test_measurement_replay_rejects_mismatched_durable_operation_identity(
         _commit_append(runs, append_repository, append)
     with pytest.raises(ExecutionStateConflict, match="different content"):
         _commit_seal(runs, seal_repository, seal)
+
+
+def test_coverage_requires_actual_durable_ordinals_not_acquisition_count(
+    tmp_path: Path,
+) -> None:
+    runs = _runs(tmp_path)
+    header = _header("durable-coverage", point_count=3)
+    repository = SQLiteMeasurementDatasetRepository(runs, run_id=header.run_id)
+    _commit_header(runs, repository, header)
+    coverage = SQLiteRunCoverage(runs, run_id=header.run_id)
+    # Receiving/preparing output is not a durable append; an unrelated ordinal
+    # is not evidence of a contiguous prefix either.
+    repository.prepare_append(_append(header))
+    with (
+        pytest.raises(ExecutionStateConflict, match="durably acquired"),
+        _sqlite_transaction(runs) as connection,
+    ):
+        coverage.advance_in_transaction(connection, start_index=0, point_count=1)
+    _commit_acquisition(
+        runs, repository, _append(header, point_index=2, acquisition_start=0)
+    )
+    with (
+        pytest.raises(ExecutionStateConflict, match="durably acquired"),
+        _sqlite_transaction(runs) as connection,
+    ):
+        coverage.advance_in_transaction(connection, start_index=0, point_count=1)
+    assert coverage.read() == 0
+    _commit_append(
+        runs, repository, _append(header, point_index=0, acquisition_start=1)
+    )
+    with _sqlite_transaction(runs) as connection:
+        assert coverage.advance_in_transaction(
+            connection, start_index=0, point_count=1
+        ) == (1, True)
+    with (
+        pytest.raises(ExecutionStateConflict, match="durably acquired"),
+        _sqlite_transaction(runs) as connection,
+    ):
+        coverage.advance_in_transaction(connection, start_index=1, point_count=2)
+    assert coverage.read() == 1
+
+
+def test_durable_preview_keeps_fixed_output_and_selects_latest_unfixed_tail(
+    tmp_path: Path,
+) -> None:
+    runs = _runs(tmp_path)
+    header = _header("preview-tail", point_count=3)
+    repository = SQLiteMeasurementDatasetRepository(runs, run_id=header.run_id)
+    _commit_header(runs, repository, header)
+    fixed = _append(header, value=1)
+    _commit_append(runs, repository, fixed)
+    _commit_acquisition(
+        runs, repository, _append(header, point_index=0, acquisition_start=1, value=99)
+    )
+    _commit_acquisition(
+        runs, repository, _append(header, point_index=2, acquisition_start=2, value=2)
+    )
+    latest = _append(header, point_index=2, acquisition_start=3, value=3)
+    _commit_acquisition(runs, repository, latest)
+    items, next_offset, schema = repository.measurement_preview(limit=1)
+    assert items == fixed.records
+    assert next_offset == 1
+    assert schema == header.dataset_schema
+    items, next_offset, _schema = repository.measurement_preview(limit=2)
+    assert items == (*fixed.records, *latest.records)
+    assert next_offset is None  # Two actual rows, even though the last ordinal is 2.
+    assert repository.measurement_page(limit=3, offset=0)[0] == fixed.records
+    # A resumed exact group may select a newer acquisition for the unproved tail.
+    resumed = _append(header, point_index=2, acquisition_start=4, value=4)
+    _commit_append(runs, repository, resumed)
+    assert repository.measurement_preview(limit=3)[0] == (
+        *fixed.records,
+        *resumed.records,
+    )
+    assert repository.measurement_page(limit=3, offset=0)[0] == (
+        *fixed.records,
+        *resumed.records,
+    )

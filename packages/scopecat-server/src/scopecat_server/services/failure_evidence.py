@@ -19,7 +19,10 @@ def failure_evidence(
         if not isinstance(values, list):
             continue
         target = (
-            secondary if event.kind == "run_hardware_finalization_failed" else saved
+            secondary
+            if event.kind
+            in {"run_hardware_finalization_failed", "run_measurement_retention_failed"}
+            else saved
         )
         target.extend(Problem.model_validate(value) for value in values)
     outcome = detail.snapshot.outcome

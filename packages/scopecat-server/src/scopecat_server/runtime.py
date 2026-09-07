@@ -189,6 +189,10 @@ class LocalDaemonRuntime:
                 samples=samples,
                 sample_store=sample_store,
             )
+
+            def retain_measurements_before_fence(run_id: str, token: str) -> None:
+                executor.retain_measurements_before_fence(run_id, token)
+
             instruments = InstrumentService(
                 control=control,
                 runs=runs,
@@ -198,6 +202,7 @@ class LocalDaemonRuntime:
                 actors=instrument_actors,
                 shutdown_grace_seconds=instrument_shutdown_grace.total_seconds(),
                 session_lease_ttl=instrument_session_lease_ttl,
+                retain_measurements_before_fence=retain_measurements_before_fence,
             )
             executor = ExecutorService(
                 control=control,
