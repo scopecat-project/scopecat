@@ -32,6 +32,7 @@ from scopecat.records.analysis import (
     AnalysisDatasetViewSource,
     AnalysisExecutionOutputReference,
     AnalysisFactRecordOutput,
+    AnalysisFigureLayerSpec,
     AnalysisFigureProjection,
     AnalysisFigureRecordOutput,
     AnalysisFigureViewSpec,
@@ -353,11 +354,11 @@ def test_native_dataframe_trace_returns_one_reusable_derived_dataset(
     assert table_output.content.source.output_id == "derived-signal"
     assert table_output.content.columns == ("frequency", "score")
     assert isinstance(figure_output, AnalysisFigureRecordOutput)
-    assert figure_output.content.source is not None
-    assert figure_output.content.source.output_id == "derived-signal"
-    assert figure_output.content.projection is not None
-    assert figure_output.content.projection.x == "frequency"
-    assert figure_output.content.projection.y == "score"
+    assert isinstance(figure_output.content.layers[0].source, AnalysisDatasetViewSource)
+    assert figure_output.content.layers[0].source.output_id == "derived-signal"
+    assert figure_output.content.layers[0].projection is not None
+    assert figure_output.content.layers[0].projection.x == "frequency"
+    assert figure_output.content.layers[0].projection.y == "score"
 
     stored = handle.record_json(
         "analysis-native-derived-data-r1",
@@ -399,7 +400,7 @@ def test_native_dataframe_trace_returns_one_reusable_derived_dataset(
         "_derived_score_max",
     ]
     assert published.table("table").source is not None
-    assert published.figure("figure").projection is not None
+    assert published.figure("figure").layers[0].projection is not None
     catalog_entry = handle.content("dataset", dataset_id)
     assert catalog_entry.kind == "analysis_dataset"
     assert catalog_entry.content_hash == content["content_hash"]
@@ -1089,12 +1090,15 @@ def test_analysis_save_rejects_views_with_unknown_dataset_fields(
             id="forged-figure",
             title="forged figure",
             content=AnalysisFigureViewSpec(
-                source=source,
-                projection=AnalysisFigureProjection(
-                    kind="line",
-                    x="value",
-                    y="missing",
-                ),
+                layers=(
+                    AnalysisFigureLayerSpec(
+                        id="data",
+                        source=source,
+                        projection=AnalysisFigureProjection(
+                            kind="line", x="value", y="missing"
+                        ),
+                    ),
+                )
             ),
             metadata={},
         ),
@@ -1257,7 +1261,9 @@ def test_analysis_facade_projects_annotated_results_directly(tmp_path: Path) -> 
     assert isinstance(table_output, AnalysisTableOutput)
     assert isinstance(figure_output, AnalysisFigureOutput)
     assert table_output.content.source.output_id == "observations"
-    assert figure_output.content.source.output_id == "observations"
+    assert figure_output.content.layers[0].source == AnalysisDatasetViewSource(
+        output_id="observations"
+    )
 
     published = analysis.save()
     table_view = published.table("table")
@@ -1268,7 +1274,7 @@ def test_analysis_facade_projects_annotated_results_directly(tmp_path: Path) -> 
     ]
     assert table_view.total_rows == 2
     assert not table_view.truncated
-    assert figure_view.preview.series[0].x == [100.0, 200.0]
+    assert figure_view.layers[0].preview.series[0].x == [100.0, 200.0]
     assert figure_view.total_points == 2
     assert not figure_view.truncated
 
@@ -1305,6 +1311,101 @@ def test_analysis_publication_generates_bounded_preview_counts(tmp_path: Path) -
     assert table.truncated
 
     figure = published.figure("figure")
-    assert len(figure.preview.series[0].x) == MAX_ANALYSIS_FIGURE_POINTS
+    assert len(figure.layers[0].preview.series[0].x) == MAX_ANALYSIS_FIGURE_POINTS
     assert figure.total_points == row_count
     assert figure.truncated
+
+
+def test_layered_figure_freezes_published_sources_without_copying_datasets(
+    tmp_path: Path,
+) -> None:
+    from scopecat.records.analysis import (
+        AnalysisPublishedDatasetViewSource,
+        AnalysisUncertaintyProjection,
+    )
+
+    run = execute_signal_run(
+        config=load_config(), experiment=load_invocation(), project_root=tmp_path
+    )
+    lab = in_process_lab(tmp_path, config=load_config())
+    handle = lab.get_run(run.run_id)
+    measured = (
+        handle.analysis("Measured", key="measured")
+        .result()
+        .dataset(
+            "data",
+            pd.DataFrame({"x": range(10_000), "y": range(10_000)}),
+            fields={"x": sc.AnalysisField(unit="us"), "y": sc.AnalysisField(unit="V")},
+        )
+        .figure(dataset="data", kind="scatter", x="x", y="y")
+        .save()
+    )
+    fit = (
+        handle.analysis("Fit", key="fit")
+        .result()
+        .dataset(
+            "curve",
+            pd.DataFrame(
+                {
+                    "x": [0.0, 1000.0],
+                    "y": [0.0, 1000.0],
+                    "lo": [-10.0, 990.0],
+                    "hi": [10.0, 1010.0],
+                }
+            ),
+            fields={
+                "x": sc.AnalysisField(unit="ns"),
+                "y": sc.AnalysisField(unit="mV"),
+                "lo": sc.AnalysisField(unit="mV"),
+                "hi": sc.AnalysisField(unit="mV"),
+            },
+        )
+        .save()
+    )
+    result = (
+        handle.analysis("Layered review", key="layered-review")
+        .result()
+        .figure_layers(
+            layers=(
+                AnalysisFigureLayerSpec(
+                    id="measured",
+                    source=measured.dataset_view_source("data"),
+                    projection=AnalysisFigureProjection(kind="scatter", x="x", y="y"),
+                ),
+                AnalysisFigureLayerSpec(
+                    id="fit",
+                    source=fit.dataset_view_source("curve"),
+                    projection=AnalysisFigureProjection(
+                        kind="line",
+                        x="x",
+                        y="y",
+                        uncertainty=AnalysisUncertaintyProjection(
+                            lower="lo",
+                            upper="hi",
+                            meaning="Declared fixture bounds",
+                            style="bars",
+                        ),
+                    ),
+                ),
+            )
+        )
+        .save()
+    )
+    assert len(result.inputs) == 2
+    assert [output.kind for output in result.outputs] == ["figure"]
+    view = result.figure("figure")
+    assert view.total_points == 10_002
+    assert [
+        sum(len(series.x) for series in layer.preview.series) for layer in view.layers
+    ] == [2048, 2]
+    assert view.layers[1].preview.series[0].x == [0.0, 1.0]
+    assert view.layers[1].preview.series[0].y_upper == [0.01, 1.01]
+    original_source = view.layers[0].source
+    assert isinstance(original_source, AnalysisPublishedDatasetViewSource)
+    assert original_source.source.analysis_record_id == measured.id
+    handle.analysis("Changed measured", key="measured").result().dataset(
+        "data", pd.DataFrame({"x": [0.0], "y": [999.0]})
+    ).save()
+    reopened = handle.published_analysis(result.id).figure("figure")
+    assert reopened == view
+    assert reopened.layers[0].preview.series[0].y[:2] == [0.0, 1.0]

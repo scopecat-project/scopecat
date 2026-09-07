@@ -87,3 +87,12 @@ Choose one supported path:
 This feature supplies no general migration engine. Do not delete the old database
 to make a newer reader start. Test a restore while the matching reader and
 external dependencies are still available.
+
+## Layered figure store version
+
+Layered analysis figures use project store version 63. A version 62 project or
+snapshot is rejected by this runtime without being modified; snapshot restore
+does not upgrade it. Keep its pinned version 62 runtime to read or export the
+retained scientific data, and preserve the original project and verified
+snapshot. Create a separate version 63 project for new publications. No automatic
+62-to-63 migration is supplied.

@@ -321,12 +321,24 @@ class AnalysisFigureSeries(_AnalysisContentModel):
         max_length=MAX_ANALYSIS_FIGURE_POINTS,
     )
 
+    y_lower: list[FiniteFloat] | None = None
+    y_upper: list[FiniteFloat] | None = None
+
     @model_validator(mode="after")
     def validate_points(self) -> AnalysisFigureSeries:
         if len(self.x) != len(self.y):
             raise ValueError(
                 "analysis figure series x and y values must have equal length"
             )
+        if (self.y_lower is None) != (self.y_upper is None):
+            raise ValueError("uncertainty requires both lower and upper bounds")
+        if self.y_lower is not None and self.y_upper is not None:
+            if len(self.y_lower) != len(self.x) or len(self.y_upper) != len(self.x):
+                raise ValueError("uncertainty bounds must be point-aligned")
+            if any(lo > hi for lo, hi in zip(self.y_lower, self.y_upper, strict=True)):
+                raise ValueError(
+                    "uncertainty lower bounds must not exceed upper bounds"
+                )
         return self
 
     @classmethod
@@ -499,40 +511,112 @@ class AnalysisTableView(AnalysisTableViewSpec):
         return self
 
 
+class AnalysisUncertaintyProjection(_AnalysisContentModel):
+    """Absolute y bounds supplied by project analysis, not framework statistics."""
+
+    lower: _NonEmptyText
+    upper: _NonEmptyText
+    meaning: _NonEmptyText
+    style: Literal["band", "bars"]
+
+
 class AnalysisFigureProjection(_AnalysisContentModel):
-    """Dataset column roles used to produce a bounded figure preview."""
+    """Dataset column roles used to produce a bounded figure layer."""
 
     kind: Literal["line", "scatter"]
     x: _NonEmptyText
     y: _NonEmptyText
     series: _NonEmptyText | None = None
     label: _NonEmptyText | None = None
+    uncertainty: AnalysisUncertaintyProjection | None = None
 
 
-class AnalysisFigureViewSpec(_AnalysisContentModel):
-    """Authoritative dataset projection requested for one figure view."""
+class AnalysisPublishedDatasetViewSource(_AnalysisContentModel):
+    """A frozen, already published dataset; never a reference to this publication."""
 
-    source: AnalysisDatasetViewSource
+    kind: Literal["published_dataset"] = "published_dataset"
+    source: AnalysisPublishedOutputReference
+    dataset: AnalysisDatasetReference
+
+
+type AnalysisFigureSource = Annotated[
+    AnalysisDatasetViewSource | AnalysisPublishedDatasetViewSource,
+    Field(discriminator="kind"),
+]
+
+
+class AnalysisFigureLayerSpec(_AnalysisContentModel):
+    id: _NonEmptyText
+    source: AnalysisFigureSource
     projection: AnalysisFigureProjection
 
 
-class AnalysisFigureView(AnalysisFigureViewSpec):
-    """Server-generated bounded figure preview of an authoritative dataset."""
+class AnalysisFigureViewSpec(_AnalysisContentModel):
+    """Layers share one bounded preview budget and compatible numeric axes."""
 
+    layers: Sequence[AnalysisFigureLayerSpec] = Field(
+        min_length=1, max_length=MAX_ANALYSIS_FIGURE_SERIES
+    )
+
+    @field_validator("layers")
+    @classmethod
+    def freeze_layers(
+        cls, value: Sequence[AnalysisFigureLayerSpec]
+    ) -> Sequence[AnalysisFigureLayerSpec]:
+        return tuple(value)
+
+    @model_validator(mode="after")
+    def validate_layers(self) -> Self:
+        if len({layer.id for layer in self.layers}) != len(self.layers):
+            raise ValueError("analysis figure layer ids must be unique")
+        return self
+
+
+class AnalysisFigureLayerView(AnalysisFigureLayerSpec):
     preview: AnalysisFigure
     total_points: int = Field(ge=0)
     truncated: bool
 
     @model_validator(mode="after")
-    def validate_preview(self) -> AnalysisFigureView:
-        if self.projection.kind != self.preview.kind:
-            raise ValueError(
-                "analysis figure projection kind must match its preview kind"
-            )
-        returned_points = sum(len(series.x) for series in self.preview.series)
-        if self.total_points < returned_points:
-            raise ValueError("analysis figure total points must cover its preview")
-        if self.truncated != (self.total_points > returned_points):
+    def validate_preview(self) -> Self:
+        returned = sum(len(series.x) for series in self.preview.series)
+        if self.preview.kind != self.projection.kind:
+            raise ValueError("figure layer preview kind must match its projection")
+        if returned > self.total_points or self.truncated != (
+            returned < self.total_points
+        ):
+            raise ValueError("figure layer truncation must match its point counts")
+        return self
+
+
+class AnalysisFigureView(_AnalysisContentModel):
+    """Resolved layers retain source identities without self-publication hashes."""
+
+    layers: Sequence[AnalysisFigureLayerView] = Field(
+        min_length=1, max_length=MAX_ANALYSIS_FIGURE_SERIES
+    )
+    total_points: int = Field(ge=0)
+    truncated: bool
+
+    @field_validator("layers")
+    @classmethod
+    def freeze_layers(
+        cls, value: Sequence[AnalysisFigureLayerView]
+    ) -> Sequence[AnalysisFigureLayerView]:
+        return tuple(value)
+
+    @model_validator(mode="after")
+    def validate_preview(self) -> Self:
+        if len({layer.id for layer in self.layers}) != len(self.layers):
+            raise ValueError("analysis figure layer ids must be unique")
+        returned = sum(
+            len(series.x) for layer in self.layers for series in layer.preview.series
+        )
+        if returned > MAX_ANALYSIS_FIGURE_POINTS:
+            raise ValueError("analysis figure layers exceed the shared point budget")
+        if self.total_points != sum(layer.total_points for layer in self.layers):
+            raise ValueError("analysis figure total points must match its layers")
+        if self.truncated != (returned < self.total_points):
             raise ValueError("analysis figure truncation must match its point counts")
         return self
 
@@ -863,7 +947,11 @@ def validate_analysis_output_content_budget(
         if isinstance(content, AnalysisTableView):
             table_cells += len(content.preview.columns) * len(content.preview.rows)
         else:
-            figure_points += sum(len(series.x) for series in content.preview.series)
+            figure_points += sum(
+                len(series.x)
+                for layer in content.layers
+                for series in layer.preview.series
+            )
     if table_cells > MAX_ANALYSIS_TOTAL_TABLE_CELLS:
         raise ValueError(
             "analysis total table cell count must not exceed "
@@ -992,9 +1080,19 @@ class AnalysisRecord(BaseModel):
                 AnalysisTableRecordOutput | AnalysisFigureRecordOutput,
             ):
                 continue
-            source = output.content.source
-            if source.output_id not in dataset_ids:
-                raise ValueError("analysis view source must identify a dataset output")
+            sources = (
+                tuple(layer.source for layer in output.content.layers)
+                if isinstance(output, AnalysisFigureRecordOutput)
+                else (output.content.source,)
+            )
+            for source in sources:
+                if (
+                    isinstance(source, AnalysisDatasetViewSource)
+                    and source.output_id not in dataset_ids
+                ):
+                    raise ValueError(
+                        "analysis view source must identify a dataset output"
+                    )
         validate_analysis_output_content_budget(
             output.content
             for output in self.outputs
@@ -1003,3 +1101,10 @@ class AnalysisRecord(BaseModel):
             )
         )
         return self
+
+
+AnalysisPublishedDatasetViewSource.model_rebuild()
+AnalysisFigureLayerSpec.model_rebuild()
+AnalysisFigureViewSpec.model_rebuild()
+AnalysisFigureLayerView.model_rebuild()
+AnalysisFigureView.model_rebuild()

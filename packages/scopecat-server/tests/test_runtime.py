@@ -116,6 +116,7 @@ from scopecat.project_state import ProjectStateServices
 from scopecat.records.analysis import (
     AnalysisDatasetViewSource,
     AnalysisField,
+    AnalysisFigureLayerSpec,
     AnalysisFigureProjection,
     AnalysisFigureViewSpec,
     AnalysisTableViewSpec,
@@ -443,12 +444,15 @@ def _analysis_command(proposal: ParameterChangeProposal) -> AnalysisSaveCommand:
                 id="fit-curve",
                 title="fit curve",
                 content=AnalysisFigureViewSpec(
-                    source=AnalysisDatasetViewSource(output_id="fits"),
-                    projection=AnalysisFigureProjection(
-                        kind="line",
-                        x="bias",
-                        y="signal",
-                    ),
+                    layers=(
+                        AnalysisFigureLayerSpec(
+                            id="data",
+                            source=AnalysisDatasetViewSource(output_id="fits"),
+                            projection=AnalysisFigureProjection(
+                                kind="line", x="bias", y="signal"
+                            ),
+                        ),
+                    )
                 ),
             ),
             AnalysisParameterProposalOutputPayload(

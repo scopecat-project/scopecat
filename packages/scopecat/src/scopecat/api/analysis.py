@@ -84,8 +84,10 @@ from scopecat.records.analysis import (
     AnalysisFact,
     AnalysisFactRecordOutput,
     AnalysisField,
+    AnalysisFigureLayerSpec,
     AnalysisFigureProjection,
     AnalysisFigureViewSpec,
+    AnalysisPublishedDatasetViewSource,
     AnalysisPublishedOutputReference,
     AnalysisTableViewSpec,
     analysis_record_id,
@@ -360,33 +362,59 @@ class Analysis:
     ) -> Analysis:
         """Publish a bounded figure view of an authoritative analysis dataset."""
 
-        source = self._dataset(dataset)
-        selected_columns = {x, y}
-        if series is not None:
-            selected_columns.add(series)
-        unknown = selected_columns - {field.name for field in source.schema.fields}
-        if unknown:
-            raise KeyError(
-                "derived dataset has no columns: " + ", ".join(sorted(unknown))
-            )
-        source_ref = AnalysisDatasetViewSource(
-            output_id=artifact_slug(dataset, fallback="data")
+        return self.figure_layers(
+            layers=(
+                AnalysisFigureLayerSpec(
+                    id="data",
+                    source=AnalysisDatasetViewSource(
+                        output_id=artifact_slug(dataset, fallback="data")
+                    ),
+                    projection=AnalysisFigureProjection(
+                        kind=kind, x=x, y=y, series=series, label=label
+                    ),
+                ),
+            ),
+            id=id,
+            title=title,
+            metadata=metadata,
         )
-        return self._append_output(
+
+    def figure_layers(
+        self,
+        *,
+        layers: Sequence[AnalysisFigureLayerSpec],
+        id: str = "figure",
+        title: str = "figure",
+        metadata: Mapping[str, object] | None = None,
+    ) -> Analysis:
+        """Compose retained datasets without copying them into plotting outputs.
+
+        Use a local ``AnalysisDatasetViewSource`` for a sibling dataset or
+        ``published.dataset_view_source(output_id)`` for an immutable publication.
+        Uncertainty projections name absolute bounds and their scientific meaning.
+        """
+        inputs = list(self.inputs)
+        for layer in layers:
+            source = layer.source
+            if isinstance(source, AnalysisPublishedDatasetViewSource):
+                input_ref = PublishedAnalysisOutputInput(
+                    id=f"figure-{id}-{layer.id}",
+                    target=source.dataset.dataset_id,
+                    kind="analysis_dataset",
+                    content_hash=source.dataset.content_hash,
+                    codec=source.dataset.codec,
+                    role="figure",
+                    source=source.source,
+                )
+                inputs.append(input_ref)
+            else:
+                self._dataset(source.output_id)
+        return replace(self, inputs=tuple(inputs))._append_output(
             AnalysisFigureOutput(
                 kind="figure",
                 id=_analysis_output_id(id),
                 title=title,
-                content=AnalysisFigureViewSpec(
-                    source=source_ref,
-                    projection=AnalysisFigureProjection(
-                        kind=kind,
-                        x=x,
-                        y=y,
-                        series=series,
-                        label=label,
-                    ),
-                ),
+                content=AnalysisFigureViewSpec(layers=tuple(layers)),
                 metadata=metadata or {},
             )
         )

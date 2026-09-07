@@ -6,11 +6,13 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from typing import Literal, NoReturn
 
+from scopecat.analysis.dataset_wire import DerivedDatasetSchema
 from scopecat.analysis.datasets import (
     DERIVED_DATASET_CODEC,
     DERIVED_DATASET_MEDIA_TYPE,
     DerivedDataset,
 )
+from scopecat.analysis.figure_views import figure_layer_budget, project_figure_layers
 from scopecat.analysis.repository import (
     AnalysisPublication,
     AnalysisRepository,
@@ -43,16 +45,20 @@ from scopecat.records.analysis import (
     AnalysisDatasetDerivation,
     AnalysisDatasetRecordOutput,
     AnalysisDatasetReference,
+    AnalysisDatasetViewSource,
     AnalysisExecution,
     AnalysisExecutionOutputReference,
     AnalysisFact,
     AnalysisFactRecordOutput,
+    AnalysisFigureLayerSpec,
+    AnalysisFigureProjection,
     AnalysisFigureRecordOutput,
     AnalysisFigureView,
     AnalysisFigureViewSpec,
     AnalysisInterpretationReference,
     AnalysisParameterProposalRecordOutput,
     AnalysisParameterProposalReference,
+    AnalysisPublishedDatasetViewSource,
     AnalysisPublishedOutputReference,
     AnalysisRecord,
     AnalysisRecordInput,
@@ -283,12 +289,14 @@ def prepare_analysis(
     proposed_record_id = analysis_record_id(analysis_key, 1)
     _validate_analysis_output_ids(outputs)
     _validate_analysis_input_ids(inputs)
-    analysis_views = _prepare_analysis_views(outputs)
     _validate_analysis_execution_outputs(executions, outputs)
     _validate_analysis_inputs(
         services=services,
         run_id=run_id,
         inputs=inputs,
+    )
+    analysis_views = _prepare_analysis_views(
+        outputs, inputs=inputs, services=services, repository=None
     )
     output_proposals = tuple(
         output.content
@@ -442,7 +450,6 @@ def prepare_project_analysis(
         )
     _validate_analysis_output_ids(outputs)
     _validate_analysis_input_ids(inputs)
-    analysis_views = _prepare_analysis_views(outputs)
     _validate_analysis_execution_outputs(executions, outputs)
     for index, item in enumerate(inputs):
         if isinstance(item, InterpretationAnalysisInput):
@@ -472,6 +479,9 @@ def prepare_project_analysis(
         services=services,
         repository=repository,
         inputs=inputs,
+    )
+    analysis_views = _prepare_analysis_views(
+        outputs, inputs=inputs, services=services, repository=repository
     )
     publication_hash = _analysis_publication_hash(
         title=title,
@@ -1364,8 +1374,48 @@ def _validate_analysis_output_ids(outputs: Sequence[AnalysisOutput]) -> None:
         )
 
 
+def _read_figure_dataset(
+    services: ProjectStateServices,
+    repository: AnalysisRepository | None,
+    source: AnalysisPublishedDatasetViewSource,
+    projection: AnalysisFigureProjection,
+    limit: int,
+) -> tuple[DerivedDataset, int]:
+    """Read validated immutable IPC on the server; only bounded previews leave it."""
+    ref = dataset_content_ref(
+        dataset_id=source.dataset.dataset_id, kind="analysis_dataset"
+    )
+    subject = source.source.subject
+    if isinstance(subject, RunAnalysisSubject):
+        entry = services.runs.read_content(
+            subject.run_id, role="dataset", content_id=source.dataset.dataset_id
+        )
+        content = services.runs.read_bytes(subject.run_id, ref)
+    else:
+        # Run analyses admit only same-run inputs. Project analyses supply this port.
+        assert repository is not None
+        record_id = source.source.analysis_record_id
+        entry = repository.read_content(record_id, source.dataset.dataset_id)
+        content = repository.read_bytes(record_id, ref)
+    columns = [projection.x, projection.y]
+    if projection.series is not None:
+        columns.append(projection.series)
+    if projection.uncertainty is not None:
+        columns.extend((projection.uncertainty.lower, projection.uncertainty.upper))
+    return DerivedDataset.preview_from_arrow_ipc(
+        content,
+        schema=DerivedDatasetSchema.model_validate(entry.data_schema),
+        columns=tuple(dict.fromkeys(columns)),
+        limit=limit,
+    )
+
+
 def _prepare_analysis_views(
     outputs: Sequence[AnalysisOutput],
+    *,
+    inputs: Sequence[AnalysisInput],
+    services: ProjectStateServices,
+    repository: AnalysisRepository | None,
 ) -> Mapping[str, AnalysisTableView | AnalysisFigureView]:
     datasets = {
         output.id: output.content
@@ -1376,19 +1426,9 @@ def _prepare_analysis_views(
     for index, output in enumerate(outputs):
         if not isinstance(output, AnalysisTableOutput | AnalysisFigureOutput):
             continue
-        source_id = output.content.source.output_id
-        dataset = datasets.get(source_id)
-        if dataset is None:
-            _raise_analysis_problem(
-                "analysis_view_source_unknown",
-                "analysis view source must identify a dataset output",
-                "outputs",
-                index,
-                "content",
-                "source",
-            )
         try:
             if isinstance(output, AnalysisTableOutput):
+                dataset = datasets[output.content.source.output_id]
                 preview = dataset.to_analysis_table(columns=output.content.columns)
                 selected[output.id] = AnalysisTableView(
                     source=output.content.source,
@@ -1398,22 +1438,45 @@ def _prepare_analysis_views(
                     truncated=len(dataset) > len(preview.rows),
                 )
             else:
-                projection = output.content.projection
-                preview = dataset.to_analysis_figure(
-                    kind=projection.kind,
-                    x=projection.x,
-                    y=projection.y,
-                    series=projection.series,
-                    label=projection.label,
-                )
-                returned_points = sum(len(series.x) for series in preview.series)
-                selected[output.id] = AnalysisFigureView(
-                    source=output.content.source,
-                    projection=projection,
-                    preview=preview,
-                    total_points=len(dataset),
-                    truncated=len(dataset) > returned_points,
-                )
+                layers: list[tuple[AnalysisFigureLayerSpec, DerivedDataset, int]] = []
+                for layer_index, layer in enumerate(output.content.layers):
+                    source = layer.source
+                    if isinstance(source, AnalysisDatasetViewSource):
+                        dataset = datasets[source.output_id]
+                        total_points = len(dataset)
+                    else:
+                        # External layers must match a validated frozen input.
+                        matching = next(
+                            (
+                                item
+                                for item in inputs
+                                if (
+                                    isinstance(item, PublishedAnalysisOutputInput)
+                                    and item.kind == "analysis_dataset"
+                                    and item.source == source.source
+                                    and item.target == source.dataset.dataset_id
+                                    and item.content_hash == source.dataset.content_hash
+                                    and item.codec == source.dataset.codec
+                                )
+                            ),
+                            None,
+                        )
+                        if matching is None:
+                            raise ValueError(
+                                "published figure source must match "
+                                "a frozen analysis dataset input"
+                            )
+                        dataset, total_points = _read_figure_dataset(
+                            services,
+                            repository,
+                            source,
+                            layer.projection,
+                            figure_layer_budget(
+                                len(output.content.layers), layer_index
+                            ),
+                        )
+                    layers.append((layer, dataset, total_points))
+                selected[output.id] = project_figure_layers(layers)
         except (KeyError, TypeError, ValueError) as error:
             _raise_analysis_problem(
                 "analysis_view_projection_unknown",

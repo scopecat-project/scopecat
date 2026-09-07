@@ -1561,9 +1561,8 @@ export interface components {
          */
         AnalysisDatasetViewSource: {
             /**
-             * Kind
-             * @default dataset
-             * @constant
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
              */
             kind: "dataset";
             output_id: components["schemas"]["_NonEmptyText"];
@@ -1696,9 +1695,20 @@ export interface components {
             label: components["schemas"]["_NonEmptyText"];
             unit?: components["schemas"]["_NonEmptyText"] | null;
         };
+        /** AnalysisFigureLayerView */
+        AnalysisFigureLayerView: {
+            id: components["schemas"]["_NonEmptyText"];
+            preview: components["schemas"]["AnalysisFigure"];
+            projection: components["schemas"]["AnalysisFigureProjection"];
+            source: components["schemas"]["AnalysisFigureSource"];
+            /** Total Points */
+            total_points: number;
+            /** Truncated */
+            truncated: boolean;
+        };
         /**
          * AnalysisFigureProjection
-         * @description Dataset column roles used to produce a bounded figure preview.
+         * @description Dataset column roles used to produce a bounded figure layer.
          */
         AnalysisFigureProjection: {
             /**
@@ -1708,6 +1718,7 @@ export interface components {
             kind: "line" | "scatter";
             label?: components["schemas"]["_NonEmptyText"] | null;
             series?: components["schemas"]["_NonEmptyText"] | null;
+            uncertainty?: components["schemas"]["AnalysisUncertaintyProjection"] | null;
             x: components["schemas"]["_NonEmptyText"];
             y: components["schemas"]["_NonEmptyText"];
         };
@@ -1734,15 +1745,19 @@ export interface components {
             x: number[];
             /** Y */
             y: number[];
+            /** Y Lower */
+            y_lower?: number[] | null;
+            /** Y Upper */
+            y_upper?: number[] | null;
         };
+        AnalysisFigureSource: components["schemas"]["AnalysisDatasetViewSource"] | components["schemas"]["AnalysisPublishedDatasetViewSource"];
         /**
          * AnalysisFigureView
-         * @description Server-generated bounded figure preview of an authoritative dataset.
+         * @description Resolved layers retain source identities without self-publication hashes.
          */
         AnalysisFigureView: {
-            preview: components["schemas"]["AnalysisFigure"];
-            projection: components["schemas"]["AnalysisFigureProjection"];
-            source: components["schemas"]["AnalysisDatasetViewSource"];
+            /** Layers */
+            layers: components["schemas"]["AnalysisFigureLayerView"][];
             /** Total Points */
             total_points: number;
             /** Truncated */
@@ -1790,6 +1805,19 @@ export interface components {
              */
             kind: "analysis";
             subject: components["schemas"]["AnalysisSubject"];
+        };
+        /**
+         * AnalysisPublishedDatasetViewSource
+         * @description A frozen, already published dataset; never a reference to this publication.
+         */
+        AnalysisPublishedDatasetViewSource: {
+            dataset: components["schemas"]["AnalysisDatasetReference"];
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "published_dataset";
+            source: components["schemas"]["AnalysisPublishedOutputReference"];
         };
         /**
          * AnalysisPublishedOutputReference
@@ -1872,6 +1900,20 @@ export interface components {
             total_rows: number;
             /** Truncated */
             truncated: boolean;
+        };
+        /**
+         * AnalysisUncertaintyProjection
+         * @description Absolute y bounds supplied by project analysis, not framework statistics.
+         */
+        AnalysisUncertaintyProjection: {
+            lower: components["schemas"]["_NonEmptyText"];
+            meaning: components["schemas"]["_NonEmptyText"];
+            /**
+             * Style
+             * @enum {string}
+             */
+            style: "band" | "bars";
+            upper: components["schemas"]["_NonEmptyText"];
         };
         /**
          * ApplyReceipt

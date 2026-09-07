@@ -36,6 +36,7 @@ from scopecat.records.analysis import (
     AnalysisField,
     AnalysisFigure,
     AnalysisFigureAxis,
+    AnalysisFigureLayerView,
     AnalysisFigureProjection,
     AnalysisFigureRecordOutput,
     AnalysisFigureSeries,
@@ -220,23 +221,28 @@ def test_analysis_record_outputs_round_trip_as_discriminated_display_contracts()
                 id="fit-curve",
                 title="Fit curve",
                 content=AnalysisFigureView(
-                    source=AnalysisDatasetViewSource(output_id="fit-data"),
-                    projection=AnalysisFigureProjection(
-                        kind="line",
-                        x="bias",
-                        y="frequency",
-                    ),
-                    preview=AnalysisFigure(
-                        kind="line",
-                        x_axis=AnalysisFigureAxis(label="Bias", unit="V"),
-                        y_axis=AnalysisFigureAxis(label="Frequency", unit="GHz"),
-                        series=[
-                            AnalysisFigureSeries(
-                                id="fit",
-                                x=[-0.1, 0.0, 0.1],
-                                y=[5.0, 5.1, 5.0],
-                            )
-                        ],
+                    layers=(
+                        AnalysisFigureLayerView(
+                            id="data",
+                            source=AnalysisDatasetViewSource(output_id="fit-data"),
+                            projection=AnalysisFigureProjection(
+                                kind="line", x="bias", y="frequency"
+                            ),
+                            preview=AnalysisFigure(
+                                kind="line",
+                                x_axis=AnalysisFigureAxis(label="Bias", unit="V"),
+                                y_axis=AnalysisFigureAxis(
+                                    label="Frequency", unit="GHz"
+                                ),
+                                series=[
+                                    AnalysisFigureSeries(
+                                        id="fit", x=[-0.1, 0.0, 0.1], y=[5.0, 5.1, 5.0]
+                                    )
+                                ],
+                            ),
+                            total_points=3,
+                            truncated=False,
+                        ),
                     ),
                     total_points=3,
                     truncated=False,
@@ -267,7 +273,7 @@ def test_analysis_record_outputs_round_trip_as_discriminated_display_contracts()
     assert isinstance(restored.outputs[2], AnalysisTableRecordOutput)
     assert restored.outputs[2].content.preview.rows[0].cells == [5.1, True]
     assert isinstance(restored.outputs[3], AnalysisFigureRecordOutput)
-    assert restored.outputs[3].content.preview.series[0].y == [5.0, 5.1, 5.0]
+    assert restored.outputs[3].content.layers[0].preview.series[0].y == [5.0, 5.1, 5.0]
     assert isinstance(restored.outputs[4], AnalysisParameterProposalRecordOutput)
     assert restored.outputs[4].content.proposal_id == "readout-fit"
 
@@ -434,13 +440,20 @@ def test_analysis_record_bounds_total_embedded_display_content() -> None:
         id="large-figure",
         title="large figure",
         content=AnalysisFigureView(
-            source=AnalysisDatasetViewSource(output_id="fit-data"),
-            projection=AnalysisFigureProjection(kind="line", x="x", y="y"),
-            preview=AnalysisFigure(
-                kind="line",
-                x_axis=AnalysisFigureAxis(label="x"),
-                y_axis=AnalysisFigureAxis(label="y"),
-                series=[AnalysisFigureSeries(id="large", x=values, y=values)],
+            layers=(
+                AnalysisFigureLayerView(
+                    id="data",
+                    source=AnalysisDatasetViewSource(output_id="fit-data"),
+                    projection=AnalysisFigureProjection(kind="line", x="x", y="y"),
+                    preview=AnalysisFigure(
+                        kind="line",
+                        x_axis=AnalysisFigureAxis(label="x"),
+                        y_axis=AnalysisFigureAxis(label="y"),
+                        series=[AnalysisFigureSeries(id="large", x=values, y=values)],
+                    ),
+                    total_points=len(values),
+                    truncated=False,
+                ),
             ),
             total_points=len(values),
             truncated=False,

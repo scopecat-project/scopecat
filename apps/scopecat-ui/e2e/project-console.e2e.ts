@@ -232,6 +232,10 @@ import sys
 
 import pyarrow as pa
 import scopecat as sc
+from scopecat.records.analysis import (
+    AnalysisDatasetViewSource, AnalysisFigureLayerSpec, AnalysisFigureProjection,
+    AnalysisUncertaintyProjection,
+)
 
 project_root = Path(sys.argv[1])
 with sc.open_project(project_root).connect() as lab:
@@ -253,12 +257,35 @@ with sc.open_project(project_root).connect() as lab:
             dataset="fit",
             title="Candidate fit",
         )
-        .figure(
-            dataset="fit",
-            kind="line",
-            x="repetitions",
-            y="score",
+        .dataset(
+            "fit-curve",
+            pa.table({
+                "repetitions": [128, 256, 384], "score": [0.74, 0.88, 0.97],
+                "lower": [0.72, 0.86, 0.95], "upper": [0.76, 0.90, 0.99],
+            }),
+            fields={name: sc.AnalysisField(unit="ratio")
+                    for name in ("score", "lower", "upper")},
+        )
+        .figure_layers(
             title="Candidate fit curve",
+            layers=(
+                AnalysisFigureLayerSpec(
+                    id="measured", source=AnalysisDatasetViewSource(output_id="fit"),
+                    projection=AnalysisFigureProjection(
+                        kind="scatter", x="repetitions", y="score",
+                    ),
+                ),
+                AnalysisFigureLayerSpec(
+                    id="fit", source=AnalysisDatasetViewSource(output_id="fit-curve"),
+                    projection=AnalysisFigureProjection(
+                        kind="line", x="repetitions", y="score",
+                        uncertainty=AnalysisUncertaintyProjection(
+                            lower="lower", upper="upper", style="band",
+                            meaning="Declared fixture residual bounds",
+                        ),
+                    ),
+                ),
+            ),
         )
         .propose(
             "repetitions-fit",
@@ -405,6 +432,9 @@ test("accepts a notebook candidate in the GUI and preserves its provenance", asy
       name: "Candidate fit curve: Fit score (ratio) by Repetitions",
     }),
   ).toBeVisible();
+  await expect(analyses.getByText("Showing 6 of 6 points across 2 layers")).toBeVisible();
+  await expect(analyses.getByText(/Declared fixture residual bounds/)).toBeVisible();
+  await analyses.locator("figure").screenshot({ path: test.info().outputPath("layered-fit.png") });
   const proposals = page.getByTestId("run-proposals-card");
   await expect(proposals.getByText(candidate.proposalId, { exact: true })).toBeVisible();
   await expect(proposals.getByText("98% confidence", { exact: true })).toBeVisible();

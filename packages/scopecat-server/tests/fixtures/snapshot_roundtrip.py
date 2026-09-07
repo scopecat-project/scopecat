@@ -8,6 +8,8 @@ client process and a real daemon; no editable imports or physical devices are
 required. Package wheels must already be installed in the selected interpreter.
 """
 
+# pyright: reportUnknownArgumentType=false
+
 from __future__ import annotations
 
 import argparse
@@ -21,11 +23,18 @@ from pathlib import Path
 from typing import cast
 from unittest.mock import patch
 
+import pyarrow as pa
 from pydantic import JsonValue
 from scopecat.automation import ProcedureRunListQuery
 from scopecat.daemon.client import DaemonClient
 from scopecat.daemon.endpoint import DAEMON_URL_ENV, resolve_daemon_endpoint
 from scopecat.project import load_project
+from scopecat.records.analysis import (
+    AnalysisDatasetViewSource,
+    AnalysisFigureLayerSpec,
+    AnalysisFigureProjection,
+    AnalysisUncertaintyProjection,
+)
 
 from scopecat_server.lifecycle import start_project, stop_project
 from scopecat_server.services.project_workers import ProjectProcedureWorkers
@@ -59,9 +68,58 @@ def capture(root: Path, *, seed: bool) -> dict[str, JsonValue]:
                 if client.measurement_preview(item.run_id).items
             )
             context.measurements(lab.get_run(first.run_id), id="source")
-            context.result().fact("verified", True).artifact(
-                "report", text="Retained snapshot analysis", filename="report.txt"
-            ).save()
+            published = (
+                context.result()
+                .fact("verified", True)
+                .artifact(
+                    "report", text="Retained snapshot analysis", filename="report.txt"
+                )
+                .dataset("points", pa.table({"x": [0.0, 1.0], "y": [1.0, 2.0]}))
+                .figure(dataset="points", kind="scatter", x="x", y="y")
+                .save()
+            )
+            (
+                lab.analysis("Snapshot layers", key="snapshot-layers")
+                .result()
+                .dataset(
+                    "fit",
+                    pa.table(
+                        {
+                            "x": [0.0, 1.0],
+                            "y": [1.0, 2.0],
+                            "lo": [0.9, 1.9],
+                            "hi": [1.1, 2.1],
+                        }
+                    ),
+                )
+                .figure_layers(
+                    layers=(
+                        AnalysisFigureLayerSpec(
+                            id="measured",
+                            source=published.dataset_view_source("points"),
+                            projection=AnalysisFigureProjection(
+                                kind="scatter", x="x", y="y"
+                            ),
+                        ),
+                        AnalysisFigureLayerSpec(
+                            id="fit",
+                            source=AnalysisDatasetViewSource(output_id="fit"),
+                            projection=AnalysisFigureProjection(
+                                kind="line",
+                                x="x",
+                                y="y",
+                                uncertainty=AnalysisUncertaintyProjection(
+                                    lower="lo",
+                                    upper="hi",
+                                    meaning="Declared test bounds",
+                                    style="band",
+                                ),
+                            ),
+                        ),
+                    )
+                )
+                .save()
+            )
             ready = lab.procedures.submit(
                 temperature_diagnostic_procedure,
                 TemperatureDiagnosticIntent(initial_config=bootstrap_config()),
@@ -75,6 +133,10 @@ def capture(root: Path, *, seed: bool) -> dict[str, JsonValue]:
         assert publication.fact("verified").value is True
         report = publication.artifact("report").text()
         assert report == "Retained snapshot analysis"
+        assert publication.figure("figure").layers[0].preview.series[0].y == [1.0, 2.0]
+        layers = lab.published_analysis("snapshot-layers").figure("figure")
+        assert layers.layers[1].preview.series[0].y_lower == [0.9, 1.9]
+        assert layers.layers[0].source.kind == "published_dataset"
         return {
             "runs": runs.model_dump(mode="json"),
             "measurements": {
@@ -101,6 +163,9 @@ def capture(root: Path, *, seed: bool) -> dict[str, JsonValue]:
                 mode="json"
             ),
             "report": report,
+            "layered_publication": client.project_analysis(
+                "snapshot-layers"
+            ).model_dump(mode="json"),
             "registry": client.config_registry().model_dump(mode="json"),
             "activations": client.config_activation_history().model_dump(mode="json"),
             "procedures": procedures.model_dump(mode="json"),
