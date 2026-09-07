@@ -1,0 +1,102 @@
+{
+  "A": {
+    "kind": "current",
+    "scale": 1.0
+  },
+  "GHz": {
+    "kind": "frequency",
+    "scale": 1000000000.0
+  },
+  "Hz": {
+    "kind": "frequency",
+    "scale": 1.0
+  },
+  "K": {
+    "kind": "temperature",
+    "scale": 1.0
+  },
+  "MHz": {
+    "kind": "frequency",
+    "scale": 1000000.0
+  },
+  "Ohm": {
+    "kind": "resistance",
+    "scale": 1.0
+  },
+  "V": {
+    "kind": "voltage",
+    "scale": 1.0
+  },
+  "W": {
+    "kind": "power",
+    "scale": 1.0
+  },
+  "arb": {
+    "kind": "amplitude",
+    "scale": 1.0
+  },
+  "count": {
+    "kind": "count",
+    "scale": 1.0
+  },
+  "dB": {
+    "kind": "level",
+    "scale": null
+  },
+  "dBm": {
+    "kind": "power",
+    "scale": null
+  },
+  "deg": {
+    "kind": "phase",
+    "scale": 0.017453292519943295
+  },
+  "kHz": {
+    "kind": "frequency",
+    "scale": 1000.0
+  },
+  "kOhm": {
+    "kind": "resistance",
+    "scale": 1000.0
+  },
+  "mA": {
+    "kind": "current",
+    "scale": 0.001
+  },
+  "mK": {
+    "kind": "temperature",
+    "scale": 0.001
+  },
+  "mV": {
+    "kind": "voltage",
+    "scale": 0.001
+  },
+  "ms": {
+    "kind": "time",
+    "scale": 0.001
+  },
+  "ns": {
+    "kind": "time",
+    "scale": 1e-9
+  },
+  "rad": {
+    "kind": "phase",
+    "scale": 1.0
+  },
+  "ratio": {
+    "kind": "ratio",
+    "scale": 1.0
+  },
+  "s": {
+    "kind": "time",
+    "scale": 1.0
+  },
+  "uA": {
+    "kind": "current",
+    "scale": 1e-6
+  },
+  "us": {
+    "kind": "time",
+    "scale": 1e-6
+  }
+}

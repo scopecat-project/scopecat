@@ -9,13 +9,15 @@ from typing import cast
 from pydantic import BaseModel
 
 from scopecat.config.parameter_resolution import validate_parameter_snapshot
+from scopecat.config.parameter_updates import parameter_cell_edits
 from scopecat.config.validation import (
     ParameterValueValidationError,
-    coerce_stored_parameter_value,
+    validate_parameter_representation,
 )
 from scopecat.kernel.content_identity import canonical_json
 from scopecat.kernel.errors import CheckFailed, Conflict
 from scopecat.kernel.problems import Problem, ProblemPhase, model_location, problem
+from scopecat.kernel.quantity import Quantity
 from scopecat.kernel.value_identity import scalar_identity, scalar_values_equal
 from scopecat.kernel.value_types import Scalar, Table
 from scopecat.records.config import ConfigProfileSnapshot, config_content_hash
@@ -108,9 +110,13 @@ def merge_common_base_parameter_proposals(
                     path=("proposals", proposal_index, "deltas", delta.parameter_id),
                     details={"parameter_id": delta.parameter_id},
                 )
-            normalized_base = _normalize_parameter_value(definition, base_value)
-            normalized_before = _normalize_parameter_value(definition, delta.before)
-            normalized_after = _normalize_parameter_value(definition, delta.after)
+            normalized_base = _validate_parameter_representation(definition, base_value)
+            normalized_before = _validate_parameter_representation(
+                definition, delta.before
+            )
+            normalized_after = _validate_parameter_representation(
+                definition, delta.after
+            )
             if not _parameter_values_equal(
                 normalized_before,
                 normalized_base,
@@ -130,8 +136,8 @@ def merge_common_base_parameter_proposals(
                 normalized_base,
                 definition=definition,
             ):
-                # Semantic no-ops (including keyed-table row reorder) do not
-                # participate in composition.
+                # Exact cell no-ops (including keyed-table row reorder) do not
+                # participate in composition. Quantity representation edits do.
                 continue
             branches_by_parameter.setdefault(delta.parameter_id, []).append(
                 normalized_after
@@ -141,7 +147,7 @@ def merge_common_base_parameter_proposals(
     deltas: list[ParameterValueDelta] = []
     for parameter_id in sorted(branches_by_parameter):
         definition = definitions[parameter_id]
-        base_value = _normalize_parameter_value(
+        base_value = _validate_parameter_representation(
             definition,
             base_values[parameter_id],
         )
@@ -158,6 +164,9 @@ def merge_common_base_parameter_proposals(
                 parameter_id=parameter_id,
                 before=base_values[parameter_id],
                 after=merged,
+                cells=parameter_cell_edits(
+                    definition, base_values[parameter_id], merged
+                ),
             )
         )
 
@@ -221,16 +230,12 @@ def _validate_proposal_base(
     )
 
 
-def _normalize_parameter_value(
+def _validate_parameter_representation(
     definition: ParameterDefinition,
     value: StoredParameterValue,
 ) -> StoredParameterValue:
     try:
-        return coerce_stored_parameter_value(
-            definition,
-            value,
-            path=("parameter_snapshot", "values", definition.id),
-        )
+        return validate_parameter_representation(definition, value)
     except ParameterValueValidationError as error:
         raise _merge_check(
             "parameter_merge.invalid_parameter_value",
@@ -250,7 +255,7 @@ def _merge_parameter_value(
     if isinstance(value_type, Scalar):
         assert isinstance(base, ScalarParameterValue)
         selected = tuple(cast("ScalarParameterValue", item) for item in branches)
-        if not _all_semantically_equal(
+        if not _all_representations_equal(
             tuple(item.value for item in selected),
         ):
             raise _merge_conflict(
@@ -331,18 +336,29 @@ def _merge_keyed_table(
             changed = tuple(
                 row[column]
                 for row in edits
-                if not scalar_values_equal(row[column], base_row[column])
+                if not _atoms_equal(row[column], base_row[column])
             )
             if not changed:
                 continue
-            if not _all_semantically_equal(changed):
+            if not _all_representations_equal(changed):
+                equivalent = all(
+                    scalar_values_equal(changed[0], item) for item in changed[1:]
+                )
                 raise _merge_conflict(
-                    "parameter_merge.table_cell_conflict",
-                    "branches changed the same table cell differently",
+                    "parameter_merge.table_cell_representation_conflict"
+                    if equivalent
+                    else "parameter_merge.table_cell_conflict",
+                    "branches proposed physically equivalent but different cell "
+                    "representations; choose explicitly"
+                    if equivalent
+                    else "branches changed the same table cell physically differently",
                     parameter_id=parameter_id,
                     details={
                         "primary_key": _key_details(base_row, table_type),
                         "column_id": column,
+                        "base": _atom_wire(base_row[column]),
+                        "changes": [_atom_wire(item) for item in changed],
+                        "change_kind": "representation" if equivalent else "physical",
                     },
                 )
             selected[column] = _canonical_atom(changed)
@@ -401,7 +417,7 @@ def _parameter_values_equal(
         return (
             isinstance(left, ScalarParameterValue)
             and isinstance(right, ScalarParameterValue)
-            and scalar_values_equal(left.value, right.value)
+            and _atoms_equal(left.value, right.value)
         )
     return (
         isinstance(left, TableParameterValue)
@@ -444,12 +460,12 @@ def _rows_equal(
     *,
     columns: tuple[str, ...],
 ) -> bool:
-    return all(scalar_values_equal(left[column], right[column]) for column in columns)
+    return all(_atoms_equal(left[column], right[column]) for column in columns)
 
 
-def _all_semantically_equal(values: tuple[ParameterAtomValue, ...]) -> bool:
+def _all_representations_equal(values: tuple[ParameterAtomValue, ...]) -> bool:
     first = values[0]
-    return all(scalar_values_equal(first, item) for item in values[1:])
+    return all(_atoms_equal(first, item) for item in values[1:])
 
 
 def _canonical_atom(values: tuple[ParameterAtomValue, ...]) -> ParameterAtomValue:
@@ -460,12 +476,19 @@ def _canonical_model[ModelT: BaseModel](values: tuple[ModelT, ...]) -> ModelT:
     return min(values, key=lambda item: canonical_json(item.model_dump(mode="json")))
 
 
+def _atom_wire(value: ParameterAtomValue) -> object:
+    return value.model_dump(mode="json") if isinstance(value, BaseModel) else value
+
+
+def _atoms_equal(left: ParameterAtomValue, right: ParameterAtomValue) -> bool:
+    # Physical equivalence does not erase an explicitly proposed representation.
+    if isinstance(left, Quantity) or isinstance(right, Quantity):
+        return left == right
+    return scalar_values_equal(left, right)
+
+
 def _atom_sort_token(value: ParameterAtomValue) -> str:
-    if isinstance(value, BaseModel):
-        wire: object = value.model_dump(mode="json")
-    else:
-        wire = value
-    return canonical_json(wire)
+    return canonical_json(_atom_wire(value))
 
 
 def _key_sort_token(key: tuple[tuple[object, ...], ...]) -> str:

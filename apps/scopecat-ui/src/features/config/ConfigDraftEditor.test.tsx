@@ -238,6 +238,7 @@ function validPreview(
     deltas: [
       {
         parameter_id: before.id,
+        cells: null,
         before,
         after,
       },

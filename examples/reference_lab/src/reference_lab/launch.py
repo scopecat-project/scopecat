@@ -77,7 +77,7 @@ def timing_analysis(context: sc.AnalysisContext, delay_ns: float) -> sc.Analysis
     context.measurements()
     return context.result("Channel timing candidate").propose(
         "q1-channel-delay",
-        Q1_CHANNEL_CALIBRATION.update(CHANNEL_DELAY.value(delay_ns)),
+        Q1_CHANNEL_CALIBRATION[CHANNEL_DELAY].update(delay_ns),
         reason="align q1 acquisition with the shared readout window",
     )
 

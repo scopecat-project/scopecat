@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import NoReturn, cast
 
+from scopecat.kernel.quantity import Quantity as QuantityValue
 from scopecat.kernel.value_types import (
     Bool,
     Entity,
@@ -172,4 +173,33 @@ def _raise_shape_mismatch(
         "parameter_shape_mismatch",
         msg,
         path=path,
+    )
+
+
+def validate_parameter_representation(
+    definition: ParameterDefinition, stored: StoredParameterValue
+) -> StoredParameterValue:
+    """Validate candidate values, retaining explicit compatible quantity units.
+
+    Execution resolution still converts quantities to the catalog units. Candidate
+    editing must not turn that transient conversion into unrelated stored edits.
+    """
+    normalized = coerce_stored_parameter_value(
+        definition, stored, path=("parameter_snapshot", "values", definition.id)
+    )
+    if isinstance(stored, ScalarParameterValue):
+        return stored if isinstance(stored.value, QuantityValue) else normalized
+    assert isinstance(normalized, TableParameterValue)
+    return normalized.model_copy(
+        update={
+            "rows": tuple(
+                {
+                    column: original[column]
+                    if isinstance(original[column], QuantityValue)
+                    else value
+                    for column, value in row.items()
+                }
+                for original, row in zip(stored.rows, normalized.rows, strict=True)
+            )
+        }
     )

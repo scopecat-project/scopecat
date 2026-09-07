@@ -610,6 +610,27 @@
                 ],
                 "shape": "table"
               },
+              "cells": [
+                {
+                  "after": {
+                    "unit": "ns",
+                    "value": 1.0
+                  },
+                  "before": {
+                    "unit": "ns",
+                    "value": 1.5
+                  },
+                  "change_kind": "physical",
+                  "field": "channel_delay",
+                  "key": {
+                    "qubit": {
+                      "id": "q1",
+                      "kind": "logical_qubit",
+                      "metadata": {}
+                    }
+                  }
+                }
+              ],
               "parameter_id": "channel_calibrations"
             }
           ],

@@ -9,7 +9,8 @@ import { AnalysisPublicationView } from "../analyses/AnalysisPublicationView";
 import { getProjectAnalysis, getProjectAnalysisArtifactDownload } from "../analyses/analysis-api";
 import { getRunAnalysis, getRunArtifactDownload } from "../runs/run-api";
 import { getSampleAnalysis, getSampleAnalysisArtifactDownload } from "../samples/sample-api";
-import { parameterChanges, changeValue } from "./parameter-changes";
+import { proposalChanges, changeValue } from "./parameter-changes";
+import { scientificChangeLabel } from "../config/quantity-change";
 import { isRecord } from "./DecisionFields";
 
 type Evidence = Extract<ProcedureStepAttempt["inputs"][number], { kind: "analysis" }>;
@@ -135,15 +136,20 @@ function DecisionProposals({ runId, analysisId }: { runId: string; analysisId: s
               </tr>
             </thead>
             <tbody>
-              {proposal.deltas
-                .flatMap((delta) => parameterChanges(delta.parameterId, delta.before, delta.after))
-                .map((delta) => (
-                  <tr key={delta.path}>
-                    <td>{delta.path}</td>
-                    <td>{changeValue(delta.before)}</td>
-                    <td>{changeValue(delta.after)}</td>
-                  </tr>
-                ))}
+              {proposal.deltas.flatMap(proposalChanges).map((delta) => (
+                <tr key={delta.path}>
+                  <td>
+                    {delta.path}
+                    <small className="block">
+                      {delta.changeKind === "added" || delta.changeKind === "removed"
+                        ? delta.changeKind
+                        : scientificChangeLabel(delta.changeKind ?? "physical")}
+                    </small>
+                  </td>
+                  <td>{changeValue(delta.before)}</td>
+                  <td>{changeValue(delta.after)}</td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>

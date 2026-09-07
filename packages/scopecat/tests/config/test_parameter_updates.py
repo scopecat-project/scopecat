@@ -65,7 +65,7 @@ def test_typed_replacements_materialize_authoritative_snapshot_and_deltas() -> N
     channels = candidate.get("drive_channels")
     assert frequency == ScalarParameterValue(
         id="drive.lo_frequency",
-        value=Quantity(value=5.1, unit="GHz"),
+        value=Quantity(value=5100, unit="MHz"),
     )
     assert isinstance(channels, TableParameterValue)
     assert channels.rows == (
@@ -206,19 +206,19 @@ def test_materialization_rejects_unknown_and_wrong_shape_updates() -> None:
             )
 
 
-def test_materialization_rejects_semantic_no_op_after_normalization() -> None:
-    with pytest.raises(ValueError, match="does not change"):
-        materialize_parameter_updates(
-            catalog=_catalog(),
-            base=_snapshot(),
-            candidate_id="no-op",
-            updates=(
-                replace_scalar_parameter(
-                    "drive.lo_frequency",
-                    Quantity(value=5000, unit="MHz"),
-                ),
-            ),
-        )
+def test_materialization_retains_explicit_equivalent_quantity_representation() -> None:
+    candidate, deltas = materialize_parameter_updates(
+        catalog=_catalog(),
+        base=_snapshot(),
+        candidate_id="representation",
+        updates=(
+            replace_scalar_parameter("drive.lo_frequency", Quantity(5000, "MHz")),
+        ),
+    )
+    assert candidate.get("drive.lo_frequency") == ScalarParameterValue(
+        id="drive.lo_frequency", value=Quantity(5000, "MHz")
+    )
+    assert deltas[0].before != deltas[0].after
 
 
 def test_quantity_primary_key_lookup_uses_semantic_equality() -> None:
@@ -416,4 +416,81 @@ def _snapshot() -> ParameterSnapshot:
                 ),
             ),
         ),
+    )
+
+
+def test_scoped_edit_preserves_untouched_non_catalog_units_and_original_base() -> None:
+    source = _snapshot()
+    original = source.get("drive_channels")
+    assert isinstance(original, TableParameterValue)
+    table = original.model_copy(
+        update={
+            "rows": (
+                dict(original.rows[0]) | {"fixed_if": Quantity(0.1, "GHz")},
+                original.rows[1],
+            )
+        }
+    )
+    source = source.model_copy(
+        update={
+            "values": tuple(
+                table if item.id == table.id else item for item in source.values
+            )
+        }
+    )
+    candidate, deltas = materialize_parameter_updates(
+        catalog=_catalog(),
+        base=source,
+        candidate_id="scoped",
+        updates=(
+            update_parameter_rows(
+                "drive_channels", key={"channel_id": "xy0"}, values={"gain": 0.75}
+            ),
+        ),
+    )
+    result = candidate.get("drive_channels")
+    assert isinstance(result, TableParameterValue)
+    assert result.rows[0]["fixed_if"] == Quantity(0.1, "GHz")
+    assert result.rows[1] == table.rows[1]
+    assert deltas[0].cells is not None
+    [edit] = deltas[0].cells
+    assert edit.key == {"channel_id": "xy0"}
+    assert edit.field == "gain"
+    assert edit.before == table.rows[0]["gain"]
+    assert edit.after == 0.75
+    assert edit.change_kind == "physical"
+    _, equivalent = materialize_parameter_updates(
+        catalog=_catalog(),
+        base=source,
+        candidate_id="unit-edit",
+        updates=(
+            update_parameter_rows(
+                "drive_channels",
+                key={"channel_id": "xy0"},
+                values={"fixed_if": Quantity(100, "MHz")},
+            ),
+        ),
+    )
+    assert equivalent[0].cells is not None
+    [representation] = equivalent[0].cells
+    assert representation.change_kind == "representation"
+    assert representation.before == Quantity(0.1, "GHz")
+    assert representation.after == Quantity(100, "MHz")
+
+
+def test_keyed_row_reorder_has_authoritative_empty_cell_evidence() -> None:
+    source = _snapshot()
+    table = source.get("drive_channels")
+    assert isinstance(table, TableParameterValue)
+    candidate, deltas = materialize_parameter_updates(
+        catalog=_catalog(),
+        base=source,
+        candidate_id="row-order",
+        updates=(
+            replace_table_parameter("drive_channels", tuple(reversed(table.rows))),
+        ),
+    )
+    assert deltas[0].cells == ()
+    assert candidate.get("drive_channels") == table.model_copy(
+        update={"rows": tuple(reversed(table.rows))}
     )

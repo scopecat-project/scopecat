@@ -8,8 +8,20 @@ from scopecat_testkit.workflow_fixtures import load_config
 from scopecat.config.candidate_merges import (
     merge_common_base_parameter_proposals,
 )
+from scopecat.config.changes import parameter_change_proposal_from_updates
+from scopecat.config.parameter_updates import update_parameter_rows
+from scopecat.kernel.entity import EntityRef
 from scopecat.kernel.errors import CheckFailed, Conflict
-from scopecat.kernel.value_types import Float, Scalar, String, Table, TableColumn
+from scopecat.kernel.quantity import Quantity
+from scopecat.kernel.value_types import (
+    Entity,
+    Float,
+    Scalar,
+    String,
+    Table,
+    TableColumn,
+)
+from scopecat.kernel.value_types import Quantity as QuantityType
 from scopecat.records.config import ConfigProfileSnapshot, config_content_hash
 from scopecat.records.parameter import (
     ParameterAtomValue,
@@ -76,7 +88,10 @@ def test_common_base_merge_accepts_one_proposal_as_identity_composition() -> Non
         candidate_id="single-drag",
     )
 
-    assert result.deltas == proposal.deltas
+    assert result.deltas[0].before == proposal.deltas[0].before
+    assert result.deltas[0].after == proposal.deltas[0].after
+    assert result.deltas[0].cells is not None
+    assert result.deltas[0].cells[0].field == "beta"
     assert result.config.id == "single-drag"
     assert result.config.parameter_snapshot.id == "single-drag.parameters"
     assert result.config.parameter_snapshot.get("qubits") == proposal.deltas[0].after
@@ -490,3 +505,132 @@ def _required_table(
     value = config.parameter_snapshot.get(parameter_id)
     assert isinstance(value, TableParameterValue)
     return value
+
+
+def _quantity_base() -> ConfigProfileSnapshot:
+    base = _base_config()
+    catalog = ParameterCatalog(
+        id="quantities",
+        definitions=(
+            ParameterDefinition(
+                id="channels",
+                value_type=Table(
+                    columns=(
+                        TableColumn("entity", Scalar(Entity(entity_kind="qubit"))),
+                        TableColumn("frequency", Scalar(QuantityType(unit="GHz"))),
+                        TableColumn("delay", Scalar(QuantityType(unit="ns"))),
+                    ),
+                    primary_key=("entity",),
+                ),
+            ),
+        ),
+    )
+    return base.model_copy(
+        update={
+            "system": base.system.model_copy(update={"parameter_catalog": catalog}),
+            "parameter_snapshot": ParameterSnapshot(
+                id="quantities",
+                values=(
+                    TableParameterValue(
+                        id="channels",
+                        rows=tuple(
+                            {
+                                "entity": EntityRef(id=entity, kind="qubit"),
+                                "frequency": Quantity(5, "GHz"),
+                                "delay": Quantity(0.01, "us"),
+                            }
+                            for entity in ("q0", "q1")
+                        ),
+                    ),
+                ),
+            ),
+        }
+    )
+
+
+def _cell_proposal(
+    base: ConfigProfileSnapshot, name: str, entity: str, field: str, value: Quantity
+) -> ParameterChangeProposal:
+    return parameter_change_proposal_from_updates(
+        source_run_id=f"run-{name}",
+        source_config=base,
+        analysis_title=name,
+        analysis_record_id=f"analysis-{name}",
+        proposal_id=name,
+        updates=(
+            update_parameter_rows(
+                "channels",
+                key={"entity": EntityRef(id=entity, kind="qubit")},
+                values={field: value},
+            ),
+        ),
+        reason="scoped calibration",
+        confidence=None,
+    )
+
+
+def test_entity_cells_preserve_independent_physics_and_representations() -> None:
+    base = _quantity_base()
+    equivalent = _cell_proposal(
+        base, "q0-units", "q0", "frequency", Quantity(5000, "MHz")
+    )
+    physical = _cell_proposal(base, "q1-delay", "q1", "delay", Quantity(12, "ns"))
+    merged = merge_common_base_parameter_proposals(
+        (physical, equivalent), base_config=base, candidate_id="composed"
+    )
+    table = _required_table(merged.config, "channels")
+    assert table.rows[0]["frequency"] == Quantity(5000, "MHz")
+    assert table.rows[0]["delay"] == Quantity(0.01, "us")
+    assert table.rows[1]["frequency"] == Quantity(5, "GHz")
+    assert table.rows[1]["delay"] == Quantity(12, "ns")
+    assert merged.deltas[0].cells is not None
+    assert [(edit.field, edit.change_kind) for edit in merged.deltas[0].cells] == [
+        ("frequency", "representation"),
+        ("delay", "physical"),
+    ]
+    assert merged == merge_common_base_parameter_proposals(
+        (equivalent, physical), base_config=base, candidate_id="composed"
+    )
+    # Existing publications lacking cell review data remain valid and materializable.
+    wire = equivalent.model_dump(mode="json")
+    for delta in wire["deltas"]:
+        delta.pop("cells")
+    old = ParameterChangeProposal.model_validate(wire)
+    assert not old.deltas[0].cells
+    assert (
+        merge_common_base_parameter_proposals(
+            (old,), base_config=base, candidate_id="old"
+        )
+        .deltas[0]
+        .cells
+    )
+
+
+@pytest.mark.parametrize(
+    "second,kind",
+    [(Quantity(6000, "MHz"), "representation"), (Quantity(6100, "MHz"), "physical")],
+)
+def test_same_entity_field_conflict_retains_base_and_both_changes(
+    second: Quantity, kind: str
+) -> None:
+    base = _quantity_base()
+    first = _cell_proposal(base, "first", "q0", "frequency", Quantity(6, "GHz"))
+    other = _cell_proposal(base, "second", "q0", "frequency", second)
+    with pytest.raises(Conflict) as caught:
+        merge_common_base_parameter_proposals(
+            (first, other), base_config=base, candidate_id="conflict"
+        )
+    [issue] = caught.value.problems
+    assert (
+        issue.model_dump(mode="json")["details"]["primary_key"]["entity"]["id"] == "q0"
+    )
+    assert issue.details["column_id"] == "frequency"
+    assert issue.details["base"] == Quantity(5, "GHz").model_dump(mode="json")
+    assert issue.model_dump(mode="json")["details"]["changes"] == [
+        Quantity(6, "GHz").model_dump(mode="json"),
+        second.model_dump(mode="json"),
+    ]
+    assert issue.details["change_kind"] == kind
+    if kind == "representation":
+        assert issue.code == "parameter_merge.table_cell_representation_conflict"
+        assert "physically equivalent" in issue.message

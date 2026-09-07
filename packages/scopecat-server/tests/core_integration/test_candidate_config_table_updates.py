@@ -4,6 +4,7 @@ from pathlib import Path
 
 import scopecat as sc
 from scopecat.config.documents import load_config_snapshot_document
+from scopecat.config.parameter_resolution import resolve_config_parameters
 from scopecat.config.registry import (
     CandidateConfigRegistrySource,
 )
@@ -79,6 +80,14 @@ def test_candidate_config_activation_materializes_table_row_updates(
 
     assert len(proposal.deltas) == 1
     assert proposal.deltas[0].parameter_id == "drive_channels"
+    assert proposal.deltas[0].cells is not None
+    existing = [
+        cell for cell in proposal.deltas[0].cells if cell.key == {"channel_id": "xy0"}
+    ]
+    assert len(existing) == 1
+    assert existing[0].field == "gain"
+    assert existing[0].before == 0.5
+    assert existing[0].after == 0.75
     lab.review_parameter_proposal(run, proposal.id)
 
     activation = activate_candidate_config(
@@ -102,7 +111,7 @@ def test_candidate_config_activation_materializes_table_row_updates(
             "channel_id": "xy0",
             "resource_id": "drive-a",
             "gain": 0.75,
-            "fixed_if": Quantity(value=100, unit="MHz"),
+            "fixed_if": Quantity(value=0.1, unit="GHz"),
         },
         {
             "channel_id": "xy1",
@@ -110,6 +119,12 @@ def test_candidate_config_activation_materializes_table_row_updates(
             "gain": 0.25,
             "fixed_if": Quantity(value=120, unit="MHz"),
         },
+    )
+
+    resolved = resolve_config_parameters(candidate_config)
+    assert not resolved.problems
+    assert resolved.data.table_rows("drive_channels")[0]["fixed_if"] == Quantity(
+        100, "MHz"
     )
 
 
@@ -141,7 +156,7 @@ def _config_with_drive_channels() -> ConfigProfileSnapshot:
                 "channel_id": "xy0",
                 "resource_id": "drive-a",
                 "gain": 0.5,
-                "fixed_if": Quantity(value=100, unit="MHz"),
+                "fixed_if": Quantity(value=0.1, unit="GHz"),
             },
             {
                 "channel_id": "remove-me",

@@ -165,3 +165,26 @@ function row(
     readout_frequency: { value: frequency, unit: "GHz" },
   };
 }
+
+it("retains equivalent unit edits while matching reordered entities", () => {
+  const active = configSnapshot({
+    scalar: { value: 5, unit: "GHz" },
+    table: [row("q0", 6.5), row("q1", 6.7)],
+  });
+  const selected = configSnapshot({
+    scalar: { value: 5, unit: "GHz" },
+    table: [row("q1", 6.7), { ...row("q0", 6.5), readout_frequency: { value: 6500, unit: "MHz" } }],
+  });
+  const table = diffConfigParameters(active, selected).find(
+    (item) => item.parameterId === "qubits",
+  )?.table;
+  expect(table?.rows.map((item) => item.status)).toEqual(["unchanged", "changed"]);
+  expect(table?.rows[1]?.cells.find((item) => item.columnId === "readout_frequency")).toMatchObject(
+    {
+      status: "changed",
+      changeKind: "representation",
+      before: { value: 6.5, unit: "GHz" },
+      after: { value: 6500, unit: "MHz" },
+    },
+  );
+});

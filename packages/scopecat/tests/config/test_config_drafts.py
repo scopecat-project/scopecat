@@ -63,7 +63,7 @@ def test_draft_builds_candidate_and_deltas() -> None:
     frequency = result.candidate.parameter_snapshot.get("drive.lo_frequency")
     assert frequency == ScalarParameterValue(
         id="drive.lo_frequency",
-        value=Quantity(value=5.1, unit="GHz"),
+        value=Quantity(value=5100, unit="MHz"),
     )
     table_delta = result.deltas[1]
     assert isinstance(table_delta.before, TableParameterValue)
@@ -112,7 +112,7 @@ def test_invalid_draft_returns_cell_addressable_problem() -> None:
     assert problem.location.path == ("values", "drive.lo_frequency", "value")
 
 
-def test_empty_and_semantic_noop_drafts_are_not_candidates() -> None:
+def test_empty_draft_rejected_but_explicit_representation_edit_is_candidate() -> None:
     empty = ConfigDraft(_config()).check()
     no_op = (
         ConfigDraft(_config())
@@ -125,8 +125,8 @@ def test_empty_and_semantic_noop_drafts_are_not_candidates() -> None:
 
     assert not empty.ok
     assert empty.problems[0].code == "config_draft_empty"
-    assert not no_op.ok
-    assert no_op.problems[0].code == "config_draft_no_changes"
+    assert no_op.ok
+    assert no_op.deltas[0].before != no_op.deltas[0].after
 
 
 def _config() -> ConfigProfileSnapshot:

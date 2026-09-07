@@ -58,7 +58,7 @@ def capture_acceptance_fixtures(
         .result()
         .propose(
             "q1-channel-delay",
-            Q1_CHANNEL_CALIBRATION.update(CHANNEL_DELAY.value(1.0)),
+            Q1_CHANNEL_CALIBRATION[CHANNEL_DELAY].update(1.0),
             reason="align q1 acquisition with the shared readout window",
         )
         .save()

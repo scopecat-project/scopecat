@@ -302,7 +302,6 @@ function ConcreteAtomInput({
           aria-label={`${label} unit`}
           type="text"
           value={quantity.unit}
-          readOnly={type.unit !== undefined && type.unit !== null}
           disabled={disabled}
           onChange={(event) => onChange({ value: quantity.value, unit: event.target.value })}
         />
