@@ -335,3 +335,32 @@ def _write_application_module(root: Path, module_name: str, *, marker: str) -> N
         ),
         encoding="utf-8",
     )
+
+
+@pytest.mark.parametrize(
+    "missing", ["pilot_missing_dependency", "pilot_missing_dependency.child"]
+)
+def test_missing_application_dependency_names_module_and_preserves_cause(
+    tmp_path: Path,
+    missing: str,
+) -> None:
+    source = tmp_path / "src" / "pilot_lab.py"
+    source.parent.mkdir()
+    source.write_text(f"raise ModuleNotFoundError('missing', name={missing!r})\n")
+    with pytest.raises(
+        ProjectCodeLoadError, match="application dependencies"
+    ) as raised:
+        load_application_factory("pilot_lab:create", tmp_path)
+    assert missing in str(raised.value)
+    assert isinstance(raised.value.__cause__, ModuleNotFoundError)
+    assert raised.value.__cause__.name == missing
+
+
+def test_missing_application_attribute_is_not_reported_as_dependency(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "src" / "pilot_lab.py"
+    source.parent.mkdir()
+    source.write_text("# Application callable is absent.\n")
+    with pytest.raises(AttributeError, match="create"):
+        load_application_factory("pilot_lab:create", tmp_path)

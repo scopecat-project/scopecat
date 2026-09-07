@@ -179,6 +179,17 @@ jobs:
       - name: Build UI
         run: pnpm exec vite build
 
+      - name: Build pinned GUI pilot bundle
+        run: uv run --project ../.. python ../../scripts/build_server_distribution.py
+
+      - name: Upload pilot bundle
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: scopecat-pilot-bundle
+          path: dist/scopecat-server
+          if-no-files-found: error
+          retention-days: 7
+
       - name: Install Playwright Chromium
         run: pnpm exec playwright install --with-deps chromium
 
@@ -195,6 +206,36 @@ jobs:
             apps/scopecat-ui/test-results
           if-no-files-found: ignore
           retention-days: 7
+
+  installed-pilot:
+    name: Installed pilot (${{ matrix.os }})
+    needs: ui
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    steps:
+      - name: Check out verifier
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version-file: .python-version
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+
+      - name: Download pilot bundle
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          name: scopecat-pilot-bundle
+          path: dist/scopecat-server
+
+      - name: Install and verify virtual measurement and restart
+        run: python scripts/verify_pilot_bundle.py dist/scopecat-server
 
   docs:
     name: Documentation
@@ -225,6 +266,7 @@ jobs:
     needs:
       - python-tests
       - benchmark-smoke
+      - installed-pilot
       - python-quality
       - ui
       - docs
@@ -233,12 +275,14 @@ jobs:
     steps:
       - name: Require successful jobs
         env:
+          INSTALLED_PILOT_RESULT: ${{ needs['installed-pilot'].result }}
           PYTHON_TESTS_RESULT: ${{ needs['python-tests'].result }}
           BENCHMARK_SMOKE_RESULT: ${{ needs['benchmark-smoke'].result }}
           PYTHON_QUALITY_RESULT: ${{ needs['python-quality'].result }}
           UI_RESULT: ${{ needs.ui.result }}
           DOCS_RESULT: ${{ needs.docs.result }}
         run: |
+          test "$INSTALLED_PILOT_RESULT" = success
           test "$PYTHON_TESTS_RESULT" = success
           test "$BENCHMARK_SMOKE_RESULT" = success
           test "$PYTHON_QUALITY_RESULT" = success

@@ -328,6 +328,15 @@ test("starter project closes the notebook, run, and config loop", async ({ daemo
   ).toBeVisible();
   await expect(page.getByText("first_run", { exact: true }).first()).toBeVisible();
   await expect(page.getByText("Succeeded", { exact: true }).first()).toBeVisible();
+  const dataCard = page.getByTestId("data-card");
+  await expect(dataCard.getByText(/^1 records/)).toBeVisible();
+  await dataCard.getByText("Raw records", { exact: true }).click();
+  await expect(dataCard.getByTestId("measurement-preview")).toContainText('"temperature"');
+  await expect(dataCard.getByTestId("measurement-preview")).toContainText('"value": 0.02');
+  const selectedRun = new URL(page.url()).searchParams.get("run");
+  expect(selectedRun).toBeTruthy();
+  await page.goto(`${daemon.baseUrl}/?run=${selectedRun}`);
+  await expect(page.getByRole("heading", { name: "First run", exact: true })).toBeVisible();
 
   await page.getByRole("button", { name: "Configuration" }).click();
   await expect(page.getByRole("heading", { name: "Default configuration" })).toBeVisible();

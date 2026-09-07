@@ -173,6 +173,7 @@ async function startAbandonedRun(
       instrument_registry: {
         ...registry,
         instruments: [
+          ...(registry.instruments as unknown[]),
           {
             id: resourceId,
             exclusivity_key: `rack-a/${resourceId}`,
