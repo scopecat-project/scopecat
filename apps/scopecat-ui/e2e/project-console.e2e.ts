@@ -433,7 +433,11 @@ test("accepts a notebook candidate in the GUI and preserves its provenance", asy
     }),
   ).toBeVisible();
   await expect(analyses.getByText("Showing 6 of 6 points across 2 layers")).toBeVisible();
-  await expect(analyses.getByText(/Declared fixture residual bounds/)).toBeVisible();
+  await expect(
+    analyses.getByText("Band: Declared fixture residual bounds (absolute lower/upper bounds)", {
+      exact: true,
+    }),
+  ).toBeVisible();
   const layeredFigure = analyses.locator("figure");
   await layeredFigure.getByText("Retained source and projection", { exact: true }).first().click();
   await expect(
