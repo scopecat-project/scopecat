@@ -633,6 +633,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/procedures/{procedure_run_id}/operator": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Procedure Operator */
+        get: operations["get_procedure_operator_api_v1_procedures__procedure_run_id__operator_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/procedures/{procedure_run_id}/steps": {
         parameters: {
             query?: never;
@@ -4822,6 +4839,12 @@ export interface components {
         ProcedureCancelReceipt: {
             run: components["schemas"]["ProcedureRun"];
         };
+        /** ProcedureChildRunView */
+        ProcedureChildRunView: {
+            run: components["schemas"]["RunDetail"];
+            /** Step Key */
+            step_key: string;
+        };
         /** @enum {string} */
         ProcedureCloseStatus: "succeeded" | "failed" | "cancelled";
         /**
@@ -4848,8 +4871,33 @@ export interface components {
             id: components["schemas"]["_NonEmptyText"];
             version: components["schemas"]["_NonEmptyText"];
         };
+        /**
+         * ProcedureDispatchView
+         * @description Observation of existing process management, not execution authority.
+         */
+        ProcedureDispatchView: {
+            /**
+             * Management
+             * @enum {string}
+             */
+            management: "unmanaged" | "active" | "paused";
+            /** Worker Running */
+            worker_running: boolean;
+        };
         "ProcedureIntent-Output": {
             [key: string]: components["schemas"]["pydantic__types__JsonValue"];
+        };
+        /** ProcedureOperatorView */
+        ProcedureOperatorView: {
+            /** Child Runs */
+            child_runs: components["schemas"]["ProcedureChildRunView"][];
+            current_child: components["schemas"]["ProcedureChildRunView"] | null;
+            current_step: components["schemas"]["ProcedureStepAttempt"] | null;
+            dispatch: components["schemas"]["ProcedureDispatchView"];
+            /** Dispatch Blocked Reason */
+            dispatch_blocked_reason: string | null;
+            procedure: components["schemas"]["ProcedureRun"];
+            steps: components["schemas"]["ProcedureStepAttemptPage"];
         };
         /**
          * ProcedureResourceWait
@@ -7830,6 +7878,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LaunchSubmission"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_procedure_operator_api_v1_procedures__procedure_run_id__operator_get: {
+        parameters: {
+            query?: {
+                cursor?: number | null;
+            };
+            header?: never;
+            path: {
+                procedure_run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProcedureOperatorView"];
                 };
             };
             /** @description Validation Error */

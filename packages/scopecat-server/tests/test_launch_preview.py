@@ -126,6 +126,10 @@ def test_admission_survives_dispatch_failure(tmp_path: Path) -> None:
     with (
         patch("scopecat_server.http.transport.subprocess.run") as run,
         patch(
+            "scopecat_server.http.transport.read_procedure_operator",
+            return_value=SimpleNamespace(dispatch_blocked_reason=None),
+        ),
+        patch(
             "scopecat_server.http.transport.ProjectProcedureWorkers.dispatch",
             side_effect=OSError("cannot spawn"),
         ),

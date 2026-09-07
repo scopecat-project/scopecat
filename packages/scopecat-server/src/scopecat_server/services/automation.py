@@ -216,6 +216,16 @@ class AutomationService:
             )
         return ProcedureRunnablePage(items=page.items, has_more=page.has_more)
 
+    def running_step(self, procedure_run_id: str) -> ProcedureStepAttempt | None:
+        """Read the single unsettled effect independently of history pagination."""
+        with (
+            _translate_store_errors(),
+            self._store.sqlite.read_transaction() as connection,
+        ):
+            return self._store.running_step_attempt_in_transaction(
+                connection, procedure_run_id
+            )
+
     def step_attempts(
         self,
         procedure_run_id: str,

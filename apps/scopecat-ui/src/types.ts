@@ -86,6 +86,7 @@ export interface ProjectRun {
   updatedAt?: string;
   configHash?: string;
   attentionReason?: string;
+  cancellationRequestedAt?: string;
   result?: string;
   certainty?: string;
   progressCompleted?: number;

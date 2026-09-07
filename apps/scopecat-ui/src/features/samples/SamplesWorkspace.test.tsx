@@ -42,9 +42,32 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  window.history.replaceState(null, "", "/");
 });
 
 describe("SamplesWorkspace", () => {
+  it("opens an exact linked analysis outside the loaded history page", async () => {
+    window.history.replaceState(null, "", "/?sample-analysis=older-publication#samples");
+    vi.mocked(getSampleAnalysis).mockResolvedValue({
+      id: "older-publication",
+      title: "Retained sample evidence",
+      revision: 1,
+      publicationHash: "a".repeat(64),
+      publishedAt: "2026-09-08T00:00:00Z",
+      subject: "sample",
+      inputs: [],
+      executions: [],
+      outputs: [],
+    });
+    renderWorkspace({ selectedSampleId: "chip-a17" });
+    expect(await screen.findByText("Retained sample evidence")).toBeVisible();
+    expect(getSampleAnalysis).toHaveBeenCalledWith(
+      "chip-a17",
+      "older-publication",
+      expect.any(AbortSignal),
+    );
+  });
+
   it("shows topology, exact history, and opens a related run", async () => {
     const openRun = vi.fn();
     renderWorkspace({ selectedSampleId: "chip-a17", onOpenRun: openRun });

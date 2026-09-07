@@ -13,9 +13,19 @@ import sys
 from collections.abc import Callable
 from pathlib import Path
 from threading import Event, Lock, Thread
-from typing import cast
+from typing import Literal, cast
+
+from pydantic import BaseModel, ConfigDict
 
 _LOG = logging.getLogger(__name__)
+
+
+class ProcedureDispatchView(BaseModel):
+    """Observation of existing process management, not execution authority."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+    management: Literal["unmanaged", "active", "paused"]
+    worker_running: bool
 
 
 class ProjectProcedureWorkers:
@@ -73,6 +83,19 @@ class ProjectProcedureWorkers:
                 self.tick()
             except Exception:
                 _LOG.exception("Console procedure management failed")
+
+    def snapshot(self, procedure_id: str) -> ProcedureDispatchView:
+        with self._lock:
+            management = self._load().get(procedure_id, "unmanaged")
+            child = self._children.get(procedure_id)
+            code = child.poll() if child is not None else None
+            # Report an observed failed exit immediately; tick persists it.
+            if child is not None and code is not None and code != 0:
+                management = "paused"
+            return ProcedureDispatchView(
+                management=cast("Literal['unmanaged', 'active', 'paused']", management),
+                worker_running=child is not None and code is None,
+            )
 
     def dispatch(self, procedure_id: str) -> None:
         with self._lock:

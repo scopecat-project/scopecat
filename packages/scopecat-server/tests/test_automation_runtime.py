@@ -260,6 +260,19 @@ def test_resource_wait_releases_worker_and_reuses_or_cancels_exact_child(
                 is None
             )
         child_id = waiting.resource_wait.run_id
+        operator = transport.get(
+            f"/api/v1/procedures/{waiting.procedure_run_id}/operator?cursor=1"
+        ).json()
+        assert operator["steps"]["items"] == []
+        assert operator["current_child"]["run"]["snapshot"]["run_id"] == child_id
+        blocked = operator["current_child"]["run"]["resources"][0]["blocked_by"]
+        assert blocked["owner_id"] == owner.run_id
+        assert (
+            transport.post(
+                f"/api/v1/procedures/{waiting.procedure_run_id}/dispatch"
+            ).status_code
+            == 409
+        )
         if mode == "cancel":
 
             def fail_parent_write(*_args: object, **_kwargs: object) -> None:

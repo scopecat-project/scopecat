@@ -522,7 +522,7 @@ function normalizeEvents(response: EventPage): ProjectEvent[] {
   return response.items.map(normalizeEvent).sort((left, right) => left.id - right.id);
 }
 
-function normalizeRun(
+export function normalizeRun(
   control: RunControlView,
   snapshot: RunSnapshot,
   detailResources?: RunResourceView[],
@@ -544,6 +544,7 @@ function normalizeRun(
     updatedAt: control.updated_at,
     configHash: snapshot.config_content_hash,
     attentionReason: control.attention_reason ?? undefined,
+    cancellationRequestedAt: control.cancellation_requested_at ?? undefined,
     result: outcome?.result,
     certainty: outcome?.certainty,
     progressCompleted: control.completed_point_count,

@@ -105,12 +105,19 @@ a 60-second timeout. They must not acquire data or activate configuration inside
 this bounded request. This is a trusted project-code contract, not a sandbox.
 The durable `procedure_id` in a submission receipt leads to existing procedure
 steps and their run/analysis/configuration output references. A best-effort dispatch
-failure retains that ID and exposes `dispatch_error`; Resume execution retries the
+failure retains that ID and exposes `dispatch_error`; Dispatch existing procedure retries the
 existing procedure instead of admitting another.
 
 `LaunchWorkspace` owns catalog selection, `LaunchForm` owns its form/request,
 `PreflightSummary` renders preview evidence, and `ProcedureProgress` consumes the
-existing procedure status/review/cancel APIs.
+read-only procedure operator projection plus existing review/cancel APIs. The
+projection combines the authoritative current step/child, retained history, resource
+owner, and observed worker membership. History pagination never changes dispatch
+permission. Retained procedures can be reopened from the server-backed history or
+their URL after browser or daemon restart. Cancellation requested remains distinct
+from cancellation completion; a waiting child's cancellation leaves its resource
+owner running. Unknown child effects require reconciliation, and both explicit
+dispatch and launch admission replay enforce the same server-side gate.
 
 The server manages project processes for explicitly dispatched procedures, with
 at most two live workers. A worker runs the normal durable `resume` operation
@@ -122,14 +129,13 @@ authority across processes.
 Manager membership is retained in `.scopecat/console-procedures.json`. On daemon
 restart, only previously managed, ready procedures are eligible to resume; other
 CLI procedures are not automatically adopted. An observed nonzero worker exit
-pauses automatic dispatch until an explicit Resume execution request. Attention
+pauses automatic dispatch until an explicit Dispatch existing procedure request. Attention
 and closed procedures leave the manager. This is process management, not a
 hardware recovery or procedure cancellation protocol. Daemon shutdown does not
 forcibly kill hardware workers.
 
 Process output goes to `.scopecat/console-worker.log`. A failed spawn retains the
-procedure ID and reports `dispatch_error`. The progress view offers Resume
-execution and links to child runs and Decisions; its procedure ID remains in the
+procedure ID and reports `dispatch_error`. The progress view offers explicit dispatch and links to exact child runs and analysis publications; its procedure ID remains in the
 URL. Configuration acceptance stays in the declared procedure and review policy.
 The generic GUI does not accept calibration parameters itself. Existing projects
 without a provider show an empty state.
