@@ -2684,6 +2684,86 @@ def test_executor_start_is_atomic_idempotent_and_quiet_when_resources_busy(
         ] == ["run_admitted"]
 
 
+def test_resource_rejection_closes_only_the_unstarted_contender(tmp_path: Path) -> None:
+    with LocalDaemonRuntime(tmp_path, bootstrap_config=_config()) as runtime:
+        executor = runtime.application.executor
+        owner = runtime.application.submit_run(_submission("busy-owner"))
+        owner_request = ExecutorStartRequest(
+            executor_id="owner", on_resource_busy="fail"
+        )
+        lease = executor.start_executor(owner.run_id, owner_request)
+        contender = runtime.application.submit_run(_submission("busy-contender"))
+
+        with pytest.raises(BackendConflict, match="resources are busy"):
+            executor.start_executor(
+                contender.run_id,
+                ExecutorStartRequest(
+                    executor_id="contender",
+                    on_resource_busy="fail",
+                ),
+            )
+
+        assert _control_run(runtime, contender.run_id).state == "closed"
+        outcome = _snapshot(runtime, contender.run_id).outcome
+        assert outcome is not None and outcome.result == "failed"
+        assert outcome.certainty == "known"
+        assert outcome.problems[0].code == "run_resources_busy"
+        assert executor.execution_segments(contender.run_id).items == ()
+        assert executor.run_coverage(contender.run_id).completed_point_count == 0
+        assert executor.start_executor(owner.run_id, owner_request) == lease
+        assert _control_run(runtime, owner.run_id).cancellation_requested_at is None
+
+        # A different executor cannot turn an already-owned run into a failure.
+        with pytest.raises(BackendConflict, match="different executor intent"):
+            executor.start_executor(
+                owner.run_id,
+                ExecutorStartRequest(
+                    executor_id="intruder",
+                    on_resource_busy="fail",
+                ),
+            )
+        assert _snapshot(runtime, owner.run_id).outcome is None
+        assert executor.start_executor(owner.run_id, owner_request) == lease
+
+        # Retrying admission preserves the exact rejected run and its outcome.
+        retry = runtime.application.submit_run(_submission("busy-contender"))
+        assert retry.run_id == contender.run_id
+        assert retry.snapshot.outcome == outcome
+
+
+def test_resource_rejection_rolls_back_terminal_state_if_close_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def refuse_close(
+        self: SQLiteControlPlane,
+        connection: sqlite3.Connection,
+        run_id: str,
+        *,
+        at: datetime,
+    ) -> Never:
+        raise RuntimeError("injected close failure")
+
+    with LocalDaemonRuntime(tmp_path, bootstrap_config=_config()) as runtime:
+        executor = runtime.application.executor
+        owner = runtime.application.submit_run(_submission("rollback-owner"))
+        executor.start_executor(owner.run_id, ExecutorStartRequest(executor_id="owner"))
+        contender = runtime.application.submit_run(_submission("rollback-contender"))
+        request = ExecutorStartRequest(executor_id="contender", on_resource_busy="fail")
+        events_before = _events(runtime, run_id=contender.run_id).items
+        with monkeypatch.context() as patch:
+            patch.setattr(
+                SQLiteControlPlane, "reject_queued_run_in_transaction", refuse_close
+            )
+            with pytest.raises(RuntimeError, match="injected close failure"):
+                executor.start_executor(contender.run_id, request)
+        assert _control_run(runtime, contender.run_id).state == "queued"
+        assert _snapshot(runtime, contender.run_id).outcome is None
+        assert _events(runtime, run_id=contender.run_id).items == events_before
+        with pytest.raises(BackendConflict, match="resources are busy"):
+            executor.start_executor(contender.run_id, request)
+        assert _control_run(runtime, contender.run_id).state == "closed"
+
+
 def test_run_coverage_is_contiguous_durable_and_retryable(tmp_path: Path) -> None:
     with LocalDaemonRuntime(tmp_path, bootstrap_config=_config()) as runtime:
         admission = runtime.application.submit_run(

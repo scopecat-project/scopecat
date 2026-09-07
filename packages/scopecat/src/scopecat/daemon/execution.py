@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from threading import Lock
 from time import monotonic
-from typing import Protocol, cast
+from typing import Literal, Protocol, cast
 
 from pydantic import BaseModel, JsonValue, TypeAdapter
 
@@ -124,6 +124,7 @@ def daemon_execution_session(
         admission.snapshot,
         executor_id=executor_id,
         lease_supervisor=lease_supervisor,
+        on_resource_busy="fail",
         has_prior_execution_segment=lambda: bool(
             client.get_run_execution_segments(
                 admission.run_id,
@@ -150,6 +151,7 @@ def daemon_resumption_session(
         snapshot,
         executor_id=executor_id,
         lease_supervisor=lease_supervisor,
+        on_resource_busy="keep_queued",
         has_prior_execution_segment=lambda: has_prior_execution_segment,
     )
 
@@ -160,6 +162,7 @@ def _daemon_execution_session(
     *,
     executor_id: str,
     lease_supervisor: LeaseSupervisor | None,
+    on_resource_busy: Literal["keep_queued", "fail"],
     has_prior_execution_segment: Callable[[], bool],
 ) -> ExecutionSession:
     """Construct transport-backed execution ports after admission validation."""
@@ -169,6 +172,7 @@ def _daemon_execution_session(
         run_id=snapshot.run_id,
         executor_id=executor_id,
         lease_supervisor=lease_supervisor,
+        on_resource_busy=on_resource_busy,
     )
     instruments = _DaemonRunInstrumentHost(authority)
     coverage = _DaemonRunCoverage(authority)
@@ -246,12 +250,14 @@ class _LeaseAuthority:
         run_id: str,
         executor_id: str,
         lease_supervisor: LeaseSupervisor | None,
+        on_resource_busy: Literal["keep_queued", "fail"] = "keep_queued",
     ) -> None:
         self.client = client
         self.run_id = run_id
         self.executor_id = executor_id
         self._lease: ExecutorLease | None = None
         self._lease_supervisor = lease_supervisor
+        self._on_resource_busy: Literal["keep_queued", "fail"] = on_resource_busy
         self._lock = Lock()
 
     def start(self) -> None:
@@ -262,6 +268,7 @@ class _LeaseAuthority:
             self.run_id,
             ExecutorStartRequest(
                 executor_id=self.executor_id,
+                on_resource_busy=self._on_resource_busy,
             ),
         )
         with self._lock:

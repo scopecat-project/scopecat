@@ -158,6 +158,7 @@ def test_daemon_execution_ports_round_trip_through_fenced_http_commands(
         if path.endswith("/executor/start"):
             command = ExecutorStartRequest.model_validate_json(request.content)
             assert command.executor_id == "notebook-1"
+            assert command.on_resource_busy == "fail"
             return _model(_lease())
         if path.endswith("/instruments/provision"):
             command = RunInstrumentProvisionCommand.model_validate_json(request.content)
@@ -615,7 +616,8 @@ def test_daemon_execution_rejects_provision_receipt_for_another_operation() -> N
         session.begin()
 
 
-def test_initial_lease_cancellation_skips_remote_provisioning() -> None:
+@pytest.mark.parametrize("resuming", [False, True])
+def test_initial_lease_cancellation_skips_remote_provisioning(resuming: bool) -> None:
     submission = RunSubmission(
         submission_id="submission-1",
         config=load_config(),
@@ -643,6 +645,8 @@ def test_initial_lease_cancellation_skips_remote_provisioning() -> None:
     def handler(request: httpx2.Request) -> httpx2.Response:
         nonlocal provisioned
         if request.url.path.endswith("/executor/start"):
+            command = ExecutorStartRequest.model_validate_json(request.content)
+            assert command.on_resource_busy == ("keep_queued" if resuming else "fail")
             return _model(
                 _lease().model_copy(update={"cancellation_requested_at": _NOW})
             )
@@ -658,11 +662,20 @@ def test_initial_lease_cancellation_skips_remote_provisioning() -> None:
             )
         raise AssertionError(f"unexpected request: {request.method} {request.url.path}")
 
-    session = daemon_execution_session(
-        _client(handler),
-        submission,
-        admission,
-        executor_id="notebook-1",
+    session = (
+        daemon_execution.daemon_resumption_session(
+            _client(handler),
+            admission.snapshot,
+            executor_id="notebook-1",
+            has_prior_execution_segment=True,
+        )
+        if resuming
+        else daemon_execution_session(
+            _client(handler),
+            submission,
+            admission,
+            executor_id="notebook-1",
+        )
     )
 
     session.begin()

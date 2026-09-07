@@ -4,6 +4,13 @@ Use resume when a notebook or executor disappeared after part of a static local
 experiment became durable. The run must be `queued` or `attention_required` and
 must not already have a terminal outcome.
 
+A new `lab.run(...)` or procedure child run is rejected when another run or
+interactive session owns its required instruments. It ends as `failed` with
+`run_resources_busy`, without starting acquisition or leaving queued work behind.
+Submit a new invocation after the owner finishes; this is not automatic waiting.
+Explicit `lab.resume(...)` retains the existing queued run on resource contention
+so a failed recovery attempt does not discard its earlier measurements.
+
 First reconcile the physical instruments outside Scopecat. This means checking
 that it is safe to acquire and program them again; durable measurement coverage
 does not prove their current state.
