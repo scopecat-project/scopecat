@@ -13,7 +13,11 @@ from pydantic import JsonValue, ValidationError
 
 from scopecat.analysis.facts import AnalysisFactSchema
 from scopecat.api._config import LabConfigOperations
-from scopecat.api._runner import _DaemonRunner, _prepare_run_submission
+from scopecat.api._runner import (
+    RunResourcesBlocked,
+    _DaemonRunner,
+    _prepare_run_submission,
+)
 from scopecat.api.analysis import AnalysisInvocation, AnalysisStep
 from scopecat.api.procedure_planner import (
     ProcedurePlanningConfig,
@@ -60,7 +64,7 @@ from scopecat.automation import (
     RegisteredProcedure,
     RunOutputRef,
 )
-from scopecat.automation.worker import ProcedureNeedsAttention
+from scopecat.automation.worker import ProcedureNeedsAttention, ProcedureWaitResources
 from scopecat.config.candidates import CandidateConfig
 from scopecat.config.registry.records import (
     CandidateConfigRegistrySource,
@@ -204,7 +208,9 @@ class ProcedureHandle:
             procedure_run_id=self.id,
             revision=snapshot.revision,
             outcome=snapshot.closure.status if snapshot.closure else snapshot.state,
-            next_action=actions[snapshot.state],
+            next_action="wait"
+            if snapshot.resource_wait is not None and snapshot.state == "ready"
+            else actions[snapshot.state],
             reason=snapshot.closure.reason
             if snapshot.closure
             else snapshot.attention_reason,
@@ -398,7 +404,10 @@ class LabProcedureContext:
                     planned,
                     submission_id=operation_id,
                     executor_id=operation_id,
+                    wait_for_resources=True,
                 )
+            except RunResourcesBlocked as error:
+                raise ProcedureWaitResources(error.run_id) from error
             except httpx2.TransportError as error:
                 raise ProcedureNeedsAttention(
                     "child run transport outcome for operation "

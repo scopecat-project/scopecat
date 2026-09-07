@@ -211,10 +211,32 @@ class SQLiteAutomationStore:
                              runs.definition_fingerprint
                         LEFT JOIN procedure_leases AS leases
                           ON leases.procedure_run_id = runs.procedure_run_id
-                        WHERE runs.state = 'ready'
+                        WHERE (runs.state = 'ready'
                            OR (
                                runs.state = 'leased'
                                AND leases.expires_at <= ?
+                           ))
+                           AND (
+                             json_extract(runs.run_json,
+                               '$.resource_wait.run_id') IS NULL
+                             OR EXISTS (
+                               SELECT 1 FROM scheduler_runs AS child
+                               WHERE child.run_id = json_extract(
+                                 runs.run_json, '$.resource_wait.run_id')
+                               AND (child.state = 'closed' OR (
+                                 child.state = 'queued'
+                                 AND NOT EXISTS (
+                                   SELECT 1 FROM run_execution_segments AS segment
+                                   WHERE segment.run_id = child.run_id
+                                 )
+                                 AND NOT EXISTS (
+                                   SELECT 1 FROM run_resource_claims AS needed
+                                   JOIN resource_claims AS held
+                                     USING (resource_kind, resource_id)
+                                   WHERE needed.run_id = child.run_id
+                                 )
+                               ))
+                             )
                            )
                         ORDER BY runs.sequence ASC
                         LIMIT ?

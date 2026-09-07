@@ -107,6 +107,7 @@ def daemon_execution_session(
     *,
     executor_id: str,
     lease_supervisor: LeaseSupervisor | None = None,
+    on_resource_busy: Literal["keep_queued", "fail"] = "fail",
 ) -> ExecutionSession:
     """Bind client-owned code to the admitted daemon-owned run."""
 
@@ -124,7 +125,7 @@ def daemon_execution_session(
         admission.snapshot,
         executor_id=executor_id,
         lease_supervisor=lease_supervisor,
-        on_resource_busy="fail",
+        on_resource_busy=on_resource_busy,
         has_prior_execution_segment=lambda: bool(
             client.get_run_execution_segments(
                 admission.run_id,

@@ -25,6 +25,7 @@ from scopecat.control.models import (
 )
 from scopecat.daemon.client import (
     DaemonClient,
+    DaemonConflictError,
     DaemonUnavailableError,
 )
 from scopecat.daemon.execution import (
@@ -63,6 +64,12 @@ from scopecat.records.run_request import RunRequest
 from scopecat.records.sample import SampleSelector
 
 
+class RunResourcesBlocked(Exception):
+    def __init__(self, run_id: str) -> None:
+        self.run_id = run_id
+        super().__init__(f"resources are busy for {run_id}")
+
+
 @dataclass(frozen=True, slots=True)
 class _DaemonRunner:
     client: DaemonClient
@@ -74,6 +81,7 @@ class _DaemonRunner:
         *,
         executor_id: str = "notebook",
         submission_id: str | None = None,
+        wait_for_resources: bool = False,
     ) -> RunSnapshot:
         """Admit a plan remotely while executing its Python closures locally."""
 
@@ -93,12 +101,24 @@ class _DaemonRunner:
             admission,
             executor_id=executor_id,
             lease_supervisor=heartbeat,
+            on_resource_busy="keep_queued" if wait_for_resources else "fail",
         )
         try:
             return execute_admitted_run(
                 program=planned.program,
                 session=session,
             )
+        except DaemonConflictError:
+            if wait_for_resources:
+                detail = self.client.get_run(admission.run_id)
+                if (
+                    detail.control.state == "queued"
+                    and not self.client.get_run_execution_segments(
+                        admission.run_id, limit=1
+                    ).items
+                ):
+                    raise RunResourcesBlocked(admission.run_id) from None
+            raise
         finally:
             heartbeat.close()
 

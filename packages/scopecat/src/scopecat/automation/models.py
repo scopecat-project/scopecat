@@ -200,6 +200,13 @@ class ProcedureCancellation(_ProcedureModel):
     requested_revision: int = Field(ge=1)
 
 
+class ProcedureResourceWait(_ProcedureModel):
+    """Exact unstarted child retained while its worker is released."""
+
+    step_key: _NonEmptyText
+    run_id: _NonEmptyText
+
+
 class ProcedureRun(_ProcedureModel):
     """Current durable state of one version-pinned procedure invocation."""
 
@@ -216,6 +223,7 @@ class ProcedureRun(_ProcedureModel):
     attention_reason: str | None = None
     closure: ProcedureClosure | None = None
     cancellation: ProcedureCancellation | None = None
+    resource_wait: ProcedureResourceWait | None = None
 
     @field_validator("samples")
     @classmethod

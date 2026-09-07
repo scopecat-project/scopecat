@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import sqlite3
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from threading import Event
 from typing import cast
@@ -45,11 +47,23 @@ from scopecat.automation import (
     procedure,
     procedure_step_operation_id,
 )
+from scopecat.automation.wire import ProcedureRunnableQuery
+from scopecat.automation.worker import ProcedureWaitResources
+from scopecat.control.models import RunPlanSummary, RunResourceRequirement
 from scopecat.daemon.client import DaemonClient, DaemonConflictError
-from scopecat.daemon.wire import ConfigPublishCommand, DirectConfigRevisionSource
+from scopecat.daemon.wire import (
+    ConfigPublishCommand,
+    DirectConfigRevisionSource,
+    ExecutorStartRequest,
+    RunSubmission,
+    TerminalRunCommitCommand,
+)
+from scopecat.kernel.run_outcome import RunOutcome
+from scopecat.records.run_request import RunRequest
 from scopecat_testkit.workflow_fixtures import load_config
 
 from scopecat_server import LocalDaemonRuntime
+from scopecat_server.storage.sqlite.automation import SQLiteAutomationStore
 
 _DEFINITION_HASH = "sha256:" + "1" * 64
 _FIRST_STEP_HASH = "sha256:" + "2" * 64
@@ -110,6 +124,287 @@ _ONE_STEP_PROCEDURE = procedure(
     version="1",
     intent=_WorkerIntent,
 )(_run_one_durable_step)
+
+
+@procedure(id="tests.resource-wait", version="1", intent=_WorkerIntent)
+def _resource_wait_procedure(context: _WorkerContext, intent: _WorkerIntent) -> None:
+    context.durable.step(
+        "child", operation="run", intent_hash=_FIRST_STEP_HASH, effect=context.effect
+    )
+
+
+@pytest.mark.parametrize(
+    "mode", ["resume", "cancel", "cancel-before-wait", "cancel-on-resume", "restart"]
+)
+def test_resource_wait_releases_worker_and_reuses_or_cancels_exact_child(
+    tmp_path: Path, mode: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config = load_config()
+
+    def submission(key: str) -> RunSubmission:
+        return RunSubmission(
+            submission_id=key,
+            config=config,
+            request=RunRequest(experiment_id="scratch"),
+            plan=RunPlanSummary(
+                experiment_id="scratch",
+                experiment_kind="scratch",
+                point_plan_fingerprint="a" * 64,
+                measurement_contract_fingerprint="b" * 64,
+                point_count=0,
+                initial_point_count=0,
+                point_limit=0,
+                run_resource_requirements=(
+                    RunResourceRequirement(id="source-0", kind="instrument"),
+                ),
+            ),
+        )
+
+    starts: list[str] = []
+    admissions: list[str] = []
+    with (
+        LocalDaemonRuntime(tmp_path, bootstrap_config=config) as runtime,
+        TestClient(runtime.app()) as transport,
+        _daemon_client(transport) as client,
+    ):
+        owner = client.submit_run(submission("owner"))
+        lease = client.start_executor(
+            owner.run_id, ExecutorStartRequest(executor_id="owner")
+        )
+
+        def effect(key: str) -> RunOutputRef:
+            child = client.submit_run(submission(key))
+            admissions.append(child.run_id)
+            if mode == "cancel-on-resume" and len(admissions) == 2:
+                parent = client.list_procedures(ProcedureRunListQuery()).items[0]
+                assert parent.state == "leased" and parent.resource_wait is not None
+                client.cancel_procedure(
+                    ProcedureCancelCommand(
+                        procedure_run_id=parent.procedure_run_id,
+                        expected_run_revision=parent.revision,
+                        actor="test",
+                        reason="cancel after reacquisition before child start",
+                    )
+                )
+            try:
+                child_lease = client.start_executor(
+                    child.run_id, ExecutorStartRequest(executor_id=key)
+                )
+            except DaemonConflictError:
+                if mode == "cancel-before-wait":
+                    parent = client.list_procedures(ProcedureRunListQuery()).items[0]
+                    client.cancel_procedure(
+                        ProcedureCancelCommand(
+                            procedure_run_id=parent.procedure_run_id,
+                            expected_run_revision=parent.revision,
+                            actor="test",
+                            reason="cancel before wait",
+                        )
+                    )
+                raise ProcedureWaitResources(child.run_id) from None
+            starts.append(child.run_id)
+            client.commit_terminal(
+                child.run_id,
+                TerminalRunCommitCommand(
+                    lease_id=child_lease.lease_id,
+                    outcome=RunOutcome(
+                        run_id=child.run_id,
+                        result="succeeded",
+                        certainty="known",
+                        finished_at=datetime.now(tz=UTC),
+                    ),
+                ),
+            )
+            return RunOutputRef(run_id=child.run_id)
+
+        registry = ProcedureRegistry((_resource_wait_procedure,))
+
+        def worker() -> ProcedureWorker:
+            return ProcedureWorker(
+                client,
+                registry,
+                context_factory=lambda context: _WorkerContext(context, effect),
+            )
+
+        waiting = worker().execute(
+            _resource_wait_procedure, {"child_run_id": "unused"}, "wait", "first-worker"
+        )
+        if mode == "cancel-before-wait":
+            assert waiting.closure is not None and waiting.closure.status == "cancelled"
+            assert waiting.resource_wait is not None
+            child = client.get_run(waiting.resource_wait.run_id)
+            assert (
+                child.snapshot.outcome is not None
+                and child.snapshot.outcome.result == "cancelled"
+            )
+            assert starts == []
+            return
+        assert waiting.state == "ready" and waiting.resource_wait is not None
+        assert starts == []
+        assert (
+            runtime.application.automation.worker_state(waiting.procedure_run_id)
+            == "waiting_for_resources"
+        )
+        assert (
+            client.list_runnable_procedures(
+                ProcedureRunnableQuery(definitions=(_resource_wait_procedure.ref,))
+            ).items
+            == ()
+        )
+        with sqlite3.connect(tmp_path / ".scopecat" / "control.sqlite3") as connection:
+            assert (
+                connection.execute(
+                    "SELECT 1 FROM procedure_leases WHERE procedure_run_id = ?",
+                    (waiting.procedure_run_id,),
+                ).fetchone()
+                is None
+            )
+        child_id = waiting.resource_wait.run_id
+        if mode == "cancel":
+
+            def fail_parent_write(*_args: object, **_kwargs: object) -> None:
+                raise RuntimeError("injected parent cancellation failure")
+
+            with monkeypatch.context() as patch:
+                patch.setattr(
+                    SQLiteAutomationStore,
+                    "replace_run_in_transaction",
+                    fail_parent_write,
+                )
+                with pytest.raises(
+                    RuntimeError, match="injected parent cancellation failure"
+                ):
+                    client.cancel_procedure(
+                        ProcedureCancelCommand(
+                            procedure_run_id=waiting.procedure_run_id,
+                            expected_run_revision=waiting.revision,
+                            actor="test",
+                            reason="cancel waiter",
+                        )
+                    )
+            assert client.get_run(child_id).control.state == "queued"
+            assert client.get_run(child_id).snapshot.outcome is None
+            assert client.get_procedure(waiting.procedure_run_id) == waiting
+            cancelled = client.cancel_procedure(
+                ProcedureCancelCommand(
+                    procedure_run_id=waiting.procedure_run_id,
+                    expected_run_revision=waiting.revision,
+                    actor="test",
+                    reason="cancel waiter",
+                )
+            )
+            assert (
+                cancelled.run.closure is not None
+                and cancelled.run.closure.status == "cancelled"
+            )
+            outcome = client.get_run(child_id).snapshot.outcome
+            assert outcome is not None and outcome.result == "cancelled"
+            assert (
+                client.start_executor(
+                    owner.run_id, ExecutorStartRequest(executor_id="owner")
+                )
+                == lease
+            )
+            return
+        if mode == "restart":
+            # Only the unstarted child is resumable; the previous owner becomes
+            # quarantined on restart and must continue to block this waiter.
+            pass
+        else:
+            _finish_resource_wait_case(
+                client,
+                runtime,
+                worker,
+                waiting,
+                owner.run_id,
+                lease.lease_id,
+                child_id,
+                starts,
+                admissions,
+                cancel_on_resume=mode == "cancel-on-resume",
+            )
+
+    if mode == "restart":
+        with LocalDaemonRuntime(tmp_path) as reopened:
+            assert (
+                reopened.application.automation.worker_state(waiting.procedure_run_id)
+                == "waiting_for_resources"
+            )
+            assert reopened.application.runs.get_run(child_id).control.state == "queued"
+            assert (
+                reopened.application.runs.get_run(owner.run_id).control.state
+                == "attention_required"
+            )
+            assert (
+                reopened.application.automation.runnable(
+                    ProcedureRunnableQuery(definitions=(_resource_wait_procedure.ref,))
+                ).items
+                == ()
+            )
+            cancelled = reopened.application.automation.cancel(
+                ProcedureCancelCommand(
+                    procedure_run_id=waiting.procedure_run_id,
+                    expected_run_revision=waiting.revision,
+                    actor="test",
+                    reason="cancel after restart",
+                )
+            )
+            assert (
+                cancelled.run.closure is not None
+                and cancelled.run.closure.status == "cancelled"
+            )
+            outcome = reopened.application.runs.get_run(child_id).snapshot.outcome
+            assert outcome is not None and outcome.result == "cancelled"
+
+
+def _finish_resource_wait_case(
+    client: DaemonClient,
+    runtime: LocalDaemonRuntime,
+    worker: Callable[[], ProcedureWorker],
+    waiting: ProcedureRun,
+    owner_id: str,
+    lease_id: str,
+    child_id: str,
+    starts: list[str],
+    admissions: list[str],
+    *,
+    cancel_on_resume: bool = False,
+) -> None:
+    client.commit_terminal(
+        owner_id,
+        TerminalRunCommitCommand(
+            lease_id=lease_id,
+            outcome=RunOutcome(
+                run_id=owner_id,
+                result="succeeded",
+                certainty="known",
+                finished_at=datetime.now(tz=UTC),
+            ),
+        ),
+    )
+    assert (
+        runtime.application.automation.worker_state(waiting.procedure_run_id) == "ready"
+    )
+    completed = worker().execute(
+        _resource_wait_procedure,
+        {"child_run_id": "unused"},
+        "wait",
+        "second-worker",
+    )
+    assert completed.closure is not None
+    if cancel_on_resume:
+        assert completed.closure.status == "cancelled"
+        assert starts == [] and admissions == [child_id, child_id]
+        outcome = client.get_run(child_id).snapshot.outcome
+        assert outcome is not None and outcome.result == "cancelled"
+        return
+    assert completed.closure.status == "succeeded"
+    assert completed.resource_wait is None
+    assert starts == [child_id] and admissions == [child_id, child_id]
+    [step] = client.list_procedure_step_attempts(
+        waiting.procedure_run_id, ProcedureStepAttemptListQuery()
+    ).items
+    assert step.attempt == 1 and step.output == RunOutputRef(run_id=child_id)
 
 
 def _run_two_durable_steps(

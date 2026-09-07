@@ -4,12 +4,21 @@ Use resume when a notebook or executor disappeared after part of a static local
 experiment became durable. The run must be `queued` or `attention_required` and
 must not already have a terminal outcome.
 
-A new `lab.run(...)` or procedure child run is rejected when another run or
+A new `lab.run(...)` is rejected when another run or
 interactive session owns its required instruments. It ends as `failed` with
 `run_resources_busy`, without starting acquisition or leaving queued work behind.
 Submit a new invocation after the owner finishes; this is not automatic waiting.
 Explicit `lab.resume(...)` retains the existing queued run on resource contention
 so a failed recovery attempt does not discard its earlier measurements.
+
+A procedure's `context.run(...)` instead retains its unstarted child and returns
+the parent to `ready` with a `resource_wait` marker. The worker exits while
+resources are occupied. GUI-managed procedures wake automatically when the
+resources become available, using the same child run and step attempt. Python
+callers without a background host explicitly resume the procedure. Cancel the
+parent to atomically cancel its waiting, unstarted child as well. Quarantined
+owners still require reconciliation; waiting does not authorize replay of a
+child that has already started.
 
 Inspect a queued run with `lab.control.run_detail(run_id).resources`, or the
 Resources card in the GUI. A `blocked` resource includes `blocked_by.owner_kind`

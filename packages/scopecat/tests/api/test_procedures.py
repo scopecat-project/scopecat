@@ -419,8 +419,9 @@ class _TransportFailingRunner:
         *,
         executor_id: str = "notebook",
         submission_id: str | None = None,
+        wait_for_resources: bool = False,
     ) -> RunSnapshot:
-        del executor_id, submission_id
+        del executor_id, submission_id, wait_for_resources
         raise httpx2.ReadError("child run response was lost")
 
 

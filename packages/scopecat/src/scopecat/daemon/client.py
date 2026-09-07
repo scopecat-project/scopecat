@@ -81,6 +81,10 @@ from scopecat.automation.calibration_wire import (
     CalibrationStatusQuery,
     CalibrationStatusReceipt,
 )
+from scopecat.automation.wire import (
+    ProcedureStepResourceWaitCommand,
+    ProcedureStepResourceWaitReceipt,
+)
 from scopecat.control.models import (
     ControlRunState,
     EventPage,
@@ -732,6 +736,15 @@ class DaemonClient:
             self._procedure_step_path(command, "attention"),
             command,
             ProcedureStepAttentionReceipt,
+        )
+
+    def wait_procedure_step_resources(
+        self, command: ProcedureStepResourceWaitCommand
+    ) -> ProcedureStepResourceWaitReceipt:
+        return self._post_idempotent_model(
+            self._procedure_step_path(command, "resources/wait"),
+            command,
+            ProcedureStepResourceWaitReceipt,
         )
 
     def wait_procedure_step_input(
@@ -2162,7 +2175,8 @@ class DaemonClient:
         | ProcedureStepFailCommand
         | ProcedureStepAttentionCommand
         | ProcedureStepAttentionRetryCommand
-        | ProcedureStepInputWaitCommand
+            | ProcedureStepInputWaitCommand
+            | ProcedureStepResourceWaitCommand
         | ProcedureStepInputSubmitCommand,
         suffix: str,
     ) -> str:

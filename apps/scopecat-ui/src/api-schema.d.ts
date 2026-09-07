@@ -4751,6 +4751,14 @@ export interface components {
             [key: string]: components["schemas"]["pydantic__types__JsonValue"];
         };
         /**
+         * ProcedureResourceWait
+         * @description Exact unstarted child retained while its worker is released.
+         */
+        ProcedureResourceWait: {
+            run_id: components["schemas"]["_NonEmptyText"];
+            step_key: components["schemas"]["_NonEmptyText"];
+        };
+        /**
          * ProcedureRun
          * @description Current durable state of one version-pinned procedure invocation.
          */
@@ -4769,6 +4777,7 @@ export interface components {
             intent_hash: components["schemas"]["Sha256ContentHash"];
             procedure_run_id: components["schemas"]["_NonEmptyText"];
             request_key: components["schemas"]["_NonEmptyText"];
+            resource_wait?: components["schemas"]["ProcedureResourceWait"] | null;
             /** Revision */
             revision: number;
             /**
@@ -5869,7 +5878,7 @@ export interface components {
         };
         /**
          * RunResourceView
-         * @description Logical resource state without scheduler identity or authority.
+         * @description Logical resource state and competing owner, without execution authority.
          */
         RunResourceView: {
             blocked_by?: components["schemas"]["RunResourceBlocker"] | null;

@@ -482,12 +482,22 @@ Current run detail exposes competing owners through `resources[].blocked_by`.
 This is an observational read model; it neither reserves hardware nor schedules
 the waiting run. New synchronous runs still use terminal rejection on contention.
 
-Automatic procedure waiting remains unimplemented. Its durable boundary must
-retain the exact admitted child run and unfinished step before releasing the
-worker. A later worker must replay that same child, with an atomic check that it
-has not begun execution or been cancelled. Cancelling a waiting parent must close
-its unstarted child in the same transaction; an already-started child continues
-to follow the current-step cancellation contract. Restart may make an unstarted
-wait eligible again, but must not turn an unknown execution outcome or a
-quarantined resource into permission to retry. Resource-owner lookup, wakeups,
-and these transitions belong to framework services, not project scripts.
+Procedure `context.run(...)` retains the exact admitted child when executor
+admission is blocked before any execution segment starts. The parent becomes
+`ready` with `resource_wait={step_key, run_id}`; its unfinished step keeps the
+same attempt and the worker lease is released. Runnable selection filters these
+parents using indexed resource claims. The GUI worker manager skips blocked
+parents and resumes eligible ones with the same child admission identity. A
+Python caller without a background host must explicitly resume the procedure.
+
+Lease acquisition checks eligibility again atomically. The wait marker survives
+reacquisition until step completion, allowing cancellation to close an unstarted
+child and its parent in one transaction, including the wakeup race. Once the
+child starts, cancellation follows the existing current-step contract. Closed
+children replay their retained outcome. Restart never turns quarantined claims
+or an unknown, already-started execution into permission to retry. A crash before
+the wait checkpoint still follows ordinary unfinished-step recovery.
+
+Resource-owner lookup, wakeups and these transitions belong to framework
+services, not project scripts. This is bounded resource waiting, not a fairness,
+priority or deadline scheduler; contenders may race again when resources free.

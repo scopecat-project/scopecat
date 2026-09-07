@@ -34,6 +34,7 @@ from scopecat_server.services.executor import ExecutorService
 from scopecat_server.services.leases import OwnershipLeaseSupervisor
 from scopecat_server.services.point_plans import RunPointPlanService
 from scopecat_server.services.procedure_schedules import ProcedureScheduleService
+from scopecat_server.services.resource_waits import ProcedureResourceWaits
 from scopecat_server.services.reviews import ReviewService
 from scopecat_server.services.runs import RunService
 from scopecat_server.services.samples import SampleService
@@ -141,7 +142,11 @@ class LocalDaemonRuntime:
             )
             active_measurements = ActiveMeasurementStore()
             reviews = ReviewService()
-            automation = AutomationService(automation_store)
+            point_plans = RunPointPlanService(control=control, runs=runs)
+            automation = AutomationService(
+                automation_store,
+                resource_waits=ProcedureResourceWaits(control, runs, point_plans),
+            )
             calibration_cohorts = CalibrationCohortService(
                 calibration_cohort_store,
                 automation,
@@ -169,7 +174,6 @@ class LocalDaemonRuntime:
                 automation=automation_store,
                 calibration_cohorts=calibration_cohort_store,
             )
-            point_plans = RunPointPlanService(control=control, runs=runs)
             run_service = RunService(
                 control=control,
                 runs=runs,
