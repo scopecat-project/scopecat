@@ -295,7 +295,7 @@ export async function getMeasurementTracePreview(
     coordinateId?: string;
     fixedAxisIndices: Record<string, number>;
     valueMode: NonNullable<MeasurementTracePreviewQuery["value_mode"]>;
-    entityIndices?: readonly number[];
+    entities?: NonNullable<MeasurementTracePreviewQuery["entities"]>;
   },
   signal?: AbortSignal,
 ): Promise<MeasurementTracePreview> {
@@ -306,7 +306,7 @@ export async function getMeasurementTracePreview(
         coordinate_id: selection.coordinateId,
         downsampling: "minmax",
         fixed_axis_indices: selection.fixedAxisIndices,
-        entity_indices: selection.entityIndices ? [...selection.entityIndices] : undefined,
+        entities: selection.entities,
         max_samples: 4096,
         max_series: 32,
         observable_id: selection.observableId,

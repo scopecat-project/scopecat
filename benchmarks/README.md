@@ -148,3 +148,26 @@ not claim physical transfer bandwidth or impose a speed threshold. Waveform
 rendering is unavailable in this fixture. Existing scan benchmarks remain useful
 for target/compiler work and their own phase timing; their estimates and measured
 intervals are not added to these ordinary run records.
+
+### Entity-selected reads
+
+Run `uv run python -m benchmarks.component.entity_reads` for 128 entities,
+4096 samples, a four-record immutable native chunk, and 30 repeated one-point
+reads. Full and two-entity modes run in separate reader processes. Fixture creation
+is outside their RSS measurement. The case reads the whole blob on every iteration;
+it does not claim a storage pushdown or model the repository byte-cache benefit.
+
+The JSON record separates blob bytes, decoded Arrow logical buffer bytes, copied
+selected value bytes, IPC response payload bytes (excluding HTTP headers), and RSS.
+RSS is sampled with psutil every 1 ms and at each page; it is a sampled peak, not an
+OS high-water guarantee. Allocation caches may retain memory after GC. Do not use
+wall time or RSS ratios as portable CI thresholds.
+
+On Darwin, a local 128 × 4096, 30-page run read the same 33,959,258-byte blob in both
+modes. Copied `signal` value ndarray bytes decreased from 4,194,304 to 65,536 bytes, and response payload
+from 4,273,600 to 70,304 bytes. Sampled RSS peaks were 199,032,832 and 176,324,608 bytes
+(baselines about 136 MB); wall times were 0.351 and 0.284 seconds. The immutable
+chunk and interpreter remain a material memory floor. These are measured local
+facts, not performance guarantees. The value-byte figure excludes validity masks,
+metadata/evidence, Arrow buffers and Python objects; it is not total working set.
+Only `signal` is requested, so unselected `time` coordinate arrays are not copied.

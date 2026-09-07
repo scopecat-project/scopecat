@@ -31,6 +31,7 @@ from scopecat.measurements.datasets import (
     MAX_MEASUREMENT_TRACE_SAMPLES,
     MAX_MEASUREMENT_TRACE_SERIES,
 )
+from scopecat.measurements.entity_selection import MeasurementEntitySelection
 from scopecat.measurements.traces import (
     TraceDownsampling,
     TraceLayout,
@@ -583,6 +584,7 @@ class MeasurementArrowQuery(_ViewModel):
     """Atomic projection and finite page requested from the Arrow read path."""
 
     columns: tuple[MeasurementArrowColumn, ...] = Field(min_length=1)
+    entity_selection: MeasurementEntitySelection | None = None
     units: dict[str, Annotated[str, Field(min_length=1)]] = Field(default_factory=dict)
     diagnostics: Literal["none", "reason", "full"] = "reason"
     include_identity: bool = True
@@ -593,6 +595,14 @@ class MeasurementArrowQuery(_ViewModel):
 
     @model_validator(mode="after")
     def validate_projection(self) -> MeasurementArrowQuery:
+        if (
+            self.entity_selection is not None
+            and len(self.entity_selection.entities) > MAX_MEASUREMENT_TRACE_SERIES
+        ):
+            raise ValueError(
+                "measurement Arrow entity selection supports at most "
+                f"{MAX_MEASUREMENT_TRACE_SERIES} entities per query"
+            )
         names = tuple(column.name for column in self.columns)
         if len(names) != len(set(names)):
             raise ValueError("measurement Arrow column names must be unique")
@@ -664,10 +674,13 @@ class MeasurementTracePreviewQuery(_ViewModel):
     fixed_axis_indices: dict[str, Annotated[int, Field(ge=0)]] = Field(
         default_factory=dict
     )
-    entities: tuple[EntityRef, ...] | None = Field(default=None, min_length=1)
+    entities: tuple[EntityRef, ...] | None = Field(
+        default=None, min_length=1, max_length=MAX_MEASUREMENT_TRACE_SERIES
+    )
     entity_indices: tuple[Annotated[int, Field(ge=0)], ...] | None = Field(
         default=None,
         min_length=1,
+        max_length=MAX_MEASUREMENT_TRACE_SERIES,
     )
     max_series: Annotated[
         int,

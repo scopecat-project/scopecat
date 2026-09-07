@@ -610,7 +610,10 @@ describe("run daemon reads", () => {
         coordinateId: "frequency",
         fixedAxisIndices: { bias: 1 },
         valueMode: "magnitude",
-        entityIndices: [1, 3],
+        entities: [
+          { kind: "qubit", id: "q1" },
+          { kind: "qubit", id: "q3" },
+        ],
       }),
     ).resolves.toEqual(response);
     const request = fetchMock.mock.calls[0]?.[0];
@@ -620,7 +623,10 @@ describe("run daemon reads", () => {
       coordinate_id: "frequency",
       downsampling: "minmax",
       fixed_axis_indices: { bias: 1 },
-      entity_indices: [1, 3],
+      entities: [
+        { kind: "qubit", id: "q1" },
+        { kind: "qubit", id: "q3" },
+      ],
       max_samples: 4096,
       max_series: 32,
       observable_id: "signal",

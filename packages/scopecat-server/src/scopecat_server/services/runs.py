@@ -5,10 +5,10 @@
 from __future__ import annotations
 
 from base64 import b64decode, b64encode
-from collections.abc import Generator, Sequence
+from collections.abc import Generator, Mapping, Sequence
 from contextlib import contextmanager
 from threading import Lock
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Literal, cast
 
 from scopecat.analysis.repository import AnalysisPublicationSummary
 from scopecat.config.changes import (
@@ -81,6 +81,10 @@ from scopecat.measurements.datasets import (
     RAW_MEASUREMENTS_DATASET_ID,
     product_grid_slice_indices,
     select_measurement_schema,
+)
+from scopecat.measurements.entity_selection import (
+    MeasurementEntitySelection,
+    bind_entity_selection,
 )
 from scopecat.project_state import ProjectStateServices
 from scopecat.records.analysis import AnalysisRecord
@@ -830,7 +834,7 @@ class RunService:
 
         variable_ids = tuple(column.variable_id for column in query.columns)
         with self._config_errors():
-            self._runs.read_snapshot(run_id)
+            run_snapshot = self._runs.read_snapshot(run_id)
             items, next_offset, schema, snapshot_size = (
                 SQLiteMeasurementDatasetRepository(
                     self._runs,
@@ -840,6 +844,7 @@ class RunService:
                     offset=query.offset,
                     snapshot_size=query.snapshot_size,
                     variable_ids=variable_ids,
+                    entity_selection=query.entity_selection,
                 )
             )
         if schema is None:
@@ -871,7 +876,17 @@ class RunService:
             )
         except (KeyError, TypeError, ValueError) as error:
             raise BackendConflict(str(error)) from error
-        return table, next_offset, snapshot_size
+        metadata = dict(cast("Mapping[bytes, bytes]", table.schema.metadata or {}))
+        metadata.update(
+            {
+                b"scopecat.run_id": run_id.encode(),
+                b"scopecat.config_content_hash": str(
+                    run_snapshot.config_content_hash
+                ).encode(),
+                b"scopecat.snapshot_size": str(snapshot_size).encode(),
+            }
+        )
+        return table.replace_schema_metadata(metadata), next_offset, snapshot_size
 
     def measurement_preview(
         self,
@@ -1022,6 +1037,39 @@ class RunService:
             raise BackendConflict("measurement dataset has no registered schema")
         with self._config_errors():
             available_point_count = repository.measurement_record_count()
+        selection = None
+        bound = None
+        source_projection = _project_trace_records(
+            schema,
+            (),
+            query.model_copy(update={"entities": None, "entity_indices": None}),
+        )
+        if query.entities is not None or query.entity_indices is not None:
+            dimension_id = source_projection.entity_dimension_id
+            if dimension_id is None:
+                raise BackendConflict("trace entities require an entity trace axis")
+            entities = query.entities
+            if entities is None:
+                dimension = next(
+                    item for item in schema.dimensions if item.id == dimension_id
+                )
+                assert dimension.index is not None and query.entity_indices is not None
+                try:
+                    entities = tuple(
+                        dimension.index.values[index] for index in query.entity_indices
+                    )
+                except IndexError as error:
+                    raise BackendConflict(
+                        "trace entity index is out of range"
+                    ) from error
+            selection = MeasurementEntitySelection(
+                dimension_id=dimension_id, entities=entities
+            )
+            bound = bind_entity_selection(schema, selection)
+            schema = bound.schema
+            query = query.model_copy(
+                update={"entities": bound.selection.entities, "entity_indices": None}
+            )
         projection = _project_trace_records(schema, (), query)
         series_read_limit = min(query.max_series, query.max_samples // 2)
         point_read_limit = max(
@@ -1063,6 +1111,7 @@ class RunService:
                 records = repository.measurement_records_at(
                     point_indices,
                     variable_ids=trace_variable_ids,
+                    entity_selection=selection,
                 )
             projection = _project_trace_records(schema, records, query)
         series = tuple(
@@ -1070,7 +1119,11 @@ class RunService:
                 point_index=item.point_index,
                 logical_point_id=item.logical_point_id,
                 label=item.label,
-                entity_index=item.entity_index,
+                entity_index=(
+                    item.entity_index
+                    if bound is None or item.entity_index is None
+                    else bound.target_to_schema[item.entity_index]
+                ),
                 entity=item.entity,
                 x=tuple(float(value) for value in item.x),
                 y=item.y,
@@ -1086,7 +1139,11 @@ class RunService:
                 point_index=item.point_index,
                 logical_point_id=item.logical_point_id,
                 label=item.label,
-                entity_index=item.entity_index,
+                entity_index=(
+                    item.entity_index
+                    if bound is None or item.entity_index is None
+                    else bound.target_to_schema[item.entity_index]
+                ),
                 entity=item.entity,
                 reasons=item.reasons,
                 evidence=item.evidence,

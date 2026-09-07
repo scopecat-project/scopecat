@@ -14,9 +14,18 @@ import pyarrow as pa
 
 from scopecat.kernel.content_identity import model_wire_content_hash
 from scopecat.kernel.frozen import thaw_json_value
+from scopecat.measurements.arrow_entity_selection import (
+    entity_leaf_indices,
+    select_availability,
+)
 from scopecat.measurements.arrow_values import (
     measurement_arrow_value_type,
     measurement_values_to_arrow_array,
+)
+from scopecat.measurements.entity_selection import (
+    BoundEntitySelection,
+    MeasurementEntitySelection,
+    bind_entity_selection,
 )
 from scopecat.program.measurement_types import MeasurementDType
 from scopecat.records.measurement import (
@@ -166,6 +175,7 @@ def decode_measurement_record_slice(
     length: int,
     variable_ids: Sequence[str] | None = None,
     dataset_schema_hash: str | None = None,
+    entity_selection: MeasurementEntitySelection | None = None,
 ) -> tuple[MeasurementRecord, ...]:
     """Decode a contiguous row and variable projection from one chunk."""
 
@@ -181,6 +191,7 @@ def decode_measurement_record_slice(
         run_id=identity.run_id,
         dataset_schema=dataset_schema,
         variable_ids=variable_ids,
+        entity_selection=entity_selection,
     )
     return records
 
@@ -192,6 +203,7 @@ def decode_measurement_record_indices(
     *,
     variable_ids: Sequence[str] | None = None,
     dataset_schema_hash: str | None = None,
+    entity_selection: MeasurementEntitySelection | None = None,
 ) -> tuple[MeasurementRecord, ...]:
     """Decode selected rows and variables in caller order from one chunk."""
 
@@ -208,12 +220,13 @@ def decode_measurement_record_indices(
     if not selected:
         _selected_variables(dataset_schema, variable_ids)
         return ()
-    taken = batch.take(pa.array(selected, type=pa.int64()))
     records = _decode_records(
-        taken,
+        batch,
+        row_indices=selected,
         run_id=identity.run_id,
         dataset_schema=dataset_schema,
         variable_ids=variable_ids,
+        entity_selection=entity_selection,
     )
     return records
 
@@ -636,17 +649,26 @@ def _decode_records(
     run_id: str,
     dataset_schema: MeasurementDatasetSchema,
     variable_ids: Sequence[str] | None = None,
+    entity_selection: MeasurementEntitySelection | None = None,
+    row_indices: Sequence[int] | None = None,
 ) -> tuple[MeasurementRecord, ...]:
     variables = _selected_variables(dataset_schema, variable_ids)
+    bound = (
+        None
+        if entity_selection is None
+        else bind_entity_selection(dataset_schema, entity_selection)
+    )
+    rows = tuple(range(batch.num_rows)) if row_indices is None else tuple(row_indices)
     try:
         logical_point_ids = batch.column(_LOGICAL_POINT_ID_COLUMN)
         point_indices = batch.column(_POINT_INDEX_COLUMN)
         record_metadata = batch.column(_RECORD_METADATA_COLUMN)
+        evidence_column = batch.column(_RECORD_EVIDENCE_COLUMN)
         evidence_catalogs = tuple(
             MeasurementAcquisitionEvidenceCatalog.model_validate(
-                _decode_json(value.as_py())
+                _decode_json(evidence_column[index].as_py())
             ).select([variable.id for variable in variables])
-            for value in batch.column(_RECORD_EVIDENCE_COLUMN)
+            for index in rows
         )
         variable_columns = {
             variable.id: (
@@ -659,7 +681,7 @@ def _decode_records(
             for variable in variables
         }
         records: list[MeasurementRecord] = []
-        for row_index in range(batch.num_rows):
+        for selected_index, row_index in enumerate(rows):
             coordinates: dict[str, MeasurementValue] = {}
             observables: dict[str, MeasurementValue] = {}
             for variable in variables:
@@ -678,6 +700,7 @@ def _decode_records(
                     encoded_metadata=metadata_column[row_index].as_py(),
                     variable=variable,
                     dataset_schema=dataset_schema,
+                    entity_selection=bound,
                 )
                 target = coordinates if variable.role == "coordinate" else observables
                 target[variable.id] = value
@@ -688,7 +711,11 @@ def _decode_records(
                     point_index=point_indices[row_index].as_py(),
                     coordinates=coordinates,
                     observables=observables,
-                    acquisition_evidence=evidence_catalogs[row_index],
+                    acquisition_evidence=(
+                        evidence_catalogs[selected_index]
+                        if bound is None
+                        else bound.evidence(evidence_catalogs[selected_index])
+                    ),
                     metadata=_decode_json(record_metadata[row_index].as_py()),
                 )
             )
@@ -728,7 +755,14 @@ def _decode_value(
     encoded_metadata: object,
     variable: MeasurementVariable,
     dataset_schema: MeasurementDatasetSchema,
+    entity_selection: BoundEntitySelection | None = None,
 ) -> MeasurementValue:
+    entity_axis = (
+        None
+        if entity_selection is None
+        or entity_selection.selection.dimension_id not in variable.dims[1:]
+        else variable.dims[1:].index(entity_selection.selection.dimension_id)
+    )
     metadata = _decode_json(encoded_metadata)
     availability_groups = _decode_availability(encoded_availability)
     if reason is not None:
@@ -748,6 +782,9 @@ def _decode_value(
             raise MeasurementArrowCodecError(
                 "measurement Arrow unavailable shape sidecar is invalid"
             )
+        if entity_axis is not None:
+            assert entity_selection is not None
+            decoded_shape[entity_axis] = len(entity_selection.target_to_source)
         return MeasurementUnavailable.create(
             reason=cast("MeasurementUnavailableReason", reason),
             dtype=variable.dtype,
@@ -785,6 +822,12 @@ def _decode_value(
             encoded_availability=encoded_availability,
             variable=variable,
             metadata=metadata,
+            positions=None
+            if entity_axis is None or entity_selection is None
+            else entity_selection.target_to_source,
+            dimension_id=None
+            if entity_selection is None
+            else entity_selection.selection.dimension_id,
         )
     partition_spec = _decode_partition_spec(encoded_shape)
     if partition_spec is not None:
@@ -801,7 +844,27 @@ def _decode_value(
             variable=variable,
             dataset_schema=dataset_schema,
         )
-    array, valid = _decode_array_values(encoded_value, dtype=variable.dtype)
+    indices = None
+    if entity_axis is not None:
+        assert entity_selection is not None
+        indices = entity_leaf_indices(
+            shape, axis=entity_axis, positions=entity_selection.target_to_source
+        )
+        availability_groups = select_availability(
+            availability_groups,
+            indices,
+            dimension_id=entity_selection.selection.dimension_id,
+        )
+        shape = tuple(
+            len(entity_selection.target_to_source) if axis == entity_axis else size
+            for axis, size in enumerate(shape)
+        )
+        partition_spec = (
+            None  # Selected pages retain values, not source partition ownership.
+        )
+    array, valid = _decode_array_values(
+        encoded_value, dtype=variable.dtype, indices=indices
+    )
     array = array.reshape(shape)
     valid = valid.reshape(shape)
     if availability_groups:
@@ -975,6 +1038,8 @@ def _decode_segmented_array(
     encoded_availability: object,
     variable: MeasurementVariable,
     metadata: Mapping[str, object],
+    positions: Sequence[int | None] | None = None,
+    dimension_id: str | None = None,
 ) -> MeasurementSegmentedArray:
     decoded = _decode_json(encoded_availability)
     raw_diagnostics = decoded.get("segments")
@@ -993,9 +1058,22 @@ def _decode_segmented_array(
         )
     local_rank = len(variable.dims) - 2
     segments: list[MeasurementArray | MeasurementUnavailable] = []
-    for index, (shape_spec, raw_diagnostic) in enumerate(
-        zip(shape_specs, raw_diagnostics, strict=True)
-    ):
+    for index in range(len(shape_specs)) if positions is None else positions:
+        if index is None:
+            segments.append(
+                MeasurementUnavailable.create(
+                    reason="missing",
+                    dtype=variable.dtype,
+                    unit=variable.unit,
+                    shape=(None,) * local_rank,
+                    metadata={
+                        "entity_alignment": "absent",
+                        "dimension_id": dimension_id,
+                    },
+                )
+            )
+            continue
+        shape_spec, raw_diagnostic = shape_specs[index], raw_diagnostics[index]
         if not isinstance(raw_diagnostic, dict):
             raise MeasurementArrowCodecError(
                 "measurement Arrow segmented diagnostics are invalid"
@@ -1174,6 +1252,7 @@ def _decode_array_values(
     value: pa.Scalar,
     *,
     dtype: MeasurementDType,
+    indices: np.ndarray[tuple[int], np.dtype[np.int64]] | None = None,
 ) -> tuple[
     np.ndarray[tuple[int], np.dtype[np.generic]],
     np.ndarray[tuple[int], np.dtype[np.bool_]],
@@ -1188,6 +1267,8 @@ def _decode_array_values(
             "pa.ListArray | pa.LargeListArray | pa.FixedSizeListArray",
             selected,
         ).flatten()
+    if indices is not None:
+        selected = selected.take(pa.array(indices, mask=indices < 0, type=pa.int64()))
     if dtype == "complex128":
         complex_values = cast("pa.StructArray", selected)
         real = complex_values.field("real").to_numpy(zero_copy_only=False)

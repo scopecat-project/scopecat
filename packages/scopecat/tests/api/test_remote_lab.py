@@ -2177,3 +2177,60 @@ def test_lab_close_preserves_connection_ownership() -> None:
             assert not owned.is_closed
         assert owned.is_closed
         owned.close()
+
+
+def test_remote_entity_projection_forwards_selection_on_every_snapshot_page() -> None:
+    from scopecat_testkit.entity_reads import wide_entity_measurements
+
+    from scopecat.kernel.entity import EntityRef
+
+    raw = wide_entity_measurements()
+    entry = ContentEntry(
+        role="dataset",
+        id="raw-measurements",
+        kind="measurement_dataset",
+        content_hash="selected-source",
+        schema=raw.dataset_schema.model_dump(mode="json"),
+    )
+    queries: list[dict[str, object]] = []
+
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        if request.url.path.endswith("/contents/dataset/raw-measurements"):
+            return _model(entry)
+        assert request.url.path.endswith("/measurements/arrow"), request.url.path
+        query = cast("dict[str, object]", json.loads(request.content))
+        queries.append(query)
+        table = pa.table({"signal": [float(len(queries))]})
+        sink = pa.BufferOutputStream()
+        with pa.ipc.new_stream(sink, table.schema) as writer:
+            writer.write_table(table)
+        return httpx2.Response(
+            200,
+            content=sink.getvalue().to_pybytes(),
+            headers={
+                "X-Scopecat-Snapshot-Size": "2",
+                **({"X-Scopecat-Next-Offset": "1"} if len(queries) == 1 else {}),
+            },
+        )
+
+    run = RunHandle(session=LabClient(_client(handler)), id="run-wide")
+    entities = (EntityRef(id="q7", kind="qubit"), EntityRef(id="absent", kind="qubit"))
+    reader = (
+        AnalysisContext(run=run)
+        .measurements()
+        .project({"signal": "signal"})
+        .select_entities("entity", entities)
+        .to_record_batch_reader(batch_size=1)
+    )
+    assert len(queries) == 1
+    assert len(list(reader)) == 2
+    assert [query["snapshot_size"] for query in queries] == [None, 2]
+    assert [query["offset"] for query in queries] == [0, 1]
+    assert all(
+        query["entity_selection"]
+        == {
+            "dimension_id": "entity",
+            "entities": [entity.model_dump(mode="json") for entity in entities],
+        }
+        for query in queries
+    )

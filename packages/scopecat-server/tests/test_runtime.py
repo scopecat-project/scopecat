@@ -5301,3 +5301,169 @@ def test_measurement_acknowledgment_loss_and_replay_boundaries(
         )
         assert table.column("point_index").to_pylist() == [0, 1]
         assert table.column("signal").to_pylist() == [1.0, 2.0]
+
+
+@pytest.mark.parametrize("order", [tuple(range(8)), tuple(reversed(range(8)))])
+def test_entity_selected_arrow_http_preserves_run_identity_and_page_watermark(
+    tmp_path: Path,
+    order: tuple[int, ...],
+) -> None:
+    import json
+
+    from scopecat_testkit.entity_reads import wide_entity_measurements
+
+    with LocalDaemonRuntime(
+        tmp_path / str(order[0]), bootstrap_config=_config()
+    ) as runtime:
+        client = TestClient(runtime.app())
+        admission = runtime.application.submit_run(
+            _submission("selected", point_count=2)
+        )
+        run_id = admission.run_id
+        lease = runtime.application.executor.start_executor(
+            run_id, ExecutorStartRequest(executor_id="reader-fixture")
+        )
+        raw = wide_entity_measurements(run_id=run_id, entity_order=order)
+        header = MeasurementDatasetHeader(
+            run_id=run_id,
+            recording_contract_fingerprint="test.entity-selection.v1",
+            dataset_schema=raw.dataset_schema,
+            expected_record_count=2,
+            record_count_limit=2,
+        )
+        runtime.application.executor.initialize_measurements(
+            run_id, MeasurementHeaderCommand(lease_id=lease.lease_id, header=header)
+        )
+
+        def append(point: int) -> None:
+            runtime.application.executor.ingest_measurements(
+                run_id,
+                lease_id=lease.lease_id,
+                content=encode_measurement_append(
+                    MeasurementDatasetAppend(
+                        run_id=run_id,
+                        header_content_hash=header.content_hash,
+                        acquisition_start=point,
+                        records=(raw.records[point],),
+                    ),
+                    header.dataset_schema,
+                ),
+            )
+            runtime.application.executor.flush_measurements(
+                run_id, MeasurementFlushCommand(lease_id=lease.lease_id)
+            )
+            runtime.application.executor.commit_recovery_groups(
+                run_id,
+                RunRecoveryGroupCommitCommand(
+                    lease_id=lease.lease_id,
+                    groups=(
+                        RecoveryGroupCompletion(
+                            schedule_fingerprint="test-runtime-schedule-v1",
+                            group_id=f"point-{point}",
+                            point_indices=(point,),
+                            output_kind="measurement",
+                            record_content_hashes=(
+                                measurement_record_content_hash(raw.records[point]),
+                            ),
+                        ),
+                    ),
+                ),
+            )
+            runtime.application.executor.advance_run_coverage(
+                run_id,
+                RunCoverageAdvanceCommand(
+                    lease_id=lease.lease_id,
+                    start_index=point,
+                    point_count=1,
+                ),
+            )
+
+        append(0)
+        query = {
+            "columns": [{"name": "signal", "variable_id": "signal"}],
+            "entity_selection": {
+                "dimension_id": "entity",
+                "entities": [
+                    {"kind": "qubit", "id": "q7"},
+                    {
+                        "kind": "qubit",
+                        "id": "absent",
+                        "metadata": {"label": "requested"},
+                    },
+                    {"kind": "qubit", "id": "q0"},
+                ],
+            },
+            "diagnostics": "full",
+            "limit": 1,
+        }
+        response = client.post(f"/api/v1/runs/{run_id}/measurements/arrow", json=query)
+        assert response.status_code == 200, response.text
+        table = pa.ipc.open_stream(response.content).read_all()
+        metadata = table.schema.metadata
+        assert metadata is not None
+        assert metadata[b"scopecat.run_id"] == run_id.encode()
+        assert (
+            metadata[b"scopecat.config_content_hash"]
+            == _snapshot(runtime, run_id).config_content_hash.encode()
+        )
+        assert metadata[b"scopecat.snapshot_size"] == b"1"
+        selected_schema = json.loads(metadata[b"scopecat.schema"])
+        axis = next(
+            item for item in selected_schema["dimensions"] if item["id"] == "entity"
+        )
+        assert [item["id"] for item in axis["index"]["values"]] == [
+            "q7",
+            "absent",
+            "q0",
+        ]
+        assert axis["index"]["values"][0]["metadata"]["label"] == f"{run_id}:Q7"
+        assert axis["index"]["values"][1]["metadata"] == {"label": "requested"}
+        append(1)
+        pinned = client.post(
+            f"/api/v1/runs/{run_id}/measurements/arrow",
+            json={
+                **query,
+                "offset": 1,
+                "snapshot_size": 1,
+            },
+        )
+        assert pinned.status_code == 200, pinned.text
+        assert pa.ipc.open_stream(pinned.content).read_all().num_rows == 0
+        fresh = client.post(
+            f"/api/v1/runs/{run_id}/measurements/arrow", json={**query, "offset": 1}
+        )
+        assert fresh.status_code == 200, fresh.text
+        assert fresh.headers["x-scopecat-snapshot-size"] == "2"
+        assert pa.ipc.open_stream(fresh.content).read_all().num_rows == 1
+
+        trace = client.post(
+            f"/api/v1/runs/{run_id}/measurements/traces/query",
+            json={
+                "observable_id": "signal",
+                "coordinate_id": "time",
+                "entities": [
+                    {"kind": "qubit", "id": "q7"},
+                    {"kind": "qubit", "id": "absent"},
+                    {"kind": "qubit", "id": "q0"},
+                ],
+            },
+        )
+        assert trace.status_code == 200, trace.text
+        preview = trace.json()
+        assert [item["entity"]["id"] for item in preview["series"]] == [
+            "q7",
+            "q0",
+            "q7",
+            "q0",
+        ]
+        assert [item["entity_index"] for item in preview["series"]] == [
+            order.index(7),
+            order.index(0),
+        ] * 2
+        assert [item["entity"]["id"] for item in preview["failures"]] == [
+            "absent",
+            "absent",
+        ]
+        assert all(item["entity_index"] is None for item in preview["failures"])
+        assert all(item["evidence"] is None for item in preview["failures"])
+        assert preview["series"][0]["evidence"]["command_id"] == f"{run_id}-q7"

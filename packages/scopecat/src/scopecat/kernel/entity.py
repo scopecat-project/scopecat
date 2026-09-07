@@ -43,10 +43,12 @@ class EntityRef(BaseModel):
         return normalize_entity_metadata(value)
 
     @field_serializer("metadata")
-    def serialize_metadata(self, value: object) -> object:
+    def serialize_metadata(self, value: object) -> dict[str, object]:
         """Serialize immutable authoring snapshots as ordinary JSON containers."""
 
-        return thaw_json_value(normalize_entity_metadata(value))
+        return cast(
+            "dict[str, object]", thaw_json_value(normalize_entity_metadata(value))
+        )
 
 
 def entity_identity(value: EntityRef) -> tuple[str | None, str]:
