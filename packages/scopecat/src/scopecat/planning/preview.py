@@ -10,7 +10,7 @@ from scopecat.execution.local.program import ComputeOperation, OutputInput
 from scopecat.execution.program import RunPointInspection, RunProgram
 from scopecat.inspection import CompiledProgramInspectionQuery
 from scopecat.kernel.points import PointProposalAttempt
-from scopecat.measurements.records import RecordPlan, ValueRecordPlan
+from scopecat.measurements.records import EntityRecordPlan, RecordPlan, ValueRecordPlan
 from scopecat.planning.point_selection import (
     point_coordinate_contract,
     resolve_point_selection,
@@ -27,6 +27,7 @@ from scopecat.planning.preview_models import (
     ExperimentPreviewPointGrouping,
     ExperimentPreviewPointSchedule,
     ExperimentPreviewRecord,
+    ExperimentPreviewTransientProduct,
 )
 from scopecat.program.parameters import ParameterContract, ParameterValueContract
 from scopecat.program.scans import AroundScanSource, RangeScanSource, ValuesScanSource
@@ -115,6 +116,9 @@ def build_run_program_preview(
             )
             for record in selected.records
         ),
+        sampled_point_limit=_PREVIEW_POINT_LIMIT,
+        selected_point_limit=1,
+        transient_products=_preview_transient_products(program),
         point_schedule=ExperimentPreviewPointSchedule(
             traversal=program.point_schedule.traversal,
             grouping=_preview_point_grouping(program),
@@ -508,3 +512,35 @@ def _preview_computes(program: RunProgram) -> tuple[ExperimentPreviewCompute, ..
             )
         )
     return tuple(computes)
+
+
+def _preview_transient_products(
+    program: RunProgram,
+) -> tuple[ExperimentPreviewTransientProduct, ...]:
+    retained = {
+        record.product_id
+        for record in program.measurements.records
+        if isinstance(record, RecordPlan)
+    }
+    retained.update(
+        member.product_id
+        for record in program.measurements.records
+        if isinstance(record, EntityRecordPlan)
+        for member in record.members
+    )
+    demanded = {
+        item.product_id
+        for compute in program.measurement_computes
+        for item in compute.inputs
+    }
+    return tuple(
+        ExperimentPreviewTransientProduct(
+            id=product.id.qualified_name,
+            unit=product.unit,
+            dtype=product.dtype,
+            dims=tuple(axis.dimension_id for axis in product.axes),
+            shape=tuple(axis.size for axis in product.axes),
+        )
+        for product in program.measurements.catalog.product_defs
+        if product.id in demanded and product.id not in retained
+    )

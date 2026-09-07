@@ -8,6 +8,7 @@ from typing import Protocol
 import httpx2
 import pytest
 from pydantic import ValidationError
+from scopecat.api.run import RunHandle
 from scopecat.application import LabApplication
 from scopecat.application.launch import (
     LaunchCatalog,
@@ -16,6 +17,7 @@ from scopecat.application.launch import (
     LaunchSubmission,
 )
 from scopecat.daemon.client import DaemonClient, DaemonConflictError
+from scopecat.planning.preflight import PreflightStage
 from scopecat.project import load_project
 from scopecat.records.measurement import MeasurementScalar
 from scopecat_testkit.project_loading import isolated_project_imports
@@ -53,6 +55,28 @@ def submit_request(
     )
 
 
+def assert_retained_shapes(stage: PreflightStage, run: RunHandle) -> None:
+    schema = run.measurements().schema
+    dimensions = {dimension.id: dimension.size for dimension in schema.dimensions}
+    variables = {
+        variable.id: variable
+        for variable in schema.variables
+        if variable.role == "observable"
+    }
+    retained = [
+        product for product in stage.products if product.retention == "retained"
+    ]
+    assert {product.id for product in retained} == set(variables)
+    for product in retained:
+        variable = variables[product.id]
+        assert product.dims == tuple(variable.dims)
+        assert product.shape == tuple(
+            dimensions[dimension] for dimension in variable.dims
+        )
+        assert product.dtype == variable.dtype
+        assert product.unit == variable.unit
+
+
 @pytest.mark.parametrize("experiment", ["temperature", "channel-timing"])
 def test_real_http_preview_shares_catalog_and_never_admits_acquisition(
     reference_lab_daemon: _Daemon,
@@ -81,7 +105,19 @@ def test_real_http_preview_shares_catalog_and_never_admits_acquisition(
         )
         response.raise_for_status()
         preview = LaunchPreview.model_validate(response.json())
-        assert preview == provider(lab, request)
+        repeated = provider(lab, request)
+        assert isinstance(repeated, LaunchPreview)
+        # Target inspection includes per-compilation timing/cache diagnostics.
+        exclude = {"preflight": {"stages": {"__all__": {"inspections"}}}}
+        assert preview.model_dump(exclude=exclude) == repeated.model_dump(
+            exclude=exclude
+        )
+        assert preview.preflight is not None
+        assert len(preview.preflight.stages) == (
+            1 if experiment == "temperature" else 2
+        )
+        assert all(stage.selected_points <= 1 for stage in preview.preflight.stages)
+        assert all(stage.sampled_points <= 64 for stage in preview.preflight.stages)
         assert preview.point_count == (1 if experiment == "temperature" else 2)
         assert preview.config_source.entry_id == active.entry.id
         assert client.list_runs() == before
@@ -120,6 +156,8 @@ def test_submission_fences_new_stale_work_but_replays_exact_admission(
         run = lab.get_run(output.run_id)
         assert run.status == "completed"
         assert run.snapshot.config_source == preview.config_source
+        assert preview.preflight is not None
+        assert_retained_shapes(preview.preflight.stages[0], run)
         records = run.measurements().records
         temperature = records[0].observables["temperature"]
         assert isinstance(temperature, MeasurementScalar) and temperature.unit == "K"
@@ -157,6 +195,15 @@ def test_candidate_uses_existing_review_state_and_retains_result_references(
             candidate_source is not None
             and candidate_source.kind == "analysis_candidate"
         )
+        assert preview.preflight is not None
+        assert [stage.configuration for stage in preview.preflight.stages] == [
+            "accepted",
+            "proposed_candidate",
+        ]
+        for stage in preview.preflight.stages:
+            output = handle.output(stage.id)
+            assert output.kind == "run"
+            assert_retained_shapes(stage, lab.get_run(output.run_id))
         review = handle.step("review").interpretation_request
         assert review is not None and review.schema_id == TIMING_REVIEW.id
         handle.respond(

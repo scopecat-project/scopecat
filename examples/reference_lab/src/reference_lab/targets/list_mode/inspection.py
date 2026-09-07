@@ -23,6 +23,7 @@ from scopecat.inspection import (
     CompiledProgramInspectionNodeIndex,
     CompiledProgramInspectionQuery,
     CompiledWaveformInspection,
+    CompiledWorkEstimate,
 )
 from scopecat.kernel.content_identity import sha256_json_hash
 
@@ -73,6 +74,42 @@ def _inspect_list_mode_artifact_base(
     selected_entries = artifact.entries[: selected_bounds.max_entries]
     return CompiledArtifactInspection(
         kind="reference_lab.list_mode.v1",
+        work_estimates=(
+            CompiledWorkEstimate(
+                "waveform_playback_time",
+                timing := sum(entry.sample_count for entry in artifact.entries)
+                / artifact.sample_rate_hz
+                * artifact.repetitions,
+                timing,
+                "s",
+                (
+                    "Compiled artifact sample counts times repetitions / sample "
+                    "rate; excludes trigger waits, transfer, queue and host "
+                    "time"
+                ),
+            ),
+            CompiledWorkEstimate(
+                "waveform_bytes",
+                artifact.physical_footprint.waveform_bytes,
+                artifact.physical_footprint.waveform_bytes,
+                "bytes",
+                "Target waveform-buffer allocation for this compiled artifact",
+            ),
+            CompiledWorkEstimate(
+                "result_bytes",
+                artifact.physical_footprint.result_bytes,
+                artifact.physical_footprint.result_bytes,
+                "bytes",
+                "Target result-buffer allocation, not retained dataset storage",
+            ),
+            CompiledWorkEstimate(
+                "batch_point_capacity",
+                0,
+                artifact.compilation_budget.next_batch_max_points,
+                "points",
+                "Target next-batch point budget; not a run-wide batch count",
+            ),
+        ),
         facts=(
             CompiledInspectionFact("semantics_id", artifact.waveform_semantics_id),
             CompiledInspectionFact(

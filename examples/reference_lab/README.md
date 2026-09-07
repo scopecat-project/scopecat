@@ -183,3 +183,31 @@ entity-indexed analysis using the existing public workflows.
 uv run python scripts/generate_reference_lab_acceptance.py --check
 uv run pytest examples/reference_lab/tests/test_acceptance.py
 ```
+
+## Bounded launch preflight
+
+The typed launcher declares a diagnostic stage or separate source and candidate
+verification stages. Each stage reports planned executions, entity IDs, points,
+shots and configuration meaning. The first experiment's initial point count is
+not the entire procedure workload. The candidate stage uses the proposed channel
+delay to preview its configuration; this does not claim the candidate has run,
+passed verification or been accepted as the default.
+
+`planning.preflight.summarize_preflight` projects an existing experiment preview
+without compiling additional points. The preview displays at most 64 point
+summaries and inspects one selected point per stage. Static cardinality is an
+exact planned count, not a completion promise. Adaptive scope is a bound from
+zero acquired points to the declared limit; initial proposals are reported
+separately. Retained products describe planned dataset dimensions, including the
+point axis. Transient compute inputs describe per-point dimensions and are not
+retained as independent measurement variables.
+
+Quantities carry units and a basis and are explicitly exact, bounded or unknown.
+The list-mode target supplies inspected-artifact buffer sizes, playback time and
+batch capacity. Playback excludes waits, transfer and host work; artifact costs
+are not extrapolated to full experiments. Wall-clock time, total batching and
+retained storage size remain unknown without a corresponding estimate. Raw
+selected-point inspections remain expandable. Projects can omit detailed
+preflight; the launcher then shows that scope and estimates were not provided,
+never zero. A changed input requires a new preview, and submission still checks
+the frozen request and accepted configuration generation.

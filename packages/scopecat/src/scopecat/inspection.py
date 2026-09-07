@@ -755,6 +755,21 @@ class CompiledInspectionBounds:
 
 
 @dataclass(frozen=True, slots=True)
+class CompiledWorkEstimate:
+    """Target-owned work for this inspected artifact, never an implied run total.
+
+    Equal bounds denote an exact compiler fact. A range denotes a target bound;
+    wall-clock acquisition duration must not be inferred from sequence timing.
+    """
+
+    metric: str
+    lower: float
+    upper: float
+    unit: str
+    basis: str
+
+
+@dataclass(frozen=True, slots=True)
 class CompiledArtifactInspection:
     """Common inspection envelope shared by pre-run and running views."""
 
@@ -766,6 +781,7 @@ class CompiledArtifactInspection:
     points: tuple[CompiledPointInspection, ...]
     program: CompiledProgramInspection | None = None
     warnings: tuple[str, ...] = ()
+    work_estimates: tuple[CompiledWorkEstimate, ...] = ()
     schema_id: Literal["scopecat.compiled_artifact_inspection.v2"] = (
         "scopecat.compiled_artifact_inspection.v2"
     )
@@ -793,5 +809,6 @@ __all__ = [
     "CompiledProgramInspectionPage",
     "CompiledProgramInspectionQuery",
     "CompiledWaveformInspection",
+    "CompiledWorkEstimate",
     "query_compiled_program_node_index",
 ]

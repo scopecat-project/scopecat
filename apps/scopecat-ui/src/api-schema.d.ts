@@ -1920,6 +1920,22 @@ export interface components {
             kind: "blob";
             ref: components["schemas"]["Sha256ContentHash"];
         };
+        /** BoundedQuantity */
+        BoundedQuantity: {
+            /** Basis */
+            basis: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "bounded";
+            /** Lower */
+            lower: number;
+            /** Unit */
+            unit: string;
+            /** Upper */
+            upper: number;
+        };
         /**
          * CalibrationCohortMergeRegistrySource
          * @description Durable provenance for an individually verified cohort composition.
@@ -2061,6 +2077,11 @@ export interface components {
              * @default []
              */
             warnings: string[];
+            /**
+             * Work Estimates
+             * @default []
+             */
+            work_estimates: components["schemas"]["CompiledWorkEstimate"][];
         };
         /**
          * CompiledInspectionBounds
@@ -2343,6 +2364,25 @@ export interface components {
             samples_sha256: string;
             /** Source Sample Count */
             source_sample_count: number;
+        };
+        /**
+         * CompiledWorkEstimate
+         * @description Target-owned work for this inspected artifact, never an implied run total.
+         *
+         *     Equal bounds denote an exact compiler fact. A range denotes a target bound;
+         *     wall-clock acquisition duration must not be inferred from sequence timing.
+         */
+        CompiledWorkEstimate: {
+            /** Basis */
+            basis: string;
+            /** Lower */
+            lower: number;
+            /** Metric */
+            metric: string;
+            /** Unit */
+            unit: string;
+            /** Upper */
+            upper: number;
         };
         /**
          * ComponentSpec
@@ -2945,6 +2985,37 @@ export interface components {
             items: components["schemas"]["DurableEvent"][];
             /** Next Cursor */
             next_cursor?: number | null;
+        };
+        /** ExactQuantity */
+        ExactQuantity: {
+            /** Basis */
+            basis: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "exact";
+            /** Unit */
+            unit: string;
+            /** Value */
+            value: number;
+        };
+        /**
+         * ExperimentPreviewDomainInspection
+         * @description One target-owned, non-durable inspection for the selected point.
+         */
+        ExperimentPreviewDomainInspection: {
+            /** Artifact Fingerprint */
+            artifact_fingerprint: string;
+            /** Artifact Id */
+            artifact_id: string;
+            content: components["schemas"]["CompiledArtifactInspection-Output"];
+            /** Operation Id */
+            operation_id: string;
+            /** Point Index */
+            point_index: number | null;
+            /** Target Id */
+            target_id: string;
         };
         /**
          * ExternalLocation
@@ -3762,6 +3833,7 @@ export interface components {
              * @description Initial point count of the first previewed experiment, not a procedure total.
              */
             point_count: number;
+            preflight?: components["schemas"]["PreflightSummary"] | null;
             request_hash: components["schemas"]["Sha256ContentHash"];
             /** Resolved Inputs */
             resolved_inputs?: {
@@ -4816,6 +4888,96 @@ export interface components {
         "PointCoordinateValue-Output": boolean | number | string | components["schemas"]["scopecat__kernel__quantity__Quantity"] | components["schemas"]["EntityRef-Output"] | null;
         /** @enum {string} */
         PointProposalSource: "author" | "optimizer" | "operator";
+        /** PreflightCost */
+        PreflightCost: {
+            /** Artifact Fingerprint */
+            artifact_fingerprint?: string | null;
+            /** Metric */
+            metric: string;
+            quantity: components["schemas"]["PreflightQuantity"];
+            /**
+             * Scope
+             * @enum {string}
+             */
+            scope: "inspected_artifact" | "experiment" | "procedure";
+            /** Target Id */
+            target_id?: string | null;
+        };
+        /** PreflightProduct */
+        PreflightProduct: {
+            /** Dims */
+            dims: string[];
+            /** Dtype */
+            dtype: string;
+            /** Id */
+            id: string;
+            /**
+             * Retention
+             * @enum {string}
+             */
+            retention: "retained" | "transient";
+            /** Shape */
+            shape: (number | null)[];
+            /** Unit */
+            unit: string | null;
+        };
+        PreflightQuantity: components["schemas"]["ExactQuantity"] | components["schemas"]["BoundedQuantity"] | components["schemas"]["UnknownQuantity"];
+        /** PreflightStage */
+        PreflightStage: {
+            config_content_hash: components["schemas"]["ConfigContentHash"];
+            /**
+             * Configuration
+             * @enum {string}
+             */
+            configuration: "accepted" | "proposed_candidate";
+            /** Configuration Meaning */
+            configuration_meaning: string;
+            /** Costs */
+            costs: components["schemas"]["PreflightCost"][];
+            /** Entity Ids */
+            entity_ids: string[] | null;
+            executions: components["schemas"]["PreflightQuantity"];
+            /** Experiment Id */
+            experiment_id: string;
+            /** Id */
+            id: string;
+            /** Initial Proposed Points */
+            initial_proposed_points: number;
+            /**
+             * Inspections
+             * @default []
+             */
+            inspections: components["schemas"]["ExperimentPreviewDomainInspection"][];
+            /** Label */
+            label: string;
+            /**
+             * Point Scope
+             * @enum {string}
+             */
+            point_scope: "static_plan" | "adaptive_limit";
+            points_per_execution: components["schemas"]["PreflightQuantity"];
+            /** Products */
+            products: components["schemas"]["PreflightProduct"][];
+            /** Sampled Point Limit */
+            sampled_point_limit: number;
+            /** Sampled Points */
+            sampled_points: number;
+            /** Selected Point Limit */
+            selected_point_limit: number;
+            /** Selected Points */
+            selected_points: number;
+            shots_per_point_per_entity: components["schemas"]["PreflightQuantity"];
+        };
+        /**
+         * PreflightSummary
+         * @description Project-declared stages; each stage retains its own science and cost scope.
+         */
+        PreflightSummary: {
+            /** Scope Basis */
+            scope_basis: string;
+            /** Stages */
+            stages: components["schemas"]["PreflightStage"][];
+        };
         /**
          * Problem
          * @description One expected, structured finding without presentation policy.
@@ -6741,6 +6903,18 @@ export interface components {
         TraceLayout: "overlay" | "small_multiples";
         /** @enum {string} */
         TraceValueMode: "value" | "magnitude" | "phase" | "real" | "imag";
+        /** UnknownQuantity */
+        UnknownQuantity: {
+            /** Basis */
+            basis: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "unknown";
+            /** Unit */
+            unit: string;
+        };
         /**
          * UpdateParameterRows
          * @description Update one row selected by a table primary key.

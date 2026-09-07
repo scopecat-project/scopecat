@@ -34,6 +34,17 @@ class ExperimentPreviewRecord:
 
 
 @dataclass(frozen=True)
+class ExperimentPreviewTransientProduct:
+    """A demanded compute input whose product is not selected for retention."""
+
+    id: str
+    unit: str | None
+    dtype: str
+    dims: tuple[str, ...]
+    shape: tuple[int | None, ...]
+
+
+@dataclass(frozen=True)
 class ExperimentPreviewPointGroup:
     """One sampled recovery group in preferred traversal order."""
 
@@ -130,6 +141,9 @@ class ExperimentPreview:
     points: tuple[ExperimentPreviewPoint, ...]
     points_truncated: bool
     records: tuple[ExperimentPreviewRecord, ...]
+    sampled_point_limit: int = 64
+    selected_point_limit: int = 1
+    transient_products: tuple[ExperimentPreviewTransientProduct, ...] = ()
     point_schedule: ExperimentPreviewPointSchedule | None = None
     selected_point: ExperimentPreviewPoint | None = None
     domain_inspections: tuple[ExperimentPreviewDomainInspection, ...] = ()
