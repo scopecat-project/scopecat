@@ -1,4 +1,5 @@
 import { AlertTriangle, Boxes, ChevronRight, Unlock } from "lucide-react";
+import { RunCancellationNotice } from "./RunCancellationNotice";
 import type {
   MeasurementTracePreview,
   RunDomainDecisionPage,
@@ -207,6 +208,7 @@ export function RunDetail({
         </section>
       )}
 
+      <RunCancellationNotice run={run} />
       {run.status === "attention_required" && (
         <div
           className="mt-[18px] flex items-start gap-[11px] rounded-md border border-[rgb(237_201_111_/_23%)] bg-yellow-soft px-3.5 py-[13px]"
@@ -219,8 +221,9 @@ export function RunDetail({
               {run.attentionReason ?? "The daemon has not reported a reconciliation reason."}
             </p>
             <p className="mt-1 mb-0 text-[0.71rem] leading-normal text-[#c4b994]">
-              Reconcile its external state, then resume this run from Python to create a new
-              execution segment, or close it here if no continuation is wanted.
+              Inspect retained data and reconcile external state using the project workflow. Unknown
+              hardware effects cannot be retried here. Closing this record does not establish that
+              the hardware is safe.
             </p>
             <div className="mt-[11px] flex flex-wrap gap-[7px]">
               <button

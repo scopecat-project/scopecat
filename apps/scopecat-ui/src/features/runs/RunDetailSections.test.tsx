@@ -1,12 +1,52 @@
 // @vitest-environment jsdom
 
 import "@testing-library/jest-dom/vitest";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, render, screen, within } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { RunExecutionSegmentPage } from "../../api-contract";
-import { ExecutionSegmentsCard, ResourceCard } from "./RunDetailSections";
+import { AnalysisCard, ExecutionSegmentsCard, ResourceCard } from "./RunDetailSections";
 
-afterEach(cleanup);
+import * as runApi from "./run-api";
+
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+  window.history.replaceState(null, "", "/");
+});
+
+it("opens the exact linked run analysis outside the history page", async () => {
+  window.history.replaceState(null, "", "/?run-analysis=older-publication#runs");
+  const get = vi.spyOn(runApi, "getRunAnalysis").mockResolvedValue({
+    id: "older-publication",
+    title: "Retained run evidence",
+    revision: 1,
+    publicationHash: "a".repeat(64),
+    publishedAt: "2026-09-08T00:00:00Z",
+    subject: "run",
+    inputs: [],
+    executions: [],
+    outputs: [],
+  });
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(
+    <QueryClientProvider client={client}>
+      <AnalysisCard
+        analyses={[]}
+        error={null}
+        pending={false}
+        runId="original-run"
+        hasNextPage={false}
+        loadingNextPage={false}
+        onLoadOlder={() => {}}
+      />
+    </QueryClientProvider>,
+  );
+  expect(await screen.findByRole("heading", { name: "Retained run evidence" })).toBeVisible();
+  expect(screen.queryByText("No analyses saved")).toBeNull();
+  expect(get).toHaveBeenCalledWith("original-run", "older-publication", expect.any(AbortSignal));
+  client.clear();
+});
 
 describe("ResourceCard", () => {
   it("identifies the competing run and reconciliation requirement", () => {

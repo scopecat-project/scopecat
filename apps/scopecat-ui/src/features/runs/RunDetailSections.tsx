@@ -146,6 +146,7 @@ export function AnalysisCard({
   loadingNextPage: boolean;
   onLoadOlder: () => void;
 }) {
+  const linkedAnalysis = new URLSearchParams(window.location.search).get("run-analysis");
   return (
     <article className={detailCard} data-testid="resource-card">
       <CardHeading
@@ -158,6 +159,7 @@ export function AnalysisCard({
           </span>
         }
       />
+      {linkedAnalysis && <LinkedRunAnalysis runId={runId} analysisId={linkedAnalysis} />}
       {error ? (
         <InlineEmpty title="Analyses unavailable" detail={errorMessage(error)} warning />
       ) : pending ? (
@@ -166,15 +168,19 @@ export function AnalysisCard({
           detail="Waiting for the daemon's persisted analysis records."
         />
       ) : !analyses || analyses.length === 0 ? (
-        <InlineEmpty
-          title="No analyses saved"
-          detail="Notebook and automated analysis outputs will appear here."
-        />
+        !linkedAnalysis && (
+          <InlineEmpty
+            title="No analyses saved"
+            detail="Notebook and automated analysis outputs will appear here."
+          />
+        )
       ) : (
         <div className="grid gap-2">
-          {analyses.map((analysis) => (
-            <RunAnalysisItem analysis={analysis} key={analysis.id} runId={runId} />
-          ))}
+          {analyses
+            .filter((analysis) => analysis.id !== linkedAnalysis)
+            .map((analysis) => (
+              <RunAnalysisItem analysis={analysis} key={analysis.id} runId={runId} />
+            ))}
           {hasNextPage && (
             <button
               className={classes(secondaryButton, "w-full")}
@@ -278,6 +284,37 @@ function ExecutionSegmentItem({ segment }: { segment: RunExecutionSegment }) {
         {segment.reason ? ` · ${titleCase(segment.reason)}` : ""}
       </p>
     </li>
+  );
+}
+
+function LinkedRunAnalysis({ runId, analysisId }: { runId: string; analysisId: string }) {
+  const detail = useQuery({
+    queryKey: ["analysis", runId, analysisId],
+    queryFn: ({ signal }) => getRunAnalysis(runId, analysisId, signal),
+  });
+  if (detail.isPending)
+    return (
+      <InlineEmpty
+        title="Reading linked analysis"
+        detail="Loading the exact retained publication."
+      />
+    );
+  if (detail.isError)
+    return (
+      <InlineEmpty
+        title="Linked analysis unavailable"
+        detail={errorMessage(detail.error)}
+        warning
+      />
+    );
+  return (
+    <section className="mb-3 border rounded p-3">
+      <h4>{detail.data.title}</h4>
+      <AnalysisPublicationView
+        analysis={detail.data}
+        getArtifactDownload={(selector) => getRunArtifactDownload(runId, selector)}
+      />
+    </section>
   );
 }
 

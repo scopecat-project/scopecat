@@ -11,6 +11,18 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+function operatorResult(procedure: Record<string, unknown>, steps: unknown[] = []) {
+  return {
+    procedure: { definition: { id: "test-procedure", version: "1" }, ...procedure },
+    steps: { items: steps, next_cursor: null },
+    dispatch: { management: "active", worker_running: false },
+    current_step: null,
+    current_child: null,
+    child_runs: [],
+    dispatch_blocked_reason: "Work is waiting or already running.",
+  };
+}
+
 it("shows a durable resource wait and its cancelled child without calling it running", async () => {
   window.history.replaceState(null, "", "/?procedure=p1#launch");
   let cancelled = false;
@@ -28,20 +40,25 @@ it("shows a durable resource wait and its cancelled child without calling it run
         cancelled = true;
         return Response.json({});
       }
-      return Response.json({
-        procedure_run_id: "p1",
-        revision: 7,
-        state: cancelled ? "closed" : "ready",
-        resource_wait: { step_key: "child", run_id: "run-child" },
-        closure: cancelled ? { status: "cancelled", actor: "operator" } : null,
-      });
+      return Response.json(
+        operatorResult(
+          {
+            procedure_run_id: "p1",
+            revision: 7,
+            state: cancelled ? "closed" : "ready",
+            resource_wait: { step_key: "child", run_id: "run-child" },
+            closure: cancelled ? { status: "cancelled", actor: "operator" } : null,
+          },
+          [{ step_key: "child", attempt: 1, state: "running" }],
+        ),
+      );
     }),
   );
   mount();
   await screen.findByText("Waiting for resources");
   expect(screen.getByRole("link", { name: /Inspect waiting child/ })).toHaveAttribute(
     "href",
-    "?run=run-child#runs",
+    "?procedure=p1&run=run-child#runs",
   );
   fireEvent.click(screen.getByText("Cancel remaining procedure"));
   fireEvent.change(screen.getByLabelText("Cancellation actor"), { target: { value: "operator" } });
@@ -154,7 +171,9 @@ it("retains the submission key after a lost response and opens durable progress"
         return Response.json({ procedure_id: "p1", dispatch_error: null });
       }
       if (path.endsWith("/steps")) return Response.json({ items: [], next_cursor: null });
-      return Response.json({ procedure_run_id: "p1", state: "waiting_for_input", closure: null });
+      return Response.json(
+        operatorResult({ procedure_run_id: "p1", state: "waiting_for_input", closure: null }),
+      );
     }),
   );
   mount();
@@ -234,12 +253,19 @@ it("cancels a waiting procedure with the observed revision and recorded actor", 
         cancelled = true;
         return Response.json({});
       }
-      return Response.json({
-        procedure_run_id: "p1",
-        revision: 7,
-        state: cancelled ? "closed" : "waiting_for_input",
-        closure: cancelled ? { status: "cancelled", actor: "reviewer", reason: "Stop here" } : null,
-      });
+      return Response.json(
+        operatorResult(
+          {
+            procedure_run_id: "p1",
+            revision: 7,
+            state: cancelled ? "closed" : "waiting_for_input",
+            closure: cancelled
+              ? { status: "cancelled", actor: "reviewer", reason: "Stop here" }
+              : null,
+          },
+          [{ step_key: "review", attempt: 1, state: "waiting_for_input" }],
+        ),
+      );
     }),
   );
   mount();
@@ -274,13 +300,15 @@ it("keeps a running cancellation pending instead of reporting a stopped procedur
         pending = true;
         return Response.json({});
       }
-      return Response.json({
-        procedure_run_id: "p1",
-        revision: 7,
-        state: "leased",
-        closure: null,
-        cancellation: pending ? { actor: "operator", reason: "Enough" } : null,
-      });
+      return Response.json(
+        operatorResult({
+          procedure_run_id: "p1",
+          revision: 7,
+          state: "leased",
+          closure: null,
+          cancellation: pending ? { actor: "operator", reason: "Enough" } : null,
+        }),
+      );
     }),
   );
   mount();

@@ -1,57 +1,61 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery } from "@tanstack/react-query";
 import { apiClient, apiData } from "../../api-client";
+import { ProcedureChildRun } from "./ProcedureChildRun";
+import { outputHref, procedurePhase, stateLabel } from "./procedure-operator";
 
 export function ProcedureProgress({ procedureId }: { procedureId: string }) {
   const [cancelActor, setCancelActor] = useState("");
   const [cancelReason, setCancelReason] = useState("");
-  const [cancelling, setCancelling] = useState(false);
+  const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
-  const status = useQuery({
-    queryKey: ["launch-procedure", procedureId],
-    queryFn: () =>
+  const progress = useInfiniteQuery({
+    queryKey: ["procedure-operator", procedureId],
+    initialPageParam: undefined as number | undefined,
+    queryFn: ({ pageParam, signal }) =>
       apiData(
-        apiClient.GET("/api/v1/procedures/{procedure_run_id}", {
-          params: { path: { procedure_run_id: procedureId } },
+        apiClient.GET("/api/v1/procedures/{procedure_run_id}/operator", {
+          params: { path: { procedure_run_id: procedureId }, query: { cursor: pageParam } },
+          signal,
         }),
       ),
+    getNextPageParam: (page) => page.steps.next_cursor ?? undefined,
     refetchInterval: 1000,
   });
-  const steps = useQuery({
-    queryKey: ["launch-procedure-steps", procedureId],
-    queryFn: () =>
-      apiData(
-        apiClient.GET("/api/v1/procedures/{procedure_run_id}/steps", {
-          params: { path: { procedure_run_id: procedureId }, query: { limit: 50 } },
-        }),
-      ),
-    refetchInterval: 1000,
-  });
+  const view = progress.data?.pages[0];
+  const run = view?.procedure;
+  const steps = progress.data?.pages.flatMap((page) => page.steps.items) ?? [];
+  const children = new Map(
+    progress.data?.pages.flatMap((page) =>
+      page.child_runs.map((child) => [child.step_key, child] as const),
+    ),
+  );
   async function cancel() {
-    if (!status.data) return;
+    if (!run) return;
     setError("");
-    setCancelling(true);
+    setPending(true);
     try {
       await apiData(
         apiClient.POST("/api/v1/procedures/{procedure_run_id}/cancel", {
           params: { path: { procedure_run_id: procedureId } },
           body: {
             procedure_run_id: procedureId,
-            expected_run_revision: status.data.revision,
+            expected_run_revision: run.revision,
             actor: cancelActor,
             reason: cancelReason,
           },
         }),
       );
-      await status.refetch();
+      await progress.refetch();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : String(caught));
     } finally {
-      setCancelling(false);
+      setPending(false);
     }
   }
-  async function resume() {
+  async function dispatch() {
     setError("");
+    setPending(true);
     try {
       const receipt = await apiData(
         apiClient.POST("/api/v1/procedures/{procedure_run_id}/dispatch", {
@@ -59,131 +63,188 @@ export function ProcedureProgress({ procedureId }: { procedureId: string }) {
         }),
       );
       if (receipt.dispatch_error) setError(receipt.dispatch_error);
+      await progress.refetch();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : String(caught));
+    } finally {
+      setPending(false);
     }
   }
   return (
-    <section className="border rounded p-4 space-y-2">
-      <h3>Procedure progress</h3>
-      <p>{procedureId}</p>
-      {status.error && <p role="alert">{status.error.message}</p>}
-      <p>
-        {status.data?.state === "leased" && status.data.cancellation
-          ? "Cancellation requested — finishing current step"
-          : status.data?.state === "ready" && status.data.resource_wait
-            ? "Waiting for resources"
-            : status.data && statusLabel(status.data.closure?.status ?? status.data.state)}
-      </p>
-      {status.data?.resource_wait && (
-        <a href={`?run=${encodeURIComponent(status.data.resource_wait.run_id)}#runs`}>
-          Inspect waiting child run: {status.data.resource_wait.run_id}
-        </a>
-      )}
-      {(status.data?.attention_reason || status.data?.closure?.reason) && (
-        <p>{status.data.attention_reason ?? status.data.closure?.reason}</p>
-      )}
-      {status.data?.state === "waiting_for_input" && (
-        <a href="#decisions">Review results in Decisions</a>
-      )}
-      {status.data && ["ready", "waiting_for_input"].includes(status.data.state) && (
-        <button
-          type="button"
-          onClick={() => {
-            void resume();
-          }}
-          className="border rounded px-3 py-1"
-        >
-          Resume execution
-        </button>
-      )}
-      {status.data &&
-        !status.data.cancellation &&
-        ["ready", "waiting_for_input", "leased"].includes(status.data.state) && (
-          <details>
-            <summary>Cancel remaining procedure</summary>
+    <section className="border rounded p-4 space-y-3">
+      <h3 className="font-semibold">Procedure progress</h3>
+      <p>{run?.definition.id ?? procedureId}</p>
+      <a className="underline" href={`?procedure=${encodeURIComponent(procedureId)}#launch`}>
+        Reopen this procedure
+      </a>
+      {progress.isPending && <p role="status">Loading retained procedure state…</p>}
+      {progress.error && <p role="alert">{progress.error.message}</p>}
+      {view && run && (
+        <>
+          <p role="status" className="font-semibold">
+            {procedurePhase(view)}
+          </p>
+          <p>
+            {view.dispatch.worker_running
+              ? "Worker process active"
+              : view.dispatch.management === "paused"
+                ? "Worker dispatch is paused after a start or process failure. The admitted procedure and its results are retained."
+                : view.dispatch.management === "active"
+                  ? "Managed by the console; ready work can continue when a worker is available."
+                  : "No console worker is assigned to this admitted procedure."}
+          </p>
+          {(run.attention_reason || run.closure?.reason) && (
+            <p>{run.attention_reason ?? run.closure?.reason}</p>
+          )}
+          {run.state === "attention_required" && (
             <p>
-              Retains completed results. A running step completes and settles before the procedure
-              stops.
+              Inspect retained evidence and reconcile external state with the project workflow.
+              Unknown hardware effects cannot be retried here.
             </p>
-            <label>
-              Cancellation actor
-              <input value={cancelActor} onChange={(event) => setCancelActor(event.target.value)} />
-            </label>
-            <label>
-              Cancellation reason
-              <input
-                value={cancelReason}
-                onChange={(event) => setCancelReason(event.target.value)}
-              />
-            </label>
+          )}
+          {run.cancellation && !run.closure && (
+            <p>
+              {run.cancellation.actor} requested cancellation: {run.cancellation.reason}. This is
+              not a completed stop. An already-started configuration acceptance step may still
+              complete.
+            </p>
+          )}
+          {run.resource_wait && (
+            <a
+              className="underline"
+              href={`?procedure=${encodeURIComponent(procedureId)}&run=${encodeURIComponent(run.resource_wait.run_id)}#runs`}
+            >
+              Inspect waiting child run: {run.resource_wait.run_id}
+            </a>
+          )}
+          {run.resource_wait && !run.closure && (
+            <p>
+              Cancelling this procedure stops only its waiting child. The resource owner keeps
+              running.
+            </p>
+          )}
+          {run.state === "waiting_for_input" && (
+            <a
+              className="underline"
+              href={`?procedure=${encodeURIComponent(procedureId)}#decisions`}
+            >
+              Review results in Decisions
+            </a>
+          )}
+          {view.dispatch_blocked_reason === null && !progress.isError && (
             <button
               type="button"
-              disabled={cancelling || !cancelActor.trim() || !cancelReason.trim()}
+              disabled={pending}
               onClick={() => {
-                void cancel();
+                void dispatch();
+              }}
+              className="border rounded px-3 py-1"
+            >
+              Dispatch existing procedure
+            </button>
+          )}
+          {view.dispatch_blocked_reason && run.state === "ready" && (
+            <p>{view.dispatch_blocked_reason}</p>
+          )}
+          {!run.cancellation && ["ready", "waiting_for_input", "leased"].includes(run.state) && (
+            <details>
+              <summary>Cancel remaining procedure</summary>
+              <p>
+                Retains completed results. An already-started step, including configuration
+                acceptance, settles before cancellation completes. This is not an emergency stop.
+              </p>
+              <label>
+                Cancellation actor
+                <input
+                  value={cancelActor}
+                  onChange={(event) => setCancelActor(event.target.value)}
+                />
+              </label>
+              <label>
+                Cancellation reason
+                <input
+                  value={cancelReason}
+                  onChange={(event) => setCancelReason(event.target.value)}
+                />
+              </label>
+              <button
+                type="button"
+                disabled={pending || !cancelActor.trim() || !cancelReason.trim()}
+                onClick={() => {
+                  void cancel();
+                }}
+              >
+                {run.state === "leased" ? "Stop after current step" : "Cancel procedure"}
+              </button>
+            </details>
+          )}
+          {run.closure?.actor && <p>Closed by {run.closure.actor}</p>}
+          {view.current_step && (
+            <p>
+              Current step: {view.current_step.step_key} · {stateLabel(view.current_step.state)}
+            </p>
+          )}
+          {view.current_child && (
+            <ProcedureChildRun child={view.current_child} procedureId={procedureId} current />
+          )}
+          <ul className="space-y-3">
+            {steps.map((step) => {
+              const child = children.get(step.step_key);
+              const href = step.output && outputHref(step.output, procedureId);
+              return (
+                <li key={`${step.step_key}:${step.attempt}`} className="border-t pt-2 space-y-1">
+                  <p>
+                    {step.step_key}:{" "}
+                    {run.resource_wait?.step_key === step.step_key
+                      ? run.closure?.status === "cancelled"
+                        ? "Cancelled before acquisition"
+                        : "Waiting for resources"
+                      : run.closure?.status === "cancelled" && step.state === "waiting_for_input"
+                        ? "Review cancelled"
+                        : stateLabel(step.state)}
+                  </p>
+                  {(step.failure_reason || step.attention_reason) && (
+                    <p>{step.failure_reason ?? step.attention_reason}</p>
+                  )}
+                  {child && child.step_key !== view.current_child?.step_key && (
+                    <ProcedureChildRun child={child} procedureId={procedureId} />
+                  )}
+                  {step.output?.kind === "interpretation" && (
+                    <details>
+                      <summary>Recorded review</summary>
+                      <pre className="overflow-auto text-xs">
+                        {JSON.stringify(step.output.response, null, 2)}
+                      </pre>
+                    </details>
+                  )}
+                  {href && (!child || step.output?.kind !== "run") && (
+                    <a className="underline" href={href}>
+                      Open{" "}
+                      {step.output?.kind === "analysis"
+                        ? "analysis"
+                        : step.output?.kind === "run"
+                          ? "run"
+                          : "retained result"}
+                    </a>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+          {progress.hasNextPage && (
+            <button
+              type="button"
+              disabled={progress.isFetchingNextPage}
+              onClick={() => {
+                void progress.fetchNextPage();
               }}
             >
-              {status.data.state === "leased" ? "Stop after current step" : "Cancel procedure"}
+              Load earlier steps
             </button>
-          </details>
-        )}
-      {status.data?.closure?.actor && <p>Closed by {status.data.closure.actor}</p>}
+          )}
+        </>
+      )}
       {error && <p role="alert">{error}</p>}
-      <ul>
-        {steps.data?.items.map((step) => (
-          <li key={`${step.step_key}:${step.attempt}`}>
-            {step.step_key}:{" "}
-            {status.data?.resource_wait?.step_key === step.step_key &&
-            status.data.closure?.status === "cancelled"
-              ? "Cancelled before acquisition"
-              : status.data?.resource_wait?.step_key === step.step_key &&
-                  status.data.state === "ready"
-                ? "Waiting for resources"
-                : status.data?.closure?.status === "cancelled" && step.state === "waiting_for_input"
-                  ? "Review cancelled"
-                  : statusLabel(step.state)}{" "}
-            {step.failure_reason}
-            {step.output?.kind === "run" && (
-              <a
-                className="ml-2 underline"
-                href={`?run=${encodeURIComponent(step.output.run_id)}#runs`}
-              >
-                Open run
-              </a>
-            )}
-            {step.output?.kind === "analysis" && (
-              <a
-                className="ml-2 underline"
-                href={
-                  step.output.subject.kind === "run"
-                    ? `?run=${encodeURIComponent(step.output.subject.run_id)}#runs`
-                    : step.output.subject.kind === "sample"
-                      ? `?sample=${encodeURIComponent(step.output.subject.sample_id)}#samples`
-                      : `?analysis=${encodeURIComponent(step.output.analysis_record_id)}#analyses`
-                }
-              >
-                Open analysis
-              </a>
-            )}
-          </li>
-        ))}
-      </ul>
     </section>
   );
-}
-
-function statusLabel(state: string): string {
-  const labels: Record<string, string> = {
-    ready: "Queued",
-    leased: "Running",
-    waiting_for_input: "Waiting for review",
-    attention_required: "Needs attention",
-    succeeded: "Completed",
-    failed: "Failed",
-    closed: "Finished",
-    cancelled: "Cancelled",
-    running: "Running",
-  };
-  return labels[state] ?? state.replaceAll("_", " ");
 }

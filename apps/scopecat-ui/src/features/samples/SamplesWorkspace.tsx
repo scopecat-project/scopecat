@@ -254,7 +254,9 @@ function SampleDetail({
   onSelectSample: (sampleId: string, revision?: number) => void;
 }) {
   const [selectedEntityId, setSelectedEntityId] = useState<string>();
-  const [selectedAnalysisId, setSelectedAnalysisId] = useState<string>();
+  const [selectedAnalysisId, setSelectedAnalysisId] = useState<string | undefined>(
+    () => new URLSearchParams(window.location.search).get("sample-analysis") ?? undefined,
+  );
   const detailQuery = useQuery({
     queryKey: ["sample", sampleId],
     queryFn: ({ signal }) => getSample(sampleId, signal),

@@ -349,6 +349,11 @@ class RunService:
                 next_cursor=page.next_cursor,
             )
 
+    def find_run_by_submission_id(self, submission_id: str) -> RunDetail | None:
+        """Locate an admitted effect without guessing its generated run ID."""
+        run = self._control.find_run_by_submission_id(submission_id)
+        return None if run is None else self.get_run(run.run_id)
+
     def get_run(self, run_id: str) -> RunDetail:
         try:
             with self._control.read_transaction() as connection:

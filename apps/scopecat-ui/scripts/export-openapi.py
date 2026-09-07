@@ -15,6 +15,7 @@ _OPERATIONS = {
     ("/api/v1/procedures/{procedure_run_id}/cancel", "post"),
     ("/api/v1/experiment-launcher/submit", "post"),
     ("/api/v1/procedures/{procedure_run_id}", "get"),
+    ("/api/v1/procedures/{procedure_run_id}/operator", "get"),
     ("/api/v1/procedures/{procedure_run_id}/dispatch", "post"),
     ("/api/v1/experiment-launcher", "get"),
     ("/api/v1/experiment-launcher/preview", "post"),

@@ -588,6 +588,10 @@ function replaceNavigation(
   } = {},
 ): void {
   const location = new URL(window.location.href);
+  if (location.searchParams.get("run") !== selection.runId)
+    location.searchParams.delete("run-analysis");
+  if (location.searchParams.get("sample") !== selection.sampleId)
+    location.searchParams.delete("sample-analysis");
   if (selection.runId) {
     location.searchParams.set("run", selection.runId);
   } else {

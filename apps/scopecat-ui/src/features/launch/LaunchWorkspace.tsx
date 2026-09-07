@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient, apiData } from "../../api-client";
 import { LaunchForm } from "./LaunchForm";
+import { ProcedureHistory } from "./ProcedureHistory";
 import { ProcedureProgress } from "./ProcedureProgress";
 
 export function LaunchWorkspace() {
@@ -50,7 +51,8 @@ export function LaunchWorkspace() {
           <LaunchForm key={`${entry.id}:${entry.version}`} entry={entry} onAdmitted={admitted} />
         </>
       )}
-      {procedureId && <ProcedureProgress procedureId={procedureId} />}
+      <ProcedureHistory selectedId={procedureId} onSelect={admitted} />
+      {procedureId && <ProcedureProgress key={procedureId} procedureId={procedureId} />}
     </section>
   );
 }

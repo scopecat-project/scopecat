@@ -263,6 +263,10 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
+from scopecat_server.http.procedure_operator import (
+    ProcedureOperatorView,
+    read_procedure_operator,
+)
 from scopecat_server.services.project_workers import ProjectProcedureWorkers
 from scopecat_server.storage.sqlite.connection import SQLiteBusyError
 
@@ -358,9 +362,15 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
             raise HTTPException(422, "Expected preview action")
         return LaunchPreview.model_validate_json(launch_call(command))
 
-    def dispatch_procedure(procedure_id: str) -> LaunchSubmission:
-        run = application.automation.get(procedure_id)
-        if run.state in {"closed", "attention_required"}:
+    def dispatch_procedure(
+        procedure_id: str, *, explicit: bool = False
+    ) -> LaunchSubmission:
+        view = read_procedure_operator(application, project_workers, procedure_id)
+        if view.dispatch_blocked_reason is not None:
+            if explicit:
+                raise HTTPException(409, view.dispatch_blocked_reason)
+            # Exact admission retries retain their identity without redispatching
+            # a settled, active, waiting or uncertain effect.
             return LaunchSubmission(procedure_id=procedure_id)
         try:
             project_workers.dispatch(procedure_id)
@@ -379,7 +389,16 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
 
     @app.post(f"{_API_PREFIX}/procedures/{{procedure_run_id}}/dispatch")
     def dispatch_project_procedure(procedure_run_id: str) -> LaunchSubmission:
-        return dispatch_procedure(procedure_run_id)
+        return dispatch_procedure(procedure_run_id, explicit=True)
+
+    @app.get(f"{_API_PREFIX}/procedures/{{procedure_run_id}}/operator")
+    def get_procedure_operator(
+        procedure_run_id: str,
+        cursor: Annotated[int | None, Query(ge=1)] = None,
+    ) -> ProcedureOperatorView:
+        return read_procedure_operator(
+            application, project_workers, procedure_run_id, cursor=cursor
+        )
 
     @app.get(f"{_API_PREFIX}/health")
     def health() -> DaemonHealth:
