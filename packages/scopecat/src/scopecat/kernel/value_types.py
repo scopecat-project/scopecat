@@ -3,7 +3,7 @@
 Shape and scalar content are deliberately independent:
 
 * :class:`Scalar` and :class:`Table` describe shape.
-* :class:`Bool`, :class:`Int`, :class:`Float`, :class:`String`,
+* :class:`Bool`, :class:`Int`, :class:`Float`, :class:`Complex`, :class:`String`,
   :class:`Quantity`, :class:`Entity`, and :class:`Payload`
   describe scalar content.
 

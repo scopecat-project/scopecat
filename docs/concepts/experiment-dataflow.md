@@ -427,13 +427,52 @@ peak = experiment.compute(
 )
 ```
 
-When a named function returns `bool`, `int`, `float`, or `str`, `compute`
+When a named function returns `bool`, `int`, `float`, `complex`, or `str`, `compute`
 infers the scalar output contract. Use an `Annotated` return with
 `ScalarType(...)` or `ArrayType(...)` when units, bounds, dtype, or dimensions
 matter. The annotation may be a reusable PEP 695 type alias, including payload
 schemas used by hardware operations, so call sites do not repeat
 `output_type=PayloadType(...)`. Inputs can be passed as named keywords;
 `inputs={...}` remains useful when names are assembled dynamically.
+
+A coherent point-local response can be a complex scalar without a synthetic
+one-element array or aggregate dimension:
+
+```python
+from typing import Annotated
+import numpy as np
+import scopecat as sc
+
+
+def iq_mean(
+    values: object,
+) -> Annotated[complex, sc.ScalarType(sc.ComplexType(unit="V"))]:
+    return complex(np.mean(np.asarray(values, dtype=np.complex128)))
+
+
+mean = experiment.compute("iq_mean", fn=iq_mean, inputs={"values": iq_shots})
+```
+
+`ComplexType` requires finite real and imaginary components. Its optional unit
+applies to both components, matching the existing `complex128` measurement scalar.
+`experiment.convert` scales both components for compatible linear units. Nonlinear
+or offset conversions are rejected; `QuantityType` continues to describe real
+quantities. Complex values have no ordering bounds and cannot be used as table
+primary keys or configuration/instrument-property scalar types. Use an explicit
+compute kernel for complex arithmetic; unsupported symbolic arithmetic and a
+complex result declared as `FloatType` raise normal type/compute errors.
+
+Complex literals remain native values in the frozen authoring and compute graph.
+Durable run intent describes them with an explicit `kind="complex"`, `real`, and
+`imag` record. Loading that description preserves content identity; it does not
+add an automatic execution-reconstruction mechanism. Arbitrary JSON metadata
+remains JSON-only. Recording and Arrow use the existing complex scalar wire
+representation, and scalar grids offer real, imaginary, magnitude, and phase
+views of that single stored value.
+
+The reference lab's `coherent_ramsey` experiment exercises this path with its
+existing virtual IQ acquisition and a delay/phase grid. Its shared acceptance
+fixture is generated from actual storage and HTTP responses.
 
 The same annotations on function parameters are checked against every bound
 `ValueRef` or `ProductRef` during authoring. Measurement units must match

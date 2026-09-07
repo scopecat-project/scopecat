@@ -97,3 +97,23 @@ def test_shared_fixture_retains_planned_instrument_values() -> None:
     assert frequency.point_index == 0
     assert frequency.proposal_fingerprint.startswith("sha256:")
     assert planned["planned_settings_truncated"] is False
+
+
+def test_shared_fixture_retains_complex_scalar_without_a_local_axis() -> None:
+    fixture = cast("dict[str, JsonValue]", json.loads(FIXTURE.read_text()))
+    preview = MeasurementPreview.model_validate(fixture["coherent_scalar"])
+    assert preview.schema is not None
+    [mean] = [
+        variable
+        for variable in preview.schema.variables
+        if variable.dtype == "complex128"
+    ]
+    assert mean.dims == ("point",) and mean.unit == "ratio"
+    assert len(preview.items) == 4
+    values: list[complex] = []
+    for record in preview.items:
+        value = record.observables[mean.id]
+        assert isinstance(value, MeasurementScalar) and isinstance(value.value, complex)
+        values.append(value.value)
+    assert any(value.imag != 0 for value in values)
+    assert len(set(values)) > 1

@@ -44,6 +44,17 @@ class _RunRequestModel(DurableRunRequestModel):
     model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
 
 
+class RunRequestComplexValue(_RunRequestModel):
+    """Closed finite complex authoring value, independent of JSON metadata."""
+
+    kind: Literal["complex"]
+    real: StrictFloat
+    imag: StrictFloat
+
+    def to_complex(self) -> complex:
+        return complex(self.real, self.imag)
+
+
 class RunRequestEntityRef(_RunRequestModel):
     """Closed durable projection of an authoring ``EntityRef``."""
 
@@ -89,6 +100,7 @@ type RunRequestExpressionValue = Annotated[
 type RunRequestScalarValue = Annotated[
     Quantity
     | RunRequestEntityRef
+    | RunRequestComplexValue
     | RunRequestExpressionValue
     | str
     | bool
@@ -352,6 +364,7 @@ __all__ = [
     "RunRequest",
     "RunRequestBinaryOperator",
     "RunRequestBinaryValue",
+    "RunRequestComplexValue",
     "RunRequestEntityRef",
     "RunRequestExpressionValue",
     "RunRequestJsonValue",

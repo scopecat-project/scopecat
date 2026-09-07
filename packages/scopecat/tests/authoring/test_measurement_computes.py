@@ -565,7 +565,8 @@ def test_complex_scalar_mean_and_linear_unit_conversion_have_no_local_axis() -> 
         source = context._product(
             "iq", dtype="complex128", unit="mV", axes=(shot_axis(2),)
         )
-        mean = context.compute("mean", fn=iq_mean, values=source)
+        mean = context.compute("mean", fn=iq_mean, inputs={"values": source})
+        assert isinstance(mean, sc.ProductRef)
         return context.convert(mean, "V", id="mean_volts")
 
     logical = compose_module(module.definition)
@@ -604,7 +605,7 @@ def test_complex_scalar_rejects_real_output_and_nonlinear_conversion() -> None:
         return context.compute(
             "wrong",
             fn=identity,
-            value=source,
+            inputs={"value": source},
             output_type=sc.ScalarType(sc.FloatType()),
         )
 
@@ -621,3 +622,66 @@ def test_complex_scalar_rejects_real_output_and_nonlinear_conversion() -> None:
             return context.convert(
                 context._product("iq", dtype="complex128", unit="dBm"), "W"
             )
+
+
+def test_complex_literal_compute_evaluates_and_rejects_expression_arithmetic() -> None:
+    def conjugate(value: complex) -> complex:
+        return value.conjugate()
+
+    @sc.module(id="test.complex-literal-compute")
+    def module(context: sc.ModuleContext) -> sc.ValueRef:
+        return context.compute(
+            "conjugate",
+            fn=conjugate,
+            inputs={"value": 1 + 2j},
+            output_type=sc.ScalarType(sc.ComplexType()),
+        )
+
+    logical = compose_module(module.definition)
+    [compute] = logical.compute_nodes
+    assert compute.result_type == sc.ScalarType(sc.ComplexType())
+    verified = verify_logical_program(logical)
+    from scopecat.compiler.relations.context import EvalContext
+    from scopecat.compiler.value_resolution import logical_program_value
+    from scopecat.execution.effects.boundary import EffectBoundary
+    from scopecat.execution.effects.compute import (
+        ComputeEffectExecutor,
+        EffectEvaluationFrame,
+    )
+    from scopecat.kernel.problems import Problem
+    from scopecat.planning.local_compute import bind_compute_operations
+    from scopecat.sdk.payloads import EMPTY_PAYLOAD_CODECS
+
+    problems: list[Problem] = []
+    operations, payloads = bind_compute_operations(
+        logical.compute_nodes,
+        logical.implementations,
+        {
+            value_id: logical_program_value(verified, value_id)
+            for _, value_id in compute.inputs
+        },
+        operation_prefix="literal",
+        ctx=EvalContext(),
+        demanded_payload_results=frozenset(),
+        problems=problems,
+    )
+    assert problems == [] and payloads == {}
+    boundary = EffectBoundary(run_id="complex-literal")
+    frame = EffectEvaluationFrame()
+    ComputeEffectExecutor(
+        boundary=boundary, payload_codecs=EMPTY_PAYLOAD_CODECS
+    ).execute(frame, operations)
+    assert boundary.problems == []
+    assert frame.compute_results[compute.result_id] == 1 - 2j
+
+    with pytest.raises(TypeError):
+
+        @sc.module(id="test.complex-unsupported-expression")
+        def unsupported(context: sc.ModuleContext) -> sc.ValueRef:
+            value = context.compute(
+                "conjugate",
+                fn=conjugate,
+                inputs={"value": 1 + 2j},
+                output_type=sc.ScalarType(sc.ComplexType()),
+            )
+            return value + 1.0

@@ -133,7 +133,7 @@ def input_cell(value: object) -> CellValue:
     if (
         isinstance(
             value,
-            Quantity | EntityRef | PayloadValue | str | int | float | bool,
+            Quantity | EntityRef | PayloadValue | str | int | float | complex | bool,
         )
         or value is None
     ):

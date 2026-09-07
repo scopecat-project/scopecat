@@ -44,7 +44,7 @@ from scopecat.kernel.resource_identity import (
     logical_resource_port_id,
     normalize_resource_role,
 )
-from scopecat.kernel.units import compatible_units
+from scopecat.kernel.units import compatible_units, is_linear_unit
 from scopecat.kernel.value_type_compatibility import (
     describe_value_type,
     is_assignable,
@@ -364,10 +364,9 @@ def _converted_unit_type(value_type: DataType, unit: str) -> DataType:
         source_unit = value_type.atom.unit
         if source_unit is None:
             raise TypeError("unit conversion requires a unit-bearing complex scalar")
-        from scopecat.kernel.units import UNIT_SCALE_TO_BASE
 
         if not compatible_units(source_unit, unit) or any(
-            selected not in UNIT_SCALE_TO_BASE for selected in (source_unit, unit)
+            not is_linear_unit(selected) for selected in (source_unit, unit)
         ):
             raise ValueError(
                 "complex scalar conversion requires compatible linear units"

@@ -15,6 +15,7 @@ from scopecat.kernel.value_type_compatibility import literal_scalar_type
 from scopecat.kernel.value_types import (
     Array,
     Bool,
+    Complex,
     Entity,
     Float,
     Int,
@@ -45,8 +46,12 @@ from scopecat.program.value_refs import (
 )
 
 type ComputeFunction = Callable[..., object]
-type ScalarValueType = Bool | Entity | Float | Int | Payload | QuantityType | String
-type ScalarInput = Quantity | EntityRef | PayloadValue | str | int | float | bool | None
+type ScalarValueType = (
+    Bool | Complex | Entity | Float | Int | Payload | QuantityType | String
+)
+type ScalarInput = (
+    Quantity | EntityRef | PayloadValue | str | int | float | complex | bool | None
+)
 type ComputeInput = ValueRef | ScalarInput
 type RuntimeInput = (
     Quantity
@@ -54,6 +59,7 @@ type RuntimeInput = (
     | str
     | int
     | float
+    | complex
     | bool
     | list[RuntimeInput]
     | tuple[RuntimeInput, ...]
@@ -417,7 +423,7 @@ def _is_compute_input(value: object) -> bool:
         or value is None
         or isinstance(
             value,
-            Quantity | EntityRef | PayloadValue | str | int | float | bool,
+            Quantity | EntityRef | PayloadValue | str | int | float | complex | bool,
         )
     )
 

@@ -57,3 +57,41 @@ def test_request_projection_rejects_transient_graph_values() -> None:
             project_run_request_inputs({"value": value})
         with pytest.raises(ValueError, match="unsupported authoring run request value"):
             project_run_request_inputs({"nested": {"value": value}})
+
+
+def test_complex_literal_capture_intent_and_content_identity_roundtrip() -> None:
+    from pydantic import TypeAdapter, ValidationError
+
+    from scopecat.kernel.content_identity import (
+        content_fingerprint,
+        stable_content_hash,
+    )
+    from scopecat.program.input_capture import capture_runtime_input
+    from scopecat.records.run_request import RunRequestComplexValue, RunRequestValue
+
+    value = 1.25 - 3.5j
+    frozen = capture_runtime_input(value)
+    assert frozen == value
+    projected = project_run_request_inputs({"iq": frozen})
+    adapter = TypeAdapter[RunRequestValue](RunRequestValue)
+    assert adapter.validate_python({"real": 1.25, "imag": -3.5}) == {
+        "real": 1.25,
+        "imag": -3.5,
+    }
+    intent = adapter.validate_python(projected["iq"])
+    assert isinstance(intent, RunRequestComplexValue)
+    encoded = adapter.dump_json(intent)
+    restored = adapter.validate_json(encoded)
+    assert isinstance(restored, RunRequestComplexValue)
+    assert restored.to_complex() == value
+    assert adapter.dump_json(restored) == encoded
+    assert stable_content_hash(
+        content_fingerprint(restored.to_complex())
+    ) == stable_content_hash(content_fingerprint(value))
+    assert stable_content_hash(content_fingerprint(value)) != stable_content_hash(
+        content_fingerprint(value.conjugate())
+    )
+    with pytest.raises(ValueError, match="finite"):
+        capture_runtime_input(complex(1, float("inf")))
+    with pytest.raises(ValidationError):
+        adapter.validate_python({"kind": "complex", "real": 1, "imag": float("nan")})

@@ -100,6 +100,10 @@ def _capture_value(
             msg = f"{path} numbers must be finite"
             raise ValueError(msg)
         return value
+    if isinstance(value, complex):
+        if not math.isfinite(value.real) or not math.isfinite(value.imag):
+            raise ValueError(f"{path} complex components must be finite")
+        return value
     if isinstance(value, Quantity):
         if not math.isfinite(value.value):
             msg = f"{path} quantities must be finite"
