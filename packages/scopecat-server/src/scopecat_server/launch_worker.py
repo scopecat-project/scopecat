@@ -6,7 +6,7 @@ import contextlib
 import os
 import sys
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import scopecat as sc
 from scopecat.application.launch import LaunchCatalog, LaunchRequest, LaunchResult
@@ -14,6 +14,8 @@ from scopecat.daemon.endpoint import DAEMON_URL_ENV
 from scopecat.project import load_project
 
 if TYPE_CHECKING:
+    from io import TextIOWrapper
+
     from scopecat.api.lab import LabClient
 
 
@@ -50,4 +52,7 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    # The subprocess JSON protocol and redirected diagnostics are UTF-8 on every OS.
+    for stream in (sys.stdin, sys.stdout, sys.stderr):
+        cast("TextIOWrapper", stream).reconfigure(encoding="utf-8")
     main()
