@@ -100,6 +100,7 @@ def procedure_intent_hash(
     intent: Mapping[str, object],
     *,
     samples: tuple[SampleSelector, ...] = (),
+    recovery: ProcedureRecoverySource | None = None,
 ) -> Sha256ContentHash:
     """Hash the exact definition, intent, and sample scope used by a worker."""
 
@@ -108,6 +109,8 @@ def procedure_intent_hash(
         "intent": cast("dict[str, JsonValue]", thaw_json_value(intent)),
         "samples": [sample.model_dump(mode="json") for sample in samples],
     }
+    if recovery is not None:
+        identity["recovery"] = recovery.model_dump(mode="json")
     return f"sha256:{stable_content_hash(identity)}"
 
 
@@ -207,6 +210,27 @@ class ProcedureResourceWait(_ProcedureModel):
     run_id: _NonEmptyText
 
 
+class ProcedureRecoveryStep(_ProcedureModel):
+    """Exact immutable attempt whose contract is retained across recovery."""
+
+    step_key: _NonEmptyText
+    attempt: int = Field(ge=1)
+    revision: int = Field(ge=1)
+    intent_hash: Sha256ContentHash
+
+
+class ProcedureRecoverySource(_ProcedureModel):
+    """Audited link to one closed software failure; never authority to retry it."""
+
+    adapter_id: _NonEmptyText
+    procedure_run_id: _NonEmptyText
+    revision: int = Field(ge=1)
+    definition: ProcedureDefinitionRef
+    run_step: ProcedureRecoveryStep
+    failed_analysis_step: ProcedureRecoveryStep
+    retained_run: RunOutputRef
+
+
 class ProcedureRun(_ProcedureModel):
     """Current durable state of one version-pinned procedure invocation."""
 
@@ -224,6 +248,7 @@ class ProcedureRun(_ProcedureModel):
     closure: ProcedureClosure | None = None
     cancellation: ProcedureCancellation | None = None
     resource_wait: ProcedureResourceWait | None = None
+    recovery: ProcedureRecoverySource | None = None
 
     @field_validator("samples")
     @classmethod
@@ -245,6 +270,7 @@ class ProcedureRun(_ProcedureModel):
             self.definition,
             self.intent,
             samples=self.samples,
+            recovery=self.recovery,
         )
         if self.intent_hash != expected_intent_hash:
             raise ValueError(

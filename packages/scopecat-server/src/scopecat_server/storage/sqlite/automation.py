@@ -372,6 +372,19 @@ class SQLiteAutomationStore:
                 f"invalid procedure step state: {procedure_run_id}"
             ) from error
 
+    def all_step_attempts_in_transaction(
+        self, connection: sqlite3.Connection, procedure_run_id: str
+    ) -> tuple[ProcedureStepAttempt, ...]:
+        """Complete history for atomic recovery eligibility; never latest-only."""
+        rows = _all(
+            connection.execute(
+                """SELECT attempt_json FROM procedure_step_attempts
+                   WHERE procedure_run_id = ? ORDER BY sequence""",
+                (procedure_run_id,),
+            )
+        )
+        return tuple(_attempt(row) for row in rows)
+
     def latest_step_attempt_in_transaction(
         self,
         connection: sqlite3.Connection,

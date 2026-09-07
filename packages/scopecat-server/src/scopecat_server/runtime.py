@@ -145,6 +145,7 @@ class LocalDaemonRuntime:
             point_plans = RunPointPlanService(control=control, runs=runs)
             automation = AutomationService(
                 automation_store,
+                runs=runs,
                 resource_waits=ProcedureResourceWaits(control, runs, point_plans),
             )
             calibration_cohorts = CalibrationCohortService(

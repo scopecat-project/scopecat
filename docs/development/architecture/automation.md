@@ -501,3 +501,52 @@ the wait checkpoint still follows ordinary unfinished-step recovery.
 Resource-owner lookup, wakeups and these transitions belong to framework
 services, not project scripts. This is bounded resource waiting, not a fairness,
 priority or deadline scheduler; contenders may race again when resources free.
+
+## Recovery after a known analysis failure
+
+A project can offer a `ProcedureRecoveryAdapter` for a specific completed-run /
+failed-analysis path. The adapter declares installed source and destination
+procedures, the successful run step, the failed analysis step, and a pure
+`build_intent(source_intent, retained_run)` function. That callback constructs
+only typed intent: it must not acquire, publish configuration, or perform effects.
+The [reference thermometer example](../../../examples/reference_lab/src/reference_lab/workflows/analysis_recovery.py)
+keeps its deliberately failing source definition installed and uses a separate
+analysis-only destination. It samples once and then analyzes the retained sample.
+
+```python
+available = lab.procedures.recovery_availability(adapter, failed_procedure_id)
+if available.plan is None:
+    print(available.reason)
+else:
+    recovered = lab.procedures.submit_recovery(
+        available.plan, request_key="analysis-recovery-001"
+    )
+    recovered.resume()
+```
+
+The plan records the exact source procedure revision and definition reference,
+attempt identities and their intent hashes, the retained `RunOutputRef`, and the
+new definition/intent/sample scope. The existing `ProcedureRegistry.resolve`
+checks source and destination id, version, and fingerprint. Changed definitions
+are rejected; this slice provides no automatic migration. The declared source
+analysis must have exactly that run as its input and must have failed without a
+publication output. Incompatible step/output contracts are rejected clearly.
+
+Eligibility examines **all** attempt history. It requires a closed failed source,
+a successful acquisition and a known successful retained run outcome. Any
+configuration activation/publication attempt, unknown outcome, attention state,
+or other failed effect excludes this adapter, even if a later attempt succeeded.
+An adapter is not authority to replay unknown hardware effects. Sample bindings
+remain those of the source procedure.
+
+Admission rechecks those durable facts and the acquired run's original step
+submission identity inside one transaction. A forged or stale plan cannot create
+new work. Repeating the same recovery intent and request key returns the same new
+procedure before unrelated admission checks; changing its intent or provenance
+under that key is a conflict. The original failed procedure and attempts remain
+immutable. The console links the new procedure to that history and its retained
+run; it does not offer a universal retry action.
+
+Recovery provenance is an optional field in the existing procedure JSON record.
+There are no table or store-version changes. Non-recovery intent hashes retain
+their existing format; only recovery invocations include the link in their hash.

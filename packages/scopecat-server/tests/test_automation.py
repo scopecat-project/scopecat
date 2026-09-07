@@ -32,6 +32,7 @@ from scopecat_server.services.automation import AutomationService
 from scopecat_server.storage.sqlite.automation import SQLiteAutomationStore
 from scopecat_server.storage.sqlite.connection import SQLiteDatabase
 from scopecat_server.storage.sqlite.project_store import SQLiteProjectStore
+from scopecat_server.storage.sqlite.run_repository import SQLiteRunRepository
 
 _START = datetime(2026, 8, 18, 9, tzinfo=UTC)
 _DEFINITION_HASH = "sha256:" + "1" * 64
@@ -61,6 +62,7 @@ def _service(
     return (
         AutomationService(
             SQLiteAutomationStore(sqlite),
+            runs=SQLiteRunRepository(sqlite, tmp_path / "objects"),
             lease_ttl=timedelta(seconds=30),
             clock=lambda: now[0],
         ),

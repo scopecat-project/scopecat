@@ -138,6 +138,7 @@ def _harness(tmp_path: Path) -> _Harness:
     automation_store = SQLiteAutomationStore(sqlite)
     automation = AutomationService(
         automation_store,
+        runs=SQLiteRunRepository(sqlite, tmp_path / "objects"),
         clock=lambda: now[0],
     )
     store = SQLiteCalibrationCohortStore(sqlite)
