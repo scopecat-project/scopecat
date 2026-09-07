@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import shutil
 import time
-from typing import Protocol
+from collections.abc import Generator
+from dataclasses import dataclass
 
 import httpx2
 import pytest
@@ -20,13 +22,33 @@ from scopecat.daemon.client import DaemonClient, DaemonConflictError
 from scopecat.planning.preflight import ExactQuantity, PreflightStage, UnknownQuantity
 from scopecat.project import load_project
 from scopecat.records.measurement import MeasurementScalar
+from scopecat_server.lifecycle import start_project, stop_project
 from scopecat_testkit.project_loading import isolated_project_imports
 
 from reference_lab.configuration import EXAMPLE_ROOT
 
 
-class _Daemon(Protocol):
+@dataclass(frozen=True)
+class _Daemon:
     url: str
+
+
+@pytest.fixture(scope="module")
+def reference_lab_daemon(
+    tmp_path_factory: pytest.TempPathFactory,
+) -> Generator[_Daemon]:
+    # Gallery notebooks may accept new defaults in their session daemon. Launcher
+    # scenarios have their own project so a default request has a stable base.
+    root = tmp_path_factory.mktemp("launch-project")
+    for name in ("config", "src"):
+        shutil.copytree(EXAMPLE_ROOT / name, root / name)
+    shutil.copy2(EXAMPLE_ROOT / "scopecat.toml", root / "scopecat.toml")
+    project = load_project(root / "scopecat.toml")
+    endpoint = start_project(project)
+    try:
+        yield _Daemon(endpoint.base_url)
+    finally:
+        stop_project(project)
 
 
 @pytest.fixture
@@ -95,7 +117,7 @@ def test_real_http_preview_shares_catalog_and_never_admits_acquisition(
         ) as http,
     ):
         response = http.get("/api/v1/experiment-launcher")
-        response.raise_for_status()
+        assert response.is_success, response.text
         assert LaunchCatalog.model_validate(response.json()) == CATALOG
         before = client.list_runs()
         active = lab.config.active()
@@ -103,7 +125,7 @@ def test_real_http_preview_shares_catalog_and_never_admits_acquisition(
         response = http.post(
             "/api/v1/experiment-launcher/preview", json=request.model_dump(mode="json")
         )
-        response.raise_for_status()
+        assert response.is_success, response.text
         preview = LaunchPreview.model_validate(response.json())
         repeated = provider(lab, request)
         assert isinstance(repeated, LaunchPreview)
@@ -259,7 +281,7 @@ def test_http_submission_dispatches_the_same_durable_diagnostic(
             "/api/v1/experiment-launcher/submit",
             json=command.model_dump(mode="json"),
         )
-        response.raise_for_status()
+        assert response.is_success, response.text
         admitted = LaunchSubmission.model_validate(response.json())
         assert admitted.dispatch_error is None
         handle = lab.procedures.get(admitted.procedure_id)
@@ -277,3 +299,48 @@ def test_http_submission_dispatches_the_same_durable_diagnostic(
         )
         retry.raise_for_status()
         assert LaunchSubmission.model_validate(retry.json()) == admitted
+
+
+def test_noop_candidate_preview_reports_reason_without_admitting_work(
+    reference_lab_daemon: _Daemon,
+    launch_application: LabApplication,
+) -> None:
+    from scopecat.config.parameter_updates import materialize_parameter_updates
+
+    from reference_lab.parameters import CHANNEL_DELAY, Q1_CHANNEL_CALIBRATION
+
+    with (
+        launch_application.connect(reference_lab_daemon.url) as lab,
+        DaemonClient(reference_lab_daemon.url) as client,
+        httpx2.Client(
+            base_url=reference_lab_daemon.url, trust_env=False, timeout=30
+        ) as http,
+    ):
+        original = lab.config.active().config
+        parameters, _ = materialize_parameter_updates(
+            catalog=original.parameter_catalog,
+            base=original.parameter_snapshot,
+            updates=(Q1_CHANNEL_CALIBRATION.update(CHANNEL_DELAY.value(1.0)),),
+            candidate_id="already-at-requested-delay",
+        )
+        lab.config.set_default(
+            original.model_copy(update={"parameter_snapshot": parameters})
+        )
+        try:
+            before = client.list_runs()
+            response = http.post(
+                "/api/v1/experiment-launcher/preview",
+                json={
+                    "action": "preview",
+                    "experiment": "channel-timing",
+                    "version": "1",
+                },
+            )
+            assert response.status_code == 422, response.text
+            assert (
+                "parameter change proposal does not change the base snapshot"
+                in response.text
+            )
+            assert client.list_runs() == before
+        finally:
+            lab.config.set_default(original)
