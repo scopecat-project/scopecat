@@ -483,7 +483,7 @@
     "request_hash": "sha256:bc4e261f25a3207a80d31817b9e83091b2e9a8855fed6236511e10e88bfc00f0",
     "resolved_inputs": {},
     "resources": [],
-    "summary": "Preview fixed or scanned signal controls against the reviewed q0 carrier. This analytic model makes no device calls."
+    "summary": "Preview fixed or scanned signal controls against the reviewed q0 carrier. Project limits: at most 64 points; amplitude at most 0.2 V when detuning exceeds 0.25 GHz. This analytic model makes no device calls."
   },
   "controls_scan": {
     "config_source": {
@@ -656,7 +656,7 @@
     "request_hash": "sha256:9b37f815398dff89e249e148ceedfe2b4fd5a03900060f2ae6cf528a621875ea",
     "resolved_inputs": {},
     "resources": [],
-    "summary": "Preview fixed or scanned signal controls against the reviewed q0 carrier. This analytic model makes no device calls."
+    "summary": "Preview fixed or scanned signal controls against the reviewed q0 carrier. Project limits: at most 64 points; amplitude at most 0.2 V when detuning exceeds 0.25 GHz. This analytic model makes no device calls."
   },
   "diagnostic": {
     "dataset_schema": {
@@ -1118,7 +1118,7 @@
             "unit": "GHz"
           }
         ],
-        "description": "Preview fixed or scanned signal controls against the reviewed q0 carrier. This analytic model makes no device calls.",
+        "description": "Preview fixed or scanned signal controls against the reviewed q0 carrier. Project limits: at most 64 points; amplitude at most 0.2 V when detuning exceeds 0.25 GHz. This analytic model makes no device calls.",
         "id": "frequency-amplitude",
         "kind": "diagnostic",
         "request": {

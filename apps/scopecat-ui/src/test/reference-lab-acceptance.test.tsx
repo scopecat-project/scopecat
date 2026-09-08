@@ -3,7 +3,7 @@
 import "@testing-library/jest-dom/vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { PlannedSettings } from "../features/launch/PlannedSettings";
@@ -32,6 +32,8 @@ const fixtures = JSON.parse(
   launch_catalog: components["schemas"]["LaunchCatalog"];
   launch_preview: components["schemas"]["LaunchPreview"];
   diagnostic: components["schemas"]["MeasurementPreview"];
+  controls_scalar: components["schemas"]["LaunchPreview"];
+  controls_scan: components["schemas"]["LaunchPreview"];
   coherent_scalar: components["schemas"]["MeasurementPreview"];
   inspection: components["schemas"]["ReviewSessionView"];
   reviewed_candidate: components["schemas"]["ParameterProposalPage"];
@@ -92,6 +94,76 @@ describe("shared reference-lab acceptance", () => {
     expect(screen.getByText("Unknown (s)")).toBeVisible();
     expect(screen.getByText(/1\/64 displayed points; 1\/1 selected points/)).toBeVisible();
     expect(screen.getByRole("button", { name: "Start acquisition" })).toBeEnabled();
+  });
+
+  it("uses the shared controls catalog for fixed and scanned previews with owned provenance", async () => {
+    const requests: Record<string, unknown>[] = [];
+    let submitted: Record<string, unknown> | undefined;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (request: Request) => {
+        const path = new URL(request.url).pathname;
+        if (path.endsWith("/submit")) {
+          submitted = await request.json();
+          throw new TypeError("Submission response lost");
+        }
+        if (path.endsWith("/preview")) {
+          requests.push(await request.json());
+          return Response.json(
+            requests.length === 1 ? fixtures.controls_scalar : fixtures.controls_scan,
+          );
+        }
+        if (path.endsWith("/procedures")) return Response.json({ items: [], next_cursor: null });
+        return Response.json(fixtures.launch_catalog);
+      }),
+    );
+    render(
+      <QueryClientProvider
+        client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+      >
+        <LaunchWorkspace />
+      </QueryClientProvider>,
+    );
+    fireEvent.change(await screen.findByLabelText("Experiment"), {
+      target: { value: "frequency-amplitude" },
+    });
+    expect(screen.getByText(/Configuration-owned/)).toHaveTextContent("qubits[q0]");
+    fireEvent.change(screen.getByLabelText("Frequency unit"), { target: { value: "MHz" } });
+    fireEvent.change(screen.getByLabelText("Frequency"), { target: { value: "4900" } });
+    fireEvent.click(screen.getByRole("button", { name: "Preview" }));
+    await screen.findByText("Resolved controls");
+    expect(screen.getAllByText("fixed")).toHaveLength(2);
+    expect(screen.getByText("configuration")).toBeVisible();
+    expect(screen.getByText("derived")).toBeVisible();
+    expect(requests[0]?.control_edits).toMatchObject({
+      frequency: { mode: "fixed", value: { value: 4900, unit: "MHz" } },
+    });
+    fireEvent.change(screen.getByLabelText("Frequency source"), { target: { value: "range" } });
+    expect(screen.queryByText("Resolved controls")).toBeNull();
+    expect(screen.getByRole("button", { name: "Start acquisition" })).toBeDisabled();
+    fireEvent.change(screen.getByLabelText("Frequency start"), { target: { value: "4.7" } });
+    fireEvent.change(screen.getByLabelText("Frequency stop"), { target: { value: "4.9" } });
+    fireEvent.change(screen.getByLabelText("Frequency points"), { target: { value: "3" } });
+    fireEvent.change(screen.getByLabelText("Amplitude source"), { target: { value: "values" } });
+    fireEvent.change(screen.getByLabelText("Amplitude scan values"), {
+      target: { value: "0.05, 0.1" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Preview" }));
+    await screen.findByText("Resolved controls");
+    expect(screen.getAllByText("scanned")).toHaveLength(2);
+    const edits = requests[1]?.control_edits;
+    expect(edits).toMatchObject({
+      frequency: { mode: "scan", axis: { kind: "range", points: 3 } },
+      amplitude: { mode: "scan", axis: { kind: "values" } },
+    });
+    expect(JSON.stringify(edits)).not.toContain("4900");
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Start acquisition" })).toBeEnabled(),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Start acquisition" }));
+    await waitFor(() => expect(submitted).toBeDefined());
+    expect(submitted?.control_edits).toEqual(edits);
+    expect(submitted?.expected_request_hash).toEqual(fixtures.controls_scan.request_hash);
   });
 
   it("renders the retained read-only thermometer sample through the real API adapter", async () => {

@@ -346,3 +346,53 @@ with (
     assert catalog.entries[0].title == "操作者 → μ"
     assert catalog.entries[0].description == "测量 → 结果"
     assert result.stderr.strip() == "操作者 → μ"
+
+
+def test_worker_rejects_undeclared_control_edits_before_provider_action(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import io
+
+    from scopecat.application.launch import (
+        LaunchCatalog,
+        LaunchCatalogEntry,
+        LaunchInputSchema,
+    )
+
+    from scopecat_server import launch_worker
+
+    provider = Mock(
+        return_value=LaunchCatalog(
+            entries=(
+                LaunchCatalogEntry(
+                    id="legacy",
+                    version="1",
+                    title="Legacy",
+                    description="No declared controls",
+                    actions=("preview",),
+                    kind="diagnostic",
+                    configuration_effect="none",
+                    request=LaunchInputSchema(properties={}),
+                ),
+            )
+        )
+    )
+    monkeypatch.setattr("sys.argv", ["launch_worker", str(tmp_path)])
+    monkeypatch.setattr(
+        "sys.stdin",
+        io.StringIO(
+            '{"action":"preview","experiment":"legacy","version":"1",'
+            '"control_edits":{"frequency":{"mode":"fixed","value":5.0}}}'
+        ),
+    )
+    with (
+        patch.object(launch_worker, "load_project") as load,
+        patch("scopecat.open_project"),
+    ):
+        load.return_value.load_application.return_value = SimpleNamespace(
+            launch_provider=provider
+        )
+        with pytest.raises(ValueError, match="unknown control"):
+            launch_worker.main()
+    assert provider.call_count == 1
+    assert provider.call_args.args[1].action == "list"

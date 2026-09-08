@@ -161,3 +161,38 @@ def test_scalar_bind_admission_and_owned_preview_normalization() -> None:
         plan_experiment_invocation(
             invocation.bind(value=3.0), config=config, system=system
         )
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"mode": "scan", "value": 1.0, "axis": {"kind": "values", "values": [2.0]}},
+        {"mode": "default", "value": 1.0},
+        {"mode": "fixed", "value": 1.0, "axis": {"kind": "values", "values": [2.0]}},
+    ],
+)
+def test_wire_edit_cannot_carry_an_inactive_source(payload: dict[str, object]) -> None:
+    with pytest.raises(ValueError, match="control edit"):
+        ControlEdit.model_validate(payload)
+
+
+@pytest.mark.parametrize("resolved", [sc.Quantity(3, "V"), sc.Quantity(1, "GHz")])
+def test_owned_preview_rejects_invalid_resolved_value(resolved: sc.Quantity) -> None:
+    controls = sc.ControlSet(
+        (
+            sc.Control(
+                "owned",
+                unit="V",
+                maximum=2,
+                ownership="derived",
+                resolve=lambda _: resolved,
+            ),
+        )
+    )
+
+    @sc.experiment(controls=controls)
+    def owned(context: sc.ExperimentContext) -> None:
+        return None
+
+    with pytest.raises((ValueError, TypeError)):
+        control_values(controls, owned(), config=load_config())

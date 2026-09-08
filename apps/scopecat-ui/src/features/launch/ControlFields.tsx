@@ -282,7 +282,7 @@ export function ControlFields({
 function display(value: unknown): string {
   if (typeof value === "number") return String(value);
   if (value && typeof value === "object" && "value" in value && "unit" in value)
-    return `${value.value} ${value.unit}`;
+    return `${String(value.value)} ${String(value.unit)}`;
   return JSON.stringify(value);
 }
 export function ControlSummary({ fields, values }: { fields: Control[]; values: Value[] }) {

@@ -70,6 +70,7 @@ def validate_signal_controls(context: sc.ControlValidationContext) -> None:
         else axis.source.points
         for axis in context.axes
     )
+    count *= context.invocation.point_plan.repeat
     if count > 64:
         raise ValueError("The maintained reference model allows at most 64 grid points")
 

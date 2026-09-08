@@ -211,3 +211,9 @@ selected-point inspections remain expandable. Projects can omit detailed
 preflight; the launcher then shows that scope and estimates were not provided,
 never zero. A changed input requires a new preview, and submission still checks
 the frozen request and accepted configuration generation.
+
+The **Frequency / amplitude model** launcher uses one control declaration for
+notebook edits and forms. It previews fixed or scanned axes, configuration-owned
+q0 carrier and derived detuning, then runs a hardware-free analytic signal model.
+See [Declare experiment controls once](../../docs/how-to/declare-experiment-controls.md)
+for scalar → scan → default edits and the project constraint boundary.
