@@ -9,7 +9,12 @@ from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
 import scopecat as sc
-from scopecat.application.launch import LaunchCatalog, LaunchRequest, LaunchResult
+from scopecat.application.launch import (
+    LaunchCatalog,
+    LaunchRequest,
+    LaunchResult,
+    validate_launch_control_edits,
+)
 from scopecat.daemon.endpoint import DAEMON_URL_ENV
 from scopecat.project import load_project
 
@@ -47,6 +52,15 @@ def main() -> None:
                 raise ValueError("project has no experiment preview provider")
         else:
             with sc.open_project(root).connect(operator=request.actor) as lab:
+                if request.control_edits:
+                    catalog = application.launch_provider(
+                        lab, LaunchRequest(action="list")
+                    )
+                    if not isinstance(catalog, LaunchCatalog):
+                        raise TypeError(
+                            "project list callback must return LaunchCatalog"
+                        )
+                    validate_launch_control_edits(catalog, request)
                 result = application.launch_provider(lab, request)
     print(result.model_dump_json())
 

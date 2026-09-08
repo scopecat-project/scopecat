@@ -66,6 +66,7 @@ from scopecat.kernel.product_identity import parse_product_id
 from scopecat.kernel.quantity import Quantity as QuantityValue
 from scopecat.kernel.resource_identity import ResourceRoleInput
 from scopecat.program.bindings import BindingIntent
+from scopecat.program.controls import ControlSet
 from scopecat.program.definitions import (
     ExperimentDef,
     ExperimentInvocation,
@@ -287,6 +288,7 @@ class ExperimentContext:
         input_ports: Sequence[ModuleInputPort] = (),
         input_defaults: Mapping[str, RuntimeInput],
         required_inputs: Sequence[str],
+        controls: ControlSet | None = None,
     ) -> ExperimentDef:
         """Freeze this context directly as one experiment definition."""
 
@@ -306,6 +308,7 @@ class ExperimentContext:
             input_defaults=input_defaults,
             required_inputs=required_inputs,
             default_point_plan=self._point_plan,
+            controls=controls,
             success_state_bindings=self._success_state_bindings,
             metadata=metadata,
         )
@@ -1163,6 +1166,7 @@ def experiment[ResultT, **P](
     id: str | None = None,
     kind: str | None = None,
     metadata: Mapping[str, MetadataValue] | None = None,
+    controls: ControlSet | None = None,
 ) -> Experiment[P, ResultT]: ...
 
 
@@ -1174,6 +1178,7 @@ def experiment[ResultT, **P](
     id: str | None = None,
     kind: str | None = None,
     metadata: Mapping[str, MetadataValue] | None = None,
+    controls: ControlSet | None = None,
 ) -> Callable[
     [Callable[Concatenate[ExperimentContext, P], ResultT]],
     Experiment[P, ResultT],
@@ -1187,6 +1192,7 @@ def experiment[ResultT, **P](
     id: str | None = None,
     kind: str | None = None,
     metadata: Mapping[str, MetadataValue] | None = None,
+    controls: ControlSet | None = None,
 ) -> (
     Experiment[P, ResultT]
     | Callable[
@@ -1209,6 +1215,7 @@ def experiment[ResultT, **P](
             id=id,
             kind=kind,
             metadata=metadata,
+            controls=controls,
         )
 
     return decorate(definition) if definition is not None else decorate
@@ -1299,12 +1306,35 @@ def _module_from_function[ResultT, **P](
     )
 
 
+def _apply_control_defaults(
+    controls: ControlSet,
+    contract: _ExperimentContract,
+    input_defaults: dict[str, RuntimeInput],
+    required_inputs: list[str],
+) -> None:
+    for control in controls.fields:
+        if control.ownership != "editable" or control.scannable:
+            continue
+        if control.id not in contract.runtime_names:
+            raise ValueError(f"control {control.id!r} needs a declared Input parameter")
+        declared_type = dict(contract.runtime_arguments)[control.id].value_type
+        if declared_type != control.value_type:
+            raise TypeError(
+                f"control {control.id!r} type must match its Input declaration"
+            )
+        if control.id in input_defaults:
+            raise ValueError("declare controlled defaults only on Control")
+        input_defaults[control.id] = control.default
+        required_inputs.remove(control.id)
+
+
 def _experiment_from_function[ResultT, **P](
     fn: Callable[Concatenate[ExperimentContext, P], ResultT],
     *,
     id: str | None,
     kind: str | None,
     metadata: Mapping[str, MetadataValue] | None,
+    controls: ControlSet | None,
 ) -> Experiment[P, ResultT]:
     source = cast("DefinitionFunction", fn)
     contract = _experiment_contract(source)
@@ -1323,6 +1353,8 @@ def _experiment_from_function[ResultT, **P](
             required_inputs.append(parameter.name)
         else:
             input_defaults[parameter.name] = cast("RuntimeInput", default)
+    if controls is not None:
+        _apply_control_defaults(controls, contract, input_defaults, required_inputs)
     selected_metadata = dict(metadata or {})
     doc = inspect.getdoc(fn)
     if doc is not None:
@@ -1362,6 +1394,8 @@ def _experiment_from_function[ResultT, **P](
         built = cached_build
         if built is None:
             context = ExperimentContext()
+            if controls is not None:
+                context.grid(*controls.default_axes())
             output = cast("ResultT", source(context, **values))
             recorded_tree = _record_experiment_output(context, output)
             recorded_result_refs = dict(_recorded_result_ref_items(recorded_tree))
@@ -1375,6 +1409,7 @@ def _experiment_from_function[ResultT, **P](
                 ),
                 input_defaults=input_defaults,
                 required_inputs=tuple(required_inputs),
+                controls=controls,
             )
             if set(recorded_result_refs) != {
                 field.path for field in definition.result_fields

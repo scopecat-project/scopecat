@@ -189,10 +189,18 @@ type AxisSourceRecord = Annotated[
 ]
 
 
+def _default_scan_mode(value: object) -> bool:
+    return value == "scan"
+
+
 class AxisRecord(_RunRequestModel):
     """Persisted axis source and its optional parameter-cell overlay."""
 
     axis_id: str = Field(min_length=1)
+    # Preserve historical scan request JSON/identity when the default is read back.
+    mode: Literal["fixed", "scan"] = Field(
+        default="scan", exclude_if=_default_scan_mode
+    )
     source: AxisSourceRecord
     overlay: RunRequestParameterLookupValue | None = None
 

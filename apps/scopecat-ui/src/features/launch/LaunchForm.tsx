@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { apiClient, apiData } from "../../api-client";
 import type { LaunchCatalogEntry, LaunchPreview } from "./launch-api";
+import { ControlFields, ControlSummary, controlEdits, initialControlDrafts } from "./ControlFields";
 import { PreflightSummary } from "./PreflightSummary";
 import { canRenderField, type FormField } from "./launch-fields";
 
@@ -15,6 +16,7 @@ export function LaunchForm({
   const fields = allFields.filter((pair): pair is [string, FormField] => canRenderField(pair[1]));
   const fieldsByName = new Map(fields);
   const supported = fields.length === allFields.length;
+  const [drafts, setDrafts] = useState(() => initialControlDrafts(entry.controls));
   const [sample, setSample] = useState("");
   const [actor, setActor] = useState("operator");
   const requestKey = useRef<string | undefined>(undefined);
@@ -79,6 +81,7 @@ export function LaunchForm({
               version: entry.version,
               sample: sample.trim() || null,
               inputs,
+              control_edits: controlEdits(drafts),
               actor,
               request_key: "",
             },
@@ -105,6 +108,7 @@ export function LaunchForm({
             experiment: entry.id,
             version: entry.version,
             inputs: inputValues(),
+            control_edits: controlEdits(drafts),
             request_key: requestKey.current,
             sample: sample.trim() || null,
             actor,
@@ -135,6 +139,16 @@ export function LaunchForm({
           This request schema needs a project-specific form. Use the project's Python workflow.
         </p>
       )}
+      <fieldset disabled={pending}>
+        <ControlFields
+          controls={entry.controls}
+          drafts={drafts}
+          onChange={(id, draft) => {
+            setDrafts({ ...drafts, [id]: draft });
+            invalidate();
+          }}
+        />
+      </fieldset>
       <fieldset disabled={pending} className="grid grid-cols-2 gap-4">
         {fields.map(([name, field]) => (
           <label key={name} className="flex flex-col gap-1">
@@ -242,7 +256,12 @@ export function LaunchForm({
         results.
       </p>
       {error && <p role="alert">{error}</p>}
-      {result && <PreflightSummary entry={entry} preview={result} />}
+      {result && (
+        <>
+          <PreflightSummary entry={entry} preview={result} />
+          <ControlSummary fields={entry.controls} values={result.controls} />
+        </>
+      )}
     </form>
   );
 }

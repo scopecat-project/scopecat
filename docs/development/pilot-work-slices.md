@@ -102,3 +102,12 @@ Before merging, run existing CI checks: Python tests, `basedpyright`, `lint-impo
 Ruff lint/format, generated instrument/API checks, UI tests/typecheck/build and
 documentation checks. `.github/workflows/ci.yml` remains authoritative, including
 its Windows test lane and browser checks. No parallel test framework is introduced.
+
+The frequency/amplitude control slice captures `controls_scalar` and
+`controls_scan` previews from one declaration and checks a real six-point
+analytic run. It preserves normalized units, fixed/scanned source mode and
+configuration/derived provenance. The shared UI fixture exercises source and
+unit edits through preview and submit payloads. The HTTP launch integration
+separately compares durable single-point fixed and explicit-scan requests to
+Python invocation edits and verifies their measured values agree. No analytic
+floating-point output is added to the strict golden preview fixture.

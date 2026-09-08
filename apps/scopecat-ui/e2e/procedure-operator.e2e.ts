@@ -99,7 +99,22 @@ test("reopens an admitted procedure after restart and follows exact retained run
       path: preflightScreenshot,
       contentType: "image/png",
     });
+    const submissionResponse = page.waitForResponse(
+      (response) =>
+        new URL(response.url()).pathname === "/api/v1/experiment-launcher/submit" &&
+        response.request().method() === "POST",
+    );
     await page.getByRole("button", { name: "Start acquisition" }).click();
+    // Admission launches a separate project worker. Observe that boundary before
+    // budgeting the existing execution milestones, rather than timing both together.
+    const response = await submissionResponse;
+    expect(response.ok()).toBe(true);
+    const submitted = (await response.json()) as {
+      procedure_id: string;
+      dispatch_error: string | null;
+    };
+    expect(submitted.dispatch_error).toBeNull();
+    await expect(page).toHaveURL(new RegExp(`procedure=${submitted.procedure_id}`));
     // This procedure runs a source acquisition, analysis, and a second acquisition.
     // Observe each durable milestone instead of spending one UI wait on all three.
     await expect(page.getByText("source: Completed", { exact: true })).toBeVisible();

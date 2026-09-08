@@ -69,6 +69,7 @@ class AxisSpec:
     value_type: Scalar
     source: ScanSource
     overlay: ValueRef | None = None
+    mode: Literal["fixed", "scan"] = "scan"
 
 
 @dataclass(frozen=True, slots=True, repr=False)

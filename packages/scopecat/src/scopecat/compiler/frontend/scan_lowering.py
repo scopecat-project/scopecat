@@ -114,6 +114,7 @@ def project_axis_record(
     return AxisRecord.model_validate(
         {
             "axis_id": axis.id,
+            "mode": axis.mode,
             "source": source_record,
             "overlay": (
                 None

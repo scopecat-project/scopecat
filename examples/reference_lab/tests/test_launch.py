@@ -371,3 +371,102 @@ def test_noop_candidate_preview_reports_reason_without_admitting_work(
             assert client.list_runs() == before
         finally:
             lab.config.set_default(original)
+
+
+def test_http_controls_persist_one_source_and_match_notebook_edits(
+    reference_lab_daemon: _Daemon, launch_application: LabApplication
+) -> None:
+    from scopecat.application.controls import ControlEdit, edit_controls
+    from scopecat.compiler.frontend.resolution import compile_invocation
+
+    from reference_lab.configuration import bootstrap_config
+    from reference_lab.workflows.frequency_amplitude import (
+        CONTROLS,
+        frequency_amplitude,
+    )
+
+    values: list[float] = []
+    with (
+        launch_application.connect(reference_lab_daemon.url) as lab,
+        httpx2.Client(
+            base_url=reference_lab_daemon.url, trust_env=False, timeout=30
+        ) as http,
+    ):
+        for mode in ("fixed", "scan"):
+            frequency = {"value": 4900.0, "unit": "MHz"}
+            edit = (
+                {"mode": "fixed", "value": frequency}
+                if mode == "fixed"
+                else {"mode": "scan", "axis": {"kind": "values", "values": [frequency]}}
+            )
+            request = LaunchRequest(
+                action="preview",
+                experiment="frequency-amplitude",
+                version="1",
+                control_edits={
+                    "frequency": ControlEdit.model_validate(edit),
+                    "amplitude": ControlEdit(mode="fixed", value=Quantity(100, "mV")),
+                },
+            )
+            response = http.post(
+                "/api/v1/experiment-launcher/preview",
+                json=request.model_dump(mode="json"),
+            )
+            assert response.is_success, response.text
+            preview = LaunchPreview.model_validate(response.json())
+            assert preview.point_count == 1
+            assert preview.controls[0].state == (
+                "fixed" if mode == "fixed" else "scanned"
+            )
+            notebook = edit_controls(
+                CONTROLS,
+                frequency_amplitude(),
+                config=bootstrap_config(),
+                edits=request.control_edits,
+            )
+            expected = compile_invocation(notebook).request
+            command = submit_request(request, preview, f"controls-{mode}")
+            response = http.post(
+                "/api/v1/experiment-launcher/submit",
+                json=command.model_dump(mode="json"),
+            )
+            assert response.is_success, response.text
+            admission = LaunchSubmission.model_validate(response.json())
+            assert admission.dispatch_error is None
+            handle = lab.procedures.get(admission.procedure_id)
+            deadline = time.monotonic() + 30
+            while (
+                handle.state not in {"closed", "attention_required"}
+                and time.monotonic() < deadline
+            ):
+                time.sleep(0.05)
+            assert handle.state == "closed"
+            output = handle.output("signal")
+            assert output.kind == "run"
+            run = lab.get_run(output.run_id)
+            assert run.request.point_plan == expected.point_plan
+            assert run.request.inputs == expected.inputs == {}
+            [record] = run.measurements().records
+            measured = record.observables["response"]
+            assert isinstance(measured, MeasurementScalar) and isinstance(
+                measured.value, float
+            )
+            values.append(measured.value)
+        assert values[0] == values[1]
+        unsafe = request.model_copy(
+            update={
+                "control_edits": {
+                    "frequency": ControlEdit(mode="fixed", value=Quantity(5.4, "GHz")),
+                    "amplitude": ControlEdit(mode="fixed", value=Quantity(0.3, "V")),
+                }
+            }
+        )
+        response = http.post(
+            "/api/v1/experiment-launcher/preview", json=unsafe.model_dump(mode="json")
+        )
+        assert response.status_code == 422 and "Amplitude" in response.text
+        unknown = unsafe.model_copy(update={"experiment": "temperature"})
+        response = http.post(
+            "/api/v1/experiment-launcher/preview", json=unknown.model_dump(mode="json")
+        )
+        assert response.status_code == 422 and "unknown control" in response.text

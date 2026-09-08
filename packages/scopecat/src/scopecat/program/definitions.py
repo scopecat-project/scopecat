@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, replace
-from typing import Generic, Self, TypeVar, cast
+from typing import TYPE_CHECKING, Generic, Self, TypeVar, cast
 
 from scopecat.adaptive_domains import AdaptiveScope
 from scopecat.kernel.frozen import FrozenMapping, freeze_json_mapping
@@ -52,6 +52,9 @@ from scopecat.program.verification import (
     validate_experiment_definition,
     validate_experiment_inputs,
 )
+
+if TYPE_CHECKING:
+    from scopecat.program.control_contract import InvocationControls
 
 
 class _InputDefaultMissing:
@@ -101,6 +104,7 @@ class ExperimentDef:
     python_implementations: tuple[ModulePythonImplementation, ...] = ()
     inputs: tuple[ExperimentInputDef, ...] = ()
     default_point_plan: PointPlan = field(default_factory=PointPlan)
+    controls: InvocationControls | None = field(default=None, repr=False, compare=False)
     record_selections: tuple[ProgramRecordSelection, ...] = ()
     result_fields: tuple[ExperimentResultField, ...] = ()
     success_state: EnsureStateIntent | None = None
@@ -382,6 +386,7 @@ def create_experiment_def(
     input_defaults: Mapping[str, RuntimeInput] | None = None,
     required_inputs: Sequence[str] = (),
     default_point_plan: PointPlan | None = None,
+    controls: InvocationControls | None = None,
     success_state_bindings: Sequence[BindingIntent] = (),
     metadata: Mapping[str, MetadataValue] | None = None,
 ) -> ExperimentDef:
@@ -436,6 +441,7 @@ def create_experiment_def(
         python_implementations=tuple(python_implementations),
         inputs=normalized_inputs,
         default_point_plan=selected_point_plan,
+        controls=controls,
         record_selections=selected_records,
         result_fields=selected_result_fields,
         success_state=(

@@ -14,6 +14,7 @@ const entry: LaunchCatalogEntry = {
   description: "Compile candidate",
   kind: "calibration",
   configuration_effect: "candidate",
+  controls: [],
   actions: ["preview", "submit"],
   request: {},
 };
@@ -31,6 +32,7 @@ const preview: LaunchPreview = {
   },
   summary: "Source and proposed candidate",
   resolved_inputs: {},
+  controls: [],
   resources: [],
 };
 const stage: components["schemas"]["PreflightStage"] = {

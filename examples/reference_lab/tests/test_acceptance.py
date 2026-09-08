@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import cast
 
 from pydantic import JsonValue, TypeAdapter
+from scopecat.application.launch import LaunchPreview
 from scopecat.daemon.endpoint import DAEMON_URL_ENV
 from scopecat.daemon.reviews import ReviewSessionView
 from scopecat.daemon.views import (
@@ -143,3 +144,24 @@ def test_fixture_comparison_limits_roundoff_to_complex_iq_components() -> None:
     )
     assert changed_coordinate != expected
     assert not acceptance_json_matches(expected, changed_coordinate)
+
+
+def test_shared_fixture_retains_control_sources_and_normalized_units() -> None:
+    fixture = cast("dict[str, JsonValue]", json.loads(FIXTURE.read_text()))
+    scalar = LaunchPreview.model_validate(fixture["controls_scalar"])
+    scanned = LaunchPreview.model_validate(fixture["controls_scan"])
+    assert scalar.point_count == 1 and scanned.point_count == 6
+    assert [value.state for value in scalar.controls] == [
+        "fixed",
+        "fixed",
+        "configuration",
+        "derived",
+    ]
+    assert scalar.controls[0].value == Quantity(4.9, "GHz")
+    assert scalar.controls[1].value == Quantity(0.1, "V")
+    assert scalar.controls[2].value == Quantity(4.8, "GHz")
+    assert "qubits[q0]" in scalar.controls[2].provenance
+    assert [value.state for value in scanned.controls[:2]] == ["scanned", "scanned"]
+    for value in scanned.controls[:2]:
+        assert value.value is None and value.axis is not None
+        assert value.axis.mode == "scan"

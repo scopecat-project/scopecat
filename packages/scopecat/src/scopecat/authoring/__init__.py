@@ -69,6 +69,8 @@ from scopecat.kernel.resource_identity import (
     ResourceRoleSelector,
     resource_role,
 )
+from scopecat.program.control_contract import ControlValidationContext
+from scopecat.program.controls import Control, ControlSet
 from scopecat.program.measurement_types import (
     EntityAcquisitionPolicy,
     EntityAcquisitionSemantics,
@@ -144,6 +146,9 @@ __all__ = [
     "ComplexType",
     "ComputeInput",
     "ConcreteEntityInput",
+    "Control",
+    "ControlSet",
+    "ControlValidationContext",
     "CoordinateRef",
     "DataRef",
     "EachEntity",

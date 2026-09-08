@@ -9,9 +9,11 @@ from typing import Protocol, cast
 
 from pydantic import JsonValue
 from scopecat.api.lab import LabClient
+from scopecat.application.controls import ControlEdit, edit_controls
 from scopecat.application.launch import LaunchPreview, LaunchRequest
 from scopecat.daemon.client import DaemonClient
 from scopecat.daemon.views import MeasurementPreview
+from scopecat.kernel.quantity import Quantity
 from scopecat.records.measurement import MeasurementScalar
 from scopecat.records.measurement_recording import measurement_record_content_hash
 from scopecat_instruments import temperature_readout
@@ -20,6 +22,7 @@ from reference_lab.configuration import bootstrap_config
 from reference_lab.launch import CATALOG, launch_provider
 from reference_lab.parameters import CHANNEL_DELAY, Q1_CHANNEL_CALIBRATION
 from reference_lab.workflows.coherent_ramsey import coherent_ramsey
+from reference_lab.workflows.frequency_amplitude import CONTROLS, frequency_amplitude
 from reference_lab.workflows.ramsey_experiments import parallel_raw_ramsey
 from reference_lab.workflows.temperature_diagnostic import (
     TemperatureDiagnosticIntent,
@@ -58,6 +61,80 @@ def capture_acceptance_fixtures(
             version="1",
         ),
     )
+    scalar_request = LaunchRequest(
+        action="preview",
+        experiment="frequency-amplitude",
+        version="1",
+        control_edits={
+            "frequency": ControlEdit.model_validate(
+                {"mode": "fixed", "value": {"value": 4900.0, "unit": "MHz"}}
+            ),
+            "amplitude": ControlEdit.model_validate(
+                {"mode": "fixed", "value": {"value": 100.0, "unit": "mV"}}
+            ),
+        },
+    )
+    controls_scalar = launch_provider(lab, scalar_request)
+    assert (
+        isinstance(controls_scalar, LaunchPreview) and controls_scalar.point_count == 1
+    )
+    scan_request = scalar_request.model_copy(
+        update={
+            "control_edits": {
+                "frequency": ControlEdit.model_validate(
+                    {
+                        "mode": "scan",
+                        "axis": {
+                            "kind": "range",
+                            "start": {"value": 4700.0, "unit": "MHz"},
+                            "stop": {"value": 4900.0, "unit": "MHz"},
+                            "points": 3,
+                        },
+                    }
+                ),
+                "amplitude": ControlEdit.model_validate(
+                    {
+                        "mode": "scan",
+                        "axis": {
+                            "kind": "values",
+                            "values": [
+                                {"value": 50.0, "unit": "mV"},
+                                {"value": 100.0, "unit": "mV"},
+                            ],
+                        },
+                    }
+                ),
+            }
+        }
+    )
+    controls_scan = launch_provider(lab, scan_request)
+    assert isinstance(controls_scan, LaunchPreview) and controls_scan.point_count == 6
+    controlled = edit_controls(
+        CONTROLS, frequency_amplitude(), config=config, edits=scan_request.control_edits
+    )
+    controlled_run = lab.run(controlled, config=config)
+    assert controlled_run.status == "completed"
+    controlled_records = controlled_run.measurements().records
+    assert len(controlled_records) == 6
+    reference_value = next(
+        value.value
+        for value in controls_scan.controls
+        if value.id == "reference_frequency"
+    )
+    assert isinstance(reference_value, Quantity)
+    for record in controlled_records:
+        frequency = record.coordinates["frequency"]
+        amplitude = record.coordinates["amplitude"]
+        response = record.observables["response"]
+        assert isinstance(frequency, MeasurementScalar) and frequency.unit == "GHz"
+        assert isinstance(amplitude, MeasurementScalar) and amplitude.unit == "V"
+        assert isinstance(response, MeasurementScalar) and response.unit == "V"
+        assert isinstance(frequency.value, float) and isinstance(amplitude.value, float)
+        assert isinstance(response.value, float)
+        expected = amplitude.value * math.cos(
+            2 * math.pi * (frequency.value - reference_value.value)
+        )
+        assert math.isclose(response.value, expected, rel_tol=1e-12, abs_tol=1e-12)
     diagnostic_run = lab.run(temperature_diagnostic(), config=config)
     assert diagnostic_run.status == "completed"
     assert lab.config.active() == active
@@ -212,6 +289,8 @@ def capture_acceptance_fixtures(
         ),
         "diagnostic": diagnostic.model_dump(mode="json"),
         "coherent_scalar": coherent_preview.model_dump(mode="json"),
+        "controls_scalar": controls_scalar.model_dump(mode="json"),
+        "controls_scan": controls_scan.model_dump(mode="json"),
         "inspection": inspection.model_dump(mode="json"),
         "reviewed_candidate": reviewed.model_dump(mode="json"),
         "entity_analysis": schema.model_dump(mode="json"),
