@@ -48,9 +48,10 @@ function Harness({
   initialize?: boolean;
 }) {
   const context = useLaunchDraft();
+  const select = context.select;
   useEffect(() => {
-    if (initialize) context.select(entry);
-  }, [context.select, initialize]);
+    if (initialize) select(entry);
+  }, [select, initialize]);
   return (
     <>
       <button onClick={() => context.select(entry)}>Select current catalog</button>

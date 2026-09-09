@@ -3,6 +3,12 @@ export type PlanRevision = components["schemas"]["ExperimentPlanRevision"];
 export type PlanDefinition = components["schemas"]["ExperimentPlanDefinition-Input"];
 export type PlanRef = components["schemas"]["ExperimentPlanRef"];
 
+function sampleLabel(plan: PlanRevision): string {
+  return plan.definition.sample
+    ? `${plan.definition.sample.display_name}, revision ${plan.definition.sample.revision}`
+    : "No sample";
+}
+
 export function planDifferences(before: PlanRevision, after: PlanRevision): string[] {
   const result: string[] = [];
   if (before.name !== after.name) result.push(`Name: ${before.name} → ${after.name}`);
@@ -25,11 +31,7 @@ export function planDifferences(before: PlanRevision, after: PlanRevision): stri
       result.push(`${label} changed (exact references in details).`);
   }
   if (JSON.stringify(before.definition.sample) !== JSON.stringify(after.definition.sample)) {
-    const label = (plan: PlanRevision) =>
-      plan.definition.sample
-        ? `${plan.definition.sample.display_name}, revision ${plan.definition.sample.revision}`
-        : "No sample";
-    result.push(`Sample: ${label(before)} → ${label(after)}`);
+    result.push(`Sample: ${sampleLabel(before)} → ${sampleLabel(after)}`);
   }
   return result;
 }
