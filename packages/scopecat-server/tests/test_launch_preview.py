@@ -408,7 +408,11 @@ with (
     catalog = LaunchCatalog.model_validate_json(result.stdout)
     assert catalog.entries[0].title == "操作者 → μ"
     assert catalog.entries[0].description == "测量 → 结果"
-    assert result.stderr.strip() == "操作者 → μ"
+    assert result.stderr.splitlines() == [
+        "Scopecat worker stage: project application load",
+        "Scopecat worker stage: launch provider",
+        "操作者 → μ",
+    ]
 
 
 def test_worker_rejects_undeclared_control_edits_before_provider_action(
