@@ -230,7 +230,7 @@ export function ConfigContextEditor({
   );
 }
 
-function ContextAtom({
+export function ContextAtom({
   label,
   type,
   value,

@@ -56,6 +56,7 @@ from scopecat.config.registry.service import (
 from scopecat.config.structure import (
     ParameterStructurePlan,
     ParameterStructurePreview,
+    parameter_structure_version,
     preview_parameter_structure,
 )
 from scopecat.control.models import (
@@ -101,6 +102,10 @@ from scopecat.records.analysis import (
 )
 from scopecat.records.config import config_content_hash
 from scopecat.records.config_context import ContextRunConfigSource
+from scopecat.records.parameter_structure import (
+    AddParameterColumn,
+    ChangeParameterColumn,
+)
 from scopecat.records.run import (
     AnalysisCandidateRunConfigSource,
     ConfigRegistryRunConfigSource,
@@ -179,6 +184,7 @@ class ConfigService:
     def save_context(self, command: ConfigContextSaveCommand) -> ConfigEntryView:
         with self._mutation_lock, self._config_errors():
             try:
+                self._validate_structure_evidence(command.structure_plan)
                 selector = command.sample.model_copy(
                     update={"context_id": command.working_point_id}
                 )
@@ -203,11 +209,24 @@ class ConfigService:
         self, plan: ParameterStructurePlan
     ) -> ParameterStructurePreview:
         with self._config_errors():
+            self._validate_structure_evidence(plan)
             saved = self.get_config_entry(plan.base.entry_id)
             try:
                 return preview_parameter_structure(saved.config, plan)
             except ValueError as error:
                 raise BackendConflict(str(error)) from error
+
+    def _validate_structure_evidence(self, plan: ParameterStructurePlan | None) -> None:
+        if plan is None:
+            return
+        for run_id in {
+            decision.source_run_id
+            for edit in plan.edits
+            if isinstance(edit, AddParameterColumn | ChangeParameterColumn)
+            for decision in edit.values
+            if decision.source_run_id is not None
+        }:
+            self._runs.read_snapshot(run_id)
 
     def resolve_context(
         self, command: ConfigContextResolveCommand
@@ -306,6 +325,9 @@ class ConfigService:
                 entry=snapshot.entry,
                 config=snapshot.config,
                 latest_activation=snapshot.latest_activation,
+                structure_version=parameter_structure_version(
+                    snapshot.config.parameter_catalog
+                ),
             )
 
     def get_config_activation_operation(

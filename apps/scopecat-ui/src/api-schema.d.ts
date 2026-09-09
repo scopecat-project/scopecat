@@ -174,6 +174,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/config-registry/contexts/structure/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Preview Structure */
+        post: operations["preview_structure_api_v1_config_registry_contexts_structure_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/config-registry/drafts/preview": {
         parameters: {
             query?: never;
@@ -1485,6 +1502,22 @@ export interface components {
             /** Initial Point Count */
             initial_point_count: number;
         };
+        /** AddParameterColumn */
+        AddParameterColumn: {
+            column: components["schemas"]["ParameterDefinition"];
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "add_column";
+            /** Parameter Id */
+            parameter_id: string;
+            /**
+             * Values
+             * @default []
+             */
+            values: components["schemas"]["StructureValueDecision"][];
+        };
         /** AnalysisArtifactRecordOutput */
         AnalysisArtifactRecordOutput: {
             content: components["schemas"]["AnalysisArtifactReference"];
@@ -1974,6 +2007,35 @@ export interface components {
             status: "applied" | "not_applied" | "unknown";
         };
         /**
+         * Array
+         * @description A typed dense array available at one experiment point.
+         */
+        Array: {
+            /** Dimensions */
+            dimensions: components["schemas"]["ArrayDimension"][];
+            dtype: components["schemas"]["ValueDType"];
+            /** Unit */
+            unit?: string | null;
+        };
+        /**
+         * ArrayDimension
+         * @description One local dimension of an array value.
+         *
+         *     Local dimensions describe the shape available at one experiment point.
+         *     They are intentionally distinct from scan axes, which create points.
+         */
+        ArrayDimension: {
+            /** Id */
+            id: string;
+            /** Kind */
+            kind?: string | null;
+            /** Size */
+            size: number | null;
+            /** Unit */
+            unit?: string | null;
+        };
+        AtomType: components["schemas"]["Bool"] | components["schemas"]["Int"] | components["schemas"]["Float"] | components["schemas"]["Complex"] | components["schemas"]["String"] | components["schemas"]["scopecat__kernel__value_types__Quantity"] | components["schemas"]["Entity"] | components["schemas"]["Payload"];
+        /**
          * AttentionResolutionCommand
          * @description Choose the run disposition after external state was reconciled.
          */
@@ -2103,6 +2165,11 @@ export interface components {
             kind: "blob";
             ref: components["schemas"]["Sha256ContentHash"];
         };
+        /**
+         * Bool
+         * @description Boolean scalar content.
+         */
+        Bool: Record<string, unknown>;
         /** BoundedQuantity */
         BoundedQuantity: {
             /** Basis */
@@ -2175,6 +2242,39 @@ export interface components {
             kind: "candidate_config";
             proposal_id: components["schemas"]["NonEmptyText"];
             run_id: components["schemas"]["NonEmptyText"];
+        };
+        /** ChangeParameterColumn */
+        ChangeParameterColumn: {
+            column: components["schemas"]["ParameterDefinition"];
+            /**
+             * Conversion
+             * @enum {string}
+             */
+            conversion: "compatible_unit" | "lossless_numeric" | "explicit_values" | "unknown";
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "change_column";
+            /** Parameter Id */
+            parameter_id: string;
+            /**
+             * Values
+             * @default []
+             */
+            values: components["schemas"]["StructureValueDecision"][];
+        };
+        /** ChangeParameterKey */
+        ChangeParameterKey: {
+            /** Columns */
+            columns: string[];
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "change_key";
+            /** Parameter Id */
+            parameter_id: string;
         };
         /**
          * CollectReceipt
@@ -2569,6 +2669,17 @@ export interface components {
             upper: number;
         };
         /**
+         * Complex
+         * @description Finite complex scalar content with an optional measurement unit.
+         *
+         *     Real and imaginary components share the declared unit. Complex values have
+         *     no ordering bounds; explicit unit conversion supports linear scales only.
+         */
+        Complex: {
+            /** Unit */
+            unit?: string | null;
+        };
+        /**
          * ComponentSpec
          * @description One stable role nested below an interface endpoint.
          */
@@ -2648,6 +2759,23 @@ export interface components {
             operation: components["schemas"]["ConfigActivationOperation"];
         };
         /**
+         * ConfigCellRef
+         * @description Exact source cell before any explicit structural mapping.
+         */
+        ConfigCellRef: {
+            entry: components["schemas"]["ConfigContextRef"];
+            /** Field Id */
+            field_id?: string | null;
+            /** Key */
+            key?: {
+                [key: string]: components["schemas"]["ParameterAtomValue"];
+            };
+            /** Parameter Id */
+            parameter_id: string;
+            /** Row Index */
+            row_index?: number | null;
+        };
+        /**
          * ConfigCompositionEvidenceStepRef
          * @description Self-contained exact checkpoint in one contribution procedure.
          */
@@ -2676,6 +2804,7 @@ export interface components {
             /** Label */
             label: string;
             sample: components["schemas"]["SampleBinding"];
+            structure?: components["schemas"]["ParameterStructureOrigin"] | null;
             /**
              * Value Origins
              * @default []
@@ -2739,6 +2868,7 @@ export interface components {
             note: string;
             parameters?: components["schemas"]["ParameterSnapshot"] | null;
             sample: components["schemas"]["SampleSelector"];
+            structure_plan?: components["schemas"]["ParameterStructurePlan"] | null;
             /** Working Point Id */
             working_point_id: string;
         };
@@ -2803,6 +2933,7 @@ export interface components {
             config: components["schemas"]["ConfigProfileSnapshot"];
             entry: components["schemas"]["ConfigRegistryEntry"];
             latest_activation?: components["schemas"]["ConfigRegistryActivationRecord"] | null;
+            structure_version?: components["schemas"]["ConfigContentHash"] | null;
         };
         /**
          * ConfigProfileSnapshot
@@ -2975,6 +3106,7 @@ export interface components {
          */
         ConfigValueOrigin: {
             entry: components["schemas"]["ConfigContextRef"];
+            evidence?: components["schemas"]["StructureValueDecision"] | null;
             /** Field Id */
             field_id?: string | null;
             /** Key */
@@ -2990,6 +3122,7 @@ export interface components {
             parameter_id: string;
             /** Row Index */
             row_index?: number | null;
+            source_cell?: components["schemas"]["ConfigCellRef"] | null;
         };
         /**
          * ContentEntry
@@ -3118,6 +3251,7 @@ export interface components {
              */
             status: "ok" | "degraded";
         };
+        DataType: components["schemas"]["Scalar"] | components["schemas"]["Array"];
         /**
          * DeleteParameterRows
          * @description Delete one row selected by a table primary key.
@@ -3293,6 +3427,14 @@ export interface components {
             run_id?: string | null;
         };
         /**
+         * Entity
+         * @description Entity reference content, optionally constrained by domain kind.
+         */
+        Entity: {
+            /** Entity Kind */
+            entity_kind?: string | null;
+        };
+        /**
          * EntityAcquisitionEvidenceRef
          * @description Entity-aligned result references within shared acquisition events.
          */
@@ -3384,6 +3526,21 @@ export interface components {
             sheet?: string | null;
             /** Uri */
             uri: string;
+        };
+        /**
+         * Float
+         * @description Numeric scalar content with optional inclusive bounds.
+         */
+        Float: {
+            /**
+             * Finite
+             * @default true
+             */
+            finite: boolean;
+            /** Maximum */
+            maximum?: number | null;
+            /** Minimum */
+            minimum?: number | null;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -3915,6 +4072,16 @@ export interface components {
              * @default []
              */
             problems: components["schemas"]["Problem-Output"][];
+        };
+        /**
+         * Int
+         * @description Integral scalar content with optional inclusive bounds.
+         */
+        Int: {
+            /** Maximum */
+            maximum?: number | null;
+            /** Minimum */
+            minimum?: number | null;
         };
         /**
          * InteractiveCollectIntent
@@ -5222,6 +5389,7 @@ export interface components {
             /** Source Run Id */
             source_run_id: string;
         };
+        ParameterContract: components["schemas"]["ParameterValueContract"] | components["schemas"]["ParameterLookupUse"];
         /**
          * ParameterDefinition
          * @description Stable type definition for one accepted parameter value.
@@ -5232,6 +5400,24 @@ export interface components {
             /** Id */
             id: string;
             value_type: components["schemas"]["PersistableValueType"];
+        };
+        /**
+         * ParameterLookupUse
+         * @description One selected typed lookup occurrence on a table parameter.
+         */
+        ParameterLookupUse: {
+            /** Column Id */
+            column_id: string;
+            /** Key Input Types */
+            key_input_types: [
+                string,
+                components["schemas"]["Scalar"]
+            ][];
+            /** Literal Key Columns */
+            literal_key_columns: string[];
+            result_type: components["schemas"]["Scalar"];
+            /** Table Id */
+            table_id: string;
         };
         /** ParameterProposalPage */
         ParameterProposalPage: {
@@ -5263,8 +5449,61 @@ export interface components {
             /** Values */
             values?: components["schemas"]["StoredParameterValue"][];
         };
+        ParameterStructureEdit: components["schemas"]["AddParameterColumn"] | components["schemas"]["RenameParameterColumn"] | components["schemas"]["ChangeParameterColumn"] | components["schemas"]["ChangeParameterKey"];
+        /**
+         * ParameterStructureOrigin
+         * @description Retain the declaration; old configurations and runs are never rewritten.
+         */
+        ParameterStructureOrigin: {
+            after_version: components["schemas"]["Sha256ContentHash"];
+            before_version: components["schemas"]["Sha256ContentHash"];
+            /** Edits */
+            edits: components["schemas"]["ParameterStructureEdit"][];
+        };
+        /**
+         * ParameterStructurePlan
+         * @description An ordered declaration against an exact saved snapshot and catalog shape.
+         */
+        ParameterStructurePlan: {
+            base: components["schemas"]["ConfigContextRef"];
+            /**
+             * Consumers
+             * @default []
+             */
+            consumers: components["schemas"]["StructureConsumer"][];
+            /** Edits */
+            edits: components["schemas"]["ParameterStructureEdit"][];
+            structure_version: components["schemas"]["Sha256ContentHash"];
+        };
+        /** ParameterStructurePreview */
+        ParameterStructurePreview: {
+            /** Cell Mappings */
+            cell_mappings: components["schemas"]["StructureCellMapping"][];
+            config: components["schemas"]["ConfigProfileSnapshot"];
+            /**
+             * Consumer Scope
+             * @default Affected parameter identities are reported. Arbitrary compiler and analysis code is not enumerated; preview each dependent experiment before use.
+             */
+            consumer_scope: string;
+            /** Consumers */
+            consumers: components["schemas"]["StructureConsumerImpact"][];
+            /** Impacts */
+            impacts: components["schemas"]["StructureColumnImpact"][];
+            /** Missing Values */
+            missing_values: string[];
+            origin: components["schemas"]["ParameterStructureOrigin"];
+        };
         "ParameterUpdate-Input": components["schemas"]["ReplaceParameter"] | components["schemas"]["UpdateParameterRows-Input"] | components["schemas"]["InsertParameterRows-Input"] | components["schemas"]["DeleteParameterRows-Input"];
         "ParameterUpdate-Output": components["schemas"]["ReplaceParameter"] | components["schemas"]["UpdateParameterRows-Output"] | components["schemas"]["InsertParameterRows-Output"] | components["schemas"]["DeleteParameterRows-Output"];
+        /**
+         * ParameterValueContract
+         * @description Declared shape and type of one parameter dependency.
+         */
+        ParameterValueContract: {
+            /** Parameter Id */
+            parameter_id: string;
+            value_type: components["schemas"]["ValueType"];
+        };
         /**
          * ParameterValueDelta
          * @description Durable before/after state for one proposed parameter change.
@@ -5279,6 +5518,14 @@ export interface components {
             cells?: components["schemas"]["ParameterCellEdit-Output"][] | null;
             /** Parameter Id */
             parameter_id: string;
+        };
+        /**
+         * Payload
+         * @description Opaque scalar content identified by a domain-owned schema id.
+         */
+        Payload: {
+            /** Schema Id */
+            schema_id: string;
         };
         /**
          * PayloadRef
@@ -5863,6 +6110,23 @@ export interface components {
             title?: string | null;
         };
         pydantic__types__JsonValue: unknown;
+        /**
+         * RenameParameterColumn
+         * @description Change a semantic column id explicitly; this is not an alias.
+         */
+        RenameParameterColumn: {
+            /** Column Id */
+            column_id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "rename_column";
+            /** New Id */
+            new_id: string;
+            /** Parameter Id */
+            parameter_id: string;
+        };
         /**
          * ReplaceParameter
          * @description Replace one complete typed parameter value.
@@ -7325,6 +7589,13 @@ export interface components {
             run_count: number;
         };
         /**
+         * Scalar
+         * @description A single atom.
+         */
+        Scalar: {
+            atom: components["schemas"]["AtomType"];
+        };
+        /**
          * ScalarParameterValue
          * @description One stored scalar parameter value.
          */
@@ -7350,6 +7621,28 @@ export interface components {
             unit: string;
             /** Value */
             value: number;
+        };
+        /**
+         * Quantity
+         * @description Quantity content constrained by dimension, unit, and numeric bounds.
+         *
+         *     Bounds are expressed in ``unit``. Consequently bounded quantities require
+         *     an explicit unit, while an unbounded type may constrain only the dimension.
+         */
+        scopecat__kernel__value_types__Quantity: {
+            /** Dimension */
+            dimension?: string | null;
+            /**
+             * Finite
+             * @default true
+             */
+            finite: boolean;
+            /** Maximum */
+            maximum?: number | null;
+            /** Minimum */
+            minimum?: number | null;
+            /** Unit */
+            unit?: string | null;
         };
         /**
          * SegmentedInlinePayloadBody
@@ -7480,6 +7773,89 @@ export interface components {
         };
         StoredParameterValue: components["schemas"]["ScalarParameterValue"] | components["schemas"]["TableParameterValue"];
         /**
+         * String
+         * @description String scalar content with optional closed choices.
+         */
+        String: {
+            /** Choices */
+            choices?: string[] | null;
+        };
+        /**
+         * StructureCellMapping
+         * @description Current location and immediate pre-edit location are distinct.
+         */
+        StructureCellMapping: {
+            /** Column Id */
+            column_id: string;
+            evidence?: components["schemas"]["StructureValueDecision"] | null;
+            /** Parameter Id */
+            parameter_id: string;
+            /** Row Index */
+            row_index: number;
+            /** Source Column Id */
+            source_column_id: string | null;
+        };
+        /** StructureColumnImpact */
+        StructureColumnImpact: {
+            /** Affected Rows */
+            affected_rows: number;
+            /** Column Id */
+            column_id?: string | null;
+            /** Consumer Action */
+            consumer_action: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "added" | "renamed" | "type_changed" | "key_changed";
+            /**
+             * Missing Rows
+             * @default []
+             */
+            missing_rows: number[];
+            /** Parameter Id */
+            parameter_id: string;
+        };
+        /**
+         * StructureConsumer
+         * @description Only explicitly supplied dependencies are assessed, including analysis.
+         */
+        StructureConsumer: {
+            /** Contracts */
+            contracts: components["schemas"]["ParameterContract"][];
+            /** Name */
+            name: string;
+        };
+        /** StructureConsumerImpact */
+        StructureConsumerImpact: {
+            /** Name */
+            name: string;
+            /** Problems */
+            problems: components["schemas"]["Problem-Output"][];
+        };
+        /**
+         * StructureValueDecision
+         * @description An explicit value or unknown at an existing row's identity.
+         */
+        StructureValueDecision: {
+            /** Key */
+            key?: {
+                [key: string]: components["schemas"]["ParameterAtomValue"];
+            };
+            /** Note */
+            note: string;
+            /**
+             * Origin
+             * @enum {string}
+             */
+            origin: "unknown" | "imported" | "estimated" | "measured";
+            /** Row Index */
+            row_index?: number | null;
+            /** Source Run Id */
+            source_run_id?: string | null;
+            value?: components["schemas"]["ParameterAtomValue"] | null;
+        };
+        /**
          * SystemSpec
          * @description Stable system topology and logical parameter definitions.
          */
@@ -7493,6 +7869,28 @@ export interface components {
             primary_entity_id: string;
             routing?: components["schemas"]["RoutingGraph"];
             topology: components["schemas"]["Topology"];
+        };
+        /**
+         * Table
+         * @description A row collection with exact columns and an optional primary key.
+         */
+        Table: {
+            /** Columns */
+            columns: components["schemas"]["TableColumn"][];
+            /**
+             * Primary Key
+             * @default []
+             */
+            primary_key: string[];
+        };
+        /**
+         * TableColumn
+         * @description One scalar column in a table type.
+         */
+        TableColumn: {
+            /** Id */
+            id: string;
+            value_type: components["schemas"]["Scalar"];
         };
         /**
          * TableParameterValue
@@ -7636,6 +8034,9 @@ export interface components {
             /** Error Type */
             type: string;
         };
+        /** @enum {string} */
+        ValueDType: "float64" | "int64" | "complex128" | "bool" | "string";
+        ValueType: components["schemas"]["DataType"] | components["schemas"]["Table"];
         /** VirtualInstrumentConnection */
         VirtualInstrumentConnection: {
             /**
@@ -7979,6 +8380,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ConfigContextResolution"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_structure_api_v1_config_registry_contexts_structure_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ParameterStructurePlan"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ParameterStructurePreview"];
                 };
             };
             /** @description Validation Error */

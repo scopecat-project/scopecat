@@ -47,8 +47,11 @@ class StructureValueDecision(_StructureModel):
 
     @model_validator(mode="after")
     def validate_origin(self) -> StructureValueDecision:
-        if self.value is None and self.origin != "unknown":
-            raise ValueError("a missing value must retain unknown origin")
+        if (self.value is None) != (self.origin == "unknown"):
+            raise ValueError(
+                "unknown origin requires an absent value; "
+                "provided values need an explicit origin"
+            )
         if self.origin == "measured" and not self.source_run_id:
             raise ValueError("a measured value requires its source run id")
         return self
