@@ -4805,6 +4805,7 @@ export interface components {
             inputs?: {
                 [key: string]: components["schemas"]["pydantic__types__JsonValue"];
             };
+            manual_state?: components["schemas"]["ManualPreviewFence"] | null;
             /**
              * Overrides
              * @default []
