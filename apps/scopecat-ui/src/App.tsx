@@ -126,7 +126,6 @@ export default function App() {
       void queryClient.invalidateQueries({ queryKey: ["run-contents"] });
       void queryClient.invalidateQueries({ queryKey: ["run-content"] });
       void queryClient.invalidateQueries({ queryKey: ["config"] });
-      void queryClient.invalidateQueries({ queryKey: ["experiment-launcher"] });
       void queryClient.invalidateQueries({ queryKey: ["instruments"] });
       void queryClient.invalidateQueries({ queryKey: ["reviews"] });
       void queryClient.invalidateQueries({ queryKey: ["review"] });
@@ -137,6 +136,7 @@ export default function App() {
       });
     };
     const refreshAfterConnection = () => {
+      void queryClient.invalidateQueries({ queryKey: ["experiment-launcher"] });
       invalidateCanonicalQueries();
       void queryClient.resetQueries({ queryKey: ["measurements"] });
       void queryClient.resetQueries({ queryKey: ["measurement-slice"] });

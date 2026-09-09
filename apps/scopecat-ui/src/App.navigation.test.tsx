@@ -271,6 +271,7 @@ describe("config provenance navigation", () => {
     await screen.findByText("Instrument workspace");
     await waitFor(() => expect(projectEventListener).toBeDefined());
 
+    invalidate.mockClear();
     act(() => emitProjectEvent("run-1", "instrument_session_opened"));
 
     await waitFor(() => {
@@ -279,6 +280,7 @@ describe("config provenance navigation", () => {
       expect(invalidate).toHaveBeenCalledWith({ queryKey: ["run-contents"] });
       expect(invalidate).toHaveBeenCalledWith({ queryKey: ["run-content"] });
     });
+    expect(invalidate).not.toHaveBeenCalledWith({ queryKey: ["experiment-launcher"] });
   });
 
   it("does not mount the run browser while configuration is active", async () => {
@@ -721,9 +723,11 @@ describe("config provenance navigation", () => {
     );
   });
 
-  it("refreshes canonical queries whenever SSE connects", async () => {
+  it("refreshes canonical queries and the experiment catalog whenever SSE connects", async () => {
     window.history.replaceState(null, "", "/?run=run-1");
-    renderApp();
+    const queryClient = createQueryClient();
+    const invalidate = vi.spyOn(queryClient, "invalidateQueries");
+    renderApp(queryClient);
 
     expect(await screen.findByRole("heading", { name: "Recent events" })).toBeVisible();
     await waitFor(() => expect(openEventListener).toBeDefined());
@@ -735,6 +739,8 @@ describe("config provenance navigation", () => {
     await waitFor(() =>
       expect(canonicalQueryCallCounts()).toEqual(initialCounts.map((count) => count + 1)),
     );
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ["experiment-launcher"] });
+    invalidate.mockClear();
     const connectedCounts = canonicalQueryCallCounts();
 
     act(() => {
@@ -743,6 +749,7 @@ describe("config provenance navigation", () => {
     await waitFor(() =>
       expect(canonicalQueryCallCounts()).toEqual(connectedCounts.map((count) => count + 1)),
     );
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ["experiment-launcher"] });
   });
 
   it("labels the bounded run event timeline honestly", async () => {
