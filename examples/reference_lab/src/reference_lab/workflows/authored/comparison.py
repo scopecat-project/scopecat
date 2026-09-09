@@ -7,9 +7,9 @@ from typing import cast
 
 import numpy as np
 from numpy.typing import NDArray
-from scopecat.application.comparison import ComparisonModel, ComparisonParameter
 from scopecat.kernel.quantity import Quantity
 from scopecat.measurements.dataset import Dataset
+from scopecat.records.comparison import ComparisonModel, ComparisonParameter
 
 MODEL = ComparisonModel(
     id="signal-quadratic",

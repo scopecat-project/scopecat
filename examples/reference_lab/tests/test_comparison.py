@@ -3,40 +3,36 @@
 from __future__ import annotations
 
 import os
+import time
 
 import httpx2 as httpx
 import pytest
 import scopecat as sc
-from scopecat.analysis.comparison import COMPARISON_REQUEST_SCHEMA
-from scopecat.application.comparison import (
-    ComparisonHandoff,
+from scopecat.api.comparison import COMPARISON_REQUEST_SCHEMA
+from scopecat.api.lab import LabClient
+from scopecat.api.procedures import ProcedureHandle
+from scopecat.application.comparison import ComparisonHandoff
+from scopecat.application.controls import ControlEdit
+from scopecat.application.launch import LaunchPreview, LaunchRequest, LaunchSubmission
+from scopecat.automation import RunOutputRef
+from scopecat.daemon.client import DaemonClient
+from scopecat.records.analysis import MeasurementAnalysisRecordInput
+from scopecat.records.comparison import (
     ComparisonInspection,
     ComparisonPublication,
     ComparisonRequest,
     ComparisonSelection,
 )
-from scopecat.application.controls import ControlEdit
-from scopecat.application.launch import LaunchPreview, LaunchRequest, LaunchSubmission
-from scopecat.automation import RunOutputRef
-from scopecat.records.analysis import MeasurementAnalysisRecordInput
 from scopecat.records.run_request import AxisValuesSourceRecord
 
-from reference_lab.application import create_application
 from reference_lab.comparison import FIT_SCHEMA, NEXT_INPUT_SCHEMA, REVIEW_SCHEMA
-from reference_lab.configuration import EXAMPLE_ROOT
-from reference_lab.control_launch import control_launch
 from reference_lab.workflows.authored.comparison import MODEL
-from reference_lab.workflows.frequency_amplitude import (
-    AMPLITUDE,
-    FREQUENCY,
-    frequency_amplitude,
-)
 
 
 def test_two_retained_runs_fit_candidate_rejection_and_handoff() -> None:
     url = os.environ["SCOPECAT_DAEMON_URL"]
     with (
-        create_application(EXAMPLE_ROOT).connect(url) as lab,
+        LabClient(DaemonClient(url)) as lab,
         httpx.Client(
             base_url=url, timeout=60, headers={"content-type": "application/json"}
         ) as http,
@@ -53,32 +49,58 @@ def test_two_retained_runs_fit_candidate_rejection_and_handoff() -> None:
                 )
             },
         )
-        preview = control_launch(lab, launch)
-        assert isinstance(preview, LaunchPreview)
-        admitted = control_launch(
-            lab,
-            launch.model_copy(
-                update={
-                    "action": "submit",
-                    "request_key": "comparison-source",
-                    "expected_request_hash": preview.request_hash,
-                    "config_source": preview.config_source,
-                }
-            ),
-        )
-        assert isinstance(admitted, LaunchSubmission)
-        source_procedure = lab.procedures.get(admitted.procedure_id)
-        source_procedure.resume()
+
+        def acquire(request: LaunchRequest, key: str) -> ProcedureHandle:
+            response = http.post(
+                "/api/v1/experiment-launcher/preview", content=request.model_dump_json()
+            )
+            assert response.status_code == 200, response.text
+            preview = LaunchPreview.model_validate_json(response.text)
+            response = http.post(
+                "/api/v1/experiment-launcher/submit",
+                content=request.model_copy(
+                    update={
+                        "action": "submit",
+                        "request_key": key,
+                        "expected_request_hash": preview.request_hash,
+                        "config_source": preview.config_source,
+                        "code_revision": preview.code_revision,
+                    }
+                ).model_dump_json(),
+            )
+            assert response.status_code == 200, response.text
+            admitted = LaunchSubmission.model_validate_json(response.text)
+            assert admitted.dispatch_error is None
+            procedure = lab.procedures.get(admitted.procedure_id)
+            deadline = time.monotonic() + 30
+            while procedure.snapshot.closure is None:
+                assert time.monotonic() < deadline, procedure.snapshot
+                time.sleep(0.05)
+            assert procedure.snapshot.closure is not None
+            assert procedure.snapshot.closure.status == "succeeded"
+            return procedure
+
+        source_procedure = acquire(launch, "comparison-source")
         closed = source_procedure.snapshot
-        assert closed.closure is not None and closed.closure.status == "succeeded"
         output = source_procedure.step("signal").output
         assert isinstance(output, RunOutputRef)
         primary = lab.get_run(output.run_id)
-        secondary = lab.run(
-            frequency_amplitude()
-            .with_axis(sc.axis(FREQUENCY.ref, frequencies))
-            .with_axis(sc.axis(AMPLITUDE.ref, [sc.Quantity(0.08, "V")]))
+        secondary_procedure = acquire(
+            launch.model_copy(
+                update={
+                    "control_edits": {
+                        **launch.control_edits,
+                        "amplitude": ControlEdit(
+                            mode="fixed", value=sc.Quantity(0.08, "V")
+                        ),
+                    }
+                }
+            ),
+            "comparison-secondary",
         )
+        secondary_output = secondary_procedure.step("signal").output
+        assert isinstance(secondary_output, RunOutputRef)
+        secondary = lab.get_run(secondary_output.run_id)
         runs = (primary, secondary)
         originals = tuple(
             run.measurements()["response"].require_values() for run in runs

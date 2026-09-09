@@ -14,9 +14,10 @@ is an analytic teaching example, not physical calibration evidence. Experiment
 authors can edit the authored fit/helper and its model version, then select
 **Refresh author code**. Registering or replacing the project-level
 `LabApplication(comparison_provider=...)` callback is a maintainer task, using the
-public types in `scopecat.application.comparison`.
+public data types in `scopecat.records.comparison` and provider/handoff types in
+`scopecat.application.comparison`.
 
-The optional `scopecat.analysis.comparison.comparison_inputs` helper checks one
+The optional `scopecat.api.comparison.comparison_inputs` helper checks one
 real scalar coordinate and observable per point. It rejects arrays, unavailable
 or nonfinite values, incompatible units, stale hashes and unfinished inputs.
 Different grids remain separate: no interpolation or cross-run join is performed.
@@ -34,7 +35,7 @@ analysis into another owner to bypass those checks.
 
 Reopen old and new results in **Primary run analysis history**. Reading a result
 does not execute a model. Providers publish via
-`scopecat.analysis.comparison.save_comparison(analysis, request)`, which adds the
+`scopecat.api.comparison.save_comparison(analysis, request)`, which adds the
 public typed `comparison-request` fact to the existing atomic analysis save.
 Source actions validate the exact run, analysis and publication hash before
 loading project code. They retain the original model, parameters and selections;

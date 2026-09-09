@@ -7,15 +7,15 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from scopecat.analysis.facts import AnalysisFactSchema
-from scopecat.application.comparison import (
+from scopecat.kernel.quantity import Quantity
+from scopecat.records.analysis import AnalysisFactRecordOutput
+from scopecat.records.comparison import (
     ComparisonCurve,
     ComparisonInspection,
     ComparisonModel,
     ComparisonRequest,
     ComparisonSelection,
 )
-from scopecat.kernel.quantity import Quantity
-from scopecat.records.analysis import AnalysisFactRecordOutput
 
 if TYPE_CHECKING:
     from scopecat.api.analysis import Analysis, AnalysisContext

@@ -16,7 +16,7 @@ from fastapi import FastAPI, Header, HTTPException, Query, Request
 from fastapi import Path as ApiPath
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from scopecat.application.comparison import ComparisonRequest, ComparisonResult
+from scopecat.application.comparison import ComparisonResult
 from scopecat.application.launch import (
     LaunchCatalog,
     LaunchPreview,
@@ -245,6 +245,7 @@ from scopecat.records.author_revision import (
     AuthorRevisionRef,
     AuthorRevisionState,
 )
+from scopecat.records.comparison import ComparisonRequest
 from scopecat.records.content import ContentEntry
 from scopecat.records.costs import RunMeasuredCosts
 from scopecat.records.instrument import (

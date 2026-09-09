@@ -8,15 +8,15 @@ import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
-from scopecat.analysis.comparison import reopen_comparison
-from scopecat.application.comparison import (
+from scopecat.api.comparison import reopen_comparison
+from scopecat.daemon.client import DaemonClient
+from scopecat.daemon.endpoint import DAEMON_URL_ENV, resolve_daemon_endpoint
+from scopecat.project import load_project
+from scopecat.records.comparison import (
     ComparisonCatalog,
     ComparisonInspection,
     ComparisonRequest,
 )
-from scopecat.daemon.client import DaemonClient
-from scopecat.daemon.endpoint import DAEMON_URL_ENV, resolve_daemon_endpoint
-from scopecat.project import load_project
 
 from scopecat_server.author_worker import revision_project
 

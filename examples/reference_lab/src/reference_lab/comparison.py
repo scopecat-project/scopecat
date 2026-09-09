@@ -10,17 +10,11 @@ from typing import TypedDict
 
 import numpy as np
 import pandas as pd
-from scopecat.analysis.comparison import comparison_inputs, save_comparison
 from scopecat.analysis.facts import AnalysisFactSchema
+from scopecat.api.comparison import comparison_inputs, save_comparison
 from scopecat.api.lab import LabClient
 from scopecat.api.published_analysis import PublishedAnalysis
-from scopecat.application.comparison import (
-    ComparisonCatalog,
-    ComparisonHandoff,
-    ComparisonPublication,
-    ComparisonRequest,
-    ComparisonResult,
-)
+from scopecat.application.comparison import ComparisonHandoff, ComparisonResult
 from scopecat.application.controls import ControlEdit
 from scopecat.application.launch import LaunchRequest
 from scopecat.kernel.quantity import Quantity
@@ -29,6 +23,11 @@ from scopecat.records.analysis import (
     AnalysisField,
     AnalysisFigureLayerSpec,
     AnalysisFigureProjection,
+)
+from scopecat.records.comparison import (
+    ComparisonCatalog,
+    ComparisonPublication,
+    ComparisonRequest,
 )
 
 from reference_lab.control_launch import CONTROL_ENTRY

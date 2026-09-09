@@ -31,6 +31,9 @@ with project.connect() as lab:
 test("compares retained signals, saves independent results and imports a reviewed suggestion without acquisition", async ({
   page,
 }, testInfo) => {
+  // Include cold acquisition, author refresh, retained actions, and daemon cleanup.
+  // CI completes individual assertions within their existing limits.
+  test.setTimeout(90_000);
   const project = await mkdtemp(join(tmpdir(), "scopecat-comparison-e2e-"));
   let passed = false;
   try {

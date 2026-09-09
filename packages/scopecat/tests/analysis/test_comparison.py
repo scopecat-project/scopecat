@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import pytest
 
-from scopecat.analysis.comparison import comparison_curve
-from scopecat.application.comparison import ComparisonModel
+from scopecat.api.comparison import comparison_curve
 from scopecat.measurements.dataset import Dataset
+from scopecat.records.comparison import ComparisonModel
 from scopecat.records.content import ContentEntry
 from scopecat.records.measurement import (
     MeasurementDataset,
@@ -127,11 +127,10 @@ def test_missing_coordinate_does_not_select_another_column() -> None:
 def test_reopen_uses_public_frozen_request_and_checks_exact_owner() -> None:
     from datetime import UTC, datetime
 
-    from scopecat.analysis.comparison import (
+    from scopecat.api.comparison import (
         COMPARISON_REQUEST_SCHEMA,
         reopen_comparison,
     )
-    from scopecat.application.comparison import ComparisonRequest, ComparisonSelection
     from scopecat.daemon.views import RunAnalysisView
     from scopecat.records.analysis import (
         AnalysisFact,
@@ -140,6 +139,7 @@ def test_reopen_uses_public_frozen_request_and_checks_exact_owner() -> None:
         RunAnalysisSubject,
     )
     from scopecat.records.author_revision import AuthorRevisionRef
+    from scopecat.records.comparison import ComparisonRequest, ComparisonSelection
 
     original = ComparisonRequest(
         action="fit",
