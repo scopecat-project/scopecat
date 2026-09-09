@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import json
+from typing import Annotated
 
 import pytest
 from scopecat_testkit.authoring import load_config
@@ -13,6 +14,7 @@ import scopecat as sc
 from scopecat.application.controls import ControlEdit, control_values, edit_controls
 from scopecat.compiler.frontend.resolution import compile_invocation
 from scopecat.kernel.content_identity import content_fingerprint
+from scopecat.kernel.errors import CheckFailed
 from scopecat.planning.catalog import InstrumentContractCatalog
 from scopecat.planning.service import plan_experiment_invocation
 from scopecat.planning.system import ExperimentSystem
@@ -157,7 +159,7 @@ def test_scalar_bind_admission_and_owned_preview_normalization() -> None:
     system = ExperimentSystem(
         InstrumentContractCatalog(config_content_hash=config_content_hash(config))
     )
-    with pytest.raises(ValueError, match="at most"):
+    with pytest.raises(CheckFailed, match="at most"):
         plan_experiment_invocation(
             invocation.bind(value=3.0), config=config, system=system
         )
@@ -196,3 +198,15 @@ def test_owned_preview_rejects_invalid_resolved_value(resolved: sc.Quantity) -> 
 
     with pytest.raises((ValueError, TypeError)):
         control_values(controls, owned(), config=load_config())
+
+
+def test_control_range_must_fit_its_declared_input_type() -> None:
+    controls = sc.ControlSet((sc.Control("value", default=1.5, minimum=0, maximum=2),))
+    with pytest.raises(TypeError, match="type must match"):
+
+        @sc.experiment(controls=controls)
+        def narrower(
+            context: sc.ExperimentContext,
+            value: Annotated[sc.Input[float], sc.FloatType(minimum=1)],
+        ) -> sc.Input[float]:
+            return value
