@@ -206,11 +206,7 @@ def preview_parameter_structure(
             assert isinstance(edit.column.value_type, Scalar)
             target = TableColumn(column_id, edit.column.value_type)
             columns[column_id] = target
-            if edit.conversion in {"unknown", "explicit_values"}:
-                for row in rows:
-                    row.pop(column_id, None)
-            else:
-                _convert_rows(edit, before, target, rows)
+            _change_column_values(edit, before, target, rows)
             _apply_decisions(
                 edit.parameter_id, table, rows, target, edit.values, identities
             )
@@ -320,6 +316,7 @@ def _update_cell_mappings(
             )
             replaced = isinstance(edit, AddParameterColumn) or (
                 edit.conversion in {"explicit_values", "unknown"}
+                or (edit.conversion == "patch_values" and decision is not None)
             )
             mappings[address] = StructureCellMapping(
                 parameter_id=edit.parameter_id,
@@ -383,6 +380,19 @@ def _apply_decisions(
                 value=decision.value,
                 path=(parameter_id, index, column.id),
             )
+
+
+def _change_column_values(
+    edit: ChangeParameterColumn,
+    before: TableColumn,
+    target: TableColumn,
+    rows: list[dict[str, ParameterAtomValue]],
+) -> None:
+    if edit.conversion in {"unknown", "explicit_values"}:
+        for row in rows:
+            row.pop(target.id, None)
+    elif edit.conversion != "patch_values":
+        _convert_rows(edit, before, target, rows)
 
 
 def _convert_rows(

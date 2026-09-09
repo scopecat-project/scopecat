@@ -239,12 +239,37 @@ Malformed supplied values and missing or duplicate primary keys are still
 rejected. The ordinary complete-configuration path keeps its existing validation.
 
 For breaking changes, `ChangeParameterColumn` requires one declared policy:
-`compatible_unit`, `lossless_numeric`, `explicit_values`, or `unknown`. Automatic
+`compatible_unit`, `lossless_numeric`, `explicit_values`, `patch_values`, or
+`unknown`. Automatic
 numeric conversion rejects rounding; unit conversion requires compatible units.
 Explicit `StructureValueDecision` records identify an existing keyed row, or a
 row index for a table without a key. A measured declaration must reference an
 existing source run; this records the author's evidence claim and does not grant
 calibration validity. Conversion and renaming never promote evidence to measured.
+
+Use `patch_values` to change only the cells identified by its value decisions,
+including marking a selected cell unknown. Unspecified rows retain their values,
+evidence and original source-cell references. In contrast, `explicit_values`
+replaces the entire column: rows without a decision become unknown. Neither mode
+bypasses the column's final type/unit validation; changing the type while retaining
+incompatible values is rejected. For example, this declares one estimated value
+without replacing other rows:
+
+```python
+ChangeParameterColumn(
+    parameter_id="observations",
+    column=ParameterDefinition(id="quality", value_type=quality.value_type),
+    conversion="patch_values",
+    values=(
+        StructureValueDecision(
+            key={"sample": "a"},
+            value=0.8,
+            origin="estimated",
+            note="Initial estimate pending measurement",
+        ),
+    ),
+)
+```
 
 The preview reports changed column and key identities. Python callers can pass
 named `StructureConsumer` records containing existing typed parameter contracts
