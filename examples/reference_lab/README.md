@@ -217,3 +217,11 @@ notebook edits and forms. It previews fixed or scanned axes, configuration-owned
 q0 carrier and derived detuning, then runs a hardware-free analytic signal model.
 See [Declare experiment controls once](../../docs/how-to/declare-experiment-controls.md)
 for scalar → scan → default edits and the project constraint boundary.
+
+## Ordinary experiment authors
+
+The application discovers local experiments in `src/reference_lab/workflows/authored/`.
+Edit controls, helpers, Ramsey timing or retained-data analysis there; Launch lists
+them automatically without a per-experiment provider or procedure. Follow the
+[author guide](../../docs/how-to/write-an-experiment.md) for Python and GUI execution,
+source provenance limits, and the boundary with shared laboratory capabilities.
