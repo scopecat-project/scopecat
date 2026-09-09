@@ -240,8 +240,8 @@ rejected. The ordinary complete-configuration path keeps its existing validation
 
 For breaking changes, `ChangeParameterColumn` requires one declared policy:
 `compatible_unit`, `lossless_numeric`, `explicit_values`, `patch_values`, or
-`unknown`. Automatic
-numeric conversion rejects rounding; unit conversion requires compatible units.
+`unknown`. Automatic numeric conversion rejects rounding; unit conversion requires
+compatible units.
 Explicit `StructureValueDecision` records identify an existing keyed row, or a
 row index for a table without a key. A measured declaration must reference an
 existing source run; this records the author's evidence claim and does not grant
@@ -256,13 +256,18 @@ incompatible values is rejected. For example, this declares one estimated value
 without replacing other rows:
 
 ```python
+from scopecat.records.parameter_structure import (
+    ChangeParameterColumn,
+    StructureValueDecision,
+)
+
 ChangeParameterColumn(
-    parameter_id="observations",
+    parameter_id="qubits",
     column=ParameterDefinition(id="quality", value_type=quality.value_type),
     conversion="patch_values",
     values=(
         StructureValueDecision(
-            key={"sample": "a"},
+            key={"qubit": sc.EntityRef(id="q0", kind="logical_qubit")},
             value=0.8,
             origin="estimated",
             note="Initial estimate pending measurement",

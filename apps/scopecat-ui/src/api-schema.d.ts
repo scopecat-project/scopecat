@@ -2341,7 +2341,7 @@ export interface components {
              * Conversion
              * @enum {string}
              */
-            conversion: "compatible_unit" | "lossless_numeric" | "explicit_values" | "unknown";
+            conversion: "compatible_unit" | "lossless_numeric" | "explicit_values" | "patch_values" | "unknown";
             /**
              * @description discriminator enum property added by openapi-typescript
              * @enum {string}

@@ -16,7 +16,11 @@ from scopecat.kernel.value_types import Float, Int, Scalar, String, Table, Table
 from scopecat.kernel.value_types import Quantity as QuantityType
 from scopecat.program.expressions import ParameterLookupUse
 from scopecat.records.config import ConfigProfileSnapshot, config_content_hash
-from scopecat.records.config_context import ConfigContextRef
+from scopecat.records.config_context import (
+    ConfigCellRef,
+    ConfigContextRef,
+    ConfigValueOrigin,
+)
 from scopecat.records.parameter import (
     ParameterCatalog,
     ParameterDefinition,
@@ -359,3 +363,103 @@ def test_only_explicit_consumer_contracts_are_assessed_after_rename() -> None:
     assert preview.consumers[0].name == "frequency analysis"
     assert preview.consumers[0].problems[0].code == "unknown_authoring_parameter_column"
     assert ParameterStructurePlan.model_validate_json(edits.model_dump_json()) == edits
+
+
+@pytest.mark.parametrize("value", [None, Quantity(5.0, "GHz")])
+def test_patch_changes_only_selected_cell_and_retains_other_source(
+    value: Quantity | None,
+) -> None:
+    base = config()
+    prior_ref = ConfigContextRef(
+        entry_id="original", content_hash=config_content_hash(base)
+    )
+    evidence = StructureValueDecision(
+        key={"sample": "b"},
+        value=Quantity(4.9, "GHz"),
+        origin="measured",
+        note="Retained frequency measurement",
+        source_run_id="run-b",
+    )
+    prior = ConfigValueOrigin(
+        parameter_id="observations",
+        field_id="frequency",
+        key={"sample": "b"},
+        layer="context",
+        entry=prior_ref,
+        evidence=evidence,
+        source_cell=ConfigCellRef(
+            entry=prior_ref,
+            parameter_id="observations",
+            field_id="old_frequency",
+            key={"sample": "b"},
+        ),
+    )
+    decision = StructureValueDecision(
+        key={"sample": "a"},
+        value=value,
+        origin="unknown" if value is None else "estimated",
+        note="One-cell declaration",
+    )
+    edits = plan(
+        base,
+        ChangeParameterColumn(
+            parameter_id="observations",
+            column=ParameterDefinition(
+                id="frequency", value_type=Scalar(QuantityType(unit="GHz"))
+            ),
+            conversion="patch_values",
+            values=(decision,),
+        ),
+    )
+    preview = preview_parameter_structure(base, edits)
+    table = preview.config.parameter_snapshot.get("observations")
+    assert isinstance(table, TableParameterValue)
+    assert table.rows[0].get("frequency") == value
+    assert table.rows[1]["frequency"] == Quantity(4.9, "GHz")
+    origins = mapped_structure_origins(
+        base,
+        preview,
+        base_ref=edits.base,
+        selected_ref=ConfigContextRef(
+            entry_id="patched", content_hash=config_content_hash(preview.config)
+        ),
+        inherited=(prior,),
+    )
+    unchanged = next(
+        item
+        for item in origins
+        if item.field_id == "frequency" and item.key == {"sample": "b"}
+    )
+    changed = next(
+        item
+        for item in origins
+        if item.field_id == "frequency" and item.key == {"sample": "a"}
+    )
+    assert unchanged.evidence == prior.evidence
+    assert unchanged.source_cell == prior.source_cell
+    assert changed.evidence == decision
+    assert changed.source_cell is None
+    assert ParameterStructurePlan.model_validate_json(edits.model_dump_json()) == edits
+
+
+def test_patch_does_not_silently_clear_values_incompatible_with_new_type() -> None:
+    base = config()
+    edit = ChangeParameterColumn(
+        parameter_id="observations",
+        column=ParameterDefinition(id="frequency", value_type=Scalar(Int())),
+        conversion="patch_values",
+        values=(
+            StructureValueDecision(
+                key={"sample": "a"}, value=1, origin="imported", note="New value"
+            ),
+        ),
+    )
+    with pytest.raises(CheckFailed):
+        preview_parameter_structure(base, plan(base, edit))
+    replacement = preview_parameter_structure(
+        base,
+        plan(base, edit.model_copy(update={"conversion": "explicit_values"})),
+    )
+    table = replacement.config.parameter_snapshot.get("observations")
+    assert isinstance(table, TableParameterValue)
+    assert "frequency" not in table.rows[1]
