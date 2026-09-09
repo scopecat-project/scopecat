@@ -79,6 +79,25 @@ process for direct imports of a different frozen code root. Ordinary direct
 Python execution without a selected revision still records declaration identity,
 not a claim of complete helper provenance.
 
+## Declare simple form inputs
+
+Ordinary Python parameters with defaults become form fields alongside controls.
+For example, the reference `signal` experiment declares
+`polarity: Literal["positive", "negative"] = "positive"`. Select its polarity in
+Experiments, or pass `inputs={"polarity": "negative"}` to `authors.prepare()`.
+The same declaration creates the catalog schema and validates input values before
+binding the experiment. Its effective arguments, including defaults, are retained
+in the admitted intent; a later refresh cannot replace those arguments or the
+original implementation.
+
+Use `str`, `int`, `float`, `bool`, or `Literal` choices of one scalar type for
+these structural inputs. Discovery requires defaults and rejects nullable unions,
+containers and other complex objects with a named error; maintainers can compose
+those through the existing Python API. Values for controlled inputs belong in
+`control_edits`, not `inputs`. Fixed and scanned controls keep their units, bounds
+and existing compiler validation. There is no second per-experiment parser or
+catalog to update when an ordinary author changes a supported parameter.
+
 ## Maintainer configuration and supported boundary
 
 The maintainer configures these paths once in `scopecat.toml`:

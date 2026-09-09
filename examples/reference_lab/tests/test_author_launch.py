@@ -128,6 +128,7 @@ def test_copied_author_uses_shared_control_plan_and_real_retained_run(
                 experiment=selected.entry.id,
                 version=selected.entry.version,
                 control_edits={"frequency": edit},
+                inputs={"polarity": "negative"},
                 actor="ordinary-author",
                 sample=chip.id,
             )
@@ -137,7 +138,9 @@ def test_copied_author_uses_shared_control_plan_and_real_retained_run(
             )
             response.raise_for_status()
             preview = LaunchPreview.model_validate(response.json())
-            direct = selected.edit(config=before.config, edits=request.control_edits)
+            direct = selected.edit(
+                config=before.config, edits=request.control_edits, inputs=request.inputs
+            )
             assert (
                 preview.point_count
                 == lab.preview(direct, config=before.config).initial_point_count
@@ -177,7 +180,7 @@ def test_copied_author_uses_shared_control_plan_and_real_retained_run(
                 )
             )
         np.testing.assert_array_equal(retained[0], retained[1])
-        np.testing.assert_array_equal(retained[0], (2.0,))
+        np.testing.assert_array_equal(retained[0], (-2.0,))
         assert lab.config.active() == before
         python_run = selected.run(
             lab,

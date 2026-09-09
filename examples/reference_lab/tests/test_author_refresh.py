@@ -126,9 +126,9 @@ def test_refresh_freezes_admission_and_analysis_across_restore(
             second = authors.refresh(expected_generation=initial.generation)
             assert second.active != first
             source_path.write_text(
-                source_path.read_text().replace(
-                    'default=1.0, title="Gain"', 'default=3.0, title="Gain"'
-                )
+                source_path.read_text()
+                .replace('default=1.0, title="Gain"', 'default=3.0, title="Gain"')
+                .replace('= "positive",', '= "negative",')
             )
             third = authors.refresh(expected_generation=second.generation)
             assert third.active != second.active
@@ -161,6 +161,7 @@ def test_refresh_freezes_admission_and_analysis_across_restore(
             with DaemonClient(endpoint.base_url) as client:
                 stored = client.get_procedure(admitted)
                 assert stored.state == "ready"
+                assert stored.intent["inputs"] == {"polarity": "positive"}
                 assert stored.intent["code_revision"] == first.model_dump()
             newer = admit_without_dispatch(root, "new-definition")
             run_admitted(root, newer)
@@ -168,7 +169,7 @@ def test_refresh_freezes_admission_and_analysis_across_restore(
                 runs = lab.runs().items
                 assert len(runs) == 1
                 latest = runs[0]
-                assert latest.measurements()["result"].require_values() == (6.0,)
+                assert latest.measurements()["result"].require_values() == (-6.0,)
                 assert (
                     latest.request.metadata["author_code_revision"]
                     == fourth.active.content_hash

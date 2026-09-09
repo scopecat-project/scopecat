@@ -165,3 +165,77 @@ def test_project_loading_pins_complete_revision_into_discovered_procedures(
             == first.content_hash
         )
     assert loading_revision.get() is None
+
+
+def test_author_scalar_schema_and_binding_use_the_same_declaration(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from pydantic import ValidationError
+
+    monkeypatch.setattr(sys, "path", [str(tmp_path), *sys.path])
+    name = "scalar_author"
+    (tmp_path / f"{name}.py").write_text(
+        SOURCE.replace(
+            "import scopecat as sc", "import scopecat as sc\nfrom typing import Literal"
+        )
+        .replace(
+            "experiment: sc.ExperimentContext)",
+            'experiment: sc.ExperimentContext, *, target: str = "q0", '
+            "shots: int = 32, gain: float = 1.0, enabled: bool = True, "
+            'mode: Literal["short", "long"] = "short")',
+        )
+        .replace("return LEVEL.ref", "return LEVEL.ref + shots * gain"),
+        encoding="utf-8",
+    )
+    author = AuthorExperiments.discover(name).experiments[0]
+    schema = author.entry.request.properties
+    assert set(schema) == {"target", "shots", "gain", "enabled", "mode"}
+    assert not isinstance(schema["shots"], bool)
+    assert not isinstance(schema["mode"], bool)
+    assert schema["shots"].type == "integer"
+    assert schema["shots"].default == 32
+    assert schema["mode"].enum == ("short", "long")
+    values = author.input_model.model_validate({"shots": 64, "mode": "long"})
+    assert values.model_dump() == {
+        "target": "q0",
+        "shots": 64,
+        "gain": 1.0,
+        "enabled": True,
+        "mode": "long",
+    }
+    rebound = author.declaration.bind(**values.model_dump())
+    assert rebound.definition != author.invocation.definition
+    for invalid in (
+        {"shots": "64"},
+        {"shots": True},
+        {"enabled": "false"},
+        {"mode": "other"},
+        {"level": 2},
+        {"extra": 1},
+    ):
+        with pytest.raises(ValidationError):
+            author.input_model.model_validate(invalid)
+    monkeypatch.delitem(sys.modules, name)
+
+
+@pytest.mark.parametrize(
+    "annotation, default",
+    [("str | None", "None"), ("list[str]", "[]"), ('Literal["short", 1]', '"short"')],
+)
+def test_author_unsupported_form_type_is_rejected_at_discovery(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, annotation: str, default: str
+) -> None:
+    monkeypatch.setattr(sys, "path", [str(tmp_path), *sys.path])
+    name = "unsupported_scalar_author"
+    (tmp_path / f"{name}.py").write_text(
+        SOURCE.replace(
+            "import scopecat as sc", "import scopecat as sc\nfrom typing import Literal"
+        ).replace(
+            "experiment: sc.ExperimentContext)",
+            f"experiment: sc.ExperimentContext, *, option: {annotation} = {default})",
+        ),
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match=r"author input 'option'.*JSON scalar"):
+        AuthorExperiments.discover(name)
+    monkeypatch.delitem(sys.modules, name)

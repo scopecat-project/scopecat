@@ -15,11 +15,12 @@ from importlib import import_module
 from types import MappingProxyType
 from typing import cast
 
-from pydantic import BaseModel, ConfigDict, JsonValue
+from pydantic import BaseModel, ConfigDict, Field, JsonValue
 
 from scopecat.api.lab import LabClient, PreparedLabExperiment
 from scopecat.api.procedures import LabProcedureContext
 from scopecat.api.run import RunHandle
+from scopecat.application.author_inputs import author_input_model
 from scopecat.application.controls import (
     ControlEdit,
     control_catalog,
@@ -78,6 +79,7 @@ class AuthorLaunchIntent(BaseModel):
     config: ConfigProfileSnapshot
     config_source: LaunchConfigSource
     edits: dict[str, ControlEdit]
+    inputs: dict[str, JsonValue] = Field(default_factory=dict)
     actor: str
     request_hash: Sha256ContentHash
     code_revision: AuthorRevisionRef | None = None
@@ -87,6 +89,8 @@ class AuthorLaunchIntent(BaseModel):
 class AuthorExperiment:
     """One discovered declaration and its default invocation, without a registry DSL."""
 
+    declaration: Experiment[..., object]
+    input_model: type[BaseModel]
     invocation: ExperimentInvocation
     controls: ControlSet
     source: Mapping[str, str]
@@ -110,6 +114,7 @@ class AuthorExperiment:
                     else None,
                     "id": self.invocation.definition.id,
                     "declaration": dict(self.source),
+                    "inputs": self.input_model.model_json_schema(),
                     "controls": [
                         item.model_dump(mode="json")
                         for item in control_catalog(self.controls)
@@ -132,7 +137,9 @@ class AuthorExperiment:
             actions=("preview", "submit"),
             kind="diagnostic",
             configuration_effect="none",
-            request=LaunchInputSchema(properties={}),
+            request=LaunchInputSchema.model_validate(
+                self.input_model.model_json_schema()
+            ),
             controls=control_catalog(self.controls),
         )
 
@@ -141,9 +148,18 @@ class AuthorExperiment:
         *,
         config: ConfigProfileSnapshot,
         edits: dict[str, ControlEdit] | None = None,
+        inputs: Mapping[str, JsonValue] | None = None,
     ) -> ExperimentInvocation:
         return edit_controls(
-            self.controls, self.invocation, config=config, edits=edits or {}
+            self.controls,
+            self.declaration.bind(
+                **cast(
+                    "dict[str, object]",
+                    self.input_model.model_validate(inputs or {}).model_dump(),
+                )
+            ),
+            config=config,
+            edits=edits or {},
         )
 
     @property
@@ -244,7 +260,9 @@ class _AuthorProcedure:
             raise ValueError("procedure must load its admitted author revision")
         context.run(
             "experiment",
-            self.experiment.edit(config=selected.config, edits=selected.edits),
+            self.experiment.edit(
+                config=selected.config, edits=selected.edits, inputs=selected.inputs
+            ),
             config=selected.config,
             config_source=selected.config_source,
             operator=selected.actor,
@@ -310,6 +328,10 @@ class AuthorExperiments:
                     )
                     discovered.append(
                         AuthorExperiment(
+                            declaration=experiment,
+                            input_model=author_input_model(
+                                experiment, invocation, controls
+                            ),
                             invocation=invocation,
                             controls=controls,
                             source={
@@ -373,12 +395,14 @@ class AuthorExperiments:
             raise ValueError(
                 "author declaration changed; reload the catalog and preview again"
             )
-        if request.inputs:
-            raise ValueError(
-                "author experiments accept declared control edits, not extra inputs"
-            )
         config, source = resolve_launch_config(lab, request)
-        invocation = selected.edit(config=config, edits=request.control_edits)
+        inputs = cast(
+            "dict[str, JsonValue]",
+            selected.input_model.model_validate(request.inputs).model_dump(mode="json"),
+        )
+        invocation = selected.edit(
+            config=config, edits=request.control_edits, inputs=inputs
+        )
         if request.action == "preview":
             preview = lab.preview_invocation(
                 invocation, config=config, config_source=source
@@ -418,6 +442,7 @@ class AuthorExperiments:
                 config=config,
                 config_source=source,
                 edits=request.control_edits,
+                inputs=inputs,
                 actor=request.actor,
                 manual_state=request.manual_state,
                 request_hash=request.request_hash,

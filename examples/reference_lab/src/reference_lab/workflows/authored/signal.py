@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import cast
+from typing import Literal, cast
 
 import numpy as np
 import scopecat as sc
@@ -24,15 +24,20 @@ GAIN = sc.Control("gain", default=1.0, title="Gain")
 SIGNAL_CONTROLS = sc.ControlSet((FREQUENCY, GAIN))
 
 
-def response(frequency: sc.Quantity, center: sc.Quantity, gain: float) -> float:
+def response(
+    frequency: sc.Quantity, center: sc.Quantity, gain: float, polarity: str = "positive"
+) -> float:
     """Edit this synthetic model without changing device code."""
     detuning = (frequency.to("GHz").value - center.to("GHz").value) / 0.05
-    return gain / (1 + detuning**2)
+    return gain / (1 + detuning**2) * (1 if polarity == "positive" else -1)
 
 
 @sc.experiment(controls=SIGNAL_CONTROLS, metadata={"title": "Exploratory signal"})
 def signal(
-    experiment: sc.ExperimentContext, gain: sc.Input[float]
+    experiment: sc.ExperimentContext,
+    gain: sc.Input[float],
+    *,
+    polarity: Literal["positive", "negative"] = "positive",
 ) -> sc.ValueRef[float]:
     """Inspect a synthetic resonance using the configured q0 carrier; no devices."""
     return cast(
@@ -42,6 +47,7 @@ def signal(
             frequency=FREQUENCY.ref,
             center=Q0[DRIVE_CARRIER_FREQUENCY].ref,
             gain=gain,
+            polarity=polarity,
         ),
     )
 
