@@ -17,11 +17,15 @@ from scopecat.automation import (
     procedure_step_operation_id,
 )
 from scopecat.daemon.views import RunDetail
+from scopecat.kernel.content_identity import sha256_json_hash
+from scopecat.records.manual_preview import ManualPreviewBinding, ManualPreviewFence
 
 from scopecat_server.http.procedure_operator import read_procedure_operator
 from scopecat_server.http.transport import create_app
 from scopecat_server.services.application import DaemonApplication
+from scopecat_server.services.manual_previews import ManualPreviewService
 from scopecat_server.services.project_workers import ProjectProcedureWorkers
+from scopecat_server.storage.sqlite.connection import SQLiteDatabase
 
 NOW = datetime(2026, 9, 1, tzinfo=UTC)
 HASH = "sha256:" + "1" * 64
@@ -102,6 +106,9 @@ def _application(root: Path) -> tuple[DaemonApplication, Mock]:
             "object",
             SimpleNamespace(
                 project_root=root,
+                manual_previews=ManualPreviewService(
+                    SQLiteDatabase(root / "store.sqlite3"), Mock()
+                ),
                 automation=SimpleNamespace(
                     get=Mock(return_value=procedure),
                     running_step=Mock(return_value=step),
@@ -157,6 +164,20 @@ def test_unknown_child_never_dispatches_including_exact_submission_retry(
                 content_hash=HASH,
                 registry_generation=1,
             ),
+        }
+    )
+    assert command.config_source is not None
+    command = command.model_copy(
+        update={
+            "manual_state": ManualPreviewFence(
+                event_id=1,
+                binding=ManualPreviewBinding(
+                    request_hash=command.request_hash,
+                    config_source_hash=sha256_json_hash(
+                        command.config_source.model_dump(mode="json")
+                    ),
+                ),
+            )
         }
     )
     with (
