@@ -225,7 +225,8 @@ def _verify_store(project: Path) -> int:
             "list[sqlite3.Row]",
             connection.execute(
                 "SELECT digest FROM run_repository_refs "
-                "UNION SELECT digest FROM project_analysis_repository_refs"
+                "UNION SELECT digest FROM project_analysis_repository_refs "
+                "UNION SELECT bundle_digest AS digest FROM author_revisions"
             ).fetchall(),
         )
         for row in refs:

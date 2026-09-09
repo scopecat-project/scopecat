@@ -232,6 +232,14 @@ from scopecat.daemon.wire import (
     TerminalRunCommitCommand,
 )
 from scopecat.planning.catalog import InstrumentContractCatalog
+from scopecat.records.author_revision import (
+    AuthorAnalysisReceipt,
+    AuthorAnalysisRequest,
+    AuthorRefreshRequest,
+    AuthorRevisionBundle,
+    AuthorRevisionRef,
+    AuthorRevisionState,
+)
 from scopecat.records.content import ContentEntry
 from scopecat.records.costs import RunMeasuredCosts
 from scopecat.records.instrument import (
@@ -273,6 +281,9 @@ from scopecat_server.http.procedure_operator import (
     read_procedure_operator,
 )
 from scopecat_server.services.project_workers import ProjectProcedureWorkers
+from scopecat_server.storage.sqlite.author_revision_repository import (
+    AuthorRevisionConflict,
+)
 from scopecat_server.storage.sqlite.connection import SQLiteBusyError
 
 from ..command_payloads import (
@@ -329,6 +340,52 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
         max_body_bytes=max_command_body_bytes,
     )
     _install_error_mapping(app)
+
+    @app.get(f"{_API_PREFIX}/author-revisions")
+    def author_revision_state() -> AuthorRevisionState:
+        return application.author_revisions.state()
+
+    @app.get(f"{_API_PREFIX}/author-revisions/{'{content_hash}'}")
+    def author_revision(content_hash: str) -> AuthorRevisionBundle:
+        return application.author_revisions.get(
+            AuthorRevisionRef(content_hash=content_hash)
+        )
+
+    @app.post(f"{_API_PREFIX}/author-revisions/refresh")
+    def refresh_author_revision(command: AuthorRefreshRequest) -> AuthorRevisionState:
+        try:
+            return application.author_revisions.refresh(
+                expected_generation=command.expected_generation
+            )
+        except AuthorRevisionConflict as error:
+            raise HTTPException(409, str(error)) from error
+        except ValueError as error:
+            raise HTTPException(422, str(error)) from error
+
+    @app.post(f"{_API_PREFIX}/author-revisions/analyze")
+    def analyze_author_revision(
+        command: AuthorAnalysisRequest,
+    ) -> AuthorAnalysisReceipt:
+        completed = subprocess.run(  # noqa: S603 - internal revision-pinned analysis worker
+            [
+                sys.executable,
+                "-m",
+                "scopecat_server.author_worker",
+                str(application.project_root),
+                "--analyze",
+            ],
+            input=command.model_dump_json(),
+            capture_output=True,
+            encoding="utf-8",
+            timeout=60,
+            check=False,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        )
+        if completed.returncode:
+            raise HTTPException(
+                422, completed.stderr.strip() or "Author analysis failed"
+            )
+        return AuthorAnalysisReceipt.model_validate_json(completed.stdout)
 
     def launch_call(command: LaunchRequest) -> str:
         try:

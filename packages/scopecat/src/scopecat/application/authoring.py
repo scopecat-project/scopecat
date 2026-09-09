@@ -60,6 +60,8 @@ from scopecat.program.controls import ControlScalar, ControlSet
 from scopecat.program.definitions import ExperimentInvocation
 from scopecat.program.scans import AxisSpec
 from scopecat.program.values import MetadataValue
+from scopecat.project_sources import loading_revision
+from scopecat.records.author_revision import AuthorRevisionRef
 from scopecat.records.config import ConfigProfileSnapshot
 from scopecat.records.config_context import ConfigContextRef
 from scopecat.records.content import Sha256ContentHash
@@ -75,6 +77,7 @@ class AuthorLaunchIntent(BaseModel):
     edits: dict[str, ControlEdit]
     actor: str
     request_hash: Sha256ContentHash
+    code_revision: AuthorRevisionRef | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -86,6 +89,9 @@ class AuthorExperiment:
     source: Mapping[str, str]
     title: str
     description: str
+    code_revision: AuthorRevisionRef | None = field(
+        default_factory=loading_revision.get
+    )
     fingerprint: Sha256ContentHash = field(init=False)
 
     def __post_init__(self) -> None:
@@ -95,7 +101,10 @@ class AuthorExperiment:
             "fingerprint",
             sha256_json_hash(
                 {
-                    "codec": "scopecat.author-experiment.v1",
+                    "codec": "scopecat.author-experiment.v2",
+                    "code_revision": self.code_revision.model_dump(mode="json")
+                    if self.code_revision
+                    else None,
                     "id": self.invocation.definition.id,
                     "declaration": dict(self.source),
                     "controls": [
@@ -139,8 +148,13 @@ class AuthorExperiment:
         return {
             "author_declaration": dict(self.source),
             "author_fingerprint": self.fingerprint,
-            "author_source_scope": (
-                "declaration-and-controls; not transitive helper identity"
+            "author_source_scope": "declared local source roots"
+            if self.code_revision
+            else "declaration-and-controls; not transitive helper identity",
+            **(
+                {"author_code_revision": self.code_revision.content_hash}
+                if self.code_revision
+                else {}
             ),
         }
 
@@ -223,6 +237,8 @@ class _AuthorProcedure:
     def run(self, context: object, intent: object) -> None:
         context = cast("LabProcedureContext", context)
         selected = self.validate_intent(intent)
+        if selected.code_revision != self.experiment.code_revision:
+            raise ValueError("procedure must load its admitted author revision")
         context.run(
             "experiment",
             self.experiment.edit(config=selected.config, edits=selected.edits),
@@ -367,6 +383,7 @@ class AuthorExperiments:
             return LaunchPreview(
                 experiment_id=selected.entry.id,
                 request_hash=request.request_hash,
+                code_revision=selected.code_revision,
                 config_source=source,
                 point_count=preview.initial_point_count,
                 controls=control_values(selected.controls, invocation, config=config),
@@ -398,6 +415,7 @@ class AuthorExperiments:
                 edits=request.control_edits,
                 actor=request.actor,
                 request_hash=request.request_hash,
+                code_revision=selected.code_revision,
             ),
             request_key=request.request_key,
             sample=launch_sample_selection(request, source),

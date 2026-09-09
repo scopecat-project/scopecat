@@ -19,6 +19,7 @@ from scopecat_server.storage.sqlite.project_store import SQLiteProjectStore
 from ..command_payloads import CommandPayloadService
 from .admission import AdmissionService
 from .analyses import AnalysisService
+from .author_revisions import AuthorRevisionService
 from .automation import AutomationService
 from .calibration_cohorts import CalibrationCohortService
 from .config import ConfigService
@@ -61,6 +62,7 @@ class DaemonApplication:
         self.project_root = Path(project_root).resolve()
         self.project_id = project_id
         self._project_store = project_store
+        self.author_revisions = AuthorRevisionService(self.project_root, project_store)
         self.config = config
         self.analyses = analyses
         self.runs = runs

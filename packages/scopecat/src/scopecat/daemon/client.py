@@ -13,6 +13,12 @@ import httpx2
 import pyarrow as pa
 from pydantic import BaseModel, ValidationError
 
+from scopecat.application.launch import (
+    LaunchCatalog,
+    LaunchPreview,
+    LaunchRequest,
+    LaunchSubmission,
+)
 from scopecat.automation import (
     ProcedureCancelCommand,
     ProcedureCancelReceipt,
@@ -216,6 +222,14 @@ from scopecat.kernel.content_identity import (
 from scopecat.kernel.errors import SessionClosedError
 from scopecat.measurements.recording_arrow import encode_measurement_append
 from scopecat.planning.catalog import InstrumentContractCatalog
+from scopecat.records.author_revision import (
+    AuthorAnalysisReceipt,
+    AuthorAnalysisRequest,
+    AuthorRefreshRequest,
+    AuthorRevisionBundle,
+    AuthorRevisionRef,
+    AuthorRevisionState,
+)
 from scopecat.records.config import ConfigProfileSnapshot
 from scopecat.records.content import (
     BlobPayloadBody,
@@ -327,6 +341,41 @@ class DaemonClient:
 
     def close(self) -> None:
         self._http.close()
+
+    def author_launch_catalog(self) -> LaunchCatalog:
+        return self._get_model(f"{_API_PREFIX}/experiment-launcher", LaunchCatalog)
+
+    def author_launch_preview(self, request: LaunchRequest) -> LaunchPreview:
+        return self._post_model(
+            f"{_API_PREFIX}/experiment-launcher/preview", request, LaunchPreview
+        )
+
+    def author_launch_submit(self, request: LaunchRequest) -> LaunchSubmission:
+        return self._post_model(
+            f"{_API_PREFIX}/experiment-launcher/submit", request, LaunchSubmission
+        )
+
+    def author_revision_state(self) -> AuthorRevisionState:
+        return self._get_model(f"{_API_PREFIX}/author-revisions", AuthorRevisionState)
+
+    def author_revision(self, ref: AuthorRevisionRef) -> AuthorRevisionBundle:
+        return self._get_model(
+            f"{_API_PREFIX}/author-revisions/{ref.content_hash}", AuthorRevisionBundle
+        )
+
+    def refresh_authors(self, *, expected_generation: int) -> AuthorRevisionState:
+        return self._post_model(
+            f"{_API_PREFIX}/author-revisions/refresh",
+            AuthorRefreshRequest(expected_generation=expected_generation),
+            AuthorRevisionState,
+        )
+
+    def analyze_author_revision(
+        self, request: AuthorAnalysisRequest
+    ) -> AuthorAnalysisReceipt:
+        return self._post_model(
+            f"{_API_PREFIX}/author-revisions/analyze", request, AuthorAnalysisReceipt
+        )
 
     def health(self) -> DaemonHealth:
         return self._get_model(f"{_API_PREFIX}/health", DaemonHealth)
