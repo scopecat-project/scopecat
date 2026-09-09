@@ -43,6 +43,8 @@ export function configSourceLabel(entry: ConfigRegistryEntry): string {
       return "Direct profile";
     case "manual_parameter_updates":
       return "Typed parameter edit";
+    case "parameter_context":
+      return "Parameter context";
     case "candidate_config":
       return "Candidate config";
     case "calibration_cohort_merge":
@@ -59,6 +61,13 @@ function configSourceSearchTerms(
     case "direct_config_profile":
     case "manual_parameter_updates":
       return [];
+    case "parameter_context":
+      return [
+        source.context.label,
+        source.context.working_point_id,
+        source.context.sample.sample_id,
+        source.context.base.entry_id,
+      ];
     case "candidate_config":
       return [source.run_id, source.proposal_id];
     case "calibration_cohort_merge":

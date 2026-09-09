@@ -140,10 +140,12 @@ function RegistryEntryButton({
       />
       <span className="grid min-w-0 gap-[3px]">
         <strong className="overflow-hidden text-[0.71rem] text-ellipsis whitespace-nowrap">
-          {entry.id}
+          {entry.source.kind === "parameter_context" ? entry.source.context.label : entry.id}
         </strong>
         <small className="overflow-hidden text-[0.57rem] text-ellipsis whitespace-nowrap text-text-dim">
-          {configSourceLabel(entry)}
+          {entry.source.kind === "parameter_context"
+            ? `${entry.source.context.sample.sample_id} r${entry.source.context.sample.revision} / ${entry.source.context.working_point_id} · ${entry.id}`
+            : configSourceLabel(entry)}
           {entry.recorded_at ? ` · ${formatRelative(entry.recorded_at)}` : ""}
         </small>
         <code className="overflow-hidden text-[0.57rem] text-ellipsis whitespace-nowrap text-text-dim">

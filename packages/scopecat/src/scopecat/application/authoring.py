@@ -29,6 +29,7 @@ from scopecat.application.controls import (
 from scopecat.application.launch import (
     LaunchCatalog,
     LaunchCatalogEntry,
+    LaunchConfigSource,
     LaunchInputSchema,
     LaunchPreview,
     LaunchProvider,
@@ -36,9 +37,17 @@ from scopecat.application.launch import (
     LaunchResult,
     LaunchSubmission,
 )
+from scopecat.application.launch_config import (
+    launch_config_generation,
+    launch_preflight_configuration,
+    launch_preflight_meaning,
+    launch_sample_selection,
+    resolve_launch_config,
+)
 from scopecat.authoring.experiments import Experiment
 from scopecat.automation.definition import RegisteredProcedure
 from scopecat.automation.models import ProcedureDefinitionRef, procedure_intent_hash
+from scopecat.daemon.views import ConfigContextResolution
 from scopecat.kernel.content_identity import sha256_json_hash
 from scopecat.kernel.frozen import thaw_json_value
 from scopecat.kernel.python_source import python_source_identity
@@ -52,8 +61,8 @@ from scopecat.program.definitions import ExperimentInvocation
 from scopecat.program.scans import AxisSpec
 from scopecat.program.values import MetadataValue
 from scopecat.records.config import ConfigProfileSnapshot
+from scopecat.records.config_context import ConfigContextRef
 from scopecat.records.content import Sha256ContentHash
-from scopecat.records.run import ConfigRegistryRunConfigSource
 from scopecat.records.sample import SampleSelector
 
 
@@ -62,7 +71,7 @@ class AuthorLaunchIntent(BaseModel):
 
     model_config = ConfigDict(extra="forbid", frozen=True)
     config: ConfigProfileSnapshot
-    config_source: ConfigRegistryRunConfigSource
+    config_source: LaunchConfigSource
     edits: dict[str, ControlEdit]
     actor: str
     request_hash: Sha256ContentHash
@@ -139,7 +148,11 @@ class AuthorExperiment:
         self,
         lab: LabClient,
         *,
-        config: str | ConfigProfileSnapshot | None = None,
+        config: str
+        | ConfigProfileSnapshot
+        | ConfigContextRef
+        | ConfigContextResolution
+        | None = None,
         edits: Mapping[str, ControlScalar | AxisSpec] | None = None,
     ) -> PreparedLabExperiment:
         prepared = lab.prepare(self.invocation, config=config)
@@ -154,7 +167,11 @@ class AuthorExperiment:
         self,
         lab: LabClient,
         *,
-        config: str | ConfigProfileSnapshot | None = None,
+        config: str
+        | ConfigProfileSnapshot
+        | ConfigContextRef
+        | ConfigContextResolution
+        | None = None,
         edits: Mapping[str, ControlScalar | AxisSpec] | None = None,
         sample: str | SampleSelector | None = None,
         operator: str | None = None,
@@ -341,10 +358,12 @@ class AuthorExperiments:
             raise ValueError(
                 "author experiments accept declared control edits, not extra inputs"
             )
-        config, source = _launch_config(lab, request)
+        config, source = resolve_launch_config(lab, request)
         invocation = selected.edit(config=config, edits=request.control_edits)
         if request.action == "preview":
-            preview = lab.preview(invocation, config=config)
+            preview = lab.preview_invocation(
+                invocation, config=config, config_source=source
+            )
             return LaunchPreview(
                 experiment_id=selected.entry.id,
                 request_hash=request.request_hash,
@@ -358,16 +377,14 @@ class AuthorExperiments:
                             preview,
                             stage_id="experiment",
                             label=selected.title,
-                            configuration="accepted",
+                            configuration=launch_preflight_configuration(source),
                             executions=ExactQuantity(
                                 value=1,
                                 unit="runs",
                                 basis="One authored experiment",
                             ),
                             config_content_hash=source.content_hash,
-                            configuration_meaning=(
-                                "Explicit accepted configuration; no publication."
-                            ),
+                            configuration_meaning=launch_preflight_meaning(source),
                         ),
                     ),
                     scope_basis="One authored run; all selected points.",
@@ -383,8 +400,8 @@ class AuthorExperiments:
                 request_hash=request.request_hash,
             ),
             request_key=request.request_key,
-            sample=request.sample,
-            expected_config_generation=source.registry_generation,
+            sample=launch_sample_selection(request, source),
+            expected_config_generation=launch_config_generation(source),
         )
         return LaunchSubmission(procedure_id=admitted.id)
 
@@ -398,30 +415,3 @@ class AuthorLaunchProvider:
 
     def __call__(self, lab: LabClient, request: LaunchRequest) -> LaunchResult:
         return self.authors.launch(lab, request, self.maintained)
-
-
-def _launch_config(
-    lab: LabClient, request: LaunchRequest
-) -> tuple[ConfigProfileSnapshot, ConfigRegistryRunConfigSource]:
-    if request.action == "preview":
-        config, source = lab.config.resolve_with_source("active")
-        assert isinstance(source, ConfigRegistryRunConfigSource)
-        return config, source
-    source = request.config_source
-    assert source is not None and source.registry_generation is not None
-    snapshot = lab.config.entry(source.entry_id)
-    if (
-        source.selector != "active"
-        or source.config_ref != snapshot.entry.config_ref
-        or source.content_hash != snapshot.entry.content_hash
-    ):
-        raise ValueError(
-            "preview configuration reference does not match its immutable snapshot"
-        )
-    active = lab.config.active()
-    if (
-        active.activation.generation == source.registry_generation
-        and active.entry.id != source.entry_id
-    ):
-        raise ValueError("preview configuration binding does not match its generation")
-    return snapshot.config, source

@@ -30,7 +30,7 @@ export type ConfigDraftPreview = Omit<
   config?: ConfigProfileSnapshot | null;
   deltas: ParameterValueDelta[];
 };
-export type ConfigProfileSnapshot = components["schemas"]["ConfigProfileSnapshot-Input"];
+export type ConfigProfileSnapshot = components["schemas"]["ConfigProfileSnapshot"];
 export type ConfigRegistryEntry = components["schemas"]["ConfigRegistryEntry"];
 export type ConfigRegistryPage = GetResponse<"/api/v1/config-registry">;
 export type ConfigActivationPage = GetResponse<"/api/v1/config-registry/activations">;
@@ -119,7 +119,7 @@ export type EventPage = GetResponse<"/api/v1/events">;
 export type ParameterAtom = components["schemas"]["ParameterAtomValue"];
 export type ParameterDefinition = components["schemas"]["ParameterDefinition"];
 export type ParameterEntity = components["schemas"]["EntityRef"];
-export type ParameterUpdate = components["schemas"]["ParameterUpdate"];
+export type ParameterUpdate = components["schemas"]["ConfigDraftCommand"]["updates"][number];
 export type ParameterQuantity = components["schemas"]["scopecat__kernel__quantity__Quantity"];
 export type ParameterScalarType = components["schemas"]["PersistableScalarWire"];
 export type ParameterValueDelta = Omit<
@@ -173,6 +173,6 @@ export type SampleRevision = GetResponse<"/api/v1/samples/{sample_id}/revisions/
 export type SampleRevisionPage = GetResponse<"/api/v1/samples/{sample_id}/revisions">;
 export type SampleSummary = SamplePage["items"][number];
 export type SampleView = GetResponse<"/api/v1/samples/{sample_id}">;
-export type StoredParameterValue = components["schemas"]["StoredParameterValue-Input"];
+export type StoredParameterValue = components["schemas"]["StoredParameterValue"];
 export type TableParameterType = Extract<ParameterValueType, { shape: "table" }>;
 export type TableParameterValue = Extract<StoredParameterValue, { shape: "table" }>;

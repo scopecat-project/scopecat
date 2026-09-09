@@ -10,10 +10,17 @@ from scopecat.application.controls import (
 )
 from scopecat.application.launch import (
     LaunchCatalogEntry,
+    LaunchConfigSource,
     LaunchInputSchema,
     LaunchPreview,
     LaunchRequest,
     LaunchSubmission,
+)
+from scopecat.application.launch_config import (
+    launch_config_generation,
+    launch_preflight_configuration,
+    launch_preflight_meaning,
+    launch_sample_selection,
 )
 from scopecat.automation import procedure
 from scopecat.planning.preflight import (
@@ -22,7 +29,6 @@ from scopecat.planning.preflight import (
     summarize_preflight,
 )
 from scopecat.records.content import Sha256ContentHash
-from scopecat.records.run import ConfigRegistryRunConfigSource
 
 from reference_lab.launch_config import launch_config
 from reference_lab.workflows.frequency_amplitude import CONTROLS, frequency_amplitude
@@ -47,7 +53,7 @@ CONTROL_ENTRY = LaunchCatalogEntry(
 
 
 class ControlLaunchIntent(TemperatureDiagnosticIntent):
-    config_source: ConfigRegistryRunConfigSource
+    config_source: LaunchConfigSource
     request_hash: Sha256ContentHash
     actor: str
     edits: dict[str, ControlEdit]
@@ -88,7 +94,9 @@ def control_launch(
         CONTROLS, frequency_amplitude(), config=config, edits=request.control_edits
     )
     if request.action == "preview":
-        preview = lab.preview(invocation, config=config)
+        preview = lab.preview_invocation(
+            invocation, config=config, config_source=source
+        )
         return LaunchPreview(
             experiment_id=CONTROL_ENTRY.id,
             request_hash=request.request_hash,
@@ -102,23 +110,19 @@ def control_launch(
                         preview,
                         stage_id="signal",
                         label="Configured signal model",
-                        configuration="accepted",
+                        configuration=launch_preflight_configuration(source),
                         executions=ExactQuantity(
                             value=1,
                             unit="runs",
                             basis="One declared analytic model run",
                         ),
                         config_content_hash=source.content_hash,
-                        configuration_meaning=(
-                            "Uses the reviewed q0 carrier "
-                            "without changing configuration."
-                        ),
+                        configuration_meaning=launch_preflight_meaning(source),
                     ),
                 ),
                 scope_basis="One analytic model run; all selected grid points.",
             ),
         )
-    assert source.registry_generation is not None
     admitted = lab.procedures.submit(
         launch_frequency_amplitude,
         ControlLaunchIntent(
@@ -129,7 +133,7 @@ def control_launch(
             edits=request.control_edits,
         ),
         request_key=request.request_key,
-        sample=request.sample,
-        expected_config_generation=source.registry_generation,
+        sample=launch_sample_selection(request, source),
+        expected_config_generation=launch_config_generation(source),
     )
     return LaunchSubmission(procedure_id=admitted.id)

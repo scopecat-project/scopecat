@@ -24,6 +24,7 @@ from scopecat.kernel.quantity import Quantity
 from scopecat.planning.preflight import ExactQuantity, PreflightStage, UnknownQuantity
 from scopecat.project import Project, load_project
 from scopecat.records.measurement import MeasurementScalar
+from scopecat.records.run import ConfigRegistryRunConfigSource
 from scopecat_server.lifecycle import start_project, stop_project
 from scopecat_testkit.project_loading import isolated_project_imports
 
@@ -188,6 +189,7 @@ def test_real_http_preview_shares_catalog_and_never_admits_acquisition(
                     stage.inspections[0].artifact_fingerprint
                 )
         assert preview.point_count == (1 if experiment == "temperature" else 2)
+        assert isinstance(preview.config_source, ConfigRegistryRunConfigSource)
         assert preview.config_source.entry_id == active.entry.id
         assert client.list_runs() == before
         assert lab.config.active() == active

@@ -17,6 +17,7 @@ import {
   type SubmissionAttempt,
   type SubmissionRequest,
 } from "./launch-submission";
+import type { ConfigContextResolution } from "../config/config-api";
 import type { LaunchCatalogEntry, LaunchPreview } from "./launch-api";
 
 export interface LaunchDraft {
@@ -37,6 +38,8 @@ export interface LaunchDraft {
 type DraftUpdate = (current: LaunchDraft) => LaunchDraft;
 interface DraftContext {
   projectId: string | undefined;
+  selectedContext: ConfigContextResolution | undefined;
+  selectContext: (resolution?: ConfigContextResolution) => void;
   draft: LaunchDraft | undefined;
   select: (entry: LaunchCatalogEntry, reset?: boolean) => void;
   update: (change: DraftUpdate) => void;
@@ -114,6 +117,7 @@ function ProjectDraft({
   children: ReactNode;
 }) {
   const [draft, setDraft] = useState<LaunchDraft>();
+  const [selectedContext, setSelectedContext] = useState<ConfigContextResolution>();
   const [attempt, setAttempt] = useState<SubmissionAttempt>();
   const queryClient = useQueryClient();
   const latest = useRef(draft);
@@ -129,13 +133,7 @@ function ProjectDraft({
   }, []);
   const source = draft?.preview?.config_source ?? attempt?.request.config_source;
   const configuration = useQuery({
-    queryKey: [
-      "config",
-      "launch-context",
-      projectId,
-      source?.entry_id,
-      source?.registry_generation,
-    ],
+    queryKey: ["config", "launch-context", projectId, source],
     enabled: Boolean(projectId && (draft?.preview || attempt?.request.config_source)),
     queryFn: async ({ signal }) =>
       (
@@ -147,11 +145,7 @@ function ProjectDraft({
         )
       ).activation ?? null,
   });
-  const matchesConfiguration =
-    configuration.isSuccess &&
-    (source == null ||
-      (source.registry_generation === configuration.data?.generation &&
-        source.entry_id === configuration.data?.entry_id));
+  const matchesConfiguration = configuration.isSuccess && matchesActive(source, configuration.data);
   if (
     draft?.preview &&
     source &&
@@ -239,6 +233,19 @@ function ProjectDraft({
     <Context
       value={{
         projectId,
+        selectedContext,
+        selectContext: (resolved) => {
+          if (!alive.current) return;
+          setSelectedContext(resolved);
+          setDraft((current) =>
+            current
+              ? invalidateDraft(
+                  current,
+                  "Parameter context changed. Preview again before starting.",
+                )
+              : current,
+          );
+        },
         draft,
         attempt,
         submit,
@@ -248,8 +255,7 @@ function ProjectDraft({
           attempt?.definition === draft?.definition &&
           configuration.isSuccess &&
           !configuration.isFetching &&
-          configuration.data?.generation === attempt?.request.config_source?.registry_generation &&
-          configuration.data?.entry_id === attempt?.request.config_source?.entry_id,
+          matchesActive(attempt?.request.config_source, configuration.data),
         refreshConfiguration: () => {
           void queryClient.invalidateQueries({ queryKey: ["config", "launch-context", projectId] });
         },
@@ -268,4 +274,15 @@ export function useLaunchDraft() {
   const context = useContext(Context);
   if (!context) throw new Error("Launch workspace requires its project draft provider");
   return context;
+}
+
+function matchesActive(
+  source: LaunchPreview["config_source"] | null | undefined,
+  activation: { generation: number; entry_id: string } | null | undefined,
+) {
+  if (source == null) return true;
+  return source.kind === "parameter_context"
+    ? source.lab_generation === activation?.generation
+    : source.registry_generation === activation?.generation &&
+        source.entry_id === activation?.entry_id;
 }

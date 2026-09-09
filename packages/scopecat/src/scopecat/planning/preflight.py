@@ -68,7 +68,7 @@ class PreflightStage(_PreflightModel):
     id: str
     label: str
     experiment_id: str
-    configuration: Literal["accepted", "proposed_candidate"]
+    configuration: Literal["accepted", "proposed_candidate", "selected_context"]
     config_content_hash: ConfigContentHash
     configuration_meaning: str
     executions: PreflightQuantity
@@ -102,7 +102,7 @@ def summarize_preflight(
     stage_id: str,
     label: str,
     config_content_hash: ConfigContentHash,
-    configuration: Literal["accepted", "proposed_candidate"],
+    configuration: Literal["accepted", "proposed_candidate", "selected_context"],
     configuration_meaning: str,
     executions: PreflightQuantity,
     shots_per_point_per_entity: PreflightQuantity | None = None,

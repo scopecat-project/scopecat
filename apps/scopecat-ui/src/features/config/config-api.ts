@@ -123,7 +123,7 @@ export async function publishConfig(command: ConfigPublishCommand): Promise<Conf
       }),
     ),
   );
-  return response as ConfigPublishReceipt;
+  return response;
 }
 
 export function createConfigOperationId(purpose: string): string {
@@ -196,4 +196,23 @@ function object(value: unknown, label: string): Record<string, unknown> {
 
 function optionalText(value: unknown): string | undefined {
   return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
+export type ConfigContextRef = components["schemas"]["ConfigContextRef"];
+export type ConfigContextResolution = Awaited<ReturnType<typeof resolveConfigContext>>;
+export type ConfigContextSaveCommand = components["schemas"]["ConfigContextSaveCommand"];
+
+export async function saveConfigContext(command: ConfigContextSaveCommand) {
+  return retryOneTransportFailure(() =>
+    apiData(apiClient.POST("/api/v1/config-registry/contexts", { body: command })),
+  );
+}
+
+export async function resolveConfigContext(
+  context: ConfigContextRef,
+  overrides: components["schemas"]["ConfigContextResolveCommand"]["overrides"] = [],
+) {
+  return apiData(
+    apiClient.POST("/api/v1/config-registry/contexts/resolve", { body: { context, overrides } }),
+  );
 }

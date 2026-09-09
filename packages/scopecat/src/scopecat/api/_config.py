@@ -16,6 +16,7 @@ from scopecat.config.candidates import (
 )
 from scopecat.config.drafts import ConfigDraft
 from scopecat.config.inventory import InstrumentInventoryChange
+from scopecat.config.parameter_updates import ParameterUpdate
 from scopecat.config.registry.records import (
     CandidateAcceptance,
     ConfigRegistryActivationRecord,
@@ -27,6 +28,7 @@ from scopecat.daemon.client import DaemonClient, DaemonNotFoundError
 from scopecat.daemon.views import (
     ActiveConfigView,
     ConfigActivationPage,
+    ConfigContextResolution,
     ConfigDraftPreview,
     ConfigEntryView,
     ConfigRegistryPage,
@@ -35,6 +37,8 @@ from scopecat.daemon.views import (
 from scopecat.daemon.wire import (
     CandidateConfigRevisionSource,
     ConfigActivationReceipt,
+    ConfigContextResolveCommand,
+    ConfigContextSaveCommand,
     ConfigDraftCommand,
     ConfigEntryActivationCommand,
     ConfigPublishCommand,
@@ -49,11 +53,14 @@ from scopecat.records.analysis import (
     ProjectAnalysisDecisionReference,
 )
 from scopecat.records.config import ConfigProfileSnapshot, config_content_hash
+from scopecat.records.config_context import ConfigContextRef
+from scopecat.records.parameter import ParameterSnapshot
 from scopecat.records.run import (
     AnalysisCandidateRunConfigSource,
     ConfigRegistryRunConfigSource,
     RunConfigSource,
 )
+from scopecat.records.sample import SampleSelector
 from scopecat.runs.selectors import RunSelector
 
 
@@ -65,6 +72,46 @@ class LabConfigOperations:
     runs: RemoteRunOperations
     default_config: ConfigProfileSnapshot | None
     operator: str
+
+    def save_context(
+        self,
+        *,
+        entry_id: str,
+        base: ConfigContextRef,
+        sample: SampleSelector,
+        working_point_id: str,
+        label: str,
+        parameters: ParameterSnapshot | None = None,
+        actor: str | None = None,
+        note: str = "",
+    ) -> ConfigEntryView:
+        if sample.revision is None:
+            current = self.client.get_sample(sample.sample_id)
+            sample = sample.model_copy(
+                update={"revision": current.record.active_revision}
+            )
+        return self.client.save_context(
+            ConfigContextSaveCommand(
+                entry_id=entry_id,
+                base=base,
+                sample=sample,
+                working_point_id=working_point_id,
+                label=label,
+                parameters=parameters,
+                actor=actor or self.operator,
+                note=note,
+            )
+        )
+
+    def resolve_context(
+        self,
+        context: ConfigContextRef,
+        *,
+        overrides: tuple[ParameterUpdate, ...] = (),
+    ) -> ConfigContextResolution:
+        return self.client.resolve_context(
+            ConfigContextResolveCommand(context=context, overrides=overrides)
+        )
 
     def registry(
         self,
@@ -90,21 +137,40 @@ class LabConfigOperations:
 
     def edit(
         self,
-        config: str | ConfigProfileSnapshot | CandidateConfig | None = None,
+        config: str
+        | ConfigProfileSnapshot
+        | CandidateConfig
+        | ConfigContextRef
+        | ConfigContextResolution
+        | None = None,
     ) -> ConfigDraft:
         return ConfigDraft.from_snapshot(self.resolve(config))
 
     def resolve(
         self,
-        config: str | ConfigProfileSnapshot | CandidateConfig | None = None,
+        config: str
+        | ConfigProfileSnapshot
+        | CandidateConfig
+        | ConfigContextRef
+        | ConfigContextResolution
+        | None = None,
     ) -> ConfigProfileSnapshot:
         return self.resolve_with_source(config)[0]
 
     def resolve_with_source(
         self,
-        config: str | ConfigProfileSnapshot | CandidateConfig | None = None,
+        config: str
+        | ConfigProfileSnapshot
+        | CandidateConfig
+        | ConfigContextRef
+        | ConfigContextResolution
+        | None = None,
     ) -> tuple[ConfigProfileSnapshot, RunConfigSource | None]:
         selected = self.default_config if config is None else config
+        if isinstance(selected, ConfigContextRef):
+            selected = self.resolve_context(selected)
+        if isinstance(selected, ConfigContextResolution):
+            return selected.config, selected.config_source
         if selected is None or selected == "active":
             active = self.client.active_config()
             return (

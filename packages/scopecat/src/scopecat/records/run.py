@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from scopecat.kernel.run_outcome import RunOutcome, RunStatus, utc_now
 from scopecat.records.config import ConfigContentHash
+from scopecat.records.config_context import ContextRunConfigSource
 from scopecat.records.sample import SampleBinding
 
 
@@ -47,7 +48,9 @@ class AnalysisCandidateRunConfigSource(BaseModel):
 
 
 type RunConfigSource = Annotated[
-    ConfigRegistryRunConfigSource | AnalysisCandidateRunConfigSource,
+    ConfigRegistryRunConfigSource
+    | AnalysisCandidateRunConfigSource
+    | ContextRunConfigSource,
     Field(discriminator="kind"),
 ]
 

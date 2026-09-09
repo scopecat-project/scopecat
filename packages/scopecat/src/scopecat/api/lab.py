@@ -29,7 +29,12 @@ from scopecat.automation.calibration_definition import CalibrationRegistry
 from scopecat.config.candidates import CandidateConfig
 from scopecat.control.models import ControlRunState
 from scopecat.daemon.client import DaemonClient
-from scopecat.daemon.views import DaemonHealth, ProjectAnalysisPage, SampleAnalysisPage
+from scopecat.daemon.views import (
+    ConfigContextResolution,
+    DaemonHealth,
+    ProjectAnalysisPage,
+    SampleAnalysisPage,
+)
 from scopecat.inspection import CompiledProgramInspectionQuery
 from scopecat.planning.preview import PreviewCoordinateMode
 from scopecat.planning.preview_models import ExperimentPreview
@@ -37,6 +42,7 @@ from scopecat.planning.system import ExperimentSystemBuilder
 from scopecat.program.values import MetadataValue
 from scopecat.records.analysis import SampleAnalysisSubject
 from scopecat.records.config import ConfigProfileSnapshot
+from scopecat.records.config_context import ConfigContextRef
 from scopecat.records.run import RunConfigSource
 from scopecat.records.sample import SampleSelector
 from scopecat.runs.selectors import RunSelector
@@ -73,6 +79,7 @@ class PreparedLabExperiment:
         return self.lab.preview_invocation(
             self.invocation,
             config=self.config,
+            config_source=self.config_source,
             point=point,
             coordinates=coordinates,
             coordinate_mode=coordinate_mode,
@@ -124,6 +131,7 @@ class PreparedLabExperiment:
         return self.lab.review_invocation(
             self.invocation,
             config=self.config,
+            config_source=self.config_source,
             name=name,
             tags=tags,
             description=description,
@@ -389,7 +397,12 @@ class LabClient:
 
     def resolve_config(
         self,
-        config: str | ConfigProfileSnapshot | CandidateConfig | None = None,
+        config: str
+        | ConfigProfileSnapshot
+        | CandidateConfig
+        | ConfigContextRef
+        | ConfigContextResolution
+        | None = None,
     ) -> ConfigProfileSnapshot:
         return self._config.resolve(config)
 
@@ -397,7 +410,12 @@ class LabClient:
         self,
         experiment: ExperimentSpec,
         *,
-        config: str | ConfigProfileSnapshot | CandidateConfig | None = None,
+        config: str
+        | ConfigProfileSnapshot
+        | CandidateConfig
+        | ConfigContextRef
+        | ConfigContextResolution
+        | None = None,
     ) -> PreparedLabExperiment:
         invocation = _experiment_invocation(experiment)
         resolved_config, config_source = self._config.resolve_with_source(config)
@@ -412,7 +430,12 @@ class LabClient:
         self,
         experiment: ExperimentSpec,
         *,
-        config: str | ConfigProfileSnapshot | CandidateConfig | None = None,
+        config: str
+        | ConfigProfileSnapshot
+        | CandidateConfig
+        | ConfigContextRef
+        | ConfigContextResolution
+        | None = None,
         point: PreviewPoint = "first",
         coordinates: Mapping[str, object] | None = None,
         coordinate_mode: PreviewCoordinateMode = "exact",
@@ -445,7 +468,12 @@ class LabClient:
         self,
         experiment: ExperimentSpec,
         *,
-        config: str | ConfigProfileSnapshot | CandidateConfig | None = None,
+        config: str
+        | ConfigProfileSnapshot
+        | CandidateConfig
+        | ConfigContextRef
+        | ConfigContextResolution
+        | None = None,
         name: str | None = None,
         tags: tuple[str, ...] = (),
         description: str | None = None,
@@ -470,7 +498,12 @@ class LabClient:
         self,
         experiment: ExperimentSpec,
         *,
-        config: str | ConfigProfileSnapshot | CandidateConfig | None = None,
+        config: str
+        | ConfigProfileSnapshot
+        | CandidateConfig
+        | ConfigContextRef
+        | ConfigContextResolution
+        | None = None,
         name: str | None = None,
         tags: tuple[str, ...] = (),
         description: str | None = None,
@@ -496,6 +529,7 @@ class LabClient:
         invocation: ExperimentInvocation,
         *,
         config: ConfigProfileSnapshot,
+        config_source: RunConfigSource | None = None,
         point: PreviewPoint = "first",
         coordinates: Mapping[str, object] | None = None,
         coordinate_mode: PreviewCoordinateMode = "exact",
@@ -511,6 +545,7 @@ class LabClient:
         return self._runner.preview(
             invocation,
             config=config,
+            config_source=config_source,
             point=point,
             coordinates=coordinates,
             coordinate_mode=coordinate_mode,
@@ -557,6 +592,7 @@ class LabClient:
         invocation: ExperimentInvocation,
         *,
         config: ConfigProfileSnapshot,
+        config_source: RunConfigSource | None = None,
         name: str | None = None,
         tags: tuple[str, ...] = (),
         description: str | None = None,
@@ -568,6 +604,7 @@ class LabClient:
         return self._runner.review(
             invocation,
             config=config,
+            config_source=config_source,
             name=name,
             tags=tags,
             description=description,

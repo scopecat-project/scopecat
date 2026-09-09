@@ -139,6 +139,7 @@ from scopecat.daemon.views import (
     ActiveConfigView,
     AnalysisContentBytesView,
     ConfigActivationPage,
+    ConfigContextResolution,
     ConfigDraftPreview,
     ConfigEntryView,
     ConfigRegistryPage,
@@ -180,6 +181,8 @@ from scopecat.daemon.wire import (
     CalibrationPublicationCommand,
     CalibrationPublicationReceipt,
     ConfigActivationReceipt,
+    ConfigContextResolveCommand,
+    ConfigContextSaveCommand,
     ConfigDraftCommand,
     ConfigEntryActivationCommand,
     ConfigPublishCommand,
@@ -481,6 +484,16 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
             limit=limit,
             before=before,
         )
+
+    @app.post(f"{_API_PREFIX}/config-registry/contexts")
+    def save_context(command: ConfigContextSaveCommand) -> ConfigEntryView:
+        return application.config.save_context(command)
+
+    @app.post(f"{_API_PREFIX}/config-registry/contexts/resolve")
+    def resolve_context(
+        command: ConfigContextResolveCommand,
+    ) -> ConfigContextResolution:
+        return application.config.resolve_context(command)
 
     @app.get(f"{_API_PREFIX}/config-registry/active")
     def get_active_config() -> ActiveConfigView:

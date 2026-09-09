@@ -99,7 +99,7 @@ export function ConfigEntryInspector({
             Edit parameters
           </button>
         )}
-        {!active && (
+        {!active && entry.source.kind !== "parameter_context" && (
           <button
             className={classes(primaryButton, "max-[680px]:justify-self-start")}
             type="button"
@@ -198,6 +198,44 @@ function EntryProvenance({
   candidateAnalysisError: Error | null;
 }) {
   const source = entry.source;
+  if (source.kind === "parameter_context") {
+    return (
+      <div className={provenance}>
+        <div>
+          <strong>{source.context.label}</strong>
+          <p className={provenanceCopy}>
+            Sample {source.context.sample.sample_id} · revision {source.context.sample.revision} ·
+            working point {source.context.working_point_id}. Saved trial parameters; calibration
+            validity is not implied.
+          </p>
+          <button
+            className={secondaryButton}
+            onClick={() => onSelectEntry(source.context.base.entry_id)}
+          >
+            Open source {source.context.base.entry_id}
+          </button>
+          <dl>
+            {(source.context.value_origins ?? []).map((origin, index) => (
+              <div key={index}>
+                <dt>
+                  {origin.parameter_id}
+                  {origin.row_index != null
+                    ? `[${origin.row_index}]`
+                    : Object.keys(origin.key ?? {}).length
+                      ? ` ${JSON.stringify(origin.key)}`
+                      : ""}
+                  {origin.field_id ? `.${origin.field_id}` : ""}
+                </dt>
+                <dd>
+                  {origin.layer} · {origin.entry.entry_id}
+                </dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+      </div>
+    );
+  }
   if (source.kind === "direct_config_profile") {
     return (
       <div className={provenance}>

@@ -165,6 +165,7 @@ class LocalDaemonRuntime:
                 samples=samples,
             )
             config_service = ConfigService(
+                samples=samples,
                 control=control,
                 config_registry=config_registry,
                 config_operations=config_operations,

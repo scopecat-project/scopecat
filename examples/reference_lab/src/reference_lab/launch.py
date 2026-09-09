@@ -11,12 +11,19 @@ from scopecat.api.procedures import LabProcedureContext
 from scopecat.application.launch import (
     LaunchCatalog,
     LaunchCatalogEntry,
+    LaunchConfigSource,
     LaunchInputSchema,
     LaunchPreview,
     LaunchRequest,
     LaunchResult,
     LaunchSubmission,
     validate_launch_control_edits,
+)
+from scopecat.application.launch_config import (
+    launch_config_generation,
+    launch_preflight_configuration,
+    launch_preflight_meaning,
+    launch_sample_selection,
 )
 from scopecat.automation import InterpretationRequest, procedure
 from scopecat.config.parameter_updates import materialize_parameter_updates
@@ -27,7 +34,6 @@ from scopecat.planning.preflight import (
 )
 from scopecat.records.config import config_content_hash
 from scopecat.records.content import Sha256ContentHash
-from scopecat.records.run import ConfigRegistryRunConfigSource
 
 from reference_lab.control_launch import CONTROL_ENTRY, control_launch
 from reference_lab.launch_config import launch_config
@@ -64,7 +70,7 @@ REVIEW_INSTRUCTIONS = (
 
 
 class LaunchIntent(TemperatureDiagnosticIntent):
-    config_source: ConfigRegistryRunConfigSource
+    config_source: LaunchConfigSource
     request_hash: Sha256ContentHash
     actor: str
     inputs: dict[str, JsonValue]
@@ -189,19 +195,19 @@ def launch_provider(lab: LabClient, request: LaunchRequest) -> LaunchResult:
     )
     if request.action == "preview":
         config, source = launch_config(lab, request)
-        preview = lab.preview(invocation, config=config)
+        preview = lab.preview_invocation(
+            invocation, config=config, config_source=source
+        )
         stages = [
             summarize_preflight(
                 preview,
                 stage_id="diagnostic" if entry.kind == "diagnostic" else "source",
                 label="Retained temperature diagnostic"
                 if entry.kind == "diagnostic"
-                else "Accepted-configuration source run",
-                configuration="accepted",
+                else "Selected-configuration source run",
+                configuration=launch_preflight_configuration(source),
                 config_content_hash=source.content_hash,
-                configuration_meaning=(
-                    "Uses the reviewed active configuration; no default changes."
-                ),
+                configuration_meaning=launch_preflight_meaning(source),
                 executions=ExactQuantity(
                     value=1,
                     unit="runs",
@@ -287,7 +293,6 @@ def launch_provider(lab: LabClient, request: LaunchRequest) -> LaunchResult:
             resolved_inputs=inputs.model_dump(mode="json"),
         )
     config, source = launch_config(lab, request)
-    assert source.registry_generation is not None
     intent = LaunchIntent(
         initial_config=config,
         config_source=source,
@@ -299,7 +304,7 @@ def launch_provider(lab: LabClient, request: LaunchRequest) -> LaunchResult:
         definition,
         intent,
         request_key=request.request_key,
-        sample=request.sample,
-        expected_config_generation=source.registry_generation,
+        sample=launch_sample_selection(request, source),
+        expected_config_generation=launch_config_generation(source),
     )
     return LaunchSubmission(procedure_id=admitted.id)

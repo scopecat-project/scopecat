@@ -80,7 +80,7 @@ export function ConfigParameters({
             )}
           >
             <GitCompareArrows size={13} aria-hidden="true" />
-            {changedCount === 0 ? "Matches default" : `${changedCount} changed`}
+            {changedCount === 0 ? "No parameter differences" : `${changedCount} changed`}
           </span>
         )}
       </header>
@@ -254,10 +254,10 @@ function ValueComparison({ before, after }: { before: ParameterAtom; after: Para
   return (
     <div
       className="grid w-[min(100%,440px)] grid-cols-[minmax(90px,1fr)_auto_minmax(90px,1fr)] items-center gap-3.5 max-[680px]:gap-2"
-      aria-label="Default to selected value"
+      aria-label="Comparison to selected value"
     >
       <span className="grid min-w-0 gap-[5px] text-center">
-        <small className="text-[0.52rem] font-extrabold text-text-dim uppercase">Default</small>
+        <small className="text-[0.52rem] font-extrabold text-text-dim uppercase">Comparison</small>
         <ParameterAtomView value={before} />
       </span>
       <GitCompareArrows className="text-yellow" size={16} aria-hidden="true" />

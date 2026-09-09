@@ -74,8 +74,14 @@ describe("shared reference-lab acceptance", () => {
             new URL(request.url).pathname.endsWith("/config-registry")
               ? {
                   activation: {
-                    entry_id: fixtures.launch_preview.config_source?.entry_id,
-                    generation: fixtures.launch_preview.config_source?.registry_generation,
+                    entry_id:
+                      fixtures.launch_preview.config_source.kind === "config_registry"
+                        ? fixtures.launch_preview.config_source.entry_id
+                        : undefined,
+                    generation:
+                      fixtures.launch_preview.config_source.kind === "config_registry"
+                        ? fixtures.launch_preview.config_source.registry_generation
+                        : undefined,
                   },
                   entries: [],
                 }
@@ -117,8 +123,14 @@ describe("shared reference-lab acceptance", () => {
         if (path.endsWith("/config-registry"))
           return Response.json({
             activation: {
-              entry_id: fixtures.controls_scan.config_source?.entry_id,
-              generation: fixtures.controls_scan.config_source?.registry_generation,
+              entry_id:
+                fixtures.controls_scan.config_source.kind === "config_registry"
+                  ? fixtures.controls_scan.config_source.entry_id
+                  : undefined,
+              generation:
+                fixtures.controls_scan.config_source.kind === "config_registry"
+                  ? fixtures.controls_scan.config_source.registry_generation
+                  : undefined,
             },
             entries: [],
           });

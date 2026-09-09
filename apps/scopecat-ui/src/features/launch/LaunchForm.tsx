@@ -20,6 +20,8 @@ export function LaunchForm({
   const fieldsByName = new Map(fields);
   const supported = fields.length === allFields.length;
   const {
+    selectedContext,
+    selectContext,
     draft: retained,
     update,
     select,
@@ -79,7 +81,9 @@ export function LaunchForm({
             action: "preview",
             experiment: entry.id,
             version: entry.version,
-            sample: sample.trim() || null,
+            sample: selectedContext ? null : sample.trim() || null,
+            context: selectedContext?.config_source.context,
+            overrides: selectedContext?.config_source.overrides ?? [],
             inputs: inputValues(),
             control_edits: controlEdits(drafts),
             actor,
@@ -124,7 +128,9 @@ export function LaunchForm({
           inputs: inputValues(),
           control_edits: controlEdits(drafts),
           request_key: requestKey,
-          sample: sample.trim() || null,
+          sample: selectedContext ? null : sample.trim() || null,
+          context: selectedContext?.config_source.context,
+          overrides: selectedContext?.config_source.overrides ?? [],
           actor,
           config_source: source,
           expected_request_hash: result?.request_hash,
@@ -153,6 +159,30 @@ export function LaunchForm({
       className="space-y-4 max-w-3xl"
     >
       <p>{entry.description}</p>
+      {selectedContext ? (
+        <div>
+          <p>
+            Parameter context: {selectedContext.config_source.context.entry_id} ·{" "}
+            {selectedContext.config_source.sample.display_name} (
+            {selectedContext.config_source.sample.sample_id}, r
+            {selectedContext.config_source.sample.revision}) ·{" "}
+            {selectedContext.config_source.sample.context_id}
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              selectContext();
+            }}
+          >
+            Use lab default
+          </button>
+        </div>
+      ) : (
+        <p>
+          Using lab default. Select a saved sample working point in Configuration to use its
+          parameters.
+        </p>
+      )}
       <p className="text-sm">
         {draft.preview && !result && !pending
           ? configurationError
@@ -252,7 +282,8 @@ export function LaunchForm({
             Sample ID{" "}
             <input
               aria-label="Sample ID"
-              value={sample}
+              disabled={!!selectedContext}
+              value={selectedContext?.config_source.sample.sample_id ?? sample}
               onChange={(e) => {
                 changeInput({ sample: e.target.value });
               }}

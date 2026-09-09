@@ -2,25 +2,12 @@
 
 from __future__ import annotations
 
-import math
 from collections.abc import Mapping, Sequence
-from typing import Annotated, Literal
-
-from pydantic import (
-    BaseModel,
-    ConfigDict,
-    Field,
-    field_serializer,
-    field_validator,
-    model_validator,
-)
 
 from scopecat.config.validation import (
     coerce_parameter_table_cell,
     validate_parameter_representation,
 )
-from scopecat.kernel.entity import EntityRef
-from scopecat.kernel.frozen import FrozenMapping
 from scopecat.kernel.quantity import Quantity
 from scopecat.kernel.value_identity import scalar_identity, scalar_values_equal
 from scopecat.kernel.value_types import Scalar, Table
@@ -34,134 +21,21 @@ from scopecat.records.parameter import (
     TableParameterValue,
 )
 from scopecat.records.parameter_change import ParameterCellEdit, ParameterValueDelta
-
-type _ParameterId = Annotated[str, Field(min_length=1)]
-
-
-def _freeze_parameter_atoms(
-    values: Mapping[str, ParameterAtomValue],
-) -> FrozenMapping[str, ParameterAtomValue]:
-    selected: list[tuple[str, ParameterAtomValue]] = []
-    for name, value in values.items():
-        number = value.value if isinstance(value, Quantity) else value
-        if isinstance(number, float) and not math.isfinite(number):
-            raise ValueError("parameter update atoms must be finite")
-        selected.append((name, value))
-    return FrozenMapping(selected)
-
-
-def _serialize_parameter_atoms(
-    values: Mapping[str, ParameterAtomValue],
-) -> dict[str, object]:
-    return {
-        name: (
-            value.model_dump(mode="json")
-            if isinstance(value, Quantity | EntityRef)
-            else value
-        )
-        for name, value in values.items()
-    }
-
-
-class _ParameterUpdateModel(BaseModel):
-    model_config = ConfigDict(
-        extra="forbid",
-        frozen=True,
-        allow_inf_nan=False,
-    )
-
-
-class ReplaceParameter(_ParameterUpdateModel):
-    """Replace one complete typed parameter value."""
-
-    kind: Literal["replace_parameter"] = "replace_parameter"
-    value: StoredParameterValue
-
-    @property
-    def parameter_id(self) -> str:
-        return self.value.id
-
-    @model_validator(mode="after")
-    def validate_parameter_id(self) -> ReplaceParameter:
-        if not self.parameter_id:
-            raise ValueError("parameter id must be non-empty")
-        return self
-
-
-class UpdateParameterRows(_ParameterUpdateModel):
-    """Update one row selected by a table primary key."""
-
-    kind: Literal["update_parameter_rows"] = "update_parameter_rows"
-    parameter_id: _ParameterId
-    key: Mapping[str, ParameterAtomValue] = Field(min_length=1)
-    values: Mapping[str, ParameterAtomValue] = Field(min_length=1)
-
-    @field_validator("key", "values")
-    @classmethod
-    def freeze_atoms(
-        cls,
-        value: Mapping[str, ParameterAtomValue],
-    ) -> Mapping[str, ParameterAtomValue]:
-        return _freeze_parameter_atoms(value)
-
-    @field_serializer("key", "values")
-    def serialize_atoms(
-        self,
-        value: Mapping[str, ParameterAtomValue],
-    ) -> dict[str, object]:
-        return _serialize_parameter_atoms(value)
-
-
-class InsertParameterRows(_ParameterUpdateModel):
-    """Append rows to a table-shaped parameter."""
-
-    kind: Literal["insert_parameter_rows"] = "insert_parameter_rows"
-    parameter_id: _ParameterId
-    rows: Sequence[Mapping[str, ParameterAtomValue]] = Field(min_length=1)
-
-    @field_validator("rows")
-    @classmethod
-    def freeze_rows(
-        cls,
-        value: Sequence[Mapping[str, ParameterAtomValue]],
-    ) -> Sequence[Mapping[str, ParameterAtomValue]]:
-        return tuple(_freeze_parameter_atoms(row) for row in value)
-
-    @field_serializer("rows")
-    def serialize_rows(
-        self,
-        value: Sequence[Mapping[str, ParameterAtomValue]],
-    ) -> list[dict[str, object]]:
-        return [_serialize_parameter_atoms(row) for row in value]
-
-
-class DeleteParameterRows(_ParameterUpdateModel):
-    """Delete one row selected by a table primary key."""
-
-    kind: Literal["delete_parameter_rows"] = "delete_parameter_rows"
-    parameter_id: _ParameterId
-    key: Mapping[str, ParameterAtomValue] = Field(min_length=1)
-
-    @field_validator("key")
-    @classmethod
-    def freeze_key(
-        cls,
-        value: Mapping[str, ParameterAtomValue],
-    ) -> Mapping[str, ParameterAtomValue]:
-        return _freeze_parameter_atoms(value)
-
-    @field_serializer("key")
-    def serialize_key(
-        self,
-        value: Mapping[str, ParameterAtomValue],
-    ) -> dict[str, object]:
-        return _serialize_parameter_atoms(value)
-
-
-type ParameterUpdate = Annotated[
-    ReplaceParameter | UpdateParameterRows | InsertParameterRows | DeleteParameterRows,
-    Field(discriminator="kind"),
-]
+from scopecat.records.parameter_update import (
+    DeleteParameterRows as DeleteParameterRows,
+)
+from scopecat.records.parameter_update import (
+    InsertParameterRows as InsertParameterRows,
+)
+from scopecat.records.parameter_update import (
+    ParameterUpdate as ParameterUpdate,
+)
+from scopecat.records.parameter_update import (
+    ReplaceParameter as ReplaceParameter,
+)
+from scopecat.records.parameter_update import (
+    UpdateParameterRows as UpdateParameterRows,
+)
 
 
 def replace_scalar_parameter(
@@ -554,3 +428,42 @@ def parameter_cell_edits(
                 )
             )
     return tuple(edits)
+
+
+def materialize_context_updates(
+    *,
+    catalog: ParameterCatalog,
+    base: ParameterSnapshot,
+    updates: Sequence[ParameterUpdate],
+) -> ParameterSnapshot:
+    """Apply explicit trial edits, including filling a previously unknown value.
+
+    Unlike a scientific proposal, this creates no before/after acceptance claim.
+    Present-value validation remains the resolver's responsibility.
+    """
+    selected = {value.id: value for value in base.values}
+    for update in updates:
+        definition = catalog.get(update.parameter_id)
+        if definition is None:
+            raise ValueError(f"parameter {update.parameter_id!r} is not defined")
+        if isinstance(update, ReplaceParameter):
+            _require_matching_shape(
+                parameter_id=update.parameter_id,
+                expected=definition.value_type,
+                value=update.value,
+            )
+            selected[update.parameter_id] = update.value
+        else:
+            current = selected.get(update.parameter_id)
+            if not isinstance(current, TableParameterValue) or not isinstance(
+                definition.value_type, Table
+            ):
+                raise ValueError(
+                    f"parameter {update.parameter_id!r} requires an existing table"
+                )
+            selected[update.parameter_id] = _apply_table_update(
+                current=current,
+                table_type=definition.value_type,
+                update=update,
+            )
+    return ParameterSnapshot(id=base.id, values=tuple(selected.values()))

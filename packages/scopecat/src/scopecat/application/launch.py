@@ -17,8 +17,10 @@ from pydantic import (
 
 from scopecat.application.controls import ControlEdit, LaunchControl, LaunchControlValue
 from scopecat.automation.interpretations import InterpretationRequest
+from scopecat.config.parameter_updates import ParameterUpdate
 from scopecat.kernel.content_identity import sha256_json_hash
 from scopecat.planning.preflight import PreflightSummary
+from scopecat.records.config_context import ConfigContextRef, ContextRunConfigSource
 from scopecat.records.content import Sha256ContentHash
 from scopecat.records.run import ConfigRegistryRunConfigSource
 
@@ -80,6 +82,9 @@ class LaunchCatalog(BaseModel):
     entries: tuple[LaunchCatalogEntry, ...] = ()
 
 
+type LaunchConfigSource = ConfigRegistryRunConfigSource | ContextRunConfigSource
+
+
 class LaunchRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     action: Literal["list", "preview", "submit"]
@@ -91,7 +96,9 @@ class LaunchRequest(BaseModel):
     inputs: dict[str, JsonValue] = Field(default_factory=dict)
     control_edits: dict[str, ControlEdit] = Field(default_factory=dict)
     expected_request_hash: Sha256ContentHash | None = None
-    config_source: ConfigRegistryRunConfigSource | None = None
+    context: ConfigContextRef | None = None
+    overrides: tuple[ParameterUpdate, ...] = Field(default=(), max_length=256)
+    config_source: LaunchConfigSource | None = None
 
     @model_validator(mode="after")
     def validate_action(self) -> LaunchRequest:
@@ -99,18 +106,18 @@ class LaunchRequest(BaseModel):
             self.experiment and self.version and self.actor.strip()
         ):
             raise ValueError("launch requires experiment, version and actor")
+        if self.overrides and self.context is None:
+            raise ValueError("parameter overrides require an explicit context")
         if self.action == "submit":
             if not self.request_key.strip() or self.expected_request_hash is None:
                 raise ValueError(
                     "submit requires a request key and preview request hash"
                 )
-            if (
-                self.config_source is None
-                or self.config_source.registry_generation is None
+            if self.config_source is None or (
+                isinstance(self.config_source, ConfigRegistryRunConfigSource)
+                and self.config_source.registry_generation is None
             ):
-                raise ValueError(
-                    "submit requires the preview's active configuration binding"
-                )
+                raise ValueError("submit requires the preview's configuration binding")
             if self.expected_request_hash != self.request_hash:
                 raise ValueError("request changed since preview; preview again")
         return self
@@ -125,6 +132,16 @@ class LaunchRequest(BaseModel):
                 "inputs": self.inputs,
                 "sample": self.sample,
                 "actor": self.actor,
+                **(
+                    {
+                        "context": self.context.model_dump(mode="json"),
+                        "overrides": [
+                            edit.model_dump(mode="json") for edit in self.overrides
+                        ],
+                    }
+                    if self.context is not None
+                    else {}
+                ),
                 **(
                     {
                         "control_edits": {
@@ -145,7 +162,7 @@ class LaunchPreview(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     experiment_id: str
     request_hash: Sha256ContentHash
-    config_source: ConfigRegistryRunConfigSource
+    config_source: LaunchConfigSource
     point_count: int = Field(
         ge=0,
         description=(

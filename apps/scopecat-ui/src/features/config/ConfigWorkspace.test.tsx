@@ -96,7 +96,7 @@ describe("ConfigWorkspace", () => {
 
     expect(await screen.findByRole("button", { name: "Undo" })).toBeDisabled();
     fireEvent.click(await screen.findByRole("button", { name: "Load older versions" }));
-    expect(await screen.findByText("older")).toBeInTheDocument();
+    expect((await screen.findAllByText("older")).length).toBeGreaterThan(0);
     expect(getOlderConfigRegistryEntries).toHaveBeenCalledWith(2);
 
     fireEvent.click(screen.getByRole("button", { name: "Load older changes" }));

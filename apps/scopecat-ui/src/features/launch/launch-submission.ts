@@ -13,6 +13,26 @@ export interface SubmissionAttempt {
 function configBinding(value: unknown): string | undefined {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return undefined;
   const source = value as Record<string, unknown>;
+  if (source.kind === "parameter_context") {
+    if (
+      typeof source.content_hash !== "string" ||
+      typeof source.lab_generation !== "number" ||
+      typeof source.context !== "object" ||
+      source.context === null ||
+      typeof source.sample !== "object" ||
+      source.sample === null ||
+      !Array.isArray(source.overrides)
+    )
+      return undefined;
+    return canonical({
+      kind: source.kind,
+      context: source.context,
+      content_hash: source.content_hash,
+      lab_generation: source.lab_generation,
+      sample: source.sample,
+      overrides: source.overrides,
+    });
+  }
   if (
     source.kind !== "config_registry" ||
     typeof source.selector !== "string" ||
@@ -68,4 +88,14 @@ export async function findSubmittedProcedure(request: SubmissionRequest): Promis
       "The retained procedure does not confirm the original launch hash and configuration binding. The submission remains unconfirmed.",
     );
   return procedure.procedure_run_id;
+}
+
+function canonical(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
+  if (typeof value === "object" && value !== null)
+    return `{${Object.entries(value)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([key, item]) => `${JSON.stringify(key)}:${canonical(item)}`)
+      .join(",")}}`;
+  return JSON.stringify(value) ?? "null";
 }

@@ -17,6 +17,7 @@ from scopecat.kernel.content_identity import stable_content_hash
 from scopecat.kernel.run_outcome import utc_now
 from scopecat.records.analysis import ProjectAnalysisDecisionReference
 from scopecat.records.config import ConfigContentHash
+from scopecat.records.config_context import ConfigContextMetadata
 from scopecat.records.content import Sha256ContentHash
 
 _CONFIG_ACTIVATION_INTENT_CODEC = "scopecat.config-activation-intent.v1"
@@ -300,11 +301,17 @@ class CalibrationCohortMergeRegistrySource(_FrozenRegistryModel):
         return self
 
 
+class ContextConfigRegistrySource(_FrozenRegistryModel):
+    kind: Literal["parameter_context"] = "parameter_context"
+    context: ConfigContextMetadata
+
+
 ConfigRegistryEntrySource = Annotated[
     DirectConfigRegistrySource
     | ManualConfigDraftRegistrySource
     | CandidateConfigRegistrySource
-    | CalibrationCohortMergeRegistrySource,
+    | CalibrationCohortMergeRegistrySource
+    | ContextConfigRegistrySource,
     Field(discriminator="kind"),
 ]
 

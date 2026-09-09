@@ -54,6 +54,7 @@ from scopecat.planning.system import (
     build_experiment_system,
 )
 from scopecat.records.config import ConfigProfileSnapshot
+from scopecat.records.config_context import ContextRunConfigSource
 from scopecat.records.content import Sha256ContentHash
 from scopecat.records.run import (
     ConfigRegistryRunConfigSource,
@@ -231,6 +232,7 @@ class _DaemonRunner:
         experiment: ExperimentInvocation,
         *,
         config: ConfigProfileSnapshot | None = None,
+        config_source: RunConfigSource | None = None,
         point: int | Literal["first", "middle", "last"] = "first",
         coordinates: Mapping[str, object] | None = None,
         coordinate_mode: PreviewCoordinateMode = "exact",
@@ -245,7 +247,7 @@ class _DaemonRunner:
         planned = self._plan(
             experiment,
             config=config,
-            config_source=None,
+            config_source=config_source,
             name=name,
             tags=tags,
             description=description,
@@ -267,6 +269,7 @@ class _DaemonRunner:
         experiment: ExperimentInvocation,
         *,
         config: ConfigProfileSnapshot | None = None,
+        config_source: RunConfigSource | None = None,
         name: str | None = None,
         tags: tuple[str, ...] = (),
         description: str | None = None,
@@ -277,7 +280,7 @@ class _DaemonRunner:
         planned = self._plan(
             experiment,
             config=config,
-            config_source=None,
+            config_source=config_source,
             name=name,
             tags=tags,
             description=description,
@@ -307,6 +310,27 @@ class _DaemonRunner:
         operator: str | None,
         samples: tuple[SampleSelector, ...] = (),
     ) -> PlannedRun:
+        if isinstance(config_source, ContextRunConfigSource):
+            binding = config_source.sample
+            exact = SampleSelector(
+                role=binding.role,
+                sample_id=binding.sample_id,
+                revision=binding.revision,
+                context_id=binding.context_id,
+            )
+            for selector in samples:
+                if selector.role == binding.role and (
+                    selector.sample_id != binding.sample_id
+                    or selector.revision not in (None, binding.revision)
+                    or selector.context_id not in (None, binding.context_id)
+                ):
+                    raise ValueError(
+                        "explicit sample does not match the selected parameter context"
+                    )
+            samples = (
+                *(selector for selector in samples if selector.role != binding.role),
+                exact,
+            )
         selected_source = config_source
         if config is None:
             active = self.client.active_config()
