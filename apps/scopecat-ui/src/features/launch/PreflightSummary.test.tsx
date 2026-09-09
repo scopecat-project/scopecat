@@ -36,6 +36,7 @@ const preview: LaunchPreview = {
   resources: [],
 };
 const stage: components["schemas"]["PreflightStage"] = {
+  instrument_ids: [],
   inspections: [],
   planned_settings: [],
   planned_setting_limit: 64,

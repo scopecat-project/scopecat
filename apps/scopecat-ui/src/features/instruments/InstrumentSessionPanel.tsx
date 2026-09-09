@@ -164,8 +164,12 @@ export function InstrumentSessionPanel({
       <div className={attentionPanel}>
         <Database className="mt-0.5 flex-none" size={18} aria-hidden="true" />
         <div className="flex-1 max-[680px]:w-full max-[680px]:basis-full">
-          <strong className="text-[0.7rem] text-text-soft">Read-only while owned</strong>
-          <p className={attentionCopy}>Another run or interactive session owns this instrument.</p>
+          <strong className="text-[0.7rem] text-text-soft">Manual controls unavailable</strong>
+          <p className={attentionCopy}>
+            {instrument.owner_kind === "run"
+              ? "This instrument is in use. Wait for the run to finish, or request a stop from its run page and wait for cleanup before reconnecting."
+              : "Another manual session is connected. Finish or disconnect that session before reconnecting here."}
+          </p>
           <OwnerDescription instrument={instrument} />
         </div>
         {canDisconnectSession && (
@@ -211,8 +215,8 @@ export function InstrumentSessionPanel({
           Connect only when you are ready to interact
         </strong>
         <small className="overflow-hidden text-[0.58rem] leading-[1.4] text-ellipsis text-text-dim">
-          Opening a session gives the daemon exclusive ownership. Selecting this instrument never
-          connects it.
+          Connect to read or adjust this instrument. Disconnect when finished so an experiment can
+          use it. Selecting it does not connect.
         </small>
       </div>
       <button type="button" className={primaryButton} onClick={onConnect} disabled={connectPending}>

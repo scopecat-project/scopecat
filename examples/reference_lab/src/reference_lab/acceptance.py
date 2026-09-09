@@ -9,11 +9,13 @@ from typing import Protocol, cast
 
 from pydantic import JsonValue
 from scopecat.api.lab import LabClient
+from scopecat.application.author_project import AuthorProject
 from scopecat.application.controls import ControlEdit, edit_controls
 from scopecat.application.launch import LaunchPreview, LaunchRequest
 from scopecat.daemon.client import DaemonClient
 from scopecat.daemon.views import MeasurementPreview
 from scopecat.kernel.quantity import Quantity
+from scopecat.records.author_revision import AuthorRevisionRef
 from scopecat.records.measurement import MeasurementScalar
 from scopecat.records.measurement_recording import measurement_record_content_hash
 from scopecat_instruments import temperature_readout
@@ -42,6 +44,33 @@ class _ArrowProjection(Protocol):
 FIXTURE_TIME = datetime(2026, 9, 1, tzinfo=UTC)
 
 
+def _checked_launch_preview(
+    client: DaemonClient, request: LaunchRequest
+) -> LaunchPreview:
+    with AuthorProject(client.base_url) as authors:
+        preview = authors.preview(request)
+    assert preview.manual_state is not None
+    assert preview.code_revision is not None
+    assert preview.manual_state.binding.code_revision == preview.code_revision
+    # UI shape/science fixtures are not executable permissions. Normalize only
+    # process/environment-dependent source identity and the retained event ID;
+    # real admission journeys always use the original complete server response.
+    revision = AuthorRevisionRef(content_hash="sha256:" + "0" * 64)
+    return preview.model_copy(
+        update={
+            "code_revision": revision,
+            "manual_state": preview.manual_state.model_copy(
+                update={
+                    "event_id": 1,
+                    "binding": preview.manual_state.binding.model_copy(
+                        update={"code_revision": revision}
+                    ),
+                }
+            ),
+        }
+    )
+
+
 def capture_acceptance_fixtures(
     lab: LabClient, client: DaemonClient
 ) -> dict[str, JsonValue]:
@@ -53,8 +82,8 @@ def capture_acceptance_fixtures(
     assert setting_preview.preflight is not None
     config = bootstrap_config()
     active = lab.config.active()
-    launch_preview = launch_provider(
-        lab,
+    launch_preview = _checked_launch_preview(
+        client,
         LaunchRequest(
             action="preview",
             experiment="temperature",
@@ -74,7 +103,7 @@ def capture_acceptance_fixtures(
             ),
         },
     )
-    controls_scalar = launch_provider(lab, scalar_request)
+    controls_scalar = _checked_launch_preview(client, scalar_request)
     assert (
         isinstance(controls_scalar, LaunchPreview) and controls_scalar.point_count == 1
     )
@@ -107,7 +136,7 @@ def capture_acceptance_fixtures(
             }
         }
     )
-    controls_scan = launch_provider(lab, scan_request)
+    controls_scan = _checked_launch_preview(client, scan_request)
     assert isinstance(controls_scan, LaunchPreview) and controls_scan.point_count == 6
     controlled = edit_controls(
         CONTROLS, frequency_amplitude(), config=config, edits=scan_request.control_edits

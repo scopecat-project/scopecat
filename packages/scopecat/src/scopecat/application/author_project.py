@@ -111,6 +111,7 @@ class AuthorPreparedLaunch:
                     "expected_request_hash": self.preview.request_hash,
                     "config_source": self.preview.config_source,
                     "code_revision": self.preview.code_revision,
+                    "manual_state": self.preview.manual_state,
                 }
             )
         )

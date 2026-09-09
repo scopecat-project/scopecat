@@ -8,6 +8,7 @@ from datetime import UTC, datetime, timedelta
 from threading import Lock, RLock, Timer
 from time import perf_counter
 from typing import TYPE_CHECKING, Literal, cast
+from uuid import uuid4
 
 from pydantic import JsonValue
 from scopecat.control.models import (
@@ -244,15 +245,28 @@ class InstrumentRuntime:
         keys = tuple(specs[item].exclusivity_key for item in command.instrument_ids)
         try:
             with self._actors.begin_retirement(keys) as retirement:
-                with self._control.read_transaction() as connection:
+                with self._control.write_transaction() as connection:
                     blockers = (
                         self._control.inventory_migration_blockers_in_transaction(
                             connection,
                             tuple(ResourceKey.instrument(key) for key in keys),
                         )
                     )
-                if blockers:
-                    raise BackendConflict("instrument release requires idle devices")
+                    if blockers:
+                        raise BackendConflict(
+                            "instrument release requires idle devices"
+                        )
+                    self._control.append_event_in_transaction(
+                        connection,
+                        DurableEventInput(
+                            kind="instrument_connection_release_started",
+                            payload={
+                                "operation_id": uuid4().hex,
+                                "instrument_ids": list(command.instrument_ids),
+                                "exclusivity_keys": list(keys),
+                            },
+                        ),
+                    )
                 retirement.retire_idle()
         except (InstrumentActorConflict, InstrumentActorShutdown) as error:
             raise BackendConflict(str(error)) from error
@@ -3640,6 +3654,19 @@ class InstrumentRuntime:
                 session = self._control.validate_instrument_session(session_id)
             except ControlPlaneConflict as error:
                 raise BackendConflict(str(error)) from error
+            if abort:
+                with self._control.write_transaction() as connection:
+                    self._control.append_event_in_transaction(
+                        connection,
+                        DurableEventInput(
+                            kind="instrument_session_abort_started",
+                            payload={
+                                "session_id": session.session_id,
+                                "operation_id": uuid4().hex,
+                                "exclusivity_keys": list(session.exclusivity_keys),
+                            },
+                        ),
+                    )
             failed = abort_instruments(runtime.instruments.values()) if abort else False
             if failed:
                 self._lose_runtime(

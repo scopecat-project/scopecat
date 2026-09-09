@@ -145,6 +145,7 @@ class ExperimentPreview:
     points: tuple[ExperimentPreviewPoint, ...]
     points_truncated: bool
     records: tuple[ExperimentPreviewRecord, ...]
+    instrument_ids: tuple[str, ...] = ()
     sampled_point_limit: int = 64
     selected_point_limit: int = 1
     transient_products: tuple[ExperimentPreviewTransientProduct, ...] = ()

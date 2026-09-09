@@ -86,7 +86,16 @@ const entry = {
     },
   },
 };
+const manualFence = {
+  event_id: 1,
+  binding: {
+    request_hash: "sha256:" + "a".repeat(64),
+    config_source_hash: "sha256:" + "b".repeat(64),
+    code_revision: null,
+  },
+};
 const previewResult = {
+  manual_state: manualFence,
   experiment_id: "rabi",
   request_hash: "sha256:" + "a".repeat(64),
   point_count: 2,
@@ -102,7 +111,7 @@ const previewResult = {
   resolved_inputs: {},
   controls: [],
 };
-function mount() {
+function mount(manualValidity = () => Response.json({ valid: true, changes: [] })) {
   const fetcher = globalThis.fetch;
   vi.stubGlobal("fetch", (request: Request) =>
     new URL(request.url).pathname.endsWith("/config-registry")
@@ -111,7 +120,9 @@ function mount() {
         )
       : request.url.endsWith("/author-revisions")
         ? Promise.resolve(Response.json({ enabled: false, generation: 0, active: null }))
-        : fetcher(request),
+        : new URL(request.url).pathname.endsWith("/experiment-launcher/validity")
+          ? Promise.resolve(manualValidity())
+          : fetcher(request),
   );
   render(
     <QueryClientProvider
@@ -201,6 +212,9 @@ it("retains the submission key after a lost response and opens durable progress"
   expect(screen.getByRole("button", { name: "Start acquisition" })).toBeDisabled();
   fireEvent.click(screen.getByRole("button", { name: "Preview" }));
   await screen.findByText("Preview ready");
+  await waitFor(() =>
+    expect(screen.getByRole("button", { name: "Start acquisition" })).toBeEnabled(),
+  );
   fireEvent.click(screen.getByRole("button", { name: "Start acquisition" }));
   await screen.findByRole("alert");
   fireEvent.click(screen.getByRole("button", { name: "Retry original submission" }));
@@ -354,7 +368,9 @@ it.each(["Operator", "Sample ID"])("invalidates preview after changing %s", asyn
   fireEvent.change(screen.getByLabelText("Amplitude"), { target: { value: "0.4" } });
   fireEvent.click(screen.getByRole("button", { name: "Preview" }));
   await screen.findByText("Preview ready");
-  expect(screen.getByRole("button", { name: "Start acquisition" })).toBeEnabled();
+  await waitFor(() =>
+    expect(screen.getByRole("button", { name: "Start acquisition" })).toBeEnabled(),
+  );
   fireEvent.change(screen.getByLabelText(label), { target: { value: "changed" } });
   expect(screen.queryByText("Preview ready")).toBeNull();
   expect(screen.getByRole("button", { name: "Start acquisition" })).toBeDisabled();
@@ -391,4 +407,47 @@ it("does not offer actions absent from catalog capabilities", async () => {
   await screen.findByLabelText("Qubit");
   expect(screen.queryByRole("button", { name: "Preview" })).toBeNull();
   expect(screen.queryByRole("button", { name: "Start acquisition" })).toBeNull();
+});
+
+it("invalidates a preview after relevant manual changes and retains science inputs", async () => {
+  let changed = false;
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (request: Request) =>
+      new URL(request.url).pathname.endsWith("/preview")
+        ? Response.json(previewResult)
+        : Response.json({ entries: [{ ...entry, actions: ["preview", "submit"] }] }),
+    ),
+  );
+  mount(() =>
+    Response.json({
+      valid: !changed,
+      changes: changed
+        ? [
+            {
+              instrument_ids: ["q0-bias"],
+              action: "apply",
+              occurred_at: "2026-09-09T08:00:00Z",
+              reason: "Manual apply may change instrument state.",
+            },
+          ]
+        : [],
+    }),
+  );
+  fireEvent.change(await screen.findByLabelText("Qubit"), { target: { value: "Q12" } });
+  fireEvent.change(screen.getByLabelText("Amplitude"), { target: { value: "0.4" } });
+  fireEvent.click(screen.getByRole("button", { name: "Preview" }));
+  await waitFor(() =>
+    expect(screen.getByRole("button", { name: "Start acquisition" })).toBeEnabled(),
+  );
+  changed = true;
+  await waitFor(
+    () =>
+      expect(screen.getByText(/Manual instrument changes invalidate this preview/)).toBeVisible(),
+    { timeout: 3000 },
+  );
+  expect(screen.getByRole("button", { name: "Start acquisition" })).toBeDisabled();
+  expect(screen.getByLabelText("Amplitude")).toHaveValue(0.4);
+  expect(screen.getByLabelText("Qubit")).toHaveValue("Q12");
+  expect(screen.getByRole("button", { name: "Preview" })).toBeEnabled();
 });

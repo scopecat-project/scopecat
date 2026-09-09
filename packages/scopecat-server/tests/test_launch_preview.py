@@ -11,7 +11,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 from fastapi.testclient import TestClient
-from scopecat.application.launch import LaunchRequest
+from scopecat.application.launch import LaunchPreview, LaunchRequest
 from scopecat.records.run import ConfigRegistryRunConfigSource
 
 from scopecat_server.http.transport import create_app
@@ -41,12 +41,29 @@ if TYPE_CHECKING:
     from scopecat_server.services.application import DaemonApplication
 
 
+def _manual_previews() -> Mock:
+    service = Mock()
+    service.cursor.return_value = 0
+
+    def record(preview: LaunchPreview, *, cursor: int) -> LaunchPreview:
+        del cursor
+        return preview
+
+    service.record_preview.side_effect = record
+    return service
+
+
 def client() -> TestClient:
     return TestClient(
         create_app(
             cast(
                 "DaemonApplication",
-                cast("object", SimpleNamespace(project_root=Path.cwd())),
+                cast(
+                    "object",
+                    SimpleNamespace(
+                        project_root=Path.cwd(), manual_previews=_manual_previews()
+                    ),
+                ),
             )
         )
     )
@@ -124,7 +141,12 @@ def test_admission_survives_dispatch_failure(tmp_path: Path) -> None:
         cast(
             "DaemonApplication",
             cast(
-                "object", SimpleNamespace(project_root=tmp_path, automation=automation)
+                "object",
+                SimpleNamespace(
+                    project_root=tmp_path,
+                    automation=automation,
+                    manual_previews=_manual_previews(),
+                ),
             ),
         )
     )
@@ -280,7 +302,12 @@ def test_http_lifespan_starts_and_stops_manager() -> None:
             create_app(
                 cast(
                     "DaemonApplication",
-                    cast("object", SimpleNamespace(project_root=Path.cwd())),
+                    cast(
+                        "object",
+                        SimpleNamespace(
+                            project_root=Path.cwd(), manual_previews=_manual_previews()
+                        ),
+                    ),
                 )
             )
         ):

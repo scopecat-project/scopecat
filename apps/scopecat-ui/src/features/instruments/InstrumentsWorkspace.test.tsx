@@ -162,7 +162,7 @@ describe("instrument workspace", () => {
     expect(openInstrumentSession).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByTitle("Inspect instrument vna-1"));
-    expect(await screen.findByText("Read-only while owned")).toBeVisible();
+    expect(await screen.findByText("Manual controls unavailable")).toBeVisible();
     expect(screen.getByRole("button", { name: "Configure device" })).toBeDisabled();
     expect(screen.queryByRole("button", { name: "Connect" })).not.toBeInTheDocument();
   });
@@ -500,7 +500,7 @@ describe("instrument workspace", () => {
     });
     renderWorkspace();
 
-    expect(await screen.findByText("Read-only while owned")).toBeVisible();
+    expect(await screen.findByText("Manual controls unavailable")).toBeVisible();
     expect(screen.queryByText("session-stale")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Disconnect session" }));
 

@@ -34,6 +34,7 @@ from scopecat.automation.models import (
 )
 from scopecat.kernel.content_identity import stable_content_hash
 from scopecat.records.content import Sha256ContentHash
+from scopecat.records.manual_preview import ManualPreviewFence
 from scopecat.records.sample import SampleSelector
 
 type _NonEmptyText = Annotated[str, Field(min_length=1)]
@@ -54,6 +55,7 @@ class ProcedureSubmitCommand(_WireModel):
     definition: ProcedureDefinitionRef
     intent: ProcedureIntent
     samples: tuple[SampleSelector, ...] = ()
+    expected_manual_preview: ManualPreviewFence | None = None
     expected_config_generation: int | None = Field(default=None, ge=1)
     recovery: ProcedureRecoverySource | None = None
 

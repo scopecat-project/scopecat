@@ -85,9 +85,11 @@ describe("shared reference-lab acceptance", () => {
                   },
                   entries: [],
                 }
-              : new URL(request.url).pathname.endsWith("/preview")
-                ? fixtures.launch_preview
-                : fixtures.launch_catalog,
+              : new URL(request.url).pathname.endsWith("/validity")
+                ? { valid: true, changes: [] }
+                : new URL(request.url).pathname.endsWith("/preview")
+                  ? fixtures.launch_preview
+                  : fixtures.launch_catalog,
           ),
         ),
       ),
@@ -110,7 +112,9 @@ describe("shared reference-lab acceptance", () => {
     expect(screen.getAllByText("Retained (planned dataset)")).toHaveLength(2);
     expect(screen.getByText("Unknown (s)")).toBeVisible();
     expect(screen.getByText(/1\/64 displayed points; 1\/1 selected points/)).toBeVisible();
-    expect(screen.getByRole("button", { name: "Start acquisition" })).toBeEnabled();
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Start acquisition" })).toBeEnabled(),
+    );
   });
 
   it("uses the shared controls catalog for fixed and scanned previews with owned provenance", async () => {
@@ -134,6 +138,7 @@ describe("shared reference-lab acceptance", () => {
             },
             entries: [],
           });
+        if (path.endsWith("/validity")) return Response.json({ valid: true, changes: [] });
         if (path.endsWith("/submit")) {
           submitted = await request.json();
           throw new TypeError("Submission response lost");

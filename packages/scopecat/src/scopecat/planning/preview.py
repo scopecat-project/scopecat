@@ -86,6 +86,7 @@ def build_run_program_preview(
         ((), ()) if invocation is None else _preview_binding_graph(invocation)
     )
     return ExperimentPreview(
+        instrument_ids=tuple(item.id for item in program.resource_requirements),
         experiment_id=catalog.experiment_id,
         experiment_kind=catalog.experiment_kind,
         schema=selected.schema,

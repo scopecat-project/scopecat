@@ -56,7 +56,10 @@ by hand into a second set of mocks.
   and q1 identities, source products and acquisition policy. The gallery's channel
   unavailable scenario exercises selection and retained unavailable evidence.
 
-Only explicitly named capture IDs and wall-clock fields are normalized. Scientific
+Only explicitly named capture IDs and wall-clock fields are normalized, together
+with the three HTTP launch previews’ code revision (including the matching fence
+binding) and checked-event ID. These UI fixtures are not executable permissions;
+real admission tests retain the complete unmodified server response. Scientific
 values, content hashes, entity alignment and proposal deltas remain generated
 production output. The fixture check compares only the coherent scalar IQ mean's
 real/imaginary components with absolute and relative tolerance `1e-12` in `ratio`,

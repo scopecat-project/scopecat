@@ -42,6 +42,7 @@ def admit_without_dispatch(root: Path, key: str) -> str:
             "expected_request_hash": preview.request_hash,
             "config_source": preview.config_source,
             "code_revision": preview.code_revision,
+            "manual_state": preview.manual_state,
         }
     )
     completed = subprocess.run(  # noqa: S603 - fixed internal project worker

@@ -34,6 +34,7 @@ from scopecat.planning.preflight import (
 )
 from scopecat.records.config import config_content_hash
 from scopecat.records.content import Sha256ContentHash
+from scopecat.records.manual_preview import ManualPreviewFence
 
 from reference_lab.control_launch import CONTROL_ENTRY, control_launch
 from reference_lab.launch_config import launch_config
@@ -70,6 +71,7 @@ REVIEW_INSTRUCTIONS = (
 
 
 class LaunchIntent(TemperatureDiagnosticIntent):
+    manual_state: ManualPreviewFence | None = None
     config_source: LaunchConfigSource
     request_hash: Sha256ContentHash
     actor: str
@@ -273,9 +275,13 @@ def launch_provider(lab: LabClient, request: LaunchRequest) -> LaunchResult:
             )
         return LaunchPreview(
             experiment_id=entry.id,
+            manual_state=request.manual_state,
             request_hash=request.request_hash,
             config_source=source,
             point_count=preview.initial_point_count,
+            resources=tuple(
+                sorted({item for stage in stages for item in stage.instrument_ids})
+            ),
             preflight=PreflightSummary(
                 stages=tuple(stages),
                 scope_basis=(
@@ -296,6 +302,7 @@ def launch_provider(lab: LabClient, request: LaunchRequest) -> LaunchResult:
     intent = LaunchIntent(
         initial_config=config,
         config_source=source,
+        manual_state=request.manual_state,
         request_hash=request.request_hash,
         actor=request.actor,
         inputs=inputs.model_dump(mode="json"),
@@ -305,6 +312,7 @@ def launch_provider(lab: LabClient, request: LaunchRequest) -> LaunchResult:
         intent,
         request_key=request.request_key,
         sample=launch_sample_selection(request, source),
+        expected_manual_preview=request.manual_state,
         expected_config_generation=launch_config_generation(source),
     )
     return LaunchSubmission(procedure_id=admitted.id)

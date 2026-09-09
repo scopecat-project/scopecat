@@ -65,11 +65,14 @@ from scopecat.records.author_revision import AuthorRevisionRef
 from scopecat.records.config import ConfigProfileSnapshot
 from scopecat.records.config_context import ConfigContextRef
 from scopecat.records.content import Sha256ContentHash
+from scopecat.records.manual_preview import ManualPreviewFence
 from scopecat.records.sample import SampleSelector
 
 
 class AuthorLaunchIntent(BaseModel):
     """Same frozen admission inputs for every discovered single-run experiment."""
+
+    manual_state: ManualPreviewFence | None = None
 
     model_config = ConfigDict(extra="forbid", frozen=True)
     config: ConfigProfileSnapshot
@@ -382,10 +385,12 @@ class AuthorExperiments:
             )
             return LaunchPreview(
                 experiment_id=selected.entry.id,
+                manual_state=request.manual_state,
                 request_hash=request.request_hash,
                 code_revision=selected.code_revision,
                 config_source=source,
                 point_count=preview.initial_point_count,
+                resources=preview.instrument_ids,
                 controls=control_values(selected.controls, invocation, config=config),
                 summary=selected.description,
                 preflight=PreflightSummary(
@@ -414,11 +419,13 @@ class AuthorExperiments:
                 config_source=source,
                 edits=request.control_edits,
                 actor=request.actor,
+                manual_state=request.manual_state,
                 request_hash=request.request_hash,
                 code_revision=selected.code_revision,
             ),
             request_key=request.request_key,
             sample=launch_sample_selection(request, source),
+            expected_manual_preview=request.manual_state,
             expected_config_generation=launch_config_generation(source),
         )
         return LaunchSubmission(procedure_id=admitted.id)
