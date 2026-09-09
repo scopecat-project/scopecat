@@ -3,27 +3,28 @@
 from __future__ import annotations
 
 import contextlib
+import faulthandler
 import os
 import sys
 from dataclasses import replace
 from importlib import import_module
 from pathlib import Path
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
-from scopecat.api.analysis import AnalysisContext, AnalysisDefinition
-from scopecat.daemon.client import DaemonClient
-from scopecat.daemon.endpoint import DAEMON_URL_ENV, resolve_daemon_endpoint
-from scopecat.project import Project, load_project
-from scopecat.project_sources import materialize_sources, require_environment
-from scopecat.records.author_revision import (
-    AuthorAnalysisReceipt,
-    AuthorAnalysisRequest,
-    AuthorRevisionRef,
-)
+from scopecat_server.worker_diagnostics import report_stage
+
+if TYPE_CHECKING:
+    from scopecat.project import Project
+    from scopecat.records.author_revision import AuthorRevisionRef
 
 
 def revision_project(root: Path, ref: AuthorRevisionRef) -> Project:
     """Read original identity before importing any project implementation."""
+    from scopecat.daemon.client import DaemonClient
+    from scopecat.daemon.endpoint import resolve_daemon_endpoint
+    from scopecat.project import load_project
+    from scopecat.project_sources import materialize_sources, require_environment
+
     with DaemonClient(resolve_daemon_endpoint(root)) as client:
         bundle = client.author_revision(ref)
     require_environment(bundle.manifest)
@@ -55,18 +56,26 @@ def author_module_path(project: Project, module_name: str) -> Path:
     raise ValueError("module must belong to a configured author refresh root")
 
 
-def main() -> None:
-    os.environ.pop(DAEMON_URL_ENV, None)
-    root = Path(sys.argv[1]).resolve()
-    if sys.argv[2] == "--validate":
-        code_root = Path(sys.argv[3])
+def validate(root: Path, code_root: Path) -> None:
+    # Start before framework imports so a slow import is observable too. One
+    # stack dump fits inside the unchanged parent deadline; no retry is implied.
+    faulthandler.dump_traceback_later(30, file=sys.stderr)
+    try:
+        report_stage("framework imports")
+        from scopecat.daemon.endpoint import DAEMON_URL_ENV
+        from scopecat.project import load_project
+
+        os.environ.pop(DAEMON_URL_ENV, None)
         project = replace(
             load_project(code_root / "scopecat.toml"), root=root, code_root=code_root
         )
+        report_stage("source compilation")
         for source in project.source_roots:
             for path in (code_root / source).rglob("*.py"):
                 compile(path.read_bytes(), str(path.relative_to(code_root)), "exec")
+        report_stage("application import")
         application = project.load_application()
+        report_stage("source identity validation")
         if application.authors is not None:
             for experiment in application.authors.experiments:
                 name = experiment.source["module"]
@@ -75,7 +84,24 @@ def main() -> None:
                     raise ValueError(
                         f"author module resolved outside its source snapshot: {name}"
                     )
+    finally:
+        faulthandler.cancel_dump_traceback_later()
+
+
+def main() -> None:
+    root = Path(sys.argv[1]).resolve()
+    if sys.argv[2] == "--validate":
+        validate(root, Path(sys.argv[3]))
         return
+
+    from scopecat.api.analysis import AnalysisContext, AnalysisDefinition
+    from scopecat.daemon.endpoint import DAEMON_URL_ENV
+    from scopecat.records.author_revision import (
+        AuthorAnalysisReceipt,
+        AuthorAnalysisRequest,
+    )
+
+    os.environ.pop(DAEMON_URL_ENV, None)
     request = AuthorAnalysisRequest.model_validate_json(sys.stdin.read())
     with contextlib.redirect_stdout(sys.stderr):
         project = revision_project(root, request.code_revision)
