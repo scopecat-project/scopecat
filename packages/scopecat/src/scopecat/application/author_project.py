@@ -20,6 +20,8 @@ from scopecat.records.author_revision import (
     AuthorRevisionRef,
     AuthorRevisionState,
 )
+from scopecat.records.config_context import ConfigContextRef
+from scopecat.records.parameter_update import ParameterUpdate
 
 
 class AuthorProject(DaemonClient):
@@ -35,6 +37,8 @@ class AuthorProject(DaemonClient):
         *,
         control_edits: dict[str, ControlEdit] | None = None,
         inputs: dict[str, JsonValue] | None = None,
+        context: ConfigContextRef | None = None,
+        overrides: tuple[ParameterUpdate, ...] = (),
         sample: str | None = None,
         actor: str = "operator",
     ) -> AuthorPreparedLaunch:
@@ -47,6 +51,8 @@ class AuthorProject(DaemonClient):
             version=entry.version,
             control_edits=control_edits or {},
             inputs=inputs or {},
+            context=context,
+            overrides=overrides,
             sample=sample,
             actor=actor,
             code_revision=catalog.code_revision,

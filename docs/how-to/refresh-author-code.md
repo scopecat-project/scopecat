@@ -37,6 +37,13 @@ replace the implementation inside that submission. The ordinary author still
 writes existing `@sc.experiment`, `ControlSet` and `@sc.analysis_step` declarations;
 there is no per-experiment service, procedure or catalog adapter to maintain.
 
+`authors.prepare()` accepts the same typed `context`, `overrides`, `inputs`,
+`control_edits` and `sample` fields as GUI launch. Pass a saved `ConfigContextRef`
+and a tuple of `ParameterUpdate` values to explore another working point without
+changing the laboratory default. The preview retains that context's exact sample
+revision and overrides alongside its code revision; submission uses the same
+shared resolver as GUI launch.
+
 For retained analysis, explicitly choose the original revision from the run's
 `author_code_revision` metadata or a newly refreshed revision:
 
