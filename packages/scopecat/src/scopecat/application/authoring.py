@@ -1,8 +1,8 @@
 """A maintained discovery adapter for ordinary experiment authors.
 
 Discovery is explicit project composition, not an HTTP import facility. A loaded
-collection is immutable; refreshing code and retaining historical implementations
-are separate from this initial authoring path.
+collection is immutable and inherits the project's selected source revision.
+Revision-aware workers validate and load the next collection in a fresh process.
 """
 
 from __future__ import annotations

@@ -9,9 +9,9 @@ import tempfile
 from contextvars import ContextVar
 from importlib.metadata import distributions
 from pathlib import Path
+from typing import Protocol
 
 from scopecat.kernel.content_identity import sha256_content_hash, sha256_json_hash
-from scopecat.project import Project
 from scopecat.records.author_revision import (
     AuthorRevisionBundle,
     AuthorRevisionManifest,
@@ -37,7 +37,18 @@ _EXCLUDED = frozenset(
 )
 
 
-def capture_sources(project: Project) -> AuthorRevisionBundle:
+class SourceProject(Protocol):
+    @property
+    def root(self) -> Path: ...
+    @property
+    def manifest(self) -> Path: ...
+    @property
+    def source_roots(self) -> tuple[str, ...]: ...
+    @property
+    def refresh_roots(self) -> tuple[str, ...]: ...
+
+
+def capture_sources(project: SourceProject) -> AuthorRevisionBundle:
     """Snapshot all declared roots, including helpers, analysis and local resources."""
     files: dict[str, bytes] = {"scopecat.toml": project.manifest.read_bytes()}
     for name in ("pyproject.toml", "uv.lock", "requirements.txt"):
@@ -128,7 +139,9 @@ def materialize_sources(bundle: AuthorRevisionBundle, directory: Path) -> Path:
             path.write_bytes(content)
         try:
             staged.rename(target)
-        except FileExistsError:
+        except OSError:
+            if not target.is_dir():
+                raise
             return materialize_sources(bundle, directory)
         return target
     finally:

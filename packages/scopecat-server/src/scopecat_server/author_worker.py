@@ -36,6 +36,25 @@ def revision_project(root: Path, ref: AuthorRevisionRef) -> Project:
     )
 
 
+def author_module_path(project: Project, module_name: str) -> Path:
+    """Resolve the HTTP-selected module inside configured roots before importing it."""
+    if not all(part.isidentifier() for part in module_name.split(".")):
+        raise ValueError("analysis module must be a qualified Python module name")
+    code_root = project.code_root or project.root
+    relative = Path(*module_name.split("."))
+    for prefix in (code_root / "src", code_root):
+        for path in (
+            prefix / relative.with_suffix(".py"),
+            prefix / relative / "__init__.py",
+        ):
+            if path.is_file() and any(
+                path.relative_to(code_root).is_relative_to(root)
+                for root in project.refresh_roots
+            ):
+                return path
+    raise ValueError("module must belong to a configured author refresh root")
+
+
 def main() -> None:
     os.environ.pop(DAEMON_URL_ENV, None)
     root = Path(sys.argv[1]).resolve()
@@ -47,7 +66,15 @@ def main() -> None:
         for source in project.source_roots:
             for path in (code_root / source).rglob("*.py"):
                 compile(path.read_bytes(), str(path.relative_to(code_root)), "exec")
-        project.load_application()
+        application = project.load_application()
+        if application.authors is not None:
+            for experiment in application.authors.experiments:
+                name = experiment.source["module"]
+                expected = author_module_path(project, name)
+                if Path(cast("str", sys.modules[name].__file__)) != expected:
+                    raise ValueError(
+                        f"author module resolved outside its source snapshot: {name}"
+                    )
         return
     request = AuthorAnalysisRequest.model_validate_json(sys.stdin.read())
     with contextlib.redirect_stdout(sys.stderr):
@@ -56,14 +83,10 @@ def main() -> None:
             module_name, separator, name = request.analysis.partition(":")
             if not separator or not module_name or not name:
                 raise ValueError("analysis must use module:name")
+            expected = author_module_path(project, module_name)
             module = import_module(module_name)
-            source = Path(cast("str", module.__file__)).relative_to(
-                project.code_root or root
-            )
-            if not any(source.is_relative_to(path) for path in project.refresh_roots):
-                raise ValueError(
-                    "analysis must belong to a configured author refresh root"
-                )
+            if Path(cast("str", module.__file__)) != expected:
+                raise ValueError("analysis resolved outside its source snapshot")
             definition = cast("object", getattr(module, name))
             if not isinstance(definition, AnalysisDefinition):
                 raise ValueError(

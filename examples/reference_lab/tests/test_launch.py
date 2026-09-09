@@ -91,6 +91,7 @@ def submit_request(
             "request_key": key,
             "expected_request_hash": preview.request_hash,
             "config_source": preview.config_source,
+            "code_revision": preview.code_revision,
         }
     )
 
@@ -134,9 +135,13 @@ def test_real_http_preview_shares_catalog_and_never_admits_acquisition(
     ):
         response = http.get("/api/v1/experiment-launcher")
         assert response.is_success, response.text
-        assert LaunchCatalog.model_validate(response.json()) == provider(
-            lab, LaunchRequest(action="list")
-        )
+        catalog = LaunchCatalog.model_validate(response.json())
+        expected = provider(lab, LaunchRequest(action="list"))
+        assert isinstance(expected, LaunchCatalog)
+        assert catalog.code_revision is not None
+        assert [(item.id, item.title, item.controls) for item in catalog.entries] == [
+            (item.id, item.title, item.controls) for item in expected.entries
+        ]
         before = client.list_runs()
         active = lab.config.active()
         request = LaunchRequest(action="preview", experiment=experiment, version="1")
@@ -148,7 +153,12 @@ def test_real_http_preview_shares_catalog_and_never_admits_acquisition(
         repeated = provider(lab, request)
         assert isinstance(repeated, LaunchPreview)
         # Target inspection includes per-compilation timing/cache diagnostics.
-        exclude = {"preflight": {"stages": {"__all__": {"inspections"}}}}
+        assert preview.code_revision == catalog.code_revision
+        assert repeated.code_revision is None  # direct, deliberately unpinned provider
+        exclude = {
+            "code_revision": True,
+            "preflight": {"stages": {"__all__": {"inspections"}}},
+        }
         assert preview.model_dump(exclude=exclude) == repeated.model_dump(
             exclude=exclude
         )

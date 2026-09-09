@@ -13,12 +13,6 @@ import httpx2
 import pyarrow as pa
 from pydantic import BaseModel, ValidationError
 
-from scopecat.application.launch import (
-    LaunchCatalog,
-    LaunchPreview,
-    LaunchRequest,
-    LaunchSubmission,
-)
 from scopecat.automation import (
     ProcedureCancelCommand,
     ProcedureCancelReceipt,
@@ -341,19 +335,6 @@ class DaemonClient:
 
     def close(self) -> None:
         self._http.close()
-
-    def author_launch_catalog(self) -> LaunchCatalog:
-        return self._get_model(f"{_API_PREFIX}/experiment-launcher", LaunchCatalog)
-
-    def author_launch_preview(self, request: LaunchRequest) -> LaunchPreview:
-        return self._post_model(
-            f"{_API_PREFIX}/experiment-launcher/preview", request, LaunchPreview
-        )
-
-    def author_launch_submit(self, request: LaunchRequest) -> LaunchSubmission:
-        return self._post_model(
-            f"{_API_PREFIX}/experiment-launcher/submit", request, LaunchSubmission
-        )
 
     def author_revision_state(self) -> AuthorRevisionState:
         return self._get_model(f"{_API_PREFIX}/author-revisions", AuthorRevisionState)

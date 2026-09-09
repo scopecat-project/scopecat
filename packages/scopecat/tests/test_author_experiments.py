@@ -131,3 +131,37 @@ def test_application_replace_preserves_discovered_authors_without_reloading(
         item.ref for item in copied.authors.procedures
     )
     monkeypatch.delitem(sys.modules, "retained_author")
+
+
+def test_project_loading_pins_complete_revision_into_discovered_procedures(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from scopecat_testkit.project_loading import isolated_project_imports
+
+    from scopecat.project import load_project
+    from scopecat.project_sources import loading_revision
+    from scopecat.records.author_revision import AuthorRevisionRef
+
+    monkeypatch.setattr(sys, "path", [str(tmp_path), *sys.path])
+    (tmp_path / "revision_author.py").write_text(
+        SOURCE + "\nfrom scopecat.application import LabApplication\n"
+        "def create(root):\n"
+        "    return LabApplication(author_modules=(__name__,))\n"
+    )
+    manifest = tmp_path / "scopecat.toml"
+    manifest.write_text('[lab]\napplication="revision_author:create"\n')
+    project = load_project(manifest)
+    first = AuthorRevisionRef(content_hash="sha256:" + "1" * 64)
+    second = AuthorRevisionRef(content_hash="sha256:" + "2" * 64)
+    with isolated_project_imports():
+        original = replace(project, code_revision=first).load_application()
+        revised = replace(project, code_revision=second).load_application()
+        assert original.authors is not None and revised.authors is not None
+        assert original.authors.experiments[0].code_revision == first
+        assert revised.authors.experiments[0].code_revision == second
+        assert original.procedures.refs != revised.procedures.refs
+        assert (
+            original.authors.experiments[0].provenance["author_code_revision"]
+            == first.content_hash
+        )
+    assert loading_revision.get() is None

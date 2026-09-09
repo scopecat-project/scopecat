@@ -21,11 +21,12 @@ from scopecat.application.launch import (
     LaunchRequest,
     LaunchSubmission,
 )
-from scopecat.daemon.client import DaemonConflictError
+from scopecat.daemon.client import DaemonClient, DaemonConflictError
 from scopecat.kernel.quantity import Quantity
 from scopecat.project import load_project
 from scopecat.records.run_request import AxisValuesSourceRecord
 from scopecat.records.sample import SampleRevisionDraft
+from scopecat_server.author_worker import revision_project
 from scopecat_server.lifecycle import start_project, stop_project
 from scopecat_testkit.project_loading import isolated_project_imports
 
@@ -66,19 +67,22 @@ def reference_lab_daemon(
     project = load_project(root / "scopecat.toml")
     with isolated_project_imports():
         load_project(EXAMPLE_ROOT / "scopecat.toml").load_bootstrap()
-    with isolated_project_imports():
-        application = project.load_application()
-        analysis = cast(
-            "AnalysisDefinition[...]",
-            import_module("reference_lab.workflows.authored.signal").selected_mean,
-        )()
-        with pytest.MonkeyPatch.context() as patch:
-            patch.delenv("SCOPECAT_DAEMON_URL", raising=False)
-            endpoint = start_project(project)
-        try:
+    with pytest.MonkeyPatch.context() as patch:
+        patch.delenv("SCOPECAT_DAEMON_URL", raising=False)
+        endpoint = start_project(project)
+    try:
+        with DaemonClient(endpoint.base_url, timeout=120) as client:
+            active = client.author_revision_state().active
+            assert active is not None
+        with isolated_project_imports():
+            application = revision_project(root, active).load_application()
+            analysis = cast(
+                "AnalysisDefinition[...]",
+                import_module("reference_lab.workflows.authored.signal").selected_mean,
+            )()
             yield AuthorDaemon(endpoint.base_url, application, source, analysis)
-        finally:
-            stop_project(project)
+    finally:
+        stop_project(project)
 
 
 def test_copied_author_uses_shared_control_plan_and_real_retained_run(
@@ -140,6 +144,7 @@ def test_copied_author_uses_shared_control_plan_and_real_retained_run(
                     "request_key": f"author-{mode}",
                     "expected_request_hash": preview.request_hash,
                     "config_source": preview.config_source,
+                    "code_revision": preview.code_revision,
                 }
             )
             admitted = provider(lab, command)

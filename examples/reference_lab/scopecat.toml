@@ -2,3 +2,7 @@
 bootstrap = "reference_lab.application:create_bootstrap"
 application = "reference_lab.application:create_application"
 instrument_backend = "reference_lab.backend:create_backend"
+
+[authors]
+source_roots = ["src", "config"]
+refresh_roots = ["src/reference_lab/workflows/authored"]

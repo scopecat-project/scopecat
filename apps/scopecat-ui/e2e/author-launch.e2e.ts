@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { cp, mkdtemp, readFile, rm } from "node:fs/promises";
+import { cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { expect, test } from "@playwright/test";
@@ -47,7 +47,8 @@ test("discovers an ordinary author experiment and edits controls before submitti
     await page.getByRole("button", { name: "Preview", exact: true }).click();
     const preview = await previewResponse;
     expect(preview.status()).toBe(200);
-    expect(await preview.json()).toMatchObject({
+    const originalPreview = await preview.json();
+    expect(originalPreview).toMatchObject({
       experiment_id: "signal",
       point_count: 3,
       controls: expect.arrayContaining([
@@ -55,6 +56,36 @@ test("discovers an ordinary author experiment and edits controls before submitti
       ]),
     });
     await expect(page.getByText("Preview ready", { exact: true })).toBeVisible();
+    const sourcePath = join(project, "src/reference_lab/workflows/authored/signal.py");
+    const originalSource = await readFile(sourcePath, "utf8");
+    await writeFile(sourcePath, originalSource + "\ndef broken(:\n");
+    await page.getByRole("button", { name: "Refresh author code", exact: true }).click();
+    await expect(page.getByRole("alert").filter({ hasText: "SyntaxError" })).toBeVisible();
+    await expect(page.getByText("Preview ready", { exact: true })).toBeVisible();
+    await writeFile(sourcePath, originalSource.replace("return gain /", "return 2 * gain /"));
+    await page.getByRole("button", { name: "Refresh author code", exact: true }).click();
+    await expect(
+      page.getByText("Author code refreshed. Preview the updated experiment before starting."),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Start acquisition", exact: true }),
+    ).toBeDisabled();
+    await expect(
+      page.getByText(
+        "Experiment revision changed. Inputs and control edits are retained; preview again.",
+      ),
+    ).toBeVisible();
+    await expect(page.getByLabel("Gain", { exact: true })).toHaveValue("2");
+    await expect(page.getByLabel("Frequency points")).toHaveValue("3");
+    const nextPreviewResponse = page.waitForResponse(
+      (response) =>
+        response.url().endsWith("/experiment-launcher/preview") &&
+        response.request().method() === "POST",
+    );
+    await page.getByRole("button", { name: "Preview", exact: true }).click();
+    const revisedPreview = await (await nextPreviewResponse).json();
+    expect(revisedPreview.code_revision).not.toEqual(originalPreview.code_revision);
+    expect(revisedPreview.point_count).toBe(3);
     const submitted = page.waitForResponse(
       (response) =>
         response.url().endsWith("/experiment-launcher/submit") &&

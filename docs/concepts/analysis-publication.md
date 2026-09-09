@@ -182,11 +182,11 @@ whole-blob storage read: record batches are counted without building a full
 table, and only selected columns and bounded rows enter the preview table.
 This is not storage predicate pushdown or a bound on a single decoded batch.
 
-The layered figure format requires project store version **63**. Version 62
-projects and snapshots must be read or exported with their pinned version 62
-runtime; the version 63 runtime rejects them before modification. There is no
-automatic migration. Keep the original projects and verified snapshots when
-creating a separate version 63 project. See [backup and restore](../how-to/backup-and-restore.md).
+The layered figure format was introduced in project store version **63**. The
+current runtime uses version **64**, adding immutable author revisions. Older
+projects and snapshots require their pinned matching reader; this runtime rejects
+them before modification. Preserve originals when starting a separate version 64
+project. See [backup and restore](../how-to/backup-and-restore.md).
 
 ## Compare completed runs
 

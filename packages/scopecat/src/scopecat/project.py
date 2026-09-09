@@ -71,16 +71,24 @@ class Project:
             from scopecat.application.lab import LabApplication
 
             return LabApplication()
-        return load_application_factory(
-            self.application_spec, self.code_root or self.root
-        )(self.root)
+        from scopecat.project_sources import loading_revision
+
+        token = loading_revision.set(self.code_revision)
+        try:
+            return load_application_factory(
+                self.application_spec, self.code_root or self.root
+            )(self.root)
+        finally:
+            loading_revision.reset(token)
 
     def authoring(self, daemon: str | None = None) -> AuthorProject:
         """Use complete author revisions from notebooks without module reload."""
         from scopecat.application.author_project import AuthorProject
         from scopecat.daemon.endpoint import resolve_daemon_endpoint
 
-        return AuthorProject(resolve_daemon_endpoint(self.root, explicit=daemon))
+        return AuthorProject(
+            resolve_daemon_endpoint(self.root, explicit=daemon), timeout=120
+        )
 
     def connect(
         self,

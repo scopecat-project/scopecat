@@ -64,3 +64,54 @@ def test_revision_captures_helper_analysis_and_keeps_previous_objects(
         capture_sources(project).manifest.maintenance_hash
         != first.manifest.maintenance_hash
     )
+
+
+def test_maintenance_change_is_rejected_before_author_validation(
+    tmp_path: Path,
+) -> None:
+    from scopecat.project_sources import require_environment
+
+    from scopecat_server.services.author_revisions import AuthorRevisionService
+
+    (tmp_path / "src/authors").mkdir(parents=True)
+    (tmp_path / "scopecat.toml").write_text(
+        '[lab]\n[authors]\nsource_roots=["src"]\nrefresh_roots=["src/authors"]\n'
+    )
+    driver = tmp_path / "src/driver.py"
+    driver.write_text("driver = 1\n")
+    store = SQLiteProjectStore(
+        SQLiteDatabase(tmp_path / "control.sqlite3"), tmp_path / "objects"
+    )
+    store.bootstrap()
+    try:
+        service = AuthorRevisionService(tmp_path, store)
+        assert service.baseline is not None
+        with pytest.raises(ValueError, match="recorded Python"):
+            require_environment(
+                service.baseline.manifest.model_copy(update={"python": "0.0"})
+            )
+        driver.write_text("driver = 2\n")
+        with pytest.raises(ValueError, match="maintained composition changed"):
+            service.refresh(expected_generation=0)
+        assert service.repository.state().active is None
+    finally:
+        store.close()
+
+
+def test_analysis_module_must_resolve_inside_configured_author_root(
+    tmp_path: Path,
+) -> None:
+    from scopecat_server.author_worker import author_module_path
+
+    (tmp_path / "src/authors").mkdir(parents=True)
+    (tmp_path / "scopecat.toml").write_text(
+        '[lab]\n[authors]\nsource_roots=["src"]\nrefresh_roots=["src/authors"]\n'
+    )
+    analysis = tmp_path / "src/authors/analysis.py"
+    analysis.write_text("# permitted local analysis\n")
+    project = load_project(tmp_path / "scopecat.toml")
+    assert author_module_path(project, "authors.analysis") == analysis
+    with pytest.raises(ValueError, match="configured author refresh root"):
+        author_module_path(project, "os")
+    with pytest.raises(ValueError, match="qualified Python module"):
+        author_module_path(project, "../outside")

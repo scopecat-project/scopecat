@@ -88,11 +88,16 @@ This feature supplies no general migration engine. Do not delete the old databas
 to make a newer reader start. Test a restore while the matching reader and
 external dependencies are still available.
 
-## Layered figure store version
+## Current store version
 
-Layered analysis figures use project store version 63. A version 62 project or
-snapshot is rejected by this runtime without being modified; snapshot restore
-does not upgrade it. Keep its pinned version 62 runtime to read or export the
-retained scientific data, and preserve the original project and verified
-snapshot. Create a separate version 63 project for new publications. No automatic
-62-to-63 migration is supplied.
+The current runtime uses project store **64**, including immutable author source
+revisions. Layered analysis figures were introduced in version 63. Version 63 and
+older stores and snapshots are rejected before modification; restore does not
+upgrade them. Keep each original project, verified snapshot and matching pinned
+reader to inspect or export its scientific data. Start a separate version 64
+project for new work. No 63-to-64 migration is supplied.
+
+Within version 64, snapshots retain author source bundles, active revision and
+admitted procedure identity. Restored author workers select the original code
+before importing project modules. See [author refresh and recovery](refresh-author-code.md)
+for the maintained-source and external environment requirements.

@@ -343,13 +343,21 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
 
     @app.get(f"{_API_PREFIX}/author-revisions")
     def author_revision_state() -> AuthorRevisionState:
-        return application.author_revisions.state()
+        try:
+            return application.author_revisions.state()
+        except ValueError as error:
+            raise HTTPException(422, str(error)) from error
 
-    @app.get(f"{_API_PREFIX}/author-revisions/{'{content_hash}'}")
+    @app.get(f"{_API_PREFIX}/author-revisions/{{content_hash}}")
     def author_revision(content_hash: str) -> AuthorRevisionBundle:
-        return application.author_revisions.get(
-            AuthorRevisionRef(content_hash=content_hash)
-        )
+        try:
+            return application.author_revisions.get(
+                AuthorRevisionRef(content_hash=content_hash)
+            )
+        except KeyError as error:
+            raise HTTPException(404, "Author revision not found") from error
+        except ValueError as error:
+            raise HTTPException(422, str(error)) from error
 
     @app.post(f"{_API_PREFIX}/author-revisions/refresh")
     def refresh_author_revision(command: AuthorRefreshRequest) -> AuthorRevisionState:

@@ -137,8 +137,9 @@ experiment, a resonance helper and a thresholded mean analysis. Editing its scan
 input default, helper or analysis does not require changes to catalog, service,
 cohort, compiler or driver files. The [ordinary author path](../how-to/write-an-experiment.md) builds on this
 fixture with initial module discovery, GUI control editing/submission and a Python
-adapter. Atomic refresh of installed definitions and helper dependency identity
-remain separate acceptance targets; this fixture alone does not qualify them.
+adapter. The separate [author revision journey](../how-to/refresh-author-code.md)
+validates complete helper/analysis snapshots, atomic refresh and old admission
+recovery. This four-run fixture alone does not qualify those guarantees.
 
 `src/reference_lab/exploration.py` belongs to the fixture maintainer. It reuses
 the existing reference application, parameter table, sample registry and run
@@ -196,7 +197,7 @@ where a maintainer intervened. A proposed mechanism is not an observed success.
 
 | Journey | Goal and observable success | Foundation versus later work |
 |---|---|---|
-| Edit and refresh | Change scan density, then helper response and analysis; run the revised experiment and still interpret the old result | Direct Python and the #441 discovered GUI author path exist. Atomic refresh and helper dependency identity belong to #442. |
+| Edit and refresh | Change scan density, then helper response and analysis; run the revised experiment and still interpret the old result | The revision-aware Python/GUI path snapshots configured source roots, validates refresh in a fresh process and pins admitted work; direct imports retain single-process semantics. |
 | Preserve a plan | Leave an unfinished scan, inspect an old run, return without losing edits; save two alternatives and reopen them | This fixture supplies an editable invocation. Route-local preservation is #436; durable saved plans are #437. |
 | Select parameters | Move between A/B and parked/shifted, identify each value's source, try a local override, and encounter a missing carrier without inheriting a misleading default | Four explicit snapshots and the missing case exist. Parameter-context resolution and structural edits are #438/#439. |
 | Reanalyze and continue | Compare original and selected means from retained data, explain exclusions, then use the result to choose the next scan | The two Python publications exist without reacquisition. The connected selection/comparison/next-run experience is #440. |
@@ -217,9 +218,11 @@ and describe that as successful exploration.
   readable without rebuilding the current experiment return tree.
 - An experiment ID is a name, not a complete code revision. Existing request
   records and compute diagnostics must not be described as a transitive source
-  archive or replay guarantee. #442 owns the stronger edit/helper provenance
-  contract; its tests must distinguish changes to helpers as well as the main
-  function. Old runs must remain readable even when new code cannot execute them.
+  archive or replay guarantee. Configured author revisions separately retain the
+  full declared local source roots and pin the exact helper/analysis implementation.
+  Their recovery contract requires matching maintained source and external
+  environment. Pre-revision runs retain their original weaker provenance; old
+  stores require their pinned reader across schema boundaries.
 - Keep at most three development worktrees active. Each fixture lane owns its
   source, state directory and generated outputs. Serialize daemon/worker/browser,
   full-suite and benchmark tests; claim the slot only when ready to run and release
