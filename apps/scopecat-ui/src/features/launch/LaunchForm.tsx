@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { apiClient, apiData } from "../../api-client";
 import type { LaunchCatalogEntry } from "./launch-api";
 import { ControlFields, ControlSummary, controlEdits } from "./ControlFields";
@@ -20,6 +21,7 @@ export function LaunchForm({
   const fieldsByName = new Map(fields);
   const supported = fields.length === allFields.length;
   const {
+    projectId,
     selectedContext,
     selectContext,
     draft: retained,
@@ -43,6 +45,33 @@ export function LaunchForm({
     };
   }, []);
   const result = catalogReady && configurationReady && !pending ? draft.preview : undefined;
+  const fence = result?.manual_state;
+  const manual = useQuery({
+    queryKey: ["launch-manual-validity", projectId, fence],
+    enabled: Boolean(fence),
+    retry: false,
+    refetchInterval: 1000,
+    queryFn: () => {
+      if (!fence) throw new Error("Preview before checking instrument changes");
+      return apiData(apiClient.POST("/api/v1/experiment-launcher/validity", { body: fence }));
+    },
+  });
+  const manualReady = Boolean(fence && manual.data?.valid && !manual.isError);
+  useEffect(() => {
+    if (!fence || !manual.data || manual.data.valid) return;
+    const changes = manual.data.changes.map(
+      (change) =>
+        `${change.instrument_ids.join(", ")}: ${change.reason} (${new Date(change.occurred_at).toLocaleTimeString()})`,
+    );
+    update((current) =>
+      current.preview?.manual_state?.event_id === fence.event_id
+        ? invalidateDraft(
+            current,
+            `Manual instrument changes invalidate this preview. ${changes.join(" ")} Preview again before starting.`,
+          )
+        : current,
+    );
+  }, [fence, manual.data, update]);
   function changeInput(
     changes: Partial<Pick<LaunchDraft, "values" | "controls" | "sample" | "actor">>,
   ) {
@@ -134,6 +163,7 @@ export function LaunchForm({
           actor,
           config_source: source,
           code_revision: result?.code_revision,
+          manual_state: result?.manual_state,
           expected_request_hash: result?.request_hash,
         },
         draft.definition,
@@ -306,6 +336,7 @@ export function LaunchForm({
             type="button"
             disabled={
               !source ||
+              !manualReady ||
               !actor.trim() ||
               pending ||
               attempt?.status === "unknown" ||
@@ -324,6 +355,13 @@ export function LaunchForm({
         Preview compiles only. Start acquisition submits a durable procedure and retains its
         results.
       </p>
+      {fence && !manualReady && (
+        <p role={manual.isError ? "alert" : "status"}>
+          {manual.isError
+            ? "Cannot check recent instrument changes. Preview again or wait for the connection to recover."
+            : "Checking relevant instrument changes…"}
+        </p>
+      )}
       {error && <p role="alert">{error}</p>}
       {result && (
         <>

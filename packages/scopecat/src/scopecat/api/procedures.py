@@ -105,6 +105,7 @@ from scopecat.records.analysis import (
 )
 from scopecat.records.config import ConfigProfileSnapshot, config_content_hash
 from scopecat.records.content import Sha256ContentHash
+from scopecat.records.manual_preview import ManualPreviewFence
 from scopecat.records.parameter_change import ParameterChangeProposal
 from scopecat.records.run import RunConfigSource
 from scopecat.records.sample import SampleSelector
@@ -794,6 +795,7 @@ class LabProcedureOperations:
         intent: object,
         *,
         request_key: str,
+        expected_manual_preview: ManualPreviewFence | None = None,
         expected_config_generation: int | None = None,
         sample: str | SampleSelector | None = None,
         samples: tuple[SampleSelector, ...] = (),
@@ -807,6 +809,7 @@ class LabProcedureOperations:
         receipt = self._client.submit_procedure(
             ProcedureSubmitCommand(
                 request_key=request_key,
+                expected_manual_preview=expected_manual_preview,
                 expected_config_generation=expected_config_generation,
                 definition=selected.ref,
                 intent=selected.encode_intent(intent),

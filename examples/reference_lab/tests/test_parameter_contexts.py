@@ -255,6 +255,7 @@ def test_context_launch_replay_preserves_reviewed_generation() -> None:
                 "action": "submit",
                 "request_key": "context-replay",
                 "config_source": preview.config_source,
+                "manual_state": preview.manual_state,
                 "expected_request_hash": preview.request_hash,
             }
         )

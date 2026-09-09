@@ -29,6 +29,7 @@ from scopecat.planning.preflight import (
     summarize_preflight,
 )
 from scopecat.records.content import Sha256ContentHash
+from scopecat.records.manual_preview import ManualPreviewFence
 
 from reference_lab.launch_config import launch_config
 from reference_lab.workflows.frequency_amplitude import CONTROLS, frequency_amplitude
@@ -53,6 +54,7 @@ CONTROL_ENTRY = LaunchCatalogEntry(
 
 
 class ControlLaunchIntent(TemperatureDiagnosticIntent):
+    manual_state: ManualPreviewFence | None = None
     config_source: LaunchConfigSource
     request_hash: Sha256ContentHash
     actor: str
@@ -99,9 +101,11 @@ def control_launch(
         )
         return LaunchPreview(
             experiment_id=CONTROL_ENTRY.id,
+            manual_state=request.manual_state,
             request_hash=request.request_hash,
             config_source=source,
             point_count=preview.initial_point_count,
+            resources=preview.instrument_ids,
             controls=control_values(CONTROLS, invocation, config=config),
             summary=CONTROL_ENTRY.description,
             preflight=PreflightSummary(
@@ -128,12 +132,14 @@ def control_launch(
         ControlLaunchIntent(
             initial_config=config,
             config_source=source,
+            manual_state=request.manual_state,
             request_hash=request.request_hash,
             actor=request.actor,
             edits=request.control_edits,
         ),
         request_key=request.request_key,
         sample=launch_sample_selection(request, source),
+        expected_manual_preview=request.manual_state,
         expected_config_generation=launch_config_generation(source),
     )
     return LaunchSubmission(procedure_id=admitted.id)

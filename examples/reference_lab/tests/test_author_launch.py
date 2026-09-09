@@ -151,6 +151,7 @@ def test_copied_author_uses_shared_control_plan_and_real_retained_run(
                     "expected_request_hash": preview.request_hash,
                     "config_source": preview.config_source,
                     "code_revision": preview.code_revision,
+                    "manual_state": preview.manual_state,
                 }
             )
             admitted = provider(lab, command)

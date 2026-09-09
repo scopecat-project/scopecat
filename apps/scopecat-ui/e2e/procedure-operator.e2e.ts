@@ -31,6 +31,7 @@ with project.connect() as lab:
     admitted = provider(lab, LaunchRequest.model_validate({
         **request.model_dump(), "action": "submit", "request_key": "browser-retained",
         "expected_request_hash": preview.request_hash, "config_source": preview.config_source,
+                "manual_state": preview.manual_state,
     }))
     print(admitted.procedure_id)
 `;

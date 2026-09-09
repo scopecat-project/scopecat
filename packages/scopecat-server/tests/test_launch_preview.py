@@ -41,12 +41,24 @@ if TYPE_CHECKING:
     from scopecat_server.services.application import DaemonApplication
 
 
+def _manual_previews() -> Mock:
+    service = Mock()
+    service.cursor.return_value = 0
+    service.record_preview.side_effect = lambda preview, **_kwargs: preview
+    return service
+
+
 def client() -> TestClient:
     return TestClient(
         create_app(
             cast(
                 "DaemonApplication",
-                cast("object", SimpleNamespace(project_root=Path.cwd())),
+                cast(
+                    "object",
+                    SimpleNamespace(
+                        project_root=Path.cwd(), manual_previews=_manual_previews()
+                    ),
+                ),
             )
         )
     )
@@ -124,7 +136,12 @@ def test_admission_survives_dispatch_failure(tmp_path: Path) -> None:
         cast(
             "DaemonApplication",
             cast(
-                "object", SimpleNamespace(project_root=tmp_path, automation=automation)
+                "object",
+                SimpleNamespace(
+                    project_root=tmp_path,
+                    automation=automation,
+                    manual_previews=_manual_previews(),
+                ),
             ),
         )
     )
@@ -280,7 +297,12 @@ def test_http_lifespan_starts_and_stops_manager() -> None:
             create_app(
                 cast(
                     "DaemonApplication",
-                    cast("object", SimpleNamespace(project_root=Path.cwd())),
+                    cast(
+                        "object",
+                        SimpleNamespace(
+                            project_root=Path.cwd(), manual_previews=_manual_previews()
+                        ),
+                    ),
                 )
             )
         ):

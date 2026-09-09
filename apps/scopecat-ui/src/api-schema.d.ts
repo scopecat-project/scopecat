@@ -361,6 +361,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/experiment-launcher/validity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Experiment Launch Validity */
+        post: operations["experiment_launch_validity_api_v1_experiment_launcher_validity_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/health": {
         parameters: {
             query?: never;
@@ -4691,6 +4708,7 @@ export interface components {
             controls: components["schemas"]["LaunchControlValue"][];
             /** Experiment Id */
             experiment_id: string;
+            manual_state?: components["schemas"]["ManualPreviewFence"] | null;
             /**
              * Point Count
              * @description Initial point count of the first previewed experiment, not a procedure total.
@@ -4739,6 +4757,7 @@ export interface components {
             inputs?: {
                 [key: string]: components["schemas"]["pydantic__types__JsonValue"];
             };
+            manual_state?: components["schemas"]["ManualPreviewFence"] | null;
             /**
              * Overrides
              * @default []
@@ -4870,6 +4889,45 @@ export interface components {
              * @enum {string}
              */
             kind: "manual_parameter_updates";
+        };
+        /** ManualPreviewBinding */
+        ManualPreviewBinding: {
+            code_revision?: components["schemas"]["Sha256ContentHash"] | null;
+            config_source_hash: components["schemas"]["Sha256ContentHash"];
+            request_hash: components["schemas"]["Sha256ContentHash"];
+        };
+        /** ManualPreviewChange */
+        ManualPreviewChange: {
+            /** Action */
+            action: string;
+            /** Instrument Ids */
+            instrument_ids: string[];
+            /**
+             * Occurred At
+             * Format: date-time
+             */
+            occurred_at: string;
+            /** Reason */
+            reason: string;
+        };
+        /**
+         * ManualPreviewFence
+         * @description Reference to server-recorded preview facts; never a permanent run permission.
+         */
+        ManualPreviewFence: {
+            binding: components["schemas"]["ManualPreviewBinding"];
+            /** Event Id */
+            event_id: number;
+        };
+        /** ManualPreviewValidity */
+        ManualPreviewValidity: {
+            /**
+             * Changes
+             * @default []
+             */
+            changes: components["schemas"]["ManualPreviewChange"][];
+            /** Valid */
+            valid: boolean;
         };
         MeasurementAcquisitionEvents: components["schemas"]["InstrumentAcquisitionEvent"][];
         /**
@@ -5987,6 +6045,11 @@ export interface components {
              * @default []
              */
             inspections: components["schemas"]["ExperimentPreviewDomainInspection"][];
+            /**
+             * Instrument Ids
+             * @default []
+             */
+            instrument_ids: string[];
             /** Label */
             label: string;
             /**
@@ -9069,6 +9132,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LaunchSubmission"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    experiment_launch_validity_api_v1_experiment_launcher_validity_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ManualPreviewFence"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ManualPreviewValidity"];
                 };
             };
             /** @description Validation Error */

@@ -23,6 +23,7 @@ _OPERATIONS = {
     ("/api/v1/procedures/{procedure_run_id}/dispatch", "post"),
     ("/api/v1/experiment-launcher", "get"),
     ("/api/v1/experiment-launcher/preview", "post"),
+    ("/api/v1/experiment-launcher/validity", "post"),
     ("/api/v1/analyses", "get"),
     ("/api/v1/analyses/{analysis_id}/contents/{selector}/bytes", "get"),
     ("/api/v1/analyses/{selector}", "get"),

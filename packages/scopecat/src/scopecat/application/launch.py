@@ -23,6 +23,7 @@ from scopecat.planning.preflight import PreflightSummary
 from scopecat.records.author_revision import AuthorRevisionRef
 from scopecat.records.config_context import ConfigContextRef, ContextRunConfigSource
 from scopecat.records.content import Sha256ContentHash
+from scopecat.records.manual_preview import ManualPreviewFence
 from scopecat.records.run import ConfigRegistryRunConfigSource
 
 if TYPE_CHECKING:
@@ -98,6 +99,7 @@ class LaunchRequest(BaseModel):
     actor: str = "operator"
     inputs: dict[str, JsonValue] = Field(default_factory=dict)
     control_edits: dict[str, ControlEdit] = Field(default_factory=dict)
+    manual_state: ManualPreviewFence | None = None
     expected_request_hash: Sha256ContentHash | None = None
     context: ConfigContextRef | None = None
     overrides: tuple[ParameterUpdate, ...] = Field(default=(), max_length=256)
@@ -175,6 +177,7 @@ class LaunchPreview(BaseModel):
         ),
     )
     preflight: PreflightSummary | None = None
+    manual_state: ManualPreviewFence | None = None
     resources: tuple[str, ...] = ()
     summary: str
     resolved_inputs: dict[str, JsonValue] = Field(default_factory=dict)

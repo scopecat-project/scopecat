@@ -25,6 +25,7 @@ from .calibration_cohorts import CalibrationCohortService
 from .config import ConfigService
 from .executor import ExecutorService
 from .leases import OwnershipLeaseSupervisor
+from .manual_previews import ManualPreviewService
 from .point_plans import RunPointPlanService
 from .procedure_schedules import ProcedureScheduleService
 from .reviews import ReviewService
@@ -64,6 +65,7 @@ class DaemonApplication:
         self._project_store = project_store
         self.author_revisions = AuthorRevisionService(self.project_root, project_store)
         self.config = config
+        self.manual_previews = ManualPreviewService(project_store.sqlite, config)
         self.analyses = analyses
         self.runs = runs
         self._admission = admission

@@ -70,6 +70,7 @@ from scopecat.automation.wire import (
     ProcedureStepResourceWaitReceipt,
 )
 from scopecat.records.content import Sha256ContentHash
+from scopecat.records.manual_preview import ManualPreviewFence
 from scopecat.records.sample import SampleSelector
 
 from scopecat_server.storage.sqlite.automation import (
@@ -88,6 +89,10 @@ from scopecat_server.storage.sqlite.config_registry import (
     SQLiteConfigRegistryRepository,
 )
 from scopecat_server.storage.sqlite.control_plane import SQLiteControlPlane
+from scopecat_server.storage.sqlite.manual_preview import (
+    ManualPreviewChanged,
+    ManualPreviewRepository,
+)
 from scopecat_server.storage.sqlite.run_repository import SQLiteRunRepository
 
 from ..errors import BackendConflict, BackendNotFound
@@ -200,6 +205,7 @@ class AutomationService:
                 request_key=command.request_key,
                 intent=command.intent,
                 samples=command.samples,
+                expected_manual_preview=command.expected_manual_preview,
                 expected_config_generation=command.expected_config_generation,
                 recovery=command.recovery,
             )
@@ -513,6 +519,7 @@ class AutomationService:
         request_key: str,
         intent: ProcedureIntent,
         samples: tuple[SampleSelector, ...] = (),
+        expected_manual_preview: ManualPreviewFence | None = None,
         expected_config_generation: int | None = None,
         recovery: ProcedureRecoverySource | None = None,
     ) -> ProcedureRun:
@@ -530,6 +537,7 @@ class AutomationService:
                 request_key=request_key,
                 intent=intent,
                 samples=samples,
+                expected_manual_preview=expected_manual_preview,
                 expected_config_generation=expected_config_generation,
                 recovery=recovery,
             )
@@ -542,6 +550,7 @@ class AutomationService:
         request_key: str,
         intent: ProcedureIntent,
         samples: tuple[SampleSelector, ...] = (),
+        expected_manual_preview: ManualPreviewFence | None = None,
         expected_config_generation: int | None = None,
         recovery: ProcedureRecoverySource | None = None,
         at: datetime | None = None,
@@ -597,6 +606,13 @@ class AutomationService:
                 if samples != source.samples:
                     raise ValueError("recovery must preserve source sample bindings")
             except ValueError as error:
+                raise AutomationConflict(str(error)) from error
+        if expected_manual_preview is not None:
+            try:
+                ManualPreviewRepository.require_valid_in_transaction(
+                    connection, expected_manual_preview
+                )
+            except ManualPreviewChanged as error:
                 raise AutomationConflict(str(error)) from error
         if expected_config_generation is not None:
             registry = SQLiteConfigRegistryRepository(connection)

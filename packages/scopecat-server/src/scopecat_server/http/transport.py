@@ -253,6 +253,7 @@ from scopecat.records.instrument import (
     InstrumentStateReadback,
     InstrumentStateSnapshot,
 )
+from scopecat.records.manual_preview import ManualPreviewFence, ManualPreviewValidity
 from scopecat.records.measurement_recording import MeasurementDatasetReceipt
 from scopecat.records.run import RunSnapshot
 from scopecat.records.sample import SampleArtifactRef, SampleId, SampleRevision
@@ -468,7 +469,16 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
     def experiment_launch_preview(command: LaunchRequest) -> LaunchPreview:
         if command.action != "preview":
             raise HTTPException(422, "Expected preview action")
-        return LaunchPreview.model_validate_json(launch_call(command))
+        cursor = application.manual_previews.cursor()
+        preview = LaunchPreview.model_validate_json(launch_call(command))
+        return application.manual_previews.record_preview(preview, cursor=cursor)
+
+    @app.post(f"{_API_PREFIX}/experiment-launcher/validity")
+    def experiment_launch_validity(fence: ManualPreviewFence) -> ManualPreviewValidity:
+        try:
+            return application.manual_previews.validity(fence)
+        except ValueError as error:
+            raise HTTPException(409, str(error)) from error
 
     def dispatch_procedure(
         procedure_id: str, *, explicit: bool = False
@@ -492,6 +502,10 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
     def experiment_launch_submit(command: LaunchRequest) -> LaunchSubmission:
         if command.action != "submit" or not command.request_key.strip():
             raise HTTPException(422, "Submit requires a request key")
+        try:
+            application.manual_previews.require_binding(command)
+        except ValueError as error:
+            raise HTTPException(422, str(error)) from error
         admitted = LaunchSubmission.model_validate_json(launch_call(command))
         return dispatch_procedure(admitted.procedure_id)
 

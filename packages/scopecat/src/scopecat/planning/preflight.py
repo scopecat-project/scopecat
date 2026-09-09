@@ -83,6 +83,7 @@ class PreflightStage(_PreflightModel):
     sampled_points: int
     selected_point_limit: int
     selected_points: int
+    instrument_ids: tuple[str, ...] = ()
     inspections: tuple[ExperimentPreviewDomainInspection, ...] = ()
     planned_settings: tuple[PlannedInstrumentSetting, ...] = ()
     planned_setting_limit: int = PLANNED_INSTRUMENT_SETTING_LIMIT
@@ -217,6 +218,7 @@ def summarize_preflight(
         )
     )
     return PreflightStage(
+        instrument_ids=preview.instrument_ids,
         id=stage_id,
         label=label,
         experiment_id=preview.experiment_id,
