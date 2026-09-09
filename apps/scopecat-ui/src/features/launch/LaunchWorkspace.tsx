@@ -1,3 +1,4 @@
+import type { ComparisonHandoff } from "../analyses/RunComparison";
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient, apiData } from "../../api-client";
@@ -8,8 +9,11 @@ import { OriginalSubmission } from "./OriginalSubmission";
 import { ProcedureHistory } from "./ProcedureHistory";
 import { ProcedureProgress } from "./ProcedureProgress";
 
-export function LaunchWorkspace() {
-  const { projectId, draft, select, update } = useLaunchDraft();
+export function LaunchWorkspace({
+  handoff,
+  onHandoffImported,
+}: { handoff?: ComparisonHandoff; onHandoffImported?: () => void } = {}) {
+  const { projectId, draft, select, update, importHandoff } = useLaunchDraft();
   const queryClient = useQueryClient();
   useEffect(() => {
     void queryClient.invalidateQueries({ queryKey: ["config", "launch-context", projectId] });
@@ -50,10 +54,37 @@ export function LaunchWorkspace() {
   useEffect(() => {
     if (entry) select(entry);
   }, [entry, select]);
+  const handoffTarget = handoff
+    ? catalog.data?.find((item) => item.id === handoff.request.experiment)
+    : undefined;
+  const handoffUnavailable = handoff && catalog.isSuccess && !handoffTarget;
+  useEffect(() => {
+    if (!handoff || !handoffTarget) return;
+    importHandoff(handoffTarget, handoff);
+    onHandoffImported?.();
+  }, [handoff, handoffTarget, importHandoff, onHandoffImported]);
   return (
     <section className="p-6 space-y-4">
       <h2 className="text-lg font-semibold">Experiments</h2>
       <AuthorRefresh projectId={projectId} />
+      {handoffUnavailable && (
+        <p role="alert">
+          The suggested experiment is unavailable. The source analysis is retained.
+        </p>
+      )}
+      {draft?.handoff && (
+        <p>
+          Suggested by{" "}
+          <a
+            className="underline"
+            href={`?compare=${encodeURIComponent(draft.handoff.source_run)}&comparison-analysis=${encodeURIComponent(draft.handoff.source_analysis)}#analyses`}
+          >
+            {draft.handoff.source_analysis}
+          </a>{" "}
+          · {draft.handoff.source_hash}. This source is retained only in the current draft, not yet
+          as destination-run provenance.
+        </p>
+      )}
       <p>Select a maintained experiment and preview its configured parameters.</p>
       {catalog.isPending && <p role="status">Loading experiments…</p>}
       {catalog.error && <p role="alert">{catalog.error.message}</p>}

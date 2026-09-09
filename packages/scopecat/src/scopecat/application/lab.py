@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from scopecat.api.calibration_policy import CalibrationPublicationPolicyRegistry
+from scopecat.application.comparison import ComparisonProvider
 from scopecat.application.launch import LaunchProvider
 from scopecat.automation.calibration_definition import CalibrationRegistry
 from scopecat.automation.definition import ProcedureRegistry
@@ -40,6 +41,7 @@ class LabApplication:
     """
 
     launch_provider: LaunchProvider | None = field(default=None, repr=False)
+    comparison_provider: ComparisonProvider | None = field(default=None, repr=False)
     authors: AuthorExperiments | None = field(default=None, init=False, repr=False)
 
     build_experiment_system: ExperimentSystemBuilder | None = field(
@@ -82,12 +84,14 @@ class LabApplication:
         ) = (),
         launch_provider: LaunchProvider | None = None,
         author_modules: tuple[str, ...] = (),
+        comparison_provider: ComparisonProvider | None = None,
     ) -> None:
         object.__setattr__(
             self,
             "build_experiment_system",
             build_experiment_system,
         )
+        object.__setattr__(self, "comparison_provider", comparison_provider)
         authors = None
         if author_modules:
             from scopecat.application.authoring import AuthorExperiments

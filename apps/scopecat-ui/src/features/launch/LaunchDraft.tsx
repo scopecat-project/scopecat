@@ -1,3 +1,5 @@
+import { importLaunchHandoff } from "./launch-handoff";
+import type { ComparisonHandoff } from "../analyses/RunComparison";
 import {
   createContext,
   useCallback,
@@ -21,6 +23,7 @@ import type { ConfigContextResolution } from "../config/config-api";
 import type { LaunchCatalogEntry, LaunchPreview } from "./launch-api";
 
 export interface LaunchDraft {
+  handoff?: ComparisonHandoff;
   definition: string;
   controlDefinition: string;
   experiment: string;
@@ -42,6 +45,7 @@ interface DraftContext {
   selectedContext: ConfigContextResolution | undefined;
   selectContext: (resolution?: ConfigContextResolution) => void;
   draft: LaunchDraft | undefined;
+  importHandoff: (entry: LaunchCatalogEntry, handoff: ComparisonHandoff) => void;
   select: (entry: LaunchCatalogEntry, reset?: boolean) => void;
   update: (change: DraftUpdate) => void;
   isCurrent: (revision: number) => boolean;
@@ -280,6 +284,18 @@ function ProjectDraft({
         refreshConfiguration: () => {
           void queryClient.invalidateQueries({ queryKey: ["config", "launch-context", projectId] });
         },
+        importHandoff: (entry, handoff) =>
+          setDraft((current) => {
+            const next = initialDraft(entry, (current?.revision ?? 0) + 1);
+            try {
+              return importLaunchHandoff(next, entry, handoff, selectedContext?.config_source);
+            } catch (error) {
+              return {
+                ...(current ?? next),
+                error: error instanceof Error ? error.message : String(error),
+              };
+            }
+          }),
         select,
         update: (change) => setDraft((current) => (current ? change(current) : current)),
         isCurrent: (revision) => alive.current && latest.current?.revision === revision,

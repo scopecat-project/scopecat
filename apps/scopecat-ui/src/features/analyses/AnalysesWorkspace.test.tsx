@@ -109,6 +109,8 @@ function renderWorkspace(onOpenRun: (runId: string) => void) {
   return render(
     <QueryClientProvider client={queryClient}>
       <AnalysesWorkspace
+        projectId="test"
+        onHandoff={vi.fn()}
         daemonUnavailable={false}
         onOpenRun={onOpenRun}
         onSelectAnalysis={vi.fn()}

@@ -1,3 +1,4 @@
+import { ComparisonLink } from "../analyses/ComparisonLink";
 import { useState } from "react";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { apiClient, apiData } from "../../api-client";
@@ -142,6 +143,7 @@ export function ProcedureProgress({ procedureId }: { procedureId: string }) {
               running.
             </p>
           )}
+          <ComparisonLink />
           {run.state === "waiting_for_input" && (
             <a
               className="underline"

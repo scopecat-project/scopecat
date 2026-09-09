@@ -136,7 +136,7 @@ def _fact_value_adapter[ValueT](
             )
 
         def decode_model(value: JsonValue) -> ValueT:
-            return cast("ValueT", model_type.model_validate(value))
+            return cast("ValueT", model_type.model_validate_json(canonical_json(value)))
 
         return encode_model, decode_model
 
@@ -180,7 +180,7 @@ def _fact_value_adapter[ValueT](
         return cast("JsonValue", validated.model_dump(mode="json"))
 
     def decode_dataclass(value: JsonValue) -> ValueT:
-        validated = validation_model.model_validate(value)
+        validated = validation_model.model_validate_json(canonical_json(value))
         constructor = cast("Callable[..., ValueT]", value_type)
         return constructor(
             **{member.name: getattr(validated, member.name) for member in members}

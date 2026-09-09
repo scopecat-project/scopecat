@@ -2,7 +2,7 @@ import type { components } from "../../api-schema";
 import registry from "../../unit-registry.json";
 
 type Control = components["schemas"]["LaunchControl"];
-type Edit = components["schemas"]["ControlEdit"];
+type Edit = components["schemas"]["ControlEdit-Input"];
 type Value = components["schemas"]["LaunchControlValue"];
 export type ControlDraft =
   | { mode: "default" }
