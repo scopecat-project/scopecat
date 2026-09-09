@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { errorMessage } from "../../lib/presentation";
 import { classes, secondaryButton } from "../../ui/styles";
+import { ConfigStructureEditor } from "./ConfigStructureEditor";
 import { ConfigContextEditor } from "./ConfigContextEditor";
 import {
   getConfigRegistryEntry,
@@ -45,6 +46,7 @@ export function ConfigWorkspace({
   const fileInput = useRef<HTMLInputElement>(null);
   const [configDraft, setConfigDraft] = useState<ConfigDraftSeed>();
   const [editingContext, setEditingContext] = useState(false);
+  const [editingStructure, setEditingStructure] = useState(false);
   const [comparisonId, setComparisonId] = useState("");
   const comparison = useQuery({
     queryKey: ["config", "comparison", comparisonId],
@@ -261,6 +263,15 @@ export function ConfigWorkspace({
                 {selectedEntry.source.kind === "parameter_context" && (
                   <button
                     className={secondaryButton}
+                    disabled={!registry.entryDetailQuery.data?.structureVersion}
+                    onClick={() => setEditingStructure(true)}
+                  >
+                    Change table structure
+                  </button>
+                )}
+                {selectedEntry.source.kind === "parameter_context" && (
+                  <button
+                    className={secondaryButton}
                     disabled={contextSelection.isPending}
                     onClick={() =>
                       contextSelection.mutate({
@@ -339,6 +350,19 @@ export function ConfigWorkspace({
                 }
                 onEdit={editableDraftSeed ? () => setConfigDraft(editableDraftSeed) : undefined}
               />
+              {editingStructure && registry.entryDetailQuery.data && (
+                <ConfigStructureEditor
+                  key={selectedEntry.id}
+                  detail={registry.entryDetailQuery.data}
+                  operator={workflow.operator}
+                  onCancel={() => setEditingStructure(false)}
+                  onSaved={(entryId) => {
+                    setEditingStructure(false);
+                    void queryClient.invalidateQueries({ queryKey: ["config"] });
+                    registry.selectEntry(entryId);
+                  }}
+                />
+              )}
               {editingContext && registry.entryDetailQuery.data && (
                 <ConfigContextEditor
                   key={selectedEntry.id}

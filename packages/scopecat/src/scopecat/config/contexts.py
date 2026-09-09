@@ -163,6 +163,36 @@ def context_value_origins(
                         entry=base_ref,
                     )
                 )
+    # Explicitly declared unknown is provenance too, even without a stored atom.
+    for origin in inherited:
+        if origin.evidence is None or origin.evidence.origin != "unknown":
+            continue
+        value = config.parameter_snapshot.get(origin.parameter_id)
+        definition = config.parameter_catalog.get(origin.parameter_id)
+        if (
+            not isinstance(value, TableParameterValue)
+            or definition is None
+            or not isinstance(definition.value_type, Table)
+        ):
+            continue
+        if not any(
+            column.id == origin.field_id for column in definition.value_type.columns
+        ):
+            continue
+        row = next(
+            (
+                row
+                for index, row in enumerate(value.rows)
+                if (
+                    index == origin.row_index
+                    if not definition.value_type.primary_key
+                    else all(row.get(key) == atom for key, atom in origin.key.items())
+                )
+            ),
+            None,
+        )
+        if row is not None and origin.field_id not in row:
+            origins.append(origin)
     return tuple(origins)
 
 

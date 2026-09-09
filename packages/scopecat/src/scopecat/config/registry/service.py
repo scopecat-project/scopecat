@@ -50,6 +50,11 @@ from scopecat.config.registry.records import (
     ManualConfigDraftRegistrySource,
     ResolvedCalibrationCohortMergeContribution,
 )
+from scopecat.config.structure import (
+    ParameterStructurePlan,
+    mapped_structure_origins,
+    preview_parameter_structure,
+)
 from scopecat.kernel.errors import (
     CheckFailed,
     Conflict,
@@ -1585,6 +1590,7 @@ def save_config_context(
     working_point_id: str,
     label: str,
     parameters: ParameterSnapshot | None,
+    structure_plan: ParameterStructurePlan | None = None,
     actor: str,
     note: str,
     unit_of_work: ConfigRegistryUnitOfWorkFactory,
@@ -1596,12 +1602,27 @@ def save_config_context(
         loaded = _load_config_registry_entry_locked(entry_id=base.entry_id, work=work)
         if loaded.entry.content_hash != base.content_hash:
             raise ValueError("context base does not match the exact registry revision")
-        config = loaded.config.model_copy(
-            update={
-                "parameter_snapshot": loaded.config.parameter_snapshot
-                if parameters is None
-                else parameters
-            }
+        if structure_plan is not None and (
+            parameters is not None or structure_plan.base != base
+        ):
+            raise ValueError(
+                "structure plan must match base and cannot mix with parameter edits"
+            )
+        structural = (
+            preview_parameter_structure(loaded.config, structure_plan)
+            if structure_plan
+            else None
+        )
+        config = (
+            structural.config
+            if structural
+            else loaded.config.model_copy(
+                update={
+                    "parameter_snapshot": loaded.config.parameter_snapshot
+                    if parameters is None
+                    else parameters
+                }
+            )
         )
         validate_context_config(config)
         selected_ref = ConfigContextRef(
@@ -1618,7 +1639,22 @@ def save_config_context(
                 working_point_id=working_point_id,
                 label=label,
                 base=base,
-                value_origins=context_value_origins(
+                structure=structural.origin
+                if structural
+                else (
+                    loaded.entry.source.context.structure
+                    if isinstance(loaded.entry.source, ContextConfigRegistrySource)
+                    else None
+                ),
+                value_origins=mapped_structure_origins(
+                    loaded.config,
+                    structural,
+                    base_ref=base,
+                    selected_ref=selected_ref,
+                    inherited=inherited,
+                )
+                if structural
+                else context_value_origins(
                     config,
                     base=loaded.config.parameter_snapshot,
                     base_ref=base,

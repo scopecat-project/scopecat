@@ -85,6 +85,10 @@ from scopecat.automation.wire import (
     ProcedureStepResourceWaitCommand,
     ProcedureStepResourceWaitReceipt,
 )
+from scopecat.config.structure import (
+    ParameterStructurePlan,
+    ParameterStructurePreview,
+)
 from scopecat.control.models import (
     ControlRunState,
     EventPage,
@@ -898,6 +902,15 @@ class DaemonClient:
             f"{_API_PREFIX}/config-registry/contexts",
             command,
             ConfigEntryView,
+        )
+
+    def preview_structure(
+        self, plan: ParameterStructurePlan
+    ) -> ParameterStructurePreview:
+        return self._post_model(
+            f"{_API_PREFIX}/config-registry/contexts/structure/preview",
+            plan,
+            ParameterStructurePreview,
         )
 
     def resolve_context(

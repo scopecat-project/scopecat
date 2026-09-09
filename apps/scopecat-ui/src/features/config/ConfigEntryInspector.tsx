@@ -228,6 +228,21 @@ function EntryProvenance({
                 </dt>
                 <dd>
                   {origin.layer} · {origin.entry.entry_id}
+                  {origin.evidence && (
+                    <p>
+                      {origin.evidence.origin} · {origin.evidence.note}
+                    </p>
+                  )}
+                  {origin.source_cell && (
+                    <p>
+                      Source: {origin.source_cell.entry.entry_id} /{" "}
+                      {origin.source_cell.parameter_id}
+                      {origin.source_cell.row_index != null
+                        ? `[${origin.source_cell.row_index}]`
+                        : ` ${JSON.stringify(origin.source_cell.key)}`}
+                      {origin.source_cell.field_id ? `.${origin.source_cell.field_id}` : ""}
+                    </p>
+                  )}
                 </dd>
               </div>
             ))}

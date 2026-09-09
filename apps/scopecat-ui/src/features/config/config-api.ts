@@ -25,6 +25,7 @@ export interface ConfigRegistryEntryDetail {
   config: ConfigProfileSnapshot;
   summary: ConfigSnapshotSummary;
   latestActivation?: ConfigActivationRecord | null;
+  structureVersion?: string | null;
 }
 
 export async function getConfigRegistry(signal?: AbortSignal): Promise<ConfigRegistryOverview> {
@@ -95,6 +96,7 @@ export async function getConfigRegistryEntry(
     config,
     summary: summarizeConfigSnapshot(config),
     latestActivation: response.latest_activation,
+    structureVersion: response.structure_version,
   };
 }
 
@@ -214,5 +216,13 @@ export async function resolveConfigContext(
 ) {
   return apiData(
     apiClient.POST("/api/v1/config-registry/contexts/resolve", { body: { context, overrides } }),
+  );
+}
+
+export type ParameterStructurePlan = components["schemas"]["ParameterStructurePlan"];
+export type ParameterStructurePreview = components["schemas"]["ParameterStructurePreview"];
+export function previewConfigStructure(plan: ParameterStructurePlan) {
+  return apiData(
+    apiClient.POST("/api/v1/config-registry/contexts/structure/preview", { body: plan }),
   );
 }

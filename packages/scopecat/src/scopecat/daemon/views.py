@@ -99,6 +99,7 @@ class ConfigEntryView(_ViewModel):
     entry: ConfigRegistryEntry
     config: ConfigProfileSnapshot
     latest_activation: ConfigRegistryActivationRecord | None = None
+    structure_version: ConfigContentHash | None = None
 
 
 class ConfigDraftPreview(_ViewModel):

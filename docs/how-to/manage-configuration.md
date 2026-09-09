@@ -182,3 +182,82 @@ current lab generation. If the lab default changed after resolution, resolve
 again before submitting; selecting a context never implicitly activates it.
 Historical selection preserves parameters and provenance, and does not grant a
 new claim of calibration freshness or evidence quality.
+
+## Change a working point's parameter table structure
+
+A table's parameter and column IDs are semantic identities. Changing an ID is
+an explicit rename, not a display-label change or an alias. Structure revisions
+use a content hash of the parameter catalog; this is independent of the database
+schema version. Saved configuration JSON and old run snapshots are not rewritten.
+
+In **Configuration**, select a saved working point and choose **Change table
+structure**. Add an optional column, rename a column, change its type or unit, or
+replace its lookup key. Leave an unknown value empty. Provided values require an
+imported or estimated origin and a source note. Preview the affected rows and
+parameter identities, then save a new working point revision. The lab default
+remains unchanged. Select the old saved version to restore its exact structure
+for a subsequent experiment.
+
+A small Python declaration uses the same preview and save endpoints:
+
+```python
+from scopecat.config.structure import (
+    ParameterStructurePlan,
+    parameter_structure_version,
+)
+from scopecat.records.parameter import ParameterDefinition
+from scopecat.records.parameter_structure import AddParameterColumn
+
+quality = sc.parameter_field("quality", sc.FloatType())
+plan = ParameterStructurePlan(
+    base=context_ref,
+    structure_version=parameter_structure_version(saved.config.parameter_catalog),
+    edits=(
+        AddParameterColumn(
+            parameter_id="qubits",
+            column=ParameterDefinition(id=quality.id, value_type=quality.value_type),
+        ),
+    ),
+)
+preview = lab.config.preview_structure(plan)
+print(preview.missing_values)
+revised = lab.config.save_context(
+    entry_id="sample-a-parked-quality",
+    base=context_ref,
+    sample=lab.samples.handle("sample-a").selector(revision=1),
+    working_point_id="parked",
+    label="Sample A parked, with quality",
+    structure_plan=plan,
+    note="Optional analysis column; no measurement has supplied its values yet",
+)
+```
+
+Missing optional cells remain absent. An existing experiment that does not read
+`quality` can run with this context. An experiment that reads an unknown cell
+reports that parameter identity; supply the value or revise that experiment.
+Malformed supplied values and missing or duplicate primary keys are still
+rejected. The ordinary complete-configuration path keeps its existing validation.
+
+For breaking changes, `ChangeParameterColumn` requires one declared policy:
+`compatible_unit`, `lossless_numeric`, `explicit_values`, or `unknown`. Automatic
+numeric conversion rejects rounding; unit conversion requires compatible units.
+Explicit `StructureValueDecision` records identify an existing keyed row, or a
+row index for a table without a key. A measured declaration must reference an
+existing source run; this records the author's evidence claim and does not grant
+calibration validity. Conversion and renaming never promote evidence to measured.
+
+The preview reports changed column and key identities. Python callers can pass
+named `StructureConsumer` records containing existing typed parameter contracts
+for experiments or analyses; the compiler's contract validator reports their
+incompatibilities. This list is explicit: arbitrary Python, compiler, driver and
+analysis code is not automatically inventoried. Preview the affected experiments
+before using the new context.
+
+Operations are ordered and run against an exact base entry and content hash.
+Saving revalidates the declaration; a changed or conflicting base cannot silently
+replace the draft. Per-cell metadata distinguishes the current column/key from
+the exact old source entry, column and key, including successive renames.
+For a split or merge, explicitly compute and supply the intended new values in
+Python and preview the resulting additions and type changes. There is no generic
+split/merge engine or automatic source-column deletion in this release; retain
+the old columns until dependent author code has been updated.
