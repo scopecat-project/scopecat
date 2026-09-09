@@ -306,94 +306,98 @@ class AuthorExperiments:
                 return experiment
         raise KeyError(id)
 
-    def compose(self, maintained: LaunchProvider | None) -> LaunchProvider:
-        """Combine discovery with an optional existing project-owned provider."""
+    def compose(self, maintained: LaunchProvider | None) -> AuthorLaunchProvider:
+        """Retain this collection when an application is copied with replace()."""
+        return AuthorLaunchProvider(authors=self, maintained=maintained)
 
-        def launch(lab: LabClient, request: LaunchRequest) -> LaunchResult:
-            existing = (
-                maintained(lab, LaunchRequest(action="list"))
-                if maintained is not None
-                else LaunchCatalog()
+    def launch(
+        self, lab: LabClient, request: LaunchRequest, maintained: LaunchProvider | None
+    ) -> LaunchResult:
+        existing = (
+            maintained(lab, LaunchRequest(action="list"))
+            if maintained is not None
+            else LaunchCatalog()
+        )
+        if not isinstance(existing, LaunchCatalog):
+            raise TypeError("maintained list callback must return LaunchCatalog")
+        entries = (*existing.entries, *(item.entry for item in self.experiments))
+        if len({entry.id for entry in entries}) != len(entries):
+            raise ValueError("author and maintained launch IDs overlap")
+        if request.action == "list":
+            return LaunchCatalog(entries=entries)
+        selected = next(
+            (item for item in self.experiments if item.entry.id == request.experiment),
+            None,
+        )
+        if selected is None:
+            if maintained is None:
+                raise ValueError(f"unknown author experiment {request.experiment!r}")
+            return maintained(lab, request)
+        if request.version != selected.entry.version:
+            raise ValueError(
+                "author declaration changed; reload the catalog and preview again"
             )
-            if not isinstance(existing, LaunchCatalog):
-                raise TypeError("maintained list callback must return LaunchCatalog")
-            entries = (*existing.entries, *(item.entry for item in self.experiments))
-            if len({entry.id for entry in entries}) != len(entries):
-                raise ValueError("author and maintained launch IDs overlap")
-            if request.action == "list":
-                return LaunchCatalog(entries=entries)
-            selected = next(
-                (
-                    item
-                    for item in self.experiments
-                    if item.entry.id == request.experiment
-                ),
-                None,
+        if request.inputs:
+            raise ValueError(
+                "author experiments accept declared control edits, not extra inputs"
             )
-            if selected is None:
-                if maintained is None:
-                    raise ValueError(
-                        f"unknown author experiment {request.experiment!r}"
-                    )
-                return maintained(lab, request)
-            if request.version != selected.entry.version:
-                raise ValueError(
-                    "author declaration changed; reload the catalog and preview again"
-                )
-            if request.inputs:
-                raise ValueError(
-                    "author experiments accept declared control edits, not extra inputs"
-                )
-            config, source = _launch_config(lab, request)
-            invocation = selected.edit(config=config, edits=request.control_edits)
-            if request.action == "preview":
-                preview = lab.preview(invocation, config=config)
-                return LaunchPreview(
-                    experiment_id=selected.entry.id,
-                    request_hash=request.request_hash,
-                    config_source=source,
-                    point_count=preview.initial_point_count,
-                    controls=control_values(
-                        selected.controls, invocation, config=config
-                    ),
-                    summary=selected.description,
-                    preflight=PreflightSummary(
-                        stages=(
-                            summarize_preflight(
-                                preview,
-                                stage_id="experiment",
-                                label=selected.title,
-                                configuration="accepted",
-                                executions=ExactQuantity(
-                                    value=1,
-                                    unit="runs",
-                                    basis="One authored experiment",
-                                ),
-                                config_content_hash=source.content_hash,
-                                configuration_meaning=(
-                                    "Explicit accepted configuration; no publication."
-                                ),
+        config, source = _launch_config(lab, request)
+        invocation = selected.edit(config=config, edits=request.control_edits)
+        if request.action == "preview":
+            preview = lab.preview(invocation, config=config)
+            return LaunchPreview(
+                experiment_id=selected.entry.id,
+                request_hash=request.request_hash,
+                config_source=source,
+                point_count=preview.initial_point_count,
+                controls=control_values(selected.controls, invocation, config=config),
+                summary=selected.description,
+                preflight=PreflightSummary(
+                    stages=(
+                        summarize_preflight(
+                            preview,
+                            stage_id="experiment",
+                            label=selected.title,
+                            configuration="accepted",
+                            executions=ExactQuantity(
+                                value=1,
+                                unit="runs",
+                                basis="One authored experiment",
+                            ),
+                            config_content_hash=source.content_hash,
+                            configuration_meaning=(
+                                "Explicit accepted configuration; no publication."
                             ),
                         ),
-                        scope_basis="One authored run; all selected points.",
                     ),
-                )
-            admitted = lab.procedures.submit(
-                _AuthorProcedure(selected),
-                AuthorLaunchIntent(
-                    config=config,
-                    config_source=source,
-                    edits=request.control_edits,
-                    actor=request.actor,
-                    request_hash=request.request_hash,
+                    scope_basis="One authored run; all selected points.",
                 ),
-                request_key=request.request_key,
-                sample=request.sample,
-                expected_config_generation=source.registry_generation,
             )
-            return LaunchSubmission(procedure_id=admitted.id)
+        admitted = lab.procedures.submit(
+            _AuthorProcedure(selected),
+            AuthorLaunchIntent(
+                config=config,
+                config_source=source,
+                edits=request.control_edits,
+                actor=request.actor,
+                request_hash=request.request_hash,
+            ),
+            request_key=request.request_key,
+            sample=request.sample,
+            expected_config_generation=source.registry_generation,
+        )
+        return LaunchSubmission(procedure_id=admitted.id)
 
-        return launch
+
+@dataclass(frozen=True, slots=True)
+class AuthorLaunchProvider:
+    """A composed provider retains its already discovered author collection."""
+
+    authors: AuthorExperiments
+    maintained: LaunchProvider | None
+
+    def __call__(self, lab: LabClient, request: LaunchRequest) -> LaunchResult:
+        return self.authors.launch(lab, request, self.maintained)
 
 
 def _launch_config(

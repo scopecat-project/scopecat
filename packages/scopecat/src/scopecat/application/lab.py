@@ -40,7 +40,7 @@ class LabApplication:
     """
 
     launch_provider: LaunchProvider | None = field(default=None, repr=False)
-    authors: AuthorExperiments | None = field(default=None, repr=False)
+    authors: AuthorExperiments | None = field(default=None, init=False, repr=False)
 
     build_experiment_system: ExperimentSystemBuilder | None = field(
         default=None,
@@ -99,6 +99,11 @@ class LabApplication:
                 if isinstance(procedures, ProcedureRegistry)
                 else (*procedures, *authors.procedures)
             )
+        elif launch_provider is not None:
+            from scopecat.application.authoring import AuthorLaunchProvider
+
+            if isinstance(launch_provider, AuthorLaunchProvider):
+                authors = launch_provider.authors
         object.__setattr__(self, "authors", authors)
         object.__setattr__(self, "launch_provider", launch_provider)
         procedure_registry = (

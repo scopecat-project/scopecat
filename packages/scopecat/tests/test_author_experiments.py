@@ -4,15 +4,20 @@ from __future__ import annotations
 
 import importlib
 import sys
+from dataclasses import replace
 from pathlib import Path
 from typing import cast
 
 import pytest
 
 from scopecat.api.lab import LabClient
+from scopecat.application import LabApplication
 from scopecat.application.authoring import AuthorExperiments
 from scopecat.application.launch import LaunchCatalog, LaunchRequest
 from scopecat.automation.definition import ProcedureRegistry
+from scopecat.planning.catalog import InstrumentContractCatalog
+from scopecat.planning.system import ExperimentSystem
+from scopecat.records.config import ConfigProfileSnapshot
 
 SOURCE = '''import scopecat as sc
 LEVEL = sc.Control("level", default=1.0, minimum=0, scannable=True)
@@ -92,3 +97,37 @@ def test_maintained_catalog_collision_rejects_direct_preview(
             LaunchRequest(action="preview", experiment=entry.id, version=entry.version),
         )
     monkeypatch.delitem(sys.modules, "overlapping_author")
+
+
+def test_application_replace_preserves_discovered_authors_without_reloading(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(sys, "path", [str(tmp_path), *sys.path])
+    (tmp_path / "retained_author.py").write_text(SOURCE, encoding="utf-8")
+    application = LabApplication(author_modules=("retained_author",))
+    assert application.authors is not None
+
+    def unexpected_discovery(*_sources: str) -> AuthorExperiments:
+        raise AssertionError("replace must not rediscover source files")
+
+    monkeypatch.setattr(AuthorExperiments, "discover", unexpected_discovery)
+
+    def builder(
+        _config: ConfigProfileSnapshot, catalog: InstrumentContractCatalog
+    ) -> ExperimentSystem:
+        return ExperimentSystem(instrument_catalog=catalog)
+
+    copied = replace(application, build_experiment_system=builder)
+    assert copied.build_experiment_system is builder
+    assert application.build_experiment_system is None
+    assert copied.authors is not None
+    assert copied.authors is application.authors
+    assert copied.launch_provider is application.launch_provider
+    assert copied.procedures is application.procedures
+    assert copied.procedure_schedules is application.procedure_schedules
+    assert copied.calibrations is application.calibrations
+    assert copied.calibration_publications is application.calibration_publications
+    assert copied.procedures.refs == tuple(
+        item.ref for item in copied.authors.procedures
+    )
+    monkeypatch.delitem(sys.modules, "retained_author")
