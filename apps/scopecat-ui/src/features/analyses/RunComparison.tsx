@@ -12,6 +12,7 @@ import {
   getRunArtifactDownload,
 } from "../runs/run-api";
 import { AnalysisPublicationView } from "./AnalysisPublicationView";
+import { AnalysisOutputView } from "../runs/AnalysisOutputView";
 import { errorMessage, formatDateTime } from "../../lib/presentation";
 
 type Request = components["schemas"]["ComparisonRequest"];
@@ -394,11 +395,30 @@ export function RunComparison({
                       ? "Candidate only. No configuration activation or calibration validity is implied."
                       : "Saved analysis. No candidate has been accepted by this operation."}
                 </p>
-                <AnalysisPublicationView
-                  analysis={saved}
-                  getArtifactDownload={(selector) => getRunArtifactDownload(primary, selector)}
-                  onOpenRun={onOpenRun}
-                />
+                {saved.outputs
+                  .filter((output) => output.kind === "figure")
+                  .map((output) => (
+                    <section className="my-4 rounded border border-line p-3" key={output.id}>
+                      <h4>{output.title}</h4>
+                      <AnalysisOutputView
+                        output={output}
+                        getArtifactDownload={(selector) =>
+                          getRunArtifactDownload(primary, selector)
+                        }
+                      />
+                    </section>
+                  ))}
+                <details className="my-4">
+                  <summary>Inputs, model parameters and saved evidence</summary>
+                  <AnalysisPublicationView
+                    analysis={{
+                      ...saved,
+                      outputs: saved.outputs.filter((output) => output.kind !== "figure"),
+                    }}
+                    getArtifactDownload={(selector) => getRunArtifactDownload(primary, selector)}
+                    onOpenRun={onOpenRun}
+                  />
+                </details>
                 {fit && (
                   <div className="mt-4 flex flex-wrap gap-3">
                     {!candidate && (
