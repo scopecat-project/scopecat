@@ -754,3 +754,26 @@ Further convenience should be judged against complete experiments. New
 features should extend typed results, the shared compute model, or this
 ownership vocabulary instead of introducing another kind of value or another
 experiment-data transformation API.
+
+## Ordinary authors and laboratory infrastructure
+
+The author-facing boundary is broader than a fixed launcher form. Someone who
+knows simple Python should be able to combine existing operations, edit a scan,
+change a scientific helper and reanalyze retained data without editing project
+services, a compiler or a driver. Shared lab operations and parameter schemas
+have their own maintainer; not every reusable scientific change is a compiler
+change. A new device capability, mapping or execution guarantee is a compiler /
+driver responsibility.
+
+The reference lab's `workflows/exploratory_signal.py` provides a small editable
+experiment and analysis on this direct Python path. Its companion fixture retains
+two samples in two explicitly configured working points using the normal run and
+sample records. Read the [exploratory journeys and ownership agreement](../development/pilot-work-slices.md#exploratory-work-roles-and-executable-foundation)
+for executable checks and the features still to be built. In particular, a sample
+context label does not currently resolve parameter values, and a function's ID
+does not establish complete helper-code provenance.
+
+Judge conveniences by whether an ordinary author can move from a surprising
+result to a revised experiment while preserving the old plan, parameters and
+measurements. Successful execution of a maintained calibration near a known
+working point is a separate, narrower qualification.

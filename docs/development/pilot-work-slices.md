@@ -111,3 +111,119 @@ unit edits through preview and submit payloads. The HTTP launch integration
 separately compares durable single-point fixed and explicit-scan requests to
 Python invocation edits and verifies their measured values agree. No analytic
 floating-point output is added to the strict golden preview fixture.
+
+## Exploratory work: roles and executable foundation
+
+A maintained calibration finishing successfully does not qualify unknown-sample
+initialization, changing working points or ordinary Python editing. Assess those
+journeys separately, with the three ownership levels below.
+
+| Owner | Normal edits | Boundary requiring a different owner |
+|---|---|---|
+| Ordinary experiment author | A small experiment, scientific helpers, scan/input values and completed-data analysis | A new meaning for a shared operation or a shared parameter contract |
+| Shared laboratory capability maintainer | Reusable operations, parameter schemas, fixture setup and project composition | New compiler lowering, device protocol or execution guarantee |
+| Compiler/driver maintainer | Hardware mapping, native programs, acquisition modes, SDK and connection/fault semantics | Scientific acceptance still belongs to the experiment owner |
+
+Frequency, amplitude, time, phase, reference frame, point/shot shape and retained
+products are scientific choices: keep them visible. Worker leases, compiler IR
+and SDK buffers are maintenance diagnostics, available on demand. Both views
+must explain the same frozen plan and data, not execute separate implementations.
+
+### One editable experiment, four retained runs
+
+`src/reference_lab/workflows/exploratory_signal.py` is the author-owned file
+(relative to `examples/reference_lab`). It contains a short ordinary Python
+experiment, a resonance helper and a thresholded mean analysis. Editing its scan,
+input default, helper or analysis does not require changes to catalog, service,
+cohort, compiler or driver files. Today the direct Python path evaluates edits
+in a new Python process. Browser discovery and refreshing an installed definition
+are separate acceptance targets, not capabilities claimed by this fixture.
+
+`src/reference_lab/exploration.py` belongs to the fixture maintainer. It reuses
+the existing reference application, parameter table, sample registry and run
+store. `seed_exploration(lab)` creates two synthetic samples with the same local
+`q0` identity, each in `parked` and `shifted` contexts, and returns four durable
+run IDs. The carriers are 4.8, 4.9, 5.0 and 5.1 GHz respectively. The experiment
+is a deterministic analytic model with a 50 MHz half-width; these values are
+fixture inputs, not inferred calibration results or hidden device ground truth.
+It performs no instrument operation and provides no physical qualification.
+
+Create the isolated project as described above, then from a Python process
+connected to that project:
+
+```python
+import scopecat as sc
+from reference_lab.exploration import seed_exploration
+from reference_lab.workflows.exploratory_signal import exploratory_mean
+
+pilot_project = "/path/to/your/scopecat-pilot.copy"
+with sc.open_project(pilot_project).connect() as lab:
+    run_ids = seed_exploration(lab)  # once per fresh fixture project
+    retained = lab.get_run(run_ids[0])
+    whole = retained.analyze(exploratory_mean(minimum=0))
+    selected = retained.analyze(exploratory_mean(minimum=0.5))
+```
+
+Here `pilot_project` is the path created in the shell example; supply that path
+in Python rather than the shell variable's name. Keep the IDs or find them in the
+normal run list after reconnecting. There is no committed database, new JSON
+wire fixture or second example app. Callers own a fresh project and must not seed
+another lane's state. The focused check is:
+
+```sh
+uv run pytest -q -n 0 examples/reference_lab/tests/test_exploration.py
+```
+
+It checks four distinct configuration hashes and sample/context bindings,
+expected peak positions, two published analyses over identical retained inputs,
+and exact original data/request/sample/config identity after sample revision
+and client reconnection. All configurations are explicit per-run trial snapshots;
+the accepted project default remains unchanged. A `context_id` records provenance
+only: it does not select or merge parameters automatically.
+
+`exploration_config(None)` deliberately removes q0's carrier. Its preview must
+reject the missing value rather than reuse another sample or working point's
+value. This baseline does not supply a missing-value editor or a parameter
+resolver. Retain the actual diagnostic when evaluating the later context/schema
+work; do not weaken validation or substitute zero to make a journey pass.
+
+### Task goals and observations
+
+These are goals for a participant who knows basic Python, not click scripts.
+Record what the participant could accomplish, what they had to understand and
+where a maintainer intervened. A proposed mechanism is not an observed success.
+
+| Journey | Goal and observable success | Foundation versus later work |
+|---|---|---|
+| Edit and refresh | Change scan density, then helper response and analysis; run the revised experiment and still interpret the old result | Direct Python file and retained data exist. Convenient discovery/refresh and dependency-aware code identity belong to #441/#442. |
+| Preserve a plan | Leave an unfinished scan, inspect an old run, return without losing edits; save two alternatives and reopen them | This fixture supplies an editable invocation. Route-local preservation is #436; durable saved plans are #437. |
+| Select parameters | Move between A/B and parked/shifted, identify each value's source, try a local override, and encounter a missing carrier without inheriting a misleading default | Four explicit snapshots and the missing case exist. Parameter-context resolution and structural edits are #438/#439. |
+| Reanalyze and continue | Compare original and selected means from retained data, explain exclusions, then use the result to choose the next scan | The two Python publications exist without reacquisition. The connected selection/comparison/next-run experience is #440. |
+
+Unknown-sample work should include finding a useful scan window when the initial
+window misses the response. The fixture is sufficient to expose workflow friction;
+it does not prove that an automatic search converges or that a scientific fit is
+valid. Test authors must not silently recenter scans using the fixture's carrier
+and describe that as successful exploration.
+
+### Identity invariants and parallel ownership
+
+- A completed run keeps its exact run ID, configuration content hash, frozen
+  sample revision/hash/role/context, admitted inputs and point plan. Switching
+  current sample/configuration must not rewrite historical interpretation.
+- New analysis publishes a new result over named retained input identities; it
+  neither mutates raw measurements nor acquires again. Retained history remains
+  readable without rebuilding the current experiment return tree.
+- An experiment ID is a name, not a complete code revision. Existing request
+  records and compute diagnostics must not be described as a transitive source
+  archive or replay guarantee. #442 owns the stronger edit/helper provenance
+  contract; its tests must distinguish changes to helpers as well as the main
+  function. Old runs must remain readable even when new code cannot execute them.
+- Keep at most three development worktrees active. Each fixture lane owns its
+  source, state directory and generated outputs. Serialize daemon/worker/browser,
+  full-suite and benchmark tests; claim the slot only when ready to run and release
+  it before editing a failure. Pure/static checks can proceed independently.
+- Subsequent slices reuse this experiment and its records. Coordinate edits to
+  `exploratory_signal.py` and `exploration.py` with the current owner; do not create
+  a replacement registry, parameter store or gallery. Changes to shared contracts
+  land before consumers even when their text does not conflict.
