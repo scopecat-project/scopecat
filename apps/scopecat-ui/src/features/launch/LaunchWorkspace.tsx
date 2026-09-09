@@ -72,7 +72,7 @@ export function LaunchWorkspace({
     <section className="p-6 space-y-4">
       <h2 className="text-lg font-semibold">Experiments</h2>
       <AuthorRefresh projectId={projectId} />
-      <PlanLibrary key={projectId} />
+      <PlanLibrary key={projectId} initializing={catalog.isPending && draft === undefined} />
       {handoffUnavailable && (
         <p role="alert">
           The suggested experiment is unavailable. The source analysis is retained.

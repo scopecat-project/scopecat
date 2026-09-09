@@ -4,7 +4,7 @@ import { apiClient, apiData } from "../../api-client";
 import { useLaunchDraft } from "./LaunchDraft";
 import { planDifferences, type PlanRevision } from "./experiment-plans";
 
-export function PlanLibrary() {
+export function PlanLibrary({ initializing = false }: { initializing?: boolean } = {}) {
   const { projectId, draft, openPlan, isCurrent } = useLaunchDraft();
   const cache = useQueryClient();
   const [history, setHistory] = useState<string>();
@@ -93,6 +93,7 @@ export function PlanLibrary() {
         Saving and opening never start an experiment or change the lab default. Each run needs a
         fresh preview.
       </p>
+      {initializing && <p role="status">Loading experiments before opening a saved plan…</p>}
       {history && (
         <button
           className="border border-line rounded px-2 py-1 mr-2"
@@ -117,6 +118,7 @@ export function PlanLibrary() {
           <button
             className="border border-line rounded px-2 py-1 mr-2"
             type="button"
+            disabled={initializing}
             onClick={() => void open(plan)}
           >
             Open {plan.name} r{plan.ref.revision}

@@ -222,3 +222,29 @@ it("an open started without a draft cannot replace the subsequently selected cat
   });
   expect(screen.getByLabelText("Current draft")).toHaveTextContent("new edit");
 });
+
+it("waits for initial catalog readiness before allowing a saved plan to open", async () => {
+  const fetch = vi.fn(async (input: Request) =>
+    reply(input.url.includes("experiment-plans") ? { items: [first] } : { entries: [entry] }),
+  );
+  vi.stubGlobal("fetch", fetch);
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const view = (initializing: boolean) => (
+    <QueryClientProvider client={client}>
+      <LaunchDraftProvider projectId="project-a">
+        <PlanLibrary initializing={initializing} />
+      </LaunchDraftProvider>
+    </QueryClientProvider>
+  );
+  const rendered = render(view(true));
+  const open = await screen.findByRole("button", { name: "Open First plan r1" });
+  expect(open).toBeDisabled();
+  expect(screen.getByRole("status")).toHaveTextContent("Loading experiments");
+  fireEvent.click(open);
+  expect(fetch).toHaveBeenCalledTimes(1);
+  rendered.rerender(view(false));
+  expect(open).toBeEnabled();
+  fireEvent.click(open);
+  await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
+  expect(screen.queryByRole("status")).not.toBeInTheDocument();
+});
