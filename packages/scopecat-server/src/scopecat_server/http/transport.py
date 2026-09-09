@@ -1012,9 +1012,12 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
         limit: Annotated[int, Query(ge=1, le=200)] = 50,
         cursor: Annotated[int | None, Query(ge=1)] = None,
         state: ProcedureRunState | None = None,
+        request_key: Annotated[str | None, Query(min_length=1)] = None,
     ) -> ProcedureRunPage:
         return application.automation.list(
-            ProcedureRunListQuery(limit=limit, cursor=cursor, state=state)
+            ProcedureRunListQuery(
+                limit=limit, cursor=cursor, state=state, request_key=request_key
+            )
         )
 
     @app.post(f"{_API_PREFIX}/procedures/runnable/query")

@@ -8,7 +8,6 @@ from typing import TYPE_CHECKING
 from scopecat.application import LabBootstrap
 
 from reference_lab.configuration import bootstrap_config
-from reference_lab.control_launch import launch_frequency_amplitude
 
 if TYPE_CHECKING:
     from scopecat.application import LabApplication
@@ -28,6 +27,7 @@ def create_application(_project_root: Path) -> LabApplication:
 
     from scopecat.application import LabApplication
 
+    from reference_lab.control_launch import launch_frequency_amplitude
     from reference_lab.lab import reference_lab_system
     from reference_lab.launch import (
         launch_channel_timing,

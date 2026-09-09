@@ -7,6 +7,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { PlannedSettings } from "../features/launch/PlannedSettings";
+import { LaunchDraftProvider } from "../features/launch/LaunchDraft";
 import { LaunchWorkspace } from "../features/launch/LaunchWorkspace";
 import type { components } from "../api-schema";
 import { getRunParameterProposals } from "../data/parameter-proposals/api";
@@ -70,9 +71,17 @@ describe("shared reference-lab acceptance", () => {
       vi.fn((request: Request) =>
         Promise.resolve(
           Response.json(
-            new URL(request.url).pathname.endsWith("/preview")
-              ? fixtures.launch_preview
-              : fixtures.launch_catalog,
+            new URL(request.url).pathname.endsWith("/config-registry")
+              ? {
+                  activation: {
+                    entry_id: fixtures.launch_preview.config_source?.entry_id,
+                    generation: fixtures.launch_preview.config_source?.registry_generation,
+                  },
+                  entries: [],
+                }
+              : new URL(request.url).pathname.endsWith("/preview")
+                ? fixtures.launch_preview
+                : fixtures.launch_catalog,
           ),
         ),
       ),
@@ -81,7 +90,9 @@ describe("shared reference-lab acceptance", () => {
       <QueryClientProvider
         client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
       >
-        <LaunchWorkspace />
+        <LaunchDraftProvider projectId="reference-lab">
+          <LaunchWorkspace />
+        </LaunchDraftProvider>
       </QueryClientProvider>,
     );
     await screen.findByRole("option", { name: "Q1 channel timing candidate" });
@@ -103,6 +114,14 @@ describe("shared reference-lab acceptance", () => {
       "fetch",
       vi.fn(async (request: Request) => {
         const path = new URL(request.url).pathname;
+        if (path.endsWith("/config-registry"))
+          return Response.json({
+            activation: {
+              entry_id: fixtures.controls_scan.config_source?.entry_id,
+              generation: fixtures.controls_scan.config_source?.registry_generation,
+            },
+            entries: [],
+          });
         if (path.endsWith("/submit")) {
           submitted = await request.json();
           throw new TypeError("Submission response lost");
@@ -121,7 +140,9 @@ describe("shared reference-lab acceptance", () => {
       <QueryClientProvider
         client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
       >
-        <LaunchWorkspace />
+        <LaunchDraftProvider projectId="reference-lab">
+          <LaunchWorkspace />
+        </LaunchDraftProvider>
       </QueryClientProvider>,
     );
     fireEvent.change(await screen.findByLabelText("Experiment"), {

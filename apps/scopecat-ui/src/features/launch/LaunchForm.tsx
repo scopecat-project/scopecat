@@ -1,51 +1,55 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { apiClient, apiData } from "../../api-client";
-import type { LaunchCatalogEntry, LaunchPreview } from "./launch-api";
-import { ControlFields, ControlSummary, controlEdits, initialControlDrafts } from "./ControlFields";
+import type { LaunchCatalogEntry } from "./launch-api";
+import { ControlFields, ControlSummary, controlEdits } from "./ControlFields";
+import { invalidateDraft, useLaunchDraft, type LaunchDraft } from "./LaunchDraft";
 import { PreflightSummary } from "./PreflightSummary";
 import { canRenderField, type FormField } from "./launch-fields";
 
 export function LaunchForm({
   entry,
   onAdmitted,
+  catalogReady,
 }: {
   entry: LaunchCatalogEntry;
   onAdmitted: (id: string) => void;
+  catalogReady: boolean;
 }) {
   const allFields = Object.entries(entry.request.properties ?? {});
   const fields = allFields.filter((pair): pair is [string, FormField] => canRenderField(pair[1]));
   const fieldsByName = new Map(fields);
   const supported = fields.length === allFields.length;
-  const [drafts, setDrafts] = useState(() => initialControlDrafts(entry.controls));
-  const [sample, setSample] = useState("");
-  const [actor, setActor] = useState("operator");
-  const requestKey = useRef<string | undefined>(undefined);
-  const [values, setValues] = useState<Record<string, string>>(() =>
-    Object.fromEntries(
-      fields.map(([name, field]) => [
-        name,
-        field.default == null
-          ? ""
-          : Array.isArray(field.default)
-            ? field.default.join("\n")
-            : typeof field.default === "string"
-              ? field.default
-              : JSON.stringify(field.default),
-      ]),
-    ),
-  );
-  function invalidate() {
-    setResult(undefined);
-    setError("");
-    requestKey.current = undefined;
+  const {
+    draft: retained,
+    update,
+    select,
+    isCurrent,
+    configurationReady,
+    configurationError,
+    refreshConfiguration,
+    submit,
+    attempt,
+  } = useLaunchDraft();
+  if (!retained) throw new Error("Select a launch draft before rendering its form");
+  const draft: LaunchDraft = retained;
+  const { controls: drafts, sample, actor, values, error, pending } = draft;
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+  const result = catalogReady && configurationReady && !pending ? draft.preview : undefined;
+  function changeInput(
+    changes: Partial<Pick<LaunchDraft, "values" | "controls" | "sample" | "actor">>,
+  ) {
+    update((current) =>
+      invalidateDraft({ ...current, ...changes }, "Inputs changed. Preview again before starting."),
+    );
   }
-  const [result, setResult] = useState<LaunchPreview>();
-  const [error, setError] = useState("");
-  const [pending, setPending] = useState(false);
-  // A result only describes the exact visible request that produced it.
   function change(name: string, value: string) {
-    setValues({ ...values, [name]: value });
-    invalidate();
+    changeInput({ values: { ...values, [name]: value } });
   }
   function inputValues() {
     return Object.fromEntries(
@@ -65,65 +69,80 @@ export function LaunchForm({
   }
   async function preview(event: React.FormEvent) {
     event.preventDefault();
-    if (!entry.actions.includes("preview") || !supported) return;
-    requestKey.current = undefined;
-    setPending(true);
-    setError("");
-    setResult(undefined);
-    const inputs = inputValues();
+    if (!entry.actions.includes("preview") || !supported || !catalogReady) return;
+    const revision = draft.revision;
+    update((current) => ({ ...current, pending: true, error: "" }));
     try {
-      setResult(
-        await apiData(
-          apiClient.POST("/api/v1/experiment-launcher/preview", {
-            body: {
-              action: "preview",
-              experiment: entry.id,
-              version: entry.version,
-              sample: sample.trim() || null,
-              inputs,
-              control_edits: controlEdits(drafts),
-              actor,
-              request_key: "",
-            },
-          }),
-        ),
+      const next = await apiData(
+        apiClient.POST("/api/v1/experiment-launcher/preview", {
+          body: {
+            action: "preview",
+            experiment: entry.id,
+            version: entry.version,
+            sample: sample.trim() || null,
+            inputs: inputValues(),
+            control_edits: controlEdits(drafts),
+            actor,
+            request_key: "",
+          },
+        }),
       );
+      if (isCurrent(revision))
+        update((current) => ({
+          ...current,
+          preview: next,
+          requestKey:
+            current.preview?.request_hash === next.request_hash &&
+            JSON.stringify(current.preview.config_source) === JSON.stringify(next.config_source)
+              ? current.requestKey
+              : undefined,
+          notice: "Preview matches these inputs and the checked project configuration.",
+        }));
+      if (isCurrent(revision)) refreshConfiguration();
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : String(caught));
+      if (isCurrent(revision))
+        update((current) => ({
+          ...current,
+          error: caught instanceof Error ? caught.message : String(caught),
+        }));
     } finally {
-      setPending(false);
+      if (isCurrent(revision)) update((current) => ({ ...current, pending: false }));
     }
   }
   const source = result?.config_source;
   async function start() {
     if (!source) return;
-    requestKey.current ??= crypto.randomUUID();
-    setPending(true);
-    setError("");
+    const revision = draft.revision;
+    const requestKey = draft.requestKey ?? crypto.randomUUID();
+    update((current) => ({ ...current, requestKey, pending: true, error: "" }));
     try {
-      const receipt = await apiData(
-        apiClient.POST("/api/v1/experiment-launcher/submit", {
-          body: {
-            action: "submit",
-            experiment: entry.id,
-            version: entry.version,
-            inputs: inputValues(),
-            control_edits: controlEdits(drafts),
-            request_key: requestKey.current,
-            sample: sample.trim() || null,
-            actor,
-            config_source: source,
-            expected_request_hash: result?.request_hash,
-          },
-        }),
+      const procedureId = await submit(
+        {
+          action: "submit",
+          experiment: entry.id,
+          version: entry.version,
+          inputs: inputValues(),
+          control_edits: controlEdits(drafts),
+          request_key: requestKey,
+          sample: sample.trim() || null,
+          actor,
+          config_source: source,
+          expected_request_hash: result?.request_hash,
+        },
+        draft.definition,
       );
-      onAdmitted(receipt.procedure_id);
-      if (receipt.dispatch_error)
-        setError(`Submitted; execution needs retry: ${receipt.dispatch_error}`);
+      if (procedureId && isCurrent(revision)) {
+        update((current) => ({ ...current, admittedProcedureId: procedureId }));
+        if (mounted.current) onAdmitted(procedureId);
+      }
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : String(caught));
+      if (isCurrent(revision))
+        update((current) => ({
+          ...current,
+          error: caught instanceof Error ? caught.message : String(caught),
+        }));
     } finally {
-      setPending(false);
+      if (isCurrent(revision)) update((current) => ({ ...current, pending: false }));
     }
   }
   return (
@@ -134,6 +153,21 @@ export function LaunchForm({
       className="space-y-4 max-w-3xl"
     >
       <p>{entry.description}</p>
+      <p className="text-sm">
+        {draft.preview && !result && !pending
+          ? configurationError
+            ? "Cannot verify current configuration. Retained inputs and submission keys are unchanged; refresh project data or preview again."
+            : "Checking the retained preview against current project context…"
+          : draft.notice}
+      </p>
+      <button
+        type="button"
+        disabled={pending}
+        onClick={() => select(entry, true)}
+        className="border rounded px-3 py-1"
+      >
+        Reset launch draft
+      </button>
       {!supported && (
         <p role="alert">
           This request schema needs a project-specific form. Use the project's Python workflow.
@@ -143,9 +177,8 @@ export function LaunchForm({
         <ControlFields
           controls={entry.controls}
           drafts={drafts}
-          onChange={(id, draft) => {
-            setDrafts({ ...drafts, [id]: draft });
-            invalidate();
+          onChange={(id, controlDraft) => {
+            changeInput({ controls: { ...drafts, [id]: controlDraft } });
           }}
         />
       </fieldset>
@@ -207,7 +240,7 @@ export function LaunchForm({
       {entry.actions.includes("preview") && (
         <button
           type="submit"
-          disabled={pending || !supported || !actor.trim()}
+          disabled={pending || !supported || !actor.trim() || !catalogReady}
           className="border rounded px-4 py-2"
         >
           {pending ? "Compiling…" : "Preview"}
@@ -221,8 +254,7 @@ export function LaunchForm({
               aria-label="Sample ID"
               value={sample}
               onChange={(e) => {
-                setSample(e.target.value);
-                invalidate();
+                changeInput({ sample: e.target.value });
               }}
               className="border rounded p-2"
             />
@@ -233,15 +265,20 @@ export function LaunchForm({
               aria-label="Operator"
               value={actor}
               onChange={(e) => {
-                setActor(e.target.value);
-                invalidate();
+                changeInput({ actor: e.target.value });
               }}
               className="border rounded p-2"
             />
           </label>
           <button
             type="button"
-            disabled={!source || !actor.trim() || pending}
+            disabled={
+              !source ||
+              !actor.trim() ||
+              pending ||
+              attempt?.status === "unknown" ||
+              attempt?.status === "pending"
+            }
             onClick={() => {
               void start();
             }}

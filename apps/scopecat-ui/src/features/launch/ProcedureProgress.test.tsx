@@ -4,6 +4,7 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, expect, it, vi } from "vitest";
 import { ProcedureProgress } from "./ProcedureProgress";
+import { LaunchDraftProvider } from "./LaunchDraft";
 import { LaunchWorkspace } from "./LaunchWorkspace";
 import { outputHref, type ProcedureOperatorView } from "./procedure-operator";
 import { RunCancellationNotice } from "../runs/RunCancellationNotice";
@@ -238,7 +239,11 @@ it("finds durable work from history without copying an ID", async () => {
       return Response.json(view());
     }),
   );
-  mount(<LaunchWorkspace />);
+  mount(
+    <LaunchDraftProvider projectId="test-project">
+      <LaunchWorkspace />
+    </LaunchDraftProvider>,
+  );
   fireEvent.click(screen.getByText("Retained procedures"));
   fireEvent.click(await screen.findByRole("button", { name: /temperature-diagnostic/ }));
   await screen.findByText("Dispatch paused");

@@ -93,6 +93,7 @@ class ProcedureRunListQuery(_WireModel):
     cursor: int | None = Field(default=None, ge=1)
     limit: int = Field(default=50, ge=1, le=200)
     state: ProcedureRunState | None = None
+    request_key: str | None = Field(default=None, min_length=1)
 
 
 class ProcedureRunPage(_WireModel):

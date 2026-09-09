@@ -569,6 +569,8 @@ class DaemonClient:
             params["cursor"] = query.cursor
         if query.state is not None:
             params["state"] = query.state
+        if query.request_key is not None:
+            params["request_key"] = query.request_key
         return self._get_model(
             f"{_API_PREFIX}/procedures",
             ProcedureRunPage,

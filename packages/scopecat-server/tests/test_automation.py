@@ -611,3 +611,28 @@ def test_analysis_verifies_exact_durable_judgment_and_survives_restart(
                 )
     with LocalDaemonRuntime(tmp_path) as reopened:
         assert reopened.application.analyses.save(command) == saved
+
+
+def test_request_key_filter_preserves_definition_collisions_and_pagination(
+    tmp_path: Path,
+) -> None:
+    service, _ = _service(tmp_path)
+    first = _submit(service, key="shared-key")
+    _submit(service, key="unrelated")
+    second = service.submit(
+        ProcedureSubmitCommand(
+            request_key="shared-key",
+            definition=_definition().model_copy(update={"id": "different-procedure"}),
+            intent={"qubits": ["q0"]},
+        )
+    ).run
+    page = service.list(ProcedureRunListQuery(request_key="shared-key", limit=1))
+    assert page.items == (second,)
+    assert page.next_cursor is not None
+    older = service.list(
+        ProcedureRunListQuery(
+            request_key="shared-key", limit=1, cursor=page.next_cursor
+        )
+    )
+    assert older.items == (first,) and older.next_cursor is None
+    assert service.list(ProcedureRunListQuery(request_key="missing")).items == ()

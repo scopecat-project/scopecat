@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { parameterProposalKeys } from "./data/parameter-proposals/query-keys";
 import { getEvents, getHealth } from "./data/project-api";
+import { LaunchDraftProvider } from "./features/launch/LaunchDraft";
 import { RunsWorkspace } from "./features/runs/RunsWorkspace";
 import { titleCase } from "./lib/presentation";
 import { classes, iconButton } from "./ui/styles";
@@ -135,6 +136,7 @@ export default function App() {
       });
     };
     const refreshAfterConnection = () => {
+      void queryClient.invalidateQueries({ queryKey: ["experiment-launcher"] });
       invalidateCanonicalQueries();
       void queryClient.resetQueries({ queryKey: ["measurements"] });
       void queryClient.resetQueries({ queryKey: ["measurement-slice"] });
@@ -382,6 +384,13 @@ export default function App() {
           </div>
         )}
 
+        <LaunchDraftProvider projectId={healthQuery.data?.projectId}>
+          {view === "launch" && (
+            <Suspense fallback={<p>Loading experiments…</p>}>
+              <LaunchWorkspace />
+            </Suspense>
+          )}
+        </LaunchDraftProvider>
         {view === "runs" ? (
           <RunsWorkspace
             selectedRunId={selectedRunId}
@@ -427,11 +436,7 @@ export default function App() {
               selectedAnalysisId={selectedAnalysisId}
             />
           </Suspense>
-        ) : view === "launch" ? (
-          <Suspense fallback={<p>Loading experiments…</p>}>
-            <LaunchWorkspace />
-          </Suspense>
-        ) : view === "decisions" ? (
+        ) : view === "launch" ? null : view === "decisions" ? (
           <Suspense
             fallback={
               <DetailEmpty

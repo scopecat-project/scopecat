@@ -3,6 +3,7 @@ import "@testing-library/jest-dom/vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, expect, it, vi } from "vitest";
+import { LaunchDraftProvider } from "./LaunchDraft";
 import { LaunchWorkspace } from "./LaunchWorkspace";
 
 afterEach(() => {
@@ -102,11 +103,21 @@ const previewResult = {
   controls: [],
 };
 function mount() {
+  const fetcher = globalThis.fetch;
+  vi.stubGlobal("fetch", (request: Request) =>
+    new URL(request.url).pathname.endsWith("/config-registry")
+      ? Promise.resolve(
+          Response.json({ activation: { entry_id: "baseline", generation: 1 }, entries: [] }),
+        )
+      : fetcher(request),
+  );
   render(
     <QueryClientProvider
       client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
     >
-      <LaunchWorkspace />
+      <LaunchDraftProvider projectId="test-project">
+        <LaunchWorkspace />
+      </LaunchDraftProvider>
     </QueryClientProvider>,
   );
 }
@@ -189,7 +200,8 @@ it("retains the submission key after a lost response and opens durable progress"
   await screen.findByText("Preview ready");
   fireEvent.click(screen.getByRole("button", { name: "Start acquisition" }));
   await screen.findByRole("alert");
-  fireEvent.click(screen.getByRole("button", { name: "Start acquisition" }));
+  fireEvent.click(screen.getByRole("button", { name: "Retry original submission" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Open submitted procedure" }));
   await screen.findByText("Procedure progress");
   expect(submitted).toHaveLength(2);
   expect(submitted[0]?.request_key).toBe(submitted[1]?.request_key);
