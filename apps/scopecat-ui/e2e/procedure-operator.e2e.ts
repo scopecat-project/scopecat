@@ -84,7 +84,7 @@ test("reopens an admitted procedure after restart and follows exact retained run
     await page.getByLabel("Experiment", { exact: true }).selectOption("channel-timing");
     await page.getByRole("button", { name: "Preview", exact: true }).click();
     await expect(page.getByText("Preview ready", { exact: true })).toBeVisible();
-    const sourceScope = page.getByRole("region", { name: "Accepted-configuration source run" });
+    const sourceScope = page.getByRole("region", { name: "Selected-configuration source run" });
     const candidateScope = page.getByRole("region", {
       name: "Proposed-configuration verification run",
     });
