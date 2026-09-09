@@ -312,6 +312,7 @@
     "truncated": false
   },
   "controls_scalar": {
+    "code_revision": null,
     "config_source": {
       "config_ref": "config-registry/configs/daemon-15248161728d3097f23ae3b6e8109e20a2a2ec2b720eafcceefc89943acd302e.config-profile-snapshot.json",
       "content_hash": "sha256:15248161728d3097f23ae3b6e8109e20a2a2ec2b720eafcceefc89943acd302e",
@@ -486,6 +487,7 @@
     "summary": "Preview fixed or scanned signal controls against the reviewed q0 carrier. Project limits: at most 64 points; amplitude at most 0.2 V when detuning exceeds 0.25 GHz. This analytic model makes no device calls."
   },
   "controls_scan": {
+    "code_revision": null,
     "config_source": {
       "config_ref": "config-registry/configs/daemon-15248161728d3097f23ae3b6e8109e20a2a2ec2b720eafcceefc89943acd302e.config-profile-snapshot.json",
       "content_hash": "sha256:15248161728d3097f23ae3b6e8109e20a2a2ec2b720eafcceefc89943acd302e",
@@ -988,6 +990,7 @@
     "updated_at": "2026-09-01T00:00:00Z"
   },
   "launch_catalog": {
+    "code_revision": null,
     "entries": [
       {
         "actions": [
@@ -1131,6 +1134,7 @@
     ]
   },
   "launch_preview": {
+    "code_revision": null,
     "config_source": {
       "config_ref": "config-registry/configs/daemon-15248161728d3097f23ae3b6e8109e20a2a2ec2b720eafcceefc89943acd302e.config-profile-snapshot.json",
       "content_hash": "sha256:15248161728d3097f23ae3b6e8109e20a2a2ec2b720eafcceefc89943acd302e",

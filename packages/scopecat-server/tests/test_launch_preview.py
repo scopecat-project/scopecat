@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import os
 import subprocess
 import sys
@@ -57,7 +58,7 @@ def test_catalog_runs_a_fixed_separate_worker() -> None:
             returncode=0, stdout='{"entries": []}', stderr=""
         )
         response = client().get("/api/v1/experiment-launcher")
-        assert response.json() == {"entries": []}
+        assert response.json() == {"entries": [], "code_revision": None}
         assert run.call_args.args[0][1:3] == [
             "-m",
             "scopecat_server.launch_worker",
@@ -108,12 +109,13 @@ def test_worker_loads_manifest_file_and_supports_empty_project(
     monkeypatch.setattr("sys.argv", ["launch_worker", str(tmp_path)])
     monkeypatch.setattr("sys.stdin", io.StringIO('{"action":"list"}'))
     with patch.object(launch_worker, "load_project") as load:
+        load.return_value.source_roots = ()
         load.return_value.load_application.return_value = SimpleNamespace(
             launch_provider=None
         )
         launch_worker.main()
         load.assert_called_once_with(tmp_path / "scopecat.toml")
-    assert capsys.readouterr().out.strip() == '{"entries":[]}'
+    assert capsys.readouterr().out.strip() == '{"code_revision":null,"entries":[]}'
 
 
 def test_admission_survives_dispatch_failure(tmp_path: Path) -> None:
@@ -322,12 +324,13 @@ def provider(lab, request):
 
 with (
     patch("scopecat.project.load_project") as load,
-    patch("scopecat.open_project") as opened,
+    patch("scopecat.daemon.endpoint.resolve_daemon_endpoint", return_value="http://unused"),
 ):
+    load.return_value.source_roots = ()
     load.return_value.load_application.return_value = SimpleNamespace(
-        launch_provider=provider
+        launch_provider=provider,
+        connect=lambda *_args, **_kwargs: contextlib.nullcontext(None)
     )
-    opened.return_value.connect.return_value = contextlib.nullcontext(None)
     sys.argv = ["launch_worker", sys.argv[1]]
     runpy.run_module("scopecat_server.launch_worker", run_name="__main__")
 """
@@ -387,10 +390,14 @@ def test_worker_rejects_undeclared_control_edits_before_provider_action(
     )
     with (
         patch.object(launch_worker, "load_project") as load,
-        patch("scopecat.open_project"),
+        patch.object(
+            launch_worker, "resolve_daemon_endpoint", return_value="http://unused"
+        ),
     ):
+        load.return_value.source_roots = ()
         load.return_value.load_application.return_value = SimpleNamespace(
-            launch_provider=provider
+            launch_provider=provider,
+            connect=Mock(return_value=contextlib.nullcontext(None)),
         )
         with pytest.raises(ValueError, match="unknown control"):
             launch_worker.main()

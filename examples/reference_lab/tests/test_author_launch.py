@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import shutil
+import time
 from collections.abc import Generator
 from dataclasses import dataclass
 from importlib import import_module
@@ -21,11 +22,13 @@ from scopecat.application.launch import (
     LaunchRequest,
     LaunchSubmission,
 )
-from scopecat.daemon.client import DaemonConflictError
+from scopecat.daemon.client import DaemonClient, DaemonConflictError
+from scopecat.kernel.frozen import thaw_json_value
 from scopecat.kernel.quantity import Quantity
 from scopecat.project import load_project
 from scopecat.records.run_request import AxisValuesSourceRecord
 from scopecat.records.sample import SampleRevisionDraft
+from scopecat_server.author_worker import revision_project
 from scopecat_server.lifecycle import start_project, stop_project
 from scopecat_testkit.project_loading import isolated_project_imports
 
@@ -66,16 +69,23 @@ def reference_lab_daemon(
     project = load_project(root / "scopecat.toml")
     with isolated_project_imports():
         load_project(EXAMPLE_ROOT / "scopecat.toml").load_bootstrap()
-    with isolated_project_imports():
-        application = project.load_application()
-        analysis = cast(
-            "AnalysisDefinition[...]",
-            import_module("reference_lab.workflows.authored.signal").selected_mean,
-        )()
-        with pytest.MonkeyPatch.context() as patch:
-            patch.delenv("SCOPECAT_DAEMON_URL", raising=False)
-            endpoint = start_project(project)
+    with pytest.MonkeyPatch.context() as patch:
+        patch.delenv("SCOPECAT_DAEMON_URL", raising=False)
+        endpoint = start_project(project)
         try:
+            with DaemonClient(endpoint.base_url, timeout=120) as client:
+                active = client.author_revision_state().active
+                assert active is not None
+            with isolated_project_imports():
+                application = revision_project(root, active).load_application()
+                analysis = cast(
+                    "AnalysisDefinition[...]",
+                    import_module(
+                        "reference_lab.workflows.authored.signal"
+                    ).selected_mean,
+                )()
+            # Keep the loaded objects, not snapshot import paths, across the
+            # function-scoped loader isolation used by the rest of this suite.
             yield AuthorDaemon(endpoint.base_url, application, source, analysis)
         finally:
             stop_project(project)
@@ -140,6 +150,7 @@ def test_copied_author_uses_shared_control_plan_and_real_retained_run(
                     "request_key": f"author-{mode}",
                     "expected_request_hash": preview.request_hash,
                     "config_source": preview.config_source,
+                    "code_revision": preview.code_revision,
                 }
             )
             admitted = provider(lab, command)
@@ -221,3 +232,70 @@ def test_author_changes_supported_timing_without_application_edits(
         assert domain.kind == "grid"
         assert domain.axes[0].source.kind == "values"
         assert domain.axes[0].source.values == [Quantity(88, "ns")]
+
+
+def test_revision_aware_notebook_prepare_preserves_parameter_context(
+    reference_lab_daemon: AuthorDaemon,
+) -> None:
+    from scopecat.application.author_project import AuthorProject
+    from scopecat.records.config_context import ConfigContextRef, ContextRunConfigSource
+
+    from reference_lab.parameters import DRIVE_CARRIER_FREQUENCY, Q0
+
+    fixture = reference_lab_daemon
+    with fixture.application.connect(fixture.url) as lab:
+        active = lab.config.active()
+        sample = lab.samples.create(
+            "notebook-context",
+            kind="synthetic",
+            content=SampleRevisionDraft(display_name="Notebook context"),
+        )
+        saved = lab.config.save_context(
+            entry_id="notebook-working-point",
+            base=ConfigContextRef(
+                entry_id=active.entry.id, content_hash=active.entry.content_hash
+            ),
+            sample=sample.selector(),
+            working_point_id="shifted",
+            label="Notebook shifted point",
+            parameters=active.config.parameter_snapshot,
+        )
+        context = ConfigContextRef(
+            entry_id=saved.entry.id, content_hash=saved.entry.content_hash
+        )
+        overrides = (Q0[DRIVE_CARRIER_FREQUENCY].update(sc.Quantity(5.1, "GHz")),)
+        expected = lab.config.resolve_context(context, overrides=overrides)
+        with AuthorProject(fixture.url, timeout=120) as authors:
+            prepared = authors.prepare(
+                "copied_signal", context=context, overrides=overrides
+            )
+            admitted = prepared.submit(request_key="notebook-context-launch")
+        assert prepared.request.context == context
+        assert prepared.request.overrides == overrides
+        assert prepared.preview.code_revision is not None
+        source = prepared.preview.config_source
+        assert isinstance(source, ContextRunConfigSource)
+        assert source == expected.config_source
+        assert source.sample.sample_id == "notebook-context"
+        assert source.sample.context_id == "shifted"
+        procedure = lab.procedures.get(admitted.procedure_id)
+        deadline = time.monotonic() + 30
+        while procedure.state in {"ready", "leased"} and time.monotonic() < deadline:
+            time.sleep(0.05)
+        assert procedure.state == "closed"
+        revision = prepared.preview.code_revision
+        assert thaw_json_value(
+            procedure.snapshot.intent["code_revision"]
+        ) == revision.model_dump(mode="json")
+        assert thaw_json_value(
+            procedure.snapshot.intent["config_source"]
+        ) == source.model_dump(mode="json")
+        output = procedure.output("experiment")
+        assert output.kind == "run"
+        run = lab.get_run(output.run_id)
+        assert run.status == "completed"
+        assert run.snapshot.config_source == source
+        assert run.request.metadata["author_code_revision"] == revision.content_hash
+        assert run.samples[0].sample_id == "notebook-context"
+        assert run.samples[0].context_id == "shifted"
+        assert lab.config.active() == active

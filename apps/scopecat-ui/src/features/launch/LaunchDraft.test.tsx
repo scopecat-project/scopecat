@@ -254,7 +254,7 @@ it("invalidates previews after configuration or definition changes while retaini
   await act(async () => {
     await client.invalidateQueries({ queryKey: ["experiment-launcher"] });
   });
-  expect(await screen.findByText(/Experiment definition changed/)).toBeVisible();
+  expect(await screen.findByText(/Experiment revision changed/)).toBeVisible();
   expect(screen.getByLabelText("Note")).toHaveValue("keep me");
   expect(screen.queryByText("Preview ready")).toBeNull();
 });
@@ -290,7 +290,7 @@ it("reopens original admitted work after lost response, configuration and defini
     await client.invalidateQueries({ queryKey: ["config"] });
   });
   await returnToLaunch();
-  await screen.findByText(/Experiment definition changed/);
+  await screen.findByText(/Experiment revision changed/);
   expect(screen.getByRole("button", { name: "Retry original submission" })).toBeDisabled();
   lookupMatch = "original";
   fireEvent.click(screen.getByRole("button", { name: "Check original submission" }));
@@ -370,4 +370,41 @@ it("retains an unavailable experiment draft until its declaration returns", asyn
   expect(screen.getByLabelText("Experiment")).toHaveValue("prepared");
   expect(screen.queryByText("Preview ready")).toBeNull();
   expect(submissions).toHaveLength(0);
+});
+
+it("retains a scan across helper revisions but resets changed control declarations", async () => {
+  render(<Harness />);
+  await selectPrepared();
+  fireEvent.change(screen.getByLabelText("Frequency source"), { target: { value: "range" } });
+  fireEvent.change(screen.getByLabelText("Frequency start"), { target: { value: "4.7" } });
+  fireEvent.change(screen.getByLabelText("Frequency stop"), { target: { value: "4.9" } });
+  fireEvent.change(screen.getByLabelText("Frequency points"), { target: { value: "3" } });
+  await previewReady();
+  catalog = [catalog[0]!, { ...prepared, version: "helper-revision-2" }];
+  await act(async () => {
+    await client.invalidateQueries({ queryKey: ["experiment-launcher"] });
+  });
+  await screen.findByText(
+    "Experiment revision changed. Inputs and control edits are retained; preview again.",
+  );
+  expect(screen.getByLabelText("Frequency points")).toHaveValue(3);
+  expect(screen.getByLabelText("Frequency start")).toHaveValue(4.7);
+  expect(screen.queryByText("Preview ready")).toBeNull();
+  expect(screen.getByRole("button", { name: "Start acquisition" })).toBeDisabled();
+  catalog = [
+    catalog[0]!,
+    {
+      ...prepared,
+      version: "controls-revision-3",
+      controls: [{ ...prepared.controls[0]!, default: { value: 5, unit: "GHz" } }],
+    },
+  ];
+  await act(async () => {
+    await client.invalidateQueries({ queryKey: ["experiment-launcher"] });
+  });
+  await screen.findByText(
+    "Control declarations changed. Check retained inputs and new control defaults, then preview again.",
+  );
+  expect(screen.getByLabelText("Frequency", { exact: true })).toHaveValue(5);
+  expect(screen.queryByLabelText("Frequency points")).toBeNull();
 });

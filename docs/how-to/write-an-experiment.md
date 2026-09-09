@@ -34,49 +34,38 @@ Python structure must have a usable default for this initial GUI path.
 
 ## Run and analyze from Python
 
-Start a fresh Python process after editing the author file. Uncommitted local
-files work; no Git commit or manually computed hash is required.
+The reference project enables complete author revisions. Refresh after editing,
+then prepare and submit through the revision-aware notebook connection. No Git
+commit, manual hash or device-service restart is required.
 
 ```python
 import scopecat as sc
-from reference_lab.workflows.authored.signal import FREQUENCY, selected_mean
 
 project = sc.open_project("examples/reference_lab")
-authors = project.load_application().authors
-assert authors is not None
-signal = authors.get("signal")
-edits = {
-    "frequency": sc.axis(
-        FREQUENCY.ref,
-        [sc.Quantity(4.7, "GHz"), sc.Quantity(4.8, "GHz"), sc.Quantity(4.9, "GHz")],
-    ),
-    "gain": 2.0,
-}
-with project.connect(operator="alice") as lab:
-    prepared = signal.prepare(lab, edits=edits)
-    print(prepared.preview().initial_point_count)
-    run = signal.run(lab, edits=edits)
-    analysis = run.analyze(selected_mean(minimum=0.5))
-    print(run.id, analysis.id)
+with project.authoring() as authors:
+    observed = authors.state()
+    authors.refresh(expected_generation=observed.generation)
+    launch = authors.prepare("signal", actor="alice")
+    print(launch.preview.point_count, launch.preview.code_revision)
+    submitted = launch.submit(request_key="sample-a-signal-001")
+    print(submitted.procedure_id)
 ```
 
-`prepare` freezes the selected configuration for its preview. `signal.run`
-resolves the configuration at that call, applies the same edits, and records the
-admitted declaration and actual inputs. If you need to run exactly the earlier
-prepared configuration, use `prepared.run(metadata=signal.provenance)` instead.
-Reopen a retained run with `lab.get_run(run_id)` and call `.analyze(...)` again;
-this publishes analysis over old data without acquiring or changing it.
+The preview pins a complete code revision and exact configuration. Reuse the same
+request key to retry that submission. Use the GUI's **Fixed value**, **Scan values**
+and **Scan range** controls to edit the same `ControlSet`. Fixed and one-point
+scanned intent remain distinct even when they evaluate the same physical point.
+Changing controls invalidates the previous preview.
 
-For a scalar, use `"frequency": sc.Quantity(4.8, "GHz")`. For an explicit one-point
-scan, use an axis containing that quantity. Both evaluate the same physical
-point, but keep their different fixed/scanned intent. The GUI's **Fixed value**,
-**Scan values** and **Scan range** controls use the same underlying `ControlSet`
-operations, normalization and validation. Changing the GUI source discards stale
-inactive values and invalidates the previous preview.
+See [refresh author code](refresh-author-code.md) for explicit old/new revision
+analysis over retained data. Direct `signal.prepare/run` and `run.analyze` remain
+available for a deliberately loaded Python process, including arbitrary supported
+analysis arguments. Direct imports do not hot-reload; their declaration-only
+provenance must not be confused with the full revision-aware path.
 
 ## Use the same declaration in the GUI
 
-Reload the launch catalog after adding or editing an author file. Select the
+Choose **Refresh author code** after adding or editing an author file. Select the
 experiment, edit its controls, and choose **Preview**. Check the point count,
 configuration and preflight before **Start acquisition**. Submission retains a
 normal single-run procedure and its exact child run; it uses the existing retry
@@ -84,20 +73,13 @@ key and configuration-generation checks. The author did not declare a procedure.
 Follow **Open retained run** to inspect data, then reuse that run from Python for
 independent analysis.
 
-The daemon never imports these author modules. Existing short-lived project
-workers perform discovery, preview and execution. This does not require restarting
-the instrument daemon for initial discovery. An already loaded notebook collection
-does not refresh automatically. Restart that Python process when changing code.
-
-The initial fingerprint covers the experiment declaration's lexical source,
-control catalog, wrapper and intent schema; the durable run request records that
-declaration beside its actual inputs and point plan. It is **not** a transitive
-helper/module identity or a source archive sufficient for replay. In particular,
-a helper-only edit outside the decorated function is not yet a reliable revision
-fence. Do not edit helpers while a run is admitted or executing. Atomic definition
-refresh, helper dependency identity and retained in-flight implementations are
-tracked by [#442](https://github.com/scopecat-project/scopecat/issues/442). Old results
-remain readable using their retained result contract without loading new code.
+The daemon does not import author modules. Fresh workers validate the complete
+candidate and publish it atomically; another fresh worker previews or executes
+that revision. A failed refresh shows the source error and leaves the previous
+catalog usable. Admitted and running author procedures retain their original
+helper, experiment and analysis source. Historical analysis explicitly chooses
+an archived revision. See [the refresh and recovery boundary](refresh-author-code.md),
+including the schema 64 store requirement and external environment limitations.
 
 ## One-time laboratory composition
 

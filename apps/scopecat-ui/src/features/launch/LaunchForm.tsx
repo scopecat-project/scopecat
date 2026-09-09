@@ -133,6 +133,7 @@ export function LaunchForm({
           overrides: selectedContext?.config_source.overrides ?? [],
           actor,
           config_source: source,
+          code_revision: result?.code_revision,
           expected_request_hash: result?.request_hash,
         },
         draft.definition,

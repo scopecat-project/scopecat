@@ -21,6 +21,7 @@ nav = [
   { "How-to guides" = [
     "how-to/index.md",
     { "Write an experiment" = "how-to/write-an-experiment.md" },
+    { "Refresh author code" = "how-to/refresh-author-code.md" },
     { "Control instruments" = "how-to/control-instruments.md" },
     { "Use measurement data" = "how-to/use-measurement-data.md" },
     { "Manage configuration" = "how-to/manage-configuration.md" },

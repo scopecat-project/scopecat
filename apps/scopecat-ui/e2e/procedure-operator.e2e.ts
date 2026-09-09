@@ -294,6 +294,7 @@ test("reopens a lost launch receipt after context changes without a second submi
         entries: Array<{ id: string; description: string }>;
       };
       const changed = {
+        ...catalog,
         entries: catalog.entries.map((entry) =>
           entry.id === "frequency-amplitude"
             ? { ...entry, description: entry.description + " Updated description." }
@@ -306,7 +307,7 @@ test("reopens a lost launch receipt after context changes without a second submi
       .getByRole("navigation", { name: "Project sections" })
       .getByRole("button", { name: "Experiments", exact: true })
       .click();
-    await expect(page.getByText(/Experiment definition changed/)).toBeVisible();
+    await expect(page.getByText(/Experiment revision changed/)).toBeVisible();
     await expect(page.getByRole("button", { name: "Retry original submission" })).toBeDisabled();
     await page.getByRole("button", { name: "Check original submission" }).click();
     await page.getByRole("button", { name: "Open submitted procedure" }).click();

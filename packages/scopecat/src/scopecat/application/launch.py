@@ -20,6 +20,7 @@ from scopecat.automation.interpretations import InterpretationRequest
 from scopecat.config.parameter_updates import ParameterUpdate
 from scopecat.kernel.content_identity import sha256_json_hash
 from scopecat.planning.preflight import PreflightSummary
+from scopecat.records.author_revision import AuthorRevisionRef
 from scopecat.records.config_context import ConfigContextRef, ContextRunConfigSource
 from scopecat.records.content import Sha256ContentHash
 from scopecat.records.run import ConfigRegistryRunConfigSource
@@ -79,6 +80,7 @@ class LaunchCatalogEntry(BaseModel):
 
 class LaunchCatalog(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
+    code_revision: AuthorRevisionRef | None = None
     entries: tuple[LaunchCatalogEntry, ...] = ()
 
 
@@ -87,6 +89,7 @@ type LaunchConfigSource = ConfigRegistryRunConfigSource | ContextRunConfigSource
 
 class LaunchRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
+    code_revision: AuthorRevisionRef | None = None
     action: Literal["list", "preview", "submit"]
     experiment: str = ""
     version: str = ""
@@ -160,6 +163,7 @@ class LaunchPreview(BaseModel):
     """Compile-only evidence for exactly one request and immutable configuration."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
+    code_revision: AuthorRevisionRef | None = None
     experiment_id: str
     request_hash: Sha256ContentHash
     config_source: LaunchConfigSource

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient, apiData } from "../../api-client";
 import { definitionKey, invalidateDraft, useLaunchDraft } from "./LaunchDraft";
+import { AuthorRefresh } from "./AuthorRefresh";
 import { LaunchForm } from "./LaunchForm";
 import { OriginalSubmission } from "./OriginalSubmission";
 import { ProcedureHistory } from "./ProcedureHistory";
@@ -52,6 +53,7 @@ export function LaunchWorkspace() {
   return (
     <section className="p-6 space-y-4">
       <h2 className="text-lg font-semibold">Experiments</h2>
+      <AuthorRefresh projectId={projectId} />
       <p>Select a maintained experiment and preview its configured parameters.</p>
       {catalog.isPending && <p role="status">Loading experiments…</p>}
       {catalog.error && <p role="alert">{catalog.error.message}</p>}

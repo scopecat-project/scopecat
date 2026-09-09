@@ -22,6 +22,7 @@ import type { LaunchCatalogEntry, LaunchPreview } from "./launch-api";
 
 export interface LaunchDraft {
   definition: string;
+  controlDefinition: string;
   experiment: string;
   values: Record<string, string>;
   controls: ControlDrafts;
@@ -55,10 +56,24 @@ interface DraftContext {
 const Context = createContext<DraftContext | null>(null);
 export const definitionKey = (entry: LaunchCatalogEntry) => JSON.stringify(entry);
 
+const controlDefinitionKey = (entry: LaunchCatalogEntry) =>
+  JSON.stringify(
+    entry.controls.map((control) => ({
+      id: control.id,
+      default: control.default,
+      unit: control.unit,
+      minimum: control.minimum,
+      maximum: control.maximum,
+      scannable: control.scannable,
+      ownership: control.ownership,
+    })),
+  );
+
 function initialDraft(entry: LaunchCatalogEntry, revision: number): LaunchDraft {
   return {
     experiment: entry.id,
     definition: definitionKey(entry),
+    controlDefinition: controlDefinitionKey(entry),
     values: Object.fromEntries(
       Object.entries(entry.request.properties ?? {})
         .filter((pair): pair is [string, FormField] => canRenderField(pair[1]))
@@ -171,8 +186,14 @@ function ProjectDraft({
         );
         next.sample = current.sample;
         next.actor = current.actor;
-        next.notice =
-          "Experiment definition changed. Check retained inputs and new control defaults, then preview again.";
+        if (current.controlDefinition === next.controlDefinition) {
+          next.controls = current.controls;
+          next.notice =
+            "Experiment revision changed. Inputs and control edits are retained; preview again.";
+        } else {
+          next.notice =
+            "Control declarations changed. Check retained inputs and new control defaults, then preview again.";
+        }
       }
       return next;
     });

@@ -109,7 +109,9 @@ function mount() {
       ? Promise.resolve(
           Response.json({ activation: { entry_id: "baseline", generation: 1 }, entries: [] }),
         )
-      : fetcher(request),
+      : request.url.endsWith("/author-revisions")
+        ? Promise.resolve(Response.json({ enabled: false, generation: 0, active: null }))
+        : fetcher(request),
   );
   render(
     <QueryClientProvider

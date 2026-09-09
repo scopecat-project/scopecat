@@ -55,6 +55,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/author-revisions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Author Revision State */
+        get: operations["author_revision_state_api_v1_author_revisions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/author-revisions/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Refresh Author Revision */
+        post: operations["refresh_author_revision_api_v1_author_revisions_refresh_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/config-registry": {
         parameters: {
             query?: never;
@@ -2018,6 +2052,29 @@ export interface components {
              * @enum {string}
              */
             state: "queued" | "closed";
+        };
+        /** AuthorRefreshRequest */
+        AuthorRefreshRequest: {
+            /** Expected Generation */
+            expected_generation: number;
+        };
+        /** AuthorRevisionRef */
+        AuthorRevisionRef: {
+            content_hash: components["schemas"]["Sha256ContentHash"];
+        };
+        /** AuthorRevisionState */
+        AuthorRevisionState: {
+            active?: components["schemas"]["AuthorRevisionRef"] | null;
+            /**
+             * Enabled
+             * @default false
+             */
+            enabled: boolean;
+            /**
+             * Generation
+             * @default 0
+             */
+            generation: number;
         };
         /**
          * AxisAroundSourceRecord
@@ -4128,6 +4185,7 @@ export interface components {
         };
         /** LaunchCatalog */
         LaunchCatalog: {
+            code_revision?: components["schemas"]["AuthorRevisionRef"] | null;
             /**
              * Entries
              * @default []
@@ -4251,6 +4309,7 @@ export interface components {
          * @description Compile-only evidence for exactly one request and immutable configuration.
          */
         LaunchPreview: {
+            code_revision?: components["schemas"]["AuthorRevisionRef"] | null;
             config_source: components["schemas"]["LaunchConfigSource-Output"];
             /**
              * Controls
@@ -4290,6 +4349,7 @@ export interface components {
              * @default operator
              */
             actor: string;
+            code_revision?: components["schemas"]["AuthorRevisionRef"] | null;
             config_source?: components["schemas"]["LaunchConfigSource-Input"] | null;
             context?: components["schemas"]["ConfigContextRef"] | null;
             /** Control Edits */
@@ -7809,6 +7869,59 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProjectAnalysisView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    author_revision_state_api_v1_author_revisions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthorRevisionState"];
+                };
+            };
+        };
+    };
+    refresh_author_revision_api_v1_author_revisions_refresh_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AuthorRefreshRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthorRevisionState"];
                 };
             };
             /** @description Validation Error */

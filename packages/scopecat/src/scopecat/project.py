@@ -7,15 +7,17 @@ import tomllib
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, replace
 from importlib import import_module
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from threading import RLock
 from typing import TYPE_CHECKING, cast
 
 if TYPE_CHECKING:
     from scopecat.api.lab import LabClient
+    from scopecat.application.author_project import AuthorProject
     from scopecat.application.bootstrap import LabBootstrap
     from scopecat.application.lab import LabApplication
     from scopecat.planning.system import ExperimentSystemBuilder
+    from scopecat.records.author_revision import AuthorRevisionRef
     from scopecat.sdk.instruments import InstrumentBackend
 
 type LabBootstrapFactory = Callable[[Path], LabBootstrap]
@@ -46,6 +48,10 @@ class Project:
     bootstrap_spec: str | None
     application_spec: str | None
     instrument_backend_spec: str | None
+    code_root: Path | None = None
+    code_revision: AuthorRevisionRef | None = None
+    source_roots: tuple[str, ...] = ()
+    refresh_roots: tuple[str, ...] = ()
 
     def load_bootstrap(self) -> LabBootstrap:
         """Load the lightweight composition used by the daemon and config CLI."""
@@ -54,7 +60,9 @@ class Project:
             from scopecat.application.bootstrap import LabBootstrap
 
             return LabBootstrap()
-        return load_bootstrap_factory(self.bootstrap_spec, self.root)(self.root)
+        return load_bootstrap_factory(self.bootstrap_spec, self.code_root or self.root)(
+            self.root
+        )
 
     def load_application(self) -> LabApplication:
         """Load the version-controlled composition declared by this project."""
@@ -63,7 +71,24 @@ class Project:
             from scopecat.application.lab import LabApplication
 
             return LabApplication()
-        return load_application_factory(self.application_spec, self.root)(self.root)
+        from scopecat.project_sources import loading_revision
+
+        token = loading_revision.set(self.code_revision)
+        try:
+            return load_application_factory(
+                self.application_spec, self.code_root or self.root
+            )(self.root)
+        finally:
+            loading_revision.reset(token)
+
+    def authoring(self, daemon: str | None = None) -> AuthorProject:
+        """Use complete author revisions from notebooks without module reload."""
+        from scopecat.application.author_project import AuthorProject
+        from scopecat.daemon.endpoint import resolve_daemon_endpoint
+
+        return AuthorProject(
+            resolve_daemon_endpoint(self.root, explicit=daemon), timeout=120
+        )
 
     def connect(
         self,
@@ -130,12 +155,34 @@ def load_project(manifest: str | Path) -> Project:
     bootstrap = _optional_text(lab, "bootstrap")
     application = _optional_text(lab, "application")
     instrument_backend = _optional_text(lab, "instrument_backend")
+    authors = document.get("authors", {})
+    if not isinstance(authors, dict):
+        raise ProjectManifestError("[authors] must be a table")
+    authors = cast("dict[str, object]", authors)
+    if set(authors) - {
+        "source_roots",
+        "refresh_roots",
+    }:
+        raise ProjectManifestError("[authors] accepts source_roots and refresh_roots")
+    source_roots = _local_roots(authors.get("source_roots", []))
+    refresh_roots = _local_roots(authors.get("refresh_roots", []))
+    if bool(source_roots) != bool(refresh_roots):
+        raise ProjectManifestError(
+            "authors requires both source_roots and refresh_roots"
+        )
+    if any(
+        not any(Path(item).is_relative_to(root) for root in source_roots)
+        for item in refresh_roots
+    ):
+        raise ProjectManifestError("refresh_roots must be within source_roots")
     return Project(
         root=selected.parent,
         manifest=selected,
         bootstrap_spec=bootstrap,
         application_spec=application,
         instrument_backend_spec=instrument_backend,
+        source_roots=source_roots,
+        refresh_roots=refresh_roots,
     )
 
 
@@ -319,6 +366,27 @@ def _remove_import_paths(paths: Iterable[str]) -> None:
     for selected in paths:
         if selected in sys.path:
             sys.path.remove(selected)
+
+
+def _local_roots(value: object) -> tuple[str, ...]:
+    if not isinstance(value, list):
+        raise ProjectManifestError("author roots must be lists of local paths")
+    selected: list[str] = []
+    for item in cast("list[object]", value):
+        if (
+            not isinstance(item, str)
+            or not item
+            or PureWindowsPath(item).drive
+            or Path(item).is_absolute()
+            or ".." in Path(item).parts
+            or "\\" in item
+            or item == "."
+        ):
+            raise ProjectManifestError(
+                "author roots must be nonempty relative subdirectories"
+            )
+        selected.append(item)
+    return tuple(selected)
 
 
 def _optional_text(table: dict[str, object], field: str) -> str | None:
