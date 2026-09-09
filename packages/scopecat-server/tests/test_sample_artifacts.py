@@ -98,6 +98,16 @@ def test_missing_and_corrupt_content_have_different_repair_evidence(
         (b"\xff", "application/json"),
         (b"x" * (MAX_SAMPLE_ARTIFACT_BYTES + 1), "text/plain"),
     ],
+    ids=(
+        "html",
+        "svg",
+        "invalid-png",
+        "invalid-text-utf8",
+        "invalid-json",
+        "nonfinite-json",
+        "invalid-json-utf8",
+        "over-size-limit",
+    ),
 )
 def test_import_rejects_unsupported_or_mislabelled_bytes(
     artifacts: SampleArtifacts, content: bytes, media_type: str
