@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import sqlite3
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from threading import Barrier
 from typing import cast
@@ -17,6 +17,7 @@ from fastapi.testclient import TestClient
 from pydantic import ValidationError
 from scopecat.analysis.datasets import DerivedDataset, derived_dataset
 from scopecat.analysis.facts import AnalysisFactSchema
+from scopecat.analysis.service import MeasurementAnalysisInput
 from scopecat.api.analysis import Analysis, AnalysisContext, analysis_step
 from scopecat.api.lab import LabClient
 from scopecat.api.published_analysis import PublishedAnalysis
@@ -66,7 +67,11 @@ from scopecat.control.models import (
     RunPlanSummary,
     RunResourceRequirement,
 )
-from scopecat.daemon.client import DaemonClient, DaemonConflictError
+from scopecat.daemon.client import (
+    DaemonClient,
+    DaemonConflictError,
+    DaemonNotFoundError,
+)
 from scopecat.daemon.wire import (
     AnalysisParameterProposalOutputPayload,
     AnalysisSaveCommand,
@@ -2212,3 +2217,41 @@ def test_cross_run_entity_comparison_freezes_sources_and_survives_restart(
         )
         assert restored.dataset("comparison").table.to_pydict() == expected
         assert [item.model_dump(mode="json") for item in restored.inputs] == inputs
+
+
+def test_primary_run_analysis_checks_secondary_owner_and_exact_content(
+    tmp_path: Path,
+) -> None:
+    with LocalDaemonRuntime(tmp_path, bootstrap_config=_config()) as runtime:
+        primary_id = _complete_signal_run(runtime, submission_id="primary", signal=0.8)
+        secondary_id = _complete_signal_run(
+            runtime, submission_id="secondary", signal=1.1
+        )
+        with TestClient(runtime.app()) as transport:
+            lab = LabClient(_daemon_client(transport))
+            primary, secondary = lab.get_run(primary_id), lab.get_run(secondary_id)
+            context = primary.analysis("Comparison", key="comparison")
+            context.measurements(id="primary")
+            context.measurements(secondary, id="secondary")
+            analysis = context.result().fact("compared", True)
+            saved = analysis.save()
+            assert saved.view.analysis.subject == RunAnalysisSubject(run_id=primary_id)
+            first, second = analysis.inputs
+            assert isinstance(first, MeasurementAnalysisInput)
+            assert isinstance(second, MeasurementAnalysisInput)
+            with pytest.raises(DaemonConflictError, match="primary run"):
+                replace(analysis, inputs=(second,)).save()
+            with pytest.raises(DaemonConflictError, match="exact run content"):
+                replace(
+                    analysis,
+                    inputs=(first, replace(second, content_hash="sha256:wrong")),
+                ).save()
+            with pytest.raises(DaemonNotFoundError):
+                replace(
+                    analysis,
+                    inputs=(first, replace(second, run_id="removed-secondary")),
+                ).save()
+            assert (
+                primary.published_analysis(saved.id).publication_hash
+                == saved.publication_hash
+            )

@@ -820,6 +820,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/run-comparison": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Run Comparison */
+        post: operations["run_comparison_api_v1_run_comparison_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/runs": {
         parameters: {
             query?: never;
@@ -2407,6 +2424,181 @@ export interface components {
             size_bytes: number;
         };
         CommandPayloadBody: components["schemas"]["InlinePayloadBody"] | components["schemas"]["SegmentedInlinePayloadBody"] | components["schemas"]["BlobPayloadBody"];
+        /** ComparisonCatalog */
+        ComparisonCatalog: {
+            code_revision?: components["schemas"]["AuthorRevisionRef"] | null;
+            /**
+             * Kind
+             * @default catalog
+             * @constant
+             */
+            kind: "catalog";
+            /**
+             * Models
+             * @default []
+             */
+            models: components["schemas"]["ComparisonModel"][];
+        };
+        /** ComparisonCurve */
+        ComparisonCurve: {
+            /** Content Hash */
+            content_hash: string;
+            /** Coordinate */
+            coordinate: string;
+            /** Coordinate Unit */
+            coordinate_unit: string | null;
+            /** Observable */
+            observable: string;
+            /** Observable Unit */
+            observable_unit: string | null;
+            /** Run Id */
+            run_id: string;
+            /** X */
+            x: number[];
+            /** Y */
+            y: number[];
+        };
+        /** ComparisonHandoff */
+        ComparisonHandoff: {
+            /**
+             * Kind
+             * @default handoff
+             * @constant
+             */
+            kind: "handoff";
+            request: components["schemas"]["LaunchRequest-Output"];
+            /** Source Analysis */
+            source_analysis: string;
+            /** Source Hash */
+            source_hash: string;
+            /** Source Run */
+            source_run: string;
+        };
+        /** ComparisonInspection */
+        ComparisonInspection: {
+            code_revision?: components["schemas"]["AuthorRevisionRef"] | null;
+            /**
+             * Kind
+             * @default inspection
+             * @constant
+             */
+            kind: "inspection";
+            primary: components["schemas"]["ComparisonCurve"];
+            secondary: components["schemas"]["ComparisonCurve"];
+        };
+        /** ComparisonModel */
+        ComparisonModel: {
+            /** Coordinate */
+            coordinate: string;
+            /** Description */
+            description: string;
+            /** Id */
+            id: string;
+            /** Observable */
+            observable: string;
+            /**
+             * Parameters
+             * @default []
+             */
+            parameters: components["schemas"]["ComparisonParameter"][];
+            /** Title */
+            title: string;
+            /** Version */
+            version: string;
+        };
+        /** ComparisonParameter */
+        ComparisonParameter: {
+            /** Default */
+            default: number;
+            /** Label */
+            label: string;
+            /** Maximum */
+            maximum?: number | null;
+            /** Minimum */
+            minimum?: number | null;
+            /** Name */
+            name: string;
+        };
+        /** ComparisonPublication */
+        ComparisonPublication: {
+            /** Analysis Id */
+            analysis_id: string;
+            /**
+             * Kind
+             * @default publication
+             * @constant
+             */
+            kind: "publication";
+            /** Publication Hash */
+            publication_hash: string;
+            /** Run Id */
+            run_id: string;
+        };
+        /** ComparisonRequest */
+        ComparisonRequest: {
+            /**
+             * Action
+             * @enum {string}
+             */
+            action: "list" | "inspect" | "fit" | "candidate" | "reject" | "handoff";
+            /**
+             * Actor
+             * @default operator
+             */
+            actor: string;
+            /**
+             * Analysis Hash
+             * @default
+             */
+            analysis_hash: string;
+            /**
+             * Analysis Id
+             * @default
+             */
+            analysis_id: string;
+            code_revision?: components["schemas"]["AuthorRevisionRef"] | null;
+            /**
+             * Model Id
+             * @default
+             */
+            model_id: string;
+            /**
+             * Model Version
+             * @default
+             */
+            model_version: string;
+            /** Parameters */
+            parameters?: {
+                [key: string]: number;
+            };
+            primary?: components["schemas"]["ComparisonSelection"] | null;
+            /**
+             * Primary Run
+             * @default
+             */
+            primary_run: string;
+            /**
+             * Reason
+             * @default
+             */
+            reason: string;
+            secondary?: components["schemas"]["ComparisonSelection"] | null;
+            /**
+             * Secondary Run
+             * @default
+             */
+            secondary_run: string;
+        };
+        ComparisonResult: components["schemas"]["ComparisonCatalog"] | components["schemas"]["ComparisonInspection"] | components["schemas"]["ComparisonPublication"] | components["schemas"]["ComparisonHandoff"];
+        /** ComparisonSelection */
+        ComparisonSelection: {
+            /** Content Hash */
+            content_hash: string;
+            /** Points */
+            points: number[];
+            /** Run Id */
+            run_id: string;
+        };
         /**
          * CompiledArtifactInspection
          * @description Common inspection envelope shared by pre-run and running views.
@@ -3284,8 +3476,22 @@ export interface components {
          * ControlEdit
          * @description Choose one existing scalar or axis source; no hidden inactive value.
          */
-        ControlEdit: {
+        "ControlEdit-Input": {
             axis?: components["schemas"]["AxisSourceRecord-Input"] | null;
+            /**
+             * Mode
+             * @enum {string}
+             */
+            mode: "fixed" | "scan" | "default";
+            /** Value */
+            value?: number | components["schemas"]["scopecat__kernel__quantity__Quantity"] | null;
+        };
+        /**
+         * ControlEdit
+         * @description Choose one existing scalar or axis source; no hidden inactive value.
+         */
+        "ControlEdit-Output": {
+            axis?: components["schemas"]["AxisSourceRecord-Output"] | null;
             /**
              * Mode
              * @enum {string}
@@ -4505,7 +4711,7 @@ export interface components {
             summary: string;
         };
         /** LaunchRequest */
-        LaunchRequest: {
+        "LaunchRequest-Input": {
             /**
              * Action
              * @enum {string}
@@ -4521,7 +4727,7 @@ export interface components {
             context?: components["schemas"]["ConfigContextRef"] | null;
             /** Control Edits */
             control_edits?: {
-                [key: string]: components["schemas"]["ControlEdit"];
+                [key: string]: components["schemas"]["ControlEdit-Input"];
             };
             expected_request_hash?: components["schemas"]["Sha256ContentHash"] | null;
             /**
@@ -4538,6 +4744,53 @@ export interface components {
              * @default []
              */
             overrides: components["schemas"]["ParameterUpdate-Input"][];
+            /**
+             * Request Key
+             * @default
+             */
+            request_key: string;
+            /** Sample */
+            sample?: string | null;
+            /**
+             * Version
+             * @default
+             */
+            version: string;
+        };
+        /** LaunchRequest */
+        "LaunchRequest-Output": {
+            /**
+             * Action
+             * @enum {string}
+             */
+            action: "list" | "preview" | "submit";
+            /**
+             * Actor
+             * @default operator
+             */
+            actor: string;
+            code_revision?: components["schemas"]["AuthorRevisionRef"] | null;
+            config_source?: components["schemas"]["LaunchConfigSource-Output"] | null;
+            context?: components["schemas"]["ConfigContextRef"] | null;
+            /** Control Edits */
+            control_edits?: {
+                [key: string]: components["schemas"]["ControlEdit-Output"];
+            };
+            expected_request_hash?: components["schemas"]["Sha256ContentHash"] | null;
+            /**
+             * Experiment
+             * @default
+             */
+            experiment: string;
+            /** Inputs */
+            inputs?: {
+                [key: string]: components["schemas"]["pydantic__types__JsonValue"];
+            };
+            /**
+             * Overrides
+             * @default []
+             */
+            overrides: components["schemas"]["ParameterUpdate-Output"][];
             /**
              * Request Key
              * @default
@@ -7169,9 +7422,8 @@ export interface components {
         /** RunRequestBinaryValue */
         "RunRequestBinaryValue-Output": {
             /**
-             * Kind
-             * @default binary
-             * @constant
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
              */
             kind: "binary";
             left: components["schemas"]["RunRequestScalarValue-Output"];
@@ -7266,9 +7518,8 @@ export interface components {
                 [key: string]: components["schemas"]["RunRequestScalarValue-Output"];
             };
             /**
-             * Kind
-             * @default parameter_lookup
-             * @constant
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
              */
             kind: "parameter_lookup";
             /** Table Id */
@@ -8774,7 +9025,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["LaunchRequest"];
+                "application/json": components["schemas"]["LaunchRequest-Input"];
             };
         };
         responses: {
@@ -8807,7 +9058,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["LaunchRequest"];
+                "application/json": components["schemas"]["LaunchRequest-Input"];
             };
         };
         responses: {
@@ -9668,6 +9919,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ReviewCompileReceipt"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    run_comparison_api_v1_run_comparison_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ComparisonRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ComparisonResult"];
                 };
             };
             /** @description Validation Error */

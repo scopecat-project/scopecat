@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import Annotated
 
 import pytest
-from pydantic import BaseModel, Field, field_serializer
+from pydantic import BaseModel, ConfigDict, Field, field_serializer
 
 import scopecat as sc
 from scopecat.analysis.facts import ANALYSIS_FACT_SCHEMA_CODEC
@@ -100,3 +100,54 @@ def test_fact_schema_ignores_analysis_projection_metadata() -> None:
         sc.AnalysisFactSchema("tests.value.v1", First).schema_hash
         == sc.AnalysisFactSchema("tests.value.v1", Second).schema_hash
     )
+
+
+@dataclass(frozen=True)
+class _Selection:
+    positions: tuple[int, ...]
+
+
+@dataclass(frozen=True)
+class _SelectedFit:
+    selection: _Selection
+    coefficients: tuple[float, ...]
+
+
+class _StrictSelectedFit(BaseModel):
+    model_config = ConfigDict(strict=True, frozen=True)
+    selection: _Selection
+    coefficients: tuple[float, ...]
+
+
+@pytest.mark.parametrize("model", [_SelectedFit, _StrictSelectedFit])
+def test_persisted_json_reconstructs_tuple_and_nested_typed_facts(
+    model: type[_SelectedFit | _StrictSelectedFit],
+) -> None:
+    value = model(selection=_Selection((4, 1, 2)), coefficients=(0.5, 1.0))
+    schema = sc.AnalysisFactSchema("tests.selected-fit.v1", model)
+    encoded = schema.encode(value)
+    assert encoded == {
+        "selection": {"positions": [4, 1, 2]},
+        "coefficients": [0.5, 1.0],
+    }
+    restored = schema.decode(encoded)
+    assert restored == value
+    assert restored.selection.positions == (4, 1, 2)
+    assert schema.encode(restored) == encoded
+    with pytest.raises(TypeError, match="int"):
+        schema.decode({"selection": {"positions": [True]}, "coefficients": [0.5]})
+
+
+def test_author_revision_alias_has_a_stable_typed_fact_roundtrip() -> None:
+    from pydantic import ValidationError
+
+    from scopecat.records.author_revision import AuthorRevisionRef
+
+    schema = sc.AnalysisFactSchema("tests.author-revision.v1", AuthorRevisionRef)
+    original = AuthorRevisionRef(content_hash="sha256:" + "a" * 64)
+    encoded = schema.encode(original)
+    assert encoded == {"content_hash": original.content_hash}
+    assert schema.decode(encoded) == original
+    assert schema.encode(schema.decode(encoded)) == encoded
+    with pytest.raises(ValidationError, match="content_hash"):
+        schema.decode({"content_hash": "not-a-content-hash"})

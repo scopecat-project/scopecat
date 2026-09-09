@@ -1,7 +1,7 @@
 import { apiClient, apiData, ApiError } from "../../api-client";
 import type { components } from "../../api-schema";
 
-export type SubmissionRequest = components["schemas"]["LaunchRequest"];
+export type SubmissionRequest = components["schemas"]["LaunchRequest-Input"];
 export interface SubmissionAttempt {
   request: SubmissionRequest;
   definition: string;

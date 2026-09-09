@@ -1,4 +1,4 @@
-import { useEffect, useMemo, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { Atom, ChevronDown, CircleOff, LoaderCircle } from "lucide-react";
 import { errorMessage, formatDateTime, formatRelative } from "../../lib/presentation";
@@ -12,7 +12,40 @@ import {
   getOlderProjectAnalysisSummaries,
 } from "./analysis-api";
 
-export function AnalysesWorkspace({
+import { RunComparison, type ComparisonHandoff } from "./RunComparison";
+
+export function AnalysesWorkspace(props: {
+  projectId: string | undefined;
+  daemonUnavailable: boolean;
+  onOpenRun: (runId: string) => void;
+  onSelectAnalysis: (analysisId: string) => void;
+  selectedAnalysisId?: string;
+  onHandoff: (handoff: ComparisonHandoff) => void;
+}) {
+  const [comparison, setComparison] = useState(() =>
+    new URLSearchParams(location.search).has("compare"),
+  );
+  return (
+    <div className="space-y-4">
+      <nav className="flex gap-4" aria-label="Analysis workflows">
+        <button onClick={() => setComparison(true)}>Compare retained runs</button>
+        <button onClick={() => setComparison(false)}>Project analysis history</button>
+      </nav>
+      {comparison && !props.daemonUnavailable ? (
+        <RunComparison
+          key={props.projectId}
+          projectId={props.projectId}
+          onOpenRun={props.onOpenRun}
+          onHandoff={props.onHandoff}
+        />
+      ) : (
+        <ProjectAnalyses {...props} />
+      )}
+    </div>
+  );
+}
+
+function ProjectAnalyses({
   daemonUnavailable,
   onOpenRun,
   onSelectAnalysis,

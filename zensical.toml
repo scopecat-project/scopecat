@@ -24,6 +24,7 @@ nav = [
     { "Refresh author code" = "how-to/refresh-author-code.md" },
     { "Control instruments" = "how-to/control-instruments.md" },
     { "Use measurement data" = "how-to/use-measurement-data.md" },
+    { "Compare retained runs" = "how-to/retained-run-comparison.md" },
     { "Manage configuration" = "how-to/manage-configuration.md" },
     { "Back up and restore" = "how-to/backup-and-restore.md" },
   ] },

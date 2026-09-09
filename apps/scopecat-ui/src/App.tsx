@@ -1,3 +1,4 @@
+import type { ComparisonHandoff } from "./features/analyses/RunComparison";
 import { lazy, Suspense, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useIsFetching, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -68,6 +69,10 @@ const DecisionWorkspace = lazy(async () => {
 export default function App() {
   const queryClient = useQueryClient();
   const activeQueries = useIsFetching();
+  const [handoff, setHandoff] = useState<{
+    projectId: string | undefined;
+    value: ComparisonHandoff;
+  }>();
   const [view, setView] = useState<ProjectView>(projectViewFromLocation);
   const [selectedRunId, setSelectedRunId] = useState<string | undefined>(selectedRunFromUrl);
   const [selectedAnalysisId, setSelectedAnalysisId] = useState<string | undefined>(
@@ -387,7 +392,12 @@ export default function App() {
         <LaunchDraftProvider projectId={healthQuery.data?.projectId}>
           {view === "launch" && (
             <Suspense fallback={<p>Loading experiments…</p>}>
-              <LaunchWorkspace />
+              <LaunchWorkspace
+                handoff={
+                  handoff?.projectId === healthQuery.data?.projectId ? handoff?.value : undefined
+                }
+                onHandoffImported={() => setHandoff(undefined)}
+              />
             </Suspense>
           )}
           {view === "configuration" && (
@@ -447,6 +457,11 @@ export default function App() {
             }
           >
             <AnalysesWorkspace
+              projectId={healthQuery.data?.projectId}
+              onHandoff={(request) => {
+                setHandoff({ projectId: healthQuery.data?.projectId, value: request });
+                selectView("launch");
+              }}
               daemonUnavailable={daemonUnavailable}
               onOpenRun={openConfigSourceRun}
               onSelectAnalysis={selectAnalysis}

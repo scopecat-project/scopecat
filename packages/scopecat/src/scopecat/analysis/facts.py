@@ -8,6 +8,7 @@ from types import UnionType
 from typing import (
     Annotated,
     Literal,
+    TypeAliasType,
     cast,
     get_args,
     get_origin,
@@ -136,7 +137,7 @@ def _fact_value_adapter[ValueT](
             )
 
         def decode_model(value: JsonValue) -> ValueT:
-            return cast("ValueT", model_type.model_validate(value))
+            return cast("ValueT", model_type.model_validate_json(canonical_json(value)))
 
         return encode_model, decode_model
 
@@ -180,7 +181,7 @@ def _fact_value_adapter[ValueT](
         return cast("JsonValue", validated.model_dump(mode="json"))
 
     def decode_dataclass(value: JsonValue) -> ValueT:
-        validated = validation_model.model_validate(value)
+        validated = validation_model.model_validate_json(canonical_json(value))
         constructor = cast("Callable[..., ValueT]", value_type)
         return constructor(
             **{member.name: getattr(validated, member.name) for member in members}
@@ -189,12 +190,19 @@ def _fact_value_adapter[ValueT](
     return encode_dataclass, decode_dataclass
 
 
+def _resolve_fact_alias(annotation: object) -> object:
+    while isinstance(annotation, TypeAliasType):
+        annotation = cast("object", annotation.__value__)
+    return annotation
+
+
 def _fact_type_structure(
     annotation: object,
     *,
     ancestors: frozenset[type[object]] | None = None,
 ) -> JsonValue:
     selected_ancestors = _EMPTY_FACT_ANCESTORS if ancestors is None else ancestors
+    annotation = _resolve_fact_alias(annotation)
     origin = get_origin(annotation)
     if origin is Annotated:
         arguments = cast("tuple[object, ...]", get_args(annotation))

@@ -830,6 +830,17 @@ def _validate_analysis_inputs(
     inputs: Sequence[AnalysisInput],
 ) -> None:
     storage = services.runs
+    measurement_inputs = tuple(
+        item for item in inputs if isinstance(item, MeasurementAnalysisInput)
+    )
+    if measurement_inputs and not any(
+        item.run_id == run_id for item in measurement_inputs
+    ):
+        _raise_analysis_problem(
+            "analysis_input_run_invalid",
+            "a run-owned measurement analysis must include its primary run",
+            "inputs",
+        )
     for index, input_ref in enumerate(inputs):
         if isinstance(input_ref, InterpretationAnalysisInput):
             _raise_analysis_problem(
@@ -840,12 +851,14 @@ def _validate_analysis_inputs(
             )
         if isinstance(input_ref, MeasurementAnalysisInput):
             if input_ref.run_id != run_id:
-                _raise_analysis_problem(
-                    "analysis_input_run_invalid",
-                    "run analysis inputs must belong to their subject run",
-                    "inputs",
-                    index,
-                )
+                snapshot = storage.read_snapshot(input_ref.run_id)
+                if snapshot.status != "completed":
+                    _raise_analysis_problem(
+                        "analysis_secondary_run_incomplete",
+                        "secondary measurement inputs must belong to completed runs",
+                        "inputs",
+                        index,
+                    )
             _validate_measurement_analysis_input(
                 services=services,
                 input_ref=input_ref,

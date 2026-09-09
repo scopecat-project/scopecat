@@ -16,6 +16,7 @@ from fastapi import FastAPI, Header, HTTPException, Query, Request
 from fastapi import Path as ApiPath
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
+from scopecat.application.comparison import ComparisonResult
 from scopecat.application.launch import (
     LaunchCatalog,
     LaunchPreview,
@@ -244,6 +245,7 @@ from scopecat.records.author_revision import (
     AuthorRevisionRef,
     AuthorRevisionState,
 )
+from scopecat.records.comparison import ComparisonRequest
 from scopecat.records.content import ContentEntry
 from scopecat.records.costs import RunMeasuredCosts
 from scopecat.records.instrument import (
@@ -427,6 +429,34 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
                 422, detail[-1] if detail else "Experiment preview failed"
             )
         return completed.stdout
+
+    @app.post(f"{_API_PREFIX}/run-comparison")
+    def run_comparison(command: ComparisonRequest) -> ComparisonResult:
+        from pydantic import TypeAdapter
+
+        try:
+            completed = subprocess.run(  # noqa: S603 - fixed project worker command
+                [
+                    sys.executable,
+                    "-m",
+                    "scopecat_server.comparison_worker",
+                    str(application.project_root),
+                ],
+                input=command.model_dump_json(),
+                capture_output=True,
+                encoding="utf-8",
+                timeout=60,
+                check=False,
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+            )
+        except subprocess.TimeoutExpired as error:
+            raise HTTPException(
+                504, "Comparison timed out; inspect history before retrying"
+            ) from error
+        if completed.returncode:
+            lines = completed.stderr.strip().splitlines()
+            raise HTTPException(422, lines[-1] if lines else "Comparison failed")
+        return TypeAdapter(ComparisonResult).validate_json(completed.stdout)
 
     @app.get(f"{_API_PREFIX}/experiment-launcher")
     def experiment_launch_catalog() -> LaunchCatalog:
