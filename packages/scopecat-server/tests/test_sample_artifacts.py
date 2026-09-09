@@ -93,6 +93,9 @@ def test_missing_and_corrupt_content_have_different_repair_evidence(
         (b"<svg/>", "image/svg+xml"),
         (b"not a png", "image/png"),
         (b"\xff", "text/plain"),
+        (b"not json", "application/json"),
+        (b'{"x": NaN}', "application/json"),
+        (b"\xff", "application/json"),
         (b"x" * (MAX_SAMPLE_ARTIFACT_BYTES + 1), "text/plain"),
     ],
 )
@@ -103,10 +106,23 @@ def test_import_rejects_unsupported_or_mislabelled_bytes(
         ValueError,
         match=(
             r"^(Unsupported attachment media type|Attachment bytes do not match"
-            r"|Plain text attachments must|Sample attachments require)"
+            r"|Plain text attachments must|JSON attachments must"
+            r"|Sample attachments require)"
         ),
     ):
         artifacts.import_bytes(
             content, artifact_id="a", title="Bad content", media_type=media_type
         )
     assert not tuple(artifacts.objects.root.iterdir())
+
+
+def test_json_layout_is_preserved_without_text_relabelling(
+    artifacts: SampleArtifacts,
+) -> None:
+    content = b'{"unit": "mm", "sites": [{"id": "a", "x": 1.0, "y": 2.0}]}\n'
+    ref = artifacts.import_bytes(
+        content, artifact_id="layout", title="Layout", media_type="application/json"
+    )
+    assert ref.media_type == "application/json"
+    assert artifacts.content(ref) == content
+    assert artifacts.resolve(revision(ref), ref).status == "stored"

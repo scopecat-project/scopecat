@@ -14,6 +14,7 @@ SAMPLE_ARTIFACT_MEDIA_TYPES = (
     "image/webp",
     "application/pdf",
     "text/plain",
+    "application/json",
 )
 
 

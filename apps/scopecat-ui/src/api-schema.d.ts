@@ -7165,6 +7165,7 @@ export interface components {
             id: components["schemas"]["_NonEmptyText"];
             media_type?: components["schemas"]["_NonEmptyText"] | null;
             title: components["schemas"]["_NonEmptyText"];
+            /** @description Imported project bytes use sha256:<digest>; absolute HTTP(S) is an external reference. Other URI forms remain readable but unavailable until a maintainer imports their bytes. */
             uri: components["schemas"]["_NonEmptyText"];
         };
         /**

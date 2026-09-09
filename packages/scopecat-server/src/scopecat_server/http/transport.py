@@ -578,10 +578,12 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
         return application.samples.artifact_list(sample_id, revision)
 
     @app.get(
-        f"{_API_PREFIX}/samples/{{sample_id}}/revisions/{{revision}}/artifacts/{{artifact_id}}/content"
+        f"{_API_PREFIX}/samples/{{sample_id}}/revisions/{{revision}}/artifacts/content"
     )
     def sample_artifact_content(
-        sample_id: SampleId, revision: Annotated[int, ApiPath(ge=1)], artifact_id: str
+        sample_id: SampleId,
+        revision: Annotated[int, ApiPath(ge=1)],
+        artifact_id: Annotated[str, Query(min_length=1)],
     ) -> Response:
         artifact = application.samples.artifact(sample_id, revision, artifact_id)
         try:

@@ -194,7 +194,7 @@ exact revision, and artifact ID. It supports these delivery contracts:
 
 | Reference | Console behavior | Delivery and restoration |
 | --- | --- | --- |
-| `sha256:<64 lowercase hex digits>` returned by `import_artifact` | Opens a stored PNG/JPEG/WebP image or UTF-8 text; downloads a PDF | Bytes belong to the project's immutable object store and are included and checked by project snapshots |
+| `sha256:<64 lowercase hex digits>` returned by `import_artifact` | Opens a stored PNG/JPEG/WebP image, UTF-8 JSON or text; downloads a PDF | Bytes belong to the project's immutable object store and are included and checked by project snapshots |
 | Absolute `http://` or `https://`, without URL credentials | Opens an explicitly labeled external website | The daemon does not fetch or verify it; remote bytes are not captured in a snapshot |
 | Relative paths, `file:`, `project:`, script/data schemes, or malformed references | Displays an unavailable reason and maintainer repair instructions | Import the intended local bytes and record the returned reference instead |
 
@@ -229,7 +229,8 @@ For an existing sample, add the returned reference using `chip.revise(...)`;
 previous revisions keep their previous references. `lab.samples.artifacts(id,
 revision)` reports stored, external, or unavailable delivery with a repair reason.
 Imports accept 1 byte through 8 MiB and check the declared supported file type;
-plain text must be UTF-8. HTML and SVG are not served as active same-origin
+plain text must be UTF-8. `application/json` must parse as UTF-8 JSON, including
+finite numeric values; its original bytes and media type are retained. HTML and SVG are not served as active same-origin
 content: render a diagram as PNG, or export a document as PDF before importing.
 Responses use fixed supported media types, `nosniff`, and a sandbox policy. PDF
 content is a download rather than an embedded viewer.
@@ -243,7 +244,7 @@ readable and do not prevent snapshots, but are not silently turned into working
 links. No server-side remote fetch, local-path resolver, or URI execution is
 provided.
 
-The public `fixtures/core/sample_artifacts/diagram.png` and `notes.txt` and `document.pdf` form a
+The public `fixtures/core/sample_artifacts/diagram.png` and `notes.txt`, `document.pdf`, and `layout.json` form a
 synthetic delivery fixture. The HTTP regression imports these bytes, opens the
 attachment from an immutable sample revision, updates the sample, then snapshots
 and restores the project and checks the original bytes and SHA-256 again.

@@ -25,7 +25,7 @@ it("opens only delivered or explicit external attachments and explains repair", 
               media_type: "image/png",
             },
             status: "stored",
-            url: "/api/v1/samples/sample-a/revisions/2/artifacts/diagram/content",
+            url: "/api/v1/samples/sample-a/revisions/2/artifacts/content?artifact_id=diagram",
             reason: "Included in project snapshots.",
           },
           {
@@ -63,7 +63,7 @@ it("opens only delivered or explicit external attachments and explains repair", 
   );
   expect(await screen.findByRole("link", { name: "Open attachment" })).toHaveAttribute(
     "href",
-    "/api/v1/samples/sample-a/revisions/2/artifacts/diagram/content",
+    "/api/v1/samples/sample-a/revisions/2/artifacts/content?artifact_id=diagram",
   );
   expect(screen.getByRole("link", { name: "Open external website" })).toHaveAttribute(
     "rel",

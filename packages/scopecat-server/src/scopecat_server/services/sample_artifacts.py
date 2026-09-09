@@ -1,6 +1,8 @@
 """Bounded, content-owned sample attachments; never resolve local URI paths."""
 
-from urllib.parse import quote, urlsplit
+import json
+from typing import Never
+from urllib.parse import quote, urlencode, urlsplit
 
 from scopecat.records.sample import SampleArtifactRef, SampleRevision
 from scopecat.records.sample_artifact import (
@@ -24,13 +26,17 @@ _IMPORT_REPAIR = (
 )
 
 
+def _reject_nonfinite_json(_value: str) -> Never:
+    raise ValueError("Non-finite JSON number")
+
+
 def validate_artifact_bytes(content: bytes, media_type: str | None) -> None:
     if not content or len(content) > MAX_SAMPLE_ARTIFACT_BYTES:
         raise ValueError("Sample attachments require 1 to 8388608 bytes (8 MiB).")
     if media_type not in SAMPLE_ARTIFACT_MEDIA_TYPES:
         raise ValueError(
             "Unsupported attachment media type; use PNG, JPEG, WebP, PDF "
-            "or UTF-8 plain text. Convert HTML/SVG to a supported "
+            "or UTF-8 JSON/plain text. Convert HTML/SVG to a supported "
             "non-active format first."
         )
     signatures = {
@@ -44,6 +50,13 @@ def validate_artifact_bytes(content: bytes, media_type: str | None) -> None:
             content.decode("utf-8")
         except UnicodeDecodeError as error:
             raise ValueError("Plain text attachments must be UTF-8.") from error
+    elif media_type == "application/json":
+        try:
+            json.loads(content.decode("utf-8"), parse_constant=_reject_nonfinite_json)
+        except (UnicodeDecodeError, ValueError) as error:
+            raise ValueError(
+                "JSON attachments must contain valid UTF-8 JSON."
+            ) from error
     elif not signatures[media_type]:
         raise ValueError(
             "Attachment bytes do not match the declared supported media type."
@@ -102,12 +115,12 @@ class SampleArtifacts:
                     status="stored",
                     url=(
                         f"/api/v1/samples/{quote(revision.sample_id, safe='')}"
-                        f"/revisions/{revision.revision}/artifacts/"
-                        f"{quote(artifact.id, safe='')}/content"
+                        f"/revisions/{revision.revision}/artifacts/content?"
+                        + urlencode({"artifact_id": artifact.id})
                     ),
                     reason=(
                         "Stored in this project; included in project snapshots. "
-                        "PDF files download; supported images and plain text "
+                        "PDF files download; supported images, JSON and plain text "
                         "open in the browser."
                     ),
                 )

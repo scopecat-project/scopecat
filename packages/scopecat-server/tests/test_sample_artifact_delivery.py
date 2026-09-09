@@ -60,7 +60,7 @@ def test_import_owned_delivery_and_snapshot_restore(tmp_path: Path) -> None:
         assert diagram.uri == expected
         text = lab.samples.import_artifact(
             (_FIXTURE / "notes.txt").read_bytes(),
-            artifact_id="notes",
+            artifact_id="notes/../?\u03b1",
             title="Delivery notes",
             media_type="text/plain",
         )
@@ -70,11 +70,18 @@ def test_import_owned_delivery_and_snapshot_restore(tmp_path: Path) -> None:
             title="Synthetic document",
             media_type="application/pdf",
         )
+        layout = lab.samples.import_artifact(
+            (_FIXTURE / "layout.json").read_bytes(),
+            artifact_id="layout",
+            title="Synthetic layout",
+            media_type="application/json",
+        )
         sample = lab.samples.create(
             "sample-a",
             kind="chip",
             content=SampleRevisionDraft(
-                display_name="Synthetic sample", artifacts=(diagram, text, document)
+                display_name="Synthetic sample",
+                artifacts=(diagram, text, document, layout),
             ),
         )
         lab.samples.create(
@@ -92,11 +99,11 @@ def test_import_owned_delivery_and_snapshot_restore(tmp_path: Path) -> None:
         assert "sandbox" in response.headers["content-security-policy"]
         assert http.get(url.replace("sample-a", "sample-b")).status_code == 404
         assert http.get(url.replace("/1/", "/2/")).status_code == 404
-        assert lab.samples.artifact_content("sample-a", 1, "notes").startswith(
-            b"Synthetic"
-        )
+        assert lab.samples.artifact_content(
+            "sample-a", 1, "notes/../?\u03b1"
+        ).startswith(b"Synthetic")
         pdf = http.get(
-            "/api/v1/samples/sample-a/revisions/1/artifacts/document/content"
+            "/api/v1/samples/sample-a/revisions/1/artifacts/content?artifact_id=document"
         )
         assert pdf.content == (_FIXTURE / "document.pdf").read_bytes()
         assert pdf.headers["content-type"] == "application/pdf"
@@ -104,6 +111,11 @@ def test_import_owned_delivery_and_snapshot_restore(tmp_path: Path) -> None:
             pdf.headers["content-disposition"]
             == 'attachment; filename="sample-attachment.pdf"'
         )
+        layout_response = http.get(
+            "/api/v1/samples/sample-a/revisions/1/artifacts/content?artifact_id=layout"
+        )
+        assert layout_response.content == (_FIXTURE / "layout.json").read_bytes()
+        assert layout_response.headers["content-type"] == "application/json"
         sample.revise(SampleRevisionDraft(display_name="Synthetic sample updated"))
         assert lab.samples.artifact_content("sample-a", 1, "diagram") == image
     snapshot = tmp_path / "snapshot"
@@ -115,6 +127,11 @@ def test_import_owned_delivery_and_snapshot_restore(tmp_path: Path) -> None:
         response = http.get(url)
         assert response.status_code == 200 and response.content == image
         assert "sha256:" + hashlib.sha256(response.content).hexdigest() == expected
+        restored_layout = http.get(
+            "/api/v1/samples/sample-a/revisions/1/artifacts/content?artifact_id=layout"
+        )
+        assert restored_layout.content == (_FIXTURE / "layout.json").read_bytes()
+        assert restored_layout.headers["content-type"] == "application/json"
         page = http.get("/api/v1/samples/sample-a/revisions/1/artifacts").json()
         assert page["items"][0]["artifact"]["uri"] == expected
 
@@ -156,7 +173,7 @@ def test_reference_and_content_boundaries_are_visible_over_http(tmp_path: Path) 
         )
         assert "missing" in page.items[0].reason
         response = http.get(
-            "/api/v1/samples/sample-a/revisions/1/artifacts/missing/content"
+            "/api/v1/samples/sample-a/revisions/1/artifacts/content?artifact_id=missing"
         )
         assert response.status_code == 422 and "missing" in response.text
         response = http.post(
@@ -184,7 +201,7 @@ def test_snapshot_checks_owned_objects_but_preserves_unsupported_old_references(
     ):
         owned = lab.samples.import_artifact(
             b"retained notes",
-            artifact_id="notes",
+            artifact_id="notes/../?\u03b1",
             title="Notes",
             media_type="text/plain",
         )

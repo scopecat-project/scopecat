@@ -996,7 +996,8 @@ class DaemonClient:
         return self._request(
             "GET",
             f"{_API_PREFIX}/samples/{quote(sample_id, safe='')}"
-            f"/revisions/{revision}/artifacts/{quote(artifact_id, safe='')}/content",
+            f"/revisions/{revision}/artifacts/content",
+            params={"artifact_id": artifact_id},
         ).content
 
     def get_sample(self, sample_id: str) -> SampleView:

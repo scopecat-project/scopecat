@@ -233,8 +233,8 @@ def _verify_store(project: Path) -> int:
         for row in refs:
             objects.verify(cast("str", row["digest"]))
         sample_rows = cast(
-            "list[sqlite3.Row]",
-            connection.execute("SELECT revision_json FROM sample_revisions").fetchall(),
+            "Iterator[sqlite3.Row]",
+            connection.execute("SELECT revision_json FROM sample_revisions"),
         )
         for row in sample_rows:
             revision = SampleRevision.model_validate_json(
