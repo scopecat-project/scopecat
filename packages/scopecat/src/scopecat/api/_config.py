@@ -241,6 +241,14 @@ class LabConfigOperations:
         actor: str | None = None,
         note: str = "",
     ) -> ConfigActivationReceipt:
+        """Select an exact saved entry, restoring it if previously activated.
+
+        Restoration retains its original content and provenance, and records the
+        most recent prior activation in ``restored_from_generation``. It does not
+        renew calibration validity or execute devices. An unactivated derived
+        entry still requires its original base to be active.
+        """
+
         return self.client.activate_config_entry(
             ConfigEntryActivationCommand(
                 operation_id=operation_id,

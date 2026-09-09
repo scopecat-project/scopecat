@@ -93,10 +93,11 @@ class ActiveConfigView(_ViewModel):
 
 
 class ConfigEntryView(_ViewModel):
-    """One registry identity paired with its immutable configuration."""
+    """One immutable configuration and its most recent activation, if any."""
 
     entry: ConfigRegistryEntry
     config: ConfigProfileSnapshot
+    latest_activation: ConfigRegistryActivationRecord | None = None
 
 
 class ConfigDraftPreview(_ViewModel):

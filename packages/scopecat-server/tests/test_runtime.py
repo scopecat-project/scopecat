@@ -54,6 +54,7 @@ from scopecat.daemon.views import (
     ActiveConfigView,
     ConfigActivationPage,
     ConfigDraftPreview,
+    ConfigEntryView,
     ConfigRegistryPage,
     MeasurementArrowColumn,
     MeasurementArrowQuery,
@@ -1656,8 +1657,70 @@ def test_config_draft_http_workflow_previews_and_atomically_sets_default(
         assert default.entry.content_hash == preview.result_content_hash
         assert default.activation.entry_id == "manual-tuning"
         assert default.activation.generation == active.activation.generation + 1
+        # A later revision makes the original draft base stale. Restoration must
+        # select the already accepted immutable entry, not republish the draft.
+        later = runtime.application.config.publish_config(
+            _direct_publish_command(
+                config=_config().model_copy(update={"id": "later"}),
+                entry_id="later",
+                actor="operator",
+                expected_generation=2,
+            )
+        )
+        detail = ConfigEntryView.model_validate(
+            client.get("/api/v1/config-registry/entries/manual-tuning").json()
+        )
+        assert detail.latest_activation == default.activation
+        command = ConfigEntryActivationCommand(
+            operation_id="restore-manual-tuning",
+            entry_id=default.entry.id,
+            actor="operator",
+            expected_generation=later.activation.generation,
+            note="return to reviewed parameters",
+        )
+        restored_response = client.post(
+            "/api/v1/config-registry/activation-operations",
+            json=command.model_dump(mode="json"),
+        )
+        assert restored_response.status_code == 200
+        restored = ConfigActivationReceipt.model_validate(restored_response.json())
+        assert restored.activation.generation == 4
+        assert restored.activation.restored_from_generation == 2
+        assert restored.activation.entry_content_hash == default.entry.content_hash
+        assert (
+            runtime.application.config.get_config_entry(default.entry.id).entry
+            == default.entry
+        )
+        replay = client.post(
+            "/api/v1/config-registry/activation-operations",
+            json=command.model_dump(mode="json"),
+        )
+        assert ConfigActivationReceipt.model_validate(replay.json()) == restored
+        stale = client.post(
+            "/api/v1/config-registry/activation-operations",
+            json=command.model_copy(
+                update={"operation_id": "stale-restore"}
+            ).model_dump(mode="json"),
+        )
+        assert stale.status_code == 409
+        assert [
+            item.generation
+            for item in runtime.application.config.get_config_activation_history().items
+        ] == [4, 3, 2, 1]
 
     with LocalDaemonRuntime(tmp_path) as reopened:
+        assert (
+            reopened.application.config.get_config_activation_operation(
+                "restore-manual-tuning"
+            )
+            == restored
+        )
+        assert (
+            reopened.application.config.get_config_entry(
+                "manual-tuning"
+            ).latest_activation
+            == restored.activation
+        )
         active = reopened.application.config.get_active_config()
         parameter = active.config.parameter_snapshot.get("drive_frequency")
 

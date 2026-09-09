@@ -210,7 +210,11 @@ class ConfigService:
                 entry_id=entry_id,
                 unit_of_work=self._config_registry.read_unit_of_work,
             )
-            return ConfigEntryView(entry=snapshot.entry, config=snapshot.config)
+            return ConfigEntryView(
+                entry=snapshot.entry,
+                config=snapshot.config,
+                latest_activation=snapshot.latest_activation,
+            )
 
     def get_config_activation_operation(
         self,

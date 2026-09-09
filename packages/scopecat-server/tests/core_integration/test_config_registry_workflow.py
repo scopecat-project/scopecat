@@ -397,7 +397,7 @@ def test_manual_config_draft_set_default_stale_conflict_leaves_no_entry(
     assert newer_activation.entry_id == newer.entry.id
 
 
-def test_manual_config_draft_activation_rejects_a_stale_base(
+def test_manual_config_draft_restores_after_its_original_base_changes(
     tmp_path: Path,
 ) -> None:
     unit_of_work = sqlite_config_registry_unit_of_work(tmp_path)
@@ -432,20 +432,21 @@ def test_manual_config_draft_activation_rejects_a_stale_base(
     newer_activation = newer.activation
     assert newer_activation is not None
 
-    with pytest.raises(Conflict) as error:
-        activate_config_registry_entry(
-            entry_id=manual.entry.id,
-            unit_of_work=unit_of_work,
-            actor="operator",
-            expected_generation=newer_activation.generation,
-        )
-
-    assert error.value.problems[0].code == "config_registry.stale_candidate"
-    assert (
-        load_active_config_registry_activation(unit_of_work=unit_of_work)
-        == newer_activation
+    restored = activate_config_registry_entry(
+        entry_id=manual.entry.id,
+        unit_of_work=unit_of_work,
+        actor="operator",
+        expected_generation=newer_activation.generation,
     )
-    assert newer_activation.entry_id == newer.entry.id
+    assert manual.activation is not None
+    assert restored.activation is not None
+    assert restored.entry == manual.entry
+    assert restored.activation.restored_from_generation == manual.activation.generation
+    assert restored.activation.generation == newer_activation.generation + 1
+    assert (
+        load_active_config_registry_snapshot(unit_of_work=unit_of_work).config
+        == preview.check.candidate
+    )
 
 
 def test_candidate_config_publish_preserves_parameter_proposal_source(

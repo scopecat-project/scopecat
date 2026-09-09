@@ -326,11 +326,20 @@ class ConfigRegistryEntry(_FrozenRegistryModel):
         return self
 
 
+def _exclude_none(value: object) -> bool:
+    return value is None
+
+
 class ConfigRegistryActivationRecord(_FrozenRegistryModel):
     generation: int = Field(ge=1)
     action: Literal["activation", "inventory_migration"]
     entry_id: str
     entry_content_hash: ConfigContentHash
+    # Most recent activation of this exact entry before this restoration.
+    # No new calibration decision or validity is implied by restoring content.
+    restored_from_generation: int | None = Field(
+        default=None, ge=1, exclude_if=_exclude_none
+    )
     previous_entry_id: str | None = None
     previous_entry_content_hash: ConfigContentHash | None = None
     actor: str

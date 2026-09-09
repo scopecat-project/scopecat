@@ -178,6 +178,12 @@ export function ActivationHistory({
                   {record.actor || "Unknown actor"}
                   {record.recorded_at ? ` · ${formatDateTime(record.recorded_at)}` : ""}
                 </small>
+                {record.restored_from_generation != null && (
+                  <small className="text-[0.55rem] text-text-dim">
+                    Restored from G{record.restored_from_generation} · calibration validity not
+                    renewed
+                  </small>
+                )}
                 {record.note && (
                   <p className="mt-[3px] mb-0 text-[0.58rem] text-text-soft">{record.note}</p>
                 )}
