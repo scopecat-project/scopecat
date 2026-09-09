@@ -7,7 +7,7 @@ import tomllib
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, replace
 from importlib import import_module
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from threading import RLock
 from typing import TYPE_CHECKING, cast
 
@@ -376,6 +376,7 @@ def _local_roots(value: object) -> tuple[str, ...]:
         if (
             not isinstance(item, str)
             or not item
+            or PureWindowsPath(item).drive
             or Path(item).is_absolute()
             or ".." in Path(item).parts
             or "\\" in item

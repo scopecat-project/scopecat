@@ -115,3 +115,18 @@ def test_analysis_module_must_resolve_inside_configured_author_root(
         author_module_path(project, "os")
     with pytest.raises(ValueError, match="qualified Python module"):
         author_module_path(project, "../outside")
+
+
+@pytest.mark.parametrize("name", ["C:/authors", "C:authors"])
+def test_windows_drive_paths_are_rejected_on_every_platform(
+    tmp_path: Path, name: str
+) -> None:
+    from scopecat.project import ProjectManifestError
+    from scopecat.records.author_revision import AuthorRevisionManifest
+
+    with pytest.raises(ValueError, match="invalid source path"):
+        AuthorRevisionManifest.local_paths({name: "sha256:" + "0" * 64})
+    manifest = tmp_path / "scopecat.toml"
+    manifest.write_text(f'[lab]\n[authors]\nsource_roots=["{name}"]\n')
+    with pytest.raises(ProjectManifestError, match="relative subdirectories"):
+        load_project(manifest)

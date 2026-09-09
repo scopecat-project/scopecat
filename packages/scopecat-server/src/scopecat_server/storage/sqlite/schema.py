@@ -1,7 +1,7 @@
 """Current SQLite project-store schema."""
 
 from scopecat_server.storage.sqlite.analysis_schema import ANALYSIS_TABLES_SQL
-from scopecat_server.storage.sqlite.author_revision_repository import (
+from scopecat_server.storage.sqlite.author_revision_schema import (
     AUTHOR_REVISION_TABLES_SQL,
 )
 from scopecat_server.storage.sqlite.automation_schema import AUTOMATION_TABLES_SQL

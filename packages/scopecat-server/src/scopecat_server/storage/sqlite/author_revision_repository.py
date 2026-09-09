@@ -14,18 +14,6 @@ from scopecat.records.author_revision import (
 if TYPE_CHECKING:
     from scopecat_server.storage.sqlite.project_store import SQLiteProjectStore
 
-AUTHOR_REVISION_TABLES_SQL = """
-CREATE TABLE IF NOT EXISTS author_revisions (
-    content_hash TEXT PRIMARY KEY,
-    bundle_digest TEXT NOT NULL
-);
-CREATE TABLE IF NOT EXISTS author_revision_active (
-    singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
-    generation INTEGER NOT NULL,
-    content_hash TEXT NOT NULL REFERENCES author_revisions(content_hash)
-);
-"""
-
 
 class AuthorRevisionConflict(ValueError):
     """Another refresh published first; inspect the active revision and retry."""

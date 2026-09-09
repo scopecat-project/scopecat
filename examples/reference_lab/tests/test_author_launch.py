@@ -70,19 +70,21 @@ def reference_lab_daemon(
     with pytest.MonkeyPatch.context() as patch:
         patch.delenv("SCOPECAT_DAEMON_URL", raising=False)
         endpoint = start_project(project)
-    try:
-        with DaemonClient(endpoint.base_url, timeout=120) as client:
-            active = client.author_revision_state().active
-            assert active is not None
-        with isolated_project_imports():
-            application = revision_project(root, active).load_application()
-            analysis = cast(
-                "AnalysisDefinition[...]",
-                import_module("reference_lab.workflows.authored.signal").selected_mean,
-            )()
-            yield AuthorDaemon(endpoint.base_url, application, source, analysis)
-    finally:
-        stop_project(project)
+        try:
+            with DaemonClient(endpoint.base_url, timeout=120) as client:
+                active = client.author_revision_state().active
+                assert active is not None
+            with isolated_project_imports():
+                application = revision_project(root, active).load_application()
+                analysis = cast(
+                    "AnalysisDefinition[...]",
+                    import_module(
+                        "reference_lab.workflows.authored.signal"
+                    ).selected_mean,
+                )()
+                yield AuthorDaemon(endpoint.base_url, application, source, analysis)
+        finally:
+            stop_project(project)
 
 
 def test_copied_author_uses_shared_control_plan_and_real_retained_run(

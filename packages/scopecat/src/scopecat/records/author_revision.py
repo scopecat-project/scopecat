@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from pathlib import PurePosixPath
+from pathlib import PurePosixPath, PureWindowsPath
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -37,6 +37,7 @@ class AuthorRevisionManifest(BaseModel):
             path = PurePosixPath(name)
             if (
                 path.is_absolute()
+                or PureWindowsPath(name).drive
                 or ".." in path.parts
                 or "\\" in name
                 or path.as_posix() != name

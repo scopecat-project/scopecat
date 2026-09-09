@@ -57,16 +57,20 @@ def main() -> None:
             run_procedure(lab, sys.argv[3])
         return
     request = LaunchRequest.model_validate_json(sys.stdin.read())
-    with DaemonClient(resolve_daemon_endpoint(root)) as client:
-        state = client.author_revision_state()
-    ref = request.code_revision or state.active
-    if state.enabled and request.action == "submit" and request.code_revision is None:
-        raise ValueError("submit requires the preview's author code revision")
-    project = (
-        revision_project(root, ref)
-        if ref is not None
-        else load_project(root / "scopecat.toml")
-    )
+    project = load_project(root / "scopecat.toml")
+    ref = request.code_revision
+    if project.source_roots or ref is not None:
+        with DaemonClient(resolve_daemon_endpoint(root)) as client:
+            state = client.author_revision_state()
+        ref = ref or state.active
+        if (
+            state.enabled
+            and request.action == "submit"
+            and request.code_revision is None
+        ):
+            raise ValueError("submit requires the preview's author code revision")
+        if ref is not None:
+            project = revision_project(root, ref)
     with contextlib.redirect_stdout(sys.stderr):
         application = project.load_application()
         result: LaunchResult
