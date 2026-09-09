@@ -21,7 +21,14 @@ class ConfigRegistryRunConfigSource(BaseModel):
     entry_id: str
     config_ref: str
     content_hash: ConfigContentHash
-    registry_generation: int | None = Field(default=None, ge=1)
+    registry_generation: int | None = Field(
+        default=None,
+        ge=1,
+        description=(
+            "For active: historical activation generation. For an exact entry: "
+            "optional observed lab-generation fence, not a claim of activation."
+        ),
+    )
 
 
 class AnalysisCandidateRunConfigSource(BaseModel):

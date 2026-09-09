@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient, apiData } from "../../api-client";
 import { definitionKey, invalidateDraft, useLaunchDraft } from "./LaunchDraft";
 import { AuthorRefresh } from "./AuthorRefresh";
+import { PlanLibrary } from "./PlanLibrary";
 import { LaunchForm } from "./LaunchForm";
 import { OriginalSubmission } from "./OriginalSubmission";
 import { ProcedureHistory } from "./ProcedureHistory";
@@ -19,10 +20,14 @@ export function LaunchWorkspace({
     void queryClient.invalidateQueries({ queryKey: ["config", "launch-context", projectId] });
   }, [projectId, queryClient]);
   const catalog = useQuery({
-    queryKey: ["experiment-launcher", projectId],
+    queryKey: ["experiment-launcher", projectId, draft?.codeRevision?.content_hash],
     enabled: Boolean(projectId),
     queryFn: async () => {
-      const result = await apiData(apiClient.GET("/api/v1/experiment-launcher"));
+      const result = await apiData(
+        apiClient.GET("/api/v1/experiment-launcher", {
+          params: { query: { code_revision: draft?.codeRevision?.content_hash } },
+        }),
+      );
       return result.entries;
     },
   });
@@ -67,6 +72,7 @@ export function LaunchWorkspace({
     <section className="p-6 space-y-4">
       <h2 className="text-lg font-semibold">Experiments</h2>
       <AuthorRefresh projectId={projectId} />
+      <PlanLibrary key={projectId} />
       {handoffUnavailable && (
         <p role="alert">
           The suggested experiment is unavailable. The source analysis is retained.

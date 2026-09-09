@@ -10,6 +10,7 @@ from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 from scopecat.analysis.facts import validate_analysis_fact_json
+from scopecat.application.experiment_plans import plan_launch_request
 from scopecat.automation import (
     InterpretationOutputRef,
     InterpretationRequest,
@@ -70,9 +71,12 @@ from scopecat.automation.wire import (
     ProcedureStepResourceWaitReceipt,
 )
 from scopecat.records.content import Sha256ContentHash
+from scopecat.records.launch_request import LaunchRequest
 from scopecat.records.manual_preview import ManualPreviewFence
+from scopecat.records.plan_ref import ExperimentPlanRef
 from scopecat.records.sample import SampleSelector
 
+from scopecat_server.services.manual_previews import ManualPreviewService
 from scopecat_server.storage.sqlite.automation import (
     AutomationConflict,
     AutomationNotFound,
@@ -89,6 +93,9 @@ from scopecat_server.storage.sqlite.config_registry import (
     SQLiteConfigRegistryRepository,
 )
 from scopecat_server.storage.sqlite.control_plane import SQLiteControlPlane
+from scopecat_server.storage.sqlite.experiment_plan_repository import (
+    ExperimentPlanRepository,
+)
 from scopecat_server.storage.sqlite.manual_preview import (
     ManualPreviewChanged,
     ManualPreviewRepository,
@@ -120,6 +127,7 @@ class AutomationService:
         lease_ttl: timedelta = _DEFAULT_PROCEDURE_LEASE_TTL,
         clock: Callable[[], datetime] | None = None,
         resource_waits: ProcedureResourceWaits | None = None,
+        plans: ExperimentPlanRepository | None = None,
     ) -> None:
         if lease_ttl <= timedelta(0):
             raise ValueError("procedure lease TTL must be positive")
@@ -128,6 +136,7 @@ class AutomationService:
         self._lease_ttl = lease_ttl
         self._clock = clock or _utc_now
         self._resource_waits = resource_waits
+        self._plans = plans
 
     def worker_state(self, procedure_id: str) -> str:
         with self._store.sqlite.read_connection() as connection:
@@ -208,6 +217,8 @@ class AutomationService:
                 expected_manual_preview=command.expected_manual_preview,
                 expected_config_generation=command.expected_config_generation,
                 recovery=command.recovery,
+                plan_ref=command.plan_ref,
+                plan_request=command.plan_request,
             )
         )
 
@@ -522,6 +533,8 @@ class AutomationService:
         expected_manual_preview: ManualPreviewFence | None = None,
         expected_config_generation: int | None = None,
         recovery: ProcedureRecoverySource | None = None,
+        plan_ref: ExperimentPlanRef | None = None,
+        plan_request: LaunchRequest | None = None,
     ) -> ProcedureRun:
         """Admit one idempotent, version-pinned procedure request."""
 
@@ -540,6 +553,8 @@ class AutomationService:
                 expected_manual_preview=expected_manual_preview,
                 expected_config_generation=expected_config_generation,
                 recovery=recovery,
+                plan_ref=plan_ref,
+                plan_request=plan_request,
             )
 
     def submit_in_transaction(
@@ -553,6 +568,8 @@ class AutomationService:
         expected_manual_preview: ManualPreviewFence | None = None,
         expected_config_generation: int | None = None,
         recovery: ProcedureRecoverySource | None = None,
+        plan_ref: ExperimentPlanRef | None = None,
+        plan_request: LaunchRequest | None = None,
         at: datetime | None = None,
         require_new: bool = False,
     ) -> ProcedureRun:
@@ -566,6 +583,7 @@ class AutomationService:
             selected_intent,
             samples=samples,
             recovery=recovery,
+            plan_ref=plan_ref,
         )
         existing = self._store.find_run_by_request_in_transaction(
             connection,
@@ -582,6 +600,44 @@ class AutomationService:
                     "procedure request key already has a durable run"
                 )
             return existing
+        if plan_ref is not None:
+            if self._plans is None:
+                raise AutomationConflict("experiment plan storage is unavailable")
+            if (
+                plan_request is None
+                or plan_request.plan_ref != plan_ref
+                or plan_request.action != "submit"
+            ):
+                raise AutomationConflict(
+                    "plan admission requires the actual checked launch request"
+                )
+            if (
+                expected_manual_preview is None
+                or plan_request.manual_state != expected_manual_preview
+            ):
+                raise AutomationConflict("plan launch requires its checked preview")
+            try:
+                ManualPreviewService.require_binding(plan_request)
+            except ValueError as error:
+                raise AutomationConflict(str(error)) from error
+            plan = self._plans.get_in_transaction(connection, plan_ref)
+            expected_request = plan_launch_request(plan, actor=plan_request.actor)
+            if (
+                plan_request.request_hash != expected_request.request_hash
+                or plan_request.code_revision != expected_request.code_revision
+            ):
+                raise AutomationConflict(
+                    "checked launch request differs from its immutable plan"
+                )
+            actor = selected_intent.get("actor")
+            if (
+                not isinstance(actor, str)
+                or selected_intent.get("request_hash")
+                != plan_launch_request(plan, actor=actor).request_hash
+            ):
+                raise AutomationConflict(
+                    "procedure intent does not match the saved plan launch"
+                )
         if recovery is not None:
             source = self._store.read_run_in_transaction(
                 connection, recovery.procedure_run_id
@@ -627,6 +683,7 @@ class AutomationService:
             intent_hash=intent_hash,
             samples=samples,
             recovery=recovery,
+            plan_ref=plan_ref,
             revision=1,
             state="ready",
             created_at=now,

@@ -105,8 +105,10 @@ from scopecat.records.analysis import (
 )
 from scopecat.records.config import ConfigProfileSnapshot, config_content_hash
 from scopecat.records.content import Sha256ContentHash
+from scopecat.records.launch_request import LaunchRequest
 from scopecat.records.manual_preview import ManualPreviewFence
 from scopecat.records.parameter_change import ParameterChangeProposal
+from scopecat.records.plan_ref import ExperimentPlanRef, ProcedureChildSubmission
 from scopecat.records.run import RunConfigSource
 from scopecat.records.sample import SampleSelector
 from scopecat.runs.selectors import RunSelector
@@ -386,6 +388,7 @@ class LabProcedureContext:
         invocation = _experiment_invocation(experiment)
         planned = self._runner._plan(  # pyright: ignore[reportPrivateUsage]
             invocation,
+            plan_ref=self._durable.plan_ref,
             config=selected_config,
             config_source=selected_source,
             name=name,
@@ -409,6 +412,12 @@ class LabProcedureContext:
                 snapshot = self._runner.execute(
                     planned,
                     submission_id=operation_id,
+                    procedure_child=ProcedureChildSubmission(
+                        procedure_run_id=self._durable.procedure_run_id,
+                        step_key=step_key,
+                    )
+                    if self._durable.plan_ref is not None
+                    else None,
                     executor_id=operation_id,
                     wait_for_resources=True,
                 )
@@ -796,6 +805,8 @@ class LabProcedureOperations:
         *,
         request_key: str,
         expected_manual_preview: ManualPreviewFence | None = None,
+        plan_ref: ExperimentPlanRef | None = None,
+        plan_request: LaunchRequest | None = None,
         expected_config_generation: int | None = None,
         sample: str | SampleSelector | None = None,
         samples: tuple[SampleSelector, ...] = (),
@@ -810,6 +821,8 @@ class LabProcedureOperations:
             ProcedureSubmitCommand(
                 request_key=request_key,
                 expected_manual_preview=expected_manual_preview,
+                plan_ref=plan_ref,
+                plan_request=plan_request,
                 expected_config_generation=expected_config_generation,
                 definition=selected.ref,
                 intent=selected.encode_intent(intent),

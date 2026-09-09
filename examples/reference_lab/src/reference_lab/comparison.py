@@ -15,8 +15,6 @@ from scopecat.api.comparison import comparison_inputs, save_comparison
 from scopecat.api.lab import LabClient
 from scopecat.api.published_analysis import PublishedAnalysis
 from scopecat.application.comparison import ComparisonHandoff, ComparisonResult
-from scopecat.application.controls import ControlEdit
-from scopecat.application.launch import LaunchRequest
 from scopecat.kernel.quantity import Quantity
 from scopecat.records.analysis import (
     AnalysisDatasetViewSource,
@@ -29,6 +27,8 @@ from scopecat.records.comparison import (
     ComparisonPublication,
     ComparisonRequest,
 )
+from scopecat.records.control_edit import ControlEdit
+from scopecat.records.launch_request import LaunchRequest
 
 from reference_lab.control_launch import CONTROL_ENTRY
 from reference_lab.parameters import DRIVE_CARRIER_FREQUENCY, Q0

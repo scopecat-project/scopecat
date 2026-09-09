@@ -12,8 +12,7 @@ from scopecat.api.comparison import COMPARISON_REQUEST_SCHEMA
 from scopecat.api.lab import LabClient
 from scopecat.api.procedures import ProcedureHandle
 from scopecat.application.comparison import ComparisonHandoff
-from scopecat.application.controls import ControlEdit
-from scopecat.application.launch import LaunchPreview, LaunchRequest, LaunchSubmission
+from scopecat.application.launch import LaunchPreview, LaunchSubmission
 from scopecat.automation import RunOutputRef
 from scopecat.daemon.client import DaemonClient
 from scopecat.records.analysis import MeasurementAnalysisRecordInput
@@ -23,6 +22,8 @@ from scopecat.records.comparison import (
     ComparisonRequest,
     ComparisonSelection,
 )
+from scopecat.records.control_edit import ControlEdit
+from scopecat.records.launch_request import LaunchRequest
 from scopecat.records.run_request import AxisValuesSourceRecord
 
 from reference_lab.comparison import FIT_SCHEMA, NEXT_INPUT_SCHEMA, REVIEW_SCHEMA

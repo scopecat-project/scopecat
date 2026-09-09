@@ -61,8 +61,8 @@ class ManualPreviewService:
         )
         return preview.model_copy(update={"manual_state": fence})
 
+    @staticmethod
     def require_binding(
-        self,
         request: LaunchRequest,
     ) -> None:
         fence = request.manual_state

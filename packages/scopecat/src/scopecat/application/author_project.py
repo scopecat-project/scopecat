@@ -6,13 +6,8 @@ from dataclasses import dataclass
 
 from pydantic import JsonValue
 
-from scopecat.application.controls import ControlEdit
-from scopecat.application.launch import (
-    LaunchCatalog,
-    LaunchPreview,
-    LaunchRequest,
-    LaunchSubmission,
-)
+from scopecat.application.experiment_plans import plan_definition, plan_launch_request
+from scopecat.application.launch import LaunchCatalog, LaunchPreview, LaunchSubmission
 from scopecat.daemon.client import DaemonClient
 from scopecat.records.author_revision import (
     AuthorAnalysisReceipt,
@@ -21,7 +16,11 @@ from scopecat.records.author_revision import (
     AuthorRevisionState,
 )
 from scopecat.records.config_context import ConfigContextRef
+from scopecat.records.control_edit import ControlEdit
+from scopecat.records.experiment_plan import ExperimentPlanRevision, ExperimentPlanSave
+from scopecat.records.launch_request import LaunchRequest
 from scopecat.records.parameter_update import ParameterUpdate
+from scopecat.records.plan_ref import ExperimentPlanRef, PlanAnalysisSource
 
 
 class AuthorProject(DaemonClient):
@@ -57,6 +56,13 @@ class AuthorProject(DaemonClient):
             actor=actor,
             code_revision=catalog.code_revision,
         )
+        return AuthorPreparedLaunch(self, request, self.preview(request))
+
+    def prepare_plan(
+        self, ref: ExperimentPlanRef, *, actor: str
+    ) -> AuthorPreparedLaunch:
+        """Read an exact plan and obtain a new preview for this execution actor."""
+        request = plan_launch_request(self.experiment_plan(ref), actor=actor)
         return AuthorPreparedLaunch(self, request, self.preview(request))
 
     def state(self) -> AuthorRevisionState:
@@ -99,6 +105,26 @@ class AuthorPreparedLaunch:
     client: AuthorProject
     request: LaunchRequest
     preview: LaunchPreview
+
+    def save_plan(
+        self,
+        name: str,
+        *,
+        saved_by: str,
+        previous: ExperimentPlanRef | None = None,
+        copied_from: ExperimentPlanRef | None = None,
+        source: PlanAnalysisSource | None = None,
+    ) -> ExperimentPlanRevision:
+        """Save immutable inputs/configuration; no run is admitted or activated."""
+        return self.client.save_experiment_plan(
+            ExperimentPlanSave(
+                name=name,
+                saved_by=saved_by,
+                previous=previous,
+                copied_from=copied_from,
+                definition=plan_definition(self.request, self.preview, source=source),
+            )
+        )
 
     def submit(self, *, request_key: str) -> LaunchSubmission:
         """Submit this checked revision; reuse the same key only for a retry."""

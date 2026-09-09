@@ -14,6 +14,9 @@ from scopecat.daemon.wire import (
     RunSubmission,
 )
 
+from scopecat_server.storage.sqlite.experiment_plan_repository import (
+    ExperimentPlanRepository,
+)
 from scopecat_server.storage.sqlite.project_store import SQLiteProjectStore
 
 from ..command_payloads import CommandPayloadService
@@ -24,6 +27,7 @@ from .automation import AutomationService
 from .calibration_cohorts import CalibrationCohortService
 from .config import ConfigService
 from .executor import ExecutorService
+from .experiment_plans import ExperimentPlanService
 from .leases import OwnershipLeaseSupervisor
 from .manual_previews import ManualPreviewService
 from .point_plans import RunPointPlanService
@@ -64,6 +68,13 @@ class DaemonApplication:
         self.project_id = project_id
         self._project_store = project_store
         self.author_revisions = AuthorRevisionService(self.project_root, project_store)
+        self.plans = ExperimentPlanService(
+            ExperimentPlanRepository(project_store),
+            config=config,
+            samples=samples,
+            runs=runs,
+            authors=self.author_revisions,
+        )
         self.config = config
         self.manual_previews = ManualPreviewService(project_store.sqlite, config)
         self.analyses = analyses

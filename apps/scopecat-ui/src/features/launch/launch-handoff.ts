@@ -19,13 +19,12 @@ function scalar(value: unknown) {
   throw new Error("Suggested scans must contain explicit finite numeric values.");
 }
 
-export function importLaunchHandoff(
+export function importLaunchRequest(
   current: LaunchDraft,
   entry: LaunchCatalogEntry,
-  handoff: ComparisonHandoff,
+  request: ComparisonHandoff["request"],
   selectedSource?: ConfigContextResolution["config_source"],
 ): LaunchDraft {
-  const request = handoff.request;
   if (request.experiment !== entry.id || request.version !== entry.version)
     throw new Error(
       "The suggested experiment definition changed. Reopen the source analysis and review its inputs.",
@@ -108,6 +107,14 @@ export function importLaunchHandoff(
     controls,
     sample: request.sample ?? "",
     actor: request.actor ?? "operator",
-    handoff,
   };
+}
+
+export function importLaunchHandoff(
+  current: LaunchDraft,
+  entry: LaunchCatalogEntry,
+  handoff: ComparisonHandoff,
+  selectedSource?: ConfigContextResolution["config_source"],
+): LaunchDraft {
+  return { ...importLaunchRequest(current, entry, handoff.request, selectedSource), handoff };
 }

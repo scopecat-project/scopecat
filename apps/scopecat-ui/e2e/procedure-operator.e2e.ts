@@ -21,7 +21,7 @@ function uv(args: string[]): string {
 const ADMIT = `
 import sys
 import scopecat as sc
-from scopecat.application.launch import LaunchRequest
+from scopecat.records.launch_request import LaunchRequest
 project = sc.open_project(sys.argv[1])
 application = project.load_application()
 with project.connect() as lab:

@@ -12,17 +12,13 @@ import pytest
 from pydantic import ValidationError
 from scopecat.api.run import RunHandle
 from scopecat.application import LabApplication
-from scopecat.application.launch import (
-    LaunchCatalog,
-    LaunchPreview,
-    LaunchRequest,
-    LaunchSubmission,
-)
+from scopecat.application.launch import LaunchCatalog, LaunchPreview, LaunchSubmission
 from scopecat.daemon.client import DaemonClient, DaemonConflictError
 from scopecat.daemon.endpoint import DAEMON_URL_ENV
 from scopecat.kernel.quantity import Quantity
 from scopecat.planning.preflight import ExactQuantity, PreflightStage, UnknownQuantity
 from scopecat.project import Project, load_project
+from scopecat.records.launch_request import LaunchRequest
 from scopecat.records.measurement import MeasurementScalar
 from scopecat.records.run import ConfigRegistryRunConfigSource
 from scopecat_server.lifecycle import start_project, stop_project
@@ -390,8 +386,9 @@ def test_noop_candidate_preview_reports_reason_without_admitting_work(
 def test_http_controls_persist_one_source_and_match_notebook_edits(
     reference_lab_daemon: _Daemon, launch_application: LabApplication
 ) -> None:
-    from scopecat.application.controls import ControlEdit, edit_controls
+    from scopecat.application.controls import edit_controls
     from scopecat.compiler.frontend.resolution import compile_invocation
+    from scopecat.records.control_edit import ControlEdit
 
     from reference_lab.configuration import bootstrap_config
     from reference_lab.workflows.frequency_amplitude import (

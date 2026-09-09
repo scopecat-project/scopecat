@@ -209,11 +209,8 @@ def test_context_unknown_values_block_only_the_experiment_that_needs_them() -> N
 
 
 def test_context_launch_replay_preserves_reviewed_generation() -> None:
-    from scopecat.application.launch import (
-        LaunchPreview,
-        LaunchRequest,
-        LaunchSubmission,
-    )
+    from scopecat.application.launch import LaunchPreview, LaunchSubmission
+    from scopecat.records.launch_request import LaunchRequest
 
     application = create_application(EXAMPLE_ROOT)
     assert application.launch_provider is not None

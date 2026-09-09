@@ -94,10 +94,10 @@ The current runtime uses project store **64**, including immutable author source
 revisions. Layered analysis figures were introduced in version 63. Version 63 and
 older stores and snapshots are rejected before modification; restore does not
 upgrade them. Keep each original project, verified snapshot and matching pinned
-reader to inspect or export its scientific data. Start a separate version 64
-project for new work. No 63-to-64 migration is supplied.
+reader to inspect or export its scientific data. Start a separate version 65
+project for new work. No 64-to-65 migration is supplied.
 
-Within version 64, snapshots retain author source bundles, active revision and
+Within version 65, snapshots retain author source bundles, active revision and
 admitted procedure identity. Restored author workers select the original code
 before importing project modules. See [author refresh and recovery](refresh-author-code.md)
 for the maintained-source and external environment requirements.

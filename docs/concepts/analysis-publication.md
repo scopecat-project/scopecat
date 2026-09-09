@@ -185,7 +185,7 @@ This is not storage predicate pushdown or a bound on a single decoded batch.
 The layered figure format was introduced in project store version **63**. The
 current runtime uses version **64**, adding immutable author revisions. Older
 projects and snapshots require their pinned matching reader; this runtime rejects
-them before modification. Preserve originals when starting a separate version 64
+them before modification. Preserve originals when starting a separate version 65
 project. See [backup and restore](../how-to/backup-and-restore.md).
 
 ## Compare completed runs

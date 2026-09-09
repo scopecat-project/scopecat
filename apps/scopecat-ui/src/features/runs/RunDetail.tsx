@@ -1,3 +1,4 @@
+import { RunPlanOrigin } from "../launch/PlanOrigin";
 import { ComparisonLink } from "../analyses/ComparisonLink";
 import { AlertTriangle, Boxes, ChevronRight, Unlock } from "lucide-react";
 import { RunCancellationNotice } from "./RunCancellationNotice";
@@ -120,6 +121,7 @@ export function RunDetail({
   return (
     <>
       <ComparisonLink runId={run.runId} />
+      <RunPlanOrigin runId={run.runId} />
       <header
         className="flex items-start justify-between gap-7 border-b border-line px-0.5 pb-[17px] max-[680px]:block"
         data-testid="run-detail-header"

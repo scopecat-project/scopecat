@@ -47,6 +47,9 @@ from scopecat_server.storage.sqlite.config_operations import SQLiteConfigOperati
 from scopecat_server.storage.sqlite.config_registry import SQLiteConfigRegistryStore
 from scopecat_server.storage.sqlite.connection import SQLiteDatabase
 from scopecat_server.storage.sqlite.control_plane import SQLiteControlPlane
+from scopecat_server.storage.sqlite.experiment_plan_repository import (
+    ExperimentPlanRepository,
+)
 from scopecat_server.storage.sqlite.procedure_schedules import (
     SQLiteProcedureScheduleStore,
 )
@@ -145,6 +148,7 @@ class LocalDaemonRuntime:
             point_plans = RunPointPlanService(control=control, runs=runs)
             automation = AutomationService(
                 automation_store,
+                plans=ExperimentPlanRepository(project_store),
                 runs=runs,
                 resource_waits=ProcedureResourceWaits(control, runs, point_plans),
             )

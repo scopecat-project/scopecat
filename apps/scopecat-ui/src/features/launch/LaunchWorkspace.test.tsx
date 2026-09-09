@@ -114,7 +114,9 @@ const previewResult = {
 function mount(manualValidity = () => Response.json({ valid: true, changes: [] })) {
   const fetcher = globalThis.fetch;
   vi.stubGlobal("fetch", (request: Request) =>
-    new URL(request.url).pathname.endsWith("/config-registry")
+    new URL(request.url).pathname.endsWith("/experiment-plans")
+      ? Promise.resolve(Response.json({ items: [] }))
+      : new URL(request.url).pathname.endsWith("/config-registry")
       ? Promise.resolve(
           Response.json({ activation: { entry_id: "baseline", generation: 1 }, entries: [] }),
         )

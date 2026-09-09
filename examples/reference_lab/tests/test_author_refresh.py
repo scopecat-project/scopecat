@@ -11,9 +11,10 @@ from pathlib import Path
 import httpx2
 import pytest
 from scopecat.application import LabApplication
-from scopecat.application.launch import LaunchPreview, LaunchRequest, LaunchSubmission
+from scopecat.application.launch import LaunchPreview, LaunchSubmission
 from scopecat.daemon.client import DaemonClient
 from scopecat.project import load_project
+from scopecat.records.launch_request import LaunchRequest
 from scopecat_server.lifecycle import start_project, stop_project
 from scopecat_server.snapshots import create_snapshot, restore_snapshot
 

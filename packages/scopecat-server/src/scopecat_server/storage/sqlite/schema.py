@@ -10,13 +10,16 @@ from scopecat_server.storage.sqlite.calibration_schema import (
 )
 from scopecat_server.storage.sqlite.config_schema import CONFIG_REGISTRY_TABLES_SQL
 from scopecat_server.storage.sqlite.execution_schema import EXECUTION_TABLES_SQL
+from scopecat_server.storage.sqlite.experiment_plan_schema import (
+    EXPERIMENT_PLAN_TABLES_SQL,
+)
 from scopecat_server.storage.sqlite.procedure_schedule_schema import (
     PROCEDURE_SCHEDULE_TABLES_SQL,
 )
 from scopecat_server.storage.sqlite.run_schema import RUN_TABLES_SQL
 from scopecat_server.storage.sqlite.sample_schema import SAMPLE_TABLES_SQL
 
-PROJECT_SCHEMA_VERSION = 64
+PROJECT_SCHEMA_VERSION = 65
 
 _CONTROL_TABLES_SQL = f"""
 CREATE TABLE IF NOT EXISTS project_schema (
@@ -195,6 +198,7 @@ PROJECT_SCHEMA_SQL = "\n".join(
         CONFIG_REGISTRY_TABLES_SQL,
         EXECUTION_TABLES_SQL,
         AUTHOR_REVISION_TABLES_SQL,
+        EXPERIMENT_PLAN_TABLES_SQL,
         "COMMIT;",
     )
 )

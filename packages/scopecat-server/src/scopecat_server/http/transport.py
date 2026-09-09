@@ -17,12 +17,8 @@ from fastapi import Path as ApiPath
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from scopecat.application.comparison import ComparisonResult
-from scopecat.application.launch import (
-    LaunchCatalog,
-    LaunchPreview,
-    LaunchRequest,
-    LaunchSubmission,
-)
+from scopecat.application.launch import LaunchCatalog, LaunchPreview, LaunchSubmission
+from scopecat.application.launch_config import launch_sample_selection
 from scopecat.automation import (
     ProcedureCancelCommand,
     ProcedureCancelReceipt,
@@ -248,15 +244,27 @@ from scopecat.records.author_revision import (
 from scopecat.records.comparison import ComparisonRequest
 from scopecat.records.content import ContentEntry
 from scopecat.records.costs import RunMeasuredCosts
+from scopecat.records.experiment_plan import (
+    ExperimentPlanList,
+    ExperimentPlanRevision,
+    ExperimentPlanSave,
+)
 from scopecat.records.instrument import (
     InstrumentStateCacheReadback,
     InstrumentStateReadback,
     InstrumentStateSnapshot,
 )
+from scopecat.records.launch_request import LaunchRequest
 from scopecat.records.manual_preview import ManualPreviewFence, ManualPreviewValidity
 from scopecat.records.measurement_recording import MeasurementDatasetReceipt
+from scopecat.records.plan_ref import ExperimentPlanRef
 from scopecat.records.run import RunSnapshot
-from scopecat.records.sample import SampleArtifactRef, SampleId, SampleRevision
+from scopecat.records.sample import (
+    SampleArtifactRef,
+    SampleId,
+    SampleRevision,
+    SampleSelector,
+)
 from scopecat.records.sample_artifact import (
     MAX_SAMPLE_ARTIFACT_BYTES,
     SampleArtifactPage,
@@ -351,6 +359,26 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
         max_body_bytes=max_command_body_bytes,
     )
     _install_error_mapping(app)
+
+    @app.get(f"{_API_PREFIX}/experiment-plans")
+    def list_experiment_plans(plan_id: str | None = None) -> ExperimentPlanList:
+        return application.plans.repository.list(plan_id=plan_id)
+
+    @app.post(f"{_API_PREFIX}/experiment-plans")
+    def save_experiment_plan(command: ExperimentPlanSave) -> ExperimentPlanRevision:
+        try:
+            return application.plans.save(command)
+        except ValueError as error:
+            raise HTTPException(422, str(error)) from error
+
+    @app.post(f"{_API_PREFIX}/experiment-plans/read")
+    def read_experiment_plan(ref: ExperimentPlanRef) -> ExperimentPlanRevision:
+        return application.plans.repository.get(ref)
+
+    @app.post(f"{_API_PREFIX}/experiment-plans/hide")
+    def hide_experiment_plan(ref: ExperimentPlanRef) -> ExperimentPlanRef:
+        application.plans.repository.hide(ref)
+        return ref
 
     @app.get(f"{_API_PREFIX}/author-revisions")
     def author_revision_state() -> AuthorRevisionState:
@@ -460,9 +488,16 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
         return TypeAdapter(ComparisonResult).validate_json(completed.stdout)
 
     @app.get(f"{_API_PREFIX}/experiment-launcher")
-    def experiment_launch_catalog() -> LaunchCatalog:
+    def experiment_launch_catalog(code_revision: str | None = None) -> LaunchCatalog:
         return LaunchCatalog.model_validate_json(
-            launch_call(LaunchRequest(action="list"))
+            launch_call(
+                LaunchRequest(
+                    action="list",
+                    code_revision=AuthorRevisionRef(content_hash=code_revision)
+                    if code_revision
+                    else None,
+                )
+            )
         )
 
     @app.post(f"{_API_PREFIX}/experiment-launcher/preview")
@@ -471,6 +506,19 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
             raise HTTPException(422, "Expected preview action")
         cursor = application.manual_previews.cursor()
         preview = LaunchPreview.model_validate_json(launch_call(command))
+        selection = launch_sample_selection(command, preview.config_source)
+        if selection is not None:
+            selector = (
+                SampleSelector(sample_id=selection)
+                if isinstance(selection, str)
+                else selection
+            )
+            binding = application.samples.resolve_bindings((selector,))[0]
+            if command.sample_binding is not None and command.sample_binding != binding:
+                raise HTTPException(
+                    422, "sample binding differs from its exact saved revision"
+                )
+            preview = preview.model_copy(update={"sample_binding": binding})
         return application.manual_previews.record_preview(preview, cursor=cursor)
 
     @app.post(f"{_API_PREFIX}/experiment-launcher/validity")

@@ -21,20 +21,13 @@ from scopecat.api.lab import LabClient, PreparedLabExperiment
 from scopecat.api.procedures import LabProcedureContext
 from scopecat.api.run import RunHandle
 from scopecat.application.author_inputs import author_input_model
-from scopecat.application.controls import (
-    ControlEdit,
-    control_catalog,
-    control_values,
-    edit_controls,
-)
+from scopecat.application.controls import control_catalog, control_values, edit_controls
 from scopecat.application.launch import (
     LaunchCatalog,
     LaunchCatalogEntry,
-    LaunchConfigSource,
     LaunchInputSchema,
     LaunchPreview,
     LaunchProvider,
-    LaunchRequest,
     LaunchResult,
     LaunchSubmission,
 )
@@ -66,6 +59,8 @@ from scopecat.records.author_revision import AuthorRevisionRef
 from scopecat.records.config import ConfigProfileSnapshot
 from scopecat.records.config_context import ConfigContextRef
 from scopecat.records.content import Sha256ContentHash
+from scopecat.records.control_edit import ControlEdit
+from scopecat.records.launch_request import LaunchConfigSource, LaunchRequest
 from scopecat.records.manual_preview import ManualPreviewFence
 from scopecat.records.sample import SampleSelector
 
@@ -452,6 +447,8 @@ class AuthorExperiments:
             sample=launch_sample_selection(request, source),
             expected_manual_preview=request.manual_state,
             expected_config_generation=launch_config_generation(source),
+            plan_ref=request.plan_ref,
+            plan_request=request if request.plan_ref is not None else None,
         )
         return LaunchSubmission(procedure_id=admitted.id)
 

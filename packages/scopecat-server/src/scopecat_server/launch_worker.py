@@ -9,18 +9,20 @@ from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
 import scopecat as sc
+from scopecat.application.experiment_plans import validate_plan_launch
 from scopecat.application.launch import (
     LaunchCatalog,
     LaunchPreview,
-    LaunchRequest,
     LaunchResult,
     validate_launch_control_edits,
 )
 from scopecat.daemon.client import DaemonClient
 from scopecat.daemon.endpoint import DAEMON_URL_ENV, resolve_daemon_endpoint
+from scopecat.kernel.content_identity import sha256_json_hash
 from scopecat.kernel.frozen import thaw_json_value
 from scopecat.project import load_project
 from scopecat.records.author_revision import AuthorRevisionRef
+from scopecat.records.launch_request import LaunchRequest
 
 from scopecat_server.author_worker import revision_project
 
@@ -45,7 +47,14 @@ def main() -> None:
     if len(sys.argv) == 4 and sys.argv[2] == "--procedure":
         with DaemonClient(resolve_daemon_endpoint(root)) as client:
             stored = client.get_procedure(sys.argv[3])
+            plan_code = (
+                client.experiment_plan(stored.plan_ref).definition.code_revision
+                if stored.plan_ref is not None
+                else None
+            )
         identity = stored.intent.get("code_revision")
+        if plan_code is not None:
+            identity = plan_code.model_dump(mode="json")
         project = (
             revision_project(
                 root, AuthorRevisionRef.model_validate(thaw_json_value(identity))
@@ -82,7 +91,8 @@ def main() -> None:
             with application.connect(
                 resolve_daemon_endpoint(root), operator=request.actor
             ) as lab:
-                if request.control_edits:
+                catalog = LaunchCatalog()
+                if request.action != "list":
                     catalog = application.launch_provider(
                         lab, LaunchRequest(action="list")
                     )
@@ -91,7 +101,43 @@ def main() -> None:
                             "project list callback must return LaunchCatalog"
                         )
                     validate_launch_control_edits(catalog, request)
+                    if request.plan_ref is not None:
+                        plan = lab.plans.get(request.plan_ref)
+                        entry = next(
+                            (
+                                entry
+                                for entry in catalog.entries
+                                if entry.id == request.experiment
+                                and entry.version == request.version
+                            ),
+                            None,
+                        )
+                        if entry is None:
+                            raise ValueError(
+                                "saved plan experiment is "
+                                "unavailable in this author revision"
+                            )
+                        validate_plan_launch(plan, request, entry)
                 result = application.launch_provider(lab, request)
+                if isinstance(result, LaunchPreview):
+                    entry = next(
+                        (
+                            item
+                            for item in catalog.entries
+                            if item.id == request.experiment
+                            and item.version == request.version
+                        ),
+                        None,
+                    )
+                    if entry is not None:
+                        result = result.model_copy(
+                            update={
+                                "plan_ref": request.plan_ref,
+                                "definition_hash": sha256_json_hash(
+                                    entry.model_dump(mode="json")
+                                ),
+                            }
+                        )
     if isinstance(result, (LaunchCatalog, LaunchPreview)):
         result = result.model_copy(update={"code_revision": ref})
     print(result.model_dump_json())

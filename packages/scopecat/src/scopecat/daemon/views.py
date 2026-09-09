@@ -7,7 +7,7 @@ from binascii import Error as BinasciiError
 from datetime import datetime
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, computed_field, model_validator
 
 from scopecat.config.registry.records import (
     ConfigRegistryActivationRecord,
@@ -57,6 +57,7 @@ from scopecat.records.parameter_change import (
     ParameterChangeProposal,
     ParameterValueDelta,
 )
+from scopecat.records.plan_ref import ExperimentPlanRef
 from scopecat.records.run import RunSnapshot
 from scopecat.records.run_request import RunRequest
 from scopecat.records.sample import SampleId, SampleRecord, SampleRevision
@@ -343,6 +344,12 @@ class RunRequestView(_ViewModel):
 
     run_id: str
     request: RunRequest
+
+    @computed_field
+    @property
+    def plan_ref(self) -> ExperimentPlanRef | None:
+        """Typed projection from the authoritative stored request."""
+        return self.request.plan_ref
 
 
 class RunAnalysisView(_ViewModel):

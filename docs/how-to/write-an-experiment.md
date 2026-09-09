@@ -79,7 +79,7 @@ that revision. A failed refresh shows the source error and leaves the previous
 catalog usable. Admitted and running author procedures retain their original
 helper, experiment and analysis source. Historical analysis explicitly chooses
 an archived revision. See [the refresh and recovery boundary](refresh-author-code.md),
-including the schema 64 store requirement and external environment limitations.
+including the schema 65 store requirement and external environment limitations.
 
 ## One-time laboratory composition
 

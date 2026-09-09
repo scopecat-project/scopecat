@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import pytest
 import scopecat as sc
-from scopecat.application.controls import ControlEdit, edit_controls
+from scopecat.application.controls import edit_controls
 from scopecat.planning.catalog import InstrumentContractCatalog
 from scopecat.planning.service import plan_experiment_invocation
 from scopecat.planning.system import ExperimentSystem
 from scopecat.records.config import config_content_hash
+from scopecat.records.control_edit import ControlEdit
 from scopecat.records.run_request import AxisRangeSourceRecord
 
 from reference_lab.configuration import bootstrap_config

@@ -13,11 +13,12 @@ import pytest
 from scopecat.api.lab import LabClient
 from scopecat.application import LabApplication
 from scopecat.application.authoring import AuthorExperiments
-from scopecat.application.launch import LaunchCatalog, LaunchRequest
+from scopecat.application.launch import LaunchCatalog
 from scopecat.automation.definition import ProcedureRegistry
 from scopecat.planning.catalog import InstrumentContractCatalog
 from scopecat.planning.system import ExperimentSystem
 from scopecat.records.config import ConfigProfileSnapshot
+from scopecat.records.launch_request import LaunchRequest
 
 SOURCE = '''import scopecat as sc
 LEVEL = sc.Control("level", default=1.0, minimum=0, scannable=True)

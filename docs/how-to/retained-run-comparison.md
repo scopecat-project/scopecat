@@ -72,3 +72,6 @@ submission remains separately recoverable. Source provenance is session state:
 the destination run does **not** yet retain a durable analysis-origin reference.
 Saved-plan integration owns that future bridge. Reopen the saved source analysis
 to recover suggestions after closing the console.
+
+Save an imported suggestion as a [named experiment plan](save-experiment-plans.md)
+to retain its exact analysis source through later admission and child runs.

@@ -378,6 +378,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/experiment-plans": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Experiment Plans */
+        get: operations["list_experiment_plans_api_v1_experiment_plans_get"];
+        put?: never;
+        /** Save Experiment Plan */
+        post: operations["save_experiment_plan_api_v1_experiment_plans_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/experiment-plans/hide": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Hide Experiment Plan */
+        post: operations["hide_experiment_plan_api_v1_experiment_plans_hide_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/experiment-plans/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Read Experiment Plan */
+        post: operations["read_experiment_plan_api_v1_experiment_plans_read_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/health": {
         parameters: {
             query?: never;
@@ -1238,6 +1290,23 @@ export interface paths {
         };
         /** Get Run Record Json */
         get: operations["get_run_record_json_api_v1_runs__run_id__records__selector__json_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/runs/{run_id}/request": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Run Request */
+        get: operations["get_run_request_api_v1_runs__run_id__request_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3378,7 +3447,10 @@ export interface components {
              * @enum {string}
              */
             kind: "config_registry";
-            /** Registry Generation */
+            /**
+             * Registry Generation
+             * @description For active: historical activation generation. For an exact entry: optional observed lab-generation fence, not a claim of activation.
+             */
             registry_generation?: number | null;
             /** Selector */
             selector: string;
@@ -3782,6 +3854,85 @@ export interface components {
             unit: string;
             /** Value */
             value: number;
+        };
+        /** ExperimentPlanDefinition */
+        "ExperimentPlanDefinition-Input": {
+            code_revision?: components["schemas"]["AuthorRevisionRef"] | null;
+            configuration?: components["schemas"]["PlanConfigRef"] | null;
+            context?: components["schemas"]["ConfigContextRef"] | null;
+            control_edits?: components["schemas"]["PlanControlEdits-Input"];
+            definition_hash: components["schemas"]["Sha256ContentHash"];
+            /** Experiment */
+            experiment: string;
+            inputs?: components["schemas"]["PlanInputs"];
+            /**
+             * Overrides
+             * @default []
+             */
+            overrides: components["schemas"]["ParameterUpdate-Input"][];
+            sample?: components["schemas"]["SampleBinding"] | null;
+            source?: components["schemas"]["PlanAnalysisSource"] | null;
+            /** Version */
+            version: string;
+        };
+        /** ExperimentPlanDefinition */
+        "ExperimentPlanDefinition-Output": {
+            code_revision?: components["schemas"]["AuthorRevisionRef"] | null;
+            configuration?: components["schemas"]["PlanConfigRef"] | null;
+            context?: components["schemas"]["ConfigContextRef"] | null;
+            control_edits?: components["schemas"]["PlanControlEdits-Output"];
+            definition_hash: components["schemas"]["Sha256ContentHash"];
+            /** Experiment */
+            experiment: string;
+            inputs?: components["schemas"]["PlanInputs"];
+            /**
+             * Overrides
+             * @default []
+             */
+            overrides: components["schemas"]["ParameterUpdate-Output"][];
+            sample?: components["schemas"]["SampleBinding"] | null;
+            source?: components["schemas"]["PlanAnalysisSource"] | null;
+            /** Version */
+            version: string;
+        };
+        /** ExperimentPlanList */
+        ExperimentPlanList: {
+            /** Items */
+            items: components["schemas"]["ExperimentPlanRevision"][];
+        };
+        /** ExperimentPlanRef */
+        ExperimentPlanRef: {
+            content_hash: components["schemas"]["Sha256ContentHash"];
+            /** Plan Id */
+            plan_id: string;
+            /** Revision */
+            revision: number;
+        };
+        /** ExperimentPlanRevision */
+        ExperimentPlanRevision: {
+            copied_from?: components["schemas"]["ExperimentPlanRef"] | null;
+            definition: components["schemas"]["ExperimentPlanDefinition-Output"];
+            /** Name */
+            name: string;
+            previous?: components["schemas"]["ExperimentPlanRef"] | null;
+            ref: components["schemas"]["ExperimentPlanRef"];
+            /**
+             * Saved At
+             * Format: date-time
+             */
+            saved_at: string;
+            /** Saved By */
+            saved_by: string;
+        };
+        /** ExperimentPlanSave */
+        ExperimentPlanSave: {
+            copied_from?: components["schemas"]["ExperimentPlanRef"] | null;
+            definition: components["schemas"]["ExperimentPlanDefinition-Input"];
+            /** Name */
+            name: string;
+            previous?: components["schemas"]["ExperimentPlanRef"] | null;
+            /** Saved By */
+            saved_by: string;
         };
         /**
          * ExperimentPreviewDomainInspection
@@ -4706,9 +4857,11 @@ export interface components {
              * @default []
              */
             controls: components["schemas"]["LaunchControlValue"][];
+            definition_hash?: components["schemas"]["Sha256ContentHash"] | null;
             /** Experiment Id */
             experiment_id: string;
             manual_state?: components["schemas"]["ManualPreviewFence"] | null;
+            plan_ref?: components["schemas"]["ExperimentPlanRef"] | null;
             /**
              * Point Count
              * @description Initial point count of the first previewed experiment, not a procedure total.
@@ -4725,6 +4878,7 @@ export interface components {
              * @default []
              */
             resources: string[];
+            sample_binding?: components["schemas"]["SampleBinding"] | null;
             /** Summary */
             summary: string;
         };
@@ -4742,6 +4896,7 @@ export interface components {
             actor: string;
             code_revision?: components["schemas"]["AuthorRevisionRef"] | null;
             config_source?: components["schemas"]["LaunchConfigSource-Input"] | null;
+            configuration?: components["schemas"]["PlanConfigRef"] | null;
             context?: components["schemas"]["ConfigContextRef"] | null;
             /** Control Edits */
             control_edits?: {
@@ -4763,6 +4918,7 @@ export interface components {
              * @default []
              */
             overrides: components["schemas"]["ParameterUpdate-Input"][];
+            plan_ref?: components["schemas"]["ExperimentPlanRef"] | null;
             /**
              * Request Key
              * @default
@@ -4770,6 +4926,7 @@ export interface components {
             request_key: string;
             /** Sample */
             sample?: string | null;
+            sample_binding?: components["schemas"]["SampleBinding"] | null;
             /**
              * Version
              * @default
@@ -4790,6 +4947,7 @@ export interface components {
             actor: string;
             code_revision?: components["schemas"]["AuthorRevisionRef"] | null;
             config_source?: components["schemas"]["LaunchConfigSource-Output"] | null;
+            configuration?: components["schemas"]["PlanConfigRef"] | null;
             context?: components["schemas"]["ConfigContextRef"] | null;
             /** Control Edits */
             control_edits?: {
@@ -4811,6 +4969,7 @@ export interface components {
              * @default []
              */
             overrides: components["schemas"]["ParameterUpdate-Output"][];
+            plan_ref?: components["schemas"]["ExperimentPlanRef"] | null;
             /**
              * Request Key
              * @default
@@ -4818,6 +4977,7 @@ export interface components {
             request_key: string;
             /** Sample */
             sample?: string | null;
+            sample_binding?: components["schemas"]["SampleBinding"] | null;
             /**
              * Version
              * @default
@@ -5926,6 +6086,29 @@ export interface components {
         };
         PersistableScalarWire: components["schemas"]["_PersistableScalarModel"];
         PersistableValueType: components["schemas"]["_PersistableValueTypeWire"];
+        /** PlanAnalysisSource */
+        PlanAnalysisSource: {
+            /** Analysis Id */
+            analysis_id: string;
+            publication_hash: components["schemas"]["Sha256ContentHash"];
+            /** Run Id */
+            run_id: string;
+        };
+        /** PlanConfigRef */
+        PlanConfigRef: {
+            content_hash: components["schemas"]["Sha256ContentHash"];
+            /** Entry Id */
+            entry_id: string;
+        };
+        "PlanControlEdits-Input": {
+            [key: string]: components["schemas"]["ControlEdit-Input"];
+        };
+        "PlanControlEdits-Output": {
+            [key: string]: components["schemas"]["ControlEdit-Output"];
+        };
+        PlanInputs: {
+            [key: string]: components["schemas"]["pydantic__types__JsonValue"];
+        };
         /**
          * PlannedInstrumentSetting
          * @description A frozen point-plan assignment, not an observed or confirmed device value.
@@ -6268,6 +6451,7 @@ export interface components {
             definition: components["schemas"]["ProcedureDefinitionRef"];
             intent: components["schemas"]["ProcedureIntent-Output"];
             intent_hash: components["schemas"]["Sha256ContentHash"];
+            plan_ref?: components["schemas"]["ExperimentPlanRef"] | null;
             procedure_run_id: components["schemas"]["_NonEmptyText"];
             recovery?: components["schemas"]["ProcedureRecoverySource"] | null;
             request_key: components["schemas"]["_NonEmptyText"];
@@ -7470,6 +7654,7 @@ export interface components {
             };
             record: components["schemas"]["ContentEntry"];
         };
+        "RunRequest-Output": unknown;
         /** @enum {string} */
         RunRequestBinaryOperator: "+" | "-" | "*" | "/";
         /** RunRequestBinaryValue */
@@ -7603,6 +7788,17 @@ export interface components {
         RunRequestRangeValue: components["schemas"]["scopecat__kernel__quantity__Quantity"] | number;
         "RunRequestScalarValue-Input": components["schemas"]["scopecat__kernel__quantity__Quantity"] | components["schemas"]["RunRequestEntityRef-Input"] | components["schemas"]["RunRequestComplexValue"] | components["schemas"]["RunRequestExpressionValue-Input"] | string | boolean | number | null;
         "RunRequestScalarValue-Output": components["schemas"]["scopecat__kernel__quantity__Quantity"] | components["schemas"]["RunRequestEntityRef-Output"] | components["schemas"]["RunRequestComplexValue"] | components["schemas"]["RunRequestExpressionValue-Output"] | string | boolean | number | null;
+        /**
+         * RunRequestView
+         * @description The operator request accepted with one run.
+         */
+        RunRequestView: {
+            /** @description Typed projection from the authoritative stored request. */
+            readonly plan_ref: components["schemas"]["ExperimentPlanRef"] | null;
+            request: components["schemas"]["RunRequest-Output"];
+            /** Run Id */
+            run_id: string;
+        };
         /**
          * RunResourceBlocker
          * @description Current competing owner, without authority or canonical resource keys.
@@ -9062,7 +9258,9 @@ export interface operations {
     };
     experiment_launch_catalog_api_v1_experiment_launcher_get: {
         parameters: {
-            query?: never;
+            query?: {
+                code_revision?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -9076,6 +9274,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LaunchCatalog"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -9166,6 +9373,136 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ManualPreviewValidity"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_experiment_plans_api_v1_experiment_plans_get: {
+        parameters: {
+            query?: {
+                plan_id?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExperimentPlanList"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    save_experiment_plan_api_v1_experiment_plans_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExperimentPlanSave"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExperimentPlanRevision"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    hide_experiment_plan_api_v1_experiment_plans_hide_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExperimentPlanRef"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExperimentPlanRef"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_experiment_plan_api_v1_experiment_plans_read_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExperimentPlanRef"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExperimentPlanRevision"];
                 };
             };
             /** @description Validation Error */
@@ -10853,6 +11190,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RunRecordJsonResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_run_request_api_v1_runs__run_id__request_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunRequestView"];
                 };
             };
             /** @description Validation Error */

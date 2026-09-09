@@ -2,9 +2,9 @@
 
 from typing import TYPE_CHECKING, Literal
 
-from scopecat.application.launch import LaunchConfigSource, LaunchRequest
 from scopecat.records.config import ConfigProfileSnapshot
 from scopecat.records.config_context import ContextRunConfigSource
+from scopecat.records.launch_request import LaunchConfigSource, LaunchRequest
 from scopecat.records.run import ConfigRegistryRunConfigSource
 from scopecat.records.sample import SampleSelector
 
@@ -42,6 +42,34 @@ def resolve_launch_config(
         raise ValueError(
             "context source requires the matching explicit context selection"
         )
+    if request.configuration is not None:
+        selected = lab.config.entry(request.configuration.entry_id)
+        if selected.entry.content_hash != request.configuration.content_hash:
+            raise ValueError(
+                "saved configuration does not match its exact content hash"
+            )
+        active = lab.config.active()
+        current = ConfigRegistryRunConfigSource(
+            selector=selected.entry.id,
+            entry_id=selected.entry.id,
+            config_ref=selected.entry.config_ref,
+            content_hash=selected.entry.content_hash,
+            registry_generation=active.activation.generation,
+        )
+        if request.action == "submit":
+            submitted = request.config_source
+            if (
+                not isinstance(submitted, ConfigRegistryRunConfigSource)
+                or submitted.model_copy(
+                    update={"registry_generation": current.registry_generation}
+                )
+                != current
+            ):
+                raise ValueError(
+                    "saved configuration binding changed since preview; preview again"
+                )
+            return selected.config, submitted
+        return selected.config, current
     if request.action == "preview":
         config, source = lab.config.resolve_with_source("active")
         assert isinstance(source, ConfigRegistryRunConfigSource)
@@ -78,6 +106,14 @@ def launch_sample_selection(
 ) -> str | SampleSelector | None:
     if isinstance(source, ContextRunConfigSource):
         sample = source.sample
+        return SampleSelector(
+            sample_id=sample.sample_id,
+            revision=sample.revision,
+            role=sample.role,
+            context_id=sample.context_id,
+        )
+    if request.sample_binding is not None:
+        sample = request.sample_binding
         return SampleSelector(
             sample_id=sample.sample_id,
             revision=sample.revision,

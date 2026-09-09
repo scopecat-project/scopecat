@@ -56,6 +56,7 @@ from scopecat.planning.system import (
 from scopecat.records.config import ConfigProfileSnapshot
 from scopecat.records.config_context import ContextRunConfigSource
 from scopecat.records.content import Sha256ContentHash
+from scopecat.records.plan_ref import ExperimentPlanRef, ProcedureChildSubmission
 from scopecat.records.run import (
     ConfigRegistryRunConfigSource,
     RunConfigSource,
@@ -83,6 +84,7 @@ class _DaemonRunner:
         executor_id: str = "notebook",
         submission_id: str | None = None,
         wait_for_resources: bool = False,
+        procedure_child: ProcedureChildSubmission | None = None,
     ) -> RunSnapshot:
         """Admit a plan remotely while executing its Python closures locally."""
 
@@ -90,6 +92,10 @@ class _DaemonRunner:
             planned,
             submission_id=submission_id or uuid4().hex,
         )
+        if procedure_child is not None:
+            submission = submission.model_copy(
+                update={"procedure_child": procedure_child}
+            )
         admission = self.client.submit_run(submission)
         if admission.snapshot.outcome is not None:
             return _resolve_terminal_snapshot(admission.snapshot)
@@ -309,6 +315,7 @@ class _DaemonRunner:
         metadata: Mapping[str, MetadataValue] | None,
         operator: str | None,
         samples: tuple[SampleSelector, ...] = (),
+        plan_ref: ExperimentPlanRef | None = None,
     ) -> PlannedRun:
         if isinstance(config_source, ContextRunConfigSource):
             binding = config_source.sample
@@ -363,6 +370,7 @@ class _DaemonRunner:
             metadata=metadata,
             operator=operator,
             samples=samples,
+            plan_ref=plan_ref,
         )
 
 

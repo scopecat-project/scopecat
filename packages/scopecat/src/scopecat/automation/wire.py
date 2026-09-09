@@ -34,7 +34,9 @@ from scopecat.automation.models import (
 )
 from scopecat.kernel.content_identity import stable_content_hash
 from scopecat.records.content import Sha256ContentHash
+from scopecat.records.launch_request import LaunchRequest
 from scopecat.records.manual_preview import ManualPreviewFence
+from scopecat.records.plan_ref import ExperimentPlanRef
 from scopecat.records.sample import SampleSelector
 
 type _NonEmptyText = Annotated[str, Field(min_length=1)]
@@ -58,6 +60,8 @@ class ProcedureSubmitCommand(_WireModel):
     expected_manual_preview: ManualPreviewFence | None = None
     expected_config_generation: int | None = Field(default=None, ge=1)
     recovery: ProcedureRecoverySource | None = None
+    plan_ref: ExperimentPlanRef | None = None
+    plan_request: LaunchRequest | None = None
 
     @property
     def intent_hash(self) -> Sha256ContentHash:
@@ -66,6 +70,7 @@ class ProcedureSubmitCommand(_WireModel):
             self.intent,
             samples=self.samples,
             recovery=self.recovery,
+            plan_ref=self.plan_ref,
         )
 
     @field_validator("samples")

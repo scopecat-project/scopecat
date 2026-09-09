@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import sqlite3
 from dataclasses import dataclass
+from datetime import UTC, datetime
 
+from scopecat.automation.wire import procedure_step_operation_id
 from scopecat.config.candidates import (
     CandidateConfig,
     resolve_candidate_config_snapshot,
@@ -56,6 +59,10 @@ from scopecat.runs.repository import (
     TerminalRunCommit,
 )
 
+from scopecat_server.storage.sqlite.automation import (
+    AutomationNotFound,
+    SQLiteAutomationStore,
+)
 from scopecat_server.storage.sqlite.control_plane import (
     ControlPlaneConflict,
     ControlPlaneNotFound,
@@ -105,6 +112,16 @@ class AdmissionService:
                 )
             self._resolve_provenance_config(submission.config_source)
             active = self._resolve_active_config()
+            source = submission.config_source
+            if (
+                isinstance(source, ConfigRegistryRunConfigSource)
+                and source.selector != "active"
+                and source.registry_generation is not None
+                and source.registry_generation != active.activation.generation
+            ):
+                raise BackendConflict(
+                    "lab configuration changed since the saved-entry preview"
+                )
             if (
                 isinstance(submission.config_source, ContextRunConfigSource)
                 and submission.config_source.lab_generation
@@ -172,6 +189,7 @@ class AdmissionService:
                 )
                 self._point_plans.initialize_admitted_in_transaction(connection, run)
                 if run.run_id == admission.run_id:
+                    self._require_plan_child(connection, submission)
                     self._runs.commit_run_skeleton_in_transaction(
                         connection,
                         prepared,
@@ -183,6 +201,43 @@ class AdmissionService:
         except ControlPlaneConflict as error:
             raise BackendConflict(str(error)) from error
         return self._wire_admission(run)
+
+    def _require_plan_child(
+        self, connection: sqlite3.Connection, submission: RunSubmission
+    ) -> None:
+        source = submission.procedure_child
+        if source is None:
+            if submission.request.plan_ref is not None:
+                raise BackendConflict(
+                    "plan-derived run requires its admitted procedure step"
+                )
+            return
+        store = SQLiteAutomationStore(self._control.sqlite)
+        try:
+            parent = store.read_run_in_transaction(connection, source.procedure_run_id)
+        except AutomationNotFound as error:
+            raise BackendConflict(
+                "plan-derived parent procedure was not found"
+            ) from error
+        step = store.latest_step_attempt_in_transaction(
+            connection, source.procedure_run_id, source.step_key
+        )
+        lease = store.read_lease_in_transaction(connection, source.procedure_run_id)
+        if (
+            parent.plan_ref != submission.request.plan_ref
+            or parent.state != "leased"
+            or lease is None
+            or lease.expires_at <= datetime.now(UTC)
+            or step is None
+            or step.state != "running"
+            or step.operation != "run"
+            or step.intent_hash != f"sha256:{submission.intent_content_hash}"
+            or submission.submission_id
+            != procedure_step_operation_id(source.procedure_run_id, source.step_key)
+        ):
+            raise BackendConflict(
+                "plan-derived run does not match its live durable parent step"
+            )
 
     def _replay_admission(
         self,
@@ -291,7 +346,7 @@ class AdmissionService:
                     raise BackendConflict(
                         "run config source does not match registry activation history"
                     )
-            elif source.selector != entry.id or source.registry_generation is not None:
+            elif source.selector != entry.id:
                 raise BackendConflict(
                     "run config source selector does not match its registry entry"
                 )

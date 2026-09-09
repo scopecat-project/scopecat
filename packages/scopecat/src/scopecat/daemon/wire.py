@@ -83,6 +83,7 @@ from scopecat.records.parameter_change import (
     ParameterChangeProposal,
     ParameterValueDelta,
 )
+from scopecat.records.plan_ref import ProcedureChildSubmission
 from scopecat.records.run import (
     RunConfigSource,
     RunSnapshot,
@@ -762,6 +763,7 @@ class RunSubmission(_WireModel):
     client planner.
     """
 
+    procedure_child: ProcedureChildSubmission | None = None
     submission_id: NonEmptyText
     config: ConfigProfileSnapshot
     config_source: RunConfigSource | None = None
@@ -773,7 +775,7 @@ class RunSubmission(_WireModel):
         """Identify submission content independently of its retry key."""
 
         return stable_content_hash(
-            self.model_dump(mode="json", exclude={"submission_id"})
+            self.model_dump(mode="json", exclude={"submission_id", "procedure_child"})
         )
 
 

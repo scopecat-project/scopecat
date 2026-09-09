@@ -134,14 +134,14 @@ No automatic migration of arbitrary failed procedures is provided.
 
 ## Store and backup boundary
 
-Author revisions require **project schema 64**. Opening a schema 63 store with
+Author revisions require **project schema 65**. Opening a schema 63 store with
 this runtime is rejected before modification. Keep the original store and its
-pinned schema 63 Scopecat reader; start a separate schema 64 project for this
-phase. There is no supplied 63-to-64 migration and no claim that version 64 can
+pinned schema 63 Scopecat reader; start a separate schema 65 project for this
+phase. There is no supplied 64-to-65 migration and no claim that version 65 can
 read version 63 history directly. Consumers must preserve their existing project
 and snapshot when upgrading the package.
 
-Within schema 64, [backup and restore](backup-and-restore.md) retains the source
+Within schema 65, [backup and restore](backup-and-restore.md) retains the source
 bundles, manifest identities, active generation and original admitted procedure
 intents. Restored workers materialize the old code from the object store instead
 of importing the currently edited helper. Restore the recorded external

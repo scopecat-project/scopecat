@@ -11,7 +11,8 @@ from unittest.mock import Mock, patch
 
 import pytest
 from fastapi.testclient import TestClient
-from scopecat.application.launch import LaunchPreview, LaunchRequest
+from scopecat.application.launch import LaunchPreview
+from scopecat.records.launch_request import LaunchRequest
 from scopecat.records.run import ConfigRegistryRunConfigSource
 
 from scopecat_server.http.transport import create_app
