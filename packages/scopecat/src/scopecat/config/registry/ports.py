@@ -47,6 +47,10 @@ class ConfigRegistryRepository(Protocol):
 
     def read_activation(self, generation: int) -> ConfigRegistryActivationRecord: ...
 
+    def read_latest_entry_activation(
+        self, entry_id: str
+    ) -> ConfigRegistryActivationRecord | None: ...
+
     def list_activation_history(self) -> tuple[ConfigRegistryActivationRecord, ...]: ...
 
     def list_activation_page(

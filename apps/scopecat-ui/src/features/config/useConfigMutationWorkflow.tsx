@@ -12,7 +12,7 @@ import {
 import { safeConfigEntryId } from "./config-utils";
 
 export type ConfigMutation =
-  | { kind: "activate-entry"; entryId: string }
+  | { kind: "activate-entry"; entryId: string; expectedGeneration: number }
   | { kind: "undo"; entryId: string; expectedGeneration: number }
   | { kind: "import"; draft: ImportDraft };
 
@@ -47,6 +47,7 @@ export function useConfigMutationWorkflow(overview?: ConfigRegistryOverview) {
             ...command,
             operation_id: createConfigOperationId("activate"),
             entry_id: action.entryId,
+            expected_generation: action.expectedGeneration,
           });
           return;
         case "undo":
@@ -79,11 +80,15 @@ export function useConfigMutationWorkflow(overview?: ConfigRegistryOverview) {
     },
   });
 
-  const runAction = (action: ConfigMutation, confirmation: string) => {
+  const runAction = (
+    action: ConfigMutation,
+    confirmation: string,
+    confirmLabel = action.kind === "undo" ? "Restore default" : "Set as default",
+  ) => {
     requestConfirmation({
       title: action.kind === "undo" ? "Restore the previous default?" : "Change the default?",
       description: confirmation,
-      confirmLabel: action.kind === "undo" ? "Restore default" : "Set as default",
+      confirmLabel,
       onConfirm: () => mutation.mutate(action),
     });
   };

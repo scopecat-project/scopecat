@@ -96,6 +96,9 @@ export function ConfigWorkspace({
 
   const selectedEntry = registry.selectedEntry;
   const commandDisabled = workflow.commandDisabled;
+  const latestActivation = registry.entryDetailQuery.data?.latestActivation;
+  const restoring = latestActivation != null;
+  const accepting = selectedEntry?.source.kind !== "direct_config_profile";
   const editableDraftSeed =
     selectedEntry &&
     overview.activation &&
@@ -200,7 +203,7 @@ export function ConfigWorkspace({
               entryId: undoTarget.entryId,
               expectedGeneration: undoTarget.expectedGeneration,
             },
-            `Restore ${undoTarget.entryId} as the default configuration?`,
+            `Restore ${undoTarget.entryId} as the default configuration? Calibration validity is not renewed and no devices are run.`,
           );
         }}
       />
@@ -228,6 +231,7 @@ export function ConfigWorkspace({
             <ConfigEntryInspector
               entry={selectedEntry}
               active={overview.activation?.entry_id === selectedEntry.id}
+              latestActivation={latestActivation?.generation}
               snapshot={registry.entryDetailQuery.data?.summary}
               config={registry.entryDetailQuery.data?.config}
               activeConfig={registry.activeDetailQuery.data?.config}
@@ -238,14 +242,25 @@ export function ConfigWorkspace({
                 workflow.mutation.isPending &&
                 workflow.mutation.variables?.kind === "activate-entry"
               }
-              actionDisabled={commandDisabled}
+              actionDisabled={commandDisabled || !registry.entryDetailQuery.isSuccess}
               onNoteChange={workflow.setNote}
               onSelectEntry={selectEntry}
               onOpenRun={onOpenRun}
               onActivate={() =>
                 workflow.runAction(
-                  { kind: "activate-entry", entryId: selectedEntry.id },
-                  `Set ${selectedEntry.id} as the default configuration?`,
+                  {
+                    kind: "activate-entry",
+                    entryId: selectedEntry.id,
+                    expectedGeneration: overview.activation?.generation ?? 0,
+                  },
+                  restoring
+                    ? `Restore ${selectedEntry.id} as the default configuration? This selects the exact saved parameters from G${latestActivation.generation}; calibration validity is not renewed.`
+                    : `${accepting ? "Accept" : "Set"} ${selectedEntry.id} as the default configuration?`,
+                  restoring
+                    ? "Restore default"
+                    : accepting
+                      ? "Accept as default"
+                      : "Set as default",
                 )
               }
               onEdit={editableDraftSeed ? () => setConfigDraft(editableDraftSeed) : undefined}

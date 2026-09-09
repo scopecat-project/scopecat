@@ -75,3 +75,43 @@ Acceptance continues to require the frozen expected registry generation and
 retains proposal provenance. Undo appends an activation of the previous exact
 entry; it does not erase acceptance history. Refresh and review again after a
 generation conflict rather than silently accepting against a newer base.
+
+
+## Restore an earlier default
+
+In **Default configuration**, select a saved version. The entry details show
+**Restore default** if that exact entry was previously activated, **Accept as
+default** for an unactivated derived entry, and **Set as default** for a new
+source snapshot. The restore decision comes from the entry's history on the
+server, even if its old activation is outside the displayed history page.
+
+From Python, use the existing activation operation with the exact saved entry:
+
+```python
+active = lab.config.active()
+receipt = lab.config.activate_entry(
+    "previously-accepted-entry",
+    operation_id="restore-reviewed-working-point-1",
+    expected_generation=active.activation.generation,
+    note="return to the previously reviewed working point",
+)
+print(receipt.activation.restored_from_generation)
+```
+
+Keep the operation ID with the command. Retry that same command after an
+ambiguous response, or call `lab.config.activation_operation(operation_id)` to
+read its original receipt. A changed default requires a new review and expected
+generation for a new operation. `lab.config.undo()` uses the same operation to
+restore the previous distinct entry.
+
+Restoration reuses the exact entry ID, content hash, and original candidate,
+manual-edit, or cohort provenance. It appends a new activation whose
+`restored_from_generation` points to the most recent activation of that entry.
+Selecting the already active entry is a no-op. A never-activated derived entry
+still requires its original base to be active; copying a stale entry does not
+make it eligible. Physical instrument identity checks also remain in force.
+
+**Restoring parameters does not revalidate the sample or renew calibration
+validity.** It creates no scientific acceptance, verification result, calibration
+success publication, or device action. Use the experiment's normal verification
+journey before relying on restored parameters at a changed working point.

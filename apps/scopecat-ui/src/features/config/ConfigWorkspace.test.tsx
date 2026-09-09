@@ -2,7 +2,7 @@
 
 import "@testing-library/jest-dom/vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getRunAnalysis } from "../runs/run-api";
 import {
@@ -147,7 +147,9 @@ describe("ConfigWorkspace", () => {
     expect(screen.getByText("Inventory migration")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /calibrated.*direct profile/i }));
-    fireEvent.click(await screen.findByRole("button", { name: "Set as default" }));
+    const setDefault = await screen.findByRole("button", { name: "Set as default" });
+    await waitFor(() => expect(setDefault).toBeEnabled());
+    fireEvent.click(setDefault);
     const activateDialog = await screen.findByRole("alertdialog");
     expect(activateDialog).toHaveTextContent("Set calibrated as the default configuration?");
     fireEvent.click(within(activateDialog).getByRole("button", { name: "Set as default" }));
@@ -178,6 +180,62 @@ describe("ConfigWorkspace", () => {
       }),
     );
   });
+
+  it.each(["manual_parameter_updates", "candidate_config", "calibration_cohort_merge"] as const)(
+    "distinguishes accepting and restoring a %s entry outside the history page",
+    async (sourceKind) => {
+      const entry = runtimeDerivedEntry(sourceKind);
+      const current = configEntry("current", "sha256:current");
+      vi.mocked(getConfigRegistry).mockResolvedValue({
+        activation: activation(120, current.id, current.content_hash),
+        activation_history: [activation(120, current.id, current.content_hash)],
+        activation_history_next_cursor: 120,
+        entries: [current, entry],
+      });
+      let prior: ReturnType<typeof activation> | null = null;
+      vi.mocked(getConfigRegistryEntry).mockImplementation(async (entryId) => ({
+        ...entryDetail(entryId === current.id ? current : entry),
+        latestActivation: entryId === entry.id ? prior : null,
+      }));
+      vi.mocked(activateConfigEntry).mockResolvedValue();
+      renderWorkspace();
+      fireEvent.click(await screen.findByRole("button", { name: new RegExp(entry.id) }));
+      expect(await screen.findByRole("button", { name: "Accept as default" })).toBeEnabled();
+      cleanup();
+
+      prior = activation(2, entry.id, entry.content_hash);
+      const { queryClient } = renderWorkspace();
+      fireEvent.click(await screen.findByRole("button", { name: new RegExp(entry.id) }));
+      const restore = await screen.findByRole("button", { name: "Restore default" });
+      await waitFor(() => expect(restore).toBeEnabled());
+      expect(screen.getByText(/Previously selected at G2/)).toHaveTextContent(
+        "does not renew calibration validity or run devices",
+      );
+      fireEvent.click(restore);
+      const dialog = await screen.findByRole("alertdialog");
+      expect(dialog).toHaveTextContent("exact saved parameters from G2");
+      expect(dialog).toHaveTextContent("calibration validity is not renewed");
+      // Polling must not silently retarget the reviewed command to a newer head.
+      await act(async () => {
+        queryClient.setQueryData(["config", "registry"], {
+          activation: activation(121, current.id, current.content_hash),
+          activation_history: [activation(121, current.id, current.content_hash)],
+          entries: [current, entry],
+        });
+      });
+      fireEvent.click(within(dialog).getByRole("button", { name: "Restore default" }));
+      await waitFor(() =>
+        expect(activateConfigEntry).toHaveBeenLastCalledWith({
+          operation_id: expect.stringMatching(/^ui-config-activate-/),
+          entry_id: entry.id,
+          actor: "local-operator",
+          note: "",
+          expected_generation: 120,
+        }),
+      );
+      expect(getOlderConfigActivationHistory).not.toHaveBeenCalled();
+    },
+  );
 
   it.each(["manual_parameter_updates", "candidate_config", "calibration_cohort_merge"] as const)(
     "marks a %s default as runtime-derived without claiming source drift",

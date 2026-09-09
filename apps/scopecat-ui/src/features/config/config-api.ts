@@ -3,6 +3,7 @@ import type {
   ConfigDraftCommand,
   ConfigDraftPreview,
   ConfigActivationPage,
+  ConfigActivationRecord,
   ConfigProfileSnapshot,
   ConfigRegistryEntry,
   ConfigRegistryOverview,
@@ -23,6 +24,7 @@ export interface ConfigRegistryEntryDetail {
   entry: ConfigRegistryEntry;
   config: ConfigProfileSnapshot;
   summary: ConfigSnapshotSummary;
+  latestActivation?: ConfigActivationRecord | null;
 }
 
 export async function getConfigRegistry(signal?: AbortSignal): Promise<ConfigRegistryOverview> {
@@ -92,6 +94,7 @@ export async function getConfigRegistryEntry(
     entry: response.entry,
     config,
     summary: summarizeConfigSnapshot(config),
+    latestActivation: response.latest_activation,
   };
 }
 

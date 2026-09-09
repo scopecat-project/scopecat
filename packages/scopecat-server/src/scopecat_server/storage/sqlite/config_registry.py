@@ -216,6 +216,39 @@ class SQLiteConfigRegistryRepository:
             code="config_registry.activation_record_invalid",
         )
 
+    def read_latest_entry_activation(
+        self, entry_id: str
+    ) -> ConfigRegistryActivationRecord | None:
+        """Read one prior activation without materializing the history.
+
+        Schema 63 has no entry index, so SQLite may scan activation rows.
+        Only the matching record is returned and decoded.
+        """
+
+        try:
+            row = _one(
+                self._connection.execute(
+                    """
+                    SELECT generation, record_json
+                    FROM config_registry_activations
+                    WHERE entry_id = ?
+                    ORDER BY generation DESC
+                    LIMIT 1
+                    """,
+                    (entry_id,),
+                )
+            )
+        except sqlite3.Error as error:
+            raise _storage_failure(self.active_ref) from error
+        if row is None:
+            return None
+        return _parse_model(
+            _text(row, "record_json"),
+            ConfigRegistryActivationRecord,
+            ref=f"{self.active_ref}#generation-{_integer(row, 'generation')}",
+            code="config_registry.activation_record_invalid",
+        )
+
     def read_activation(self, generation: int) -> ConfigRegistryActivationRecord:
         ref = f"{self.active_ref}#generation-{generation}"
         try:

@@ -2688,11 +2688,12 @@ export interface components {
         };
         /**
          * ConfigEntryView
-         * @description One registry identity paired with its immutable configuration.
+         * @description One immutable configuration and its most recent activation, if any.
          */
         ConfigEntryView: {
             config: components["schemas"]["ConfigProfileSnapshot-Output"];
             entry: components["schemas"]["ConfigRegistryEntry"];
+            latest_activation?: components["schemas"]["ConfigRegistryActivationRecord"] | null;
         };
         /**
          * ConfigProfileSnapshot
@@ -2813,6 +2814,8 @@ export interface components {
              * Format: date-time
              */
             recorded_at?: string;
+            /** Restored From Generation */
+            restored_from_generation?: number | null;
         };
         /** ConfigRegistryEntry */
         ConfigRegistryEntry: {

@@ -15,6 +15,7 @@ import { configSourceLabel } from "./config-utils";
 export function ConfigEntryInspector({
   entry,
   active,
+  latestActivation,
   snapshot,
   config,
   activeConfig,
@@ -31,6 +32,7 @@ export function ConfigEntryInspector({
 }: {
   entry: ConfigRegistryEntry;
   active: boolean;
+  latestActivation?: number;
   snapshot?: ConfigSnapshotSummary;
   config?: ConfigProfileSnapshot;
   activeConfig?: ConfigProfileSnapshot;
@@ -109,7 +111,11 @@ export function ConfigEntryInspector({
             ) : (
               <CheckCircle2 size={15} />
             )}
-            Set as default
+            {latestActivation !== undefined
+              ? "Restore default"
+              : entry.source.kind === "direct_config_profile"
+                ? "Set as default"
+                : "Accept as default"}
           </button>
         )}
       </header>
@@ -122,6 +128,12 @@ export function ConfigEntryInspector({
         />
         <ConfigFact label="Config ref" value={entry.config_ref || "Not reported"} code />
       </div>
+      {latestActivation !== undefined && (
+        <p className="mb-4 text-[0.68rem] text-text-dim">
+          Previously selected at G{latestActivation}. Restoring selects the exact saved parameters;
+          it does not renew calibration validity or run devices.
+        </p>
+      )}
       <EntryProvenance
         entry={entry}
         onSelectEntry={onSelectEntry}

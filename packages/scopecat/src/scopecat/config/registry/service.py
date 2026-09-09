@@ -167,6 +167,7 @@ class InstrumentInventoryMigrationPlan:
 class ConfigRegistryEntrySnapshot:
     entry: ConfigRegistryEntry
     config: ConfigProfileSnapshot
+    latest_activation: ConfigRegistryActivationRecord | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -746,9 +747,11 @@ def load_config_registry_entry_snapshot(
 ) -> ConfigRegistryEntrySnapshot:
     _validate_entry_id(entry_id)
     with unit_of_work() as work:
-        return _load_config_registry_entry_locked(
-            entry_id=entry_id,
-            work=work,
+        loaded = _load_config_registry_entry_locked(entry_id=entry_id, work=work)
+        return ConfigRegistryEntrySnapshot(
+            entry=loaded.entry,
+            config=loaded.config,
+            latest_activation=_latest_entry_activation(work.registry, loaded.entry),
         )
 
 
@@ -884,7 +887,9 @@ def _commit_config_registry_activation_locked(
         work=work,
     )
     entry = loaded.entry
-    _validate_derived_entry_base(current_activation, entry, work)
+    prior_activation = _latest_entry_activation(work.registry, entry)
+    if prior_activation is None:
+        _validate_derived_entry_base(current_activation, entry, work)
     if current_activation is not None and current_activation.entry_id == entry.id:
         _validate_active_entry_identity(work.registry, current_activation, entry)
         return ConfigRegistryMutationResult(
@@ -923,6 +928,9 @@ def _commit_config_registry_activation_locked(
         action=("activation" if inventory_migration is None else "inventory_migration"),
         entry_id=entry.id,
         entry_content_hash=entry.content_hash,
+        restored_from_generation=(
+            prior_activation.generation if prior_activation is not None else None
+        ),
         previous_entry_id=previous_entry_id,
         previous_entry_content_hash=previous_content_hash,
         actor=actor,
@@ -1205,6 +1213,15 @@ def _validate_active_entry_identity(
         related_locations=(_registry_storage_location(repository.entry_ref(entry.id)),),
         details={"entry_id": entry.id},
     )
+
+
+def _latest_entry_activation(
+    repository: ConfigRegistryRepository, entry: ConfigRegistryEntry
+) -> ConfigRegistryActivationRecord | None:
+    activation = repository.read_latest_entry_activation(entry.id)
+    if activation is not None:
+        _validate_active_entry_identity(repository, activation, entry)
+    return activation
 
 
 def _validate_derived_entry_base(
