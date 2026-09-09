@@ -2426,6 +2426,7 @@ export interface components {
         CommandPayloadBody: components["schemas"]["InlinePayloadBody"] | components["schemas"]["SegmentedInlinePayloadBody"] | components["schemas"]["BlobPayloadBody"];
         /** ComparisonCatalog */
         ComparisonCatalog: {
+            code_revision?: components["schemas"]["AuthorRevisionRef"] | null;
             /**
              * Kind
              * @default catalog
@@ -2475,6 +2476,7 @@ export interface components {
         };
         /** ComparisonInspection */
         ComparisonInspection: {
+            code_revision?: components["schemas"]["AuthorRevisionRef"] | null;
             /**
              * Kind
              * @default inspection
@@ -2554,6 +2556,7 @@ export interface components {
              * @default
              */
             analysis_id: string;
+            code_revision?: components["schemas"]["AuthorRevisionRef"] | null;
             /**
              * Model Id
              * @default
@@ -4766,6 +4769,7 @@ export interface components {
              * @default operator
              */
             actor: string;
+            code_revision?: components["schemas"]["AuthorRevisionRef"] | null;
             config_source?: components["schemas"]["LaunchConfigSource-Output"] | null;
             context?: components["schemas"]["ConfigContextRef"] | null;
             /** Control Edits */

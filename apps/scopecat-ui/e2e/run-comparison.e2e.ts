@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { cp, mkdtemp, readFile, rm } from "node:fs/promises";
+import { cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { expect, test } from "@playwright/test";
@@ -16,6 +16,8 @@ function uv(args: string[]): string {
     throw new Error(`${result.error?.message ?? ""}\n${result.stdout}\n${result.stderr}`);
   return result.stdout.trim();
 }
+const factValue = (items: { id: string; content: { value: unknown } }[], id: string) =>
+  items.find((item) => item.id === id)!.content.value;
 const SEED = `
 import json, sys
 import scopecat as sc
@@ -60,9 +62,45 @@ test("compares retained signals, saves independent results and imports a reviewe
     await expect(
       page.getByRole("button", { name: "Create explicit candidate", exact: true }),
     ).toBeVisible();
+    const modelPath = join(project, "src/reference_lab/workflows/authored/comparison.py");
+    const source = await readFile(modelPath, "utf8");
+    await writeFile(
+      modelPath,
+      source
+        .replace('version="1"', 'version="2"')
+        .replace(
+          "center = -coefficients[1] / (2 * coefficients[2]) + offset_ghz",
+          "center = -coefficients[1] / (2 * coefficients[2]) + offset_ghz + 0.02",
+        ),
+    );
+    const refreshed = page.waitForResponse((value) =>
+      value.url().endsWith("/author-revisions/refresh"),
+    );
+    await page.getByRole("button", { name: "Refresh author code", exact: true }).click();
+    expect((await refreshed).status()).toBe(200);
+    await expect(
+      page.getByRole("status").filter({ hasText: "Author code refreshed" }),
+    ).toBeVisible();
+    await action("Inspect compatible data");
+    await page.getByLabel("Primary selected positions").fill("4,1,2,3");
     await page.getByLabel("Carrier offset (GHz)").fill("0.01");
     const second = await action("Fit selected data and save analysis");
     expect(second.analysis_id).not.toBe(first.analysis_id);
+    const facts = async (id: string) => {
+      const response = await page.request.get(
+        `${endpoint.base_url}/api/v1/runs/${primary}/analyses/${id}`,
+      );
+      expect(response.status()).toBe(200);
+      const body = await response.json();
+      return body.analysis.outputs.filter((output: { kind: string }) => output.kind === "fact");
+    };
+    const firstFacts = await facts(first.analysis_id!);
+    const secondFacts = await facts(second.analysis_id!);
+    expect(factValue(firstFacts, "fit")).toMatchObject({ model_version: "1" });
+    expect(factValue(secondFacts, "fit")).toMatchObject({ model_version: "2" });
+    expect(factValue(secondFacts, "comparison-request")).not.toEqual(
+      factValue(firstFacts, "comparison-request"),
+    );
     await page.locator("aside button").filter({ hasText: first.analysis_id }).click();
     const candidate = await action("Create explicit candidate");
     await page.getByLabel("Rejection reason").fill("Need independent physical verification");

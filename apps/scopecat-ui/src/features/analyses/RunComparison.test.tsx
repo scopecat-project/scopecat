@@ -7,6 +7,7 @@ import type { ProjectRun, RunAnalysis } from "../../types";
 import { RunComparison, selectedPoints } from "./RunComparison";
 import { getRuns, getRunAnalysis, getRunAnalysisSummaries } from "../runs/run-api";
 
+vi.mock("../launch/AuthorRefresh", () => ({ AuthorRefresh: () => null }));
 vi.mock("../../ui/EChartRuntime", () => ({ EChartRuntime: () => <div>Two retained curves</div> }));
 vi.mock("./AnalysisPublicationView", () => ({
   AnalysisPublicationView: ({ analysis }: { analysis: RunAnalysis }) => (
@@ -82,6 +83,7 @@ it("retains ordered selections and exact publication through explicit candidate,
       if (body.action === "list")
         return Response.json({
           kind: "catalog",
+          code_revision: { content_hash: "sha256:catalog" },
           models: [
             {
               id: "model",
@@ -97,6 +99,7 @@ it("retains ordered selections and exact publication through explicit candidate,
       if (body.action === "inspect")
         return Response.json({
           kind: "inspection",
+          code_revision: { content_hash: "sha256:inspected" },
           ...Object.fromEntries(
             ["primary", "secondary"].map((role, index) => [
               role,
@@ -159,6 +162,7 @@ it("retains ordered selections and exact publication through explicit candidate,
   fireEvent.click(screen.getByText("Fit selected data and save analysis"));
   await screen.findByText("Publication fit");
   expect(requests.find((item) => item.action === "fit")).toMatchObject({
+    code_revision: { content_hash: "sha256:inspected" },
     primary: { run_id: "left", content_hash: "hash-primary", points: [2, 0] },
     secondary: { points: [1, 2] },
     parameters: { offset: 0.01 },

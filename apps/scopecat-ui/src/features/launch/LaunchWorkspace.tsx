@@ -83,6 +83,14 @@ export function LaunchWorkspace({
           </a>{" "}
           · {draft.handoff.source_hash}. This source is retained only in the current draft, not yet
           as destination-run provenance.
+          {!draft.handoff.request.context && (
+            <>
+              {" "}
+              Only suggested inputs were imported. Previous sample and working-point selections were
+              cleared. Review the current default configuration or explicitly select a
+              sample/context in Configuration before preview.
+            </>
+          )}
         </p>
       )}
       <p>Select a maintained experiment and preview its configured parameters.</p>

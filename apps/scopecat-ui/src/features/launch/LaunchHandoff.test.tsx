@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, expect, it, vi } from "vitest";
 import { LaunchDraftProvider, useLaunchDraft } from "./LaunchDraft";
 import type { LaunchCatalogEntry } from "./launch-api";
+import { resolveConfigContext } from "../config/config-api";
 import type { ComparisonHandoff } from "../analyses/RunComparison";
 
 const entry: LaunchCatalogEntry = {
@@ -54,7 +55,20 @@ function Probe() {
       >
         Lose receipt
       </button>
+      <button
+        onClick={async () => {
+          state.select(entry);
+          state.update((current) => ({ ...current, sample: "old-sample" }));
+          state.selectContext(
+            await resolveConfigContext({ entry_id: "old-context", content_hash: "old-hash" }),
+          );
+        }}
+      >
+        Select old configuration
+      </button>
       <button onClick={() => state.importHandoff(entry, suggestion)}>Import</button>
+      <output aria-label="Context">{state.selectedContext?.config_source.context.entry_id}</output>
+      <output aria-label="Sample">{state.draft?.sample}</output>
       <output aria-label="Attempt">
         {state.attempt?.status}:{state.attempt?.request.request_key}
       </output>
@@ -97,4 +111,41 @@ it("imports a new suggested draft while retaining an uncertain original submissi
   );
   expect(screen.getByLabelText("Source")).toBeEmptyDOMElement();
   expect(screen.getByLabelText("Experiment")).toBeEmptyDOMElement();
+});
+
+it("clears an unrelated sample and resolved context when importing inputs without a source context", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () =>
+      Response.json({
+        config: {},
+        value_origins: [],
+        missing_values: [],
+        config_source: {
+          kind: "parameter_context",
+          context: { entry_id: "old-context", content_hash: "old-hash" },
+          content_hash: "effective-old",
+          lab_generation: 1,
+          overrides: [],
+          sample: { sample_id: "old-sample", revision: 1, context_id: "old-point" },
+        },
+      }),
+    ),
+  );
+  render(
+    <QueryClientProvider
+      client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+    >
+      <LaunchDraftProvider projectId="one">
+        <Probe />
+      </LaunchDraftProvider>
+    </QueryClientProvider>,
+  );
+  fireEvent.click(screen.getByText("Select old configuration"));
+  await screen.findByText("old-context");
+  expect(screen.getByLabelText("Sample")).toHaveTextContent("old-sample");
+  fireEvent.click(screen.getByText("Import"));
+  expect(screen.getByLabelText("Context")).toBeEmptyDOMElement();
+  expect(screen.getByLabelText("Sample")).toBeEmptyDOMElement();
+  expect(screen.getByLabelText("Source")).toHaveTextContent("sha256:fit");
 });

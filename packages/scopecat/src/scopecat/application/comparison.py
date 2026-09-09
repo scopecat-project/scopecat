@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Literal, Protocol
 from pydantic import BaseModel, ConfigDict, Field, FiniteFloat
 
 from scopecat.application.launch import LaunchRequest
+from scopecat.records.author_revision import AuthorRevisionRef
 
 if TYPE_CHECKING:
     from scopecat.api.lab import LabClient
@@ -46,6 +47,7 @@ class ComparisonSelection(BaseModel):
 class ComparisonRequest(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
     action: Literal["list", "inspect", "fit", "candidate", "reject", "handoff"]
+    code_revision: AuthorRevisionRef | None = None
     model_id: str = ""
     model_version: str = ""
     primary_run: str = ""
@@ -74,10 +76,12 @@ class ComparisonCurve(BaseModel):
 class ComparisonCatalog(BaseModel):
     kind: Literal["catalog"] = "catalog"
     models: tuple[ComparisonModel, ...] = ()
+    code_revision: AuthorRevisionRef | None = None
 
 
 class ComparisonInspection(BaseModel):
     kind: Literal["inspection"] = "inspection"
+    code_revision: AuthorRevisionRef | None = None
     primary: ComparisonCurve
     secondary: ComparisonCurve
 

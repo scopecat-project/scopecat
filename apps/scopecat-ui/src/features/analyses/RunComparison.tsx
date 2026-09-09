@@ -11,6 +11,7 @@ import {
   getOlderRunAnalysisSummaries,
   getRunArtifactDownload,
 } from "../runs/run-api";
+import { AuthorRefresh } from "../launch/AuthorRefresh";
 import { AnalysisPublicationView } from "./AnalysisPublicationView";
 import { AnalysisOutputView } from "../runs/AnalysisOutputView";
 import { errorMessage, formatDateTime } from "../../lib/presentation";
@@ -82,7 +83,7 @@ export function RunComparison({
     queryFn: async () => {
       const result = await call({ action: "list" });
       if (result.kind !== "catalog") throw new Error("Unexpected comparison catalog");
-      return result.models;
+      return result;
     },
   });
   const runs = useInfiniteQuery({
@@ -108,7 +109,9 @@ export function RunComparison({
     enabled: Boolean(projectId && primary && selected),
     queryFn: ({ signal }) => getRunAnalysis(primary, selected, signal),
   });
-  const model = catalog.data?.find((item) => item.id === (modelId || catalog.data?.[0]?.id));
+  const model = catalog.data?.models.find(
+    (item) => item.id === (modelId || catalog.data?.models[0]?.id),
+  );
   const saved = detail.data;
   const candidate = saved?.outputs.some((output) => output.kind === "parameter_change_proposal");
   const requestFact = saved?.outputs.find(
@@ -162,6 +165,7 @@ export function RunComparison({
           : {};
       const result = await call({
         action,
+        code_revision: action === "fit" ? inspection?.code_revision : catalog.data?.code_revision,
         model_id: model?.id ?? "",
         model_version: model?.version ?? "",
         primary_run: primary,
@@ -211,12 +215,19 @@ export function RunComparison({
       aria-label="Retained run comparison"
     >
       <h2 className="text-lg font-semibold">Compare and reanalyze retained runs</h2>
+      <AuthorRefresh
+        projectId={projectId}
+        onRefreshed={async () => {
+          setInspection(undefined);
+          await client.invalidateQueries({ queryKey: ["comparison", projectId, "models"] });
+        }}
+      />
       <p>
         No acquisition occurs here. The primary run owns the analysis and candidate base
         configuration; both runs remain independent evidence.
       </p>
       {catalog.error && <p role="alert">{errorMessage(catalog.error)}</p>}
-      {catalog.data?.length === 0 && (
+      {catalog.data?.models.length === 0 && (
         <p>
           Declare a comparison_provider in the lab application to expose a versioned Python model.
         </p>
@@ -266,7 +277,7 @@ export function RunComparison({
               setInspection(undefined);
             }}
           >
-            {catalog.data?.map((item) => (
+            {catalog.data?.models.map((item) => (
               <option value={item.id} key={item.id}>
                 {item.title} · v{item.version}
               </option>

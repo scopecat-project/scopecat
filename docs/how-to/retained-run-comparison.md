@@ -10,10 +10,11 @@ The reference lab registers `signal-quadratic` through the maintained adapter in
 `reference_lab/workflows/authored/comparison.py`.
 Acquire two hardware-free `frequency_amplitude` runs over several frequencies,
 then compare them. The quadratic model exposes an adjustable carrier offset. It
-is an analytic teaching example, not physical calibration evidence. Maintainers
-can change that function and its explicit model version, or register their own
-`LabApplication(comparison_provider=...)` callback using the public types in
-`scopecat.application.comparison`.
+is an analytic teaching example, not physical calibration evidence. Experiment
+authors can edit the authored fit/helper and its model version, then select
+**Refresh author code**. Registering or replacing the project-level
+`LabApplication(comparison_provider=...)` callback is a maintainer task, using the
+public types in `scopecat.application.comparison`.
 
 The optional `scopecat.analysis.comparison.comparison_inputs` helper checks one
 real scalar coordinate and observable per point. It rejects arrays, unavailable
@@ -38,8 +39,14 @@ public typed `comparison-request` fact to the existing atomic analysis save.
 Source actions validate the exact run, analysis and publication hash before
 loading project code. They retain the original model, parameters and selections;
 editing the current form cannot change what an old candidate or review means.
-The recorded execution bindings alone do not promise to recreate an executable
-environment; source revision integration supplies that separate identity.
+Configure `[authors].refresh_roots` to include the editable fit/helper module.
+**Refresh author code** validates and retains the source revision before another
+inspection. Inspection returns its actual `AuthorRevisionRef`; fitting requires
+that reference, which is saved in the request fact. Reopening a source action
+loads its retained revision before importing the application, even after active
+code changes. The existing revision manifest checks the required external Python
+and package environment; it does not archive installed dependencies. Comparison
+execution without a retained author revision is rejected.
 
 **Create explicit candidate** publishes a separate analysis referencing the exact
 saved fit and using the primary run's frozen configuration as its proposal base.
@@ -53,7 +60,13 @@ acceptance, default activation and calibration validity remain separate acts.
 returns an existing typed `LaunchRequest` inside a `ComparisonHandoff`, including
 the source run, analysis and publication hash. Only an explicit action imports
 it. The draft retains that structured reference across console navigation and
-requires fresh preview in the selected configuration. An uncertain previous
+requires fresh preview in the selected configuration. A suggestion without an
+explicit parameter context clears the previous draft's sample and working point;
+the console identifies the current default as awaiting review, and users can
+explicitly choose a sample/context before preview. A suggestion with an exact
+context must first use the existing Configuration resolver and selector; no
+context or override is silently dropped. No configuration is declared valid merely
+because it belonged to the source run. An uncertain previous
 submission remains separately recoverable. Source provenance is session state:
 the destination run does **not** yet retain a durable analysis-origin reference.
 Saved-plan integration owns that future bridge. Reopen the saved source analysis

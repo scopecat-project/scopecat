@@ -284,18 +284,26 @@ function ProjectDraft({
         refreshConfiguration: () => {
           void queryClient.invalidateQueries({ queryKey: ["config", "launch-context", projectId] });
         },
-        importHandoff: (entry, handoff) =>
-          setDraft((current) => {
-            const next = initialDraft(entry, (current?.revision ?? 0) + 1);
-            try {
-              return importLaunchHandoff(next, entry, handoff, selectedContext?.config_source);
-            } catch (error) {
-              return {
-                ...(current ?? next),
-                error: error instanceof Error ? error.message : String(error),
-              };
-            }
-          }),
+        importHandoff: (entry, handoff) => {
+          if (!alive.current) return;
+          const current = latest.current;
+          const next = initialDraft(entry, (current?.revision ?? 0) + 1);
+          try {
+            const imported = importLaunchHandoff(
+              next,
+              entry,
+              handoff,
+              selectedContext?.config_source,
+            );
+            if (!handoff.request.context) setSelectedContext(undefined);
+            setDraft(imported);
+          } catch (error) {
+            setDraft({
+              ...(current ?? next),
+              error: error instanceof Error ? error.message : String(error),
+            });
+          }
+        },
         select,
         update: (change) => setDraft((current) => (current ? change(current) : current)),
         isCurrent: (revision) => alive.current && latest.current?.revision === revision,

@@ -30,6 +30,7 @@ const entry: LaunchCatalogEntry = {
   ],
 };
 const current: LaunchDraft = {
+  controlDefinition: "old-controls",
   experiment: "signal",
   definition: "old",
   values: { repetitions: "2" },

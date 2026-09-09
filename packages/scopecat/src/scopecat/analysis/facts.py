@@ -8,6 +8,7 @@ from types import UnionType
 from typing import (
     Annotated,
     Literal,
+    TypeAliasType,
     cast,
     get_args,
     get_origin,
@@ -189,12 +190,19 @@ def _fact_value_adapter[ValueT](
     return encode_dataclass, decode_dataclass
 
 
+def _resolve_fact_alias(annotation: object) -> object:
+    while isinstance(annotation, TypeAliasType):
+        annotation = cast("object", annotation.__value__)
+    return annotation
+
+
 def _fact_type_structure(
     annotation: object,
     *,
     ancestors: frozenset[type[object]] | None = None,
 ) -> JsonValue:
     selected_ancestors = _EMPTY_FACT_ANCESTORS if ancestors is None else ancestors
+    annotation = _resolve_fact_alias(annotation)
     origin = get_origin(annotation)
     if origin is Annotated:
         arguments = cast("tuple[object, ...]", get_args(annotation))

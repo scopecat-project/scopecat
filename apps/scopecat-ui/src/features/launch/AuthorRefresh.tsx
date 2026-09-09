@@ -1,7 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient, apiData } from "../../api-client";
 
-export function AuthorRefresh({ projectId }: { projectId: string | undefined }) {
+export function AuthorRefresh({
+  projectId,
+  onRefreshed,
+}: {
+  projectId: string | undefined;
+  onRefreshed?: () => void | Promise<void>;
+}) {
   const queryClient = useQueryClient();
   const state = useQuery({
     queryKey: ["author-revisions", projectId],
@@ -21,6 +27,7 @@ export function AuthorRefresh({ projectId }: { projectId: string | undefined }) 
     onSuccess: async (next) => {
       queryClient.setQueryData(["author-revisions", projectId], next);
       await queryClient.invalidateQueries({ queryKey: ["experiment-launcher"] });
+      await onRefreshed?.();
     },
   });
   if (state.data && !state.data.enabled) return null;

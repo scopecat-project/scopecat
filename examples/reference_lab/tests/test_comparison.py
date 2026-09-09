@@ -108,6 +108,7 @@ def test_two_retained_runs_fit_candidate_rejection_and_handoff() -> None:
         command = base.model_copy(
             update={
                 "action": "fit",
+                "code_revision": inspected.code_revision,
                 "primary": ComparisonSelection(
                     run_id=primary.id,
                     content_hash=inspected.primary.content_hash,

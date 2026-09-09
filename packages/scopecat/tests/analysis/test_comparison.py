@@ -139,10 +139,12 @@ def test_reopen_uses_public_frozen_request_and_checks_exact_owner() -> None:
         AnalysisRecord,
         RunAnalysisSubject,
     )
+    from scopecat.records.author_revision import AuthorRevisionRef
 
     original = ComparisonRequest(
         action="fit",
         model_id="original",
+        code_revision=AuthorRevisionRef(content_hash="sha256:" + "a" * 64),
         model_version="1",
         primary_run="left",
         secondary_run="right",
@@ -193,6 +195,7 @@ def test_reopen_uses_public_frozen_request_and_checks_exact_owner() -> None:
         actor="reviewer",
     )
     reopened = reopen_comparison(edited, source)
+    assert reopened.code_revision == original.code_revision
     assert reopened.model_id == original.model_id
     assert reopened.model_version == original.model_version
     assert reopened.parameters == original.parameters
