@@ -6,9 +6,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, field_serializer, field_validator
 
 from scopecat.config.parameter_updates import ParameterUpdate
-from scopecat.kernel.entity import EntityRef
 from scopecat.kernel.frozen import FrozenMapping
-from scopecat.kernel.quantity import Quantity
 from scopecat.records.config import ConfigContentHash
 from scopecat.records.parameter import ParameterAtomValue
 from scopecat.records.sample import SampleBinding
@@ -45,13 +43,8 @@ class ConfigValueOrigin(_ContextModel):
     @field_serializer("key")
     def serialize_key(
         self, value: Mapping[str, ParameterAtomValue]
-    ) -> dict[str, object]:
-        return {
-            key: atom.model_dump(mode="json")
-            if isinstance(atom, Quantity | EntityRef)
-            else atom
-            for key, atom in value.items()
-        }
+    ) -> dict[str, ParameterAtomValue]:
+        return dict(value)
 
 
 class ConfigContextMetadata(_ContextModel):

@@ -199,7 +199,7 @@ function optionalText(value: unknown): string | undefined {
 }
 
 export type ConfigContextRef = components["schemas"]["ConfigContextRef"];
-export type ConfigContextResolution = components["schemas"]["ConfigContextResolution"];
+export type ConfigContextResolution = Awaited<ReturnType<typeof resolveConfigContext>>;
 export type ConfigContextSaveCommand = components["schemas"]["ConfigContextSaveCommand"];
 
 export async function saveConfigContext(command: ConfigContextSaveCommand) {

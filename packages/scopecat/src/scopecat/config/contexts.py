@@ -4,7 +4,10 @@ from collections.abc import Mapping
 
 from scopecat.config.parameter_resolution import validate_parameter_snapshot
 from scopecat.config.parameter_updates import (
+    InsertParameterRows,
     ParameterUpdate,
+    ReplaceParameter,
+    UpdateParameterRows,
     materialize_context_updates,
 )
 from scopecat.config.profile_validation import validate_config_profile
@@ -51,7 +54,7 @@ def context_value_origins(
     base_ref: ConfigContextRef,
     selected_ref: ConfigContextRef,
     inherited: tuple[ConfigValueOrigin, ...] = (),
-    run_override: bool = False,
+    overrides: tuple[ParameterUpdate, ...] = (),
 ) -> tuple[ConfigValueOrigin, ...]:
     """Flatten provenance so reading a context never walks a chain of copies."""
     origins: list[ConfigValueOrigin] = []
@@ -66,11 +69,12 @@ def context_value_origins(
                 ),
                 None,
             )
-            changed = before != value
+            explicit = any(update.parameter_id == value.id for update in overrides)
+            changed = before != value or explicit
             origins.append(
                 ConfigValueOrigin(
                     parameter_id=value.id,
-                    layer="run_override" if run_override else "context",
+                    layer="run_override" if overrides else "context",
                     entry=selected_ref,
                 )
                 if changed
@@ -114,14 +118,36 @@ def context_value_origins(
                     ),
                     None,
                 )
-                changed = field not in previous or previous[field] != atom
+                explicit = any(
+                    update.parameter_id == value.id
+                    and (
+                        isinstance(update, ReplaceParameter)
+                        or (
+                            isinstance(update, UpdateParameterRows)
+                            and update.key == key
+                            and field in update.values
+                        )
+                        or (
+                            isinstance(update, InsertParameterRows)
+                            and any(
+                                all(
+                                    inserted.get(name) == value
+                                    for name, value in key.items()
+                                )
+                                for inserted in update.rows
+                            )
+                        )
+                    )
+                    for update in overrides
+                )
+                changed = field not in previous or previous[field] != atom or explicit
                 origins.append(
                     ConfigValueOrigin(
                         parameter_id=value.id,
                         key=key,
                         field_id=field,
                         row_index=row_index,
-                        layer="run_override" if run_override else "context",
+                        layer="run_override" if overrides else "context",
                         entry=selected_ref,
                     )
                     if changed

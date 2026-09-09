@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import { parameterProposalKeys } from "./data/parameter-proposals/query-keys";
 import { getEvents, getHealth } from "./data/project-api";
-import { LaunchDraftProvider } from "./features/launch/LaunchDraft";
+import { LaunchDraftProvider, useLaunchDraft } from "./features/launch/LaunchDraft";
 import { RunsWorkspace } from "./features/runs/RunsWorkspace";
 import { titleCase } from "./lib/presentation";
 import { classes, iconButton } from "./ui/styles";
@@ -343,152 +343,153 @@ export default function App() {
         </div>
       </header>
 
-      <main className="mx-auto w-[min(1680px,calc(100%-32px))] py-[14px] pb-8 max-[1100px]:w-[min(100%-28px,1200px)] max-[680px]:w-[calc(100%-20px)] max-[680px]:py-3 max-[680px]:pb-8">
-        <section
-          className="mb-2.5 flex min-h-[34px] items-center justify-between gap-5 px-0.5 max-[680px]:items-start"
-          aria-labelledby="workspace-title"
-        >
-          <div className="flex min-w-0 items-baseline gap-3 max-[680px]:grid max-[680px]:gap-[3px]">
-            <h1
-              className="m-0 flex-none text-base font-[650] tracking-[-0.015em]"
-              id="workspace-title"
+      <LaunchDraftProvider projectId={healthQuery.data?.projectId}>
+        <main className="mx-auto w-[min(1680px,calc(100%-32px))] py-[14px] pb-8 max-[1100px]:w-[min(100%-28px,1200px)] max-[680px]:w-[calc(100%-20px)] max-[680px]:py-3 max-[680px]:pb-8">
+          <section
+            className="mb-2.5 flex min-h-[34px] items-center justify-between gap-5 px-0.5 max-[680px]:items-start"
+            aria-labelledby="workspace-title"
+          >
+            <div className="flex min-w-0 items-baseline gap-3 max-[680px]:grid max-[680px]:gap-[3px]">
+              <h1
+                className="m-0 flex-none text-base font-[650] tracking-[-0.015em]"
+                id="workspace-title"
+              >
+                {healthQuery.data?.projectName ?? "Scopecat project"}
+              </h1>
+              {healthQuery.data?.projectRoot && (
+                <code className="max-w-[min(60vw,900px)] overflow-hidden text-[0.64rem] text-ellipsis whitespace-nowrap text-text-dim max-[680px]:max-w-[65vw]">
+                  {healthQuery.data.projectRoot}
+                </code>
+              )}
+            </div>
+            <div
+              className="inline-flex flex-none items-center gap-[7px] text-[0.64rem] font-semibold text-text-dim"
+              aria-live="polite"
             >
-              {healthQuery.data?.projectName ?? "Scopecat project"}
-            </h1>
-            {healthQuery.data?.projectRoot && (
-              <code className="max-w-[min(60vw,900px)] overflow-hidden text-[0.64rem] text-ellipsis whitespace-nowrap text-text-dim max-[680px]:max-w-[65vw]">
-                {healthQuery.data.projectRoot}
-              </code>
-            )}
-          </div>
-          <div
-            className="inline-flex flex-none items-center gap-[7px] text-[0.64rem] font-semibold text-text-dim"
-            aria-live="polite"
-          >
-            {lastUpdated > 0
-              ? `Updated ${formatClock(new Date(lastUpdated).toISOString())}`
-              : "Waiting for daemon"}
-          </div>
-        </section>
+              {lastUpdated > 0
+                ? `Updated ${formatClock(new Date(lastUpdated).toISOString())}`
+                : "Waiting for daemon"}
+            </div>
+          </section>
 
-        {daemonUnavailable && (
-          <div
-            className="mb-[18px] flex items-center gap-[11px] rounded-md border border-[rgb(255_140_136_/_27%)] bg-red-soft px-[15px] py-[13px] text-[0.82rem] leading-6 text-[#efc3c0]"
-            role="status"
-          >
-            <Unplug className="flex-none text-red" size={18} aria-hidden="true" />
-            <span>
-              <strong className="text-[#ffe6e4]">Daemon unavailable.</strong> Start the local
-              Scopecat daemon, then refresh this page. No cached project data is shown.
-            </span>
-          </div>
-        )}
+          {daemonUnavailable && (
+            <div
+              className="mb-[18px] flex items-center gap-[11px] rounded-md border border-[rgb(255_140_136_/_27%)] bg-red-soft px-[15px] py-[13px] text-[0.82rem] leading-6 text-[#efc3c0]"
+              role="status"
+            >
+              <Unplug className="flex-none text-red" size={18} aria-hidden="true" />
+              <span>
+                <strong className="text-[#ffe6e4]">Daemon unavailable.</strong> Start the local
+                Scopecat daemon, then refresh this page. No cached project data is shown.
+              </span>
+            </div>
+          )}
 
-        <LaunchDraftProvider projectId={healthQuery.data?.projectId}>
           {view === "launch" && (
             <Suspense fallback={<p>Loading experiments…</p>}>
               <LaunchWorkspace />
             </Suspense>
           )}
-        </LaunchDraftProvider>
-        {view === "runs" ? (
-          <RunsWorkspace
-            selectedRunId={selectedRunId}
-            onSelectRun={selectRun}
-            health={healthQuery.data}
-            healthPending={healthQuery.isPending}
-            healthReachable={daemonReachable}
-            daemonUnavailable={daemonUnavailable}
-            onOpenSample={openRunSample}
-          />
-        ) : view === "samples" ? (
-          <Suspense
-            fallback={
-              <DetailEmpty
-                icon={<LoaderCircle className="animate-spin" />}
-                title="Loading samples"
-                detail="The physical sample registry is being prepared."
-              />
-            }
-          >
-            <SamplesWorkspace
+          {view === "runs" ? (
+            <RunsWorkspace
+              selectedRunId={selectedRunId}
+              onSelectRun={selectRun}
+              health={healthQuery.data}
+              healthPending={healthQuery.isPending}
+              healthReachable={daemonReachable}
               daemonUnavailable={daemonUnavailable}
-              onOpenRun={openConfigSourceRun}
-              onSelectSample={selectSample}
-              selectedSampleId={selectedSampleId}
-              selectedSampleRevision={selectedSampleRevision}
+              onOpenSample={openRunSample}
             />
-          </Suspense>
-        ) : view === "analyses" ? (
-          <Suspense
-            fallback={
-              <DetailEmpty
-                icon={<LoaderCircle className="animate-spin" />}
-                title="Loading analyses"
-                detail="The cross-run analysis workspace is being prepared."
+          ) : view === "samples" ? (
+            <Suspense
+              fallback={
+                <DetailEmpty
+                  icon={<LoaderCircle className="animate-spin" />}
+                  title="Loading samples"
+                  detail="The physical sample registry is being prepared."
+                />
+              }
+            >
+              <SamplesWorkspace
+                daemonUnavailable={daemonUnavailable}
+                onOpenRun={openConfigSourceRun}
+                onSelectSample={selectSample}
+                selectedSampleId={selectedSampleId}
+                selectedSampleRevision={selectedSampleRevision}
               />
-            }
-          >
-            <AnalysesWorkspace
-              daemonUnavailable={daemonUnavailable}
-              onOpenRun={openConfigSourceRun}
-              onSelectAnalysis={selectAnalysis}
-              selectedAnalysisId={selectedAnalysisId}
-            />
-          </Suspense>
-        ) : view === "launch" ? null : view === "decisions" ? (
-          <Suspense
-            fallback={
-              <DetailEmpty
-                icon={<LoaderCircle className="animate-spin" />}
-                title="Loading decisions"
-                detail="The experiment interpretation queue is being prepared."
+            </Suspense>
+          ) : view === "analyses" ? (
+            <Suspense
+              fallback={
+                <DetailEmpty
+                  icon={<LoaderCircle className="animate-spin" />}
+                  title="Loading analyses"
+                  detail="The cross-run analysis workspace is being prepared."
+                />
+              }
+            >
+              <AnalysesWorkspace
+                daemonUnavailable={daemonUnavailable}
+                onOpenRun={openConfigSourceRun}
+                onSelectAnalysis={selectAnalysis}
+                selectedAnalysisId={selectedAnalysisId}
               />
-            }
-          >
-            <DecisionWorkspace daemonUnavailable={daemonUnavailable} />
-          </Suspense>
-        ) : view === "reviews" ? (
-          <Suspense
-            fallback={
-              <DetailEmpty
-                icon={<LoaderCircle className="animate-spin" />}
-                title="Loading reviews"
-                detail="The compiled waveform workspace is being prepared."
+            </Suspense>
+          ) : view === "launch" ? null : view === "decisions" ? (
+            <Suspense
+              fallback={
+                <DetailEmpty
+                  icon={<LoaderCircle className="animate-spin" />}
+                  title="Loading decisions"
+                  detail="The experiment interpretation queue is being prepared."
+                />
+              }
+            >
+              <DecisionWorkspace daemonUnavailable={daemonUnavailable} />
+            </Suspense>
+          ) : view === "reviews" ? (
+            <Suspense
+              fallback={
+                <DetailEmpty
+                  icon={<LoaderCircle className="animate-spin" />}
+                  title="Loading reviews"
+                  detail="The compiled waveform workspace is being prepared."
+                />
+              }
+            >
+              <ReviewWorkspace daemonUnavailable={daemonUnavailable} />
+            </Suspense>
+          ) : view === "instruments" ? (
+            <Suspense
+              fallback={
+                <DetailEmpty
+                  icon={<LoaderCircle className="animate-spin" />}
+                  title="Loading instruments"
+                  detail="The instrument workspace is being prepared."
+                />
+              }
+            >
+              <InstrumentsWorkspace daemonUnavailable={daemonUnavailable} />
+            </Suspense>
+          ) : (
+            <Suspense
+              fallback={
+                <DetailEmpty
+                  icon={<LoaderCircle className="animate-spin" />}
+                  title="Loading configuration"
+                  detail="The configuration workspace is being prepared."
+                />
+              }
+            >
+              <ContextConfigWorkspace
+                onSelected={() => selectView("launch")}
+                daemonUnavailable={daemonUnavailable}
+                onOpenRun={openConfigSourceRun}
               />
-            }
-          >
-            <ReviewWorkspace daemonUnavailable={daemonUnavailable} />
-          </Suspense>
-        ) : view === "instruments" ? (
-          <Suspense
-            fallback={
-              <DetailEmpty
-                icon={<LoaderCircle className="animate-spin" />}
-                title="Loading instruments"
-                detail="The instrument workspace is being prepared."
-              />
-            }
-          >
-            <InstrumentsWorkspace daemonUnavailable={daemonUnavailable} />
-          </Suspense>
-        ) : (
-          <Suspense
-            fallback={
-              <DetailEmpty
-                icon={<LoaderCircle className="animate-spin" />}
-                title="Loading configuration"
-                detail="The configuration workspace is being prepared."
-              />
-            }
-          >
-            <ConfigWorkspace
-              daemonUnavailable={daemonUnavailable}
-              onOpenRun={openConfigSourceRun}
-            />
-          </Suspense>
-        )}
-      </main>
+            </Suspense>
+          )}
+        </main>
+      </LaunchDraftProvider>
     </div>
   );
 }
@@ -650,4 +651,25 @@ function formatClock(value: string): string {
     minute: "2-digit",
     second: "2-digit",
   }).format(date);
+}
+
+function ContextConfigWorkspace({
+  daemonUnavailable,
+  onOpenRun,
+  onSelected,
+}: {
+  daemonUnavailable: boolean;
+  onOpenRun: (id: string) => void;
+  onSelected: () => void;
+}) {
+  const { selectContext } = useLaunchDraft();
+  return (
+    <ConfigWorkspace
+      daemonUnavailable={daemonUnavailable}
+      onOpenRun={onOpenRun}
+      onSelectContext={(ref) => {
+        void selectContext(ref).then(onSelected);
+      }}
+    />
+  );
 }

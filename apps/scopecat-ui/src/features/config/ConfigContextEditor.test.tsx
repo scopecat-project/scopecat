@@ -107,7 +107,7 @@ it("saves an explicit sample/working point copy and leaves untouched unknown val
     </QueryClientProvider>,
   );
   await screen.findByRole("option", { name: /Sample A/ });
-  fireEvent.change(screen.getByLabelText("Physical sample"), { target: { value: "sample-a" } });
+  fireEvent.change(screen.getByLabelText("Physical sample"), { target: { value: "sample-a@2" } });
   fireEvent.change(screen.getByLabelText("Working point"), { target: { value: "shifted" } });
   fireEvent.change(screen.getByLabelText("Context label"), { target: { value: "A shifted" } });
   fireEvent.change(screen.getByLabelText("frequency"), { target: { value: "4.9" } });
@@ -132,3 +132,82 @@ it("saves an explicit sample/working point copy and leaves untouched unknown val
     value: { value: 4.8, unit: "GHz" },
   });
 });
+
+it.each([false, true])(
+  "keeps the original physical revision unless the operator explicitly selects the new one (%s)",
+  async (chooseNew) => {
+    vi.mocked(getSamples).mockResolvedValue({
+      items: [
+        {
+          run_count: 0,
+          record: { id: "sample-a", kind: "synthetic", active_revision: 2 },
+          revision: {
+            sample_id: "sample-a",
+            revision: 2,
+            content_hash: `sha256:${"b".repeat(64)}`,
+            actor: "operator",
+            note: "",
+            content: {
+              display_name: "Sample A",
+              aliases: [],
+              artifacts: [],
+              relations: [],
+              status: "available",
+              tags: [],
+            },
+          },
+        },
+      ],
+    });
+    const copy: ConfigRegistryEntry = {
+      ...entry,
+      source: {
+        kind: "parameter_context",
+        context: {
+          sample: {
+            sample_id: "sample-a",
+            revision: 1,
+            content_hash: `sha256:${"c".repeat(64)}`,
+            role: "subject",
+            kind: "synthetic",
+            display_name: "Sample A",
+            context_id: "parked",
+          },
+          working_point_id: "parked",
+          label: "Old",
+          base: { entry_id: entry.id, content_hash: entry.content_hash },
+          value_origins: [],
+        },
+      },
+    };
+    vi.mocked(saveConfigContext).mockClear();
+    vi.mocked(saveConfigContext).mockResolvedValue({ entry, config });
+    render(
+      <QueryClientProvider
+        client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+      >
+        <ConfigContextEditor
+          entry={copy}
+          config={config}
+          operator="operator"
+          onCancel={() => {}}
+          onSaved={() => {}}
+        />
+      </QueryClientProvider>,
+    );
+    await screen.findByRole("option", { name: "Sample A · sample-a · r2" });
+    expect(screen.getByLabelText("Physical sample")).toHaveValue("sample-a@1");
+    if (chooseNew)
+      fireEvent.change(screen.getByLabelText("Physical sample"), {
+        target: { value: "sample-a@2" },
+      });
+    fireEvent.click(screen.getByRole("button", { name: "Save context" }));
+    await waitFor(() =>
+      expect(saveConfigContext).toHaveBeenCalledWith(
+        expect.objectContaining({
+          sample: { sample_id: "sample-a", revision: chooseNew ? 2 : 1, role: "subject" },
+        }),
+      ),
+    );
+  },
+);

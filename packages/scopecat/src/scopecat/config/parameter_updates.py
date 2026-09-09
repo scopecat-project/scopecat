@@ -19,7 +19,6 @@ from scopecat.config.validation import (
     coerce_parameter_table_cell,
     validate_parameter_representation,
 )
-from scopecat.kernel.entity import EntityRef
 from scopecat.kernel.frozen import FrozenMapping
 from scopecat.kernel.quantity import Quantity
 from scopecat.kernel.value_identity import scalar_identity, scalar_values_equal
@@ -48,19 +47,6 @@ def _freeze_parameter_atoms(
             raise ValueError("parameter update atoms must be finite")
         selected.append((name, value))
     return FrozenMapping(selected)
-
-
-def _serialize_parameter_atoms(
-    values: Mapping[str, ParameterAtomValue],
-) -> dict[str, object]:
-    return {
-        name: (
-            value.model_dump(mode="json")
-            if isinstance(value, Quantity | EntityRef)
-            else value
-        )
-        for name, value in values.items()
-    }
 
 
 class _ParameterUpdateModel(BaseModel):
@@ -108,8 +94,8 @@ class UpdateParameterRows(_ParameterUpdateModel):
     def serialize_atoms(
         self,
         value: Mapping[str, ParameterAtomValue],
-    ) -> dict[str, object]:
-        return _serialize_parameter_atoms(value)
+    ) -> dict[str, ParameterAtomValue]:
+        return dict(value)
 
 
 class InsertParameterRows(_ParameterUpdateModel):
@@ -131,8 +117,8 @@ class InsertParameterRows(_ParameterUpdateModel):
     def serialize_rows(
         self,
         value: Sequence[Mapping[str, ParameterAtomValue]],
-    ) -> list[dict[str, object]]:
-        return [_serialize_parameter_atoms(row) for row in value]
+    ) -> list[dict[str, ParameterAtomValue]]:
+        return [dict(row) for row in value]
 
 
 class DeleteParameterRows(_ParameterUpdateModel):
@@ -154,8 +140,8 @@ class DeleteParameterRows(_ParameterUpdateModel):
     def serialize_key(
         self,
         value: Mapping[str, ParameterAtomValue],
-    ) -> dict[str, object]:
-        return _serialize_parameter_atoms(value)
+    ) -> dict[str, ParameterAtomValue]:
+        return dict(value)
 
 
 type ParameterUpdate = Annotated[

@@ -1468,7 +1468,7 @@ export interface components {
          */
         ActiveConfigView: {
             activation: components["schemas"]["ConfigRegistryActivationRecord"];
-            config: components["schemas"]["ConfigProfileSnapshot-Output"];
+            config: components["schemas"]["ConfigProfileSnapshot"];
             entry: components["schemas"]["ConfigRegistryEntry"];
         };
         /**
@@ -2698,7 +2698,7 @@ export interface components {
          * @description Effective trial parameters, exact identity, and unknown-value diagnostics.
          */
         ConfigContextResolution: {
-            config: components["schemas"]["ConfigProfileSnapshot-Output"];
+            config: components["schemas"]["ConfigProfileSnapshot"];
             config_source: components["schemas"]["ContextRunConfigSource-Output"];
             /**
              * Missing Values
@@ -2737,7 +2737,7 @@ export interface components {
              * @default
              */
             note: string;
-            parameters?: components["schemas"]["ParameterSnapshot-Input"] | null;
+            parameters?: components["schemas"]["ParameterSnapshot"] | null;
             sample: components["schemas"]["SampleSelector"];
             /** Working Point Id */
             working_point_id: string;
@@ -2764,7 +2764,7 @@ export interface components {
             base_entry: components["schemas"]["ConfigRegistryEntry"];
             /** Base Generation */
             base_generation: number;
-            config?: components["schemas"]["ConfigProfileSnapshot-Output"] | null;
+            config?: components["schemas"]["ConfigProfileSnapshot"] | null;
             /**
              * Deltas
              * @default []
@@ -2800,7 +2800,7 @@ export interface components {
          * @description One immutable configuration and its most recent activation, if any.
          */
         ConfigEntryView: {
-            config: components["schemas"]["ConfigProfileSnapshot-Output"];
+            config: components["schemas"]["ConfigProfileSnapshot"];
             entry: components["schemas"]["ConfigRegistryEntry"];
             latest_activation?: components["schemas"]["ConfigRegistryActivationRecord"] | null;
         };
@@ -2808,20 +2808,10 @@ export interface components {
          * ConfigProfileSnapshot
          * @description Immutable config profile snapshot used by runs and ConfigRegistry entries.
          */
-        "ConfigProfileSnapshot-Input": {
+        ConfigProfileSnapshot: {
             /** Id */
             id: string;
-            parameter_snapshot: components["schemas"]["ParameterSnapshot-Input"];
-            system: components["schemas"]["SystemSpec"];
-        };
-        /**
-         * ConfigProfileSnapshot
-         * @description Immutable config profile snapshot used by runs and ConfigRegistry entries.
-         */
-        "ConfigProfileSnapshot-Output": {
-            /** Id */
-            id: string;
-            parameter_snapshot: components["schemas"]["ParameterSnapshot-Output"];
+            parameter_snapshot: components["schemas"]["ParameterSnapshot"];
             system: components["schemas"]["SystemSpec"];
         };
         /**
@@ -2989,7 +2979,7 @@ export interface components {
             field_id?: string | null;
             /** Key */
             key?: {
-                [key: string]: unknown;
+                [key: string]: components["schemas"]["ParameterAtomValue"];
             };
             /**
              * Layer
@@ -3039,6 +3029,28 @@ export interface components {
              * @enum {string}
              */
             kind: "parameter_context";
+        };
+        /**
+         * ContextRunConfigSource
+         * @description A context resolved without changing the lab's active configuration.
+         */
+        "ContextRunConfigSource-Input": {
+            content_hash: components["schemas"]["ConfigContentHash"];
+            context: components["schemas"]["ConfigContextRef"];
+            /**
+             * Kind
+             * @default parameter_context
+             * @constant
+             */
+            kind: "parameter_context";
+            /** Lab Generation */
+            lab_generation: number;
+            /**
+             * Overrides
+             * @default []
+             */
+            overrides: components["schemas"]["ParameterUpdate-Input"][];
+            sample: components["schemas"]["SampleBinding"];
         };
         /**
          * ContextRunConfigSource
@@ -3129,7 +3141,7 @@ export interface components {
         "DeleteParameterRows-Output": {
             /** Key */
             key: {
-                [key: string]: unknown;
+                [key: string]: components["schemas"]["ParameterAtomValue"];
             };
             /**
              * @description discriminator enum property added by openapi-typescript
@@ -3189,7 +3201,7 @@ export interface components {
         };
         /** DirectConfigRevisionSource */
         DirectConfigRevisionSource: {
-            config: components["schemas"]["ConfigProfileSnapshot-Input"];
+            config: components["schemas"]["ConfigProfileSnapshot"];
             /**
              * @description discriminator enum property added by openapi-typescript
              * @enum {string}
@@ -3420,7 +3432,7 @@ export interface components {
             parameter_id: components["schemas"]["_ParameterId"];
             /** Rows */
             rows: {
-                [key: string]: unknown;
+                [key: string]: components["schemas"]["ParameterAtomValue"];
             }[];
         };
         /**
@@ -4135,6 +4147,8 @@ export interface components {
             /** Version */
             version: string;
         };
+        "LaunchConfigSource-Input": components["schemas"]["ConfigRegistryRunConfigSource"] | components["schemas"]["ContextRunConfigSource-Input"];
+        "LaunchConfigSource-Output": components["schemas"]["ConfigRegistryRunConfigSource"] | components["schemas"]["ContextRunConfigSource-Output"];
         /** LaunchControl */
         LaunchControl: {
             /** Default */
@@ -4220,7 +4234,7 @@ export interface components {
          * @description Compile-only evidence for exactly one request and immutable configuration.
          */
         LaunchPreview: {
-            config_source: components["schemas"]["ConfigRegistryRunConfigSource"];
+            config_source: components["schemas"]["LaunchConfigSource-Output"];
             /**
              * Controls
              * @default []
@@ -4259,7 +4273,8 @@ export interface components {
              * @default operator
              */
             actor: string;
-            config_source?: components["schemas"]["ConfigRegistryRunConfigSource"] | null;
+            config_source?: components["schemas"]["LaunchConfigSource-Input"] | null;
+            context?: components["schemas"]["ConfigContextRef"] | null;
             /** Control Edits */
             control_edits?: {
                 [key: string]: components["schemas"]["ControlEdit"];
@@ -4274,6 +4289,11 @@ export interface components {
             inputs?: {
                 [key: string]: components["schemas"]["pydantic__types__JsonValue"];
             };
+            /**
+             * Overrides
+             * @default []
+             */
+            overrides: components["schemas"]["ParameterUpdate-Input"][];
             /**
              * Request Key
              * @default
@@ -5237,24 +5257,14 @@ export interface components {
          * ParameterSnapshot
          * @description Recursively immutable accepted parameters for future runs.
          */
-        "ParameterSnapshot-Input": {
+        ParameterSnapshot: {
             /** Id */
             id: string;
             /** Values */
-            values?: components["schemas"]["StoredParameterValue-Input"][];
+            values?: components["schemas"]["StoredParameterValue"][];
         };
-        /**
-         * ParameterSnapshot
-         * @description Recursively immutable accepted parameters for future runs.
-         */
-        "ParameterSnapshot-Output": {
-            /** Id */
-            id: string;
-            /** Values */
-            values?: components["schemas"]["StoredParameterValue-Output"][];
-        };
-        "ParameterUpdate-Input": components["schemas"]["ReplaceParameter-Input"] | components["schemas"]["UpdateParameterRows-Input"] | components["schemas"]["InsertParameterRows-Input"] | components["schemas"]["DeleteParameterRows-Input"];
-        "ParameterUpdate-Output": components["schemas"]["ReplaceParameter-Output"] | components["schemas"]["UpdateParameterRows-Output"] | components["schemas"]["InsertParameterRows-Output"] | components["schemas"]["DeleteParameterRows-Output"];
+        "ParameterUpdate-Input": components["schemas"]["ReplaceParameter"] | components["schemas"]["UpdateParameterRows-Input"] | components["schemas"]["InsertParameterRows-Input"] | components["schemas"]["DeleteParameterRows-Input"];
+        "ParameterUpdate-Output": components["schemas"]["ReplaceParameter"] | components["schemas"]["UpdateParameterRows-Output"] | components["schemas"]["InsertParameterRows-Output"] | components["schemas"]["DeleteParameterRows-Output"];
         /**
          * ParameterValueDelta
          * @description Durable before/after state for one proposed parameter change.
@@ -5263,8 +5273,8 @@ export interface components {
          *     base while ``after`` is the proposed value used to resolve a candidate.
          */
         "ParameterValueDelta-Output": {
-            after: components["schemas"]["StoredParameterValue-Output"];
-            before: components["schemas"]["StoredParameterValue-Output"];
+            after: components["schemas"]["StoredParameterValue"];
+            before: components["schemas"]["StoredParameterValue"];
             /** Cells */
             cells?: components["schemas"]["ParameterCellEdit-Output"][] | null;
             /** Parameter Id */
@@ -5857,25 +5867,13 @@ export interface components {
          * ReplaceParameter
          * @description Replace one complete typed parameter value.
          */
-        "ReplaceParameter-Input": {
+        ReplaceParameter: {
             /**
              * @description discriminator enum property added by openapi-typescript
              * @enum {string}
              */
             kind: "replace_parameter";
-            value: components["schemas"]["StoredParameterValue-Input"];
-        };
-        /**
-         * ReplaceParameter
-         * @description Replace one complete typed parameter value.
-         */
-        "ReplaceParameter-Output": {
-            /**
-             * @description discriminator enum property added by openapi-typescript
-             * @enum {string}
-             */
-            kind: "replace_parameter";
-            value: components["schemas"]["StoredParameterValue-Output"];
+            value: components["schemas"]["StoredParameterValue"];
         };
         /**
          * ResolvedCalibrationCohortMergeContribution
@@ -7480,8 +7478,7 @@ export interface components {
             /** Run Id */
             run_id?: string | null;
         };
-        "StoredParameterValue-Input": components["schemas"]["ScalarParameterValue"] | components["schemas"]["TableParameterValue-Input"];
-        "StoredParameterValue-Output": components["schemas"]["ScalarParameterValue"] | components["schemas"]["TableParameterValue-Output"];
+        StoredParameterValue: components["schemas"]["ScalarParameterValue"] | components["schemas"]["TableParameterValue"];
         /**
          * SystemSpec
          * @description Stable system topology and logical parameter definitions.
@@ -7501,29 +7498,12 @@ export interface components {
          * TableParameterValue
          * @description One stored typed table parameter.
          */
-        "TableParameterValue-Input": {
+        TableParameterValue: {
             /** Id */
             id: string;
             /** Rows */
             rows?: {
                 [key: string]: components["schemas"]["ParameterAtomValue"];
-            }[];
-            /**
-             * @description discriminator enum property added by openapi-typescript
-             * @enum {string}
-             */
-            shape: "table";
-        };
-        /**
-         * TableParameterValue
-         * @description One stored typed table parameter.
-         */
-        "TableParameterValue-Output": {
-            /** Id */
-            id: string;
-            /** Rows */
-            rows?: {
-                [key: string]: unknown;
             }[];
             /**
              * @description discriminator enum property added by openapi-typescript
@@ -7630,7 +7610,7 @@ export interface components {
         "UpdateParameterRows-Output": {
             /** Key */
             key: {
-                [key: string]: unknown;
+                [key: string]: components["schemas"]["ParameterAtomValue"];
             };
             /**
              * @description discriminator enum property added by openapi-typescript
@@ -7640,7 +7620,7 @@ export interface components {
             parameter_id: components["schemas"]["_ParameterId"];
             /** Values */
             values: {
-                [key: string]: unknown;
+                [key: string]: components["schemas"]["ParameterAtomValue"];
             };
         };
         /** ValidationError */

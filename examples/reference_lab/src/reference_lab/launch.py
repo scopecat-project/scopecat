@@ -11,6 +11,7 @@ from scopecat.api.procedures import LabProcedureContext
 from scopecat.application.launch import (
     LaunchCatalog,
     LaunchCatalogEntry,
+    LaunchConfigSource,
     LaunchInputSchema,
     LaunchPreview,
     LaunchRequest,
@@ -18,6 +19,7 @@ from scopecat.application.launch import (
     LaunchSubmission,
     validate_launch_control_edits,
 )
+from scopecat.application.launch_config import launch_config_generation
 from scopecat.automation import InterpretationRequest, procedure
 from scopecat.config.parameter_updates import materialize_parameter_updates
 from scopecat.planning.preflight import (
@@ -27,7 +29,6 @@ from scopecat.planning.preflight import (
 )
 from scopecat.records.config import config_content_hash
 from scopecat.records.content import Sha256ContentHash
-from scopecat.records.run import ConfigRegistryRunConfigSource
 
 from reference_lab.control_launch import CONTROL_ENTRY, control_launch
 from reference_lab.launch_config import launch_config
@@ -64,7 +65,7 @@ REVIEW_INSTRUCTIONS = (
 
 
 class LaunchIntent(TemperatureDiagnosticIntent):
-    config_source: ConfigRegistryRunConfigSource
+    config_source: LaunchConfigSource
     request_hash: Sha256ContentHash
     actor: str
     inputs: dict[str, JsonValue]
@@ -189,7 +190,9 @@ def launch_provider(lab: LabClient, request: LaunchRequest) -> LaunchResult:
     )
     if request.action == "preview":
         config, source = launch_config(lab, request)
-        preview = lab.preview(invocation, config=config)
+        preview = lab.preview_invocation(
+            invocation, config=config, config_source=source
+        )
         stages = [
             summarize_preflight(
                 preview,
@@ -287,7 +290,6 @@ def launch_provider(lab: LabClient, request: LaunchRequest) -> LaunchResult:
             resolved_inputs=inputs.model_dump(mode="json"),
         )
     config, source = launch_config(lab, request)
-    assert source.registry_generation is not None
     intent = LaunchIntent(
         initial_config=config,
         config_source=source,
@@ -300,6 +302,6 @@ def launch_provider(lab: LabClient, request: LaunchRequest) -> LaunchResult:
         intent,
         request_key=request.request_key,
         sample=request.sample,
-        expected_config_generation=source.registry_generation,
+        expected_config_generation=launch_config_generation(source),
     )
     return LaunchSubmission(procedure_id=admitted.id)

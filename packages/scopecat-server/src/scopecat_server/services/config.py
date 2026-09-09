@@ -227,7 +227,7 @@ class ConfigService:
                         base_ref=command.context,
                         selected_ref=command.context,
                         inherited=metadata.value_origins,
-                        run_override=True,
+                        overrides=command.overrides,
                     ),
                     missing_values=missing_context_values(resolved),
                 )

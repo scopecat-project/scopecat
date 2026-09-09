@@ -207,12 +207,6 @@ def _validate_finite_parameter_scalar(
     return value
 
 
-def _serialize_parameter_scalar(value: ParameterAtomValue) -> object:
-    if isinstance(value, Quantity | EntityRef):
-        return value.model_dump(mode="json")
-    return value
-
-
 class ParameterDefinition(BaseModel):
     """Stable type definition for one accepted parameter value."""
 
@@ -302,16 +296,9 @@ class TableParameterValue(_StoredParameterValue):
 
     @field_serializer("rows")
     def serialize_rows(
-        self,
-        value: Sequence[Mapping[str, ParameterAtomValue]],
-    ) -> list[dict[str, object]]:
-        return [
-            {
-                column_id: _serialize_parameter_scalar(cell)
-                for column_id, cell in row.items()
-            }
-            for row in value
-        ]
+        self, value: Sequence[Mapping[str, ParameterAtomValue]]
+    ) -> list[dict[str, ParameterAtomValue]]:
+        return [dict(row) for row in value]
 
 
 type StoredParameterValue = Annotated[

@@ -31,7 +31,11 @@ export function ConfigContextEditor({
     queryKey: ["samples", "contexts"],
     queryFn: ({ signal }) => getSamples(undefined, signal),
   });
-  const [sampleId, setSampleId] = useState(metadata?.sample.sample_id ?? "");
+  const [selectedSample, setSelectedSample] = useState<
+    { sample_id: string; revision: number; role: string } | undefined
+  >(metadata?.sample);
+  const sampleKey = (sample: { sample_id: string; revision: number }) =>
+    `${sample.sample_id}@${sample.revision}`;
   const [point, setPoint] = useState(metadata?.working_point_id ?? "");
   const [label, setLabel] = useState(metadata?.label ?? "");
   const [entryId] = useState(() => createConfigOperationId("context"));
@@ -39,7 +43,6 @@ export function ConfigContextEditor({
     ...(config.parameter_snapshot.values ?? []),
   ]);
   const [note, setNote] = useState("");
-  const selectedSample = samples.data?.items.find((item) => item.record.id === sampleId);
   const mutation = useMutation({
     mutationFn: () => {
       if (!selectedSample) throw new Error("Select a physical sample revision.");
@@ -47,9 +50,9 @@ export function ConfigContextEditor({
         entry_id: entryId,
         base: { entry_id: entry.id, content_hash: entry.content_hash },
         sample: {
-          sample_id: sampleId,
-          revision: selectedSample.record.active_revision,
-          role: "subject",
+          sample_id: selectedSample.sample_id,
+          revision: selectedSample.revision,
+          role: selectedSample.role,
         },
         working_point_id: point.trim(),
         label: label.trim(),
@@ -84,12 +87,33 @@ export function ConfigContextEditor({
         Physical sample
         <select
           aria-label="Physical sample"
-          value={sampleId}
-          onChange={(event) => setSampleId(event.target.value)}
+          value={selectedSample ? sampleKey(selectedSample) : ""}
+          onChange={(event) => {
+            const item = samples.data?.items.find(
+              (item) => `${item.record.id}@${item.record.active_revision}` === event.target.value,
+            );
+            if (item)
+              setSelectedSample({
+                sample_id: item.record.id,
+                revision: item.record.active_revision,
+                role: "subject",
+              });
+            else if (!event.target.value) setSelectedSample(undefined);
+          }}
         >
           <option value="">Choose a sample</option>
+          {selectedSample &&
+            !samples.data?.items.some(
+              (item) =>
+                item.record.id === selectedSample.sample_id &&
+                item.record.active_revision === selectedSample.revision,
+            ) && (
+              <option value={sampleKey(selectedSample)}>
+                {selectedSample.sample_id} · r{selectedSample.revision} (selected revision)
+              </option>
+            )}
           {(samples.data?.items ?? []).map((item) => (
-            <option key={item.record.id} value={item.record.id}>
+            <option key={item.record.id} value={`${item.record.id}@${item.record.active_revision}`}>
               {item.revision.content.display_name} · {item.record.id} · r
               {item.record.active_revision}
             </option>

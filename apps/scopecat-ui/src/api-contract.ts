@@ -30,7 +30,7 @@ export type ConfigDraftPreview = Omit<
   config?: ConfigProfileSnapshot | null;
   deltas: ParameterValueDelta[];
 };
-export type ConfigProfileSnapshot = components["schemas"]["ConfigProfileSnapshot-Input"];
+export type ConfigProfileSnapshot = components["schemas"]["ConfigProfileSnapshot"];
 export type ConfigRegistryEntry = components["schemas"]["ConfigRegistryEntry"];
 export type ConfigRegistryPage = GetResponse<"/api/v1/config-registry">;
 export type ConfigActivationPage = GetResponse<"/api/v1/config-registry/activations">;
@@ -173,6 +173,6 @@ export type SampleRevision = GetResponse<"/api/v1/samples/{sample_id}/revisions/
 export type SampleRevisionPage = GetResponse<"/api/v1/samples/{sample_id}/revisions">;
 export type SampleSummary = SamplePage["items"][number];
 export type SampleView = GetResponse<"/api/v1/samples/{sample_id}">;
-export type StoredParameterValue = components["schemas"]["StoredParameterValue-Input"];
+export type StoredParameterValue = components["schemas"]["StoredParameterValue"];
 export type TableParameterType = Extract<ParameterValueType, { shape: "table" }>;
 export type TableParameterValue = Extract<StoredParameterValue, { shape: "table" }>;

@@ -173,3 +173,59 @@ def test_unkeyed_table_origins_retain_distinct_rows_after_copy() -> None:
     assert [item.row_index for item in first] == [0, 1]
     assert [item.entry.entry_id for item in first] == ["base", "first"]
     assert copied == first
+
+
+def test_explicit_equal_trial_values_keep_override_origin_and_typed_roundtrip() -> None:
+    from pydantic import TypeAdapter
+    from scopecat.config.parameter_updates import ParameterUpdate, UpdateParameterRows
+    from scopecat.kernel.value_types import String
+
+    base = load_config()
+    scalar = ScalarParameterValue(id="frequency", value=Quantity(5.0, "GHz"))
+    table = TableParameterValue(id="cells", rows=({"id": "q0", "value": 1.0},))
+    snapshot = ParameterSnapshot(id="values", values=(scalar, table))
+    config = base.model_copy(
+        update={
+            "parameter_snapshot": snapshot,
+            "system": base.system.model_copy(
+                update={
+                    "parameter_catalog": ParameterCatalog(
+                        id="catalog",
+                        definitions=(
+                            ParameterDefinition(
+                                id="frequency", value_type=Scalar(Float())
+                            ),
+                            ParameterDefinition(
+                                id="cells",
+                                value_type=Table(
+                                    columns=(
+                                        TableColumn("id", Scalar(String())),
+                                        TableColumn("value", Scalar(Float())),
+                                    ),
+                                    primary_key=("id",),
+                                ),
+                            ),
+                        ),
+                    )
+                }
+            ),
+        }
+    )
+    ref = ConfigContextRef(entry_id="base", content_hash=config_content_hash(config))
+    edits: tuple[ParameterUpdate, ...] = (
+        ReplaceParameter(value=scalar),
+        UpdateParameterRows(
+            parameter_id="cells", key={"id": "q0"}, values={"value": 1.0}
+        ),
+    )
+    origins = context_value_origins(
+        config, base=snapshot, base_ref=ref, selected_ref=ref, overrides=edits
+    )
+    assert [(item.parameter_id, item.field_id, item.layer) for item in origins] == [
+        ("frequency", None, "run_override"),
+        ("cells", "id", "base"),
+        ("cells", "value", "run_override"),
+    ]
+    adapter = TypeAdapter(tuple[ParameterUpdate, ...])
+    assert adapter.validate_json(adapter.dump_json(edits)) == edits
+    assert ParameterSnapshot.model_validate_json(snapshot.model_dump_json()) == snapshot

@@ -141,6 +141,7 @@ it("previews a typed request and clears results after edits", async () => {
     version: "1",
     sample: null,
     inputs: { qubit: "Q12", amplitude_max: 0.4 },
+    overrides: [],
     control_edits: {},
   });
   fireEvent.change(screen.getByLabelText("Amplitude"), { target: { value: "0.3" } });
