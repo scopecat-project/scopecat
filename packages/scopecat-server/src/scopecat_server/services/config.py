@@ -27,6 +27,11 @@ from scopecat.config.changes import (
     load_parameter_change_proposal,
     prepare_parameter_change_approval,
 )
+from scopecat.config.contexts import (
+    apply_context_overrides,
+    context_value_origins,
+    missing_context_values,
+)
 from scopecat.config.inventory import (
     InstrumentInventoryRekey,
     InstrumentInventoryRemoval,
@@ -40,6 +45,7 @@ from scopecat.config.registry.records import (
     ConfigPublishOperation,
     ConfigRegistryActivationRecord,
     ConfigRegistryEntry,
+    ContextConfigRegistrySource,
     CrossRunCandidateAcceptance,
     ResolvedCalibrationCohortMergeContribution,
     ResolvedVerifiedParameterProposalProofV1,
@@ -55,6 +61,7 @@ from scopecat.control.models import (
 from scopecat.daemon.views import (
     ActiveConfigView,
     ConfigActivationPage,
+    ConfigContextResolution,
     ConfigDraftPreview,
     ConfigEntryView,
     ConfigRegistryPage,
@@ -65,6 +72,8 @@ from scopecat.daemon.wire import (
     CalibrationPublicationReceipt,
     CandidateConfigRevisionSource,
     ConfigActivationReceipt,
+    ConfigContextResolveCommand,
+    ConfigContextSaveCommand,
     ConfigDraftCommand,
     ConfigEntryActivationCommand,
     ConfigPublishCommand,
@@ -86,6 +95,7 @@ from scopecat.records.analysis import (
     ProjectAnalysisSubject,
 )
 from scopecat.records.config import config_content_hash
+from scopecat.records.config_context import ContextRunConfigSource
 from scopecat.records.run import (
     AnalysisCandidateRunConfigSource,
     ConfigRegistryRunConfigSource,
@@ -113,6 +123,7 @@ from ..instruments.actors import (
     InstrumentActorShutdown,
 )
 from .analyses import AnalysisService
+from .samples import SampleService
 
 
 @dataclass(frozen=True, slots=True)
@@ -146,7 +157,9 @@ class ConfigService:
         analyses: AnalysisService,
         automation: SQLiteAutomationStore,
         calibration_cohorts: SQLiteCalibrationCohortStore,
+        samples: SampleService,
     ) -> None:
+        self._samples = samples
         self._control = control
         self._config_registry = config_registry
         self._config_operations = config_operations
@@ -157,6 +170,69 @@ class ConfigService:
         self._automation = automation
         self._calibration_cohorts = calibration_cohorts
         self._mutation_lock = Lock()
+
+    def save_context(self, command: ConfigContextSaveCommand) -> ConfigEntryView:
+        with self._mutation_lock, self._config_errors():
+            try:
+                selector = command.sample.model_copy(
+                    update={"context_id": command.working_point_id}
+                )
+                sample = self._samples.resolve_bindings((selector,))[0]
+                snapshot = config_registry_service.save_config_context(
+                    entry_id=command.entry_id,
+                    base=command.base,
+                    sample=sample,
+                    working_point_id=command.working_point_id,
+                    label=command.label,
+                    parameters=command.parameters,
+                    actor=command.actor,
+                    note=command.note,
+                    unit_of_work=self._config_registry.write_unit_of_work,
+                )
+                return ConfigEntryView(entry=snapshot.entry, config=snapshot.config)
+            except ValueError as error:
+                raise BackendConflict(str(error)) from error
+
+    def resolve_context(
+        self, command: ConfigContextResolveCommand
+    ) -> ConfigContextResolution:
+        with self._config_errors():
+            try:
+                saved = config_registry_service.load_config_registry_entry_snapshot(
+                    entry_id=command.context.entry_id,
+                    unit_of_work=self._config_registry.read_unit_of_work,
+                )
+                if (
+                    saved.entry.content_hash != command.context.content_hash
+                    or not isinstance(saved.entry.source, ContextConfigRegistrySource)
+                ):
+                    raise ValueError(
+                        "context reference does not match a saved parameter context"
+                    )
+                active = self.get_active_config()
+                resolved = apply_context_overrides(saved.config, command.overrides)
+                metadata = saved.entry.source.context
+                return ConfigContextResolution(
+                    config=resolved,
+                    config_source=ContextRunConfigSource(
+                        context=command.context,
+                        content_hash=config_content_hash(resolved),
+                        lab_generation=active.activation.generation,
+                        sample=metadata.sample,
+                        overrides=command.overrides,
+                    ),
+                    value_origins=context_value_origins(
+                        resolved,
+                        base=saved.config.parameter_snapshot,
+                        base_ref=command.context,
+                        selected_ref=command.context,
+                        inherited=metadata.value_origins,
+                        run_override=True,
+                    ),
+                    missing_values=missing_context_values(resolved),
+                )
+            except ValueError as error:
+                raise BackendConflict(str(error)) from error
 
     def get_config_registry(
         self,

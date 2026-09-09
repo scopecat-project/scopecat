@@ -24,6 +24,8 @@ _OPERATIONS = {
     ("/api/v1/analyses/{analysis_id}/contents/{selector}/bytes", "get"),
     ("/api/v1/analyses/{selector}", "get"),
     ("/api/v1/config-registry", "get"),
+    ("/api/v1/config-registry/contexts", "post"),
+    ("/api/v1/config-registry/contexts/resolve", "post"),
     ("/api/v1/config-registry/activation-operations", "post"),
     ("/api/v1/config-registry/activation-operations/{operation_id}", "get"),
     ("/api/v1/config-registry/activations", "get"),

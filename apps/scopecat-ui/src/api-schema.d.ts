@@ -140,6 +140,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/config-registry/contexts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Save Context */
+        post: operations["save_context_api_v1_config_registry_contexts_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/config-registry/contexts/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Resolve Context */
+        post: operations["resolve_context_api_v1_config_registry_contexts_resolve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/config-registry/drafts/preview": {
         parameters: {
             query?: never;
@@ -2634,6 +2668,81 @@ export interface components {
         };
         ConfigContentHash: string;
         /**
+         * ConfigContextMetadata
+         * @description A named working point bound to one exact physical sample revision.
+         */
+        ConfigContextMetadata: {
+            base: components["schemas"]["ConfigContextRef"];
+            /** Label */
+            label: string;
+            sample: components["schemas"]["SampleBinding"];
+            /**
+             * Value Origins
+             * @default []
+             */
+            value_origins: components["schemas"]["ConfigValueOrigin"][];
+            /** Working Point Id */
+            working_point_id: string;
+        };
+        /**
+         * ConfigContextRef
+         * @description An immutable registry entry; a display name is never an identity.
+         */
+        ConfigContextRef: {
+            content_hash: components["schemas"]["ConfigContentHash"];
+            /** Entry Id */
+            entry_id: string;
+        };
+        /**
+         * ConfigContextResolution
+         * @description Effective trial parameters, exact identity, and unknown-value diagnostics.
+         */
+        ConfigContextResolution: {
+            config: components["schemas"]["ConfigProfileSnapshot-Output"];
+            config_source: components["schemas"]["ContextRunConfigSource-Output"];
+            /**
+             * Missing Values
+             * @default []
+             */
+            missing_values: string[];
+            /**
+             * Value Origins
+             * @default []
+             */
+            value_origins: components["schemas"]["ConfigValueOrigin"][];
+        };
+        /** ConfigContextResolveCommand */
+        ConfigContextResolveCommand: {
+            context: components["schemas"]["ConfigContextRef"];
+            /**
+             * Overrides
+             * @default []
+             */
+            overrides: components["schemas"]["ParameterUpdate-Input"][];
+        };
+        /**
+         * ConfigContextSaveCommand
+         * @description entry_id is the durable retry identity; saving never activates.
+         */
+        ConfigContextSaveCommand: {
+            /** Actor */
+            actor: string;
+            base: components["schemas"]["ConfigContextRef"];
+            /** Entry Id */
+            entry_id: string;
+            /** Label */
+            label: string;
+            /**
+             * Note
+             * @default
+             */
+            note: string;
+            parameters?: components["schemas"]["ParameterSnapshot-Input"] | null;
+            sample: components["schemas"]["SampleSelector"];
+            /** Working Point Id */
+            working_point_id: string;
+        };
+        /**
          * ConfigDraftCommand
          * @description Typed parameter edits against one observed active registry generation.
          */
@@ -2644,7 +2753,7 @@ export interface components {
             base_generation: number;
             candidate_id: components["schemas"]["NonEmptyText"];
             /** Updates */
-            updates: components["schemas"]["ParameterUpdate"][];
+            updates: components["schemas"]["ParameterUpdate-Input"][];
         };
         /**
          * ConfigDraftPreview
@@ -2837,7 +2946,7 @@ export interface components {
              */
             recorded_at?: string;
             /** Source */
-            source: components["schemas"]["DirectConfigRegistrySource"] | components["schemas"]["ManualConfigDraftRegistrySource"] | components["schemas"]["CandidateConfigRegistrySource"] | components["schemas"]["CalibrationCohortMergeRegistrySource"];
+            source: components["schemas"]["DirectConfigRegistrySource"] | components["schemas"]["ManualConfigDraftRegistrySource"] | components["schemas"]["CandidateConfigRegistrySource"] | components["schemas"]["CalibrationCohortMergeRegistrySource"] | components["schemas"]["ContextConfigRegistrySource"];
         };
         /**
          * ConfigRegistryPage
@@ -2871,6 +2980,28 @@ export interface components {
             selector: string;
         };
         /**
+         * ConfigValueOrigin
+         * @description Origin of one scalar or one keyed table cell in an effective snapshot.
+         */
+        ConfigValueOrigin: {
+            entry: components["schemas"]["ConfigContextRef"];
+            /** Field Id */
+            field_id?: string | null;
+            /** Key */
+            key?: {
+                [key: string]: unknown;
+            };
+            /**
+             * Layer
+             * @enum {string}
+             */
+            layer: "base" | "context" | "run_override";
+            /** Parameter Id */
+            parameter_id: string;
+            /** Row Index */
+            row_index?: number | null;
+        };
+        /**
          * ContentEntry
          * @description One content-addressable catalog entry.
          */
@@ -2899,6 +3030,36 @@ export interface components {
             } | null;
             /** Title */
             title?: string | null;
+        };
+        /** ContextConfigRegistrySource */
+        ContextConfigRegistrySource: {
+            context: components["schemas"]["ConfigContextMetadata"];
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "parameter_context";
+        };
+        /**
+         * ContextRunConfigSource
+         * @description A context resolved without changing the lab's active configuration.
+         */
+        "ContextRunConfigSource-Output": {
+            content_hash: components["schemas"]["ConfigContentHash"];
+            context: components["schemas"]["ConfigContextRef"];
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "parameter_context";
+            /** Lab Generation */
+            lab_generation: number;
+            /**
+             * Overrides
+             * @default []
+             */
+            overrides: components["schemas"]["ParameterUpdate-Output"][];
+            sample: components["schemas"]["SampleBinding"];
         };
         /**
          * ControlEdit
@@ -2949,10 +3110,26 @@ export interface components {
          * DeleteParameterRows
          * @description Delete one row selected by a table primary key.
          */
-        DeleteParameterRows: {
+        "DeleteParameterRows-Input": {
             /** Key */
             key: {
                 [key: string]: components["schemas"]["ParameterAtomValue"];
+            };
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "delete_parameter_rows";
+            parameter_id: components["schemas"]["_ParameterId"];
+        };
+        /**
+         * DeleteParameterRows
+         * @description Delete one row selected by a table primary key.
+         */
+        "DeleteParameterRows-Output": {
+            /** Key */
+            key: {
+                [key: string]: unknown;
             };
             /**
              * @description discriminator enum property added by openapi-typescript
@@ -3218,7 +3395,7 @@ export interface components {
          * InsertParameterRows
          * @description Append rows to a table-shaped parameter.
          */
-        InsertParameterRows: {
+        "InsertParameterRows-Input": {
             /**
              * @description discriminator enum property added by openapi-typescript
              * @enum {string}
@@ -3228,6 +3405,22 @@ export interface components {
             /** Rows */
             rows: {
                 [key: string]: components["schemas"]["ParameterAtomValue"];
+            }[];
+        };
+        /**
+         * InsertParameterRows
+         * @description Append rows to a table-shaped parameter.
+         */
+        "InsertParameterRows-Output": {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "insert_parameter_rows";
+            parameter_id: components["schemas"]["_ParameterId"];
+            /** Rows */
+            rows: {
+                [key: string]: unknown;
             }[];
         };
         /**
@@ -5060,7 +5253,8 @@ export interface components {
             /** Values */
             values?: components["schemas"]["StoredParameterValue-Output"][];
         };
-        ParameterUpdate: components["schemas"]["ReplaceParameter"] | components["schemas"]["UpdateParameterRows"] | components["schemas"]["InsertParameterRows"] | components["schemas"]["DeleteParameterRows"];
+        "ParameterUpdate-Input": components["schemas"]["ReplaceParameter-Input"] | components["schemas"]["UpdateParameterRows-Input"] | components["schemas"]["InsertParameterRows-Input"] | components["schemas"]["DeleteParameterRows-Input"];
+        "ParameterUpdate-Output": components["schemas"]["ReplaceParameter-Output"] | components["schemas"]["UpdateParameterRows-Output"] | components["schemas"]["InsertParameterRows-Output"] | components["schemas"]["DeleteParameterRows-Output"];
         /**
          * ParameterValueDelta
          * @description Durable before/after state for one proposed parameter change.
@@ -5663,13 +5857,25 @@ export interface components {
          * ReplaceParameter
          * @description Replace one complete typed parameter value.
          */
-        ReplaceParameter: {
+        "ReplaceParameter-Input": {
             /**
              * @description discriminator enum property added by openapi-typescript
              * @enum {string}
              */
             kind: "replace_parameter";
             value: components["schemas"]["StoredParameterValue-Input"];
+        };
+        /**
+         * ReplaceParameter
+         * @description Replace one complete typed parameter value.
+         */
+        "ReplaceParameter-Output": {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "replace_parameter";
+            value: components["schemas"]["StoredParameterValue-Output"];
         };
         /**
          * ResolvedCalibrationCohortMergeContribution
@@ -6052,7 +6258,7 @@ export interface components {
              */
             unavailable_reason: string;
         };
-        RunConfigSource: components["schemas"]["ConfigRegistryRunConfigSource"] | components["schemas"]["AnalysisCandidateRunConfigSource"];
+        "RunConfigSource-Output": components["schemas"]["ConfigRegistryRunConfigSource"] | components["schemas"]["AnalysisCandidateRunConfigSource"] | components["schemas"]["ContextRunConfigSource-Output"];
         /**
          * RunContentPage
          * @description Newest-first keyset page from one run's content catalog.
@@ -6788,7 +6994,7 @@ export interface components {
          */
         RunSnapshot: {
             config_content_hash: components["schemas"]["ConfigContentHash"];
-            config_source?: components["schemas"]["RunConfigSource"] | null;
+            config_source?: components["schemas"]["RunConfigSource-Output"] | null;
             /**
              * Created At
              * Format: date-time
@@ -7401,7 +7607,7 @@ export interface components {
          * UpdateParameterRows
          * @description Update one row selected by a table primary key.
          */
-        UpdateParameterRows: {
+        "UpdateParameterRows-Input": {
             /** Key */
             key: {
                 [key: string]: components["schemas"]["ParameterAtomValue"];
@@ -7415,6 +7621,26 @@ export interface components {
             /** Values */
             values: {
                 [key: string]: components["schemas"]["ParameterAtomValue"];
+            };
+        };
+        /**
+         * UpdateParameterRows
+         * @description Update one row selected by a table primary key.
+         */
+        "UpdateParameterRows-Output": {
+            /** Key */
+            key: {
+                [key: string]: unknown;
+            };
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "update_parameter_rows";
+            parameter_id: components["schemas"]["_ParameterId"];
+            /** Values */
+            values: {
+                [key: string]: unknown;
             };
         };
         /** ValidationError */
@@ -7716,6 +7942,72 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ActiveConfigView"];
+                };
+            };
+        };
+    };
+    save_context_api_v1_config_registry_contexts_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConfigContextSaveCommand"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConfigEntryView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    resolve_context_api_v1_config_registry_contexts_resolve_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConfigContextResolveCommand"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConfigContextResolution"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

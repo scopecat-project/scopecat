@@ -64,6 +64,7 @@ from scopecat.records.config import (
     ConfigProfileSnapshot,
     InstrumentBindingSpec,
 )
+from scopecat.records.config_context import ConfigContextRef
 from scopecat.records.content import ContentEntry, Sha256ContentHash
 from scopecat.records.execution import (
     DomainJobInvocationTransition,
@@ -76,6 +77,7 @@ from scopecat.records.measurement_recording import (
     MeasurementDatasetReceipt,
     MeasurementDatasetSeal,
 )
+from scopecat.records.parameter import ParameterSnapshot
 from scopecat.records.parameter_change import (
     ParameterChangeProposal,
     ParameterValueDelta,
@@ -90,6 +92,7 @@ from scopecat.records.sample import (
     SampleRecord,
     SampleRevision,
     SampleRevisionDraft,
+    SampleSelector,
 )
 from scopecat.sdk.instruments.contracts import InstrumentDescription
 from scopecat.sdk.instruments.execution import RunHardwareBatch
@@ -1425,3 +1428,27 @@ __all__ = [
     "TerminalModelWrite",
     "TerminalRunCommitCommand",
 ]
+
+
+class ConfigContextSaveCommand(_WireModel):
+    """entry_id is the durable retry identity; saving never activates."""
+
+    entry_id: str = Field(min_length=1)
+    base: ConfigContextRef
+    sample: SampleSelector
+    working_point_id: str = Field(min_length=1)
+    label: str = Field(min_length=1)
+    parameters: ParameterSnapshot | None = None
+    actor: str = Field(min_length=1)
+    note: str = ""
+
+    @model_validator(mode="after")
+    def require_exact_sample(self) -> ConfigContextSaveCommand:
+        if self.sample.revision is None:
+            raise ValueError("saving a context requires an exact sample revision")
+        return self
+
+
+class ConfigContextResolveCommand(_WireModel):
+    context: ConfigContextRef
+    overrides: tuple[ParameterUpdate, ...] = Field(default=(), max_length=256)

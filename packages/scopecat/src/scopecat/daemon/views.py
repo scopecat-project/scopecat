@@ -43,6 +43,7 @@ from scopecat.records.config import (
     ConfigProfileSnapshot,
     config_content_hash,
 )
+from scopecat.records.config_context import ConfigValueOrigin, ContextRunConfigSource
 from scopecat.records.content import ContentEntry
 from scopecat.records.measurement import (
     InstrumentAcquisitionEvidence,
@@ -889,3 +890,12 @@ __all__ = [
     "TcpipSocketInstrumentConnectionSummary",
     "VirtualInstrumentConnectionSummary",
 ]
+
+
+class ConfigContextResolution(_ViewModel):
+    """Effective trial parameters, exact identity, and unknown-value diagnostics."""
+
+    config: ConfigProfileSnapshot
+    config_source: ContextRunConfigSource
+    value_origins: tuple[ConfigValueOrigin, ...] = ()
+    missing_values: tuple[str, ...] = ()

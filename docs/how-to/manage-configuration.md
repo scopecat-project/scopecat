@@ -115,3 +115,68 @@ make it eligible. Physical instrument identity checks also remain in force.
 validity.** It creates no scientific acceptance, verification result, calibration
 success publication, or device action. Use the experiment's normal verification
 journey before relying on restored parameters at a changed working point.
+
+## Keep sample and working-point parameters separate
+
+A parameter context is a saved configuration revision tied to an exact physical
+sample revision and an explicit working-point ID. It lives in the configuration
+registry alongside other snapshots. Saving or selecting it does not change the
+lab default. Two samples can both have a `parked` point and a logical `q0`; those
+names do not make them the same physical sample.
+
+In the console, open a configuration and choose **Save working point copy**.
+Select the physical sample, name the working point, and edit the values you know.
+Use **Mark unknown** for an unknown value. The saved copy retains the selected
+sample revision. Compare it with another saved revision using the comparison
+selector; select an older context again to recover its parameters without
+rewriting either copy or any earlier run.
+
+The Python API uses the same registry and resolver:
+
+```python
+from scopecat.records.config_context import ConfigContextRef
+
+active = lab.config.active()
+base = ConfigContextRef(
+    entry_id=active.entry.id,
+    content_hash=active.entry.content_hash,
+)
+copy = lab.config.save_context(
+    entry_id="sample-a-parked-1",
+    base=base,
+    sample=lab.samples.handle("sample-a").selector(),
+    working_point_id="parked",
+    label="Sample A / parked",
+    note="Starting values for an attended exploration",
+)
+selected = ConfigContextRef(
+    entry_id=copy.entry.id,
+    content_hash=copy.entry.content_hash,
+)
+resolved = lab.config.resolve_context(selected)
+prepared = lab.prepare(my_experiment(), config=resolved)
+prepared.preview()
+run = prepared.run()
+```
+
+Omitting `parameters` copies the base snapshot. Pass a `ParameterSnapshot` to save
+known values or omit unknown parameters and non-key table cells. Supplied values
+must still satisfy their catalog types and units; table identity keys remain
+required. Missing values block an experiment when its parameter expressions or
+compiler actually require them. An unrelated missing field does not prevent a
+run that does not use it. The normal complete-configuration path remains strict.
+
+For a trial, pass existing typed `ParameterUpdate` edits to
+`lab.config.resolve_context(selected, overrides=(edit, ...))`, then prepare or run
+that resolution. Precedence is explicit: the saved base supplies inherited
+values, the saved context supplies its edits, and run overrides apply in tuple
+order, with a later edit winning if it updates the same cell. Overrides never
+modify the saved context. The resolution lists effective values, per-value
+origins, and missing values. Runs freeze the resolved snapshot, exact context
+reference, typed overrides, and physical sample binding.
+
+Admission checks the selected entry's ID and content hash separately from the
+current lab generation. If the lab default changed after resolution, resolve
+again before submitting; selecting a context never implicitly activates it.
+Historical selection preserves parameters and provenance, and does not grant a
+new claim of calibration freshness or evidence quality.

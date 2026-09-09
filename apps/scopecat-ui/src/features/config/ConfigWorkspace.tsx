@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { Menu } from "@base-ui/react/menu";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
   CircleDot,
@@ -15,6 +15,8 @@ import {
 } from "lucide-react";
 import { errorMessage } from "../../lib/presentation";
 import { classes, secondaryButton } from "../../ui/styles";
+import { ConfigContextEditor } from "./ConfigContextEditor";
+import { getConfigRegistryEntry, resolveConfigContext, type ConfigContextRef } from "./config-api";
 import { ConfigDraftEditor, type ConfigDraftSeed } from "./ConfigDraftEditor";
 import { ConfigEntryInspector } from "./ConfigEntryInspector";
 import { ConfigImportDialog } from "./ConfigImportDialog";
@@ -28,19 +30,33 @@ import { useConfigRegistry } from "./useConfigRegistry";
 export function ConfigWorkspace({
   daemonUnavailable,
   onOpenRun,
+  onSelectContext,
 }: {
   daemonUnavailable: boolean;
   onOpenRun?: (runId: string) => void;
+  onSelectContext?: (context: ConfigContextRef) => void;
 }) {
   const queryClient = useQueryClient();
   const fileInput = useRef<HTMLInputElement>(null);
   const [configDraft, setConfigDraft] = useState<ConfigDraftSeed>();
+  const [editingContext, setEditingContext] = useState(false);
+  const [comparisonId, setComparisonId] = useState("");
+  const comparison = useQuery({
+    queryKey: ["config", "comparison", comparisonId],
+    queryFn: ({ signal }) => getConfigRegistryEntry(comparisonId, signal),
+    enabled: !!comparisonId,
+  });
+  const contextSelection = useMutation({
+    mutationFn: (ref: ConfigContextRef) => resolveConfigContext(ref),
+    onSuccess: (_resolution, ref) => onSelectContext?.(ref),
+  });
   const registry = useConfigRegistry(daemonUnavailable);
   const workflow = useConfigMutationWorkflow(registry.overview);
   const undoTarget = registry.overview ? configUndoTarget(registry.overview) : undefined;
 
   const selectEntry = (entryId: string) => {
     registry.selectEntry(entryId);
+    contextSelection.reset();
     workflow.mutation.reset();
   };
 
@@ -228,43 +244,111 @@ export function ConfigWorkspace({
           aria-live="polite"
         >
           {selectedEntry ? (
-            <ConfigEntryInspector
-              entry={selectedEntry}
-              active={overview.activation?.entry_id === selectedEntry.id}
-              latestActivation={latestActivation?.generation}
-              snapshot={registry.entryDetailQuery.data?.summary}
-              config={registry.entryDetailQuery.data?.config}
-              activeConfig={registry.activeDetailQuery.data?.config}
-              snapshotPending={registry.entryDetailQuery.isPending}
-              snapshotError={registry.entryDetailQuery.error}
-              note={workflow.note}
-              pending={
-                workflow.mutation.isPending &&
-                workflow.mutation.variables?.kind === "activate-entry"
-              }
-              actionDisabled={commandDisabled || !registry.entryDetailQuery.isSuccess}
-              onNoteChange={workflow.setNote}
-              onSelectEntry={selectEntry}
-              onOpenRun={onOpenRun}
-              onActivate={() =>
-                workflow.runAction(
-                  {
-                    kind: "activate-entry",
-                    entryId: selectedEntry.id,
-                    expectedGeneration: overview.activation?.generation ?? 0,
-                  },
-                  restoring
-                    ? `Restore ${selectedEntry.id} as the default configuration? This selects the exact saved parameters from G${latestActivation.generation}; calibration validity is not renewed.`
-                    : `${accepting ? "Accept" : "Set"} ${selectedEntry.id} as the default configuration?`,
-                  restoring
-                    ? "Restore default"
-                    : accepting
-                      ? "Accept as default"
-                      : "Set as default",
-                )
-              }
-              onEdit={editableDraftSeed ? () => setConfigDraft(editableDraftSeed) : undefined}
-            />
+            <>
+              <div className="mb-4 flex flex-wrap items-center gap-2">
+                <button
+                  className={secondaryButton}
+                  disabled={!registry.entryDetailQuery.data}
+                  onClick={() => setEditingContext(true)}
+                >
+                  Save working point copy
+                </button>
+                {selectedEntry.source.kind === "parameter_context" && (
+                  <button
+                    className={secondaryButton}
+                    disabled={contextSelection.isPending}
+                    onClick={() =>
+                      contextSelection.mutate({
+                        entry_id: selectedEntry.id,
+                        content_hash: selectedEntry.content_hash,
+                      })
+                    }
+                  >
+                    Use for next experiment
+                  </button>
+                )}
+                <label>
+                  Compare with
+                  <select
+                    aria-label="Compare configuration with"
+                    value={comparisonId}
+                    onChange={(event) => setComparisonId(event.target.value)}
+                  >
+                    <option value="">Lab default</option>
+                    {overview.entries.map((entry) => (
+                      <option key={entry.id} value={entry.id}>
+                        {entry.source.kind === "parameter_context"
+                          ? entry.source.context.label
+                          : entry.id}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+              {comparison.error && <p role="alert">{errorMessage(comparison.error)}</p>}
+              {contextSelection.error && <p role="alert">{errorMessage(contextSelection.error)}</p>}
+              {contextSelection.data && (
+                <p>
+                  Selected {contextSelection.data.config_source.sample.sample_id} /{" "}
+                  {contextSelection.data.config_source.sample.context_id}. Unknown:{" "}
+                  {contextSelection.data.missing_values?.join(", ") || "none"}. Lab default
+                  unchanged.
+                </p>
+              )}
+              <ConfigEntryInspector
+                entry={selectedEntry}
+                active={overview.activation?.entry_id === selectedEntry.id}
+                latestActivation={latestActivation?.generation}
+                snapshot={registry.entryDetailQuery.data?.summary}
+                config={registry.entryDetailQuery.data?.config}
+                activeConfig={
+                  comparisonId ? comparison.data?.config : registry.activeDetailQuery.data?.config
+                }
+                snapshotPending={registry.entryDetailQuery.isPending}
+                snapshotError={registry.entryDetailQuery.error}
+                note={workflow.note}
+                pending={
+                  workflow.mutation.isPending &&
+                  workflow.mutation.variables?.kind === "activate-entry"
+                }
+                actionDisabled={commandDisabled || !registry.entryDetailQuery.isSuccess}
+                onNoteChange={workflow.setNote}
+                onSelectEntry={selectEntry}
+                onOpenRun={onOpenRun}
+                onActivate={() =>
+                  workflow.runAction(
+                    {
+                      kind: "activate-entry",
+                      entryId: selectedEntry.id,
+                      expectedGeneration: overview.activation?.generation ?? 0,
+                    },
+                    restoring
+                      ? `Restore ${selectedEntry.id} as the default configuration? This selects the exact saved parameters from G${latestActivation.generation}; calibration validity is not renewed.`
+                      : `${accepting ? "Accept" : "Set"} ${selectedEntry.id} as the default configuration?`,
+                    restoring
+                      ? "Restore default"
+                      : accepting
+                        ? "Accept as default"
+                        : "Set as default",
+                  )
+                }
+                onEdit={editableDraftSeed ? () => setConfigDraft(editableDraftSeed) : undefined}
+              />
+              {editingContext && registry.entryDetailQuery.data && (
+                <ConfigContextEditor
+                  key={selectedEntry.id}
+                  entry={selectedEntry}
+                  config={registry.entryDetailQuery.data.config}
+                  operator={workflow.operator}
+                  onCancel={() => setEditingContext(false)}
+                  onSaved={(entryId) => {
+                    setEditingContext(false);
+                    void queryClient.invalidateQueries({ queryKey: ["config"] });
+                    registry.selectEntry(entryId);
+                  }}
+                />
+              )}
+            </>
           ) : (
             <ConfigBoundaryMessage
               icon={<CircleDot />}

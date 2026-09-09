@@ -119,6 +119,7 @@ from scopecat.daemon.views import (
     ActiveConfigView,
     AnalysisContentBytesView,
     ConfigActivationPage,
+    ConfigContextResolution,
     ConfigDraftPreview,
     ConfigEntryView,
     ConfigRegistryPage,
@@ -158,6 +159,8 @@ from scopecat.daemon.wire import (
     CalibrationPublicationCommand,
     CalibrationPublicationReceipt,
     ConfigActivationReceipt,
+    ConfigContextResolveCommand,
+    ConfigContextSaveCommand,
     ConfigDraftCommand,
     ConfigEntryActivationCommand,
     ConfigPublishCommand,
@@ -857,6 +860,22 @@ class DaemonClient:
         return self._get_model(
             f"{_API_PREFIX}/config-registry/entries/{quote(entry_id, safe='')}",
             ConfigEntryView,
+        )
+
+    def save_context(self, command: ConfigContextSaveCommand) -> ConfigEntryView:
+        return self._post_idempotent_model(
+            f"{_API_PREFIX}/config-registry/contexts",
+            command,
+            ConfigEntryView,
+        )
+
+    def resolve_context(
+        self, command: ConfigContextResolveCommand
+    ) -> ConfigContextResolution:
+        return self._post_model(
+            f"{_API_PREFIX}/config-registry/contexts/resolve",
+            command,
+            ConfigContextResolution,
         )
 
     def publish_config(

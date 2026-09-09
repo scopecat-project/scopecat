@@ -554,3 +554,42 @@ def parameter_cell_edits(
                 )
             )
     return tuple(edits)
+
+
+def materialize_context_updates(
+    *,
+    catalog: ParameterCatalog,
+    base: ParameterSnapshot,
+    updates: Sequence[ParameterUpdate],
+) -> ParameterSnapshot:
+    """Apply explicit trial edits, including filling a previously unknown value.
+
+    Unlike a scientific proposal, this creates no before/after acceptance claim.
+    Present-value validation remains the resolver's responsibility.
+    """
+    selected = {value.id: value for value in base.values}
+    for update in updates:
+        definition = catalog.get(update.parameter_id)
+        if definition is None:
+            raise ValueError(f"parameter {update.parameter_id!r} is not defined")
+        if isinstance(update, ReplaceParameter):
+            _require_matching_shape(
+                parameter_id=update.parameter_id,
+                expected=definition.value_type,
+                value=update.value,
+            )
+            selected[update.parameter_id] = update.value
+        else:
+            current = selected.get(update.parameter_id)
+            if not isinstance(current, TableParameterValue) or not isinstance(
+                definition.value_type, Table
+            ):
+                raise ValueError(
+                    f"parameter {update.parameter_id!r} requires an existing table"
+                )
+            selected[update.parameter_id] = _apply_table_update(
+                current=current,
+                table_type=definition.value_type,
+                update=update,
+            )
+    return ParameterSnapshot(id=base.id, values=tuple(selected.values()))

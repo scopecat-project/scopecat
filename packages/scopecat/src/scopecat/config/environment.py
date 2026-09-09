@@ -11,8 +11,10 @@ from scopecat.records.config import ConfigProfileSnapshot
 
 def build_config_environment(
     config: ConfigProfileSnapshot,
+    *,
+    allow_missing: bool = False,
 ) -> ConfigEnvironment:
-    resolved = resolve_config_parameters(config)
+    resolved = resolve_config_parameters(config, allow_missing=allow_missing)
     problems = (
         *validate_config_profile(config, include_parameter_values=False),
         *resolved.problems,

@@ -12,7 +12,9 @@ from scopecat.config.changes import (
     load_parameter_change_proposal,
     parameter_change_proposal_record_ref,
 )
+from scopecat.config.contexts import apply_context_overrides
 from scopecat.config.registry import service as config_registry_service
+from scopecat.config.registry.records import ContextConfigRegistrySource
 from scopecat.control.models import (
     ControlRun,
     ResourceKey,
@@ -42,6 +44,7 @@ from scopecat.records.config import (
     InstrumentConnection,
     config_content_hash,
 )
+from scopecat.records.config_context import ContextRunConfigSource
 from scopecat.records.run import (
     AnalysisCandidateRunConfigSource,
     ConfigRegistryRunConfigSource,
@@ -102,6 +105,14 @@ class AdmissionService:
                 )
             self._resolve_provenance_config(submission.config_source)
             active = self._resolve_active_config()
+            if (
+                isinstance(submission.config_source, ContextRunConfigSource)
+                and submission.config_source.lab_generation
+                != active.activation.generation
+            ):
+                raise BackendConflict(
+                    "lab configuration changed since context resolution; resolve again"
+                )
             active_config = active.config
             _require_authoritative_instrument_inventory(
                 submitted=submission.config,
@@ -113,6 +124,14 @@ class AdmissionService:
                     authoritative=active_config,
                 )
             sample_bindings = self._samples.resolve_bindings(submission.request.samples)
+            if (
+                isinstance(submission.config_source, ContextRunConfigSource)
+                and submission.config_source.sample not in sample_bindings
+            ):
+                raise BackendConflict(
+                    "run sample does not match the context's "
+                    "exact physical sample revision"
+                )
             skeleton = build_run_admission(
                 config=submission.config,
                 request=submission.request,
@@ -198,7 +217,37 @@ class AdmissionService:
             return None
         if isinstance(source, ConfigRegistryRunConfigSource):
             return self._resolve_registry_source(source)
+        if isinstance(source, ContextRunConfigSource):
+            return self._resolve_context_source(source)
         return self._resolve_candidate_source(source)
+
+    def _resolve_context_source(
+        self, source: ContextRunConfigSource
+    ) -> ConfigProfileSnapshot:
+        try:
+            saved = config_registry_service.load_config_registry_entry_snapshot(
+                entry_id=source.context.entry_id,
+                unit_of_work=self._services.config_registry,
+            )
+            if (
+                saved.entry.content_hash != source.context.content_hash
+                or not isinstance(saved.entry.source, ContextConfigRegistrySource)
+            ):
+                raise BackendConflict(
+                    "run context does not match a saved context revision"
+                )
+            if saved.entry.source.context.sample != source.sample:
+                raise BackendConflict("run context sample identity was changed")
+            config = apply_context_overrides(saved.config, source.overrides)
+            if config_content_hash(config) != source.content_hash:
+                raise BackendConflict(
+                    "run context overrides do not match the effective config"
+                )
+            return config
+        except (ProblemFailure, ValueError) as error:
+            raise BackendConflict(
+                "run context cannot be resolved: " + str(error)
+            ) from error
 
     def _resolve_registry_source(
         self,

@@ -87,7 +87,7 @@ describe("ConfigDraftEditor", () => {
       note: "fresh calibration",
     });
     expect(screen.getByText("Candidate is valid")).toBeInTheDocument();
-    const comparison = screen.getByLabelText("Default to selected value");
+    const comparison = screen.getByLabelText("Comparison to selected value");
     expect(within(comparison).getByText("5 GHz")).toBeInTheDocument();
     expect(within(comparison).getByText("5.2 GHz")).toBeInTheDocument();
     await waitFor(() => expect(published).toHaveBeenCalledWith(receipt));

@@ -96,6 +96,7 @@ def coerce_stored_parameter_value(
     stored: StoredParameterValue,
     *,
     path: ValuePath,
+    allow_missing: bool = False,
 ) -> StoredParameterValue:
     """Validate and normalize one stored value using its catalog type."""
 
@@ -115,6 +116,8 @@ def coerce_stored_parameter_value(
         )
     if not isinstance(stored, TableParameterValue):
         _raise_shape_mismatch(definition, stored, expected="table", path=path)
+    if allow_missing:
+        return _coerce_partial_parameter_table(definition.id, value_type, stored, path)
     rows = _coerce_parameter_table(
         parameter_id=definition.id,
         value_type=value_type,
@@ -203,3 +206,41 @@ def validate_parameter_representation(
             )
         }
     )
+
+
+def _coerce_partial_parameter_table(
+    parameter_id: str, table: Table, stored: TableParameterValue, path: ValuePath
+) -> TableParameterValue:
+    """Validate present cells and complete physical row keys; absence is unknown."""
+    columns = {column.id: column for column in table.columns}
+    rows: list[dict[str, ParameterAtomValue]] = []
+    keys: list[tuple[ParameterAtomValue, ...]] = []
+    for index, row in enumerate(stored.rows):
+        unknown = set(row) - columns.keys()
+        missing_keys = set(table.primary_key) - row.keys()
+        if unknown or missing_keys:
+            raise ParameterValueValidationError(
+                "invalid_parameter_value",
+                f"parameter {parameter_id}: unknown columns {sorted(unknown)}; "
+                f"missing key columns {sorted(missing_keys)}",
+                path=(*path, "rows", index),
+            )
+        normalized = {
+            field: coerce_parameter_table_cell(
+                parameter_id=parameter_id,
+                column=columns[field],
+                value=value,
+                path=(*path, "rows", index, field),
+            )
+            for field, value in row.items()
+        }
+        key = tuple(normalized[field] for field in table.primary_key)
+        if table.primary_key and key in keys:
+            raise ParameterValueValidationError(
+                "invalid_parameter_value",
+                f"parameter {parameter_id}: duplicate row key",
+                path=(*path, "rows", index),
+            )
+        keys.append(key)
+        rows.append(normalized)
+    return TableParameterValue(id=stored.id, rows=rows)

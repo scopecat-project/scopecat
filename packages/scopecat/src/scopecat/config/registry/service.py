@@ -28,6 +28,7 @@ from scopecat.config.candidates import (
     CandidateConfig,
     resolve_candidate_config_from_snapshot,
 )
+from scopecat.config.contexts import context_value_origins, validate_context_config
 from scopecat.config.drafts import ConfigDraft, ConfigDraftCheckResult
 from scopecat.config.parameter_updates import ParameterUpdate
 from scopecat.config.profile_validation import validate_config_profile
@@ -44,6 +45,7 @@ from scopecat.config.registry.records import (
     ConfigRegistryActivationPage,
     ConfigRegistryActivationRecord,
     ConfigRegistryEntry,
+    ContextConfigRegistrySource,
     DirectConfigRegistrySource,
     ManualConfigDraftRegistrySource,
     ResolvedCalibrationCohortMergeContribution,
@@ -68,7 +70,9 @@ from scopecat.records.config import (
     config_content_equal,
     config_content_hash,
 )
+from scopecat.records.config_context import ConfigContextMetadata, ConfigContextRef
 from scopecat.records.content import ContentEntry, Sha256ContentHash
+from scopecat.records.parameter import ParameterSnapshot
 from scopecat.records.parameter_change import (
     ParameterChangeProposal,
     ParameterValueDelta,
@@ -77,6 +81,7 @@ from scopecat.records.run import (
     ConfigRegistryRunConfigSource,
     RunConfigSource,
 )
+from scopecat.records.sample import SampleBinding
 from scopecat.runs.refs import record_content_ref
 from scopecat.runs.repository import RunRepository
 
@@ -887,6 +892,17 @@ def _commit_config_registry_activation_locked(
         work=work,
     )
     entry = loaded.entry
+    if isinstance(entry.source, ContextConfigRegistrySource):
+        raise _registry_failure(
+            Conflict,
+            code="config_registry.context_not_global_default",
+            message=(
+                "parameter contexts are selected per run, "
+                "not activated as the lab default"
+            ),
+            location=_registry_model_location("entry_id"),
+            details={"entry_id": entry.id},
+        )
     prior_activation = _latest_entry_activation(work.registry, entry)
     if prior_activation is None:
         _validate_derived_entry_base(current_activation, entry, work)
@@ -1089,7 +1105,10 @@ def _commit_revision_locked(
     requested_entry: ConfigRegistryEntry,
     config: ConfigProfileSnapshot,
 ) -> ConfigRegistryMutationResult:
-    _require_valid_config(config)
+    if isinstance(requested_entry.source, ContextConfigRegistrySource):
+        validate_context_config(config)
+    else:
+        _require_valid_config(config)
     existing = _find_existing_entry_locked(
         repository=repository,
         entry_id=requested_entry.id,
@@ -1556,3 +1575,67 @@ __all__ = [
     "publish_instrument_inventory_migration_revision",
     "resolve_config_registry_config_source",
 ]
+
+
+def save_config_context(
+    *,
+    entry_id: str,
+    base: ConfigContextRef,
+    sample: SampleBinding,
+    working_point_id: str,
+    label: str,
+    parameters: ParameterSnapshot | None,
+    actor: str,
+    note: str,
+    unit_of_work: ConfigRegistryUnitOfWorkFactory,
+) -> ConfigRegistryEntrySnapshot:
+    """Save an alternative in the existing registry without an activation."""
+    _validate_entry_id(entry_id)
+    _validate_required_text(actor, field="actor")
+    with unit_of_work() as work:
+        loaded = _load_config_registry_entry_locked(entry_id=base.entry_id, work=work)
+        if loaded.entry.content_hash != base.content_hash:
+            raise ValueError("context base does not match the exact registry revision")
+        config = loaded.config.model_copy(
+            update={
+                "parameter_snapshot": loaded.config.parameter_snapshot
+                if parameters is None
+                else parameters
+            }
+        )
+        validate_context_config(config)
+        selected_ref = ConfigContextRef(
+            entry_id=entry_id, content_hash=config_content_hash(config)
+        )
+        inherited = (
+            loaded.entry.source.context.value_origins
+            if isinstance(loaded.entry.source, ContextConfigRegistrySource)
+            else ()
+        )
+        source = ContextConfigRegistrySource(
+            context=ConfigContextMetadata(
+                sample=sample,
+                working_point_id=working_point_id,
+                label=label,
+                base=base,
+                value_origins=context_value_origins(
+                    config,
+                    base=loaded.config.parameter_snapshot,
+                    base_ref=base,
+                    selected_ref=selected_ref,
+                    inherited=inherited,
+                ),
+            )
+        )
+        entry = ConfigRegistryEntry(
+            id=entry_id,
+            config_ref=work.registry.config_ref(entry_id),
+            content_hash=selected_ref.content_hash,
+            source=source,
+            actor=actor,
+            note=note,
+        )
+        committed = _commit_revision_locked(
+            repository=work.registry, requested_entry=entry, config=config
+        )
+        return ConfigRegistryEntrySnapshot(entry=committed.entry, config=config)

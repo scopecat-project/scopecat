@@ -37,21 +37,28 @@ class ResolvedConfigParameters:
 def validate_parameter_snapshot(
     catalog: ParameterCatalog,
     snapshot: ParameterSnapshot,
+    *,
+    allow_missing: bool = False,
 ) -> tuple[Problem, ...]:
     """Cross-validate a durable snapshot against its catalog."""
 
-    _normalized, problems = _normalize_snapshot(catalog, snapshot)
+    _normalized, problems = _normalize_snapshot(
+        catalog, snapshot, allow_missing=allow_missing
+    )
     return problems
 
 
 def resolve_config_parameters(
     config: ConfigProfileSnapshot,
+    *,
+    allow_missing: bool = False,
 ) -> ResolvedConfigParameters:
     """Normalize config parameters and project them into executable data."""
 
     normalized, problems = _normalize_snapshot(
         config.parameter_catalog,
         config.parameter_snapshot,
+        allow_missing=allow_missing,
     )
     scalars: dict[str, CellValue] = {}
     tables: dict[str, list[Row]] = {}
@@ -72,13 +79,15 @@ def resolve_config_parameters(
 def _normalize_snapshot(
     catalog: ParameterCatalog,
     snapshot: ParameterSnapshot,
+    *,
+    allow_missing: bool = False,
 ) -> tuple[tuple[StoredParameterValue, ...], tuple[Problem, ...]]:
     definitions = {definition.id: definition for definition in catalog.definitions}
     stored = {value.id: value for value in snapshot.values}
     problems: list[Problem] = []
 
     for definition in catalog.definitions:
-        if definition.id not in stored:
+        if definition.id not in stored and not allow_missing:
             problems.append(
                 _problem(
                     "missing_parameter_value",
@@ -107,6 +116,7 @@ def _normalize_snapshot(
                 definition,
                 value,
                 path=("parameter_snapshot", *path),
+                allow_missing=allow_missing,
             )
         except ParameterValueValidationError as error:
             problems.append(
