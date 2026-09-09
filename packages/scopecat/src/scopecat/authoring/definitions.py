@@ -65,6 +65,7 @@ from scopecat.kernel.payloads import PayloadValue
 from scopecat.kernel.product_identity import parse_product_id
 from scopecat.kernel.quantity import Quantity as QuantityValue
 from scopecat.kernel.resource_identity import ResourceRoleInput
+from scopecat.kernel.value_type_compatibility import is_assignable
 from scopecat.program.bindings import BindingIntent
 from scopecat.program.controls import ControlSet
 from scopecat.program.definitions import (
@@ -1311,21 +1312,24 @@ def _apply_control_defaults(
     contract: _ExperimentContract,
     input_defaults: dict[str, RuntimeInput],
     required_inputs: list[str],
-) -> None:
+) -> _ExperimentContract:
+    runtime_arguments = dict(contract.runtime_arguments)
     for control in controls.fields:
         if control.ownership != "editable" or control.scannable:
             continue
         if control.id not in contract.runtime_names:
             raise ValueError(f"control {control.id!r} needs a declared Input parameter")
-        declared_type = dict(contract.runtime_arguments)[control.id].value_type
-        if declared_type != control.value_type:
+        declared_type = runtime_arguments[control.id].value_type
+        if not is_assignable(control.value_type, declared_type):
             raise TypeError(
                 f"control {control.id!r} type must match its Input declaration"
             )
         if control.id in input_defaults:
             raise ValueError("declare controlled defaults only on Control")
         input_defaults[control.id] = control.default
+        runtime_arguments[control.id] = authoring_input(control.id, control.value_type)
         required_inputs.remove(control.id)
+    return replace(contract, runtime_arguments=tuple(runtime_arguments.items()))
 
 
 def _experiment_from_function[ResultT, **P](
@@ -1354,7 +1358,9 @@ def _experiment_from_function[ResultT, **P](
         else:
             input_defaults[parameter.name] = cast("RuntimeInput", default)
     if controls is not None:
-        _apply_control_defaults(controls, contract, input_defaults, required_inputs)
+        contract = _apply_control_defaults(
+            controls, contract, input_defaults, required_inputs
+        )
     selected_metadata = dict(metadata or {})
     doc = inspect.getdoc(fn)
     if doc is not None:

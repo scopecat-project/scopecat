@@ -52,7 +52,13 @@ class Control:
 
     @property
     def value_type(self) -> Scalar:
-        return Scalar(Float() if self.unit is None else QuantityType(unit=self.unit))
+        return Scalar(
+            Float(minimum=self.minimum, maximum=self.maximum)
+            if self.unit is None
+            else QuantityType(
+                unit=self.unit, minimum=self.minimum, maximum=self.maximum
+            )
+        )
 
     @property
     def ref(self) -> CoordinateRef[object]:
@@ -62,17 +68,8 @@ class Control:
         return coordinate(self.id, self.value_type)
 
     def normalize(self, value: object) -> ControlScalar:
-        normalized = coerce_literal(self.value_type, value)
+        normalized = coerce_literal(self.value_type, value, path=(self.id,))
         assert isinstance(normalized, float | Quantity)
-        magnitude = normalized.value if isinstance(normalized, Quantity) else normalized
-        if self.minimum is not None and magnitude < self.minimum:
-            raise ValueError(
-                f"{self.id} must be at least {self.minimum} {self.unit or ''}"
-            )
-        if self.maximum is not None and magnitude > self.maximum:
-            raise ValueError(
-                f"{self.id} must be at most {self.maximum} {self.unit or ''}"
-            )
         return normalized
 
     def fixed_axis(self, value: object) -> AxisSpec:

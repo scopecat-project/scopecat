@@ -886,3 +886,54 @@ def test_parent_compute_consumes_program_call_result() -> None:
         "discriminate/probability_0",
         "discriminate/probability_1",
     }
+
+
+@pytest.mark.parametrize("scannable", [False, True])
+def test_bounded_control_compiles_into_shared_typed_program(scannable: bool) -> None:
+    duration = sc.Control(
+        "duration",
+        default=sc.Quantity(64, "ns"),
+        minimum=4,
+        maximum=1000,
+        scannable=scannable,
+    )
+    controls = sc.ControlSet((duration,))
+
+    @authoring.program
+    def timed_delay(
+        qubit: authoring.Qubit,
+        duration: Annotated[sc.Quantity, sc.QuantityType(unit="ns", minimum=0)],
+    ) -> authoring.QuantumFragment:
+        return authoring.delay(authoring.drive(qubit), duration)
+
+    if scannable:
+
+        @sc.experiment(controls=controls)
+        def scanned(context: sc.ExperimentContext) -> None:
+            context.use(timed_delay("q0", duration.ref))
+
+        invocation = scanned().with_axis(
+            sc.axis(duration.ref, [sc.Quantity(4, "ns"), sc.Quantity(1000, "ns")])
+        )
+    else:
+
+        @sc.experiment(controls=controls)
+        def fixed(
+            context: sc.ExperimentContext,
+            duration: Annotated[sc.Input[sc.Quantity], sc.QuantityType(unit="ns")],
+        ) -> None:
+            context.use(timed_delay("q0", duration))
+
+        invocation = fixed.bind()
+    compiled = compile_invocation(invocation)
+    assert compiled.request.inputs == (
+        {} if scannable else {"duration": sc.Quantity(64, "ns")}
+    )
+    assert duration.value_type == sc.ScalarType(
+        sc.QuantityType(unit="ns", minimum=4, maximum=1000)
+    )
+    with pytest.raises(ValueError, match="at least"):
+        duration.fixed_axis(sc.Quantity(3, "ns"))
+    if scannable:
+        with pytest.raises(ValueError, match="at most"):
+            sc.axis(duration.ref, [sc.Quantity(1001, "ns")])
