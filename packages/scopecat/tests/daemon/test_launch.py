@@ -3,7 +3,8 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from scopecat.application.launch import LaunchInputSchema, LaunchRequest
+from scopecat.application.launch import LaunchInputSchema
+from scopecat.records.launch_request import LaunchRequest
 from scopecat.records.run import ConfigRegistryRunConfigSource
 
 

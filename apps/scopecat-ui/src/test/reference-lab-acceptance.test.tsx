@@ -71,25 +71,27 @@ describe("shared reference-lab acceptance", () => {
       vi.fn((request: Request) =>
         Promise.resolve(
           Response.json(
-            new URL(request.url).pathname.endsWith("/config-registry")
-              ? {
-                  activation: {
-                    entry_id:
-                      fixtures.launch_preview.config_source.kind === "config_registry"
-                        ? fixtures.launch_preview.config_source.entry_id
-                        : undefined,
-                    generation:
-                      fixtures.launch_preview.config_source.kind === "config_registry"
-                        ? fixtures.launch_preview.config_source.registry_generation
-                        : undefined,
-                  },
-                  entries: [],
-                }
-              : new URL(request.url).pathname.endsWith("/validity")
-                ? { valid: true, changes: [] }
-                : new URL(request.url).pathname.endsWith("/preview")
-                  ? fixtures.launch_preview
-                  : fixtures.launch_catalog,
+            new URL(request.url).pathname.endsWith("/experiment-plans")
+              ? { items: [] }
+              : new URL(request.url).pathname.endsWith("/config-registry")
+                ? {
+                    activation: {
+                      entry_id:
+                        fixtures.launch_preview.config_source.kind === "config_registry"
+                          ? fixtures.launch_preview.config_source.entry_id
+                          : undefined,
+                      generation:
+                        fixtures.launch_preview.config_source.kind === "config_registry"
+                          ? fixtures.launch_preview.config_source.registry_generation
+                          : undefined,
+                    },
+                    entries: [],
+                  }
+                : new URL(request.url).pathname.endsWith("/validity")
+                  ? { valid: true, changes: [] }
+                  : new URL(request.url).pathname.endsWith("/preview")
+                    ? fixtures.launch_preview
+                    : fixtures.launch_catalog,
           ),
         ),
       ),
@@ -124,6 +126,7 @@ describe("shared reference-lab acceptance", () => {
       "fetch",
       vi.fn(async (request: Request) => {
         const path = new URL(request.url).pathname;
+        if (path.endsWith("/experiment-plans")) return Response.json({ items: [] });
         if (path.endsWith("/config-registry"))
           return Response.json({
             activation: {

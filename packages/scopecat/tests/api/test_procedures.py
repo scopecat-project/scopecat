@@ -72,11 +72,13 @@ from scopecat.records.analysis import (
 from scopecat.records.config import ConfigProfileSnapshot, config_content_hash
 from scopecat.records.content import ContentEntry, Sha256ContentHash
 from scopecat.records.parameter_change import ParameterChangeProposal
+from scopecat.records.plan_ref import ProcedureChildSubmission
 from scopecat.records.run import RunConfigSource, RunSnapshot
 from scopecat.runs.selectors import RunSelector
 
 
 class _ImmediateProcedureContext:
+    plan_ref = None
     procedure_run_id = "procedure-test"
     samples: tuple[object, ...] = ()
 
@@ -420,8 +422,10 @@ class _TransportFailingRunner:
         executor_id: str = "notebook",
         submission_id: str | None = None,
         wait_for_resources: bool = False,
+        procedure_child: ProcedureChildSubmission | None = None,
     ) -> RunSnapshot:
         del executor_id, submission_id, wait_for_resources
+        assert procedure_child is None
         raise httpx2.ReadError("child run response was lost")
 
 

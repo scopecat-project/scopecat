@@ -20,6 +20,7 @@ from scopecat.program.definitions import ExperimentInvocation
 from scopecat.records.config import ConfigProfileSnapshot
 from scopecat.records.config_context import ContextRunConfigSource
 from scopecat.records.costs import RunCompilationCost
+from scopecat.records.plan_ref import ExperimentPlanRef
 from scopecat.records.run import RunConfigSource
 from scopecat.records.run_request import RunRequest
 from scopecat.records.sample import SampleSelector
@@ -73,6 +74,7 @@ def plan_experiment_invocation(
     metadata: Mapping[str, object] | None = None,
     operator: str | None = None,
     samples: tuple[SampleSelector, ...] = (),
+    plan_ref: ExperimentPlanRef | None = None,
 ) -> PlannedRun:
     """Plan one authored invocation against a snapshot without project I/O."""
 
@@ -98,6 +100,9 @@ def plan_experiment_invocation(
 
     return replace(
         planned,
+        request=planned.request.model_copy(update={"plan_ref": plan_ref})
+        if plan_ref is not None
+        else planned.request,
         program=replace(
             planned.program,
             compilation_cost=RunCompilationCost(seconds=perf_counter() - started),

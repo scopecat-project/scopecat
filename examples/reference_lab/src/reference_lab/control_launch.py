@@ -2,18 +2,11 @@
 
 from scopecat.api.lab import LabClient
 from scopecat.api.procedures import LabProcedureContext
-from scopecat.application.controls import (
-    ControlEdit,
-    control_catalog,
-    control_values,
-    edit_controls,
-)
+from scopecat.application.controls import control_catalog, control_values, edit_controls
 from scopecat.application.launch import (
     LaunchCatalogEntry,
-    LaunchConfigSource,
     LaunchInputSchema,
     LaunchPreview,
-    LaunchRequest,
     LaunchSubmission,
 )
 from scopecat.application.launch_config import (
@@ -29,6 +22,8 @@ from scopecat.planning.preflight import (
     summarize_preflight,
 )
 from scopecat.records.content import Sha256ContentHash
+from scopecat.records.control_edit import ControlEdit
+from scopecat.records.launch_request import LaunchConfigSource, LaunchRequest
 from scopecat.records.manual_preview import ManualPreviewFence
 
 from reference_lab.launch_config import launch_config
@@ -141,5 +136,7 @@ def control_launch(
         sample=launch_sample_selection(request, source),
         expected_manual_preview=request.manual_state,
         expected_config_generation=launch_config_generation(source),
+        plan_ref=request.plan_ref,
+        plan_request=request if request.plan_ref is not None else None,
     )
     return LaunchSubmission(procedure_id=admitted.id)

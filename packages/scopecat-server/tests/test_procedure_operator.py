@@ -148,7 +148,7 @@ def test_unknown_child_never_dispatches_including_exact_submission_retry(
     tmp_path: Path, via_submit: bool
 ) -> None:
     application, _ = _application(tmp_path)
-    from scopecat.application.launch import LaunchRequest
+    from scopecat.records.launch_request import LaunchRequest
     from scopecat.records.run import ConfigRegistryRunConfigSource
 
     request = LaunchRequest(action="preview", experiment="diagnostic", version="1")

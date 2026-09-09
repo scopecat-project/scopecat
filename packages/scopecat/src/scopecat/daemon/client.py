@@ -236,6 +236,11 @@ from scopecat.records.content import (
     InlinePayloadBody,
 )
 from scopecat.records.costs import RunMeasuredCosts
+from scopecat.records.experiment_plan import (
+    ExperimentPlanList,
+    ExperimentPlanRevision,
+    ExperimentPlanSave,
+)
 from scopecat.records.instrument import (
     InstrumentStateCacheReadback,
     InstrumentStateReadback,
@@ -247,6 +252,7 @@ from scopecat.records.measurement_recording import (
     MeasurementDatasetAppend,
     MeasurementDatasetReceipt,
 )
+from scopecat.records.plan_ref import ExperimentPlanRef
 from scopecat.records.run import RunSnapshot
 from scopecat.records.sample import SampleArtifactRef, SampleRevision
 from scopecat.records.sample_artifact import SampleArtifactPage
@@ -341,6 +347,30 @@ class DaemonClient:
 
     def close(self) -> None:
         self._http.close()
+
+    def experiment_plans(self, *, plan_id: str | None = None) -> ExperimentPlanList:
+        return self._get_model(
+            f"{_API_PREFIX}/experiment-plans",
+            ExperimentPlanList,
+            params={"plan_id": plan_id} if plan_id else {},
+        )
+
+    def experiment_plan(self, ref: ExperimentPlanRef) -> ExperimentPlanRevision:
+        return self._post_model(
+            f"{_API_PREFIX}/experiment-plans/read", ref, ExperimentPlanRevision
+        )
+
+    def save_experiment_plan(
+        self, command: ExperimentPlanSave
+    ) -> ExperimentPlanRevision:
+        return self._post_model(
+            f"{_API_PREFIX}/experiment-plans", command, ExperimentPlanRevision
+        )
+
+    def hide_experiment_plan(self, ref: ExperimentPlanRef) -> ExperimentPlanRef:
+        return self._post_model(
+            f"{_API_PREFIX}/experiment-plans/hide", ref, ExperimentPlanRef
+        )
 
     def author_revision_state(self) -> AuthorRevisionState:
         return self._get_model(f"{_API_PREFIX}/author-revisions", AuthorRevisionState)

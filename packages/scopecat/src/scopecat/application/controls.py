@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, StrictFloat, model_validator
+from pydantic import BaseModel, ConfigDict, StrictFloat
 
 from scopecat.authoring.scans import axis
 from scopecat.compiler.frontend.scan_lowering import project_axis_record
@@ -14,7 +14,8 @@ from scopecat.program.controls import ControlScalar, ControlSet
 from scopecat.program.definitions import ExperimentInvocation
 from scopecat.program.scans import AxisSpec
 from scopecat.records.config import ConfigProfileSnapshot
-from scopecat.records.run_request import AxisRecord, AxisSourceRecord
+from scopecat.records.control_edit import ControlEdit
+from scopecat.records.run_request import AxisRecord
 
 
 class _ControlModel(BaseModel):
@@ -32,24 +33,6 @@ class LaunchControl(_ControlModel):
     scannable: bool
     ownership: Literal["editable", "derived", "configuration"]
     provenance: str
-
-
-class ControlEdit(_ControlModel):
-    """Choose one existing scalar or axis source; no hidden inactive value."""
-
-    mode: Literal["fixed", "scan", "default"]
-    value: StrictFloat | Quantity | None = None
-    axis: AxisSourceRecord | None = None
-
-    @model_validator(mode="after")
-    def validate_source(self) -> ControlEdit:
-        if self.mode == "fixed" and (self.value is None or self.axis is not None):
-            raise ValueError("fixed control edit requires only a scalar value")
-        if self.mode == "scan" and (self.axis is None or self.value is not None):
-            raise ValueError("scan control edit requires only an axis source")
-        if self.mode == "default" and (self.axis is not None or self.value is not None):
-            raise ValueError("default control edit cannot retain another source")
-        return self
 
 
 class LaunchControlValue(_ControlModel):

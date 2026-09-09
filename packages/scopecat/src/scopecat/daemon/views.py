@@ -57,6 +57,7 @@ from scopecat.records.parameter_change import (
     ParameterChangeProposal,
     ParameterValueDelta,
 )
+from scopecat.records.plan_ref import ExperimentPlanRef
 from scopecat.records.run import RunSnapshot
 from scopecat.records.run_request import RunRequest
 from scopecat.records.sample import SampleId, SampleRecord, SampleRevision
@@ -343,6 +344,14 @@ class RunRequestView(_ViewModel):
 
     run_id: str
     request: RunRequest
+
+    plan_ref: ExperimentPlanRef | None = None
+
+    @model_validator(mode="after")
+    def validate_plan_projection(self) -> RunRequestView:
+        if self.plan_ref != self.request.plan_ref:
+            raise ValueError("run request plan projection is inconsistent")
+        return self
 
 
 class RunAnalysisView(_ViewModel):

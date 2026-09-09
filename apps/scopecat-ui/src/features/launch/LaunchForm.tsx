@@ -4,6 +4,7 @@ import { apiClient, apiData } from "../../api-client";
 import type { LaunchCatalogEntry } from "./launch-api";
 import { ControlFields, ControlSummary, controlEdits } from "./ControlFields";
 import { invalidateDraft, useLaunchDraft, type LaunchDraft } from "./LaunchDraft";
+import { PlanSave } from "./PlanSave";
 import { PreflightSummary } from "./PreflightSummary";
 import { canRenderField, type FormField } from "./launch-fields";
 
@@ -76,7 +77,17 @@ export function LaunchForm({
     changes: Partial<Pick<LaunchDraft, "values" | "controls" | "sample" | "actor">>,
   ) {
     update((current) =>
-      invalidateDraft({ ...current, ...changes }, "Inputs changed. Preview again before starting."),
+      invalidateDraft(
+        {
+          ...current,
+          ...changes,
+          planDirty:
+            current.planDirty ||
+            (Boolean(current.plan) && Object.keys(changes).some((key) => key !== "actor")),
+          sampleBinding: "sample" in changes ? undefined : current.sampleBinding,
+        },
+        "Inputs changed. Preview again before starting.",
+      ),
     );
   }
   function change(name: string, value: string) {
@@ -110,13 +121,18 @@ export function LaunchForm({
             action: "preview",
             experiment: entry.id,
             version: entry.version,
-            sample: selectedContext ? null : sample.trim() || null,
+            sample:
+              draft.sampleBinding?.sample_id ?? (selectedContext ? null : sample.trim() || null),
+            sample_binding: draft.sampleBinding,
+            configuration: draft.configuration,
+            plan_ref: draft.planDirty ? undefined : draft.plan?.ref,
             context: selectedContext?.config_source.context,
             overrides: selectedContext?.config_source.overrides ?? [],
             inputs: inputValues(),
             control_edits: controlEdits(drafts),
             actor,
             request_key: "",
+            code_revision: draft.codeRevision,
           },
         }),
       );
@@ -158,7 +174,11 @@ export function LaunchForm({
           inputs: inputValues(),
           control_edits: controlEdits(drafts),
           request_key: requestKey,
-          sample: selectedContext ? null : sample.trim() || null,
+          sample:
+            draft.sampleBinding?.sample_id ?? (selectedContext ? null : sample.trim() || null),
+          sample_binding: draft.sampleBinding,
+          configuration: draft.configuration,
+          plan_ref: draft.planDirty ? undefined : draft.plan?.ref,
           context: selectedContext?.config_source.context,
           overrides: selectedContext?.config_source.overrides ?? [],
           actor,
@@ -191,6 +211,30 @@ export function LaunchForm({
       className="space-y-4 max-w-3xl"
     >
       <p>{entry.description}</p>
+      <PlanSave
+        key={`${draft.plan?.ref.plan_id ?? "new"}:${draft.plan?.ref.revision ?? 0}`}
+        preview={result}
+        request={() => ({
+          action: "preview",
+          request_key: "",
+          overrides: [],
+          experiment: entry.id,
+          version: entry.version,
+          inputs: inputValues(),
+          control_edits: controlEdits(drafts),
+          actor,
+        })}
+      />
+      {draft.configuration && (
+        <p>
+          Using the plan's exact saved configuration. It is not replaced by the current lab default.
+        </p>
+      )}
+      {draft.sampleBinding && (
+        <p>
+          Saved sample: {draft.sampleBinding.display_name}, revision {draft.sampleBinding.revision}.
+        </p>
+      )}
       {selectedContext ? (
         <div>
           <p>
@@ -209,12 +253,12 @@ export function LaunchForm({
             Use lab default
           </button>
         </div>
-      ) : (
+      ) : !draft.configuration ? (
         <p>
           Using lab default. Select a saved sample working point in Configuration to use its
           parameters.
         </p>
-      )}
+      ) : null}
       <p className="text-sm">
         {draft.preview && !result && !pending
           ? configurationError

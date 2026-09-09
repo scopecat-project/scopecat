@@ -44,6 +44,7 @@ from scopecat.automation.wire import (
     ProcedureWorkerLeaseReleaseReceipt,
 )
 from scopecat.records.content import Sha256ContentHash
+from scopecat.records.plan_ref import ExperimentPlanRef
 from scopecat.records.sample import SampleSelector
 
 
@@ -189,7 +190,7 @@ class _ProcedureYieldRequested(BaseException):
 class ProcedureContext:
     """Lease-fenced primitive used by imperative procedure definitions."""
 
-    __slots__ = ("_authority", "_control", "_samples", "_should_yield")
+    __slots__ = ("_authority", "_control", "_plan_ref", "_samples", "_should_yield")
 
     def __init__(
         self,
@@ -197,11 +198,13 @@ class ProcedureContext:
         authority: _ProcedureLeaseAuthority,
         *,
         samples: tuple[SampleSelector, ...] = (),
+        plan_ref: ExperimentPlanRef | None = None,
         should_yield: Callable[[], bool] | None = None,
     ) -> None:
         self._control = control
         self._authority = authority
         self._samples = samples
+        self._plan_ref = plan_ref
         self._should_yield = should_yield
 
     @property
@@ -215,6 +218,10 @@ class ProcedureContext:
         """Return the immutable sample scope inherited by child runs."""
 
         return self._samples
+
+    @property
+    def plan_ref(self) -> ExperimentPlanRef | None:
+        return self._plan_ref
 
     def step[OutputT: ProcedureStepOutputRef](
         self,
@@ -510,6 +517,7 @@ class ProcedureWorker:
             self._control,
             authority,
             samples=acquired.run.samples,
+            plan_ref=acquired.run.plan_ref,
             should_yield=should_yield,
         )
         authority.start()

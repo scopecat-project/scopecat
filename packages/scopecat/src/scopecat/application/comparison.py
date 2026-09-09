@@ -10,13 +10,13 @@ from typing import TYPE_CHECKING, Literal, Protocol
 
 from pydantic import BaseModel
 
-from scopecat.application.launch import LaunchRequest
 from scopecat.records.comparison import (
     ComparisonCatalog,
     ComparisonInspection,
     ComparisonPublication,
     ComparisonRequest,
 )
+from scopecat.records.launch_request import LaunchRequest
 
 if TYPE_CHECKING:
     from scopecat.api.lab import LabClient

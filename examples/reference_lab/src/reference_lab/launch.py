@@ -11,10 +11,8 @@ from scopecat.api.procedures import LabProcedureContext
 from scopecat.application.launch import (
     LaunchCatalog,
     LaunchCatalogEntry,
-    LaunchConfigSource,
     LaunchInputSchema,
     LaunchPreview,
-    LaunchRequest,
     LaunchResult,
     LaunchSubmission,
     validate_launch_control_edits,
@@ -34,6 +32,7 @@ from scopecat.planning.preflight import (
 )
 from scopecat.records.config import config_content_hash
 from scopecat.records.content import Sha256ContentHash
+from scopecat.records.launch_request import LaunchConfigSource, LaunchRequest
 from scopecat.records.manual_preview import ManualPreviewFence
 
 from reference_lab.control_launch import CONTROL_ENTRY, control_launch
@@ -314,5 +313,7 @@ def launch_provider(lab: LabClient, request: LaunchRequest) -> LaunchResult:
         sample=launch_sample_selection(request, source),
         expected_manual_preview=request.manual_state,
         expected_config_generation=launch_config_generation(source),
+        plan_ref=request.plan_ref,
+        plan_request=request if request.plan_ref is not None else None,
     )
     return LaunchSubmission(procedure_id=admitted.id)

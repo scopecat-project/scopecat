@@ -233,6 +233,7 @@ it("finds durable work from history without copying an ID", async () => {
     "fetch",
     vi.fn(async (request: Request) => {
       const path = new URL(request.url).pathname;
+      if (path.endsWith("experiment-plans")) return Response.json({ items: [] });
       if (path.endsWith("experiment-launcher")) return Response.json({ entries: [] });
       if (path.endsWith("procedures"))
         return Response.json({ items: [view().procedure], next_cursor: null });

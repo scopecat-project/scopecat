@@ -228,7 +228,8 @@ def _verify_store(project: Path) -> int:
             connection.execute(
                 "SELECT digest FROM run_repository_refs "
                 "UNION SELECT digest FROM project_analysis_repository_refs "
-                "UNION SELECT bundle_digest AS digest FROM author_revisions"
+                "UNION SELECT bundle_digest AS digest FROM author_revisions "
+                "UNION SELECT digest FROM experiment_plan_revisions"
             ).fetchall(),
         )
         for row in refs:

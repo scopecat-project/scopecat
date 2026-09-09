@@ -30,6 +30,7 @@ from scopecat.kernel.run_outcome import utc_now
 from scopecat.records.analysis import AnalysisInterpretationReference, AnalysisSubject
 from scopecat.records.config import ConfigContentHash
 from scopecat.records.content import Sha256ContentHash
+from scopecat.records.plan_ref import ExperimentPlanRef
 from scopecat.records.sample import SampleSelector
 
 type _NonEmptyText = Annotated[str, Field(min_length=1)]
@@ -101,6 +102,7 @@ def procedure_intent_hash(
     *,
     samples: tuple[SampleSelector, ...] = (),
     recovery: ProcedureRecoverySource | None = None,
+    plan_ref: ExperimentPlanRef | None = None,
 ) -> Sha256ContentHash:
     """Hash the exact definition, intent, and sample scope used by a worker."""
 
@@ -109,6 +111,8 @@ def procedure_intent_hash(
         "intent": cast("dict[str, JsonValue]", thaw_json_value(intent)),
         "samples": [sample.model_dump(mode="json") for sample in samples],
     }
+    if plan_ref is not None:
+        identity["plan_ref"] = plan_ref.model_dump(mode="json")
     if recovery is not None:
         identity["recovery"] = recovery.model_dump(mode="json")
     return f"sha256:{stable_content_hash(identity)}"
@@ -249,6 +253,7 @@ class ProcedureRun(_ProcedureModel):
     cancellation: ProcedureCancellation | None = None
     resource_wait: ProcedureResourceWait | None = None
     recovery: ProcedureRecoverySource | None = None
+    plan_ref: ExperimentPlanRef | None = None
 
     @field_validator("samples")
     @classmethod
@@ -271,6 +276,7 @@ class ProcedureRun(_ProcedureModel):
             self.intent,
             samples=self.samples,
             recovery=self.recovery,
+            plan_ref=self.plan_ref,
         )
         if self.intent_hash != expected_intent_hash:
             raise ValueError(

@@ -1,3 +1,4 @@
+import { PlanOrigin } from "./PlanOrigin";
 import { ComparisonLink } from "../analyses/ComparisonLink";
 import { useState } from "react";
 import { useInfiniteQuery } from "@tanstack/react-query";
@@ -74,6 +75,7 @@ export function ProcedureProgress({ procedureId }: { procedureId: string }) {
   return (
     <section className="border rounded p-4 space-y-3">
       <h3 className="font-semibold">Procedure progress</h3>
+      <PlanOrigin reference={run?.plan_ref} />
       <p>{run?.definition.id ?? procedureId}</p>
       <a className="underline" href={`?procedure=${encodeURIComponent(procedureId)}#launch`}>
         Reopen this procedure

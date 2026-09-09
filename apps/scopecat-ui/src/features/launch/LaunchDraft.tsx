@@ -1,4 +1,5 @@
-import { importLaunchHandoff } from "./launch-handoff";
+import type { PlanRevision } from "./experiment-plans";
+import { importLaunchRequest, importLaunchHandoff } from "./launch-handoff";
 import type { ComparisonHandoff } from "../analyses/RunComparison";
 import {
   createContext,
@@ -24,6 +25,11 @@ import type { LaunchCatalogEntry, LaunchPreview } from "./launch-api";
 
 export interface LaunchDraft {
   handoff?: ComparisonHandoff;
+  plan?: PlanRevision;
+  planDirty?: boolean;
+  configuration?: PlanRevision["definition"]["configuration"];
+  sampleBinding?: PlanRevision["definition"]["sample"];
+  codeRevision?: PlanRevision["definition"]["code_revision"];
   definition: string;
   controlDefinition: string;
   experiment: string;
@@ -45,10 +51,15 @@ interface DraftContext {
   selectedContext: ConfigContextResolution | undefined;
   selectContext: (resolution?: ConfigContextResolution) => void;
   draft: LaunchDraft | undefined;
+  openPlan: (
+    plan: PlanRevision,
+    entry: LaunchCatalogEntry,
+    context?: ConfigContextResolution,
+  ) => void;
   importHandoff: (entry: LaunchCatalogEntry, handoff: ComparisonHandoff) => void;
   select: (entry: LaunchCatalogEntry, reset?: boolean) => void;
   update: (change: DraftUpdate) => void;
-  isCurrent: (revision: number) => boolean;
+  isCurrent: (revision: number | undefined) => boolean;
   configurationReady: boolean;
   configurationError: string;
   retryOriginalAllowed: boolean;
@@ -265,7 +276,12 @@ function ProjectDraft({
           setDraft((current) =>
             current
               ? invalidateDraft(
-                  current,
+                  {
+                    ...current,
+                    planDirty: Boolean(current.plan),
+                    configuration: undefined,
+                    sampleBinding: undefined,
+                  },
                   "Parameter context changed. Preview again before starting.",
                 )
               : current,
@@ -283,6 +299,40 @@ function ProjectDraft({
           matchesActive(attempt?.request.config_source, configuration.data),
         refreshConfiguration: () => {
           void queryClient.invalidateQueries({ queryKey: ["config", "launch-context", projectId] });
+        },
+        openPlan: (plan, entry, context) => {
+          if (!alive.current) return;
+          const current = latest.current;
+          const next = initialDraft(entry, (current?.revision ?? 0) + 1);
+          const d = plan.definition;
+          const imported = importLaunchRequest(
+            next,
+            entry,
+            {
+              action: "preview",
+              request_key: "",
+              experiment: d.experiment,
+              version: d.version,
+              inputs: d.inputs,
+              control_edits: d.control_edits,
+              context: d.context,
+              overrides: d.overrides,
+              sample: d.sample?.sample_id,
+              actor: current?.actor ?? "operator",
+            },
+            context?.config_source,
+          );
+          setSelectedContext(context);
+          setDraft({
+            ...imported,
+            plan,
+            planDirty: false,
+            configuration: d.configuration,
+            sampleBinding: d.sample,
+            codeRevision: d.code_revision,
+            handoff: undefined,
+            notice: `Opened ${plan.name}, revision ${plan.ref.revision}. Saved by ${plan.saved_by}; current operator is ${current?.actor ?? "operator"}. Fresh preview required.`,
+          });
         },
         importHandoff: (entry, handoff) => {
           if (!alive.current) return;
@@ -329,5 +379,5 @@ function matchesActive(
   return source.kind === "parameter_context"
     ? source.lab_generation === activation?.generation
     : source.registry_generation === activation?.generation &&
-        source.entry_id === activation?.entry_id;
+        (source.selector !== "active" || source.entry_id === activation?.entry_id);
 }

@@ -5535,3 +5535,48 @@ def test_entity_selected_arrow_http_preserves_run_identity_and_page_watermark(
         assert all(item["entity_index"] is None for item in preview["failures"])
         assert all(item["evidence"] is None for item in preview["failures"])
         assert preview["series"][0]["evidence"]["command_id"] == f"{run_id}-q7"
+
+
+def test_plan_origin_rejects_direct_run_and_transaction_replay_skips_new_child_gate(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from scopecat.records.plan_ref import ExperimentPlanRef
+
+    with LocalDaemonRuntime(tmp_path, bootstrap_config=_config()) as runtime:
+        client = TestClient(runtime.app())
+        plain = _submission("plain-origin-check")
+        forged = plain.model_copy(
+            update={
+                "submission_id": "forged-plan-child",
+                "request": plain.request.model_copy(
+                    update={
+                        "plan_ref": ExperimentPlanRef(
+                            plan_id="claimed-plan",
+                            revision=1,
+                            content_hash="sha256:" + "a" * 64,
+                        )
+                    }
+                ),
+            }
+        )
+        rejected = client.post("/api/v1/runs", json=forged.model_dump(mode="json"))
+        assert rejected.status_code == 409, rejected.text
+        assert "admitted procedure step" in rejected.text
+        assert client.get("/api/v1/runs").json()["items"] == []
+        admitted = client.post("/api/v1/runs", json=plain.model_dump(mode="json"))
+        assert admitted.status_code == 201, admitted.text
+
+        # Model the outer lookup missing an admission won by another writer.
+        def missing_outer_lookup(*_args: object) -> None:
+            return None
+
+        monkeypatch.setattr(AdmissionService, "_replay_admission", missing_outer_lookup)
+
+        def closed_parent(*_args: object) -> None:
+            raise AssertionError("an existing admission must not recheck its parent")
+
+        monkeypatch.setattr(AdmissionService, "_require_plan_child", closed_parent)
+        replayed = client.post("/api/v1/runs", json=plain.model_dump(mode="json"))
+        assert replayed.status_code == 201, replayed.text
+        assert replayed.json() == admitted.json()
+        assert len(client.get("/api/v1/runs").json()["items"]) == 1

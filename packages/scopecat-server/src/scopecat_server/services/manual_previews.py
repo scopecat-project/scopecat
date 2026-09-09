@@ -17,7 +17,8 @@ from scopecat_server.storage.sqlite.connection import SQLiteDatabase
 from scopecat_server.storage.sqlite.manual_preview import ManualPreviewRepository
 
 if TYPE_CHECKING:
-    from scopecat.application.launch import LaunchPreview, LaunchRequest
+    from scopecat.application.launch import LaunchPreview
+    from scopecat.records.launch_request import LaunchRequest
 
     from scopecat_server.services.config import ConfigService
 
@@ -61,8 +62,8 @@ class ManualPreviewService:
         )
         return preview.model_copy(update={"manual_state": fence})
 
+    @staticmethod
     def require_binding(
-        self,
         request: LaunchRequest,
     ) -> None:
         fence = request.manual_state

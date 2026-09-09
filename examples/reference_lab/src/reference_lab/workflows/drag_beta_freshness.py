@@ -33,7 +33,7 @@ from reference_lab.workflows.drag_beta_verification import (
 )
 
 DRAG_BETA_CALIBRATION_ID = "reference-lab.drag-beta-freshness"
-DRAG_BETA_CALIBRATION_VERSION = "6"
+DRAG_BETA_CALIBRATION_VERSION = "7"
 DRAG_BETA_CALIBRATION_FANOUT_SCOPE = "reference-lab.quantum-chip"
 DRAG_BETA_CALIBRATION_TARGETS = tuple(
     CalibrationTargetRef(kind="logical_qubit", id=qubit) for qubit in ("q0", "q1")

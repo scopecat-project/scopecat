@@ -16,6 +16,7 @@ from scopecat.api.calibration_planner import CalibrationPlanningContext
 from scopecat.api.calibration_policy import CalibrationPublicationPolicyRegistry
 from scopecat.api.calibrations import LabCalibrationOperations
 from scopecat.api.instruments import LabInstrumentOperations
+from scopecat.api.plans import LabPlanOperations
 from scopecat.api.procedure_planner import ProcedurePlanningContext
 from scopecat.api.procedures import LabProcedureOperations
 from scopecat.api.project_analysis import RemoteProjectAnalysisOperations
@@ -238,6 +239,10 @@ class LabClient:
     @property
     def run_operations(self) -> RemoteRunOperations:
         return self._runs
+
+    @property
+    def plans(self) -> LabPlanOperations:
+        return LabPlanOperations(self._client)
 
     @property
     def config(self) -> LabConfigOperations:

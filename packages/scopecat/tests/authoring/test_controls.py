@@ -11,7 +11,7 @@ import pytest
 from scopecat_testkit.authoring import load_config
 
 import scopecat as sc
-from scopecat.application.controls import ControlEdit, control_values, edit_controls
+from scopecat.application.controls import control_values, edit_controls
 from scopecat.compiler.frontend.resolution import compile_invocation
 from scopecat.kernel.content_identity import content_fingerprint
 from scopecat.kernel.errors import CheckFailed
@@ -20,6 +20,7 @@ from scopecat.planning.service import plan_experiment_invocation
 from scopecat.planning.system import ExperimentSystem
 from scopecat.program.scans import ValuesScanSource
 from scopecat.records.config import config_content_hash
+from scopecat.records.control_edit import ControlEdit
 from scopecat.records.run_request import AxisRecord
 
 FREQUENCY = sc.Control(

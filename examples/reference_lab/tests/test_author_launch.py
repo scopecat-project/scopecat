@@ -15,17 +15,13 @@ import pytest
 import scopecat as sc
 from scopecat.api.analysis import AnalysisDefinition, AnalysisStep
 from scopecat.application import LabApplication
-from scopecat.application.controls import ControlEdit
-from scopecat.application.launch import (
-    LaunchCatalog,
-    LaunchPreview,
-    LaunchRequest,
-    LaunchSubmission,
-)
+from scopecat.application.launch import LaunchCatalog, LaunchPreview, LaunchSubmission
 from scopecat.daemon.client import DaemonClient, DaemonConflictError
 from scopecat.kernel.frozen import thaw_json_value
 from scopecat.kernel.quantity import Quantity
 from scopecat.project import load_project
+from scopecat.records.control_edit import ControlEdit
+from scopecat.records.launch_request import LaunchRequest
 from scopecat.records.run_request import AxisValuesSourceRecord
 from scopecat.records.sample import SampleRevisionDraft
 from scopecat_server.author_worker import revision_project
