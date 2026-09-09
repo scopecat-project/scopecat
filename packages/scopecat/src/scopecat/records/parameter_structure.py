@@ -85,7 +85,11 @@ class ChangeParameterColumn(_StructureModel):
     parameter_id: str = Field(min_length=1)
     column: ParameterDefinition
     conversion: Literal[
-        "compatible_unit", "lossless_numeric", "explicit_values", "unknown"
+        "compatible_unit",
+        "lossless_numeric",
+        "explicit_values",
+        "patch_values",
+        "unknown",
     ]
     values: tuple[StructureValueDecision, ...] = ()
 
@@ -98,8 +102,10 @@ class ChangeParameterColumn(_StructureModel):
 
     @model_validator(mode="after")
     def require_explicit_policy(self) -> ChangeParameterColumn:
-        if self.values and self.conversion != "explicit_values":
-            raise ValueError("value decisions require explicit_values conversion")
+        if self.values and self.conversion not in {"explicit_values", "patch_values"}:
+            raise ValueError(
+                "value decisions require explicit_values or patch_values conversion"
+            )
         return self
 
 
