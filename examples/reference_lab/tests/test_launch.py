@@ -15,6 +15,7 @@ from scopecat.application import LabApplication
 from scopecat.application.launch import LaunchCatalog, LaunchPreview, LaunchSubmission
 from scopecat.daemon.client import DaemonClient, DaemonConflictError
 from scopecat.daemon.endpoint import DAEMON_URL_ENV
+from scopecat.kernel.content_identity import sha256_json_hash
 from scopecat.kernel.quantity import Quantity
 from scopecat.planning.preflight import ExactQuantity, PreflightStage, UnknownQuantity
 from scopecat.project import Project, load_project
@@ -152,9 +153,15 @@ def test_real_http_preview_shares_catalog_and_never_admits_acquisition(
         # Target inspection includes per-compilation timing/cache diagnostics.
         assert preview.code_revision == catalog.code_revision
         assert repeated.code_revision is None  # direct, deliberately unpinned provider
+        selected_entry = next(item for item in catalog.entries if item.id == experiment)
+        assert preview.definition_hash == sha256_json_hash(
+            selected_entry.model_dump(mode="json")
+        )
+        assert repeated.definition_hash is None  # worker-owned catalog projection
         exclude = {
             "code_revision": True,
             "manual_state": True,
+            "definition_hash": True,
             "preflight": {"stages": {"__all__": {"inspections"}}},
         }
         assert preview.model_dump(exclude=exclude) == repeated.model_dump(

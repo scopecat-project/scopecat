@@ -185,6 +185,16 @@ test("retains launch inputs across workspaces and invalidates previews without s
     const endpoint = JSON.parse(await readFile(join(project, ".scopecat/daemon.json"), "utf8")) as {
       base_url: string;
     };
+    const sample = await page.request.post(`${endpoint.base_url}/api/v1/samples`, {
+      data: {
+        operation_id: "navigation-sample",
+        sample_id: "sample-navigation",
+        kind: "synthetic",
+        actor: "fixture",
+        content: { display_name: "Navigation sample" },
+      },
+    });
+    expect(sample.status(), await sample.text()).toBe(201);
     await page.goto(`${endpoint.base_url}/#launch`);
     await page.getByLabel("Experiment", { exact: true }).selectOption("frequency-amplitude");
     await page.getByLabel("Sample ID").fill("sample-navigation");

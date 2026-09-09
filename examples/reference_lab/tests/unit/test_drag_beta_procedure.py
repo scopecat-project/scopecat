@@ -113,7 +113,7 @@ def test_drag_beta_request_key_tracks_exact_registry_generation() -> None:
     )
 
     assert drag_beta_calibration_request_key(source) == (
-        "reference-lab.drag-beta-calibration.v6:config-entry-1:1"
+        "reference-lab.drag-beta-calibration.v7:config-entry-1:1"
     )
     assert drag_beta_calibration_request_key(
         source.model_copy(update={"registry_generation": 2})

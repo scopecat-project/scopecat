@@ -41,11 +41,11 @@ def test_drag_beta_automatic_policy_binds_its_exact_contract() -> None:
 
     assert policy.id == DRAG_BETA_PUBLICATION_POLICY_ID
     assert policy.version == DRAG_BETA_PUBLICATION_POLICY_VERSION
-    assert policy.version == "6"
+    assert policy.version == "7"
     assert policy.fingerprint == DRAG_BETA_PUBLICATION_POLICY_FINGERPRINT
     assert policy.ref == DRAG_BETA_PUBLICATION_POLICY_REF
     assert policy.calibration == drag_beta_freshness_calibration.ref
-    assert policy.calibration.version == DRAG_BETA_CALIBRATION_VERSION == "6"
+    assert policy.calibration.version == DRAG_BETA_CALIBRATION_VERSION == "7"
     assert policy.composition_policy == DRAG_BETA_COMPOSITION_POLICY_REF
     assert policy.actor == DRAG_BETA_PUBLICATION_ACTOR
     assert policy.note == DRAG_BETA_PUBLICATION_NOTE
