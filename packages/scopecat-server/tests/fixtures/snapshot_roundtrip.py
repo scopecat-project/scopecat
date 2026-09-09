@@ -28,7 +28,7 @@ from pydantic import JsonValue
 from scopecat.automation import ProcedureRunListQuery
 from scopecat.daemon.client import DaemonClient
 from scopecat.daemon.endpoint import DAEMON_URL_ENV, resolve_daemon_endpoint
-from scopecat.project import load_project
+from scopecat.project import Project, load_project
 from scopecat.records.analysis import (
     AnalysisDatasetViewSource,
     AnalysisFigureLayerSpec,
@@ -36,7 +36,7 @@ from scopecat.records.analysis import (
     AnalysisUncertaintyProjection,
 )
 
-from scopecat_server.lifecycle import start_project, stop_project
+from scopecat_server.lifecycle import DaemonLifecycleError, start_project, stop_project
 from scopecat_server.services.project_workers import ProjectProcedureWorkers
 from scopecat_server.snapshots import create_snapshot, restore_snapshot, verify_snapshot
 from scopecat_server.storage.sqlite.automation import SQLiteAutomationStore
@@ -194,6 +194,24 @@ def _capture_process(
     return cast("dict[str, JsonValue]", json.loads(output.read_text(encoding="utf-8")))
 
 
+def _start_fixture_project(project: Project) -> None:
+    try:
+        start_project(project)
+    except DaemonLifecycleError as error:
+        log = project.root / ".scopecat" / "daemon.log"
+        if log.exists():
+            error.add_note(
+                "Snapshot fixture daemon log tail:\n"
+                + log.read_bytes()[-8192:].decode("utf-8", errors="replace")
+            )
+        # Do not mask the startup failure if its cleanup also fails.
+        try:
+            stop_project(project)
+        except DaemonLifecycleError as cleanup_error:
+            error.add_note(f"Startup cleanup: {cleanup_error}")
+        raise
+
+
 def check_roundtrip(template: Path) -> None:
     with tempfile.TemporaryDirectory(prefix="scopecat-snapshot-check-") as temporary:
         root = Path(temporary)
@@ -203,7 +221,7 @@ def check_roundtrip(template: Path) -> None:
             shutil.copytree(template / name, source / name)
         shutil.copy2(template / "scopecat.toml", source / "scopecat.toml")
         project = load_project(source / "scopecat.toml")
-        start_project(project)
+        _start_fixture_project(project)
         try:
             before = _capture_process(source, root / "before.json", seed=True)
         finally:
@@ -231,7 +249,7 @@ def check_roundtrip(template: Path) -> None:
         verify_snapshot(snapshot)
         restore_snapshot(snapshot, restored)
         restored_project = load_project(restored / "scopecat.toml")
-        start_project(restored_project)
+        _start_fixture_project(restored_project)
         try:
             after = _capture_process(restored, root / "after.json")
             assert after == before, "restored values or provenance changed"

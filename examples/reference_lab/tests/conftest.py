@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 from scopecat.daemon.endpoint import DAEMON_URL_ENV
 from scopecat.project import load_project
-from scopecat_server.lifecycle import start_project, stop_project
+from scopecat_server.lifecycle import DaemonLifecycleError, start_project, stop_project
 from scopecat_testkit.project_loading import isolated_project_imports
 
 EXAMPLE_ROOT = Path(__file__).parents[1]
@@ -37,7 +37,16 @@ def reference_lab_daemon(
     shutil.copytree(EXAMPLE_ROOT / "src", project_root / "src")
     shutil.copy2(EXAMPLE_ROOT / "scopecat.toml", project_root / "scopecat.toml")
     project = load_project(project_root / "scopecat.toml")
-    record = start_project(project)
+    try:
+        record = start_project(project)
+    except DaemonLifecycleError as error:
+        log = project_root / ".scopecat" / "daemon.log"
+        if log.exists():
+            error.add_note(
+                "Reference fixture daemon log tail:\n"
+                + log.read_bytes()[-8192:].decode("utf-8", errors="replace")
+            )
+        raise
     previous_url = os.environ.get(DAEMON_URL_ENV)
     os.environ[DAEMON_URL_ENV] = record.base_url
     try:
