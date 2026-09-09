@@ -59,7 +59,15 @@ test("reopens an admitted procedure after restart and follows exact retained run
       "--static-dir",
       resolve("dist"),
     ]);
+    const catalogReady = page.waitForResponse(
+      (response) =>
+        new URL(response.url()).pathname.endsWith("/experiment-launcher") &&
+        response.request().method() === "GET",
+    );
     await page.goto(`${endpoint.base_url}/#launch`);
+    const catalogResponse = await catalogReady;
+    expect(catalogResponse.status(), await catalogResponse.text()).toBe(200);
+    await expect(page.getByLabel("Experiment", { exact: true })).toBeVisible();
     await page.getByText("Retained procedures", { exact: true }).click();
     await page.getByRole("button", { name: /reference_lab.launch_temperature/ }).click();
     await expect(page.getByText("Admitted — not dispatched", { exact: true })).toBeVisible();

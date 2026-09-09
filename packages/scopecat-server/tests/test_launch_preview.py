@@ -109,12 +109,44 @@ def test_preview_failure_is_visible_and_start_is_not_supported() -> None:
         run.assert_not_called()
 
 
-def test_timeout_has_a_bounded_error() -> None:
+@pytest.mark.parametrize(
+    ("action", "operation"),
+    [("list", "catalog loading"), ("preview", "preview"), ("submit", "submission")],
+)
+def test_timeout_identifies_operation_without_retry(
+    action: str, operation: str
+) -> None:
     with patch(
         "scopecat_server.http.transport.subprocess.run",
-        side_effect=subprocess.TimeoutExpired("worker", 60),
-    ):
-        assert client().get("/api/v1/experiment-launcher").status_code == 504
+        side_effect=subprocess.TimeoutExpired(
+            "worker",
+            60,
+            stderr=b"Scopecat worker stage: author revision initialization\n",
+        ),
+    ) as run:
+        if action == "list":
+            response = client().get("/api/v1/experiment-launcher")
+        elif action == "preview":
+            response = client().post(
+                "/api/v1/experiment-launcher/preview",
+                json={"action": "preview", "experiment": "signal", "version": "1"},
+            )
+        else:
+            response = client().post(
+                "/api/v1/experiment-launcher/submit", json=_submission_request()
+            )
+        assert response.status_code == 504
+        detail = response.json()["detail"]
+        assert f"Experiment {operation} timed out after 60 seconds" in detail
+        assert "author revision initialization" in detail
+        assert run.call_count == 1
+        assert run.call_args.kwargs["timeout"] == 60
+        if action == "submit":
+            assert "outcome is unknown" in detail
+            assert "original request key" in detail
+            assert '"request_key":"one"' in run.call_args.kwargs["input"]
+        else:
+            assert "No acquisition was submitted" in detail
 
 
 def test_worker_loads_manifest_file_and_supports_empty_project(
@@ -376,7 +408,11 @@ with (
     catalog = LaunchCatalog.model_validate_json(result.stdout)
     assert catalog.entries[0].title == "操作者 → μ"
     assert catalog.entries[0].description == "测量 → 结果"
-    assert result.stderr.strip() == "操作者 → μ"
+    assert result.stderr.splitlines() == [
+        "Scopecat worker stage: project application load",
+        "Scopecat worker stage: launch provider",
+        "操作者 → μ",
+    ]
 
 
 def test_worker_rejects_undeclared_control_edits_before_provider_action(
@@ -431,3 +467,55 @@ def test_worker_rejects_undeclared_control_edits_before_provider_action(
             launch_worker.main()
     assert provider.call_count == 1
     assert provider.call_args.args[1].action == "list"
+
+
+@pytest.mark.parametrize("padding", ["", "x" * 3000])
+def test_inner_validation_timeout_survives_worker_and_http_boundary(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    padding: str,
+) -> None:
+    import io
+
+    import httpx2
+
+    from scopecat_server import launch_worker
+    from scopecat_server.worker_diagnostics import AUTHOR_VALIDATION_TIMEOUT_EXIT
+
+    detail = (
+        "Author source validation timed out during application import. "
+        "Inspect daemon.log."
+    ) + padding
+    response = httpx2.Response(
+        504,
+        json={"detail": detail},
+        request=httpx2.Request("GET", "http://localhost/api/v1/author-revisions"),
+    )
+    monkeypatch.setattr("sys.argv", ["launch_worker", str(tmp_path)])
+    monkeypatch.setattr("sys.stdin", io.StringIO('{"action":"list"}'))
+    with (
+        patch.object(launch_worker, "load_project") as load,
+        patch.object(launch_worker, "resolve_daemon_endpoint"),
+        patch.object(launch_worker, "DaemonClient") as daemon,
+    ):
+        load.return_value.source_roots = ("src",)
+        daemon.return_value.__enter__.return_value.author_revision_state.side_effect = (
+            httpx2.HTTPStatusError(
+                "generic HTTP failure", request=response.request, response=response
+            )
+        )
+        with pytest.raises(SystemExit) as exited:
+            launch_worker.main()
+        assert exited.value.code == AUTHOR_VALIDATION_TIMEOUT_EXIT
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert captured.err.splitlines()[-1] == detail[:2048]
+    with patch("scopecat_server.http.transport.subprocess.run") as run:
+        run.return_value = SimpleNamespace(
+            returncode=exited.value.code, stdout="", stderr=captured.err
+        )
+        outer = client().get("/api/v1/experiment-launcher")
+    assert outer.status_code == 504
+    assert outer.json()["detail"] == detail[:2048]
+    run.assert_called_once()

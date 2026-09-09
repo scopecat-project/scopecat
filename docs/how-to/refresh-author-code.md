@@ -146,3 +146,38 @@ bundles, manifest identities, active generation and original admitted procedure
 intents. Restored workers materialize the old code from the object store instead
 of importing the currently edited helper. Restore the recorded external
 environment and matching maintained source before resuming supported work.
+
+## Catalog readiness and timeout evidence
+
+A successful `scopecat start` or a running daemon status confirms API liveness,
+not readiness of the author catalog. The first catalog request may validate the
+source revision in a fresh process before discovering experiments. Launch calls
+and source validation retain their existing 60-second deadlines. Because initial
+validation is nested inside catalog loading, the outer catalog deadline can expire
+first; validation may still be finishing when that response arrives.
+
+Catalog, preview and submission timeouts identify the operation and the last
+reported worker stage. A source-validation timeout reports whether the worker was
+importing the framework, compiling source, importing the application or checking
+source identity. If the worker did not reach its first marker, the stage remains
+explicitly unknown. This attempt does not publish a revision. Existing retained
+revisions are not replaced by a timed-out validation.
+
+Inspect `.scopecat/daemon.log` before trying again. Timeout entries retain the
+last reported stage and at most the last 8 KiB of worker stderr, marked when
+truncated. Validation schedules one thread-stack dump after 30 seconds, without
+locals, and cancels it on normal exit. The stack describes that earlier instant;
+it is evidence for diagnosis, not proof of the final blocking cause. Ask the
+project maintainer to check the indicated imports and matching environment.
+After resolving the problem, explicitly refresh the author revision and request
+a new preview. There is no automatic retry or fallback to different source.
+
+A **submission timeout has an unknown outcome**: it may have been admitted before
+the response was lost. Keep the original request key and use the existing
+submission recovery to find that admission. Do not create a new submission to
+resolve the timeout. Catalog loading and preview do not themselves submit an
+acquisition.
+
+These diagnostics do not establish why a particular cold import was slow or fix
+cold-start latency. A later successful warm request is not evidence of reliable
+cold startup; retain failed-attempt logs when evaluating a fresh installation.

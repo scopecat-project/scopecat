@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import subprocess
 import sys
 from collections.abc import AsyncGenerator, AsyncIterator, Callable
@@ -299,11 +300,16 @@ from scopecat_server.http.procedure_operator import (
     ProcedureOperatorView,
     read_procedure_operator,
 )
+from scopecat_server.services.author_revisions import AuthorValidationTimeout
 from scopecat_server.services.project_workers import ProjectProcedureWorkers
 from scopecat_server.storage.sqlite.author_revision_repository import (
     AuthorRevisionConflict,
 )
 from scopecat_server.storage.sqlite.connection import SQLiteBusyError
+from scopecat_server.worker_diagnostics import (
+    AUTHOR_VALIDATION_TIMEOUT_EXIT,
+    diagnostic_excerpt,
+)
 
 from ..command_payloads import (
     CommandPayloadError,
@@ -384,6 +390,8 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
     def author_revision_state() -> AuthorRevisionState:
         try:
             return application.author_revisions.state()
+        except AuthorValidationTimeout as error:
+            raise HTTPException(504, str(error)) from error
         except ValueError as error:
             raise HTTPException(422, str(error)) from error
 
@@ -404,6 +412,8 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
             return application.author_revisions.refresh(
                 expected_generation=command.expected_generation
             )
+        except AuthorValidationTimeout as error:
+            raise HTTPException(504, str(error)) from error
         except AuthorRevisionConflict as error:
             raise HTTPException(409, str(error)) from error
         except ValueError as error:
@@ -451,9 +461,38 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
                 creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
             )
         except subprocess.TimeoutExpired as error:
-            raise HTTPException(504, "Experiment preview timed out") from error
+            operation = {
+                "list": "catalog loading",
+                "preview": "preview",
+                "submit": "submission",
+            }[command.action]
+            stage, evidence = diagnostic_excerpt(error.stderr)
+            logging.getLogger(__name__).error(  # noqa: TRY400 - retain bounded worker evidence only
+                "Experiment %s timed out: stage=%s\n%s", operation, stage, evidence
+            )
+            recovery = (
+                "Submission outcome is unknown. Keep the original request key and use "
+                "submission recovery to check whether it was admitted; "
+                "do not start a new submission to resolve this timeout."
+                if command.action == "submit"
+                else "No acquisition was submitted by this operation. Check "
+                ".scopecat/daemon.log for launch and author-validation diagnostics. "
+                "A running daemon does not mean the author catalog is ready."
+            )
+            raise HTTPException(
+                504,
+                f"Experiment {operation} timed out after 60 seconds during {stage}. "
+                f"{recovery}",
+            ) from error
         if completed.returncode:
             detail = completed.stderr.strip().splitlines()
+            if completed.returncode == AUTHOR_VALIDATION_TIMEOUT_EXIT:
+                raise HTTPException(
+                    504,
+                    detail[-1][:2048]
+                    if detail
+                    else "Author source validation timed out",
+                )
             raise HTTPException(
                 422, detail[-1] if detail else "Experiment preview failed"
             )

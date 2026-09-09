@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import subprocess
 import sys
 from pathlib import Path
@@ -22,6 +23,13 @@ from scopecat_server.storage.sqlite.author_revision_repository import (
     AuthorRevisionRepository,
 )
 from scopecat_server.storage.sqlite.project_store import SQLiteProjectStore
+from scopecat_server.worker_diagnostics import diagnostic_excerpt
+
+_LOGGER = logging.getLogger(__name__)
+
+
+class AuthorValidationTimeout(TimeoutError):
+    """Validation did not publish a revision; bounded evidence is in daemon.log."""
 
 
 class AuthorRevisionService:
@@ -56,21 +64,37 @@ class AuthorRevisionService:
         bundle = capture_sources(self.project)
         self._require_maintenance(bundle)
         code_root = materialize_sources(bundle, self.root / ".scopecat" / "code")
-        completed = subprocess.run(  # noqa: S603 - fixed interpreter and internal validation worker
-            [
-                sys.executable,
-                "-m",
-                "scopecat_server.author_worker",
-                str(self.root),
-                "--validate",
-                str(code_root),
-            ],
-            capture_output=True,
-            encoding="utf-8",
-            check=False,
-            timeout=60,
-            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
-        )
+        try:
+            completed = subprocess.run(  # noqa: S603 - fixed interpreter and internal validation worker
+                [
+                    sys.executable,
+                    "-m",
+                    "scopecat_server.author_worker",
+                    str(self.root),
+                    "--validate",
+                    str(code_root),
+                ],
+                capture_output=True,
+                encoding="utf-8",
+                check=False,
+                timeout=60,
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+            )
+        except subprocess.TimeoutExpired as error:
+            stage, evidence = diagnostic_excerpt(error.stderr)
+            _LOGGER.error(  # noqa: TRY400 - retain bounded worker evidence only
+                "Author source validation timed out: revision=%s stage=%s\n%s",
+                bundle.manifest.ref.content_hash,
+                stage,
+                evidence,
+            )
+            raise AuthorValidationTimeout(
+                f"Author source validation timed out after 60 seconds during {stage}. "
+                "This attempt did not publish a revision. Inspect bounded validation "
+                "evidence in .scopecat/daemon.log. Ask the project maintainer to check "
+                "source imports and environment before explicitly refreshing again. "
+                "A running daemon does not mean the author catalog is ready."
+            ) from error
         if completed.returncode:
             raise ValueError(completed.stderr.strip() or "author validation failed")
         return self.repository.publish(bundle, expected_generation=expected_generation)

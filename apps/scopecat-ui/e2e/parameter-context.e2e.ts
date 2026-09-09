@@ -83,7 +83,15 @@ test("saves and launches two physical samples at two working points without acti
       const savedResponse = await saving;
       expect(savedResponse.status()).toBe(200);
       const saved = await savedResponse.json();
+      const catalogReady = page.waitForResponse(
+        (response) =>
+          new URL(response.url()).pathname.endsWith("/experiment-launcher") &&
+          response.request().method() === "GET",
+      );
       await page.getByRole("button", { name: "Use for next experiment", exact: true }).click();
+      const catalogResponse = await catalogReady;
+      expect(catalogResponse.status(), await catalogResponse.text()).toBe(200);
+      await expect(page.getByLabel("Experiment", { exact: true })).toBeVisible();
       await expect(
         page.getByText(new RegExp(`Parameter context: ${saved.entry.id}`)),
       ).toBeVisible();
