@@ -38,7 +38,23 @@ jobs:
           enable-cache: true
 
       - name: Run tests
+        if: runner.os != 'Windows'
         run: uv run --locked pytest
+
+      - name: Run tests with Windows hang diagnostics
+        if: runner.os == 'Windows'
+        timeout-minutes: 15
+        env:
+          SCOPECAT_TEST_DIAGNOSTICS: test-diagnostics
+        run: uv run --locked python -m pytest -p scripts.pytest_windows_diagnostics
+
+      - name: Retain Windows test diagnostics
+        if: always() && runner.os == 'Windows'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: windows-test-diagnostics
+          path: test-diagnostics/
+          if-no-files-found: warn
 
       - name: Test data ecosystem adapters
         run: >-

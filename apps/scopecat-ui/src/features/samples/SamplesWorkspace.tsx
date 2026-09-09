@@ -1,3 +1,4 @@
+import { SampleArtifacts } from "./SampleArtifacts";
 import { useMemo, useState, type ReactNode } from "react";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import {
@@ -785,48 +786,10 @@ function PropertiesCard({ sample }: { sample: SampleSummary | SampleView }) {
         </dl>
       )}
       {content.artifacts.length > 0 && (
-        <div className="mt-3 grid gap-1.5 border-t border-line pt-3">
-          {content.artifacts.map((artifact) => {
-            const uri = safeArtifactUri(artifact.uri);
-            const body = (
-              <>
-                <span>{artifact.title}</span>
-                <span className="text-text-dim">{artifact.media_type ?? "reference"}</span>
-              </>
-            );
-            return uri ? (
-              <a
-                key={artifact.id}
-                className="flex items-center justify-between rounded-md border border-line px-2.5 py-2 text-[0.68rem] text-text-soft no-underline hover:border-line-strong"
-                href={uri}
-                target="_blank"
-                rel="noreferrer"
-              >
-                {body}
-              </a>
-            ) : (
-              <span
-                key={artifact.id}
-                className="flex items-center justify-between rounded-md border border-line px-2.5 py-2 text-[0.68rem] text-text-dim"
-                title="Unsupported artifact URI scheme"
-              >
-                {body}
-              </span>
-            );
-          })}
-        </div>
+        <SampleArtifacts sampleId={sample.record.id} revision={sample.revision.revision} />
       )}
     </section>
   );
-}
-
-function safeArtifactUri(value: string): string | undefined {
-  try {
-    const uri = new URL(value, window.location.origin);
-    return ["http:", "https:"].includes(uri.protocol) ? uri.href : undefined;
-  } catch {
-    return undefined;
-  }
 }
 
 function AnalysisPeek({

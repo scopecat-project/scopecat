@@ -128,7 +128,7 @@ class LocalDaemonRuntime:
             runs = SQLiteRunRepository(sqlite, objects)
             analyses = SQLiteAnalysisRepository(sqlite, objects)
             sample_store = SQLiteSampleStore(sqlite, control=control)
-            samples = SampleService(sample_store)
+            samples = SampleService(sample_store, project_store.objects)
             config_registry = SQLiteConfigRegistryStore(
                 sqlite,
                 runs=runs,

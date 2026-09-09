@@ -1280,6 +1280,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/samples/{sample_id}/revisions/{revision}/artifacts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Sample Artifacts */
+        get: operations["sample_artifacts_api_v1_samples__sample_id__revisions__revision__artifacts_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -7115,6 +7132,32 @@ export interface components {
             sample_id: components["schemas"]["SampleId"];
         };
         /**
+         * SampleArtifactDelivery
+         * @description Resolution of one artifact owned by an exact sample revision.
+         */
+        SampleArtifactDelivery: {
+            artifact: components["schemas"]["SampleArtifactRef"];
+            /** Reason */
+            reason: string;
+            /** Repair */
+            repair?: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "stored" | "external" | "unavailable";
+            /** Url */
+            url?: string | null;
+        };
+        /** SampleArtifactPage */
+        SampleArtifactPage: {
+            /**
+             * Items
+             * @default []
+             */
+            items: components["schemas"]["SampleArtifactDelivery"][];
+        };
+        /**
          * SampleArtifactRef
          * @description External design, image, report, or data reference associated with a sample.
          */
@@ -7122,6 +7165,7 @@ export interface components {
             id: components["schemas"]["_NonEmptyText"];
             media_type?: components["schemas"]["_NonEmptyText"] | null;
             title: components["schemas"]["_NonEmptyText"];
+            /** @description Imported project bytes use sha256:<digest>; absolute HTTP(S) is an external reference. Other URI forms remain readable but unavailable until a maintainer imports their bytes. */
             uri: components["schemas"]["_NonEmptyText"];
         };
         /**
@@ -10109,6 +10153,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SampleRevision"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    sample_artifacts_api_v1_samples__sample_id__revisions__revision__artifacts_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                revision: number;
+                sample_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SampleArtifactPage"];
                 };
             };
             /** @description Validation Error */

@@ -8,16 +8,26 @@ from scopecat.daemon.wire import (
     SampleMutationReceipt,
     SampleReviseCommand,
 )
-from scopecat.records.sample import SampleBinding, SampleRevision, SampleSelector
+from scopecat.records.sample import (
+    SampleArtifactRef,
+    SampleBinding,
+    SampleRevision,
+    SampleSelector,
+)
+from scopecat.records.sample_artifact import SampleArtifactPage
 
+from scopecat_server.errors import BackendNotFound
+from scopecat_server.services.sample_artifacts import SampleArtifacts
+from scopecat_server.storage.sqlite.object_store import ImmutableObjectStore
 from scopecat_server.storage.sqlite.samples import SQLiteSampleStore
 
 
 class SampleService:
     """Expose stable samples without leaking SQLite identities."""
 
-    def __init__(self, store: SQLiteSampleStore) -> None:
+    def __init__(self, store: SQLiteSampleStore, objects: ImmutableObjectStore) -> None:
         self._store = store
+        self.artifacts = SampleArtifacts(objects)
 
     def list(
         self,
@@ -41,6 +51,24 @@ class SampleService:
 
     def revision(self, sample_id: str, revision: int) -> SampleRevision:
         return self._store.get_revision(sample_id, revision)
+
+    def artifact_list(self, sample_id: str, revision: int) -> SampleArtifactPage:
+        selected = self.revision(sample_id, revision)
+        return SampleArtifactPage(
+            items=tuple(
+                self.artifacts.resolve(selected, artifact)
+                for artifact in selected.content.artifacts
+            )
+        )
+
+    def artifact(
+        self, sample_id: str, revision: int, artifact_id: str
+    ) -> SampleArtifactRef:
+        selected = self.revision(sample_id, revision)
+        for artifact in selected.content.artifacts:
+            if artifact.id == artifact_id:
+                return artifact
+        raise BackendNotFound("Artifact is not owned by this sample revision")
 
     def create(self, command: SampleCreateCommand) -> SampleMutationReceipt:
         return self._store.create_sample(command)

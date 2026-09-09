@@ -241,7 +241,11 @@ from scopecat.records.instrument import (
 )
 from scopecat.records.measurement_recording import MeasurementDatasetReceipt
 from scopecat.records.run import RunSnapshot
-from scopecat.records.sample import SampleId, SampleRevision
+from scopecat.records.sample import SampleArtifactRef, SampleId, SampleRevision
+from scopecat.records.sample_artifact import (
+    MAX_SAMPLE_ARTIFACT_BYTES,
+    SampleArtifactPage,
+)
 from scopecat.runs.data import (
     RunArtifactJsonResult,
     RunArtifactTextResult,
@@ -547,6 +551,67 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
     @app.post(f"{_API_PREFIX}/samples", status_code=201)
     def create_sample(command: SampleCreateCommand) -> SampleMutationReceipt:
         return application.samples.create(command)
+
+    @app.post(f"{_API_PREFIX}/sample-artifacts", status_code=201)
+    async def import_sample_artifact(
+        request: Request,
+        artifact_id: Annotated[str, Query(min_length=1)],
+        title: Annotated[str, Query(min_length=1)],
+        media_type: Annotated[str, Query(min_length=1)],
+    ) -> SampleArtifactRef:
+        body = bytearray()
+        async for chunk in request.stream():
+            if len(body) + len(chunk) > MAX_SAMPLE_ARTIFACT_BYTES:
+                raise HTTPException(413, "Sample attachment exceeds 8 MiB")
+            body.extend(chunk)
+        try:
+            return application.samples.artifacts.import_bytes(
+                bytes(body), artifact_id=artifact_id, title=title, media_type=media_type
+            )
+        except ValueError as error:
+            raise HTTPException(422, str(error)) from error
+
+    @app.get(f"{_API_PREFIX}/samples/{{sample_id}}/revisions/{{revision}}/artifacts")
+    def sample_artifacts(
+        sample_id: SampleId, revision: Annotated[int, ApiPath(ge=1)]
+    ) -> SampleArtifactPage:
+        return application.samples.artifact_list(sample_id, revision)
+
+    @app.get(
+        f"{_API_PREFIX}/samples/{{sample_id}}/revisions/{{revision}}/artifacts/content"
+    )
+    def sample_artifact_content(
+        sample_id: SampleId,
+        revision: Annotated[int, ApiPath(ge=1)],
+        artifact_id: Annotated[str, Query(min_length=1)],
+    ) -> Response:
+        artifact = application.samples.artifact(sample_id, revision, artifact_id)
+        try:
+            content = application.samples.artifacts.content(artifact)
+        except (OSError, ValueError) as error:
+            delivery = application.samples.artifacts.resolve(
+                application.samples.revision(sample_id, revision), artifact
+            )
+            raise HTTPException(
+                422,
+                delivery.reason
+                + " "
+                + (
+                    delivery.repair
+                    or "External references open directly from the sample workspace."
+                ),
+            ) from error
+        return Response(
+            content=content,
+            media_type=artifact.media_type,
+            headers={
+                "X-Content-Type-Options": "nosniff",
+                "Content-Security-Policy": "sandbox; default-src 'none'",
+                "Content-Disposition": 'attachment; filename="sample-attachment.pdf"'
+                if artifact.media_type == "application/pdf"
+                else "inline",
+            },
+        )
 
     @app.get(f"{_API_PREFIX}/samples/{{sample_id}}")
     def get_sample(sample_id: SampleId) -> SampleView:

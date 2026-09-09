@@ -1,0 +1,6 @@
+{
+  "title": "Synthetic two-site layout",
+  "unit": "mm",
+  "sites": [{"id": "site-a", "x": 1.0, "y": 2.0}, {"id": "site-b", "x": 3.0, "y": 2.0}],
+  "connections": [["site-a", "site-b"]]
+}

@@ -235,7 +235,8 @@ from scopecat.records.measurement_recording import (
     MeasurementDatasetReceipt,
 )
 from scopecat.records.run import RunSnapshot
-from scopecat.records.sample import SampleRevision
+from scopecat.records.sample import SampleArtifactRef, SampleRevision
+from scopecat.records.sample_artifact import SampleArtifactPage
 from scopecat.runs.data import (
     RunArtifactJsonResult,
     RunArtifactTextResult,
@@ -965,6 +966,39 @@ class DaemonClient:
             SamplePage,
             params=params,
         )
+
+    def import_sample_artifact(
+        self, content: bytes, *, artifact_id: str, title: str, media_type: str
+    ) -> SampleArtifactRef:
+        response = self._request(
+            "POST",
+            f"{_API_PREFIX}/sample-artifacts",
+            params={
+                "artifact_id": artifact_id,
+                "title": title,
+                "media_type": media_type,
+            },
+            content=content,
+            headers={"Content-Type": "application/octet-stream"},
+        )
+        return SampleArtifactRef.model_validate_json(response.content)
+
+    def sample_artifacts(self, sample_id: str, revision: int) -> SampleArtifactPage:
+        return self._get_model(
+            f"{_API_PREFIX}/samples/{quote(sample_id, safe='')}"
+            f"/revisions/{revision}/artifacts",
+            SampleArtifactPage,
+        )
+
+    def sample_artifact_content(
+        self, sample_id: str, revision: int, artifact_id: str
+    ) -> bytes:
+        return self._request(
+            "GET",
+            f"{_API_PREFIX}/samples/{quote(sample_id, safe='')}"
+            f"/revisions/{revision}/artifacts/content",
+            params={"artifact_id": artifact_id},
+        ).content
 
     def get_sample(self, sample_id: str) -> SampleView:
         return self._get_model(
