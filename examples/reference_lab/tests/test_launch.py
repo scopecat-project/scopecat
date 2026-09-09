@@ -158,6 +158,7 @@ def test_real_http_preview_shares_catalog_and_never_admits_acquisition(
         assert repeated.code_revision is None  # direct, deliberately unpinned provider
         exclude = {
             "code_revision": True,
+            "manual_state": True,
             "preflight": {"stages": {"__all__": {"inspections"}}},
         }
         assert preview.model_dump(exclude=exclude) == repeated.model_dump(

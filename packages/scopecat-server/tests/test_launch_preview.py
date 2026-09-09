@@ -11,7 +11,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 from fastapi.testclient import TestClient
-from scopecat.application.launch import LaunchRequest
+from scopecat.application.launch import LaunchPreview, LaunchRequest
 from scopecat.records.run import ConfigRegistryRunConfigSource
 
 from scopecat_server.http.transport import create_app
@@ -44,7 +44,12 @@ if TYPE_CHECKING:
 def _manual_previews() -> Mock:
     service = Mock()
     service.cursor.return_value = 0
-    service.record_preview.side_effect = lambda preview, **_kwargs: preview
+
+    def record(preview: LaunchPreview, *, cursor: int) -> LaunchPreview:
+        del cursor
+        return preview
+
+    service.record_preview.side_effect = record
     return service
 
 

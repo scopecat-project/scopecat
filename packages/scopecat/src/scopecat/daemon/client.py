@@ -241,6 +241,7 @@ from scopecat.records.instrument import (
     InstrumentStateReadback,
     InstrumentStateSnapshot,
 )
+from scopecat.records.manual_preview import ManualPreviewFence, ManualPreviewValidity
 from scopecat.records.measurement import MeasurementDatasetSchema
 from scopecat.records.measurement_recording import (
     MeasurementDatasetAppend,
@@ -1211,6 +1212,14 @@ class DaemonClient:
             f"{_API_PREFIX}/instrument-contracts/resolve",
             InstrumentContractCatalogRequest(config=config),
             InstrumentContractCatalog,
+        )
+
+    def manual_preview_validity(
+        self, fence: ManualPreviewFence
+    ) -> ManualPreviewValidity:
+        """Check relevant manual events without querying or changing instruments."""
+        return self._post_model(
+            f"{_API_PREFIX}/experiment-launcher/validity", fence, ManualPreviewValidity
         )
 
     def open_instrument_session(

@@ -122,7 +122,7 @@ function mount(manualValidity = () => Response.json({ valid: true, changes: [] }
         ? Promise.resolve(Response.json({ enabled: false, generation: 0, active: null }))
         : new URL(request.url).pathname.endsWith("/experiment-launcher/validity")
           ? Promise.resolve(manualValidity())
-        : fetcher(request),
+          : fetcher(request),
   );
   render(
     <QueryClientProvider
@@ -212,6 +212,9 @@ it("retains the submission key after a lost response and opens durable progress"
   expect(screen.getByRole("button", { name: "Start acquisition" })).toBeDisabled();
   fireEvent.click(screen.getByRole("button", { name: "Preview" }));
   await screen.findByText("Preview ready");
+  await waitFor(() =>
+    expect(screen.getByRole("button", { name: "Start acquisition" })).toBeEnabled(),
+  );
   fireEvent.click(screen.getByRole("button", { name: "Start acquisition" }));
   await screen.findByRole("alert");
   fireEvent.click(screen.getByRole("button", { name: "Retry original submission" }));
@@ -365,7 +368,9 @@ it.each(["Operator", "Sample ID"])("invalidates preview after changing %s", asyn
   fireEvent.change(screen.getByLabelText("Amplitude"), { target: { value: "0.4" } });
   fireEvent.click(screen.getByRole("button", { name: "Preview" }));
   await screen.findByText("Preview ready");
-  expect(screen.getByRole("button", { name: "Start acquisition" })).toBeEnabled();
+  await waitFor(() =>
+    expect(screen.getByRole("button", { name: "Start acquisition" })).toBeEnabled(),
+  );
   fireEvent.change(screen.getByLabelText(label), { target: { value: "changed" } });
   expect(screen.queryByText("Preview ready")).toBeNull();
   expect(screen.getByRole("button", { name: "Start acquisition" })).toBeDisabled();

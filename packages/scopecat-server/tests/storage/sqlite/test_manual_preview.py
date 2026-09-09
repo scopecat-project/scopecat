@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 from scopecat.control.models import DurableEventInput
+from scopecat.records.author_revision import AuthorRevisionRef
 from scopecat.records.manual_preview import ManualPreviewBinding, PreviewInstrument
 
 from scopecat_server.storage.sqlite.connection import SQLiteDatabase
@@ -102,7 +103,11 @@ def test_manual_mutations_invalidate_only_the_compiled_physical_footprint(
                 newer.model_copy(
                     update={
                         "binding": binding.model_copy(
-                            update={"code_revision": "sha256:" + "3" * 64}
+                            update={
+                                "code_revision": AuthorRevisionRef(
+                                    content_hash="sha256:" + "3" * 64
+                                )
+                            }
                         )
                     }
                 )
@@ -119,6 +124,23 @@ def test_manual_mutations_invalidate_only_the_compiled_physical_footprint(
                 ),
             )
         assert not repository.validity(newer).valid
+        before_abort = repository.record(
+            cursor=repository.cursor(), binding=binding, instruments=(target,)
+        )
+        with store.sqlite.write_transaction() as connection:
+            control.append_event_in_transaction(
+                connection,
+                DurableEventInput(
+                    kind="instrument_session_abort_started",
+                    payload={
+                        "operation_id": "abort",
+                        "exclusivity_keys": ["physical-a"],
+                    },
+                ),
+            )
+        abort_changes = repository.validity(before_abort)
+        assert not abort_changes.valid
+        assert abort_changes.changes[0].action == "abort"
     finally:
         store.close()
 
@@ -128,10 +150,8 @@ def test_admission_checks_manual_events_after_exact_request_key_replay(
 ) -> None:
     from scopecat.automation import ProcedureDefinitionRef, ProcedureSubmitCommand
 
-    from scopecat_server.services.automation import (
-        AutomationConflict,
-        AutomationService,
-    )
+    from scopecat_server import BackendConflict
+    from scopecat_server.services.automation import AutomationService
     from scopecat_server.storage.sqlite.automation import SQLiteAutomationStore
     from scopecat_server.storage.sqlite.run_repository import SQLiteRunRepository
 
@@ -175,7 +195,7 @@ def test_admission_checks_manual_events_after_exact_request_key_replay(
                 ),
             )
         assert service.submit(command) == first
-        with pytest.raises(AutomationConflict, match="Manual operation changed q0"):
+        with pytest.raises(BackendConflict, match="Manual operation changed q0"):
             service.submit(command.model_copy(update={"request_key": "new"}))
     finally:
         store.close()

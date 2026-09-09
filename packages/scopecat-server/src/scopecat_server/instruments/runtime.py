@@ -3654,6 +3654,19 @@ class InstrumentRuntime:
                 session = self._control.validate_instrument_session(session_id)
             except ControlPlaneConflict as error:
                 raise BackendConflict(str(error)) from error
+            if abort:
+                with self._control.write_transaction() as connection:
+                    self._control.append_event_in_transaction(
+                        connection,
+                        DurableEventInput(
+                            kind="instrument_session_abort_started",
+                            payload={
+                                "session_id": session.session_id,
+                                "operation_id": uuid4().hex,
+                                "exclusivity_keys": list(session.exclusivity_keys),
+                            },
+                        ),
+                    )
             failed = abort_instruments(runtime.instruments.values()) if abort else False
             if failed:
                 self._lose_runtime(

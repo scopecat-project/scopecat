@@ -60,8 +60,8 @@ export function LaunchForm({
   useEffect(() => {
     if (!fence || !manual.data || manual.data.valid) return;
     const changes = manual.data.changes.map(
-      (change) =>
-        `${change.instrument_ids.join(", ")}: ${change.reason} (${new Date(change.occurred_at).toLocaleTimeString()})`,
+      (mutation) =>
+        `${mutation.instrument_ids.join(", ")}: ${mutation.reason} (${new Date(mutation.occurred_at).toLocaleTimeString()})`,
     );
     update((current) =>
       current.preview?.manual_state?.event_id === fence.event_id
@@ -126,7 +126,8 @@ export function LaunchForm({
           preview: next,
           requestKey:
             current.preview?.request_hash === next.request_hash &&
-            JSON.stringify(current.preview.config_source) === JSON.stringify(next.config_source)
+            JSON.stringify(current.preview.config_source) === JSON.stringify(next.config_source) &&
+            JSON.stringify(current.preview.manual_state) === JSON.stringify(next.manual_state)
               ? current.requestKey
               : undefined,
           notice: "Preview matches these inputs and the checked project configuration.",

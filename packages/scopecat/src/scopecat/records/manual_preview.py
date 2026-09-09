@@ -4,6 +4,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from scopecat.records.author_revision import AuthorRevisionRef
 from scopecat.records.content import Sha256ContentHash
 
 
@@ -11,7 +12,7 @@ class ManualPreviewBinding(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     request_hash: Sha256ContentHash
     config_source_hash: Sha256ContentHash
-    code_revision: Sha256ContentHash | None = None
+    code_revision: AuthorRevisionRef | None = None
 
 
 class ManualPreviewFence(BaseModel):

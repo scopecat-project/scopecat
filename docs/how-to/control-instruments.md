@@ -110,6 +110,50 @@ the notebook cell. When a diagnostic should become a reproducible run, add the
 device to inventory, write a small named experiment, and record its meaningful
 result.
 
+## Return from manual work to an experiment
+
+In the console, connect a device, query the scientific values you need, apply
+changes, then disconnect the manual session before starting an experiment.
+Queries retain their observation source and time; an observed value is not a
+promise about the device's later state. Configured defaults produce a receipt
+and can be rejected when the maintained inventory has no default state. In that
+case, choose explicit scientific settings instead of assuming a reset occurred.
+
+Preview records the complete compiled instrument footprint and the manual-event
+cursor captured before compilation. A later apply, invocation, acquisition or
+explicit abort or connection release on a relevant physical instrument invalidates that
+preview. The console explains the affected instrument and offers Preview again,
+while retaining your scientific inputs. Pure queries and changes to unrelated
+physical instruments leave the preview usable. Operations that fail or stop
+partway through also invalidate it because they may already have changed state.
+
+The revision-aware notebook entry uses the same check:
+
+```python
+with sc.open_project(".").authoring() as authors:
+    prepared = authors.prepare("ramsey")
+    # Finish any relevant manual changes before preparing again.
+    submission = prepared.submit(request_key="ramsey-after-manual-adjustment")
+```
+
+Admission checks the server-recorded preview against the exact configuration and
+code revision. Retrying an already admitted request key returns the original
+procedure even if manual work occurred afterward. A fresh preview has a fresh
+check and uses a new submission key; an unresolved original submission retains
+its original payload for recovery. A preview is not a permanent permission to
+execute a saved plan.
+
+Runtime ownership still governs acquisition after admission. A manual session and
+a run cannot own the same physical instrument concurrently. A stop request is
+pending until the run finishes its cleanup; wait for the stopped result before
+connecting manually. This ordering does not freeze hardware or detect changes
+made outside the daemon.
+
+Maintained launch adapters pass the preview's `manual_state` into their durable
+intent and as `expected_manual_preview` to `lab.procedures.submit(...)`. The
+standard author adapter already does this. Resource aliases are compared through
+the inventory's physical exclusivity keys; maintainers own those mappings.
+
 ## Declare the same work for an experiment
 
 Passing an experiment context to the same factory creates its symbolic client:

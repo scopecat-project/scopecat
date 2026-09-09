@@ -4892,7 +4892,7 @@ export interface components {
         };
         /** ManualPreviewBinding */
         ManualPreviewBinding: {
-            code_revision?: components["schemas"]["Sha256ContentHash"] | null;
+            code_revision?: components["schemas"]["AuthorRevisionRef"] | null;
             config_source_hash: components["schemas"]["Sha256ContentHash"];
             request_hash: components["schemas"]["Sha256ContentHash"];
         };

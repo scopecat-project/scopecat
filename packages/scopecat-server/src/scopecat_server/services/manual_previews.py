@@ -6,7 +6,6 @@ from typing import TYPE_CHECKING
 
 from scopecat.kernel.content_identity import sha256_json_hash
 from scopecat.records.config_context import ContextRunConfigSource
-from scopecat.records.content import Sha256ContentHash
 from scopecat.records.manual_preview import (
     ManualPreviewBinding,
     ManualPreviewFence,
@@ -36,7 +35,6 @@ class ManualPreviewService:
         preview: LaunchPreview,
         *,
         cursor: int,
-        code_revision: Sha256ContentHash | None = None,
     ) -> LaunchPreview:
         source = preview.config_source
         entry_id = (
@@ -57,7 +55,7 @@ class ManualPreviewService:
             binding=ManualPreviewBinding(
                 request_hash=preview.request_hash,
                 config_source_hash=sha256_json_hash(source.model_dump(mode="json")),
-                code_revision=code_revision,
+                code_revision=preview.code_revision,
             ),
             instruments=instruments,
         )
@@ -66,8 +64,6 @@ class ManualPreviewService:
     def require_binding(
         self,
         request: LaunchRequest,
-        *,
-        code_revision: Sha256ContentHash | None = None,
     ) -> None:
         fence = request.manual_state
         if fence is None or request.config_source is None:
@@ -77,7 +73,7 @@ class ManualPreviewService:
             config_source_hash=sha256_json_hash(
                 request.config_source.model_dump(mode="json")
             ),
-            code_revision=code_revision,
+            code_revision=request.code_revision,
         )
         if fence.binding != expected:
             raise ValueError("Checked preview binding changed; preview again")

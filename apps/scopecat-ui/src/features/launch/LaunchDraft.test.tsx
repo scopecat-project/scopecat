@@ -38,6 +38,7 @@ const prepared: LaunchCatalogEntry = {
 };
 let catalog: LaunchCatalogEntry[];
 let generation: number;
+let manualEventId: number;
 let configFails: boolean;
 let rejectSubmission: boolean;
 let submissions: Record<string, unknown>[];
@@ -49,6 +50,14 @@ function preview() {
   return {
     experiment_id: "prepared",
     request_hash: `sha256:${"a".repeat(64)}`,
+    manual_state: {
+      event_id: ++manualEventId,
+      binding: {
+        request_hash: `sha256:${"a".repeat(64)}`,
+        config_source_hash: `sha256:${"b".repeat(64)}`,
+        code_revision: null,
+      },
+    },
     point_count: 1,
     config_source: {
       kind: "config_registry",
@@ -86,6 +95,7 @@ beforeEach(() => {
   catalog = [{ ...prepared, id: "first", title: "Default experiment" }, prepared];
   lookupMatch = "none";
   generation = 1;
+  manualEventId = 0;
   configFails = false;
   rejectSubmission = false;
   submissions = [];
@@ -136,6 +146,7 @@ beforeEach(() => {
         if (configFails) throw new TypeError("temporarily offline");
         return Response.json({ entries: [], activation: { entry_id: "baseline", generation } });
       }
+      if (path.endsWith("/validity")) return Response.json({ valid: true, changes: [] });
       if (path.endsWith("/preview"))
         return deferPreview
           ? new Promise<Response>((resolve) => {
@@ -165,6 +176,9 @@ async function previewReady() {
   await waitFor(() => expect(screen.getByRole("button", { name: "Preview" })).toBeEnabled());
   fireEvent.click(screen.getByRole("button", { name: "Preview" }));
   await screen.findByText("Preview ready", { exact: true });
+  await waitFor(() =>
+    expect(screen.queryByText("Checking relevant instrument changes…")).toBeNull(),
+  );
 }
 async function returnToLaunch() {
   fireEvent.click(screen.getByRole("button", { name: "launch" }));
@@ -224,6 +238,7 @@ it("keeps an unknown submission key across navigation and temporary configuratio
   fireEvent.click(screen.getByRole("button", { name: "Retry original submission" }));
   await waitFor(() => expect(submissions).toHaveLength(2));
   expect(submissions[1]?.request_key).toBe(originalKey);
+  expect(submissions[1]?.manual_state).toEqual(submissions[0]?.manual_state);
   await screen.findByRole("alert");
   fireEvent.change(screen.getByLabelText("Note"), { target: { value: "changed request" } });
   expect(screen.queryByText("Preview ready")).toBeNull();
@@ -407,4 +422,21 @@ it("retains a scan across helper revisions but resets changed control declaratio
   );
   expect(screen.getByLabelText("Frequency", { exact: true })).toHaveValue(5);
   expect(screen.queryByLabelText("Frequency points")).toBeNull();
+});
+
+it("uses a new key after a fresh manual-state preview while preserving the original attempt", async () => {
+  render(<Harness />);
+  await selectPrepared();
+  await previewReady();
+  fireEvent.click(screen.getByRole("button", { name: "Start acquisition" }));
+  await screen.findByRole("alert");
+  const original = submissions[0];
+  lookupMatch = "original";
+  fireEvent.click(screen.getByRole("button", { name: "Check original submission" }));
+  await screen.findByRole("button", { name: "Open submitted procedure" });
+  await previewReady();
+  fireEvent.click(screen.getByRole("button", { name: "Start acquisition" }));
+  await waitFor(() => expect(submissions).toHaveLength(2));
+  expect(submissions[1]?.request_key).not.toBe(original?.request_key);
+  expect(submissions[1]?.manual_state).not.toEqual(original?.manual_state);
 });

@@ -92,7 +92,8 @@ class ManualPreviewRepository:
             "'instrument_apply_started', 'instrument_apply_finished', "
             "'instrument_invoke_started', 'instrument_invoke_finished', "
             "'instrument_collect_started', 'instrument_collect_finished', "
-            "'instrument_connection_release_started') ORDER BY event_id",
+            "'instrument_connection_release_started', "
+            "'instrument_session_abort_started') ORDER BY event_id",
             (record.observed_cursor,),
         )
         seen: set[tuple[str, str]] = set()
@@ -101,9 +102,14 @@ class ManualPreviewRepository:
                 "dict[str, object]", json.loads(cast("str", event["payload_json"]))
             )
             kind = cast("str", event["kind"])
-            if kind == "instrument_connection_release_started":
+            if kind in {
+                "instrument_connection_release_started",
+                "instrument_session_abort_started",
+            }:
                 touched = set(cast("list[str]", payload["exclusivity_keys"]))
-                action = "release"
+                action = (
+                    "abort" if kind == "instrument_session_abort_started" else "release"
+                )
                 operation = str(payload["operation_id"])
             else:
                 session = cast(
