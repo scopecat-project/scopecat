@@ -59,7 +59,7 @@ interface DraftContext {
   importHandoff: (entry: LaunchCatalogEntry, handoff: ComparisonHandoff) => void;
   select: (entry: LaunchCatalogEntry, reset?: boolean) => void;
   update: (change: DraftUpdate) => void;
-  isCurrent: (revision: number) => boolean;
+  isCurrent: (revision: number | undefined) => boolean;
   configurationReady: boolean;
   configurationError: string;
   retryOriginalAllowed: boolean;

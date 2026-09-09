@@ -258,3 +258,53 @@ def test_retained_analysis_plan_copy_revalidate_and_child_origin() -> None:
             ).model_dump_json(),
         )
         assert response.status_code == 409, response.text
+
+
+def test_plan_freezes_active_sample_and_named_context_without_activation() -> None:
+    from scopecat.records.config_context import ConfigContextRef
+    from scopecat.records.sample import SampleRevisionDraft
+
+    endpoint = os.environ["SCOPECAT_DAEMON_URL"]
+    key = uuid4().hex
+    with AuthorProject(endpoint) as author, LabClient(DaemonClient(endpoint)) as lab:
+        active = lab.config.active()
+        sample = lab.samples.create(
+            f"plan-sample-{key}",
+            kind="synthetic",
+            content=SampleRevisionDraft(display_name="Plan sample revision one"),
+        )
+        plain = author.prepare("frequency-amplitude", sample=sample.id).save_plan(
+            "Exact sample", saved_by="alice"
+        )
+        assert plain.definition.sample is not None
+        assert plain.definition.sample.revision == 1
+        context_entry = lab.config.save_context(
+            entry_id=f"plan-context-{key}",
+            base=ConfigContextRef(
+                entry_id=active.entry.id, content_hash=active.entry.content_hash
+            ),
+            sample=sample.selector(revision=1),
+            working_point_id="bias-a",
+            label="Sample bias A",
+        )
+        context = ConfigContextRef(
+            entry_id=context_entry.entry.id,
+            content_hash=context_entry.entry.content_hash,
+        )
+        contextual = author.prepare("frequency-amplitude", context=context).save_plan(
+            "Exact working point", saved_by="alice"
+        )
+        lab.samples.revise(
+            sample.id,
+            SampleRevisionDraft(display_name="Plan sample revision two"),
+            expected_revision=1,
+        )
+        for saved in (plain, contextual):
+            reopened = author.prepare_plan(saved.ref, actor="bob")
+            assert reopened.preview.sample_binding == saved.definition.sample
+            assert reopened.preview.sample_binding is not None
+            assert reopened.preview.sample_binding.revision == 1
+        assert contextual.definition.context == context
+        assert contextual.definition.sample is not None
+        assert contextual.definition.sample.context_id == "bias-a"
+        assert lab.config.active().activation == active.activation

@@ -93,6 +93,7 @@ export function PlanSave({
           : "Save these inputs and exact configuration for later."}
       </p>
       <button
+        className="border border-line rounded px-2 py-1 mr-2"
         type="button"
         disabled={!preview?.definition_hash || !name.trim() || saving}
         onClick={() => void save(false)}
@@ -101,6 +102,7 @@ export function PlanSave({
       </button>
       {draft?.plan && (
         <button
+          className="border border-line rounded px-2 py-1 mr-2"
           type="button"
           disabled={!preview?.definition_hash || !name.trim() || saving}
           onClick={() => void save(true)}

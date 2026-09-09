@@ -29,8 +29,7 @@ export function PlanLibrary() {
   async function open(plan: PlanRevision) {
     const token = ++opening.current;
     const revision = draft?.revision;
-    const current = () =>
-      alive.current && opening.current === token && (revision === undefined || isCurrent(revision));
+    const current = () => alive.current && opening.current === token && isCurrent(revision);
     setError("");
     try {
       const catalog = await apiData(
@@ -95,7 +94,11 @@ export function PlanLibrary() {
         fresh preview.
       </p>
       {history && (
-        <button type="button" onClick={() => setHistory(undefined)}>
+        <button
+          className="border border-line rounded px-2 py-1 mr-2"
+          type="button"
+          onClick={() => setHistory(undefined)}
+        >
           Back to named plans
         </button>
       )}
@@ -111,10 +114,15 @@ export function PlanLibrary() {
           <span>
             {plan.name} · revision {plan.ref.revision} · saved by {plan.saved_by}
           </span>
-          <button type="button" onClick={() => void open(plan)}>
+          <button
+            className="border border-line rounded px-2 py-1 mr-2"
+            type="button"
+            onClick={() => void open(plan)}
+          >
             Open {plan.name} r{plan.ref.revision}
           </button>
           <button
+            className="border border-line rounded px-2 py-1 mr-2"
             type="button"
             onClick={() => {
               setSelected(plan);
@@ -124,12 +132,20 @@ export function PlanLibrary() {
             History and compare
           </button>
           {!history && (
-            <button type="button" onClick={() => void hide(plan)}>
+            <button
+              className="border border-line rounded px-2 py-1 mr-2"
+              type="button"
+              onClick={() => void hide(plan)}
+            >
               Delete {plan.name}
             </button>
           )}
           {history && (
-            <button type="button" onClick={() => setSelected(plan)}>
+            <button
+              className="border border-line rounded px-2 py-1 mr-2"
+              type="button"
+              onClick={() => setSelected(plan)}
+            >
               Compare revision {plan.ref.revision}
             </button>
           )}

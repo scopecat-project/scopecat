@@ -40,13 +40,20 @@ function plan(id: string, name: string): PlanRevision {
 }
 const first = plan("a", "First plan");
 const second = plan("b", "Second plan");
-function Harness({ library = false }: { library?: boolean }) {
+function Harness({
+  library = false,
+  initialize = true,
+}: {
+  library?: boolean;
+  initialize?: boolean;
+}) {
   const context = useLaunchDraft();
   useEffect(() => {
-    context.select(entry);
-  }, [context.select]);
+    if (initialize) context.select(entry);
+  }, [context.select, initialize]);
   return (
     <>
+      <button onClick={() => context.select(entry)}>Select current catalog</button>
       <button onClick={() => context.openPlan(first, entry)}>Open first</button>
       <button onClick={() => context.openPlan(second, entry)}>Open second</button>
       <button
@@ -100,14 +107,14 @@ function Harness({ library = false }: { library?: boolean }) {
     </>
   );
 }
-function setup(library = false) {
+function setup(library = false, initialize = true) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
   return render(
     <QueryClientProvider client={client}>
       <LaunchDraftProvider projectId="project-a">
-        <Harness library={library} />
+        <Harness library={library} initialize={initialize} />
       </LaunchDraftProvider>
     </QueryClientProvider>,
   );
@@ -188,4 +195,29 @@ it("comparison identifies changed inputs without placing hashes in the ordinary 
   expect(changes.some((line) => line.includes("inputs:"))).toBe(true);
   expect(changes).toContain("Definition declaration changed (exact references in details).");
   expect(changes.join(" ")).not.toContain("sha256:");
+});
+
+it("an open started without a draft cannot replace the subsequently selected catalog", async () => {
+  let finish: ((response: Response) => void) | undefined;
+  vi.stubGlobal(
+    "fetch",
+    vi.fn((input: Request) => {
+      if (input.url.includes("experiment-plans")) return Promise.resolve(reply({ items: [first] }));
+      if (input.url.includes("experiment-launcher"))
+        return new Promise<Response>((resolve) => {
+          finish = resolve;
+        });
+      return Promise.resolve(reply({ activation: null }));
+    }),
+  );
+  setup(true, false);
+  await screen.findByText("Open First plan r1");
+  fireEvent.click(screen.getByText("Open First plan r1"));
+  await waitFor(() => expect(finish).toBeDefined());
+  fireEvent.click(screen.getByText("Select current catalog"));
+  fireEvent.click(screen.getByText("Edit while opening"));
+  await act(async () => {
+    finish!(reply({ entries: [entry] }));
+  });
+  expect(screen.getByLabelText("Current draft")).toHaveTextContent("new edit");
 });

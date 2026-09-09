@@ -391,6 +391,7 @@
         }
       }
     ],
+    "definition_hash": "sha256:79c58884cbee217d1c7c4766f57b9a71eef7f01272418d838485a79e8bd98b2e",
     "experiment_id": "frequency-amplitude",
     "manual_state": {
       "binding": {
@@ -402,6 +403,7 @@
       },
       "event_id": 1
     },
+    "plan_ref": null,
     "point_count": 1,
     "preflight": {
       "scope_basis": "One analytic model run; all selected grid points.",
@@ -497,6 +499,7 @@
     "request_hash": "sha256:bc4e261f25a3207a80d31817b9e83091b2e9a8855fed6236511e10e88bfc00f0",
     "resolved_inputs": {},
     "resources": [],
+    "sample_binding": null,
     "summary": "Preview fixed or scanned signal controls against the reviewed q0 carrier. Project limits: at most 64 points; amplitude at most 0.2 V when detuning exceeds 0.25 GHz. This analytic model makes no device calls."
   },
   "controls_scan": {
@@ -578,6 +581,7 @@
         }
       }
     ],
+    "definition_hash": "sha256:79c58884cbee217d1c7c4766f57b9a71eef7f01272418d838485a79e8bd98b2e",
     "experiment_id": "frequency-amplitude",
     "manual_state": {
       "binding": {
@@ -589,6 +593,7 @@
       },
       "event_id": 1
     },
+    "plan_ref": null,
     "point_count": 6,
     "preflight": {
       "scope_basis": "One analytic model run; all selected grid points.",
@@ -684,6 +689,7 @@
     "request_hash": "sha256:9b37f815398dff89e249e148ceedfe2b4fd5a03900060f2ae6cf528a621875ea",
     "resolved_inputs": {},
     "resources": [],
+    "sample_binding": null,
     "summary": "Preview fixed or scanned signal controls against the reviewed q0 carrier. Project limits: at most 64 points; amplitude at most 0.2 V when detuning exceeds 0.25 GHz. This analytic model makes no device calls."
   },
   "diagnostic": {
@@ -1172,6 +1178,7 @@
       "selector": "active"
     },
     "controls": [],
+    "definition_hash": "sha256:53999851b06af2bae8ccc071c6ed0b81bbb88180f58c12cdefd5e787f4ea46f9",
     "experiment_id": "temperature",
     "manual_state": {
       "binding": {
@@ -1183,6 +1190,7 @@
       },
       "event_id": 1
     },
+    "plan_ref": null,
     "point_count": 1,
     "preflight": {
       "scope_basis": "One diagnostic run. No configuration writes.",
@@ -1296,6 +1304,7 @@
     "resources": [
       "mixing-chamber"
     ],
+    "sample_binding": null,
     "summary": "Retain one thermometer sample without changing device state or default configuration."
   },
   "planned_settings": {

@@ -12,6 +12,10 @@ selected. Experiments without a sample can use the current default configuration
 saving does not require creating a working point. Later changes to the default
 never silently replace the saved configuration.
 
+This exact sample binding belongs to the saved plan (or an explicit named
+context). An ordinary name-only launch keeps its existing latest-sample
+selection semantics; previewing a name alone does not freeze its revision.
+
 Use **Saved plans** to open a revision. The saved name and revision, experiment,
 sample and source result appear before the optional exact-reference details.
 The current execution operator is separate from the person who saved the plan.
