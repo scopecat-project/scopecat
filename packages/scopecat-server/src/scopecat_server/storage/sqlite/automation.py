@@ -134,6 +134,7 @@ class SQLiteAutomationStore:
         limit: int = 50,
         before: int | None = None,
         state: ProcedureRunState | None = None,
+        request_key: str | None = None,
     ) -> ProcedureRunPage:
         if not 1 <= limit <= 500:
             raise ValueError("procedure run page size must be between 1 and 500")
@@ -147,6 +148,9 @@ class SQLiteAutomationStore:
         if state is not None:
             clauses.append("state = ?")
             parameters.append(state)
+        if request_key is not None:
+            clauses.append("request_key = ?")
+            parameters.append(request_key)
         where = "" if not clauses else f"WHERE {' AND '.join(clauses)}"
         parameters.append(limit + 1)
         try:

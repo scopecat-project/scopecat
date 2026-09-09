@@ -210,6 +210,7 @@ class AutomationService:
             limit=query.limit,
             before=query.cursor,
             state=query.state,
+            request_key=query.request_key,
         )
         return ProcedureRunPage(items=page.items, next_cursor=page.next_cursor)
 
@@ -628,8 +629,11 @@ class AutomationService:
         limit: int = 50,
         before: int | None = None,
         state: ProcedureRunState | None = None,
+        request_key: str | None = None,
     ) -> StoredProcedureRunPage:
-        return self._store.list_runs(limit=limit, before=before, state=state)
+        return self._store.list_runs(
+            limit=limit, before=before, state=state, request_key=request_key
+        )
 
     def _step_attempts(
         self,

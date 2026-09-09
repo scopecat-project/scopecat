@@ -156,3 +156,181 @@ test("reopens an admitted procedure after restart and follows exact retained run
     await rm(project, { recursive: true, force: true });
   }
 });
+
+const CHANGE_DRAFT_CONFIG = `
+import sys
+import scopecat as sc
+with sc.open_project(sys.argv[1]).connect() as lab:
+    original = lab.config.active()
+    revised = original.config.model_copy(update={"id": original.config.id + "-draft-context"})
+    lab.config.set_default(revised, actor="draft-browser", note="Verify preview invalidation")
+`;
+
+test("retains launch inputs across workspaces and invalidates previews without submitting", async ({
+  page,
+}, testInfo) => {
+  let failed = false;
+  const project = await mkdtemp(join(tmpdir(), "scopecat-draft-navigation-"));
+  let submissions = 0;
+  page.on("request", (request) => {
+    if (new URL(request.url()).pathname.endsWith("/experiment-launcher/submit")) submissions += 1;
+  });
+  try {
+    for (const name of ["src", "config", "scopecat.toml"])
+      await cp(join(ROOT, "examples/reference_lab", name), join(project, name), {
+        recursive: true,
+      });
+    uv(["scopecat", "start", project, "--port", "0", "--static-dir", resolve("dist")]);
+    const endpoint = JSON.parse(await readFile(join(project, ".scopecat/daemon.json"), "utf8")) as {
+      base_url: string;
+    };
+    await page.goto(`${endpoint.base_url}/#launch`);
+    await page.getByLabel("Experiment", { exact: true }).selectOption("frequency-amplitude");
+    await page.getByLabel("Sample ID").fill("sample-navigation");
+    await page.getByLabel("Operator", { exact: true }).fill("draft-author");
+    await page.getByLabel("Frequency source").selectOption("range");
+    await page.getByLabel("Frequency unit").selectOption("MHz");
+    await page.getByLabel("Frequency start").fill("4700");
+    await page.getByLabel("Frequency stop").fill("4900");
+    await page.getByLabel("Frequency points").fill("3");
+    for (const destination of ["Configuration", "Instruments", "Runs"]) {
+      await page
+        .getByRole("navigation", { name: "Project sections" })
+        .getByRole("button", { name: destination, exact: true })
+        .click();
+      await page
+        .getByRole("navigation", { name: "Project sections" })
+        .getByRole("button", { name: "Experiments", exact: true })
+        .click();
+      await expect(page.getByLabel("Experiment", { exact: true })).toHaveValue(
+        "frequency-amplitude",
+      );
+      await expect(page.getByLabel("Sample ID")).toHaveValue("sample-navigation");
+      await expect(page.getByLabel("Operator", { exact: true })).toHaveValue("draft-author");
+      await expect(page.getByLabel("Frequency source")).toHaveValue("range");
+      await expect(page.getByLabel("Frequency unit")).toHaveValue("MHz");
+      await expect(page.getByLabel("Frequency start")).toHaveValue("4700");
+      await expect(page.getByLabel("Frequency stop")).toHaveValue("4900");
+      await expect(page.getByLabel("Frequency points")).toHaveValue("3");
+    }
+    expect(submissions).toBe(0);
+    await page.getByRole("button", { name: "Preview", exact: true }).click();
+    await expect(page.getByText("Preview ready", { exact: true })).toBeVisible();
+    await page.getByLabel("Frequency points").fill("2");
+    await expect(page.getByText("Preview ready", { exact: true })).not.toBeVisible();
+    await expect(page.getByRole("button", { name: "Start acquisition" })).toBeDisabled();
+    await page.getByRole("button", { name: "Preview", exact: true }).click();
+    await expect(page.getByText("Preview ready", { exact: true })).toBeVisible();
+    uv(["python", "-c", CHANGE_DRAFT_CONFIG, project]);
+    await expect(
+      page.getByText(/Configuration changed. Editable inputs are retained/),
+    ).toBeVisible();
+    await expect(page.getByRole("button", { name: "Start acquisition" })).toBeDisabled();
+    const shot = testInfo.outputPath("retained-launch-draft.png");
+    await page.screenshot({ path: shot, fullPage: true });
+    await testInfo.attach("Retained inputs require a new preview", {
+      path: shot,
+      contentType: "image/png",
+    });
+    await page.getByRole("button", { name: "Reset launch draft" }).click();
+    await expect(page.getByLabel("Frequency", { exact: true })).toHaveValue("4.8");
+    await expect(page.getByLabel("Sample ID")).toHaveValue("");
+    expect(submissions).toBe(0);
+  } catch (error) {
+    failed = true;
+    await testInfo.attach("Isolated project path", { body: project, contentType: "text/plain" });
+    const daemonLog = await readFile(join(project, ".scopecat/daemon.log"), "utf8").catch(
+      () => "No daemon log was created.",
+    );
+    await testInfo.attach("Daemon log", { body: daemonLog, contentType: "text/plain" });
+    throw error;
+  } finally {
+    uv(["scopecat", "stop", project]);
+    // Preserve failed project state and logs for diagnosis.
+    if (!failed)
+      await rm(project, { recursive: true, force: true });
+  }
+});
+
+test("reopens a lost launch receipt after context changes without a second submission", async ({
+  page,
+}, testInfo) => {
+  let failed = false;
+  const project = await mkdtemp(join(tmpdir(), "scopecat-draft-submission-"));
+  let originalId = "";
+  let submissions = 0;
+  try {
+    for (const name of ["src", "config", "scopecat.toml"])
+      await cp(join(ROOT, "examples/reference_lab", name), join(project, name), {
+        recursive: true,
+      });
+    uv(["scopecat", "start", project, "--port", "0", "--static-dir", resolve("dist")]);
+    const endpoint = JSON.parse(await readFile(join(project, ".scopecat/daemon.json"), "utf8")) as {
+      base_url: string;
+    };
+    await page.goto(`${endpoint.base_url}/#launch`);
+    await page.getByLabel("Experiment", { exact: true }).selectOption("frequency-amplitude");
+    await page.getByRole("button", { name: "Preview", exact: true }).click();
+    await expect(page.getByText("Preview ready", { exact: true })).toBeVisible();
+    await page.route("**/api/v1/experiment-launcher/submit", async (route) => {
+      submissions += 1;
+      const response = await route.fetch();
+      expect(response.ok()).toBe(true);
+      originalId = ((await response.json()) as { procedure_id: string }).procedure_id;
+      await route.abort("failed");
+    });
+    await page.getByRole("button", { name: "Start acquisition" }).click();
+    await expect(
+      page.getByRole("heading", { name: "Original submission awaiting confirmation" }),
+    ).toBeVisible();
+    await expect(page.getByRole("alert")).toBeVisible();
+    await page
+      .getByRole("navigation", { name: "Project sections" })
+      .getByRole("button", { name: "Configuration", exact: true })
+      .click();
+    uv(["python", "-c", CHANGE_DRAFT_CONFIG, project]);
+    await page.route("**/api/v1/experiment-launcher", async (route) => {
+      const response = await route.fetch();
+      const catalog = (await response.json()) as {
+        entries: Array<{ id: string; description: string }>;
+      };
+      const changed = {
+        entries: catalog.entries.map((entry) =>
+          entry.id === "frequency-amplitude"
+            ? { ...entry, description: entry.description + " Updated description." }
+            : entry,
+        ),
+      };
+      await route.fulfill({ response, json: changed });
+    });
+    await page
+      .getByRole("navigation", { name: "Project sections" })
+      .getByRole("button", { name: "Experiments", exact: true })
+      .click();
+    await expect(page.getByText(/Experiment definition changed/)).toBeVisible();
+    await expect(page.getByRole("button", { name: "Retry original submission" })).toBeDisabled();
+    await page.getByRole("button", { name: "Check original submission" }).click();
+    await page.getByRole("button", { name: "Open submitted procedure" }).click();
+    await expect(page).toHaveURL(new RegExp(`procedure=${originalId}`));
+    expect(submissions).toBe(1);
+    const shot = testInfo.outputPath("original-launch-submission.png");
+    await page.screenshot({ path: shot, fullPage: true });
+    await testInfo.attach("Original admitted identity recovered read-only", {
+      path: shot,
+      contentType: "image/png",
+    });
+  } catch (error) {
+    failed = true;
+    await testInfo.attach("Isolated project path", { body: project, contentType: "text/plain" });
+    const daemonLog = await readFile(join(project, ".scopecat/daemon.log"), "utf8").catch(
+      () => "No daemon log was created.",
+    );
+    await testInfo.attach("Daemon log", { body: daemonLog, contentType: "text/plain" });
+    throw error;
+  } finally {
+    uv(["scopecat", "stop", project]);
+    // Preserve failed project state and logs for diagnosis.
+    if (!failed)
+      await rm(project, { recursive: true, force: true });
+  }
+});

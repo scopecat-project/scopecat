@@ -85,3 +85,27 @@ submission hash. Switching linear units converts the active values; nonlinear
 or unknown units retain only their declared unit. The server remains the
 unit/constraint authority. No device or accepted configuration is modified by
 previewing the reference model.
+
+## Keep a launch draft while inspecting the project
+
+The console retains the selected experiment, input fields, control sources and
+units, sample, and operator when navigating to configuration, instruments, or
+results and back. This draft belongs to the daemon's project identity and lasts
+only while that console session is open; reloading the page clears it. **Reset
+launch draft** restores the selected declaration's defaults. Neither navigation
+nor restoration previews or submits work automatically.
+
+Input edits, changed declarations, and a confirmed configuration activation
+change invalidate the preview. A temporary failure to read configuration blocks
+submission until the context can be verified without discarding retained inputs.
+
+If a submission response is lost, its original payload and request key remain
+separate from the editable draft. **Check original submission** reads retained
+procedures by that key; **Open submitted procedure** opens the confirmed ID and
+does not dispatch it. Confirmation requires one matching procedure whose public
+launch intent retains the exact `request_hash` and `config_source` binding from
+the request. Providers without this evidence, missing matches, or multiple
+matches remain explicitly unconfirmed. An explicit retry uses the original
+payload and key only while its declaration and configuration are still verified.
+Changing the context or resetting inputs never silently resubmits an unknown
+request or replaces its pending-confirmation entry.

@@ -1,20 +1,31 @@
-import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient, apiData } from "../../api-client";
+import { definitionKey, useLaunchDraft } from "./LaunchDraft";
 import { LaunchForm } from "./LaunchForm";
+import { OriginalSubmission } from "./OriginalSubmission";
 import { ProcedureHistory } from "./ProcedureHistory";
 import { ProcedureProgress } from "./ProcedureProgress";
 
 export function LaunchWorkspace() {
+  const { projectId, draft, select } = useLaunchDraft();
+  const queryClient = useQueryClient();
+  useEffect(() => {
+    void queryClient.invalidateQueries({ queryKey: ["config", "launch-context", projectId] });
+  }, [projectId, queryClient]);
   const catalog = useQuery({
-    queryKey: ["experiment-launcher"],
+    queryKey: ["experiment-launcher", projectId],
+    enabled: Boolean(projectId),
     queryFn: async () => {
       const result = await apiData(apiClient.GET("/api/v1/experiment-launcher"));
       return result.entries;
     },
   });
   const [procedureId, setProcedureId] = useState(
-    () => new URLSearchParams(window.location.search).get("procedure") ?? "",
+    () =>
+      draft?.admittedProcedureId ??
+      new URLSearchParams(window.location.search).get("procedure") ??
+      "",
   );
   function admitted(id: string) {
     setProcedureId(id);
@@ -22,8 +33,10 @@ export function LaunchWorkspace() {
     url.searchParams.set("procedure", id);
     window.history.replaceState(null, "", url);
   }
-  const [selected, setSelected] = useState("");
-  const entry = catalog.data?.find((item) => item.id === selected) ?? catalog.data?.[0];
+  const entry = catalog.data?.find((item) => item.id === draft?.experiment) ?? catalog.data?.[0];
+  useEffect(() => {
+    if (entry) select(entry);
+  }, [entry, select]);
   return (
     <section className="p-6 space-y-4">
       <h2 className="text-lg font-semibold">Experiments</h2>
@@ -38,7 +51,10 @@ export function LaunchWorkspace() {
             <select
               aria-label="Experiment"
               value={entry.id}
-              onChange={(event) => setSelected(event.target.value)}
+              onChange={(event) => {
+                const selected = catalog.data?.find((item) => item.id === event.target.value);
+                if (selected) select(selected);
+              }}
               className="border rounded p-2 ml-2"
             >
               {catalog.data?.map((item) => (
@@ -48,9 +64,20 @@ export function LaunchWorkspace() {
               ))}
             </select>
           </label>
-          <LaunchForm key={`${entry.id}:${entry.version}`} entry={entry} onAdmitted={admitted} />
+          {draft?.definition === definitionKey(entry) && (
+            <LaunchForm
+              key={draft.definition}
+              entry={entry}
+              onAdmitted={admitted}
+              catalogReady={catalog.isSuccess && !catalog.isFetching}
+            />
+          )}
         </>
       )}
+      <OriginalSubmission
+        onOpen={admitted}
+        catalogReady={catalog.isSuccess && !catalog.isFetching}
+      />
       <ProcedureHistory selectedId={procedureId} onSelect={admitted} />
       {procedureId && <ProcedureProgress key={procedureId} procedureId={procedureId} />}
     </section>
