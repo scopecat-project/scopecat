@@ -35,6 +35,7 @@ test("discovers an ordinary author experiment and edits controls before submitti
     await page.getByLabel("Experiment", { exact: true }).selectOption("signal");
     await expect(page.getByLabel("Frequency", { exact: true })).toHaveValue("4.8");
     await page.getByLabel("Gain", { exact: true }).fill("2");
+    await page.getByLabel("Polarity", { exact: true }).selectOption("negative");
     await page.getByLabel("Frequency source").selectOption("range");
     await page.getByLabel("Frequency start").fill("4.7");
     await page.getByLabel("Frequency stop").fill("4.9");
@@ -47,6 +48,7 @@ test("discovers an ordinary author experiment and edits controls before submitti
     await page.getByRole("button", { name: "Preview", exact: true }).click();
     const preview = await previewResponse;
     expect(preview.status()).toBe(200);
+    expect(preview.request().postDataJSON().inputs).toEqual({ polarity: "negative" });
     const originalPreview = await preview.json();
     expect(originalPreview).toMatchObject({
       experiment_id: "signal",
@@ -94,6 +96,7 @@ test("discovers an ordinary author experiment and edits controls before submitti
     await page.getByRole("button", { name: "Start acquisition", exact: true }).click();
     const admitted = await submitted;
     expect(admitted.status()).toBe(200);
+    expect(admitted.request().postDataJSON().inputs).toEqual({ polarity: "negative" });
     expect(await admitted.json()).toMatchObject({ dispatch_error: null });
     await expect(page.getByText("experiment: Completed", { exact: true })).toBeVisible();
     await page.getByRole("link", { name: /^Open retained run:/ }).click();

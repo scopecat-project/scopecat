@@ -278,8 +278,8 @@ export function LaunchForm({
               >
                 <option value="">Select…</option>
                 {(field.enum ?? ["true", "false"]).map((value) => (
-                  <option key={value} value={value}>
-                    {value}
+                  <option key={String(value)} value={String(value)}>
+                    {String(value)}
                   </option>
                 ))}
               </select>

@@ -7,7 +7,7 @@ interface FormArrayItem extends LaunchField {
 }
 export interface FormField extends LaunchField {
   type: string;
-  enum?: string[] | null;
+  enum?: (string | number | boolean)[] | null;
   items?: FormArrayItem | null;
 }
 
@@ -15,7 +15,8 @@ export interface FormField extends LaunchField {
 // Unsupported schemas remain intact in the catalog for other project clients.
 export function canRenderField(field: LaunchField | boolean): field is FormField {
   if (typeof field === "boolean" || typeof field.type !== "string") return false;
-  if (field.enum?.some((value) => typeof value !== "string")) return false;
+  const enumType = ["integer", "number"].includes(field.type) ? "number" : field.type;
+  if (field.enum?.some((value) => typeof value !== enumType)) return false;
   if (["string", "number", "integer", "boolean"].includes(field.type)) return true;
   const items = field.items;
   return (

@@ -376,7 +376,7 @@ it.each(["Operator", "Sample ID"])("invalidates preview after changing %s", asyn
   expect(screen.getByRole("button", { name: "Start acquisition" })).toBeDisabled();
 });
 
-it.each([{ type: "integer", enum: [1, 2] }, { type: ["number", "null"] }, false])(
+it.each([{ type: "integer", enum: [1, "two"] }, { type: ["number", "null"] }, false])(
   "reports unsupported project controls explicitly",
   async (field) => {
     vi.stubGlobal(
@@ -450,4 +450,33 @@ it("invalidates a preview after relevant manual changes and retains science inpu
   expect(screen.getByLabelText("Amplitude")).toHaveValue(0.4);
   expect(screen.getByLabelText("Qubit")).toHaveValue("Q12");
   expect(screen.getByRole("button", { name: "Preview" })).toBeEnabled();
+});
+
+it("parses numeric and boolean author choices before preview", async () => {
+  const fetcher = vi
+    .fn()
+    .mockResolvedValueOnce(
+      Response.json({
+        entries: [
+          {
+            ...entry,
+            request: {
+              properties: {
+                shots: { type: "integer", title: "Shots", enum: [4, 8], default: 4 },
+                enabled: { type: "boolean", title: "Enabled", enum: [true, false], default: true },
+              },
+            },
+          },
+        ],
+      }),
+    )
+    .mockResolvedValueOnce(Response.json(previewResult));
+  vi.stubGlobal("fetch", fetcher);
+  mount();
+  fireEvent.change(await screen.findByLabelText("Shots"), { target: { value: "8" } });
+  fireEvent.change(screen.getByLabelText("Enabled"), { target: { value: "false" } });
+  fireEvent.click(screen.getByRole("button", { name: "Preview" }));
+  await screen.findByText("Preview ready");
+  const request = fetcher.mock.calls[1]?.[0] as Request;
+  expect((await request.json()).inputs).toEqual({ shots: 8, enabled: false });
 });
