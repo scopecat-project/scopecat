@@ -7,7 +7,12 @@ from dataclasses import dataclass
 from pydantic import JsonValue
 
 from scopecat.application.experiment_plans import plan_definition, plan_launch_request
-from scopecat.application.launch import LaunchCatalog, LaunchPreview, LaunchSubmission
+from scopecat.application.launch import (
+    LaunchCatalog,
+    LaunchField,
+    LaunchPreview,
+    LaunchSubmission,
+)
 from scopecat.daemon.client import DaemonClient
 from scopecat.records.author_revision import (
     AuthorAnalysisReceipt,
@@ -44,12 +49,17 @@ class AuthorProject(DaemonClient):
         """Select the current declaration and retain a preview's exact submission."""
         catalog = self.catalog()
         entry = next(item for item in catalog.entries if item.id == experiment)
+        declared_inputs = {
+            name: field.default
+            for name, field in entry.request.properties.items()
+            if isinstance(field, LaunchField) and "default" in field.model_fields_set
+        }
         request = LaunchRequest(
             action="preview",
             experiment=entry.id,
             version=entry.version,
             control_edits=control_edits or {},
-            inputs=inputs or {},
+            inputs=declared_inputs | (inputs or {}),
             context=context,
             overrides=overrides,
             sample=sample,

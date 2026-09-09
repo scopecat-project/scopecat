@@ -308,3 +308,41 @@ def test_plan_freezes_active_sample_and_named_context_without_activation() -> No
         assert contextual.definition.sample is not None
         assert contextual.definition.sample.context_id == "bias-a"
         assert lab.config.active().activation == active.activation
+
+
+def test_authored_plan_freezes_default_structural_input_and_explicit_copy() -> None:
+    endpoint = os.environ["SCOPECAT_DAEMON_URL"]
+    key = uuid4().hex
+    with AuthorProject(endpoint) as author, LabClient(DaemonClient(endpoint)) as lab:
+        prepared = author.prepare("signal", actor="alice")
+        assert prepared.request.inputs == {"polarity": "positive"}
+        saved = prepared.save_plan("Positive signal", saved_by="alice")
+        assert saved.definition.inputs == {"polarity": "positive"}
+        assert saved.definition.code_revision == prepared.preview.code_revision
+        copied = lab.plans.save(
+            ExperimentPlanSave(
+                name="Negative signal",
+                saved_by="bob",
+                copied_from=saved.ref,
+                definition=saved.definition.model_copy(
+                    update={"inputs": {"polarity": "negative"}}
+                ),
+            )
+        )
+        for plan, polarity in ((saved, "positive"), (copied, "negative")):
+            reopened = author.prepare_plan(plan.ref, actor="carol")
+            assert reopened.request.inputs == {"polarity": polarity}
+            admitted = reopened.submit(request_key=f"{key}-{polarity}")
+            handle = lab.procedures.get(admitted.procedure_id)
+            deadline = time.monotonic() + 30
+            while handle.snapshot.closure is None:
+                assert time.monotonic() < deadline, handle.snapshot
+                time.sleep(0.05)
+            assert handle.snapshot.closure.status == "succeeded"
+            assert handle.snapshot.plan_ref == plan.ref
+            assert handle.snapshot.intent["inputs"] == {"polarity": polarity}
+            output = handle.step("experiment").output
+            assert isinstance(output, RunOutputRef)
+            request = author.run_request(output.run_id).request
+            assert request.plan_ref == plan.ref
+        assert lab.plans.get(saved.ref).definition.inputs == {"polarity": "positive"}
