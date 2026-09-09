@@ -122,8 +122,6 @@ def test_real_http_preview_shares_catalog_and_never_admits_acquisition(
     launch_application: LabApplication,
     experiment: str,
 ) -> None:
-    from reference_lab.launch import CATALOG
-
     provider = launch_application.launch_provider
     assert provider is not None
     with (
@@ -135,7 +133,9 @@ def test_real_http_preview_shares_catalog_and_never_admits_acquisition(
     ):
         response = http.get("/api/v1/experiment-launcher")
         assert response.is_success, response.text
-        assert LaunchCatalog.model_validate(response.json()) == CATALOG
+        assert LaunchCatalog.model_validate(response.json()) == provider(
+            lab, LaunchRequest(action="list")
+        )
         before = client.list_runs()
         active = lab.config.active()
         request = LaunchRequest(action="preview", experiment=experiment, version="1")

@@ -47,6 +47,7 @@ from reference_lab.workflows.temperature_diagnostic import (
 def test_application_registers_exact_drag_beta_procedure_source() -> None:
     application = create_application(EXAMPLE_ROOT)
 
+    assert application.authors is not None
     assert application.procedures.refs == (
         drag_beta_calibration_procedure.ref,
         drag_beta_verification_procedure.ref,
@@ -56,6 +57,10 @@ def test_application_registers_exact_drag_beta_procedure_source() -> None:
         launch_temperature.ref,
         recovered_temperature_analysis.ref,
         temperature_diagnostic_procedure.ref,
+        *(
+            item.ref
+            for item in sorted(application.authors.procedures, key=lambda item: item.id)
+        ),
     )
     assert (
         application.procedures.resolve(drag_beta_calibration_procedure.ref).ref

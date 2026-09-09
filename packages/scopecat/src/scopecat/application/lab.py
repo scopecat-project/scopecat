@@ -19,6 +19,7 @@ if TYPE_CHECKING:
     )
     from scopecat.api.lab import LabClient
     from scopecat.api.procedure_planner import ProcedurePlanningContext
+    from scopecat.application.authoring import AuthorExperiments
     from scopecat.automation.calibration_definition import RegisteredCalibration
     from scopecat.automation.definition import RegisteredProcedure
     from scopecat.automation.intervals import RegisteredProcedureSchedule
@@ -39,6 +40,7 @@ class LabApplication:
     """
 
     launch_provider: LaunchProvider | None = field(default=None, repr=False)
+    authors: AuthorExperiments | None = field(default=None, init=False, repr=False)
 
     build_experiment_system: ExperimentSystemBuilder | None = field(
         default=None,
@@ -79,12 +81,30 @@ class LabApplication:
             | CalibrationPublicationPolicyRegistry
         ) = (),
         launch_provider: LaunchProvider | None = None,
+        author_modules: tuple[str, ...] = (),
     ) -> None:
         object.__setattr__(
             self,
             "build_experiment_system",
             build_experiment_system,
         )
+        authors = None
+        if author_modules:
+            from scopecat.application.authoring import AuthorExperiments
+
+            authors = AuthorExperiments.discover(*author_modules)
+            launch_provider = authors.compose(launch_provider)
+            procedures = (
+                (*procedures.values(), *authors.procedures)
+                if isinstance(procedures, ProcedureRegistry)
+                else (*procedures, *authors.procedures)
+            )
+        elif launch_provider is not None:
+            from scopecat.application.authoring import AuthorLaunchProvider
+
+            if isinstance(launch_provider, AuthorLaunchProvider):
+                authors = launch_provider.authors
+        object.__setattr__(self, "authors", authors)
         object.__setattr__(self, "launch_provider", launch_provider)
         procedure_registry = (
             procedures

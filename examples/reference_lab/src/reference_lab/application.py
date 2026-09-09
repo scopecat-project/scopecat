@@ -54,6 +54,7 @@ def create_application(_project_root: Path) -> LabApplication:
 
     return LabApplication(
         launch_provider=launch_provider,
+        author_modules=("reference_lab.workflows.authored",),
         build_experiment_system=lambda config, instrument_catalog: reference_lab_system(
             config=config,
             instrument_catalog=instrument_catalog,

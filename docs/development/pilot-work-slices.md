@@ -135,9 +135,10 @@ must explain the same frozen plan and data, not execute separate implementations
 (relative to `examples/reference_lab`). It contains a short ordinary Python
 experiment, a resonance helper and a thresholded mean analysis. Editing its scan,
 input default, helper or analysis does not require changes to catalog, service,
-cohort, compiler or driver files. Today the direct Python path evaluates edits
-in a new Python process. Browser discovery and refreshing an installed definition
-are separate acceptance targets, not capabilities claimed by this fixture.
+cohort, compiler or driver files. The [ordinary author path](../how-to/write-an-experiment.md) builds on this
+fixture with initial module discovery, GUI control editing/submission and a Python
+adapter. Atomic refresh of installed definitions and helper dependency identity
+remain separate acceptance targets; this fixture alone does not qualify them.
 
 `src/reference_lab/exploration.py` belongs to the fixture maintainer. It reuses
 the existing reference application, parameter table, sample registry and run
@@ -195,7 +196,7 @@ where a maintainer intervened. A proposed mechanism is not an observed success.
 
 | Journey | Goal and observable success | Foundation versus later work |
 |---|---|---|
-| Edit and refresh | Change scan density, then helper response and analysis; run the revised experiment and still interpret the old result | Direct Python file and retained data exist. Convenient discovery/refresh and dependency-aware code identity belong to #441/#442. |
+| Edit and refresh | Change scan density, then helper response and analysis; run the revised experiment and still interpret the old result | Direct Python and the #441 discovered GUI author path exist. Atomic refresh and helper dependency identity belong to #442. |
 | Preserve a plan | Leave an unfinished scan, inspect an old run, return without losing edits; save two alternatives and reopen them | This fixture supplies an editable invocation. Route-local preservation is #436; durable saved plans are #437. |
 | Select parameters | Move between A/B and parked/shifted, identify each value's source, try a local override, and encounter a missing carrier without inheriting a misleading default | Four explicit snapshots and the missing case exist. Parameter-context resolution and structural edits are #438/#439. |
 | Reanalyze and continue | Compare original and selected means from retained data, explain exclusions, then use the result to choose the next scan | The two Python publications exist without reacquisition. The connected selection/comparison/next-run experience is #440. |

@@ -62,6 +62,10 @@ axis. Both values display their provenance. Their resolvers' values are
 normalized and checked against declared units/bounds before displaying them.
 They cannot be edited through the control interface.
 
+For an ordinary one-experiment author path, the [discovery adapter](write-an-experiment.md)
+automatically supplies these launch projections and single-run execution. The
+explicit provider below remains useful for maintained multi-stage workflows.
+
 ## Use the declaration in a launch provider
 
 `control_catalog(controls)` produces `LaunchCatalogEntry.controls`.
