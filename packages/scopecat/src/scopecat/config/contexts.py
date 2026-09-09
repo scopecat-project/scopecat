@@ -131,9 +131,11 @@ def context_value_origins(
                             isinstance(update, InsertParameterRows)
                             and any(
                                 all(
-                                    inserted.get(name) == value
-                                    for name, value in key.items()
+                                    inserted.get(name) == key_value
+                                    for name, key_value in key.items()
                                 )
+                                if keys
+                                else index >= len(before_rows) and row == inserted
                                 for inserted in update.rows
                             )
                         )

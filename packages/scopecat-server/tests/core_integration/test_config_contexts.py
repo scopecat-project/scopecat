@@ -229,3 +229,47 @@ def test_explicit_equal_trial_values_keep_override_origin_and_typed_roundtrip() 
     adapter = TypeAdapter(tuple[ParameterUpdate, ...])
     assert adapter.validate_json(adapter.dump_json(edits)) == edits
     assert ParameterSnapshot.model_validate_json(snapshot.model_dump_json()) == snapshot
+
+
+def test_unkeyed_insert_marks_only_appended_rows_as_trial_values() -> None:
+    from scopecat.config.parameter_updates import InsertParameterRows
+
+    base = load_config()
+    snapshot = ParameterSnapshot(
+        id="values",
+        values=(
+            TableParameterValue(id="cells", rows=({"value": 1.0}, {"value": 2.0})),
+        ),
+    )
+    config = base.model_copy(
+        update={
+            "parameter_snapshot": snapshot,
+            "system": base.system.model_copy(
+                update={
+                    "parameter_catalog": ParameterCatalog(
+                        id="catalog",
+                        definitions=(
+                            ParameterDefinition(
+                                id="cells",
+                                value_type=Table(
+                                    columns=(TableColumn("value", Scalar(Float())),)
+                                ),
+                            ),
+                        ),
+                    )
+                }
+            ),
+        }
+    )
+    ref = ConfigContextRef(entry_id="base", content_hash=config_content_hash(config))
+    # An appended duplicate is still a distinct row, not a new source for row 0.
+    edits = (InsertParameterRows(parameter_id="cells", rows=({"value": 1.0},)),)
+    resolved = apply_context_overrides(config, edits)
+    origins = context_value_origins(
+        resolved, base=snapshot, base_ref=ref, selected_ref=ref, overrides=edits
+    )
+    assert [(origin.row_index, origin.layer) for origin in origins] == [
+        (0, "base"),
+        (1, "base"),
+        (2, "run_override"),
+    ]

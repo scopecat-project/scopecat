@@ -396,7 +396,7 @@
         {
           "config_content_hash": "sha256:15248161728d3097f23ae3b6e8109e20a2a2ec2b720eafcceefc89943acd302e",
           "configuration": "accepted",
-          "configuration_meaning": "Uses the reviewed q0 carrier without changing configuration.",
+          "configuration_meaning": "Uses the reviewed active configuration; no default changes.",
           "costs": [
             {
               "artifact_fingerprint": null,
@@ -569,7 +569,7 @@
         {
           "config_content_hash": "sha256:15248161728d3097f23ae3b6e8109e20a2a2ec2b720eafcceefc89943acd302e",
           "configuration": "accepted",
-          "configuration_meaning": "Uses the reviewed q0 carrier without changing configuration.",
+          "configuration_meaning": "Uses the reviewed active configuration; no default changes.",
           "costs": [
             {
               "artifact_fingerprint": null,
