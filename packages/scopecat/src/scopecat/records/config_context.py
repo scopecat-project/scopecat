@@ -8,6 +8,10 @@ from pydantic import BaseModel, ConfigDict, Field, field_serializer, field_valid
 from scopecat.kernel.frozen import FrozenMapping
 from scopecat.records.config import ConfigContentHash
 from scopecat.records.parameter import ParameterAtomValue
+from scopecat.records.parameter_structure import (
+    ParameterStructureOrigin,
+    StructureValueDecision,
+)
 from scopecat.records.parameter_update import ParameterUpdate
 from scopecat.records.sample import SampleBinding
 
@@ -23,6 +27,29 @@ class ConfigContextRef(_ContextModel):
     content_hash: ConfigContentHash
 
 
+class ConfigCellRef(_ContextModel):
+    """Exact source cell before any explicit structural mapping."""
+
+    entry: ConfigContextRef
+    parameter_id: str
+    field_id: str | None = None
+    row_index: int | None = Field(default=None, ge=0)
+    key: Mapping[str, ParameterAtomValue] = Field(default_factory=dict)
+
+    @field_validator("key")
+    @classmethod
+    def freeze_key(
+        cls, value: Mapping[str, ParameterAtomValue]
+    ) -> Mapping[str, ParameterAtomValue]:
+        return FrozenMapping(value.items())
+
+    @field_serializer("key")
+    def serialize_key(
+        self, value: Mapping[str, ParameterAtomValue]
+    ) -> dict[str, ParameterAtomValue]:
+        return dict(value)
+
+
 class ConfigValueOrigin(_ContextModel):
     """Origin of one scalar or one keyed table cell in an effective snapshot."""
 
@@ -32,6 +59,8 @@ class ConfigValueOrigin(_ContextModel):
     row_index: int | None = Field(default=None, ge=0)
     layer: Literal["base", "context", "run_override"]
     entry: ConfigContextRef
+    source_cell: ConfigCellRef | None = None
+    evidence: StructureValueDecision | None = None
 
     @field_validator("key")
     @classmethod
@@ -55,6 +84,7 @@ class ConfigContextMetadata(_ContextModel):
     label: str = Field(min_length=1)
     base: ConfigContextRef
     value_origins: tuple[ConfigValueOrigin, ...] = ()
+    structure: ParameterStructureOrigin | None = None
 
 
 class ContextRunConfigSource(_ContextModel):

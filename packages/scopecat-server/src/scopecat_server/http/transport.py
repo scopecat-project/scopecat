@@ -98,6 +98,10 @@ from scopecat.automation.wire import (
     ProcedureStepResourceWaitCommand,
     ProcedureStepResourceWaitReceipt,
 )
+from scopecat.config.structure import (
+    ParameterStructurePlan,
+    ParameterStructurePreview,
+)
 from scopecat.control.models import (
     ControlRunState,
     EventPage,
@@ -488,6 +492,10 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
     @app.post(f"{_API_PREFIX}/config-registry/contexts")
     def save_context(command: ConfigContextSaveCommand) -> ConfigEntryView:
         return application.config.save_context(command)
+
+    @app.post(f"{_API_PREFIX}/config-registry/contexts/structure/preview")
+    def preview_structure(plan: ParameterStructurePlan) -> ParameterStructurePreview:
+        return application.config.preview_structure(plan)
 
     @app.post(f"{_API_PREFIX}/config-registry/contexts/resolve")
     def resolve_context(

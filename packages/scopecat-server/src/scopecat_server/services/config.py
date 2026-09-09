@@ -53,6 +53,11 @@ from scopecat.config.registry.records import (
 from scopecat.config.registry.service import (
     publish_instrument_inventory_migration_revision,
 )
+from scopecat.config.structure import (
+    ParameterStructurePlan,
+    ParameterStructurePreview,
+    preview_parameter_structure,
+)
 from scopecat.control.models import (
     DurableEventInput,
     InventoryMigrationBlocker,
@@ -185,11 +190,22 @@ class ConfigService:
                     working_point_id=command.working_point_id,
                     label=command.label,
                     parameters=command.parameters,
+                    structure_plan=command.structure_plan,
                     actor=command.actor,
                     note=command.note,
                     unit_of_work=self._config_registry.write_unit_of_work,
                 )
                 return ConfigEntryView(entry=snapshot.entry, config=snapshot.config)
+            except ValueError as error:
+                raise BackendConflict(str(error)) from error
+
+    def preview_structure(
+        self, plan: ParameterStructurePlan
+    ) -> ParameterStructurePreview:
+        with self._config_errors():
+            saved = self.get_config_entry(plan.base.entry_id)
+            try:
+                return preview_parameter_structure(saved.config, plan)
             except ValueError as error:
                 raise BackendConflict(str(error)) from error
 

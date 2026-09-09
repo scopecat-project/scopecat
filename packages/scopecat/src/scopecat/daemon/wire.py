@@ -40,6 +40,7 @@ from scopecat.config.registry.records import (
     config_activation_intent_hash,
     config_publish_intent_hash,
 )
+from scopecat.config.structure import ParameterStructurePlan
 from scopecat.control.models import RunPlanSummary
 from scopecat.kernel.content_identity import stable_content_hash
 from scopecat.kernel.problems import Problem
@@ -1439,6 +1440,7 @@ class ConfigContextSaveCommand(_WireModel):
     working_point_id: str = Field(min_length=1)
     label: str = Field(min_length=1)
     parameters: ParameterSnapshot | None = None
+    structure_plan: ParameterStructurePlan | None = None
     actor: str = Field(min_length=1)
     note: str = ""
 

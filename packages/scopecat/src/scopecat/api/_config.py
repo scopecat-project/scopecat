@@ -24,6 +24,10 @@ from scopecat.config.registry.records import (
     ManualCandidateAcceptance,
 )
 from scopecat.config.resolution import config_revision_entry_id
+from scopecat.config.structure import (
+    ParameterStructurePlan,
+    ParameterStructurePreview,
+)
 from scopecat.daemon.client import DaemonClient, DaemonNotFoundError
 from scopecat.daemon.views import (
     ActiveConfigView,
@@ -82,6 +86,7 @@ class LabConfigOperations:
         working_point_id: str,
         label: str,
         parameters: ParameterSnapshot | None = None,
+        structure_plan: ParameterStructurePlan | None = None,
         actor: str | None = None,
         note: str = "",
     ) -> ConfigEntryView:
@@ -98,10 +103,16 @@ class LabConfigOperations:
                 working_point_id=working_point_id,
                 label=label,
                 parameters=parameters,
+                structure_plan=structure_plan,
                 actor=actor or self.operator,
                 note=note,
             )
         )
+
+    def preview_structure(
+        self, plan: ParameterStructurePlan
+    ) -> ParameterStructurePreview:
+        return self.client.preview_structure(plan)
 
     def resolve_context(
         self,
