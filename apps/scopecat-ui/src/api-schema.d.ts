@@ -5391,7 +5391,7 @@ export interface components {
              * Configuration
              * @enum {string}
              */
-            configuration: "accepted" | "proposed_candidate";
+            configuration: "accepted" | "proposed_candidate" | "selected_context";
             /** Configuration Meaning */
             configuration_meaning: string;
             /** Costs */

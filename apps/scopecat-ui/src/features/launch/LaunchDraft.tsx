@@ -17,11 +17,7 @@ import {
   type SubmissionAttempt,
   type SubmissionRequest,
 } from "./launch-submission";
-import {
-  resolveConfigContext,
-  type ConfigContextRef,
-  type ConfigContextResolution,
-} from "../config/config-api";
+import type { ConfigContextResolution } from "../config/config-api";
 import type { LaunchCatalogEntry, LaunchPreview } from "./launch-api";
 
 export interface LaunchDraft {
@@ -43,7 +39,7 @@ type DraftUpdate = (current: LaunchDraft) => LaunchDraft;
 interface DraftContext {
   projectId: string | undefined;
   selectedContext: ConfigContextResolution | undefined;
-  selectContext: (ref?: ConfigContextRef) => Promise<void>;
+  selectContext: (resolution?: ConfigContextResolution) => void;
   draft: LaunchDraft | undefined;
   select: (entry: LaunchCatalogEntry, reset?: boolean) => void;
   update: (change: DraftUpdate) => void;
@@ -238,8 +234,7 @@ function ProjectDraft({
       value={{
         projectId,
         selectedContext,
-        selectContext: async (ref) => {
-          const resolved = ref ? await resolveConfigContext(ref) : undefined;
+        selectContext: (resolved) => {
           if (!alive.current) return;
           setSelectedContext(resolved);
           setDraft((current) =>

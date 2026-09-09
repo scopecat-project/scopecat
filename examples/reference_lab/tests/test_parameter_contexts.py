@@ -206,3 +206,73 @@ def test_context_unknown_values_block_only_the_experiment_that_needs_them() -> N
         )
         assert lab.run(exploratory_signal(), config=resolved).status == "completed"
         assert lab.config.active() == active
+
+
+def test_context_launch_replay_preserves_reviewed_generation() -> None:
+    from scopecat.application.launch import (
+        LaunchPreview,
+        LaunchRequest,
+        LaunchSubmission,
+    )
+
+    application = create_application(EXAMPLE_ROOT)
+    assert application.launch_provider is not None
+    with application.connect(os.environ["SCOPECAT_DAEMON_URL"]) as lab:
+        active = lab.config.active()
+        lab.samples.create(
+            "context-replay",
+            kind="synthetic",
+            content=SampleRevisionDraft(display_name="Replay"),
+        )
+        saved = lab.config.save_context(
+            entry_id="context-replay-1",
+            base=ConfigContextRef(
+                entry_id=active.entry.id, content_hash=active.entry.content_hash
+            ),
+            sample=lab.samples.handle("context-replay").selector(),
+            working_point_id="parked",
+            label="Replay",
+        )
+        ref = ConfigContextRef(
+            entry_id=saved.entry.id, content_hash=saved.entry.content_hash
+        )
+        lab.samples.revise(
+            "context-replay", SampleRevisionDraft(display_name="Replay r2")
+        )
+        request = LaunchRequest(
+            action="preview", experiment="frequency-amplitude", version="1", context=ref
+        )
+        preview = application.launch_provider(lab, request)
+        assert isinstance(preview, LaunchPreview)
+        assert preview.preflight is not None
+        assert preview.preflight.stages[0].configuration == "selected_context"
+        assert (
+            "accepted" not in preview.preflight.stages[0].configuration_meaning.lower()
+        )
+        command = LaunchRequest.model_validate(
+            {
+                **request.model_dump(),
+                "action": "submit",
+                "request_key": "context-replay",
+                "config_source": preview.config_source,
+                "expected_request_hash": preview.request_hash,
+            }
+        )
+        admitted = application.launch_provider(lab, command)
+        assert isinstance(admitted, LaunchSubmission)
+        procedure = lab.procedures.get(admitted.procedure_id)
+        assert procedure.snapshot.samples[0].revision == 1
+        procedure.resume()
+        output = procedure.output("signal")
+        assert output.kind == "run"
+        assert lab.get_run(output.run_id).samples[0].revision == 1
+        assert application.authors is not None
+        selected_author = application.authors.get("signal")
+        author_run = selected_author.run(lab, config=ref)
+        assert author_run.samples[0].revision == 1
+        lab.config.set_default(active.config)
+        assert application.launch_provider(lab, command) == admitted
+        with pytest.raises(DaemonConflictError, match="active configuration changed"):
+            application.launch_provider(
+                lab, command.model_copy(update={"request_key": "new-context-replay"})
+            )

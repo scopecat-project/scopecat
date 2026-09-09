@@ -19,7 +19,12 @@ from scopecat.application.launch import (
     LaunchSubmission,
     validate_launch_control_edits,
 )
-from scopecat.application.launch_config import launch_config_generation
+from scopecat.application.launch_config import (
+    launch_config_generation,
+    launch_preflight_configuration,
+    launch_preflight_meaning,
+    launch_sample_selection,
+)
 from scopecat.automation import InterpretationRequest, procedure
 from scopecat.config.parameter_updates import materialize_parameter_updates
 from scopecat.planning.preflight import (
@@ -199,12 +204,10 @@ def launch_provider(lab: LabClient, request: LaunchRequest) -> LaunchResult:
                 stage_id="diagnostic" if entry.kind == "diagnostic" else "source",
                 label="Retained temperature diagnostic"
                 if entry.kind == "diagnostic"
-                else "Accepted-configuration source run",
-                configuration="accepted",
+                else "Selected-configuration source run",
+                configuration=launch_preflight_configuration(source),
                 config_content_hash=source.content_hash,
-                configuration_meaning=(
-                    "Uses the reviewed active configuration; no default changes."
-                ),
+                configuration_meaning=launch_preflight_meaning(source),
                 executions=ExactQuantity(
                     value=1,
                     unit="runs",
@@ -301,7 +304,7 @@ def launch_provider(lab: LabClient, request: LaunchRequest) -> LaunchResult:
         definition,
         intent,
         request_key=request.request_key,
-        sample=request.sample,
+        sample=launch_sample_selection(request, source),
         expected_config_generation=launch_config_generation(source),
     )
     return LaunchSubmission(procedure_id=admitted.id)

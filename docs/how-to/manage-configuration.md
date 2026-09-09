@@ -127,7 +127,9 @@ names do not make them the same physical sample.
 In the console, open a configuration and choose **Save working point copy**.
 Select the physical sample, name the working point, and edit the values you know.
 Use **Mark unknown** for an unknown value. The saved copy retains the selected
-sample revision. Compare it with another saved revision using the comparison
+sample revision. Choose **Use for next experiment** to launch with that exact
+sample and working point; the launch form displays its identity and can switch
+back with **Use lab default**. Compare it with another saved revision using the comparison
 selector; select an older context again to recover its parameters without
 rewriting either copy or any earlier run.
 

@@ -171,7 +171,7 @@ export function LaunchForm({
           <button
             type="button"
             onClick={() => {
-              void selectContext();
+              selectContext();
             }}
           >
             Use lab default

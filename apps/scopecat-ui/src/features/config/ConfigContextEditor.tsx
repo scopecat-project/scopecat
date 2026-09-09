@@ -13,6 +13,9 @@ import { errorMessage } from "../../lib/presentation";
 import { primaryButton, secondaryButton } from "../../ui/styles";
 import { createConfigOperationId, saveConfigContext } from "./config-api";
 
+const sampleKey = (sample: { sample_id: string; revision: number }) =>
+  `${sample.sample_id}@${sample.revision}`;
+
 export function ConfigContextEditor({
   entry,
   config,
@@ -34,8 +37,7 @@ export function ConfigContextEditor({
   const [selectedSample, setSelectedSample] = useState<
     { sample_id: string; revision: number; role: string } | undefined
   >(metadata?.sample);
-  const sampleKey = (sample: { sample_id: string; revision: number }) =>
-    `${sample.sample_id}@${sample.revision}`;
+
   const [point, setPoint] = useState(metadata?.working_point_id ?? "");
   const [label, setLabel] = useState(metadata?.label ?? "");
   const [entryId] = useState(() => createConfigOperationId("context"));
@@ -89,13 +91,13 @@ export function ConfigContextEditor({
           aria-label="Physical sample"
           value={selectedSample ? sampleKey(selectedSample) : ""}
           onChange={(event) => {
-            const item = samples.data?.items.find(
+            const selected = samples.data?.items.find(
               (item) => `${item.record.id}@${item.record.active_revision}` === event.target.value,
             );
-            if (item)
+            if (selected)
               setSelectedSample({
-                sample_id: item.record.id,
-                revision: item.record.active_revision,
+                sample_id: selected.record.id,
+                revision: selected.record.active_revision,
                 role: "subject",
               });
             else if (!event.target.value) setSelectedSample(undefined);
@@ -252,7 +254,7 @@ function ContextAtom({
       {type.type === "bool" ? (
         <select
           aria-label={label}
-          value={value === undefined ? "" : String(value)}
+          value={typeof value === "boolean" ? String(value) : ""}
           disabled={disabled}
           onChange={(event) =>
             onChange(event.target.value === "" ? undefined : event.target.value === "true")

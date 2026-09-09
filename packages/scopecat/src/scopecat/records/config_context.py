@@ -5,10 +5,10 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_serializer, field_validator
 
-from scopecat.config.parameter_updates import ParameterUpdate
 from scopecat.kernel.frozen import FrozenMapping
 from scopecat.records.config import ConfigContentHash
 from scopecat.records.parameter import ParameterAtomValue
+from scopecat.records.parameter_update import ParameterUpdate
 from scopecat.records.sample import SampleBinding
 
 

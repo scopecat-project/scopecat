@@ -16,7 +16,12 @@ from scopecat.application.launch import (
     LaunchRequest,
     LaunchSubmission,
 )
-from scopecat.application.launch_config import launch_config_generation
+from scopecat.application.launch_config import (
+    launch_config_generation,
+    launch_preflight_configuration,
+    launch_preflight_meaning,
+    launch_sample_selection,
+)
 from scopecat.automation import procedure
 from scopecat.planning.preflight import (
     ExactQuantity,
@@ -105,17 +110,14 @@ def control_launch(
                         preview,
                         stage_id="signal",
                         label="Configured signal model",
-                        configuration="accepted",
+                        configuration=launch_preflight_configuration(source),
                         executions=ExactQuantity(
                             value=1,
                             unit="runs",
                             basis="One declared analytic model run",
                         ),
                         config_content_hash=source.content_hash,
-                        configuration_meaning=(
-                            "Uses the reviewed q0 carrier "
-                            "without changing configuration."
-                        ),
+                        configuration_meaning=launch_preflight_meaning(source),
                     ),
                 ),
                 scope_basis="One analytic model run; all selected grid points.",
@@ -131,7 +133,7 @@ def control_launch(
             edits=request.control_edits,
         ),
         request_key=request.request_key,
-        sample=request.sample,
+        sample=launch_sample_selection(request, source),
         expected_config_generation=launch_config_generation(source),
     )
     return LaunchSubmission(procedure_id=admitted.id)

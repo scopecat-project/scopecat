@@ -123,7 +123,7 @@ export async function publishConfig(command: ConfigPublishCommand): Promise<Conf
       }),
     ),
   );
-  return response as ConfigPublishReceipt;
+  return response;
 }
 
 export function createConfigOperationId(purpose: string): string {

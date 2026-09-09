@@ -16,7 +16,12 @@ import {
 import { errorMessage } from "../../lib/presentation";
 import { classes, secondaryButton } from "../../ui/styles";
 import { ConfigContextEditor } from "./ConfigContextEditor";
-import { getConfigRegistryEntry, resolveConfigContext, type ConfigContextRef } from "./config-api";
+import {
+  getConfigRegistryEntry,
+  resolveConfigContext,
+  type ConfigContextRef,
+  type ConfigContextResolution,
+} from "./config-api";
 import { ConfigDraftEditor, type ConfigDraftSeed } from "./ConfigDraftEditor";
 import { ConfigEntryInspector } from "./ConfigEntryInspector";
 import { ConfigImportDialog } from "./ConfigImportDialog";
@@ -34,7 +39,7 @@ export function ConfigWorkspace({
 }: {
   daemonUnavailable: boolean;
   onOpenRun?: (runId: string) => void;
-  onSelectContext?: (context: ConfigContextRef) => void;
+  onSelectContext?: (context: ConfigContextResolution) => void;
 }) {
   const queryClient = useQueryClient();
   const fileInput = useRef<HTMLInputElement>(null);
@@ -48,7 +53,7 @@ export function ConfigWorkspace({
   });
   const contextSelection = useMutation({
     mutationFn: (ref: ConfigContextRef) => resolveConfigContext(ref),
-    onSuccess: (_resolution, ref) => onSelectContext?.(ref),
+    onSuccess: (resolution) => onSelectContext?.(resolution),
   });
   const registry = useConfigRegistry(daemonUnavailable);
   const workflow = useConfigMutationWorkflow(registry.overview);
