@@ -192,6 +192,7 @@ from scopecat_server.storage.sqlite.control_plane import (
 from scopecat_server.storage.sqlite.execution import (
     SQLiteMeasurementDatasetRepository,
 )
+from scopecat_server.storage.sqlite.object_store import ImmutableObjectStore
 from scopecat_server.storage.sqlite.run_repository import SQLiteRunRepository
 from scopecat_server.storage.sqlite.samples import SQLiteSampleStore
 
@@ -1751,7 +1752,9 @@ def test_admission_is_durably_idempotent(tmp_path: Path) -> None:
                         config_registry=registry.read_unit_of_work,
                     ),
                     point_plans=RunPointPlanService(control=control, runs=runs),
-                    samples=SampleService(sample_store),
+                    samples=SampleService(
+                        sample_store, ImmutableObjectStore(state / "objects")
+                    ),
                     sample_store=sample_store,
                 )
             )
@@ -2052,7 +2055,9 @@ def test_authority_failure_replays_a_concurrently_admitted_submission(
                 config_registry=registry.read_unit_of_work,
             ),
             point_plans=RunPointPlanService(control=control, runs=runs),
-            samples=SampleService(sample_store),
+            samples=SampleService(
+                sample_store, ImmutableObjectStore(state / "objects")
+            ),
             sample_store=sample_store,
         )
         resolve_active = racing._resolve_active_config

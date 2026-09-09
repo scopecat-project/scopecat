@@ -13,7 +13,13 @@ from scopecat.daemon.wire import (
     SampleMutationReceipt,
     SampleReviseCommand,
 )
-from scopecat.records.sample import SampleRevision, SampleRevisionDraft, SampleSelector
+from scopecat.records.sample import (
+    SampleArtifactRef,
+    SampleRevision,
+    SampleRevisionDraft,
+    SampleSelector,
+)
+from scopecat.records.sample_artifact import SampleArtifactPage
 
 
 class SampleOperations(Protocol):
@@ -120,6 +126,22 @@ class LabSampleOperations:
     client: DaemonClient
     session: SampleSession
     operator: str
+
+    def import_artifact(
+        self, content: bytes, *, artifact_id: str, title: str, media_type: str
+    ) -> SampleArtifactRef:
+        """Store bounded attachment bytes; add the returned ref to a sample revision."""
+        return self.client.import_sample_artifact(
+            content, artifact_id=artifact_id, title=title, media_type=media_type
+        )
+
+    def artifacts(self, sample_id: str, revision: int) -> SampleArtifactPage:
+        return self.client.sample_artifacts(sample_id, revision)
+
+    def artifact_content(
+        self, sample_id: str, revision: int, artifact_id: str
+    ) -> bytes:
+        return self.client.sample_artifact_content(sample_id, revision, artifact_id)
 
     def list(
         self,

@@ -131,6 +131,7 @@ _OPERATIONS = {
     ),
     ("/api/v1/samples/{sample_id}/revisions", "get"),
     ("/api/v1/samples/{sample_id}/revisions/{revision}", "get"),
+    ("/api/v1/samples/{sample_id}/revisions/{revision}/artifacts", "get"),
 }
 
 # Binary endpoints do not reference their decoded models in OpenAPI. The UI still

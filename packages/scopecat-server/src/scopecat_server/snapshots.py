@@ -17,6 +17,8 @@ from typing import Literal, cast
 from filelock import FileLock, Timeout
 from pydantic import BaseModel, ConfigDict
 from scopecat.project import Project, load_project
+from scopecat.records.sample import SampleRevision
+from scopecat.records.sample_artifact import is_owned_sample_artifact_uri
 
 from scopecat_server.storage.sqlite.object_store import ImmutableObjectStore
 from scopecat_server.storage.sqlite.project_store import (
@@ -230,6 +232,17 @@ def _verify_store(project: Path) -> int:
         )
         for row in refs:
             objects.verify(cast("str", row["digest"]))
+        sample_rows = cast(
+            "list[sqlite3.Row]",
+            connection.execute("SELECT revision_json FROM sample_revisions").fetchall(),
+        )
+        for row in sample_rows:
+            revision = SampleRevision.model_validate_json(
+                cast("str", row["revision_json"])
+            )
+            for artifact in revision.content.artifacts:
+                if is_owned_sample_artifact_uri(artifact.uri):
+                    objects.verify(artifact.uri)
         for relative in _files(objects.root):
             if len(relative.parts) != 2 or len(relative.parts[0]) != 2:
                 raise SnapshotError(f"invalid immutable object path: {relative}")

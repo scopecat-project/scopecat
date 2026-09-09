@@ -1,0 +1,2 @@
+Synthetic sample A: two connected measurement sites.
+No real device geometry or proprietary information.

@@ -56,7 +56,13 @@ class SampleArtifactRef(_SampleModel):
 
     id: _NonEmptyText
     title: _NonEmptyText
-    uri: _NonEmptyText
+    uri: _NonEmptyText = Field(
+        description=(
+            "Imported project bytes use sha256:<digest>; absolute HTTP(S) is an "
+            "external reference. Other URI forms remain readable but unavailable "
+            "until a maintainer imports their bytes."
+        )
+    )
     media_type: _NonEmptyText | None = None
 
 

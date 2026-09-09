@@ -185,3 +185,65 @@ The UI shows lifecycle and metadata from the active revision, while every run
 badge and detail link shows the exact revision bound to that run. This visual
 distinction is important: “what we currently know about the chip” and “what
 this run actually used” are related views, not the same fact.
+
+## Deliver sample diagrams and documents
+
+An artifact's URI is a reference, not permission for the daemon to browse a
+filesystem. The sample workspace resolves each attachment through its sample ID,
+exact revision, and artifact ID. It supports these delivery contracts:
+
+| Reference | Console behavior | Delivery and restoration |
+| --- | --- | --- |
+| `sha256:<64 lowercase hex digits>` returned by `import_artifact` | Opens a stored PNG/JPEG/WebP image or UTF-8 text; downloads a PDF | Bytes belong to the project's immutable object store and are included and checked by project snapshots |
+| Absolute `http://` or `https://`, without URL credentials | Opens an explicitly labeled external website | The daemon does not fetch or verify it; remote bytes are not captured in a snapshot |
+| Relative paths, `file:`, `project:`, script/data schemes, or malformed references | Displays an unavailable reason and maintainer repair instructions | Import the intended local bytes and record the returned reference instead |
+
+For a local attachment, read the file explicitly in the author's Python process
+and upload its bytes. Import does not change a sample revision:
+
+```python
+from pathlib import Path
+from scopecat.records.sample import SampleRevisionDraft
+
+diagram = lab.samples.import_artifact(
+    Path("delivery/diagram.png").read_bytes(),
+    artifact_id="diagram",
+    title="Sample connection diagram",
+    media_type="image/png",
+)
+chip = lab.samples.create(
+    "synthetic-chip",
+    kind="chip",
+    content=SampleRevisionDraft(
+        display_name="Synthetic chip",
+        artifacts=(diagram,),
+    ),
+)
+assert (
+    lab.samples.artifact_content(chip.id, 1, "diagram")
+    == Path("delivery/diagram.png").read_bytes()
+)
+```
+
+For an existing sample, add the returned reference using `chip.revise(...)`;
+previous revisions keep their previous references. `lab.samples.artifacts(id,
+revision)` reports stored, external, or unavailable delivery with a repair reason.
+Imports accept 1 byte through 8 MiB and check the declared supported file type;
+plain text must be UTF-8. HTML and SVG are not served as active same-origin
+content: render a diagram as PNG, or export a document as PDF before importing.
+Responses use fixed supported media types, `nosniff`, and a sandbox policy. PDF
+content is a download rather than an embedded viewer.
+
+Distribute an already populated project with the normal stopped-project snapshot
+and restore commands. Copying only source/configuration or a sample record does
+not deliver its immutable objects. Missing or corrupt stored bytes require the
+original complete snapshot, or a new explicit import and new sample revision;
+do not replace bytes under an existing digest. Unsupported old references remain
+readable and do not prevent snapshots, but are not silently turned into working
+links. No server-side remote fetch, local-path resolver, or URI execution is
+provided.
+
+The public `fixtures/core/sample_artifacts/diagram.png` and `notes.txt` and `document.pdf` form a
+synthetic delivery fixture. The HTTP regression imports these bytes, opens the
+attachment from an immutable sample revision, updates the sample, then snapshots
+and restores the project and checks the original bytes and SHA-256 again.
