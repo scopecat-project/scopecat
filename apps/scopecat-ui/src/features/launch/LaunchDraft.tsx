@@ -219,7 +219,13 @@ function ProjectDraft({
     try {
       const id = await findSubmittedProcedure(selected.request);
       if (alive.current)
-        setAttempt({ ...selected, checking: false, status: "confirmed", procedureId: id });
+        setAttempt({
+          ...selected,
+          checking: false,
+          status: "confirmed",
+          procedureId: id,
+          error: "",
+        });
     } catch (error) {
       if (alive.current)
         setAttempt({

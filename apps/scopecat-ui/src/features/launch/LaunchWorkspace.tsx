@@ -1,14 +1,14 @@
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient, apiData } from "../../api-client";
-import { definitionKey, useLaunchDraft } from "./LaunchDraft";
+import { definitionKey, invalidateDraft, useLaunchDraft } from "./LaunchDraft";
 import { LaunchForm } from "./LaunchForm";
 import { OriginalSubmission } from "./OriginalSubmission";
 import { ProcedureHistory } from "./ProcedureHistory";
 import { ProcedureProgress } from "./ProcedureProgress";
 
 export function LaunchWorkspace() {
-  const { projectId, draft, select } = useLaunchDraft();
+  const { projectId, draft, select, update } = useLaunchDraft();
   const queryClient = useQueryClient();
   useEffect(() => {
     void queryClient.invalidateQueries({ queryKey: ["config", "launch-context", projectId] });
@@ -33,7 +33,19 @@ export function LaunchWorkspace() {
     url.searchParams.set("procedure", id);
     window.history.replaceState(null, "", url);
   }
-  const entry = catalog.data?.find((item) => item.id === draft?.experiment) ?? catalog.data?.[0];
+  const entry = draft
+    ? catalog.data?.find((item) => item.id === draft.experiment)
+    : catalog.data?.[0];
+  const unavailable = catalog.isSuccess && !catalog.isFetching && draft !== undefined && !entry;
+  useEffect(() => {
+    if (unavailable && (draft.preview || draft.pending || draft.requestKey))
+      update((current) =>
+        invalidateDraft(
+          current,
+          "The selected experiment is unavailable. Preview again when its declaration returns.",
+        ),
+      );
+  }, [unavailable, draft, update]);
   useEffect(() => {
     if (entry) select(entry);
   }, [entry, select]);
@@ -44,19 +56,28 @@ export function LaunchWorkspace() {
       {catalog.isPending && <p role="status">Loading experiments…</p>}
       {catalog.error && <p role="alert">{catalog.error.message}</p>}
       {catalog.data?.length === 0 && <p>This project has no registered experiments.</p>}
-      {entry && (
+      {unavailable && (
+        <p role="alert">
+          The selected experiment ({draft.experiment}) is unavailable. Its inputs are retained until
+          it returns or you explicitly choose another experiment.
+        </p>
+      )}
+      {(entry || draft) && (
         <>
           <label className="block">
             Experiment{" "}
             <select
               aria-label="Experiment"
-              value={entry.id}
+              value={draft?.experiment ?? entry?.id}
               onChange={(event) => {
                 const selected = catalog.data?.find((item) => item.id === event.target.value);
                 if (selected) select(selected);
               }}
               className="border rounded p-2 ml-2"
             >
+              {!entry && draft && (
+                <option value={draft.experiment}>{draft.experiment} (unavailable)</option>
+              )}
               {catalog.data?.map((item) => (
                 <option key={item.id} value={item.id}>
                   {item.title}
@@ -64,7 +85,7 @@ export function LaunchWorkspace() {
               ))}
             </select>
           </label>
-          {draft?.definition === definitionKey(entry) && (
+          {entry && draft?.definition === definitionKey(entry) && (
             <LaunchForm
               key={draft.definition}
               entry={entry}
@@ -76,7 +97,7 @@ export function LaunchWorkspace() {
       )}
       <OriginalSubmission
         onOpen={admitted}
-        catalogReady={catalog.isSuccess && !catalog.isFetching}
+        catalogReady={Boolean(entry) && catalog.isSuccess && !catalog.isFetching}
       />
       <ProcedureHistory selectedId={procedureId} onSelect={admitted} />
       {procedureId && <ProcedureProgress key={procedureId} procedureId={procedureId} />}

@@ -44,7 +44,7 @@ let submissions: Record<string, unknown>[];
 let previewResponse: ((response: Response) => void) | undefined;
 let deferPreview: boolean;
 let client: QueryClient;
-let lookupMatch: "none" | "original" | "ambiguous" | "unverified";
+let lookupMatch: "none" | "original" | "ambiguous" | "unverified" | "different-config";
 function preview() {
   return {
     experiment_id: "prepared",
@@ -105,7 +105,13 @@ beforeEach(() => {
           definition: { id: "maintained.launch_prepared", version: "1" },
           intent: {
             request_hash: lookupMatch === "unverified" ? "other" : original?.expected_request_hash,
-            config_source: original?.config_source,
+            config_source:
+              lookupMatch === "different-config"
+                ? {
+                    ...(original?.config_source as Record<string, unknown>),
+                    registry_generation: 999,
+                  }
+                : original?.config_source,
           },
         };
         return Response.json({
@@ -289,10 +295,11 @@ it("reopens original admitted work after lost response, configuration and defini
   lookupMatch = "original";
   fireEvent.click(screen.getByRole("button", { name: "Check original submission" }));
   fireEvent.click(await screen.findByRole("button", { name: "Open submitted procedure" }));
+  expect(screen.queryByRole("alert")).toBeNull();
   expect(new URLSearchParams(window.location.search).get("procedure")).toBe("original-procedure");
   expect(submissions).toHaveLength(1);
 });
-it.each(["none", "ambiguous", "unverified"] as const)(
+it.each(["none", "ambiguous", "unverified", "different-config"] as const)(
   "leaves %s lookup unconfirmed without choosing or resubmitting",
   async (match) => {
     render(<Harness />);
@@ -341,4 +348,26 @@ it("ignores a late preview after selecting another experiment in the same projec
   expect(screen.getByLabelText("Experiment")).toHaveValue("first");
   expect(screen.getByLabelText("Note")).toHaveValue("different draft");
   expect(screen.queryByText("Preview ready")).toBeNull();
+});
+
+it("retains an unavailable experiment draft until its declaration returns", async () => {
+  render(<Harness />);
+  await selectPrepared();
+  fireEvent.change(screen.getByLabelText("Note"), { target: { value: "keep unavailable inputs" } });
+  await previewReady();
+  catalog = [catalog[0]!];
+  await act(async () => {
+    await client.invalidateQueries({ queryKey: ["experiment-launcher"] });
+  });
+  await screen.findByText(/The selected experiment .* is unavailable/);
+  expect(screen.getByLabelText("Experiment")).toHaveValue("prepared");
+  expect(screen.queryByText("Preview ready")).toBeNull();
+  catalog = [catalog[0]!, prepared];
+  await act(async () => {
+    await client.invalidateQueries({ queryKey: ["experiment-launcher"] });
+  });
+  expect(await screen.findByLabelText("Note")).toHaveValue("keep unavailable inputs");
+  expect(screen.getByLabelText("Experiment")).toHaveValue("prepared");
+  expect(screen.queryByText("Preview ready")).toBeNull();
+  expect(submissions).toHaveLength(0);
 });

@@ -247,8 +247,7 @@ test("retains launch inputs across workspaces and invalidates previews without s
   } finally {
     uv(["scopecat", "stop", project]);
     // Preserve failed project state and logs for diagnosis.
-    if (!failed)
-      await rm(project, { recursive: true, force: true });
+    if (!failed) await rm(project, { recursive: true, force: true });
   }
 });
 
@@ -330,7 +329,6 @@ test("reopens a lost launch receipt after context changes without a second submi
   } finally {
     uv(["scopecat", "stop", project]);
     // Preserve failed project state and logs for diagnosis.
-    if (!failed)
-      await rm(project, { recursive: true, force: true });
+    if (!failed) await rm(project, { recursive: true, force: true });
   }
 });

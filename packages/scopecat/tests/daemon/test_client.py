@@ -7,6 +7,7 @@ import pytest
 from pydantic import BaseModel
 from scopecat_testkit.workflow_fixtures import load_config
 
+from scopecat.automation.wire import ProcedureRunListQuery
 from scopecat.config.inventory import InstrumentInventoryRekey
 from scopecat.config.registry.records import (
     ConfigActivationOperation,
@@ -118,6 +119,28 @@ def test_get_query_and_post_body_use_typed_wire_models() -> None:
     assert submit_request.method == "POST"
     assert submit_request.url.path == "/api/v1/runs"
     assert RunSubmission.model_validate_json(submit_request.content) == _submission()
+
+
+def test_procedure_lookup_filters_request_key_before_pagination() -> None:
+    requests: list[httpx2.Request] = []
+
+    def handle(request: httpx2.Request) -> httpx2.Response:
+        requests.append(request)
+        return httpx2.Response(200, json={"items": [], "next_cursor": None})
+
+    with DaemonClient(
+        "http://daemon.test", transport=httpx2.MockTransport(handle)
+    ) as client:
+        page = client.list_procedures(
+            ProcedureRunListQuery(request_key="original-key", limit=2, cursor=4)
+        )
+    assert page.items == ()
+    assert requests[0].url.path == "/api/v1/procedures"
+    assert dict(requests[0].url.params) == {
+        "request_key": "original-key",
+        "limit": "2",
+        "cursor": "4",
+    }
 
 
 def test_trace_preview_posts_a_typed_bounded_query() -> None:
