@@ -88,7 +88,7 @@ def comparison_provider(lab: LabClient, request: ComparisonRequest) -> Compariso
             return selected.curves
         if set(request.parameters) - {"offset_ghz"}:
             raise ValueError("Unknown signal model parameter")
-        offset = request.parameters.get("offset_ghz", 0)
+        offset = request.parameters.get("offset_ghz", 0.0)
         if not -0.1 <= offset <= 0.1:
             raise ValueError("Carrier offset must be between -0.1 and 0.1 GHz")
         assert request.primary is not None and request.secondary is not None

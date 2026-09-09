@@ -7,6 +7,8 @@ import time
 from uuid import uuid4
 
 import httpx2
+import pytest
+from pydantic import JsonValue, TypeAdapter
 from scopecat.api.lab import LabClient
 from scopecat.application.author_project import AuthorPreparedLaunch, AuthorProject
 from scopecat.application.comparison import ComparisonHandoff
@@ -32,9 +34,19 @@ def test_retained_analysis_plan_copy_revalidate_and_child_origin() -> None:
     with (
         AuthorProject(endpoint) as author,
         LabClient(DaemonClient(endpoint)) as lab,
-        httpx2.Client(base_url=endpoint, timeout=60) as http,
+        httpx2.Client(
+            base_url=endpoint, timeout=60, headers={"content-type": "application/json"}
+        ) as http,
     ):
         original_active = lab.config.active()
+
+        def run_count() -> int:
+            body = TypeAdapter(dict[str, JsonValue]).validate_json(
+                http.get("/api/v1/runs", params={"limit": 100}).content
+            )
+            items = body["items"]
+            assert isinstance(items, list)
+            return len(items)
 
         def child(procedure_id: str):
             handle = lab.procedures.get(procedure_id)
@@ -76,9 +88,7 @@ def test_retained_analysis_plan_copy_revalidate_and_child_origin() -> None:
             .procedure_id
         )
         old_request = author.run_request(primary.id)
-        original_count = len(
-            http.get("/api/v1/runs", params={"limit": 100}).json()["items"]
-        )
+        original_count = run_count()
         request = ComparisonRequest(
             action="inspect",
             primary_run=primary.id,
@@ -138,10 +148,7 @@ def test_retained_analysis_plan_copy_revalidate_and_child_origin() -> None:
         )
         frozen = saved.model_dump_json()
         assert saved.definition.sample is None  # no synthetic working point required
-        assert (
-            len(http.get("/api/v1/runs", params={"limit": 100}).json()["items"])
-            == original_count
-        )
+        assert run_count() == original_count
 
         # A new client proves the plan survives the original author session.
         with AuthorProject(endpoint) as reopened:
@@ -163,6 +170,7 @@ def test_retained_analysis_plan_copy_revalidate_and_child_origin() -> None:
                 )
             )
             assert copied.ref.plan_id != saved.ref.plan_id
+            stale = reopened.prepare_plan(copied.ref, actor="carol")
             try:
                 lab.config.set_default(
                     original_active.config.model_copy(
@@ -170,6 +178,14 @@ def test_retained_analysis_plan_copy_revalidate_and_child_origin() -> None:
                     ),
                     entry_id=f"plan-default-{key}",
                 )
+                with pytest.raises(httpx2.HTTPStatusError) as rejected:
+                    stale.submit(request_key=f"{key}-stale")
+                assert rejected.value.response.status_code in (409, 422)
+                assert (
+                    "configuration changed since preview"
+                    in rejected.value.response.text
+                ), rejected.value.response.text
+                assert run_count() == original_count
                 previewed = reopened.prepare_plan(copied.ref, actor="carol")
                 assert previewed.preview.plan_ref == copied.ref
                 assert (
@@ -211,10 +227,7 @@ def test_retained_analysis_plan_copy_revalidate_and_child_origin() -> None:
                 )
                 assert rejection.status_code in (409, 422), rejection.text
                 assert "checked launch request" in rejection.text
-                assert (
-                    len(http.get("/api/v1/runs", params={"limit": 100}).json()["items"])
-                    == original_count + 1
-                )
+                assert run_count() == original_count + 1
             finally:
                 active = lab.config.active()
                 if active.entry.id != original_active.entry.id:

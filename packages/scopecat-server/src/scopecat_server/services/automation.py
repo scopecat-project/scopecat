@@ -631,9 +631,8 @@ class AutomationService:
                 )
             actor = selected_intent.get("actor")
             if (
-                not isinstance(actor, str)
-                or selected_intent.get("request_hash")
-                != plan_launch_request(plan, actor=actor).request_hash
+                actor != plan_request.actor
+                or selected_intent.get("request_hash") != plan_request.request_hash
             ):
                 raise AutomationConflict(
                     "procedure intent does not match the saved plan launch"

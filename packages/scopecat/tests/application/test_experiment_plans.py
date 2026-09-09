@@ -92,3 +92,17 @@ def test_saved_entry_generation_is_not_a_calibration_activation() -> None:
     )
     with pytest.raises(ValueError, match="must select active"):
         CalibrationConfigSourceRef.from_run_config_source(source)
+
+
+def test_run_request_view_plan_projection_roundtrip() -> None:
+    from scopecat.daemon.views import RunRequestView
+
+    ref = ExperimentPlanRef(
+        plan_id="plan-1", revision=2, content_hash="sha256:" + "d" * 64
+    )
+    for selected in (None, ref):
+        request = RunRequest(plan_ref=selected)
+        view = RunRequestView(run_id="retained", request=request, plan_ref=selected)
+        assert RunRequestView.model_validate_json(view.model_dump_json()) == view
+    with pytest.raises(ValueError, match="projection is inconsistent"):
+        RunRequestView(run_id="retained", request=RunRequest(), plan_ref=ref)

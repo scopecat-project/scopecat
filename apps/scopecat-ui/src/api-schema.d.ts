@@ -7793,8 +7793,7 @@ export interface components {
          * @description The operator request accepted with one run.
          */
         RunRequestView: {
-            /** @description Typed projection from the authoritative stored request. */
-            readonly plan_ref: components["schemas"]["ExperimentPlanRef"] | null;
+            plan_ref?: components["schemas"]["ExperimentPlanRef"] | null;
             request: components["schemas"]["RunRequest-Output"];
             /** Run Id */
             run_id: string;

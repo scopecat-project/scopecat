@@ -482,9 +482,11 @@ class RunService:
 
     def get_run_request(self, run_id: str) -> RunRequestView:
         with self._config_errors():
+            request = load_run_request(run_id=run_id, services=self._services)
             return RunRequestView(
+                plan_ref=request.plan_ref,
                 run_id=run_id,
-                request=load_run_request(run_id=run_id, services=self._services),
+                request=request,
             )
 
     def list_run_contents(

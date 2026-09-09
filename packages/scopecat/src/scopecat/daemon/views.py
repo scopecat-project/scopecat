@@ -7,7 +7,7 @@ from binascii import Error as BinasciiError
 from datetime import datetime
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, computed_field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from scopecat.config.registry.records import (
     ConfigRegistryActivationRecord,
@@ -345,11 +345,13 @@ class RunRequestView(_ViewModel):
     run_id: str
     request: RunRequest
 
-    @computed_field
-    @property
-    def plan_ref(self) -> ExperimentPlanRef | None:
-        """Typed projection from the authoritative stored request."""
-        return self.request.plan_ref
+    plan_ref: ExperimentPlanRef | None = None
+
+    @model_validator(mode="after")
+    def validate_plan_projection(self) -> RunRequestView:
+        if self.plan_ref != self.request.plan_ref:
+            raise ValueError("run request plan projection is inconsistent")
+        return self
 
 
 class RunAnalysisView(_ViewModel):
