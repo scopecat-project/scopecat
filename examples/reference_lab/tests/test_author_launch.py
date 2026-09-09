@@ -84,7 +84,9 @@ def reference_lab_daemon(
                         "reference_lab.workflows.authored.signal"
                     ).selected_mean,
                 )()
-                yield AuthorDaemon(endpoint.base_url, application, source, analysis)
+            # Keep the loaded objects, not snapshot import paths, across the
+            # function-scoped loader isolation used by the rest of this suite.
+            yield AuthorDaemon(endpoint.base_url, application, source, analysis)
         finally:
             stop_project(project)
 
