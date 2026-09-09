@@ -68,7 +68,7 @@ class Control:
         return coordinate(self.id, self.value_type)
 
     def normalize(self, value: object) -> ControlScalar:
-        normalized = coerce_literal(self.value_type, value)
+        normalized = coerce_literal(self.value_type, value, path=(self.id,))
         assert isinstance(normalized, float | Quantity)
         return normalized
 
