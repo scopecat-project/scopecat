@@ -7,6 +7,7 @@ from typing import cast
 from uuid import uuid4
 
 from scopecat.api._remote import RemoteRunOperations
+from scopecat.api.parameters import ParameterVersion, ParameterWorkspace
 from scopecat.api.published_analysis import PublishedAnalysis
 from scopecat.api.run import RunHandle, run_handle_id
 from scopecat.config.candidates import (
@@ -76,6 +77,10 @@ class LabConfigOperations:
     runs: RemoteRunOperations
     default_config: ConfigProfileSnapshot | None
     operator: str
+
+    def workspace(self, *, context: str | ParameterVersion) -> ParameterWorkspace:
+        """Open an isolated dictionary editor for one saved sample/workpoint version."""
+        return ParameterWorkspace(self, context=context)
 
     def save_context(
         self,

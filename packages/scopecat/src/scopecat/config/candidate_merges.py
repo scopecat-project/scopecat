@@ -49,6 +49,70 @@ class CommonBaseCandidateMergeResult:
         return config_content_hash(self.config)
 
 
+def merge_parameter_branches(
+    *,
+    base: ConfigProfileSnapshot,
+    local: ParameterSnapshot,
+    current: ParameterSnapshot,
+) -> ParameterSnapshot:
+    """Rebase manual edits with the same cell rules as analysis proposals.
+
+    No proposal or measurement evidence is fabricated. Representation changes
+    remain explicit edits, and unchanged values retain the current representation.
+    Conflicts identify the parameter/cell and expose base/local/current values.
+    """
+    merged: list[StoredParameterValue] = []
+    for original in base.parameter_snapshot.values:
+        definition = base.parameter_catalog.get(original.id)
+        assert definition is not None
+        ours = local.get(original.id)
+        theirs = current.get(original.id)
+        if ours is None or theirs is None:
+            raise ValueError(
+                f"{original.id}: parameter structure changed; reopen the context"
+            )
+        original = _validate_parameter_representation(definition, original)
+        ours = _validate_parameter_representation(definition, ours)
+        theirs = _validate_parameter_representation(definition, theirs)
+        branches = tuple(
+            item
+            for item in (ours, theirs)
+            if not _parameter_values_equal(item, original, definition=definition)
+        )
+        if not branches:
+            merged.append(theirs)
+            continue
+        try:
+            merged.append(
+                _merge_parameter_value(definition, base=original, branches=branches)
+            )
+        except Conflict as error:
+            raise Conflict(
+                tuple(
+                    item.model_copy(
+                        update={
+                            "message": (
+                                f"{original.id}: {item.message}; "
+                                "choose local or current explicitly"
+                            ),
+                            "details": {
+                                **item.details,
+                                "base_value": original.model_dump(mode="json"),
+                                "local_value": ours.model_dump(mode="json"),
+                                "current_value": theirs.model_dump(mode="json"),
+                            },
+                        }
+                    )
+                    for item in error.problems
+                )
+            ) from error
+    if {value.id for value in current.values} != {
+        value.id for value in base.parameter_snapshot.values
+    }:
+        raise ValueError("parameter structure changed; reopen the context")
+    return ParameterSnapshot(id=current.id, values=tuple(merged))
+
+
 def merge_common_base_parameter_proposals(
     proposals: Sequence[ParameterChangeProposal],
     *,
@@ -577,4 +641,5 @@ __all__ = [
     "MAX_COMMON_BASE_PROPOSALS",
     "CommonBaseCandidateMergeResult",
     "merge_common_base_parameter_proposals",
+    "merge_parameter_branches",
 ]
