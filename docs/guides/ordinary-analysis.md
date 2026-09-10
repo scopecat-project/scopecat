@@ -40,6 +40,14 @@ with project.authoring() as author:
     publication_id = fitted.publication.id
 ```
 
+`arguments` currently accepts JSON-compatible values. For unit-bearing inputs,
+use an explicit scalar convention in the function signature, such as
+`expected_frequency_ghz: float`, and pass
+`fitted.value.frequency.to("GHz").value`. A `Quantity` returned in a conclusion
+cannot yet be passed directly as a managed argument. Supported typed argument
+conversion and clearer diagnostics are tracked in
+[#486](https://github.com/scopecat-project/scopecat/issues/486).
+
 After changing a function or its helpers, explicitly call `author.refresh()` and
 choose `source="current"` in `analyze_as`. This selects the refreshed source;
 it does not change the run or overwrite earlier analysis. A run without retained
