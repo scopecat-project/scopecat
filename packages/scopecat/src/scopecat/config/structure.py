@@ -94,11 +94,11 @@ class StructureCellMapping(BaseModel):
 
 class ParameterStructurePreview(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
-    config: ConfigProfileSnapshot
-    origin: ParameterStructureOrigin
+    config: ConfigProfileSnapshot = Field(repr=False)
+    origin: ParameterStructureOrigin = Field(repr=False)
     impacts: tuple[StructureColumnImpact, ...]
     missing_values: tuple[str, ...]
-    cell_mappings: tuple[StructureCellMapping, ...]
+    cell_mappings: tuple[StructureCellMapping, ...] = Field(repr=False)
     consumers: tuple[StructureConsumerImpact, ...]
     consumer_scope: str = (
         "Affected parameter identities are reported. Arbitrary compiler and analysis "
