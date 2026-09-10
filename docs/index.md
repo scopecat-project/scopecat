@@ -23,6 +23,8 @@ Continue according to what you want to accomplish:
   instrument, experiment, data, and quantum workflows.
 - [Control configured instruments](how-to/control-instruments.md) for direct and
   experiment-time device access.
+- [Run from a notebook](how-to/managed-author-session.md) with parameter edits,
+  scans and reopenable jobs.
 - [Author experiments](concepts/experiment-dataflow.md) for point plans, compute
   placement, and durable results.
 - [Track chips and physical samples](concepts/samples.md) for stable identity,

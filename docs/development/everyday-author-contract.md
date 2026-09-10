@@ -4,8 +4,8 @@ This contract guides [the implementation slices](https://github.com/scopecat-pro
 It is contributor guidance, not a tutorial for an available high-level API.
 The executable fixture below uses existing public APIs. Dictionary workspaces are
 available as described in [configuration editing](../how-to/manage-configuration.md);
-standard dataclass views are also available. Managed notebook sessions remain
-pending their own issue.
+standard dataclass views and managed notebook sessions are also available
+through their guides.
 
 ## One parameter workspace
 
@@ -74,8 +74,9 @@ advances the workspace baseline without activating the shared default. Plain IDs
 can select entity-keyed rows; the declared key type supplies their identity.
 Bind standard dataclass rows with `params.table(name, row_type=Drive)`; both views
 share edits, and constructors supply defaults only when explicitly adding rows.
-The managed session remains pending #471; its implementation must update this
-availability status when that interface ships.
+The [managed author session](../how-to/managed-author-session.md) provides ordinary
+fixed/scanned inputs, frozen workspace previews, receipt-backed submission,
+bounded waiting and read-only job recovery (#471).
 
 | Producer | Contract consumed by other slices |
 | --- | --- |
