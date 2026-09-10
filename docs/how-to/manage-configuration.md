@@ -4,6 +4,82 @@ A project's `src/<package>/configuration.py` is ordinary version-controlled
 Python. The daemon owns the accepted configuration history; it does not watch or
 rewrite that source file.
 
+## Edit a saved working point in Python
+
+For ordinary parameter edits, open a context that your laboratory project has
+already installed. The entry name selects an exact sample revision and working
+point; no Pydantic models or configuration hashes are needed. The following
+example assumes a `qubits` table with a string `id` primary key and numeric
+`frequency`/`amplitude` fields:
+
+```python
+params = lab.config.workspace(context="sample-a-parked")
+params["qubits"]["q0"]["frequency"] = 5.2
+params.diff()  # detached before/after edits
+reviewed = params.preview()  # validate and freeze these edits
+params["qubits"]["q0"]["frequency"] = 5.3  # does not change reviewed
+version = params.save("sample-a-trial-1", note="manual trial")
+reopened = lab.config.workspace(context=version)
+# A new process can use context="sample-a-trial-1" with a new lab connection.
+```
+
+`save` creates an immutable named version and advances this workspace's baseline.
+Its diff is then empty, and `discard()` returns to that saved baseline. Saving
+never changes the laboratory's shared default. A name is a unique registry entry,
+not a mutable latest-version pointer; use a new name for another version. An
+unchanged workspace can also be saved under a new name. Opening another version
+is explicit and does not transfer this workspace's unsaved edits.
+
+`preview()` and `freeze()` return the existing resolved configuration accepted by
+run/config APIs. They retain exact sample identity, per-cell origins and only the
+edited cells as run overrides. The managed author-session API is a separate
+implementation slice; freezing alone does not submit a run or bypass its normal
+admission checks. Validation failures leave the buffer editable for correction.
+
+Rows behave like mappings:
+
+```python
+params["qubits"]["q1"] = {"frequency": 5.8, "amplitude": 0.2}
+row = params["qubits"]["q1"]  # live view, shared with later typed adapters
+row["amplitude"] = 0.25
+row_copy = dict(row)  # detached copy
+another = params.copy()  # independent buffer, including unsaved edits
+params.discard()  # restore the baseline
+```
+
+Replacing an existing row must retain its existing fields. Row keys cannot be
+edited in place; delete and insert the row to change its identity. `del
+params["qubits"]["q1"]` removes a row and permanently invalidates views of that
+row, even if the same key is subsequently inserted. Views of retained rows stay
+live across save, discard and rebase. Composite keys use a tuple in declared
+primary-key order. Scalar parameters use `params.scalar("name")` and
+`params.set_scalar("name", value)`.
+
+To combine another editor's saved branch, choose it explicitly:
+
+```python
+params.rebase(current="sample-a-other-trial")
+params.diff()  # only our remaining edits against that branch
+params.save("sample-a-combined")
+```
+
+Independent-cell changes combine using the existing common-base merge rules.
+Same-cell conflicts leave the workspace unchanged and report the parameter/cell
+with base, local and current values in structured problem details. Set the
+conflicting field to the chosen value and retry. Rebase rejects another sample
+revision, working point or parameter schema. There is no automatic lookup of a
+newer branch and no silent overwrite of another editor's work.
+
+This first dictionary editor exposes existing scalar values and stored tables
+with declared primary keys. It does not create parameter definitions, expose
+unkeyed tables for indexed editing, or clear a field to `None`. Existing missing
+cells stay missing; reading does not supply defaults. Full unknown tables and
+schema evolution belong to the next parameter-structure slice. Unit reads retain
+the stored representation; deliberate compatible-unit edits remain explicit.
+These manual edits do not claim measurement or scientific verification.
+
+## Review configuration source changes
+
 Validate the source without starting the daemon:
 
 ```sh
