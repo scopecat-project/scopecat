@@ -21,6 +21,7 @@ from scopecat.records.parameter import (
     ScalarParameterValue,
     TableParameterValue,
 )
+from scopecat.records.parameter_structure import StructureValueDecision
 
 
 def validate_context_config(config: ConfigProfileSnapshot) -> None:
@@ -106,7 +107,9 @@ def context_value_origins(
                 if index < len(before_rows)
                 else empty
             )
-            for field, atom in row.items():
+            for column in definition.value_type.columns:
+                field = column.id
+                atom = row.get(field)
                 old_origin = next(
                     (
                         item
@@ -142,7 +145,17 @@ def context_value_origins(
                     )
                     for update in overrides
                 )
-                changed = field not in previous or previous[field] != atom or explicit
+                changed = not previous or previous.get(field) != atom or explicit
+                unknown = (
+                    StructureValueDecision(
+                        key=key,
+                        row_index=row_index,
+                        origin="unknown",
+                        note="Parameter value is explicitly unknown",
+                    )
+                    if atom is None
+                    else None
+                )
                 origins.append(
                     ConfigValueOrigin(
                         parameter_id=value.id,
@@ -151,6 +164,7 @@ def context_value_origins(
                         row_index=row_index,
                         layer="run_override" if overrides else "context",
                         entry=selected_ref,
+                        evidence=unknown,
                     )
                     if changed
                     else old_origin
@@ -161,38 +175,9 @@ def context_value_origins(
                         row_index=row_index,
                         layer="base",
                         entry=base_ref,
+                        evidence=unknown,
                     )
                 )
-    # Explicitly declared unknown is provenance too, even without a stored atom.
-    for origin in inherited:
-        if origin.evidence is None or origin.evidence.origin != "unknown":
-            continue
-        value = config.parameter_snapshot.get(origin.parameter_id)
-        definition = config.parameter_catalog.get(origin.parameter_id)
-        if (
-            not isinstance(value, TableParameterValue)
-            or definition is None
-            or not isinstance(definition.value_type, Table)
-        ):
-            continue
-        if not any(
-            column.id == origin.field_id for column in definition.value_type.columns
-        ):
-            continue
-        row = next(
-            (
-                row
-                for index, row in enumerate(value.rows)
-                if (
-                    index == origin.row_index
-                    if not definition.value_type.primary_key
-                    else all(row.get(key) == atom for key, atom in origin.key.items())
-                )
-            ),
-            None,
-        )
-        if row is not None and origin.field_id not in row:
-            origins.append(origin)
     return tuple(origins)
 
 

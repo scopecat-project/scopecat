@@ -47,7 +47,7 @@ def test_declaration_is_pure_and_defaults_do_not_hydrate_unknown_cells() -> None
     q0 = assert_type(typed["q0"], Drive)
     assert isinstance(q0, Drive)
     assert q0.amplitude is None
-    assert "amplitude" not in table["q0"]
+    assert table["q0"]["amplitude"] is None
     assert q0.frequency == 5.1
     assert table["q0"]["frequency"] == sc.Quantity(5100, "MHz")
     assert q0 == typed["q0"]
@@ -75,11 +75,11 @@ def test_dictionary_and_typed_units_share_live_edits_without_read_rewrites() -> 
     assert m0.frequency == 5600
     assert table["q0"]["frequency"] == 5.6
     q0.amplitude = None  # Already unknown: no edit.
-    assert "amplitude" not in table["q0"]
+    assert table["q0"]["amplitude"] is None
     q0.amplitude = 0.4
     assert table["q0"]["amplitude"] == 0.4
-    with pytest.raises(ValueError, match="clearing a stored value"):
-        q0.amplitude = None
+    q0.amplitude = None
+    assert table["q0"]["amplitude"] is None
     with pytest.raises(ValueError, match="row key"):
         q0.id = "q2"
     del table["q0"]

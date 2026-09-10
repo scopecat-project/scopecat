@@ -20,7 +20,7 @@ def config_revision_entry_id(config: ConfigProfileSnapshot) -> str:
 def validate_config_profile(
     config: ConfigProfileSnapshot,
 ) -> ConfigProfileSnapshot:
-    """Validate a complete configuration snapshot."""
+    """Validate infrastructure and present parameter values; unknowns are permitted."""
 
     problems = validate_planning_config(config)
     if problems:

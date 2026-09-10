@@ -1602,27 +1602,20 @@ def save_config_context(
         loaded = _load_config_registry_entry_locked(entry_id=base.entry_id, work=work)
         if loaded.entry.content_hash != base.content_hash:
             raise ValueError("context base does not match the exact registry revision")
-        if structure_plan is not None and (
-            parameters is not None or structure_plan.base != base
-        ):
-            raise ValueError(
-                "structure plan must match base and cannot mix with parameter edits"
-            )
+        if structure_plan is not None and structure_plan.base != base:
+            raise ValueError("structure plan must match the exact base")
         structural = (
             preview_parameter_structure(loaded.config, structure_plan)
             if structure_plan
             else None
         )
-        config = (
-            structural.config
-            if structural
-            else loaded.config.model_copy(
-                update={
-                    "parameter_snapshot": loaded.config.parameter_snapshot
-                    if parameters is None
-                    else parameters
-                }
-            )
+        baseline = structural.config if structural else loaded.config
+        config = baseline.model_copy(
+            update={
+                "parameter_snapshot": baseline.parameter_snapshot
+                if parameters is None
+                else parameters
+            }
         )
         validate_context_config(config)
         selected_ref = ConfigContextRef(
@@ -1646,12 +1639,18 @@ def save_config_context(
                     if isinstance(loaded.entry.source, ContextConfigRegistrySource)
                     else None
                 ),
-                value_origins=mapped_structure_origins(
-                    loaded.config,
-                    structural,
+                value_origins=context_value_origins(
+                    config,
+                    base=structural.config.parameter_snapshot,
                     base_ref=base,
                     selected_ref=selected_ref,
-                    inherited=inherited,
+                    inherited=mapped_structure_origins(
+                        loaded.config,
+                        structural,
+                        base_ref=base,
+                        selected_ref=selected_ref,
+                        inherited=inherited,
+                    ),
                 )
                 if structural
                 else context_value_origins(

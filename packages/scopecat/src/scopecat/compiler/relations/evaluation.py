@@ -180,7 +180,14 @@ def _normalize_parameter_table_import(
         try:
             value = read_path(row, lookup.column_id)
         except (KeyError, TypeError) as error:
-            raise ValueValidationError(result_path, str(error)) from error
+            key = {name: row.get(name) for name, _ in lookup.key_input_types}
+            raise ValueValidationError(
+                result_path,
+                f"{imported.id}[{key!r}].{lookup.column_id}: "
+                "parameter is unknown; "
+                "supply or calibrate this value in the parameter workspace "
+                "and preview again",
+            ) from error
         normalized = _normalize_typed_value(
             lookup.result_type,
             value,
