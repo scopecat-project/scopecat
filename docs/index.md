@@ -31,6 +31,8 @@ Continue according to what you want to accomplish:
   run provenance, topology maps, and longitudinal analysis.
 - [Use measurement data](how-to/use-measurement-data.md) for selection, Xarray,
   Arrow, pandas, Polars, and GUI projections.
+- [Write ordinary Python analysis](guides/ordinary-analysis.md) with dataclass
+  conclusions and retained source provenance.
 - [Publish analysis](concepts/analysis-publication.md) for derived datasets,
   facts, artifacts, views, and parameter proposals.
 

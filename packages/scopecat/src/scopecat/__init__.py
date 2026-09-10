@@ -33,6 +33,9 @@ if TYPE_CHECKING:
         Analysis,
         AnalysisContext,
         AnalysisField,
+        AnalysisPlot,
+        AnalysisProducts,
+        analysis_function,
         analysis_step,
     )
     from scopecat.api.calibration_planner import CalibrationPlanningContext
@@ -47,6 +50,7 @@ if TYPE_CHECKING:
     from scopecat.api.procedure_planner import ProcedurePlanningContext
     from scopecat.api.procedures import LabProcedureContext
     from scopecat.api.published_analysis import (
+        AnalysisResult,
         PublishedAnalysis,
         PublishedAnalysisArtifact,
     )
@@ -432,6 +436,10 @@ _EXPORTS: dict[str, tuple[str, str]] = {
         "DomainProposalSummary",
     ),
     "open_project": ("scopecat.project", "open_project"),
+    "AnalysisResult": ("scopecat.api.published_analysis", "AnalysisResult"),
+    "AnalysisProducts": ("scopecat.api.analysis", "AnalysisProducts"),
+    "AnalysisPlot": ("scopecat.api.analysis", "AnalysisPlot"),
+    "analysis_function": ("scopecat.api.analysis", "analysis_function"),
     "analysis_step": ("scopecat.api.analysis", "analysis_step"),
     "calibration": ("scopecat.automation", "calibration"),
     "instrument": ("scopecat.api.instruments", "instrument"),

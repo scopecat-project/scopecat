@@ -7,15 +7,17 @@ import time
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import SupportsFloat, override
+from typing import Literal, SupportsFloat, override
 from uuid import uuid4
 
 import httpx2
 from pydantic import JsonValue
 
+from scopecat.analysis.facts import ordinary_result_schema
 from scopecat.api._config import LabConfigOperations
 from scopecat.api._remote import RemoteRunOperations
 from scopecat.api.parameters import ParameterWorkspace
+from scopecat.api.published_analysis import AnalysisResult
 from scopecat.api.run import RunHandle
 from scopecat.application.experiment_plans import plan_definition, plan_launch_request
 from scopecat.application.launch import (
@@ -51,8 +53,8 @@ from scopecat.records.run_request import AxisValuesSourceRecord
 class AuthorProject(DaemonClient):
     """Refresh and execute author code without mutating notebook module state.
 
-    Keep a preview's code_revision for submission. Analysis always requires an
-    explicit revision, which can be copied from retained run metadata.
+    Prepared requests retain their source revision. Typed analysis uses the run's
+    original source by default; explicitly refresh and select current to reanalyze.
     """
 
     def __init__(
@@ -228,12 +230,60 @@ class AuthorProject(DaemonClient):
         *,
         code_revision: AuthorRevisionRef,
         key: str | None = None,
+        arguments: Mapping[str, JsonValue] | None = None,
     ) -> AuthorAnalysisReceipt:
         return self.analyze_author_revision(
             AuthorAnalysisRequest(
-                run_id=run_id, analysis=analysis, code_revision=code_revision, key=key
+                run_id=run_id,
+                analysis=analysis,
+                code_revision=code_revision,
+                key=key,
+                arguments=dict(arguments or {}),
             )
         )
+
+    def analyze_as[ResultT](
+        self,
+        run_id: str,
+        analysis: str,
+        result_type: type[ResultT],
+        *,
+        source: Literal["original", "current"] = "original",
+        arguments: Mapping[str, JsonValue] | None = None,
+        key: str | None = None,
+    ) -> AnalysisResult[ResultT]:
+        """Publish registered analysis and reconstruct a materialized conclusion.
+
+        Original source comes from the retained run. For edited source, call
+        refresh() explicitly, then select source="current". Changed arguments
+        or source create a separate revision; identical publication may reuse
+        its existing receipt. Direct notebook function imports are never sent.
+        """
+        schema = ordinary_result_schema(result_type)
+        run = self.run(run_id)
+        if source == "original":
+            revision_hash = run.request.metadata.get("author_code_revision")
+            if not isinstance(revision_hash, str):
+                raise ValueError(
+                    "Run has no retained author source; "
+                    "explicitly select source='current'"
+                )
+            revision = AuthorRevisionRef(content_hash=revision_hash)
+        elif source == "current":
+            revision = self.state().active
+            if revision is None:
+                raise ValueError("Refresh author source before analysis")
+        else:
+            raise ValueError("analysis source must be original or current")
+        try:
+            receipt = self.analyze(
+                run_id, analysis, code_revision=revision, arguments=arguments, key=key
+            )
+        except httpx2.HTTPStatusError as error:
+            error.add_note(error.response.text)
+            raise
+        publication = run.published_analysis(receipt.analysis_id)
+        return AnalysisResult(publication.fact_as("result", schema), publication)
 
 
 @dataclass(frozen=True, slots=True)

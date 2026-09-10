@@ -33,6 +33,7 @@ nav = [
     { "Glossary" = "concepts/glossary.md" },
     { "Chips and physical samples" = "concepts/samples.md" },
     { "Experiment authoring dataflow" = "concepts/experiment-dataflow.md" },
+    { "Ordinary Python analysis" = "guides/ordinary-analysis.md" },
     { "Analysis publication" = "concepts/analysis-publication.md" },
   ] },
   { "Reference" = [
