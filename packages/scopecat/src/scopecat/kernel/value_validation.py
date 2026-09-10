@@ -92,7 +92,7 @@ def coerce_literal(
         return _coerce_atom(value_type.atom, value, path=path)
     if isinstance(value_type, Array):
         return _coerce_array(value_type, value, path=path)
-    return _coerce_table(value_type, value, path=path)
+    return coerce_table_rows(value_type, value, path=path)
 
 
 def _coerce_array(
@@ -329,12 +329,14 @@ def _coerce_payload(atom: Payload, value: object, *, path: ValuePath) -> Payload
     return PayloadValue(schema_id=atom.schema_id, payload=selected_payload)
 
 
-def _coerce_table(
+def coerce_table_rows(
     value_type: Table,
     value: object,
     *,
     path: ValuePath,
+    allow_missing: bool = False,
 ) -> tuple[dict[str, object], ...]:
+    """Coerce table cells and physical keys, optionally retaining unknown cells."""
     rows = _sequence(value, path=path, label="table")
     columns = {column.id: column for column in value_type.columns}
     result: list[dict[str, object]] = []
@@ -343,7 +345,12 @@ def _coerce_table(
     for index, raw_row in enumerate(rows):
         row_path = (*path, index)
         row = _string_mapping(raw_row, path=row_path, label="table row")
-        missing = [column.id for column in value_type.columns if column.id not in row]
+        missing = [
+            column.id
+            for column in value_type.columns
+            if column.id not in row
+            and (not allow_missing or column.id in value_type.primary_key)
+        ]
         if missing:
             raise ValueValidationError(
                 row_path,
@@ -362,6 +369,7 @@ def _coerce_table(
                 path=(*row_path, column_id),
             )
             for column_id, column in columns.items()
+            if column_id in row
         }
         if value_type.primary_key:
             key = tuple(selected[column_id] for column_id in value_type.primary_key)

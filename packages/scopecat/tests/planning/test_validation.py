@@ -186,7 +186,8 @@ def test_parameter_table_rows_are_validated_against_catalog() -> None:
     assert problems[0].code == "invalid_parameter_value"
 
 
-def test_equivalent_quantity_primary_keys_are_rejected() -> None:
+@pytest.mark.parametrize("unknown_value", [False, True])
+def test_equivalent_quantity_primary_keys_are_rejected(unknown_value: bool) -> None:
     config_data = load_config().model_dump(mode="json")
     config_data["system"]["parameter_catalog"]["definitions"].append(
         {
@@ -216,6 +217,10 @@ def test_equivalent_quantity_primary_keys_are_rejected() -> None:
             ],
         }
     )
+    if unknown_value:
+        config_data["system"]["parameter_catalog"]["definitions"][-1]["value_type"][
+            "columns"
+        ].append({"id": "amplitude", "value_type": {"type": "float"}})
     config = ConfigProfileSnapshot.model_validate(config_data)
 
     problems = validate_config_profile(config)
