@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 import time
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import SupportsFloat, override
@@ -119,8 +119,8 @@ class AuthorProject(DaemonClient):
         experiment: str,
         *,
         control_edits: dict[str, ControlEdit] | None = None,
-        fixed: dict[str, SupportsFloat | Quantity] | None = None,
-        scans: dict[str, Iterable[SupportsFloat | Quantity]] | None = None,
+        fixed: Mapping[str, SupportsFloat | Quantity] | None = None,
+        scans: Mapping[str, Iterable[SupportsFloat | Quantity]] | None = None,
         parameters: ParameterWorkspace | None = None,
         code_revision: AuthorRevisionRef | None = None,
         inputs: dict[str, JsonValue] | None = None,
