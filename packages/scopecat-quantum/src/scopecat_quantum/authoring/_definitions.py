@@ -43,7 +43,11 @@ from ._analysis import (
     _pulse_envelope_parts,
     _summarize_fragment,
 )
-from ._expressions import QuantityExpression, substitute_expression
+from ._expressions import (
+    QuantityExpression,
+    constrain_expression,
+    substitute_expression,
+)
 from ._ir import (
     CircuitArgument,
     CircuitFragment,
@@ -542,7 +546,11 @@ def _validate_fragment_call_arguments(
         if isinstance(actual, Qubit | Coupler):
             msg = f"quantum fragment {definition.id!r} port {name!r} requires a value"
             raise TypeError(msg)
-        if isinstance(actual, ProgramInput | QuantityExpression):
+        if isinstance(actual, QuantityExpression):
+            # Fragment expansion already coerces its concrete arguments.
+            constrain_expression(actual, formal.value_type, port=name)
+            continue
+        if isinstance(actual, ProgramInput):
             expected = _program_input_type(formal, non_negative=False)
             supplied = _program_input_type(actual, non_negative=False)
             if supplied != expected:
@@ -602,7 +610,12 @@ def _instantiate_pulse_template(
     ] = {}
     for input_id, formal in expected.items():
         selected = inputs[input_id]
-        if isinstance(selected, ProgramInput | QuantityExpression):
+        if isinstance(selected, QuantityExpression):
+            input_bindings[formal] = constrain_expression(
+                selected, formal.value_type, port=input_id
+            )
+            continue
+        if isinstance(selected, ProgramInput):
             if selected.value_type != formal.value_type:
                 msg = (
                     f"pulse template input {input_id!r} requires "

@@ -380,6 +380,8 @@ def _inspection_value(value: object) -> str:
     if isinstance(value, ProgramInput):
         return f"${value.id}"
     if isinstance(value, QuantityExpression):
+        if value.binding_type is not None:
+            return _inspection_value(value.left)
         return (
             f"({_inspection_value(value.left)} {value.operator} "
             f"{_inspection_value(value.right)})"

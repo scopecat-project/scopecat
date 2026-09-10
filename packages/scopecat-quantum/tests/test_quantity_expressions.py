@@ -145,3 +145,23 @@ def test_symbolic_arithmetic_has_honest_static_result_types() -> None:
     assert_type(sc.Quantity(4, "ns") - duration, q.QuantityExpression)
     assert_type(sc.Quantity(4, "ns") + sc.Quantity(1, "ns"), sc.Quantity)
     assert_type(-sc.Quantity(4, "ns"), sc.Quantity)
+
+
+def test_expression_into_bounded_template_checks_after_point_binding() -> None:
+    @q.pulse_template(id="bounded-duration")
+    def bounded(
+        qubit: q.Qubit,
+        duration: Annotated[
+            q.QuantumQuantity, sc.QuantityType(unit="ns", minimum=8, maximum=24)
+        ],
+    ) -> q.QuantumFragment:
+        return q.delay(q.drive(qubit), duration / 2)
+
+    duration = q.input("duration", sc.ScalarType(sc.QuantityType(unit="us")))
+    declaration = q._close_program(
+        "bounded-helper", bounded(q.qubit("q0"), duration + sc.Quantity(0.004, "us"))
+    )
+    q.bind(declaration, {"duration": sc.Quantity(0.012, "us")})
+    # The template boundary checks 32 ns, even though its body later halves it.
+    with pytest.raises(ValueError, match=r"quantity expression.*24"):
+        q.bind(declaration, {"duration": sc.Quantity(0.028, "us")})

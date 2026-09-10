@@ -14,7 +14,7 @@ from typing import Literal, cast, override
 from scopecat import Quantity
 from scopecat.kernel.units import compatible_units, unit_kind
 from scopecat.program.value_types import Quantity as QuantityType
-from scopecat.program.value_types import Scalar
+from scopecat.program.value_types import Scalar, coerce_literal
 
 
 class _QuantityArithmetic:
@@ -76,11 +76,12 @@ class QuantityExpression(_QuantityArithmetic):
     left: QuantumQuantity
     operator: Literal["*", "+", "-"]
     right: QuantumQuantity | float
+    binding_type: Scalar | None = None
 
     @property
     def value_type(self) -> Scalar:
         """Describe result units without inheriting input-only bounds."""
-        return Scalar(_quantity_type(self.left))
+        return self.binding_type or Scalar(_quantity_type(self.left))
 
     @property
     def id(self) -> str:
@@ -167,12 +168,16 @@ def resolve_expression(value: object, bindings: Mapping[str, object]) -> object:
     right = resolve_expression(value.right, bindings)
     if not isinstance(left, Quantity):
         raise AssertionError("quantity expression operand must bind to Quantity")
-    if value.operator == "*":
-        return left * cast("float", right)
-    if not isinstance(right, Quantity):
-        raise AssertionError("quantity expression offset must bind to Quantity")
     try:
-        return left + right if value.operator == "+" else left - right
+        if value.operator == "*":
+            result = left * cast("float", right)
+        else:
+            if not isinstance(right, Quantity):
+                raise AssertionError("quantity expression offset must bind to Quantity")
+            result = left + right if value.operator == "+" else left - right
+        if value.binding_type is not None:
+            return coerce_literal(value.binding_type, result)
+        return result
     except ValueError as error:
         raise ValueError(
             f"cannot evaluate quantity expression {value!r}: {error}"
@@ -191,7 +196,33 @@ def substitute_expression(
     right = cast(
         "QuantumQuantity | float", substitute_expression(value.right, bindings)
     )
-    expression = QuantityExpression(left, value.operator, right)
+    expression = QuantityExpression(left, value.operator, right, value.binding_type)
     if not expression_inputs(expression):
         return resolve_expression(expression, {})
     return expression
+
+
+def constrain_expression(
+    value: QuantityExpression, expected: Scalar, *, port: str
+) -> QuantityExpression:
+    """Apply a template's units and bounds when its argument becomes concrete."""
+    atom = expected.atom
+    if not isinstance(atom, QuantityType):
+        raise TypeError(f"pulse template input {port!r} requires {expected!r}")
+    actual = _quantity_type(value)
+    wanted_dimension = unit_kind(atom.unit) if atom.unit else atom.dimension
+    actual_dimension = unit_kind(actual.unit) if actual.unit else actual.dimension
+    if wanted_dimension is not None and wanted_dimension != actual_dimension:
+        raise TypeError(
+            f"pulse template input {port!r} has incompatible expression {value!r}"
+        )
+    if (
+        atom.unit is not None
+        and actual.unit is not None
+        and not compatible_units(atom.unit, actual.unit)
+    ):
+        raise TypeError(
+            f"pulse template input {port!r} has incompatible expression {value!r}"
+        )
+    # Keep a boundary even when later helper arithmetic changes the result.
+    return QuantityExpression(value, "*", 1, binding_type=expected)
