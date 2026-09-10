@@ -2,7 +2,8 @@
 
 This contract guides [the implementation slices](https://github.com/scopecat-project/scopecat/issues/466).
 It is contributor guidance, not a tutorial for an available high-level API.
-The executable fixture below uses existing public APIs; dictionary workspaces,
+The executable fixture below uses existing public APIs. Dictionary workspaces are
+available as described in [configuration editing](../how-to/manage-configuration.md);
 dataclass tables and managed notebook sessions remain pending their own issues.
 
 ## One parameter workspace
@@ -66,12 +67,13 @@ verified calibration.
 
 ## Interface ownership and implementation order
 
-The initial proposed entry point is `lab.config.workspace(context=...)`.
-A dictionary workspace exposes table/row/cell editing, diff, discard, save and
-freeze; the dataclass adapter consumes the same workspace. These names are
-**proposals until #468 and #469 implement and document them**. No new facade
-symbols are exported by this contract. The implementation should update this
-status and its public API documentation when a spelling becomes usable.
+The workspace entry point is `lab.config.workspace(context=...)`. It exposes
+keyed dictionary editing, diff, discard, save, freeze and explicit rebase. Saving
+advances the workspace baseline without activating the shared default. Plain IDs
+can select entity-keyed rows; the declared key type supplies their identity.
+Dataclass views remain pending #469, and the managed session remains pending
+#471. Implementations must update this availability status and their user guide
+when those interfaces ship.
 
 | Producer | Contract consumed by other slices |
 | --- | --- |
