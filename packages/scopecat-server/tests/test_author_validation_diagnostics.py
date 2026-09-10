@@ -10,7 +10,6 @@ from types import SimpleNamespace
 from typing import cast
 from unittest.mock import Mock, patch
 
-import psutil
 import pytest
 from fastapi.testclient import TestClient
 
@@ -97,6 +96,16 @@ def test_slow_validation_retains_stack_and_reaps_worker(
         '[authors]\nsource_roots=["src"]\nrefresh_roots=["src/authors"]\n'
     )
     pid_file = tmp_path / "worker.pid"
+    waited: list[subprocess.Popen[str]] = []
+    process_wait = subprocess.Popen.wait
+
+    def observe_wait(
+        process: subprocess.Popen[str], timeout: float | None = None
+    ) -> int:
+        result = process_wait(process, timeout=timeout)
+        waited.append(process)
+        return result
+
     (tmp_path / "src/authors/slow.py").write_text(
         "import os, time\ndef create_application(root):\n"
         f"    open({str(pid_file)!r}, 'w').write(str(os.getpid()))\n"
@@ -109,6 +118,7 @@ def test_slow_validation_retains_stack_and_reaps_worker(
     try:
         service = AuthorRevisionService(tmp_path, store)
         with (
+            patch.object(subprocess.Popen, "wait", observe_wait),
             patch(
                 "scopecat_server.services.author_revisions.subprocess.run",
                 wraps=subprocess.run,
@@ -122,7 +132,12 @@ def test_slow_validation_retains_stack_and_reaps_worker(
         assert run.call_args.kwargs["timeout"] == 60
         assert "did not publish" in str(caught.value)
         assert service.repository.state().active is None
-        assert not psutil.pid_exists(int(pid_file.read_text()))
+        # Inspect the actual child, not a PID that Windows can already have reused.
+        worker_pid = int(pid_file.read_text())
+        children = [process for process in waited if process.pid == worker_pid]
+        assert children
+        assert all(process.returncode is not None for process in children)
+        assert all(process.poll() == process.returncode for process in children)
         assert "slow.py" in caplog.text
         assert "create_application" in caplog.text
         assert "stage=application import" in caplog.text
