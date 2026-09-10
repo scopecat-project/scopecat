@@ -92,7 +92,11 @@ def merge_parameter_branches(
                     item.model_copy(
                         update={
                             "message": (
-                                f"{original.id}: {item.message}; "
+                                f"{original.id} {item.details.get('primary_key', '')} "
+                                f"{item.details.get('column_id', '')}: {item.message}; "
+                                f"base={_branch_value(definition, original, item)!r}, "
+                                f"local={_branch_value(definition, ours, item)!r}, "
+                                f"current={_branch_value(definition, theirs, item)!r}; "
                                 "choose local or current explicitly"
                             ),
                             "details": {
@@ -111,6 +115,23 @@ def merge_parameter_branches(
     }:
         raise ValueError("parameter structure changed; reopen the context")
     return ParameterSnapshot(id=current.id, values=tuple(merged))
+
+
+def _branch_value(
+    definition: ParameterDefinition, value: StoredParameterValue, issue: Problem
+) -> object:
+    if isinstance(value, ScalarParameterValue):
+        return value.value
+    schema = definition.value_type
+    assert isinstance(schema, Table)
+    key = issue.details.get("primary_key")
+    if key is None:
+        return value.rows
+    row = next((row for row in value.rows if _key_details(row, schema) == key), None)
+    if row is None:
+        return None
+    field = issue.details.get("column_id")
+    return row.get(field) if isinstance(field, str) else row
 
 
 def merge_common_base_parameter_proposals(

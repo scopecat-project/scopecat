@@ -231,6 +231,8 @@ def test_independent_cell_rebase_and_conflict_are_atomic(
     assert conflict.diff() == before
     details = caught.value.problems[0].details
     assert details["column_id"] == "frequency"
+    assert "frequency" in str(caught.value)
+    assert "base=5.0, local=5.4, current=5.2" in str(caught.value)
     assert all(
         name in details for name in ("base_value", "local_value", "current_value")
     )
