@@ -36,135 +36,156 @@ with project.connect() as lab:
     print(admitted.procedure_id)
 `;
 
-test("reopens an admitted procedure after restart and follows exact retained run and analysis", async ({
-  page,
-}, testInfo) => {
-  const project = await mkdtemp(join(tmpdir(), "scopecat-operator-e2e-"));
-  try {
-    const template = join(ROOT, "examples/reference_lab");
-    for (const name of ["src", "config", "scopecat.toml"])
-      await cp(join(template, name), join(project, name), { recursive: true });
-    uv(["scopecat", "start", project, "--port", "0", "--static-dir", resolve("dist")]);
-    const endpoint = JSON.parse(await readFile(join(project, ".scopecat/daemon.json"), "utf8")) as {
-      base_url: string;
-    };
-    const procedureId = uv(["python", "-c", ADMIT, project]);
-    uv(["scopecat", "stop", project]);
-    uv([
-      "scopecat",
-      "start",
-      project,
-      "--port",
-      new URL(endpoint.base_url).port,
-      "--static-dir",
-      resolve("dist"),
-    ]);
-    const catalogReady = page.waitForResponse(
-      (response) =>
-        new URL(response.url()).pathname.endsWith("/experiment-launcher") &&
-        response.request().method() === "GET",
-    );
-    await page.goto(`${endpoint.base_url}/#launch`);
-    const catalogResponse = await catalogReady;
-    expect(catalogResponse.status(), await catalogResponse.text()).toBe(200);
-    await expect(page.getByLabel("Experiment", { exact: true })).toBeVisible();
-    await page.getByText("Retained procedures", { exact: true }).click();
-    await page.getByRole("button", { name: /reference_lab.launch_temperature/ }).click();
-    await expect(page.getByText("Admitted — not dispatched", { exact: true })).toBeVisible();
-    expect(new URL(page.url()).searchParams.get("procedure")).toBe(procedureId);
-    const reopenedScreenshot = testInfo.outputPath("operator-reopened.png");
-    await page.screenshot({ path: reopenedScreenshot, fullPage: true });
-    await testInfo.attach("Reopened procedure", {
-      path: reopenedScreenshot,
-      contentType: "image/png",
-    });
-    await page.getByRole("button", { name: "Dispatch existing procedure" }).click();
-    await expect(page.getByRole("status").filter({ hasText: /^Completed$/ })).toBeVisible();
-    await page.reload();
-    await expect(page.getByRole("status").filter({ hasText: /^Completed$/ })).toBeVisible();
-    await page.getByRole("link", { name: /^Open retained run:/ }).click();
-    await expect(page.getByTestId("run-status")).toHaveText("Succeeded");
-    await expect(page.getByText("Measurement data", { exact: true })).toBeVisible();
+type RetainedProcedure = {
+  project: string;
+  baseUrl: string;
+  procedureId: string;
+};
 
-    const runScreenshot = testInfo.outputPath("operator-retained-run.png");
-    await page.screenshot({ path: runScreenshot, fullPage: true });
-    await testInfo.attach("Retained run", { path: runScreenshot, contentType: "image/png" });
-    await page.goto(`${endpoint.base_url}/#launch`);
-    await page.getByLabel("Experiment", { exact: true }).selectOption("channel-timing");
-    await page.getByRole("button", { name: "Preview", exact: true }).click();
-    await expect(page.getByText("Preview ready", { exact: true })).toBeVisible();
-    const sourceScope = page.getByRole("region", { name: "Selected-configuration source run" });
-    const candidateScope = page.getByRole("region", {
-      name: "Proposed-configuration verification run",
-    });
-    await expect(sourceScope.getByText(/^Exact: 64 shots/)).toBeVisible();
-    await expect(candidateScope.getByText(/^Exact: 64 shots/)).toBeVisible();
-    await expect(candidateScope.getByText(/^Unknown \(s\)/)).toBeVisible();
-    await expect(candidateScope.getByText("Retained (planned dataset)")).toBeVisible();
-    await expect(candidateScope.getByText(/has not run or been verified/)).toBeVisible();
-    const preflightScreenshot = testInfo.outputPath("bounded-preflight.png");
-    await page.screenshot({ path: preflightScreenshot, fullPage: true });
-    await testInfo.attach("Bounded source and candidate preflight", {
-      path: preflightScreenshot,
-      contentType: "image/png",
-    });
-    const submissionResponse = page.waitForResponse(
-      (response) =>
-        new URL(response.url()).pathname === "/api/v1/experiment-launcher/submit" &&
-        response.request().method() === "POST",
-    );
-    await page.getByRole("button", { name: "Start acquisition" }).click();
-    // Admission launches a separate project worker. Observe that boundary before
-    // budgeting the existing execution milestones, rather than timing both together.
-    const response = await submissionResponse;
-    expect(response.ok()).toBe(true);
-    const submitted = (await response.json()) as {
-      procedure_id: string;
-      dispatch_error: string | null;
-    };
-    expect(submitted.dispatch_error).toBeNull();
-    await expect(page).toHaveURL(new RegExp(`procedure=${submitted.procedure_id}`));
-    // This procedure runs a source acquisition, analysis, and a second acquisition.
-    // Observe each durable milestone instead of spending one UI wait on all three.
-    await expect(page.getByText("source: Completed", { exact: true })).toBeVisible();
-    await expect(page.getByText("candidate: Completed", { exact: true })).toBeVisible();
-    await expect(
-      page.getByRole("status").filter({ hasText: /^Waiting for review$/ }),
-    ).toBeVisible();
-    const analysisLink = page.getByRole("link", { name: "Open analysis", exact: true });
-    const href = await analysisLink.getAttribute("href");
-    expect(href).toContain("run-analysis=");
-    await analysisLink.click();
-    await expect(
-      page.getByRole("heading", { name: "Channel timing candidate", exact: true }),
-    ).toBeVisible();
-    expect(new URL(page.url()).searchParams.get("procedure")).toBeTruthy();
-  } catch (error) {
-    // Capture the live failure before finally stops the daemon and removes the project.
-    const url = new URL(page.url());
-    const selectedId = url.searchParams.get("procedure");
-    if (selectedId) {
-      const operator = await page.request
-        .get(`${url.origin}/api/v1/procedures/${encodeURIComponent(selectedId)}/operator`)
-        .then(async (response) => ({ status: response.status(), body: await response.text() }))
-        .catch((failure: unknown) => ({ error: String(failure) }));
-      await testInfo.attach("Operator state before cleanup", {
-        body: JSON.stringify(operator, null, 2),
-        contentType: "application/json",
-      });
+// Keep daemon lifecycle work outside the browser assertion body. In particular,
+// stopping the daemon must not turn a completed browser scenario into a timeout.
+const retainedProcedureTest = test.extend<{ retainedProcedure: RetainedProcedure }>({
+  retainedProcedure: async ({}, use) => {
+    const project = await mkdtemp(join(tmpdir(), "scopecat-operator-e2e-"));
+    try {
+      const template = join(ROOT, "examples/reference_lab");
+      for (const name of ["src", "config", "scopecat.toml"])
+        await cp(join(template, name), join(project, name), { recursive: true });
+      uv(["scopecat", "start", project, "--port", "0", "--static-dir", resolve("dist")]);
+      const endpoint = JSON.parse(
+        await readFile(join(project, ".scopecat/daemon.json"), "utf8"),
+      ) as {
+        base_url: string;
+      };
+      const procedureId = uv(["python", "-c", ADMIT, project]);
+      uv(["scopecat", "stop", project]);
+      uv([
+        "scopecat",
+        "start",
+        project,
+        "--port",
+        new URL(endpoint.base_url).port,
+        "--static-dir",
+        resolve("dist"),
+      ]);
+      await use({ project, baseUrl: endpoint.base_url, procedureId });
+    } finally {
+      uv(["scopecat", "stop", project]);
+      await rm(project, { recursive: true, force: true });
     }
-    for (const name of ["daemon.log", "console-worker.log"]) {
-      const body = await readFile(join(project, ".scopecat", name)).catch((failure: unknown) =>
-        Buffer.from(`Log unavailable: ${String(failure)}`),
-      );
-      await testInfo.attach(name, { body, contentType: "text/plain" });
-    }
-    throw error;
-  } finally {
-    uv(["scopecat", "stop", project]);
-    await rm(project, { recursive: true, force: true });
-  }
+  },
 });
+
+retainedProcedureTest(
+  "reopens an admitted procedure after restart and follows exact retained run and analysis",
+  async ({ page, retainedProcedure }, testInfo) => {
+    const { project, baseUrl, procedureId } = retainedProcedure;
+    const endpoint = { base_url: baseUrl };
+    try {
+      const catalogReady = page.waitForResponse(
+        (response) =>
+          new URL(response.url()).pathname.endsWith("/experiment-launcher") &&
+          response.request().method() === "GET",
+      );
+      await page.goto(`${endpoint.base_url}/#launch`);
+      const catalogResponse = await catalogReady;
+      expect(catalogResponse.status(), await catalogResponse.text()).toBe(200);
+      await expect(page.getByLabel("Experiment", { exact: true })).toBeVisible();
+      await page.getByText("Retained procedures", { exact: true }).click();
+      await page.getByRole("button", { name: /reference_lab.launch_temperature/ }).click();
+      await expect(page.getByText("Admitted — not dispatched", { exact: true })).toBeVisible();
+      expect(new URL(page.url()).searchParams.get("procedure")).toBe(procedureId);
+      const reopenedScreenshot = testInfo.outputPath("operator-reopened.png");
+      await page.screenshot({ path: reopenedScreenshot, fullPage: true });
+      await testInfo.attach("Reopened procedure", {
+        path: reopenedScreenshot,
+        contentType: "image/png",
+      });
+      await page.getByRole("button", { name: "Dispatch existing procedure" }).click();
+      await expect(page.getByRole("status").filter({ hasText: /^Completed$/ })).toBeVisible();
+      await page.reload();
+      await expect(page.getByRole("status").filter({ hasText: /^Completed$/ })).toBeVisible();
+      await page.getByRole("link", { name: /^Open retained run:/ }).click();
+      await expect(page.getByTestId("run-status")).toHaveText("Succeeded");
+      await expect(page.getByText("Measurement data", { exact: true })).toBeVisible();
+
+      const runScreenshot = testInfo.outputPath("operator-retained-run.png");
+      await page.screenshot({ path: runScreenshot, fullPage: true });
+      await testInfo.attach("Retained run", { path: runScreenshot, contentType: "image/png" });
+      await page.goto(`${endpoint.base_url}/#launch`);
+      await page.getByLabel("Experiment", { exact: true }).selectOption("channel-timing");
+      await page.getByRole("button", { name: "Preview", exact: true }).click();
+      await expect(page.getByText("Preview ready", { exact: true })).toBeVisible();
+      const sourceScope = page.getByRole("region", { name: "Selected-configuration source run" });
+      const candidateScope = page.getByRole("region", {
+        name: "Proposed-configuration verification run",
+      });
+      await expect(sourceScope.getByText(/^Exact: 64 shots/)).toBeVisible();
+      await expect(candidateScope.getByText(/^Exact: 64 shots/)).toBeVisible();
+      await expect(candidateScope.getByText(/^Unknown \(s\)/)).toBeVisible();
+      await expect(candidateScope.getByText("Retained (planned dataset)")).toBeVisible();
+      await expect(candidateScope.getByText(/has not run or been verified/)).toBeVisible();
+      const preflightScreenshot = testInfo.outputPath("bounded-preflight.png");
+      await page.screenshot({ path: preflightScreenshot, fullPage: true });
+      await testInfo.attach("Bounded source and candidate preflight", {
+        path: preflightScreenshot,
+        contentType: "image/png",
+      });
+      const submissionResponse = page.waitForResponse(
+        (response) =>
+          new URL(response.url()).pathname === "/api/v1/experiment-launcher/submit" &&
+          response.request().method() === "POST",
+      );
+      await page.getByRole("button", { name: "Start acquisition" }).click();
+      // Admission launches a separate project worker. Observe that boundary before
+      // budgeting the existing execution milestones, rather than timing both together.
+      const response = await submissionResponse;
+      expect(response.ok()).toBe(true);
+      const submitted = (await response.json()) as {
+        procedure_id: string;
+        dispatch_error: string | null;
+      };
+      expect(submitted.dispatch_error).toBeNull();
+      await expect(page).toHaveURL(new RegExp(`procedure=${submitted.procedure_id}`));
+      // This procedure runs a source acquisition, analysis, and a second acquisition.
+      // Observe each durable milestone instead of spending one UI wait on all three.
+      await expect(page.getByText("source: Completed", { exact: true })).toBeVisible();
+      await expect(page.getByText("candidate: Completed", { exact: true })).toBeVisible();
+      await expect(
+        page.getByRole("status").filter({ hasText: /^Waiting for review$/ }),
+      ).toBeVisible();
+      const analysisLink = page.getByRole("link", { name: "Open analysis", exact: true });
+      const href = await analysisLink.getAttribute("href");
+      expect(href).toContain("run-analysis=");
+      await analysisLink.click();
+      await expect(
+        page.getByRole("heading", { name: "Channel timing candidate", exact: true }),
+      ).toBeVisible();
+      expect(new URL(page.url()).searchParams.get("procedure")).toBeTruthy();
+    } catch (error) {
+      // Capture the live failure before fixture teardown stops the daemon.
+      const url = new URL(page.url());
+      const selectedId = url.searchParams.get("procedure");
+      if (selectedId) {
+        const operator = await page.request
+          .get(`${url.origin}/api/v1/procedures/${encodeURIComponent(selectedId)}/operator`)
+          .then(async (response) => ({ status: response.status(), body: await response.text() }))
+          .catch((failure: unknown) => ({ error: String(failure) }));
+        await testInfo.attach("Operator state before cleanup", {
+          body: JSON.stringify(operator, null, 2),
+          contentType: "application/json",
+        });
+      }
+      for (const name of ["daemon.log", "console-worker.log"]) {
+        const body = await readFile(join(project, ".scopecat", name)).catch((failure: unknown) =>
+          Buffer.from(`Log unavailable: ${String(failure)}`),
+        );
+        await testInfo.attach(name, { body, contentType: "text/plain" });
+      }
+      throw error;
+    }
+  },
+);
 
 const CHANGE_DRAFT_CONFIG = `
 import sys
