@@ -49,6 +49,10 @@ from scopecat.authoring.member_projection import (
     StateProjector,
     StateTarget,
 )
+from scopecat.authoring.parameter_dataclasses import (
+    ParameterSpec,
+    dataclass_table_schema,
+)
 from scopecat.authoring.parameters import (
     ParameterAssignment,
     ParameterCell,
@@ -181,6 +185,7 @@ __all__ = [
     "ParameterRowKey",
     "ParameterScalar",
     "ParameterSchema",
+    "ParameterSpec",
     "PayloadType",
     "PerEntity",
     "PointRow",
@@ -209,6 +214,7 @@ __all__ = [
     "capability_resource",
     "constant",
     "coordinate",
+    "dataclass_table_schema",
     "each",
     "ensure_state_targets",
     "experiment",
