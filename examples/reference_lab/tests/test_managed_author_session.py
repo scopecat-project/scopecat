@@ -44,8 +44,7 @@ def test_workspace_run_reopens_in_fresh_python(
             parameters=active.config.parameter_snapshot,
         )
         parameters = author.config.workspace(context="managed-start")
-        qubit = next(iter(parameters["qubits"]))
-        parameters["qubits"][qubit]["drive_carrier_frequency"] = sc.Quantity(5.1, "GHz")
+        parameters["qubits"]["q0"]["drive_carrier_frequency"] = sc.Quantity(5.1, "GHz")
         prepared = author.prepare(
             "signal",
             parameters=parameters,
@@ -59,7 +58,7 @@ def test_workspace_run_reopens_in_fresh_python(
             ).preview.point_count
             == 3
         )
-        parameters["qubits"][qubit]["drive_carrier_frequency"] = sc.Quantity(4.8, "GHz")
+        parameters["qubits"]["q0"]["drive_carrier_frequency"] = sc.Quantity(4.8, "GHz")
         job = prepared.run().wait(timeout=60)
         run = job.result()
         values = cast(

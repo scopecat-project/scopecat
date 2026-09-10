@@ -11,9 +11,7 @@ import scopecat as sc
 project = sc.open_project("/path/to/lab")
 with project.authoring() as author:
     parameters = author.config.workspace(context="my-sample-start")
-    parameters["qubits"][sc.EntityRef(kind="logical_qubit", id="q0")][
-        "drive_carrier_frequency"
-    ] = sc.Quantity(5.1, "GHz")
+    parameters["qubits"]["q0"]["drive_carrier_frequency"] = sc.Quantity(5.1, "GHz")
     checked = author.prepare(
         "signal",
         parameters=parameters,
