@@ -632,6 +632,8 @@ class DaemonClient:
     def list_procedures(
         self,
         query: ProcedureRunListQuery,
+        *,
+        timeout: float | None = None,
     ) -> ProcedureRunPage:
         params: dict[str, str | int] = {"limit": query.limit}
         if query.cursor is not None:
@@ -644,6 +646,7 @@ class DaemonClient:
             f"{_API_PREFIX}/procedures",
             ProcedureRunPage,
             params=params,
+            timeout=timeout,
         )
 
     def get_procedure(self, procedure_run_id: str) -> ProcedureRun:
@@ -2173,8 +2176,9 @@ class DaemonClient:
         model: type[ModelT],
         *,
         params: dict[str, str | int] | None = None,
+        timeout: float | None = None,
     ) -> ModelT:
-        response = self._request("GET", path, params=params)
+        response = self._request("GET", path, params=params, timeout=timeout)
         return model.model_validate_json(response.content)
 
     def _externalize_invoke_command(
@@ -2454,6 +2458,7 @@ class DaemonClient:
         json: object | None = None,
         content: bytes | Iterable[bytes] | None = None,
         headers: dict[str, str] | None = None,
+        timeout: float | None = None,
     ) -> httpx2.Response:
         if self.is_closed:
             raise SessionClosedError(
@@ -2469,6 +2474,7 @@ class DaemonClient:
             json=json,
             content=content,
             headers=headers,
+            timeout=self._http.timeout if timeout is None else timeout,
         )
         if response.status_code == 404:
             raise DaemonNotFoundError(_error_detail(response), response=response)

@@ -115,6 +115,7 @@ def test_refresh_freezes_admission_and_analysis_across_restore(
             initial = authors.state()
             assert initial.active is not None
             first = initial.active
+            old_prepared = authors.prepare("signal")
             admitted = admit_without_dispatch(root, "frozen-before-edits")
             with DaemonClient(endpoint.base_url) as client:
                 assert (
@@ -124,8 +125,14 @@ def test_refresh_freezes_admission_and_analysis_across_restore(
             helper_path.write_text(
                 helper_path.read_text().replace("return gain /", "return 2 * gain /")
             )
-            second = authors.refresh(expected_generation=initial.generation)
+            second = authors.refresh()
             assert second.active != first
+            assert old_prepared.preview.code_revision == first
+            assert authors.prepare("signal").preview.code_revision == second.active
+            assert (
+                authors.prepare("signal", code_revision=first).preview.code_revision
+                == first
+            )
             source_path.write_text(
                 source_path.read_text()
                 .replace('default=1.0, title="Gain"', 'default=3.0, title="Gain"')

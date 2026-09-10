@@ -87,7 +87,9 @@ class Project:
         from scopecat.daemon.endpoint import resolve_daemon_endpoint
 
         return AuthorProject(
-            resolve_daemon_endpoint(self.root, explicit=daemon), timeout=120
+            resolve_daemon_endpoint(self.root, explicit=daemon),
+            receipts=self.root / ".scopecat" / "author-jobs",
+            timeout=120,
         )
 
     def connect(
