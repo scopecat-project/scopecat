@@ -14,11 +14,11 @@ from ._analysis import (
     _summarize_fragment,
     _unique_gate_definitions,
 )
+from ._expressions import resolve_expression
 from ._ir import (
     Coupler,
     CouplerSet,
     ProgramBindingError,
-    ProgramInput,
     QuantumFragment,
     Qubit,
     QubitPairSet,
@@ -125,7 +125,7 @@ def _evaluate_fragment_call(
             continue
         if isinstance(formal, QubitSet | CouplerSet | QubitPairSet):
             raise AssertionError("quantum fragments cannot declare entity-set ports")
-        selected = bindings[actual.id] if isinstance(actual, ProgramInput) else actual
+        selected = resolve_expression(actual, bindings)
         try:
             resolved[name] = coerce_literal(
                 _program_input_type(formal, non_negative=False),

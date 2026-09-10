@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import overload
+from typing import Protocol, overload
 
 from pydantic import BaseModel, ConfigDict, field_validator
 
@@ -13,6 +13,14 @@ from scopecat.kernel.units import (
     is_supported_unit,
     multiply_quantities_to_dimensionless,
 )
+
+
+class _ReflectedQuantityAdd[T](Protocol):
+    def __radd__(self, other: Quantity, /) -> T: ...
+
+
+class _ReflectedQuantitySubtract[T](Protocol):
+    def __rsub__(self, other: Quantity, /) -> T: ...
 
 
 class Quantity(BaseModel):
@@ -77,17 +85,33 @@ class Quantity(BaseModel):
             raise ValueError(msg)
         return Quantity(value=converted, unit=unit)
 
-    def __add__(self, other: object) -> Quantity:
+    @overload
+    def __add__(self, other: Quantity) -> Quantity: ...
+
+    @overload
+    def __add__[T](self, other: _ReflectedQuantityAdd[T]) -> T: ...
+
+    def __add__(self, other: object) -> object:
         if not isinstance(other, Quantity):
             return NotImplemented
         converted = other.to(self.unit)
         return Quantity(value=self.value + converted.value, unit=self.unit)
 
-    def __sub__(self, other: object) -> Quantity:
+    @overload
+    def __sub__(self, other: Quantity) -> Quantity: ...
+
+    @overload
+    def __sub__[T](self, other: _ReflectedQuantitySubtract[T]) -> T: ...
+
+    def __sub__(self, other: object) -> object:
         if not isinstance(other, Quantity):
             return NotImplemented
         converted = other.to(self.unit)
         return Quantity(value=self.value - converted.value, unit=self.unit)
+
+    def __neg__(self) -> Quantity:
+        """Negate this quantity without changing its units."""
+        return Quantity(value=-self.value, unit=self.unit)
 
     @overload
     def __mul__(self, other: float) -> Quantity: ...

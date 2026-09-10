@@ -212,3 +212,69 @@ def test_refresh_freezes_admission_and_analysis_across_restore(
                 )
     finally:
         stop_project(restored)
+
+
+def test_refreshed_pulse_helper_keeps_admitted_recipe_source(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A device-free author run evaluates the retained recipe's expanded amplitude."""
+    monkeypatch.delenv("SCOPECAT_DAEMON_URL", raising=False)
+    root = tmp_path / "recipe-project"
+    root.mkdir()
+    for name in ("src", "config"):
+        shutil.copytree(EXAMPLE_ROOT / name, root / name)
+    shutil.copy2(EXAMPLE_ROOT / "scopecat.toml", root / "scopecat.toml")
+    authored = root / "src/reference_lab/workflows/authored"
+    example = (
+        EXAMPLE_ROOT.parents[1]
+        / "packages/scopecat-quantum/examples/quantity_recipe.py"
+    ).read_text()
+    helper = example[: example.index('if __name__ == "__main__":')]
+    helper += """
+
+def recipe_amplitude() -> float:
+    bound = q.bind(experiment, {"qubit": "q0", "duration": Quantity(16, "ns")})
+    lowered = plan_quantum_pulse_lowering(
+        bound.verified, ResolvedPulseImplementations(),
+        output_id=PulseProgramId("preview"),
+    )
+    [event] = schedule(materialize_quantum_pulse_program(lowered)).events
+    return event.instruction.envelope.amplitude.value
+"""
+    helper_path = authored / "recipe.py"
+    helper_path.write_text(helper)
+    signal_path = authored / "signal.py"
+    signal_path.write_text(
+        signal_path.read_text()
+        .replace(
+            "FREQUENCY = sc.Control(",
+            "from .recipe import recipe_amplitude\n\nFREQUENCY = sc.Control(",
+        )
+        .replace("return gain /", "return recipe_amplitude() * gain /")
+    )
+    project = load_project(root / "scopecat.toml")
+    endpoint = start_project(project)
+    try:
+        with project.authoring() as authors:
+            first = authors.state()
+            old_run = admit_without_dispatch(root, "old-recipe")
+            helper_path.write_text(
+                helper.replace('Quantity(0.18, "arb")', 'Quantity(0.27, "arb")')
+            )
+            refreshed = authors.refresh(expected_generation=first.generation)
+            assert refreshed.active != first.active
+            new_run = admit_without_dispatch(root, "new-recipe")
+            run_admitted(root, new_run)
+            run_admitted(root, old_run)
+        with LabApplication().connect(endpoint.base_url) as lab:
+            by_revision = {
+                run.request.metadata["author_code_revision"]: run.measurements()[
+                    "result"
+                ].require_values()
+                for run in lab.runs().items
+            }
+            assert first.active is not None and refreshed.active is not None
+            assert by_revision[first.active.content_hash] == (0.18,)
+            assert by_revision[refreshed.active.content_hash] == (0.27,)
+    finally:
+        stop_project(project)

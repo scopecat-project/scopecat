@@ -85,6 +85,7 @@ from ._definitions import (
 from ._expansion import (
     _expand_fragment_calls,
 )
+from ._expressions import resolve_expression
 from ._ir import (
     Acquisition,
     CouplerSet,
@@ -315,9 +316,7 @@ def _bind_circuit_operation(
                     argument_id,
                     cast(
                         "GateArgumentValue",
-                        bindings[value.id]
-                        if isinstance(value, ProgramInput)
-                        else value,
+                        resolve_expression(value, bindings),
                     ),
                 )
                 for argument_id, value in fragment.arguments
@@ -785,7 +784,7 @@ def _bound_quantity(
     value: QuantumQuantity,
     bindings: Mapping[str, object],
 ) -> Quantity:
-    selected = bindings[value.id] if isinstance(value, ProgramInput) else value
+    selected = resolve_expression(value, bindings)
     if not isinstance(selected, Quantity):
         raise AssertionError("verified quantity input must bind to Quantity")
     return selected

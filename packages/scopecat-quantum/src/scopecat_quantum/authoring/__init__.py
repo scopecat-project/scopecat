@@ -67,6 +67,7 @@ from ._definitions import (
 from ._definitions import (
     _implement_gate as _implement_gate,
 )
+from ._expressions import QuantityExpression
 from ._inspection import (
     describe,
     draw,
@@ -146,6 +147,7 @@ __all__ = [
     "PulseEnvelope",
     "PulseFragment",
     "PulseTemplateDefinition",
+    "QuantityExpression",
     "QuantumFragment",
     "QuantumProgramCall",
     "QuantumQuantity",
