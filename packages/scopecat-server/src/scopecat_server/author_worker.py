@@ -94,8 +94,13 @@ def main() -> None:
         validate(root, Path(sys.argv[3]))
         return
 
-    from scopecat.api.analysis import AnalysisContext, AnalysisDefinition
+    from scopecat.api.analysis import (
+        AnalysisContext,
+        AnalysisDefinition,
+        AnalysisFunctionDefinition,
+    )
     from scopecat.daemon.endpoint import DAEMON_URL_ENV
+    from scopecat.kernel.content_identity import canonical_json
     from scopecat.records.author_revision import (
         AuthorAnalysisReceipt,
         AuthorAnalysisRequest,
@@ -114,20 +119,26 @@ def main() -> None:
             if Path(cast("str", module.__file__)) != expected:
                 raise ValueError("analysis resolved outside its source snapshot")
             definition = cast("object", getattr(module, name))
-            if not isinstance(definition, AnalysisDefinition):
+            if not isinstance(
+                definition, AnalysisDefinition | AnalysisFunctionDefinition
+            ):
                 raise ValueError(
                     "author analysis must use the existing analysis decorator"
                 )
-            step = definition()
+            step = definition(**request.arguments)
             run = lab.get_run(request.run_id)
             result = step.run(
                 AnalysisContext(
                     run=run, default_key=request.key or step.id, step_id=step.id
                 )
             )
-            published = result.fact(
-                "author_code_revision", request.code_revision.content_hash
-            ).save()
+            published = (
+                result.fact("author_code_revision", request.code_revision.content_hash)
+                .artifact(
+                    "author_analysis_arguments", text=canonical_json(request.arguments)
+                )
+                .save()
+            )
             receipt = AuthorAnalysisReceipt(
                 code_revision=request.code_revision, analysis_id=published.id
             )

@@ -2296,3 +2296,36 @@ def test_cross_run_alignment_preserves_each_sources_entity_metadata() -> None:
     assert source.product_ids == ("after/q0", "after/q1")
     requested = left.reindex_entities("qubit", (right_q,))
     assert requested.schema.dimensions[1].index == left.schema.dimensions[1].index
+
+
+def test_explicit_materialization_detaches_ragged_and_missing_values() -> None:
+    source = _ragged_dataset()
+    raw = _snapshot(source)
+    connected = True
+
+    def read() -> MeasurementDataset:
+        assert connected
+        return raw
+
+    def projected(
+        projection: ProjectionSchema, batch_size: int
+    ) -> pa.RecordBatchReader:
+        raise AssertionError("materialized data must not request remote projection")
+
+    lazy = Dataset._from_source(
+        schema=source.schema,
+        entry=source.entry,
+        load_raw=read,
+        load_projected_batches=projected,
+    )
+    assert lazy.materialize() is lazy
+    connected = False
+    assert lazy["frequency"].unit == "Hz"
+    assert (
+        lazy["frequency"].observations.shape == source["frequency"].observations.shape
+    )
+    assert lazy["temperature"].availability == (None, "invalid", None)
+    assert lazy.logical_point_ids == source.logical_point_ids
+    np.testing.assert_array_equal(
+        lazy["frequency"].observations.values, source["frequency"].observations.values
+    )

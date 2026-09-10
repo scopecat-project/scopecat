@@ -13,6 +13,8 @@ from typing import (
     NoReturn,
     Protocol,
     cast,
+    get_args,
+    get_origin,
     get_type_hints,
     overload,
 )
@@ -32,6 +34,7 @@ from scopecat.analysis.facts import (
     SCALAR_FACT_SCHEMA_HASH,
     SCALAR_FACT_SCHEMA_ID,
     AnalysisFactSchema,
+    ordinary_result_schema,
 )
 from scopecat.analysis.service import (
     AnalysisArtifactOutput,
@@ -100,6 +103,31 @@ from scopecat.sdk.compute import (
     PYTHON_JSON_CODEC,
     compute_capture_names_internal,
 )
+
+
+@dataclass(frozen=True, slots=True)
+class AnalysisPlot:
+    """A retained line/scatter view of one returned dataset."""
+
+    dataset: str
+    x: str
+    y: str
+    id: str = "figure"
+    kind: Literal["line", "scatter"] = "line"
+    title: str = "figure"
+
+
+@dataclass(frozen=True, slots=True)
+class AnalysisProducts[ResultT]:
+    """An ordinary conclusion plus optional native tables and plot specifications.
+
+    Tables accept the existing derived_dataset adapters. These values are local
+    computation results, not evidence of a retained measurement or verification.
+    """
+
+    result: ResultT
+    datasets: Mapping[str, object] = field(default_factory=lambda: dict[str, object]())
+    plots: tuple[AnalysisPlot, ...] = ()
 
 
 class _AnalysisOwner(Protocol):
@@ -1127,6 +1155,16 @@ def _analysis_trace_outputs(
     tuple[tuple[str, object], ...],
     tuple[AnalysisExecutionOutput, ...],
 ]:
+    if isinstance(result, AnalysisProducts):
+        products = cast("AnalysisProducts[object]", result)
+        values = (("result", products.result), *products.datasets.items())
+        if "result" in products.datasets:
+            raise ValueError("analysis dataset name 'result' is reserved")
+        outputs = tuple(
+            _analysis_trace_outputs(value, execution_id=name)[1][0]
+            for name, value in values
+        )
+        return values, outputs
     artifact_output = _analysis_artifact_value(result)
     dataset_output = _analysis_dataset_value(result)
     if artifact_output is not None:
@@ -1296,22 +1334,24 @@ class AnalysisInvocation:
     id: str
     _definition: AnalysisFunction
     arguments: tuple[tuple[str, object], ...]
+    _source_definition: Callable[..., object] | None = None
 
     @property
     def implementation_fingerprint(self) -> Sha256ContentHash:
         """Identify the exact Python analysis implementation used by automation."""
 
+        definition = self._source_definition or self._definition
         identity = {
             "codec": "scopecat.analysis-implementation.v1",
             "id": self.id,
             **python_source_identity(
-                self._definition,
+                definition,
                 label="analysis implementation",
             ),
-            "defaults": content_fingerprint(self._definition.__defaults__),
-            "keyword_defaults": content_fingerprint(self._definition.__kwdefaults__),
+            "defaults": content_fingerprint(definition.__defaults__),
+            "keyword_defaults": content_fingerprint(definition.__kwdefaults__),
             "closure": content_fingerprint(
-                inspect.getclosurevars(self._definition).nonlocals
+                inspect.getclosurevars(definition).nonlocals
             ),
         }
         return f"sha256:{stable_content_hash(identity)}"
@@ -1351,6 +1391,136 @@ class AnalysisDefinition[**P]:
             _definition=cast("AnalysisFunction", self._definition),
             arguments=tuple(bound.arguments.items()),
         )
+
+
+@dataclass(frozen=True, slots=True)
+class AnalysisFunctionDefinition[**P, ResultT]:
+    """Registered ordinary function; call ``function`` for unretained local use."""
+
+    id: str
+    function: Callable[Concatenate[Dataset, P], ResultT]
+    _signature: inspect.Signature
+    result_type: type[object]
+
+    def __call__(self, *args: P.args, **kwargs: P.kwargs) -> AnalysisInvocation:
+        bound = self._signature.bind(*args, **kwargs)
+        bound.apply_defaults()
+        definition = self.function
+        data_name = next(iter(inspect.signature(definition).parameters))
+
+        def execute(context: AnalysisContext, **arguments: object) -> Analysis:
+            inputs = {data_name: context.measurements(), **arguments}
+            value = context.trace(fn=definition, inputs=inputs)
+            result = context.result(title=self.id)
+            if isinstance(value, AnalysisProducts):
+                products = cast("AnalysisProducts[object]", value)
+                result = _ordinary_fact(result, products.result, self.result_type)
+                for name, data in products.datasets.items():
+                    result = result.dataset(name, data)
+                for plot in products.plots:
+                    result = result.figure(
+                        dataset=plot.dataset,
+                        id=plot.id,
+                        kind=plot.kind,
+                        x=plot.x,
+                        y=plot.y,
+                        title=plot.title,
+                    )
+                return result
+            return _ordinary_fact(result, value, self.result_type)
+
+        return AnalysisInvocation(
+            id=self.id,
+            _definition=execute,
+            arguments=tuple(bound.arguments.items()),
+            _source_definition=definition,
+        )
+
+
+def _ordinary_fact(
+    analysis: Analysis, value: object, result_type: type[object]
+) -> Analysis:
+    if is_dataclass(value) and not isinstance(value, type):
+        return analysis.fact(
+            "result", value, schema=ordinary_result_schema(result_type)
+        )
+    raise TypeError(
+        "ordinary analysis must return a declared dataclass or AnalysisProducts"
+    )
+
+
+@overload
+def analysis_function[**P, ResultT](
+    definition: Callable[Concatenate[Dataset, P], ResultT],
+    /,
+    *,
+    id: str | None = None,
+) -> AnalysisFunctionDefinition[P, ResultT]: ...
+
+
+@overload
+def analysis_function[**P, ResultT](
+    definition: None = None,
+    /,
+    *,
+    id: str | None = None,
+) -> Callable[
+    [Callable[Concatenate[Dataset, P], ResultT]], AnalysisFunctionDefinition[P, ResultT]
+]: ...
+
+
+def analysis_function[**P, ResultT](
+    definition: Callable[Concatenate[Dataset, P], ResultT] | None = None,
+    /,
+    *,
+    id: str | None = None,
+) -> (
+    AnalysisFunctionDefinition[P, ResultT]
+    | Callable[
+        [Callable[Concatenate[Dataset, P], ResultT]],
+        AnalysisFunctionDefinition[P, ResultT],
+    ]
+):
+    """Register a Dataset → dataclass function for retained author-worker analysis.
+
+    Keep functions/helpers in configured author source. Direct local calls do not
+    claim complete source capture. Rejected fits should return a declared status
+    and None candidate; programming/input errors raise normally.
+    """
+
+    def decorate(
+        fn: Callable[Concatenate[Dataset, P], ResultT],
+    ) -> AnalysisFunctionDefinition[P, ResultT]:
+        signature = inspect.signature(fn)
+        parameters = tuple(signature.parameters.values())
+        hints = cast("Mapping[str, object]", get_type_hints(fn))
+        if not parameters or hints.get(parameters[0].name) is not Dataset:
+            raise TypeError("ordinary analysis requires a Dataset first parameter")
+        if any(
+            p.kind
+            not in (
+                inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                inspect.Parameter.KEYWORD_ONLY,
+            )
+            for p in parameters
+        ):
+            raise TypeError("ordinary analysis requires named parameters")
+        result_type = hints.get("return")
+        if get_origin(result_type) is AnalysisProducts:
+            result_type = cast("object", get_args(result_type)[0])
+        if not isinstance(result_type, type):
+            raise TypeError(
+                "ordinary analysis requires a declared dataclass return type"
+            )
+        ordinary_result_schema(result_type)
+        return AnalysisFunctionDefinition(
+            id=id or f"{fn.__module__}.{fn.__qualname__}",
+            function=fn,
+            result_type=result_type,
+            _signature=signature.replace(parameters=parameters[1:]),
+        )
+
+    return decorate(definition) if definition is not None else decorate
 
 
 @overload
@@ -1492,10 +1662,14 @@ __all__ = [
     "AnalysisDefinition",
     "AnalysisFactSchema",
     "AnalysisField",
+    "AnalysisFunctionDefinition",
     "AnalysisInput",
     "AnalysisInvocation",
     "AnalysisOutput",
+    "AnalysisPlot",
+    "AnalysisProducts",
     "AnalysisStep",
     "DerivedDataset",
+    "analysis_function",
     "analysis_step",
 ]

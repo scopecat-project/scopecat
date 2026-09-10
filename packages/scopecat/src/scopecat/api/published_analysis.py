@@ -7,7 +7,7 @@ from datetime import datetime
 from typing import Protocol, cast
 
 from scopecat.analysis.datasets import DerivedDataset
-from scopecat.analysis.facts import AnalysisFactSchema
+from scopecat.analysis.facts import AnalysisFactSchema, ordinary_result_schema
 from scopecat.config.candidates import (
     CandidateConfig,
     CandidateSelection,
@@ -232,6 +232,12 @@ class PublishedAnalysis:
             )
         return schema.decode(fact.value)
 
+    def result_as[ResultT](self, result_type: type[ResultT]) -> AnalysisResult[ResultT]:
+        """Reconstruct a saved ordinary conclusion without rerunning analysis."""
+        return AnalysisResult(
+            self.fact_as("result", ordinary_result_schema(result_type)), self
+        )
+
     def dataset(self, id: str) -> DerivedDataset:
         output = self._output(id, AnalysisDatasetRecordOutput)
         return self.source._load_analysis_dataset(  # pyright: ignore[reportPrivateUsage]
@@ -287,4 +293,16 @@ class PublishedAnalysis:
         return output
 
 
-__all__ = ["PublishedAnalysis", "PublishedAnalysisArtifact"]
+__all__ = ["AnalysisResult", "PublishedAnalysis", "PublishedAnalysisArtifact"]
+
+
+@dataclass(frozen=True, slots=True)
+class AnalysisResult[ResultT]:
+    """Materialized ordinary conclusion and its authoritative publication receipt.
+
+    ``value`` is usable after disconnect. Dataset/artifact methods on
+    ``publication`` require its live connection; reopen by publication.id.
+    """
+
+    value: ResultT
+    publication: PublishedAnalysis

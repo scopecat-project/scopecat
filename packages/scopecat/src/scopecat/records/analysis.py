@@ -231,24 +231,18 @@ class AnalysisTable(_AnalysisContentModel):
 
 
 def is_analysis_rows(value: object) -> bool:
-    """Return whether a sequence declares an annotated dataclass row schema."""
+    """Return whether a sequence declares a dataclass row schema."""
 
     if not isinstance(value, Sequence) or isinstance(value, str | bytes | bytearray):
         return False
     if not value:
         return False
     row_type = type(value[0])
-    if not is_dataclass(row_type):
-        return False
-    hints = _dataclass_type_hints(row_type)
-    return any(
-        _analysis_field(hints.get(member.name)) is not None
-        for member in fields(row_type)
-    )
+    return is_dataclass(row_type)
 
 
 def project_analysis_rows(rows: Sequence[object]) -> AnalysisRowProjection:
-    """Apply annotated field identities and Quantity units without view limits."""
+    """Infer ordinary scalar rows or apply explicit annotated column selection."""
 
     selected_rows = tuple(rows)
     if not selected_rows:
@@ -259,13 +253,22 @@ def project_analysis_rows(rows: Sequence[object]) -> AnalysisRowProjection:
     ):
         raise TypeError("analysis object rows must share one dataclass type")
     hints = _dataclass_type_hints(row_type)
-    selected_fields = tuple(
-        (member.name, policy)
+    annotated = any(
+        _analysis_field(hints.get(member.name)) is not None
         for member in fields(row_type)
-        if (policy := _analysis_field(hints.get(member.name))) is not None
     )
+    selected: list[tuple[str, AnalysisField]] = []
+    for member in fields(row_type):
+        policy = _analysis_field(hints.get(member.name))
+        if policy is None and not annotated:
+            policy = AnalysisField.model_validate(dict(member.metadata))
+        if policy is not None:
+            selected.append((member.name, policy))
+    selected_fields = tuple(selected)
     if not selected_fields:
-        raise TypeError("analysis object rows require Annotated AnalysisField fields")
+        raise TypeError(
+            "analysis object rows require at least one scalar dataclass field"
+        )
     return AnalysisRowProjection(
         fields=selected_fields,
         dtypes=tuple(
@@ -636,9 +639,11 @@ def _analysis_field(annotation: object) -> AnalysisField | None:
 
 
 def _analysis_row_dtype(annotation: object) -> AnalysisRowDType:
-    if get_origin(annotation) is not Annotated:
-        raise TypeError("analysis row fields must use Annotated")
-    declared = cast("object", get_args(annotation)[0])
+    declared = (
+        cast("object", get_args(annotation)[0])
+        if get_origin(annotation) is Annotated
+        else annotation
+    )
     declared_args = cast("tuple[object, ...]", get_args(declared))
     union_members = tuple(
         member for member in declared_args if member is not type(None)

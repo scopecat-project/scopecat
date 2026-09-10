@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import PurePosixPath, PureWindowsPath
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, JsonValue, field_validator
 
 from scopecat.kernel.content_identity import sha256_json_hash
 from scopecat.records.content import Sha256ContentHash
@@ -79,6 +79,7 @@ class AuthorAnalysisRequest(BaseModel):
         min_length=1, description="Configured author module:analysis name"
     )
     key: str | None = None
+    arguments: dict[str, JsonValue] = Field(default_factory=dict)
 
 
 class AuthorAnalysisReceipt(BaseModel):

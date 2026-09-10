@@ -866,6 +866,15 @@ class Dataset:
         )
         return raw
 
+    def materialize(self) -> Dataset:
+        """Load retained measurements now for use after the connection closes.
+
+        Selection/projection semantics, masks and units stay on this Dataset.
+        Materialization is an explicit memory cost, not a new publication.
+        """
+        self._materialize()
+        return self
+
     @property
     def _loaded_xarray(self) -> xr.Dataset:
         self._materialize()

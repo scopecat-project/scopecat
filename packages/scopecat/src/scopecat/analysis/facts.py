@@ -454,3 +454,12 @@ __all__ = [
     "analysis_fact_structure_hash",
     "validate_analysis_fact_json",
 ]
+
+
+def ordinary_result_schema[ResultT](
+    result_type: type[ResultT],
+) -> AnalysisFactSchema[ResultT]:
+    """Infer the durable structural contract; class names are not schema identity."""
+    if not is_dataclass(result_type):
+        raise TypeError("ordinary analysis results require a standard dataclass")
+    return AnalysisFactSchema("scopecat.ordinary-result.v1", result_type)
