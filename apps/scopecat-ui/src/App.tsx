@@ -400,7 +400,7 @@ export default function App() {
               />
             </Suspense>
           )}
-          {view === "configuration" && (
+          <div hidden={view !== "configuration"}>
             <Suspense
               fallback={
                 <DetailEmpty
@@ -416,7 +416,7 @@ export default function App() {
                 onOpenRun={openConfigSourceRun}
               />
             </Suspense>
-          )}
+          </div>
         </LaunchDraftProvider>
         {view === "runs" ? (
           <RunsWorkspace

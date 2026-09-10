@@ -72,7 +72,7 @@ test("saves and launches two physical samples at two working points without acti
       await page.getByLabel("Working point", { exact: true }).fill(point);
       await page.getByLabel("Context label", { exact: true }).fill(`${sample} ${point}`);
       await page
-        .getByLabel("qubits[0].drive_carrier_frequency", { exact: true })
+        .getByLabel("qubits[q0].drive_carrier_frequency", { exact: true })
         .fill(String(frequency));
       const saving = page.waitForResponse(
         (response) =>
@@ -204,6 +204,7 @@ test("adds an unknown optional table column through the GUI and launches the sav
     const savedResponse = await saving;
     expect(savedResponse.status()).toBe(200);
     const saved = await savedResponse.json();
+    await page.getByText(/^Detailed cell origins/).click();
     await expect(
       page
         .getByText("unknown · Optional analysis column, values are unknown", { exact: true })
@@ -254,5 +255,96 @@ with sc.open_project(sys.argv[1]).connect() as lab:
         body: project,
         contentType: "text/plain",
       });
+  }
+});
+
+test("ordinary workspace keeps keyboard edits and Python units across navigation", async ({
+  page,
+}, info) => {
+  const project = await mkdtemp(join(tmpdir(), "scopecat-workspace-e2e-"));
+  try {
+    for (const name of ["src", "config", "scopecat.toml"])
+      await cp(join(ROOT, "examples/reference_lab", name), join(project, name), {
+        recursive: true,
+      });
+    uv(["scopecat", "start", project, "--port", "0", "--static-dir", resolve("dist")]);
+    const { base_url: url } = JSON.parse(
+      await readFile(join(project, ".scopecat/daemon.json"), "utf8"),
+    );
+    await page.request.post(`${url}/api/v1/samples`, {
+      data: {
+        operation_id: "author",
+        sample_id: "author",
+        kind: "synthetic",
+        actor: "operator",
+        content: { display_name: "Author" },
+      },
+    });
+    await page.goto(`${url}/#configuration`);
+    await page.getByRole("button", { name: "Save working point copy", exact: true }).click();
+    await page.getByLabel("Physical sample", { exact: true }).selectOption("author@1");
+    await page.getByLabel("Working point", { exact: true }).fill("parked");
+    await page.getByLabel("Context label", { exact: true }).fill("Initial");
+    const saving = page.waitForResponse(
+      (r) => r.url().endsWith("/config-registry/contexts") && r.request().method() === "POST",
+    );
+    await page.getByRole("button", { name: "Save context", exact: true }).click();
+    const saved = await (await saving).json();
+    uv([
+      "python",
+      "-c",
+      `
+import sys
+import scopecat as sc
+with sc.open_project(sys.argv[1]).connect() as lab:
+    p = lab.config.workspace(context=sys.argv[2])
+    p['qubits']['q0']['drive_carrier_frequency'] = sc.Quantity(5100, 'MHz')
+    p.save('python-roundtrip')
+`,
+      project,
+      saved.entry.id,
+    ]);
+    await page.reload();
+    await page.getByRole("button", { name: /python-roundtrip/ }).click();
+    await page.getByRole("button", { name: "Save working point copy", exact: true }).click();
+    const frequency = page.getByLabel("qubits[q0].drive_carrier_frequency", { exact: true });
+    await expect(frequency).toHaveValue("5100");
+    await expect(
+      page.getByLabel("qubits[q0].drive_carrier_frequency unit", { exact: true }),
+    ).toHaveValue("MHz");
+    await frequency.focus();
+    await frequency.press("ControlOrMeta+A");
+    await frequency.pressSequentially("5200");
+    await frequency.press("Tab");
+    await page.getByRole("button", { name: "Runs", exact: true }).click();
+    await page.getByRole("button", { name: "Configuration", exact: true }).click();
+    await expect(frequency).toHaveValue("5200");
+    await expect(page.getByText("Manual · unsaved · MHz", { exact: true })).toBeVisible();
+    await page.screenshot({ path: info.outputPath("ordinary-workspace.png"), fullPage: true });
+    const resaving = page.waitForResponse(
+      (r) => r.url().endsWith("/config-registry/contexts") && r.request().method() === "POST",
+    );
+    await page.getByRole("button", { name: "Save context", exact: true }).click();
+    const final = await (await resaving).json();
+    uv([
+      "python",
+      "-c",
+      `
+import sys
+import scopecat as sc
+with sc.open_project(sys.argv[1]).connect() as lab:
+    p = lab.config.workspace(context=sys.argv[2])
+    assert p['qubits']['q0']['drive_carrier_frequency'] == sc.Quantity(5200, 'MHz')
+    old = lab.config.resolve_context(lab.config.workspace(context='python-roundtrip').version.context)
+    new = lab.config.resolve_context(p.version.context)
+    untouched = lambda origins: [o for o in origins if o.parameter_id != 'qubits' or o.field_id != 'drive_carrier_frequency']
+    assert untouched(old.value_origins) == untouched(new.value_origins)
+`,
+      project,
+      final.entry.id,
+    ]);
+  } finally {
+    uv(["scopecat", "stop", project]);
+    await info.attach("Workspace project", { body: project, contentType: "text/plain" });
   }
 });

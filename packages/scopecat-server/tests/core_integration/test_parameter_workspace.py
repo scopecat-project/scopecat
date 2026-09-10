@@ -587,3 +587,21 @@ def test_bootstrap_validation_and_direct_registry_allow_unknown_but_reject_inval
             validate_config_profile(
                 complete.model_copy(update={"parameter_snapshot": values})
             )
+
+
+def test_notebook_workspace_views_keep_saved_origins_and_context(
+    operations: RegistryOperations,
+) -> None:
+    workspace = ParameterWorkspace(operations, context="start")
+    assert "sample" in repr(workspace) and "parked" in repr(workspace)
+    table = workspace["qubits"]
+    before = table.render_html()
+    assert "Saved ·" in before
+    table["q0"]["amplitude"] = 0.0
+    assert "Manual · unsaved" in table.render_html()
+    assert "Unknown" not in repr(table["q0"])
+    table["q0"]["amplitude"] = None
+    assert "Unknown" in table.render_html()
+    assert "Unknown" in repr(table["q0"])
+    assert "Saved ·" in table.render_html()  # Other cells retain provenance.
+    assert "sha256" not in repr(workspace)

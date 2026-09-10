@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from collections.abc import Iterator, Mapping, MutableMapping, Sequence
 from dataclasses import dataclass, replace
+from html import escape
+from itertools import islice
 from typing import Protocol, Self, cast, overload, override
 
 from scopecat.authoring.parameter_dataclasses import (
@@ -99,6 +101,10 @@ class ParameterVersion:
 
     context: ConfigContextRef
 
+    @override
+    def __repr__(self) -> str:
+        return f"ParameterVersion({self.name!r})"
+
     @property
     def name(self) -> str:
         return self.context.entry_id
@@ -150,6 +156,23 @@ class ParameterWorkspace(Mapping[str, "ParameterTable"]):
                 entry_id=entry.entry.id, content_hash=entry.entry.content_hash
             )
         return self._operations.resolve_context(ref)
+
+    @override
+    def __repr__(self) -> str:
+        return (
+            f"ParameterWorkspace(sample={self.sample!r}, "
+            f"working_point={self.working_point!r}, "
+            f"tables={len(self)}, edits={len(self.diff())}, "
+            f"structure_edits={len(self._structure)})"
+        )
+
+    def _repr_html_(self) -> str:
+        heading = escape(repr(self))
+        return (
+            f"<p>{heading}</p><p>Local draft · save creates a version; "
+            "default unchanged.</p>"
+            + "".join(table.render_html() for table in islice(self.values(), 5))
+        )
 
     @property
     def version(self) -> ParameterVersion:
@@ -375,10 +398,12 @@ class ParameterWorkspace(Mapping[str, "ParameterTable"]):
             if snapshot.get(definition.id) is None:
                 continue
             data = self._data.setdefault(
-                definition.id, _TableData(definition.id, definition.value_type)
+                definition.id,
+                _TableData(definition.id, definition.value_type, self._base),
             )
             if data.schema != definition.value_type:
                 data.tokens.clear()
+            data.resolution = self._base
             data.schema = definition.value_type
             self._tables.setdefault(definition.id, ParameterTable(data))
             stored = snapshot.get(definition.id)
@@ -544,11 +569,57 @@ class ParameterWorkspace(Mapping[str, "ParameterTable"]):
 class _TableData:
     """Private shared storage for dictionary and typed row views."""
 
-    def __init__(self, name: str, schema: Table) -> None:
+    def __init__(
+        self,
+        name: str,
+        schema: Table,
+        resolution: ConfigContextResolution | None = None,
+    ) -> None:
+        self.resolution = resolution
         self.name = name
         self.schema = schema
         self.rows: dict[_Identity, dict[str, ParameterAtomValue]] = {}
         self.tokens: dict[_Identity, object] = {}
+
+    def origin(self, row: Mapping[str, ParameterAtomValue], field: str) -> str:
+        value = row.get(field)
+        if value is None:
+            return "Unknown"
+        if self.resolution is None:
+            return "Manual · unsaved"
+        baseline = self.resolution.config.parameter_snapshot.get(self.name)
+        key = self.identity(self.key(row))
+        previous = (
+            next(
+                (
+                    r
+                    for r in baseline.rows
+                    if all(
+                        name in r
+                        and scalar_identity(r[name]) == scalar_identity(row[name])
+                        for name in self.schema.primary_key
+                    )
+                ),
+                None,
+            )
+            if isinstance(baseline, TableParameterValue)
+            else None
+        )
+        if previous is None or previous.get(field) != value:
+            return "Manual · unsaved"
+        for origin in self.resolution.value_origins:
+            if (
+                origin.parameter_id == self.name
+                and origin.field_id == field
+                and all(name in origin.key for name in self.schema.primary_key)
+                and self.identity(self.key(origin.key)) == key
+            ):
+                return (
+                    origin.evidence.origin
+                    if origin.evidence
+                    else f"Saved · {origin.layer}"
+                )
+        return "Saved · origin unspecified"
 
     def key_mapping(self, key: RowKey) -> dict[str, ParameterAtomValue]:
         values = key if isinstance(key, tuple) else (key,)
@@ -584,6 +655,48 @@ class ParameterTable(MutableMapping[RowKey, "ParameterRow"]):
 
     def __init__(self, data: _TableData) -> None:
         self._data = data
+
+    @override
+    def __repr__(self) -> str:
+        rows = ", ".join(repr(self[key]) for key in islice(self, 5))
+        suffix = ", …" if len(self) > 5 else ""
+        return f"ParameterTable({self.name!r}, {len(self)} rows) [{rows}{suffix}]"
+
+    def _repr_html_(self) -> str:
+        return self.render_html()
+
+    def render_html(self) -> str:
+        """Render an escaped, bounded notebook view without validating edits."""
+        columns = self.schema.columns[:12]
+        header = "".join(f"<th>{escape(c.id)}</th>" for c in columns)
+        rows = "".join(
+            "<tr>"
+            + "".join(
+                f"<td>{escape(_display_cell(row.get(c.id), c.value_type.atom))}<br>"
+                f"<small>{escape(self._data.origin(row, c.id))}</small></td>"
+                for c in columns
+            )
+            + "</tr>"
+            for row in islice(self._data.rows.values(), 10)
+        )
+        context = (
+            self._data.resolution.config_source.sample
+            if self._data.resolution
+            else None
+        )
+        caption = (
+            f"{self.name} · {len(self)} rows · "
+            f"{len(self.schema.columns)} columns · "
+            + (
+                f"{context.sample_id} / {context.context_id}"
+                if context
+                else "Detached table"
+            )
+        )
+        return (
+            f"<table><caption>{escape(caption)}</caption>"
+            f"<thead><tr>{header}</tr></thead><tbody>{rows}</tbody></table>"
+        )
 
     @property
     def name(self) -> str:
@@ -650,6 +763,25 @@ class ParameterRow(MutableMapping[str, ParameterAtomValue | None]):
         self._identity = identity
         self._token = token
 
+    @override
+    def __repr__(self) -> str:
+        row = self._row()
+        cells = ", ".join(
+            f"{c.id}={_display_cell(row.get(c.id), c.value_type.atom)}"
+            for c in self._table.schema.columns[:8]
+        )
+        return f"{self._table.name}[{_display_atom(self._table.key(row))}]({cells})"
+
+    def _repr_html_(self) -> str:
+        row = self._row()
+        cells = "".join(
+            f"<tr><th>{escape(c.id)}</th>"
+            f"<td>{escape(_display_cell(row.get(c.id), c.value_type.atom))}</td>"
+            f"<td>{escape(self._table.origin(row, c.id))}</td></tr>"
+            for c in self._table.schema.columns[:20]
+        )
+        return f"<table><caption>{escape(repr(self))}</caption>{cells}</table>"
+
     def _row(self) -> dict[str, ParameterAtomValue]:
         if self._table.tokens.get(self._identity) is not self._token:
             raise KeyError("row was deleted; select the desired row again")
@@ -701,6 +833,13 @@ class TypedParameterTable[T](Mapping["RowKey", T]):
     A row class should be a data-only, mutable dataclass: constructors and
     post-init hooks are for new rows and are not run when selecting existing ones.
     """
+
+    @override
+    def __repr__(self) -> str:
+        return repr(self._table)
+
+    def _repr_html_(self) -> str:
+        return self._table.render_html()
 
     def __init__(self, table: ParameterTable, row_type: type[T]) -> None:
         self._table = table
@@ -872,3 +1011,24 @@ __all__ = [
     "ParameterWorkspace",
     "TypedParameterTable",
 ]
+
+
+def _display_atom(value: object) -> str:
+    if value is None:
+        return "Unknown"
+    if isinstance(value, Quantity):
+        return f"{value.value:g} {value.unit}"
+    if isinstance(value, Mapping) and "unit" in value and "value" in value:
+        return f"{value['value']} {value['unit']}"
+    text = str(cast("object", value))
+    return text if len(text) <= 100 else text[:97] + "…"
+
+
+def _display_cell(value: object, atom: AtomType) -> str:
+    if (
+        isinstance(atom, QuantityType)
+        and isinstance(value, (float, int))
+        and not isinstance(value, bool)
+    ):
+        return f"{value:g} {atom.unit}"
+    return _display_atom(value)

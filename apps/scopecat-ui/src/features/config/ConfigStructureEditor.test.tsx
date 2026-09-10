@@ -192,6 +192,7 @@ it("shows a declared unknown reason and the old source cell on a saved working p
       />
     </QueryClientProvider>,
   );
+  fireEvent.click(screen.getByText(/^Detailed cell origins/));
   expect(screen.getByText("unknown · Sample B has not been evaluated")).toBeVisible();
   expect(screen.getByText(/Source: original.*observations/)).toHaveTextContent("prior_quality");
   expect(screen.getByText(/Source: original.*observations/)).toHaveTextContent("specimen");

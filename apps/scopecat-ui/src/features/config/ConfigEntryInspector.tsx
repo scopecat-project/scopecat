@@ -214,39 +214,42 @@ function EntryProvenance({
           >
             Open source {source.context.base.entry_id}
           </button>
-          <dl>
-            {(source.context.value_origins ?? []).map((origin, index) => (
-              <div key={index}>
-                <dt>
-                  {origin.parameter_id}
-                  {origin.row_index != null
-                    ? `[${origin.row_index}]`
-                    : Object.keys(origin.key ?? {}).length
-                      ? ` ${JSON.stringify(origin.key)}`
-                      : ""}
-                  {origin.field_id ? `.${origin.field_id}` : ""}
-                </dt>
-                <dd>
-                  {origin.layer} · {origin.entry.entry_id}
-                  {origin.evidence && (
-                    <p>
-                      {origin.evidence.origin} · {origin.evidence.note}
-                    </p>
-                  )}
-                  {origin.source_cell && (
-                    <p>
-                      Source: {origin.source_cell.entry.entry_id} /{" "}
-                      {origin.source_cell.parameter_id}
-                      {origin.source_cell.row_index != null
-                        ? `[${origin.source_cell.row_index}]`
-                        : ` ${JSON.stringify(origin.source_cell.key)}`}
-                      {origin.source_cell.field_id ? `.${origin.source_cell.field_id}` : ""}
-                    </p>
-                  )}
-                </dd>
-              </div>
-            ))}
-          </dl>
+          <details>
+            <summary>Detailed cell origins ({source.context.value_origins?.length ?? 0})</summary>
+            <dl className="max-h-80 overflow-auto">
+              {(source.context.value_origins ?? []).map((origin, index) => (
+                <div key={index}>
+                  <dt>
+                    {origin.parameter_id}
+                    {origin.row_index != null
+                      ? `[${origin.row_index}]`
+                      : Object.keys(origin.key ?? {}).length
+                        ? ` ${JSON.stringify(origin.key)}`
+                        : ""}
+                    {origin.field_id ? `.${origin.field_id}` : ""}
+                  </dt>
+                  <dd>
+                    {origin.layer} · {origin.entry.entry_id}
+                    {origin.evidence && (
+                      <p>
+                        {origin.evidence.origin} · {origin.evidence.note}
+                      </p>
+                    )}
+                    {origin.source_cell && (
+                      <p>
+                        Source: {origin.source_cell.entry.entry_id} /{" "}
+                        {origin.source_cell.parameter_id}
+                        {origin.source_cell.row_index != null
+                          ? `[${origin.source_cell.row_index}]`
+                          : ` ${JSON.stringify(origin.source_cell.key)}`}
+                        {origin.source_cell.field_id ? `.${origin.source_cell.field_id}` : ""}
+                      </p>
+                    )}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          </details>
         </div>
       </div>
     );

@@ -45,8 +45,12 @@ export function ConfigWorkspace({
   const queryClient = useQueryClient();
   const fileInput = useRef<HTMLInputElement>(null);
   const [configDraft, setConfigDraft] = useState<ConfigDraftSeed>();
-  const [editingContext, setEditingContext] = useState(false);
-  const [editingStructure, setEditingStructure] = useState(false);
+  const [contextDraft, setContextDraft] = useState<{
+    entry: NonNullable<ReturnType<typeof useConfigRegistry>["selectedEntry"]>;
+    config: NonNullable<ReturnType<typeof useConfigRegistry>["entryDetailQuery"]["data"]>["config"];
+  }>();
+  const [structureDraft, setStructureDraft] =
+    useState<NonNullable<ReturnType<typeof useConfigRegistry>["entryDetailQuery"]["data"]>>();
   const [comparisonId, setComparisonId] = useState("");
   const comparison = useQuery({
     queryKey: ["config", "comparison", comparisonId],
@@ -138,7 +142,7 @@ export function ConfigWorkspace({
       <header className="flex min-h-[50px] items-center justify-between gap-5 rounded-lg border border-line bg-panel py-1.5 pr-2.5 pl-3.5 max-[880px]:items-start max-[680px]:grid max-[680px]:gap-[17px]">
         <div>
           <h2 className="m-0 text-base font-[650] tracking-[-0.025em]" id="config-heading">
-            Default configuration
+            Parameter workspace
           </h2>
         </div>
         <div className="flex items-center gap-2 max-[680px]:flex-wrap">
@@ -212,6 +216,12 @@ export function ConfigWorkspace({
         </div>
       )}
 
+      <p>
+        Save a working point copy to keep a candidate. Use for next experiment selects that saved
+        version for launch. Set as default publishes it for the laboratory. Code refresh changes
+        experiment code, not saved parameters.
+      </p>
+
       <ConfigSummary
         overview={overview}
         activeEntry={registry.activeDetailQuery.data?.entry}
@@ -255,16 +265,22 @@ export function ConfigWorkspace({
               <div className="mb-4 flex flex-wrap items-center gap-2">
                 <button
                   className={secondaryButton}
-                  disabled={!registry.entryDetailQuery.data}
-                  onClick={() => setEditingContext(true)}
+                  disabled={!!contextDraft || !registry.entryDetailQuery.data}
+                  onClick={() => {
+                    if (registry.entryDetailQuery.data)
+                      setContextDraft({
+                        entry: selectedEntry,
+                        config: registry.entryDetailQuery.data.config,
+                      });
+                  }}
                 >
                   Save working point copy
                 </button>
                 {selectedEntry.source.kind === "parameter_context" && (
                   <button
                     className={secondaryButton}
-                    disabled={!registry.entryDetailQuery.data?.structureVersion}
-                    onClick={() => setEditingStructure(true)}
+                    disabled={!!structureDraft || !registry.entryDetailQuery.data?.structureVersion}
+                    onClick={() => setStructureDraft(registry.entryDetailQuery.data)}
                   >
                     Change table structure
                   </button>
@@ -350,33 +366,6 @@ export function ConfigWorkspace({
                 }
                 onEdit={editableDraftSeed ? () => setConfigDraft(editableDraftSeed) : undefined}
               />
-              {editingStructure && registry.entryDetailQuery.data && (
-                <ConfigStructureEditor
-                  key={selectedEntry.id}
-                  detail={registry.entryDetailQuery.data}
-                  operator={workflow.operator}
-                  onCancel={() => setEditingStructure(false)}
-                  onSaved={(entryId) => {
-                    setEditingStructure(false);
-                    void queryClient.invalidateQueries({ queryKey: ["config"] });
-                    registry.selectEntry(entryId);
-                  }}
-                />
-              )}
-              {editingContext && registry.entryDetailQuery.data && (
-                <ConfigContextEditor
-                  key={selectedEntry.id}
-                  entry={selectedEntry}
-                  config={registry.entryDetailQuery.data.config}
-                  operator={workflow.operator}
-                  onCancel={() => setEditingContext(false)}
-                  onSaved={(entryId) => {
-                    setEditingContext(false);
-                    void queryClient.invalidateQueries({ queryKey: ["config"] });
-                    registry.selectEntry(entryId);
-                  }}
-                />
-              )}
             </>
           ) : (
             <ConfigBoundaryMessage
@@ -388,6 +377,32 @@ export function ConfigWorkspace({
           )}
         </section>
       </div>
+
+      {structureDraft && (
+        <ConfigStructureEditor
+          detail={structureDraft}
+          operator={workflow.operator}
+          onCancel={() => setStructureDraft(undefined)}
+          onSaved={(entryId) => {
+            setStructureDraft(undefined);
+            void queryClient.invalidateQueries({ queryKey: ["config"] });
+            registry.selectEntry(entryId);
+          }}
+        />
+      )}
+      {contextDraft && (
+        <ConfigContextEditor
+          entry={contextDraft.entry}
+          config={contextDraft.config}
+          operator={workflow.operator}
+          onCancel={() => setContextDraft(undefined)}
+          onSaved={(entryId) => {
+            setContextDraft(undefined);
+            void queryClient.invalidateQueries({ queryKey: ["config"] });
+            registry.selectEntry(entryId);
+          }}
+        />
+      )}
 
       {configDraft && (
         <ConfigDraftEditor

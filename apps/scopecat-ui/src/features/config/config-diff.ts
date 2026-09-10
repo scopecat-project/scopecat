@@ -197,7 +197,7 @@ export function parameterAtomIdentity(value: ParameterAtom): unknown {
 }
 
 export function parameterAtomLabel(value: ParameterAtom | undefined): string {
-  if (value === undefined) return "—";
+  if (value === undefined) return "Unknown";
   if (value === null) return "null";
   if (isQuantity(value)) return `${formatNumber(value.value)} ${value.unit}`;
   if (isEntity(value)) {
