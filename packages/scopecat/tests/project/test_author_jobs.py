@@ -169,5 +169,11 @@ def test_submission_rejection_is_distinct_from_unknown(
         expected = (
             httpx2.HTTPStatusError if status == 422 else AuthorSubmissionUncertain
         )
-        with pytest.raises(expected):
+        with pytest.raises(expected) as failure:
             prepared.run()
+        if status == 422:
+            assert "test response" in str(failure.value)
+        else:
+            assert isinstance(failure.value, AuthorSubmissionUncertain)
+            assert failure.value.job.receipt.exists()
+            assert "test response" in str(failure.value.__cause__)

@@ -1006,3 +1006,25 @@ def _trace_preview() -> MeasurementTracePreview:
         source_sample_count=2,
         returned_sample_count=2,
     )
+
+
+def test_http_validation_message_includes_actionable_parameter_detail() -> None:
+    detail = "qubits['q0'].drive_carrier_frequency: a calibrated value is required"
+    requests: list[httpx2.Request] = []
+
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        requests.append(request)
+        return httpx2.Response(422, json={"detail": detail})
+
+    with (
+        DaemonClient(
+            "http://daemon.local", transport=httpx2.MockTransport(handler)
+        ) as client,
+        pytest.raises(httpx2.HTTPStatusError) as failure,
+    ):
+        client.get_run("invalid")
+
+    assert detail in str(failure.value)
+    assert failure.value.response.status_code == 422
+    assert failure.value.request is requests[0]
+    assert failure.value.response.request is requests[0]

@@ -2482,7 +2482,14 @@ class DaemonClient:
             raise DaemonConflictError(_error_detail(response), response=response)
         if response.status_code == 503:
             raise DaemonUnavailableError(_error_detail(response), response=response)
-        response.raise_for_status()
+        try:
+            response.raise_for_status()
+        except httpx2.HTTPStatusError as error:
+            raise httpx2.HTTPStatusError(
+                f"{error}\n{_error_detail(response)}",
+                request=error.request,
+                response=error.response,
+            ) from error
         return response
 
 
