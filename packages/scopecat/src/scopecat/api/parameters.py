@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator, Mapping, MutableMapping, Sequence
 from dataclasses import dataclass
-from typing import Protocol, Self, override
+from typing import Protocol, Self, cast, override
 
 from scopecat.config.candidate_merges import merge_parameter_branches
 from scopecat.config.contexts import apply_context_overrides
@@ -21,6 +21,7 @@ from scopecat.daemon.views import ConfigContextResolution, ConfigEntryView
 from scopecat.kernel.errors import Conflict
 from scopecat.kernel.value_identity import scalar_identity
 from scopecat.kernel.value_types import Table
+from scopecat.kernel.value_validation import coerce_literal
 from scopecat.records.config_context import ConfigContextRef
 from scopecat.records.parameter import (
     ParameterAtomValue,
@@ -345,7 +346,17 @@ class _TableData:
         values = key if isinstance(key, tuple) else (key,)
         if len(values) != len(self.schema.primary_key):
             raise KeyError(f"{self.name} requires keys {self.schema.primary_key}")
-        return dict(zip(self.schema.primary_key, values, strict=True))
+        return {
+            field: self.key_value(field, value)
+            for field, value in zip(self.schema.primary_key, values, strict=True)
+        }
+
+    def key_value(self, field: str, value: ParameterAtomValue) -> ParameterAtomValue:
+        column = next(column for column in self.schema.columns if column.id == field)
+        return cast(
+            "ParameterAtomValue",
+            coerce_literal(column.value_type, value, path=(self.name, field)),
+        )
 
     def identity(self, key: RowKey) -> _Identity:
         return tuple(scalar_identity(value) for value in self.key_mapping(key).values())
@@ -383,7 +394,9 @@ class ParameterTable(MutableMapping[RowKey, "ParameterRow"]):
     def __setitem__(self, key: RowKey, value: Mapping[str, ParameterAtomValue]) -> None:
         row = dict(value)
         for field, atom in self._data.key_mapping(key).items():
-            if field in row and scalar_identity(row[field]) != scalar_identity(atom):
+            if field in row and scalar_identity(
+                self._data.key_value(field, row[field])
+            ) != scalar_identity(atom):
                 raise ValueError(f"{self.name}[{key!r}].{field}: row key cannot change")
             row[field] = atom
         unknown = set(row) - {column.id for column in self.schema.columns}

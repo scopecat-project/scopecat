@@ -3,7 +3,7 @@
 from pathlib import Path
 
 import pytest
-from scopecat.api.parameters import ParameterWorkspace
+from scopecat.api.parameters import ParameterTable, ParameterWorkspace, _TableData
 from scopecat.config.contexts import apply_context_overrides, context_value_origins
 from scopecat.config.parameter_updates import ParameterUpdate
 from scopecat.config.registry import (
@@ -18,9 +18,17 @@ from scopecat.config.registry.service import (
     save_config_context,
 )
 from scopecat.daemon.views import ConfigContextResolution, ConfigEntryView
+from scopecat.kernel.entity import EntityRef
 from scopecat.kernel.errors import Conflict
 from scopecat.kernel.quantity import Quantity
-from scopecat.kernel.value_types import Float, Scalar, String, Table, TableColumn
+from scopecat.kernel.value_types import (
+    Entity,
+    Float,
+    Scalar,
+    String,
+    Table,
+    TableColumn,
+)
 from scopecat.records.config import config_content_hash
 from scopecat.records.config_context import ConfigContextRef, ContextRunConfigSource
 from scopecat.records.parameter import (
@@ -346,3 +354,25 @@ def test_compatible_unit_read_and_rebase_do_not_rewrite_origins(
     scalar = frozen.config.parameter_snapshot.get("drive_frequency")
     assert scalar is not None
     assert scalar.model_dump(mode="json")["value"] == {"value": 5200.0, "unit": "MHz"}
+
+
+def test_entity_keys_accept_plain_ids_without_rewriting_stored_keys() -> None:
+    schema = Table(
+        columns=(
+            TableColumn("qubit", Scalar(Entity(entity_kind="qubit"))),
+            TableColumn("gain", Scalar(Float())),
+        ),
+        primary_key=("qubit",),
+    )
+    data = _TableData("drive", schema)
+    key = EntityRef(id="q0", kind="qubit")
+    data.load(({"qubit": key, "gain": 0.1},))
+    table = ParameterTable(data)
+    assert table["q0"]["qubit"] == key
+    table["q0"] = {"qubit": "q0", "gain": 0.2}
+    assert table[key]["gain"] == 0.2
+    assert table["q0"]["qubit"] == key
+    table["q1"] = {"gain": 0.3}
+    assert table["q1"]["qubit"] == EntityRef(id="q1", kind="qubit")
+    del table["q1"]
+    assert len(table) == 1
