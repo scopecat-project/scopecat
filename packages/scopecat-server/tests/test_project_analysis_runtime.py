@@ -995,7 +995,7 @@ def test_candidate_acceptance_requires_matching_cross_run_verification(
             )
             with pytest.raises(
                 BackendConflict,
-                match="does not include a run using this proposal",
+                match="independent successful run",
             ):
                 runtime.application.config.publish_config(
                     ConfigPublishCommand(

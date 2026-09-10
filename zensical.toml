@@ -34,6 +34,7 @@ nav = [
     { "Chips and physical samples" = "concepts/samples.md" },
     { "Experiment authoring dataflow" = "concepts/experiment-dataflow.md" },
     { "Ordinary Python analysis" = "guides/ordinary-analysis.md" },
+    { "Verify fitted candidates" = "how-to/verify-parameter-candidates.md" },
     { "Analysis publication" = "concepts/analysis-publication.md" },
   ] },
   { "Reference" = [

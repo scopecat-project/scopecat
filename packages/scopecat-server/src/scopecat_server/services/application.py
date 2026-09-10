@@ -76,7 +76,7 @@ class DaemonApplication:
             authors=self.author_revisions,
         )
         self.config = config
-        self.manual_previews = ManualPreviewService(project_store.sqlite, config)
+        self.manual_previews = ManualPreviewService(project_store.sqlite, config, runs)
         self.analyses = analyses
         self.runs = runs
         self._admission = admission

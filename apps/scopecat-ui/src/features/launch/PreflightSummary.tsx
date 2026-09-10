@@ -46,7 +46,9 @@ export function PreflightSummary({
         {preview.point_count} initial points in the first experiment · Configuration{" "}
         {preview.config_source.kind === "parameter_context"
           ? preview.config_source.context.entry_id
-          : preview.config_source.entry_id}
+          : preview.config_source.kind === "analysis_candidate"
+            ? `Candidate ${preview.config_source.proposal_id}`
+            : preview.config_source.entry_id}
       </p>
       <p>
         {entry.configuration_effect === "none"

@@ -2,10 +2,14 @@
 
 from typing import TYPE_CHECKING, Literal
 
+from scopecat.config.candidates import CandidateConfig
 from scopecat.records.config import ConfigProfileSnapshot
 from scopecat.records.config_context import ContextRunConfigSource
 from scopecat.records.launch_request import LaunchConfigSource, LaunchRequest
-from scopecat.records.run import ConfigRegistryRunConfigSource
+from scopecat.records.run import (
+    AnalysisCandidateRunConfigSource,
+    ConfigRegistryRunConfigSource,
+)
 from scopecat.records.sample import SampleSelector
 
 if TYPE_CHECKING:
@@ -15,6 +19,29 @@ if TYPE_CHECKING:
 def resolve_launch_config(
     lab: LabClient, request: LaunchRequest
 ) -> tuple[ConfigProfileSnapshot, LaunchConfigSource]:
+    if isinstance(request.config_source, AnalysisCandidateRunConfigSource):
+        source = request.config_source
+        proposal = lab.config.client.parameter_proposal(
+            source.source_run_id, source.proposal_id
+        ).proposal
+        config, resolved_source = lab.config.resolve_with_source(
+            CandidateConfig(proposal)
+        )
+        if resolved_source != source.model_copy(update={"registry_generation": None}):
+            raise ValueError("candidate no longer matches its exact saved proposal")
+        samples = lab.get_run(source.source_run_id).samples
+        subjects = [sample for sample in samples if sample.role == "subject"]
+        if len(subjects) != 1 or request.sample_binding != subjects[0]:
+            raise ValueError(
+                "candidate requires its original sample revision and workpoint"
+            )
+        if request.action == "preview":
+            source = source.model_copy(
+                update={
+                    "registry_generation": lab.config.active().activation.generation
+                }
+            )
+        return config, source
     if request.context is not None:
         resolved = lab.config.resolve_context(
             request.context, overrides=request.overrides
@@ -95,6 +122,9 @@ def resolve_launch_config(
 
 
 def launch_config_generation(source: LaunchConfigSource) -> int:
+    if isinstance(source, AnalysisCandidateRunConfigSource):
+        assert source.registry_generation is not None
+        return source.registry_generation
     if isinstance(source, ContextRunConfigSource):
         return source.lab_generation
     assert source.registry_generation is not None
@@ -127,11 +157,18 @@ def launch_preflight_configuration(
     source: LaunchConfigSource,
 ) -> Literal["accepted", "selected_context"]:
     return (
-        "selected_context" if isinstance(source, ContextRunConfigSource) else "accepted"
+        "selected_context"
+        if isinstance(source, ContextRunConfigSource | AnalysisCandidateRunConfigSource)
+        else "accepted"
     )
 
 
 def launch_preflight_meaning(source: LaunchConfigSource) -> str:
+    if isinstance(source, AnalysisCandidateRunConfigSource):
+        return (
+            "Uses this exact saved candidate for this run; "
+            "no validation or default change."
+        )
     if isinstance(source, ContextRunConfigSource):
         return (
             "Uses this run's selected saved working point; selection does not "

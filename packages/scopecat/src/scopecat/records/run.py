@@ -31,6 +31,10 @@ class ConfigRegistryRunConfigSource(BaseModel):
     )
 
 
+def _unset_review_generation(value: object) -> bool:
+    return value is None
+
+
 class AnalysisCandidateRunConfigSource(BaseModel):
     """Analysis candidate resolved for one run without becoming the default."""
 
@@ -42,6 +46,15 @@ class AnalysisCandidateRunConfigSource(BaseModel):
     proposal_id: str
     base_config_content_hash: ConfigContentHash
     content_hash: ConfigContentHash
+    registry_generation: int | None = Field(
+        default=None,
+        ge=1,
+        description=(
+            "Observed preview generation, not part of candidate identity or activation."
+        ),
+        # An old source without a fence keeps its original wire bytes/hash.
+        exclude_if=_unset_review_generation,
+    )
 
     @model_validator(mode="after")
     def validate_identity(self) -> AnalysisCandidateRunConfigSource:

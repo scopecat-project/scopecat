@@ -376,6 +376,8 @@ function matchesActive(
   activation: { generation: number; entry_id: string } | null | undefined,
 ) {
   if (source == null) return true;
+  if (source.kind === "analysis_candidate")
+    return source.registry_generation === activation?.generation;
   return source.kind === "parameter_context"
     ? source.lab_generation === activation?.generation
     : source.registry_generation === activation?.generation &&

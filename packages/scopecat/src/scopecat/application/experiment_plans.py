@@ -14,6 +14,7 @@ from scopecat.records.experiment_plan import (
 )
 from scopecat.records.launch_request import LaunchRequest
 from scopecat.records.plan_ref import PlanAnalysisSource, PlanConfigRef
+from scopecat.records.run import AnalysisCandidateRunConfigSource
 
 
 def plan_launch_request(plan: ExperimentPlanRevision, *, actor: str) -> LaunchRequest:
@@ -71,6 +72,8 @@ def plan_definition(
             "preview must resolve the selected sample revision before saving"
         )
     config = preview.config_source
+    if isinstance(config, AnalysisCandidateRunConfigSource):
+        raise ValueError("Save plans from a named context, not an unaccepted candidate")
     context = config if isinstance(config, ContextRunConfigSource) else None
     return ExperimentPlanDefinition(
         experiment=request.experiment,
