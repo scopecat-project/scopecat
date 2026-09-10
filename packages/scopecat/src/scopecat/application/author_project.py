@@ -16,6 +16,7 @@ from pydantic import JsonValue
 from scopecat.analysis.facts import ordinary_result_schema
 from scopecat.api._config import LabConfigOperations
 from scopecat.api._remote import RemoteRunOperations
+from scopecat.api.parameter_candidates import ParameterCandidate
 from scopecat.api.parameters import ParameterWorkspace
 from scopecat.api.published_analysis import AnalysisResult
 from scopecat.api.run import RunHandle
@@ -32,6 +33,7 @@ from scopecat.automation.wire import (
     ProcedureRunListQuery,
     ProcedureStepAttemptListQuery,
 )
+from scopecat.config.candidates import CandidateConfig
 from scopecat.daemon.client import DaemonClient, DaemonUnavailableError
 from scopecat.kernel.errors import SessionClosedError
 from scopecat.kernel.quantity import Quantity
@@ -47,6 +49,7 @@ from scopecat.records.experiment_plan import ExperimentPlanRevision, ExperimentP
 from scopecat.records.launch_request import LaunchRequest
 from scopecat.records.parameter_update import ParameterUpdate
 from scopecat.records.plan_ref import ExperimentPlanRef, PlanAnalysisSource
+from scopecat.records.run import AnalysisCandidateRunConfigSource
 from scopecat.records.run_request import AxisValuesSourceRecord
 
 
@@ -124,6 +127,7 @@ class AuthorProject(DaemonClient):
         fixed: Mapping[str, SupportsFloat | Quantity] | None = None,
         scans: Mapping[str, Iterable[SupportsFloat | Quantity]] | None = None,
         parameters: ParameterWorkspace | None = None,
+        candidate: ParameterCandidate | CandidateConfig | None = None,
         code_revision: AuthorRevisionRef | None = None,
         inputs: dict[str, JsonValue] | None = None,
         context: ConfigContextRef | None = None,
@@ -132,6 +136,36 @@ class AuthorProject(DaemonClient):
         actor: str = "operator",
     ) -> AuthorPreparedLaunch:
         """Select the current declaration and retain a preview's exact submission."""
+        candidate_source = None
+        sample_binding = None
+        if candidate is not None:
+            if (
+                parameters is not None
+                or context is not None
+                or overrides
+                or sample is not None
+            ):
+                raise ValueError(
+                    "candidate selects its exact parameters, sample and workpoint"
+                )
+            selected = (
+                candidate.config
+                if isinstance(candidate, ParameterCandidate)
+                else candidate
+            )
+            _, candidate_source = self.config.resolve_with_source(selected)
+            assert isinstance(candidate_source, AnalysisCandidateRunConfigSource)
+            subjects = [
+                item
+                for item in self.run(selected.source_run_id).samples
+                if item.role == "subject"
+            ]
+            if len(subjects) != 1:
+                raise ValueError(
+                    "candidate requires one exact subject sample/workpoint"
+                )
+            sample_binding = subjects[0]
+            sample = sample_binding.sample_id
         catalog = self.catalog(code_revision=code_revision)
         edits = dict(control_edits or {})
         for name, value in (fixed or {}).items():
@@ -171,6 +205,8 @@ class AuthorProject(DaemonClient):
             version=entry.version,
             control_edits=edits,
             inputs=declared_inputs | (inputs or {}),
+            config_source=candidate_source,
+            sample_binding=sample_binding,
             context=context,
             overrides=overrides,
             sample=sample,

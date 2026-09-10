@@ -12,6 +12,7 @@ from scopecat.records.manual_preview import (
     ManualPreviewValidity,
     PreviewInstrument,
 )
+from scopecat.records.run import AnalysisCandidateRunConfigSource
 
 from scopecat_server.storage.sqlite.connection import SQLiteDatabase
 from scopecat_server.storage.sqlite.manual_preview import ManualPreviewRepository
@@ -21,12 +22,16 @@ if TYPE_CHECKING:
     from scopecat.records.launch_request import LaunchRequest
 
     from scopecat_server.services.config import ConfigService
+    from scopecat_server.services.runs import RunService
 
 
 class ManualPreviewService:
-    def __init__(self, sqlite: SQLiteDatabase, config: ConfigService) -> None:
+    def __init__(
+        self, sqlite: SQLiteDatabase, config: ConfigService, runs: RunService
+    ) -> None:
         self.repository = ManualPreviewRepository(sqlite)
         self.config = config
+        self.runs = runs
 
     def cursor(self) -> int:
         return self.repository.cursor()
@@ -38,12 +43,17 @@ class ManualPreviewService:
         cursor: int,
     ) -> LaunchPreview:
         source = preview.config_source
-        entry_id = (
-            source.context.entry_id
-            if isinstance(source, ContextRunConfigSource)
-            else source.entry_id
-        )
-        config = self.config.get_config_entry(entry_id).config
+        if isinstance(source, AnalysisCandidateRunConfigSource):
+            # Candidates change only parameter cells; physical inventory belongs
+            # to the exact baseline and was checked by the launch resolver.
+            config = self.runs.get_run_config(source.source_run_id).config
+        else:
+            entry_id = (
+                source.context.entry_id
+                if isinstance(source, ContextRunConfigSource)
+                else source.entry_id
+            )
+            config = self.config.get_config_entry(entry_id).config
         specs = {spec.id: spec for spec in config.instrument_registry.instruments}
         instruments = tuple(
             PreviewInstrument(

@@ -366,7 +366,9 @@ test("starter project closes the notebook, run, and config loop", async ({ daemo
   await expect(page.getByRole("heading", { name: "First run", exact: true })).toBeVisible();
 
   await page.getByRole("button", { name: "Configuration" }).click();
-  await expect(page.getByRole("heading", { name: "Default configuration" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Parameter workspace", exact: true }),
+  ).toBeVisible();
 
   const initialRegistry = await readRegistry(page, daemon.baseUrl);
   const initialHistory = await readActivationHistory(page, daemon.baseUrl);
@@ -471,7 +473,9 @@ test("accepts a notebook candidate in the GUI and preserves its provenance", asy
   await page.getByRole("button", { name: "Open producing run" }).click();
 
   await expect(page.getByRole("button", { name: "Runs" })).toHaveAttribute("aria-current", "page");
-  await expect(page.getByText(candidate.runId, { exact: true })).toBeVisible();
+  await expect(
+    page.getByTestId("run-detail-header").getByText(candidate.runId, { exact: true }),
+  ).toBeVisible();
   expect(new URL(page.url()).searchParams.get("run")).toBe(candidate.runId);
 
   await page.getByRole("button", { name: "Configuration" }).click();

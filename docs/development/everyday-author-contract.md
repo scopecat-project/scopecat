@@ -1,11 +1,14 @@
 # Everyday Python author contract
 
-This contract guides [the implementation slices](https://github.com/scopecat-project/scopecat/issues/466).
-It is contributor guidance, not a tutorial for an available high-level API.
-The executable fixture below uses existing public APIs. Dictionary workspaces are
-available as described in [configuration editing](../how-to/manage-configuration.md);
-standard dataclass views and managed notebook sessions are also available
-through their guides.
+This contributor contract records the shared semantics and validation strategy for
+[implementation slices A0–A8](https://github.com/scopecat-project/scopecat/issues/466),
+whose APIs and consumer views are implemented. For hands-on use, start with
+[configuration editing, dataclass rows and new tables](../how-to/manage-configuration.md),
+[managed author sessions](../how-to/managed-author-session.md),
+[ordinary analysis](../guides/ordinary-analysis.md), and
+[independent candidate verification](../how-to/verify-parameter-candidates.md).
+The [quantum authoring reference](../reference/python/quantum.md) covers recipe APIs.
+This document explains their contract rather than replacing those user guides.
 
 ## One parameter workspace
 
@@ -76,7 +79,8 @@ Bind standard dataclass rows with `params.table(name, row_type=Drive)`; both vie
 share edits, and constructors supply defaults only when explicitly adding rows.
 The [managed author session](../how-to/managed-author-session.md) provides ordinary
 fixed/scanned inputs, frozen workspace previews, receipt-backed submission,
-bounded waiting and read-only job recovery (#471).
+bounded waiting and read-only recovery. [Ordinary analysis](../guides/ordinary-analysis.md)
+retains typed conclusions and their input/source publication.
 
 | Producer | Contract consumed by other slices |
 | --- | --- |
@@ -87,6 +91,7 @@ bounded waiting and read-only job recovery (#471).
 | [#472 analysis](https://github.com/scopecat-project/scopecat/issues/472) | Ordinary function adapter over existing Dataset and retained publications |
 | [#473 verification](https://github.com/scopecat-project/scopecat/issues/473) | Typed candidate with evidence, independent verification, explicit selection |
 | [#474 recipes](https://github.com/scopecat-project/scopecat/issues/474) | Honest symbolic input/reference types and bounded supported arithmetic |
+| [#475 views](https://github.com/scopecat-project/scopecat/issues/475) | Live notebook representations and console drafts with units, origins and explicit save/select/publish boundaries |
 
 No slice introduces a second configuration registry, result store or dataset
 model. Producers own shared storage/wire definitions and client regeneration;
@@ -113,8 +118,8 @@ It needs no hardware. The two acquired runs have the same five frequency points:
 - The flat response has gain 0. Acquisition completes, but the same analysis
   rejects it because no values meet the selection. It is a deliberately useless
   scientific input, not a simulated device failure.
-- The missing carrier prevents the consumer's preview. Today's fixture encodes
-  it by an absent cell. `test_unknown_parameter_authoring.py` additionally covers
+- The missing carrier prevents the consumer's preview. This baseline fixture
+  encodes it by an absent cell. `test_unknown_parameter_authoring.py` additionally covers
   user-declared complete tables, visible `None`, unrelated/required consumers,
   frozen edits and old-run readback after explicit schema changes.
 
@@ -129,17 +134,40 @@ The existing test fixture creates a fresh project and real daemon. The check
 previews known/missing inputs, retains both runs, analyzes success and failure,
 reopens the original data, and confirms no extra acquisition or shared-default
 publication occurs during analysis. Reuse these run identities and normal
-Dataset/publication APIs in later slices; do not replace them with a fake result
+Dataset/publication APIs when extending coverage; do not replace them with a fake result
 registry. Synthetic resonance/selection is a contract fixture, not a validated
 physical calibration or a full fitting lesson.
 
-## First usable release and novice evaluation
+The facade coverage now also includes:
 
-Release the first preview after workspace, typed rows and managed author session
-are usable together: open a **preinstalled table**, edit a typed row, scan,
-preview, run, save and reopen. From-zero table creation needs #470. Initially use
-an existing registered analysis; user-written ordinary analysis needs #472.
-Batch import/export and complete method migration do not block this first trial.
+- `test_managed_author_session.py`: frozen workspace submission, fresh-process
+  reopening and recovery from a lost response without duplicate acquisition.
+- `test_ordinary_analysis.py`: ordinary function results with retained source,
+  arguments and restart behavior.
+- `test_typed_candidates.py`: cell proposals tied to analysis receipts and
+  independent verification policies.
+- `test_parameter_workspace.py` and `test_dataclass_parameters.py`: durable edits,
+  unknown cells, live typed views and bounded, escaped notebook representations.
+- `apps/scopecat-ui/e2e/parameter-context.e2e.ts`: sample/workpoint selection,
+  structure changes, keyboard edits retained across navigation, and a real
+  Python→GUI→Python round-trip preserving units and untouched cell origins.
+
+These tests complement the baseline synthetic scenario; passing them does not
+establish novice usability or physical calibration performance.
+
+## Implemented preview and novice evaluation
+
+A0–A8 provide the implemented preview: edit an existing table or declare one from
+zero, bind standard dataclass rows, preview and run scans, write ordinary analysis,
+stage and independently verify candidates, save and reopen versions, and inspect
+the same parameters in notebooks and the console. Explicit structure changes
+must be saved before preparing a run. Selecting a candidate and publishing a
+shared default remain separate actions.
+
+[A9 batch import/export](https://github.com/scopecat-project/scopecat/issues/476)
+is later convenience work. It does not block this preview. Automated fixtures
+have exercised the implemented route; evaluation by a basic Python/NumPy user
+who did not implement the APIs is still **unperformed**.
 
 Observe at least one basic Python/NumPy user who did not implement these APIs.
 Give them the task and supported documentation, then record the following for
@@ -159,4 +187,4 @@ For each task record completion, stalls, exact assistance, and the artifact/run
 identity. Require no Pydantic, record assembly, manual hashes, generation tokens,
 `sys.path` changes or custom polling in the ordinary-user route. Report observed
 friction rather than declaring success because an agent ran the test. A human
-trial has **not** been performed by adding this fixture.
+trial has **not** been performed by these implementation and automated checks.

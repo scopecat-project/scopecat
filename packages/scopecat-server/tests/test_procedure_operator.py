@@ -107,7 +107,7 @@ def _application(root: Path) -> tuple[DaemonApplication, Mock]:
             SimpleNamespace(
                 project_root=root,
                 manual_previews=ManualPreviewService(
-                    SQLiteDatabase(root / "store.sqlite3"), Mock()
+                    SQLiteDatabase(root / "store.sqlite3"), Mock(), Mock()
                 ),
                 automation=SimpleNamespace(
                     get=Mock(return_value=procedure),

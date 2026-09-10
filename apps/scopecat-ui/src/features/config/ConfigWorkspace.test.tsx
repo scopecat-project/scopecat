@@ -135,9 +135,7 @@ describe("ConfigWorkspace", () => {
 
     renderWorkspace();
 
-    expect(
-      await screen.findByRole("heading", { name: "Default configuration" }),
-    ).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Parameter workspace" })).toBeInTheDocument();
     expect(screen.getAllByText("Saved versions").length).toBeGreaterThan(0);
     expect(screen.getByRole("button", { name: "Undo" })).toBeEnabled();
     expect(screen.queryByText("Runtime-derived default")).not.toBeInTheDocument();

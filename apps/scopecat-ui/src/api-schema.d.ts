@@ -1725,6 +1725,11 @@ export interface components {
             kind: "analysis_candidate";
             /** Proposal Id */
             proposal_id: string;
+            /**
+             * Registry Generation
+             * @description Observed preview generation, not part of candidate identity or activation.
+             */
+            registry_generation?: number | null;
             /** Source Run Id */
             source_run_id: string;
         };
@@ -4777,8 +4782,8 @@ export interface components {
             /** Version */
             version: string;
         };
-        "LaunchConfigSource-Input": components["schemas"]["ConfigRegistryRunConfigSource"] | components["schemas"]["ContextRunConfigSource-Input"];
-        "LaunchConfigSource-Output": components["schemas"]["ConfigRegistryRunConfigSource"] | components["schemas"]["ContextRunConfigSource-Output"];
+        "LaunchConfigSource-Input": components["schemas"]["ConfigRegistryRunConfigSource"] | components["schemas"]["ContextRunConfigSource-Input"] | components["schemas"]["AnalysisCandidateRunConfigSource"];
+        "LaunchConfigSource-Output": components["schemas"]["ConfigRegistryRunConfigSource"] | components["schemas"]["ContextRunConfigSource-Output"] | components["schemas"]["AnalysisCandidateRunConfigSource"];
         /** LaunchControl */
         LaunchControl: {
             /** Default */

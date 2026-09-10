@@ -75,3 +75,23 @@ function jsonResponse(body: unknown): Response {
     headers: { "Content-Type": "application/json" },
   });
 }
+
+it("keeps actionable validation locations and raw diagnostics", async () => {
+  const detail = [{ loc: ["body", "drive", "q0", "frequency"], msg: "Use a frequency unit" }];
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(() =>
+      Promise.resolve(
+        new Response(JSON.stringify({ detail }), {
+          status: 422,
+          headers: { "Content-Type": "application/json" },
+        }),
+      ),
+    ),
+  );
+  await expect(getHealth()).rejects.toMatchObject({
+    status: 422,
+    message: "body.drive.q0.frequency: Use a frequency unit",
+    detail,
+  });
+});

@@ -504,3 +504,27 @@ For a split or merge, explicitly compute and supply the intended new values in
 Python and preview the resulting additions and type changes. There is no generic
 split/merge engine or automatic source-column deletion in this release; retain
 the old columns until dependent author code has been updated.
+
+
+## Notebook and console views
+
+Displaying `params`, `params["drive"]`, or `params["drive"]["q0"]` in a notebook
+shows a compact live view. Unknown cells are distinct from zero; quantity values
+retain their stored units. HTML views show the saved cell origin where available.
+An edited cell is marked as an unsaved manual value, never as a new measurement.
+The views cap rows and columns for readability and report the full table size.
+Use dictionary access to inspect the complete contents. Rendering does not save,
+validate or change a value.
+
+In **Configuration**, **Save working point copy** edits an isolated candidate for
+an explicit sample and working point. **Save context** saves a version;
+**Use for next experiment** selects that version in the launch form;
+**Set as default** explicitly publishes a laboratory default. Refreshing author
+code does not publish parameters.
+
+Parameter and structure drafts survive navigation between console sections and
+saved entries. Finish or cancel an existing draft before opening another of the
+same kind. Reloading or closing the page discards unsaved browser drafts. Failed
+saves retain the draft; validation messages name the relevant field and expose
+raw diagnostics on demand. An origin label records where a value came from; it
+is not a statement that the calibration is valid for the selected sample.

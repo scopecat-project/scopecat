@@ -14,10 +14,17 @@ from scopecat.records.control_edit import ControlEdit
 from scopecat.records.manual_preview import ManualPreviewFence
 from scopecat.records.parameter_update import ParameterUpdate
 from scopecat.records.plan_ref import ExperimentPlanRef, PlanConfigRef
-from scopecat.records.run import ConfigRegistryRunConfigSource
+from scopecat.records.run import (
+    AnalysisCandidateRunConfigSource,
+    ConfigRegistryRunConfigSource,
+)
 from scopecat.records.sample import SampleBinding
 
-type LaunchConfigSource = ConfigRegistryRunConfigSource | ContextRunConfigSource
+type LaunchConfigSource = (
+    ConfigRegistryRunConfigSource
+    | ContextRunConfigSource
+    | AnalysisCandidateRunConfigSource
+)
 
 
 class LaunchRequest(BaseModel):
@@ -46,6 +53,10 @@ class LaunchRequest(BaseModel):
             self.experiment and self.version and self.actor.strip()
         ):
             raise ValueError("launch requires experiment, version and actor")
+        if isinstance(self.config_source, AnalysisCandidateRunConfigSource) and (
+            self.context is not None or self.configuration is not None or self.overrides
+        ):
+            raise ValueError("candidate already selects its exact configuration")
         if self.configuration is not None and self.context is not None:
             raise ValueError("choose saved configuration or context")
         if (
@@ -61,7 +72,10 @@ class LaunchRequest(BaseModel):
                     "submit requires a request key and preview request hash"
                 )
             if self.config_source is None or (
-                isinstance(self.config_source, ConfigRegistryRunConfigSource)
+                isinstance(
+                    self.config_source,
+                    ConfigRegistryRunConfigSource | AnalysisCandidateRunConfigSource,
+                )
                 and self.config_source.registry_generation is None
             ):
                 raise ValueError("submit requires the preview's configuration binding")
@@ -79,6 +93,15 @@ class LaunchRequest(BaseModel):
                 "inputs": self.inputs,
                 "sample": self.sample,
                 "actor": self.actor,
+                **(
+                    {
+                        "candidate": self.config_source.model_dump(
+                            mode="json", exclude={"registry_generation"}
+                        )
+                    }
+                    if isinstance(self.config_source, AnalysisCandidateRunConfigSource)
+                    else {}
+                ),
                 **(
                     {"configuration": self.configuration.model_dump(mode="json")}
                     if self.configuration

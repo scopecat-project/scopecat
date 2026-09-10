@@ -169,8 +169,12 @@ function ParameterDetail({ diff, comparing }: { diff: ParameterDiff; comparing: 
   if (!definition || !value) {
     return (
       <ParameterEmpty
-        title="Incomplete parameter"
-        detail="The catalog definition and stored value are not both available."
+        title={definition ? "Unknown parameter" : "Incomplete parameter"}
+        detail={
+          definition
+            ? `${diff.parameterId} · ${parameterTypeLabel(definition)}. No value has been assigned.`
+            : "The catalog definition is not available."
+        }
       />
     );
   }

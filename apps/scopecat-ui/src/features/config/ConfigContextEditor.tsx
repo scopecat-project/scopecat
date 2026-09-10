@@ -10,6 +10,9 @@ import type {
 } from "../../api-contract";
 import { getSamples } from "../samples/sample-api";
 import { errorMessage } from "../../lib/presentation";
+import { ConfigParameters } from "./ConfigParameters";
+import { ApiError } from "../../api-client";
+import { parameterAtomLabel } from "./config-diff";
 import { primaryButton, secondaryButton } from "../../ui/styles";
 import { createConfigOperationId, saveConfigContext } from "./config-api";
 
@@ -74,6 +77,46 @@ export function ConfigContextEditor({
           : [...current, value],
     );
   const entities = config.system.topology.entities ?? [];
+  const originLabel = (
+    parameter: string,
+    field?: string,
+    row?: Record<string, ParameterAtom>,
+    index?: number,
+  ) => {
+    const current = values.find((item) => item.id === parameter);
+    const base = config.parameter_snapshot.values?.find((item) => item.id === parameter);
+    const atom = field
+      ? current?.shape === "table"
+        ? current.rows?.[index ?? 0]?.[field]
+        : undefined
+      : current?.shape === "scalar"
+        ? current.value
+        : undefined;
+    const old = field
+      ? base?.shape === "table"
+        ? base.rows?.[index ?? 0]?.[field]
+        : undefined
+      : base?.shape === "scalar"
+        ? base.value
+        : undefined;
+    if (atom === undefined) return "Unknown";
+    if (JSON.stringify(atom) !== JSON.stringify(old)) return "Manual · unsaved";
+    const origin = metadata?.value_origins?.find(
+      (item) =>
+        item.parameter_id === parameter &&
+        (item.field_id ?? undefined) === field &&
+        (field === undefined ||
+          (item.row_index != null
+            ? item.row_index === index
+            : Object.entries(item.key ?? {}).every(
+                ([key, value]) => JSON.stringify(row?.[key]) === JSON.stringify(value),
+              ))),
+    );
+    return (
+      origin?.evidence?.origin ??
+      (origin ? `Saved · ${origin.layer}` : "Saved · origin unspecified")
+    );
+  };
   return (
     <section
       role="dialog"
@@ -81,6 +124,10 @@ export function ConfigContextEditor({
       className="grid gap-4 rounded-lg border border-line bg-panel p-5"
     >
       <h3>Save a working point</h3>
+      <p>
+        Local draft · retained while navigating this console; closing or reloading the page discards
+        unsaved edits.
+      </p>
       <p>
         A new saved version keeps the lab default unchanged. Unknown values stay unknown; saving
         does not validate a calibration.
@@ -143,61 +190,85 @@ export function ConfigContextEditor({
         Source: {entry.id}. Explicit edits override this saved source; the current lab default is
         not overlaid.
       </p>
-      {(config.system.parameter_catalog.definitions ?? []).map((definition) => {
-        const value = values.find((item) => item.id === definition.id);
-        if (definition.value_type.shape === "scalar")
+      <div
+        className="max-h-[480px] overflow-auto rounded-lg border border-line p-3"
+        aria-label="Draft parameter values"
+      >
+        {(config.system.parameter_catalog.definitions ?? []).map((definition) => {
+          const value = values.find((item) => item.id === definition.id);
+          if (definition.value_type.shape === "scalar")
+            return (
+              <ContextAtom
+                key={definition.id}
+                origin={originLabel(definition.id)}
+                label={definition.id}
+                type={definition.value_type.atom}
+                value={value?.shape === "scalar" ? value.value : undefined}
+                entities={entities}
+                onChange={(atom) =>
+                  setValue(
+                    definition.id,
+                    atom === undefined
+                      ? undefined
+                      : { id: definition.id, shape: "scalar", value: atom },
+                  )
+                }
+              />
+            );
+          const rows = value?.shape === "table" ? (value.rows ?? []) : [];
+          const table = definition.value_type;
           return (
-            <ContextAtom
-              key={definition.id}
-              label={definition.id}
-              type={definition.value_type.atom}
-              value={value?.shape === "scalar" ? value.value : undefined}
-              entities={entities}
-              onChange={(atom) =>
-                setValue(
-                  definition.id,
-                  atom === undefined
-                    ? undefined
-                    : { id: definition.id, shape: "scalar", value: atom },
-                )
-              }
-            />
+            <fieldset key={definition.id}>
+              <legend>{definition.id}</legend>
+              {value === undefined && (
+                <p>Unknown table. Add its rows through the Python context API.</p>
+              )}
+              {rows.map((row, index) => (
+                <div className="grid gap-2 border-t border-line py-2" key={index}>
+                  {table.columns.map((column) => (
+                    <ContextAtom
+                      key={column.id}
+                      origin={originLabel(definition.id, column.id, row, index)}
+                      label={`${definition.id}[${
+                        (table.primary_key ?? [])
+                          .map((key) => {
+                            const atom = row[key];
+                            return atom && typeof atom === "object" && "id" in atom
+                              ? atom.id
+                              : parameterAtomLabel(atom);
+                          })
+                          .join(", ") || index
+                      }].${column.id}`}
+                      type={column.value_type}
+                      value={row[column.id]}
+                      entities={entities}
+                      disabled={table.primary_key?.includes(column.id)}
+                      onChange={(atom) => {
+                        const next = { ...row };
+                        if (atom === undefined) delete next[column.id];
+                        else next[column.id] = atom;
+                        setValue(definition.id, {
+                          id: definition.id,
+                          shape: "table",
+                          rows: rows.map((item, rowIndex) => (rowIndex === index ? next : item)),
+                        });
+                      }}
+                    />
+                  ))}
+                </div>
+              ))}
+            </fieldset>
           );
-        const rows = value?.shape === "table" ? (value.rows ?? []) : [];
-        const table = definition.value_type;
-        return (
-          <fieldset key={definition.id}>
-            <legend>{definition.id}</legend>
-            {value === undefined && (
-              <p>Unknown table. Add its rows through the Python context API.</p>
-            )}
-            {rows.map((row, index) => (
-              <div className="grid gap-2 border-t border-line py-2" key={index}>
-                {table.columns.map((column) => (
-                  <ContextAtom
-                    key={column.id}
-                    label={`${definition.id}[${index}].${column.id}`}
-                    type={column.value_type}
-                    value={row[column.id]}
-                    entities={entities}
-                    disabled={table.primary_key?.includes(column.id)}
-                    onChange={(atom) => {
-                      const next = { ...row };
-                      if (atom === undefined) delete next[column.id];
-                      else next[column.id] = atom;
-                      setValue(definition.id, {
-                        id: definition.id,
-                        shape: "table",
-                        rows: rows.map((item, rowIndex) => (rowIndex === index ? next : item)),
-                      });
-                    }}
-                  />
-                ))}
-              </div>
-            ))}
-          </fieldset>
-        );
-      })}
+        })}
+      </div>
+      <details>
+        <summary>Review parameter changes</summary>
+        <ConfigParameters
+          config={{ ...config, parameter_snapshot: { ...config.parameter_snapshot, values } }}
+          activeConfig={config}
+          headingId="context-draft-diff"
+        />
+      </details>
       <label>
         Note
         <input
@@ -206,7 +277,18 @@ export function ConfigContextEditor({
           onChange={(event) => setNote(event.target.value)}
         />
       </label>
-      {mutation.error && <p role="alert">{errorMessage(mutation.error)}</p>}
+      {mutation.error && (
+        <div role="alert">
+          <p>{errorMessage(mutation.error)}</p>
+          <p>Correct the named table, row key or field, then save again. Your draft is retained.</p>
+        </div>
+      )}
+      {mutation.error instanceof ApiError && mutation.error.detail != null && (
+        <details>
+          <summary>Detailed diagnostics</summary>
+          <pre>{JSON.stringify(mutation.error.detail, null, 2)}</pre>
+        </details>
+      )}
       <div className="flex gap-2">
         <button type="button" className={secondaryButton} onClick={onCancel}>
           Cancel
@@ -232,6 +314,7 @@ export function ConfigContextEditor({
 
 export function ContextAtom({
   label,
+  origin,
   type,
   value,
   entities,
@@ -239,6 +322,7 @@ export function ContextAtom({
   onChange,
 }: {
   label: string;
+  origin?: string;
   type: ParameterScalarType;
   value?: ParameterAtom;
   entities: ParameterEntity[];
@@ -310,6 +394,10 @@ export function ContextAtom({
           }}
         />
       )}
+      <small>
+        {origin ?? (value === undefined ? "Unknown" : "Value set")}
+        {type.type === "quantity" ? ` · ${quantity?.unit ?? type.unit ?? ""}` : ""}
+      </small>
       {!disabled && (
         <button type="button" className={secondaryButton} onClick={() => onChange(undefined)}>
           Mark unknown

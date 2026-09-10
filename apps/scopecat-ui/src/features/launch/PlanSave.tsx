@@ -25,6 +25,8 @@ export function PlanSave({
     try {
       const request = getRequest();
       const source = preview.config_source;
+      if (source.kind === "analysis_candidate")
+        throw new Error("Save plans from a named parameter context, not an unaccepted candidate.");
       const saved = await apiData(
         apiClient.POST("/api/v1/experiment-plans", {
           body: {

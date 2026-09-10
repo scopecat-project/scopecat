@@ -10,7 +10,14 @@ from typing import cast
 
 from pydantic import JsonValue
 from scopecat.automation.models import InterpretationOutputRef
-from scopecat.config.changes import parameter_change_proposal_record_ref
+from scopecat.config.candidates import (
+    CandidateConfig,
+    resolve_candidate_config_snapshot,
+)
+from scopecat.config.changes import (
+    load_parameter_change_proposal,
+    parameter_change_proposal_record_ref,
+)
 from scopecat.control.models import DurableEventInput
 from scopecat.daemon.views import (
     AnalysisContentBytesView,
@@ -39,7 +46,7 @@ from scopecat.records.analysis import (
     RunAnalysisSubject,
     SampleAnalysisSubject,
 )
-from scopecat.records.config import ConfigContentHash
+from scopecat.records.config import ConfigContentHash, config_content_hash
 from scopecat.records.content import ContentEntry
 from scopecat.records.run import AnalysisCandidateRunConfigSource
 from scopecat.runs.refs import (
@@ -411,6 +418,15 @@ class AnalysisService:
             raise BackendConflict(
                 "candidate verification does not include the proposal source run"
             )
+        baseline = self._services.runs.read_snapshot(source_run_id)
+        proposal = load_parameter_change_proposal(
+            run_id=source_run_id,
+            selector=proposal_id,
+            services=self._services,
+        )
+        expected = resolve_candidate_config_snapshot(
+            CandidateConfig(proposal), services=self._services
+        )
         for run_id in input_run_ids - {source_run_id}:
             snapshot = self._services.runs.read_snapshot(run_id)
             source = snapshot.config_source
@@ -418,10 +434,17 @@ class AnalysisService:
                 isinstance(source, AnalysisCandidateRunConfigSource)
                 and source.source_run_id == source_run_id
                 and source.proposal_id == proposal_id
+                and source.analysis_record_id == proposal.analysis_record_id
+                and source.base_config_content_hash == proposal.base_config_content_hash
+                and source.content_hash == config_content_hash(expected)
+                and snapshot.samples == baseline.samples
+                and snapshot.outcome is not None
+                and snapshot.outcome.result == "succeeded"
             ):
                 return
         raise BackendConflict(
-            "candidate verification does not include a run using this proposal"
+            "candidate verification requires an independent successful run using "
+            "this exact proposal and the same sample revision/workpoint"
         )
 
     def validate_calibration_merge_verification(

@@ -5,6 +5,7 @@ export class ApiError extends Error {
   constructor(
     message: string,
     readonly status?: number,
+    readonly detail?: unknown,
   ) {
     super(message);
     this.name = "ApiError";
@@ -43,13 +44,25 @@ export async function apiData<T>(pending: ApiResponse<T>): Promise<Exclude<T, un
     throw new ApiError("The daemon returned an invalid JSON response.");
   }
 
-  const detail =
-    isObject(result.error) && typeof result.error.detail === "string"
-      ? result.error.detail
-      : undefined;
+  const detail = isObject(result.error) ? result.error.detail : undefined;
+  const message =
+    typeof detail === "string"
+      ? detail
+      : Array.isArray(detail)
+        ? detail
+            .filter(isObject)
+            .map(
+              (item) =>
+                `${Array.isArray(item.loc) ? item.loc.join(".") + ": " : ""}${typeof item.msg === "string" ? item.msg : "Invalid value"}`,
+            )
+            .join("; ")
+        : isObject(detail) && typeof detail.message === "string"
+          ? detail.message
+          : undefined;
   throw new ApiError(
-    detail ?? `The daemon returned ${result.response.status} ${result.response.statusText}.`,
+    message || `The daemon returned ${result.response.status} ${result.response.statusText}.`,
     result.response.status,
+    detail,
   );
 }
 

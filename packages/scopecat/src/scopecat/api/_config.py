@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import cast
 from uuid import uuid4
 
 from scopecat.api._remote import RemoteRunOperations
-from scopecat.api.parameters import ParameterVersion, ParameterWorkspace
-from scopecat.api.published_analysis import PublishedAnalysis
+from scopecat.api.parameter_candidates import ParameterCandidate, stage_candidate
+from scopecat.api.parameters import ParameterVersion, ParameterWorkspace, RowKey
+from scopecat.api.published_analysis import AnalysisResult, PublishedAnalysis
 from scopecat.api.run import RunHandle, run_handle_id
 from scopecat.config.candidates import (
     CandidateConfig,
@@ -77,6 +79,32 @@ class LabConfigOperations:
     runs: RemoteRunOperations
     default_config: ConfigProfileSnapshot | None
     operator: str
+
+    @property
+    def run_operations(self) -> RemoteRunOperations:
+        return self.runs
+
+    def stage[ResultT](
+        self,
+        result: AnalysisResult[ResultT],
+        *,
+        name: str,
+        table: str,
+        key: RowKey,
+        fields: Mapping[str, str],
+        note: str = "",
+    ) -> ParameterCandidate:
+        """Save a receipt-backed cell proposal; fields maps target to result name."""
+        return stage_candidate(
+            self, result, name=name, table=table, key=key, fields=fields, note=note
+        )
+
+    def candidate(self, run_id: str, name: str) -> ParameterCandidate:
+        """Reopen an exact saved proposal; names are scoped to their source run."""
+        proposal = self.client.parameter_proposal(run_id, name).proposal
+        selected = CandidateConfig(proposal)
+        self.resolve_with_source(selected)
+        return ParameterCandidate(self, selected)
 
     def workspace(self, *, context: str | ParameterVersion) -> ParameterWorkspace:
         """Open an isolated dictionary editor for one saved sample/workpoint version."""

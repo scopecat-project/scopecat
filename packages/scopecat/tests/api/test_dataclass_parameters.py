@@ -167,3 +167,21 @@ if TYPE_CHECKING:
         if q0.amplitude is not None:
             assert_type(q0.amplitude * 2, float)
         assert_type(params.table("drive"), ParameterTable)
+
+
+def test_notebook_views_are_live_bounded_and_escape_user_content() -> None:
+    table = _table()
+    table['<script>alert("x")</script>'] = {"frequency": sc.Quantity(0, "GHz")}
+    html = table._repr_html_()
+    assert "<script>" not in html
+    assert "&lt;script&gt;" in html
+    assert "5100 MHz" in html
+    assert "0 GHz" in html
+    assert "Unknown" in html
+    assert "Manual · unsaved" in html
+    assert "2 rows" in html
+    before = dict(table["q0"])
+    assert "Unknown" in repr(table["q0"])
+    table["q0"]["frequency"] = sc.Quantity(5.2, "GHz")
+    assert "5.2 GHz" in table._repr_html_()
+    assert before["frequency"] == sc.Quantity(5100, "MHz")
