@@ -1672,6 +1672,20 @@ export interface components {
              */
             values: components["schemas"]["StructureValueDecision"][];
         };
+        /**
+         * AddParameterTable
+         * @description Declare a keyed table, initially empty; no initializer values are inferred.
+         */
+        AddParameterTable: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "add_table";
+            /** Parameter Id */
+            parameter_id: string;
+            table: components["schemas"]["Table"];
+        };
         /** AnalysisArtifactRecordOutput */
         AnalysisArtifactRecordOutput: {
             content: components["schemas"]["AnalysisArtifactReference"];
@@ -5998,7 +6012,7 @@ export interface components {
             /** Values */
             values?: components["schemas"]["StoredParameterValue"][];
         };
-        ParameterStructureEdit: components["schemas"]["AddParameterColumn"] | components["schemas"]["RenameParameterColumn"] | components["schemas"]["ChangeParameterColumn"] | components["schemas"]["ChangeParameterKey"];
+        ParameterStructureEdit: components["schemas"]["AddParameterTable"] | components["schemas"]["AddParameterColumn"] | components["schemas"]["RenameParameterColumn"] | components["schemas"]["ChangeParameterColumn"] | components["schemas"]["ChangeParameterKey"];
         /**
          * ParameterStructureOrigin
          * @description Retain the declaration; old configurations and runs are never rewritten.
@@ -8421,7 +8435,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "added" | "renamed" | "type_changed" | "key_changed";
+            kind: "table_added" | "added" | "renamed" | "type_changed" | "key_changed";
             /**
              * Missing Rows
              * @default []
@@ -8612,7 +8626,7 @@ export interface components {
             parameter_id: components["schemas"]["_ParameterId"];
             /** Values */
             values: {
-                [key: string]: components["schemas"]["ParameterAtomValue"];
+                [key: string]: components["schemas"]["ParameterAtomValue"] | null;
             };
         };
         /**
@@ -8632,7 +8646,7 @@ export interface components {
             parameter_id: components["schemas"]["_ParameterId"];
             /** Values */
             values: {
-                [key: string]: components["schemas"]["ParameterAtomValue"];
+                [key: string]: components["schemas"]["ParameterAtomValue"] | null;
             };
         };
         /** ValidationError */

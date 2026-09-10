@@ -16,6 +16,8 @@ from scopecat.config.validation import coerce_parameter_table_cell
 from scopecat.kernel.content_identity import sha256_json_hash
 from scopecat.kernel.errors import CheckFailed
 from scopecat.kernel.problems import Problem
+from scopecat.kernel.quantity import Quantity as QuantityValue
+from scopecat.kernel.units import compatible_units
 from scopecat.kernel.value_identity import scalar_values_equal
 from scopecat.kernel.value_types import Float, Int, Quantity, Scalar, Table, TableColumn
 from scopecat.program.parameters import ParameterContract
@@ -29,11 +31,13 @@ from scopecat.records.content import Sha256ContentHash
 from scopecat.records.parameter import (
     ParameterAtomValue,
     ParameterCatalog,
+    ParameterDefinition,
     ParameterSnapshot,
     TableParameterValue,
 )
 from scopecat.records.parameter_structure import (
     AddParameterColumn,
+    AddParameterTable,
     ChangeParameterColumn,
     ChangeParameterKey,
     ParameterStructureEdit,
@@ -71,7 +75,7 @@ class StructureColumnImpact(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     parameter_id: str
     column_id: str | None = None
-    kind: Literal["added", "renamed", "type_changed", "key_changed"]
+    kind: Literal["table_added", "added", "renamed", "type_changed", "key_changed"]
     affected_rows: int
     missing_rows: tuple[int, ...] = ()
     consumer_action: str
@@ -140,6 +144,27 @@ def preview_parameter_structure(
         for column in definition.value_type.columns
     }
     for edit in plan.edits:
+        if isinstance(edit, AddParameterTable):
+            if edit.parameter_id in definitions:
+                raise ValueError(f"{edit.parameter_id}: parameter already exists")
+            definitions[edit.parameter_id] = ParameterDefinition(
+                id=edit.parameter_id, value_type=edit.table
+            )
+            values[edit.parameter_id] = TableParameterValue(
+                id=edit.parameter_id, rows=()
+            )
+            impacts.append(
+                StructureColumnImpact(
+                    parameter_id=edit.parameter_id,
+                    kind="table_added",
+                    affected_rows=0,
+                    consumer_action=(
+                        "Add explicitly initialized rows; "
+                        "missing non-key cells remain unknown."
+                    ),
+                )
+            )
+            continue
         definition = definitions.get(edit.parameter_id)
         if definition is None or not isinstance(definition.value_type, Table):
             raise ValueError(
@@ -410,6 +435,16 @@ def _convert_rows(
             raise ValueError(
                 "compatible-unit conversion requires quantity types on both sides"
             )
+        if (
+            before.value_type.atom.unit is None
+            or target.value_type.atom.unit is None
+            or not compatible_units(
+                before.value_type.atom.unit, target.value_type.atom.unit
+            )
+        ):
+            raise ValueError(
+                "compatible-unit conversion requires compatible quantity units"
+            )
     elif not isinstance(before.value_type.atom, Int | Float) or not isinstance(
         target.value_type.atom, Int | Float
     ):
@@ -431,6 +466,10 @@ def _convert_rows(
                     "information; provide an explicit value or mark unknown"
                 )
             value = int(value)
+        if edit.conversion == "compatible_unit" and isinstance(value, int | float):
+            assert isinstance(before.value_type.atom, Quantity)
+            assert before.value_type.atom.unit is not None
+            value = QuantityValue(float(value), before.value_type.atom.unit)
         converted = coerce_parameter_table_cell(
             parameter_id=edit.parameter_id,
             column=target,
@@ -498,6 +537,15 @@ def mapped_structure_origins(
             if mapping.source_column_id is not None
             else None
         )
+        if (
+            prior is not None
+            and mapping.source_column_id == mapping.column_id
+            and old_key == key
+            and old_index == (None if key else mapping.row_index)
+            and old_row.get(mapping.column_id) == row.get(mapping.column_id)
+        ):
+            origins.append(prior)
+            continue
         source = prior.source_cell if prior is not None else None
         if source is None and mapping.source_column_id in old_row:
             source = ConfigCellRef(
@@ -516,7 +564,17 @@ def mapped_structure_origins(
                 layer="context",
                 entry=selected_ref,
                 source_cell=source,
-                evidence=mapping.evidence
+                evidence=(
+                    mapping.evidence
+                    or StructureValueDecision(
+                        key=key,
+                        row_index=None if key else mapping.row_index,
+                        origin="unknown",
+                        note="Newly declared parameter has no value",
+                    )
+                )
+                if mapping.column_id not in row
+                else mapping.evidence
                 if mapping.source_column_id is None
                 else prior.evidence
                 if prior

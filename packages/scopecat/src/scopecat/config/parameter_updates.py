@@ -62,7 +62,7 @@ def update_parameter_rows(
     parameter_id: str,
     *,
     key: Mapping[str, ParameterAtomValue],
-    values: Mapping[str, ParameterAtomValue],
+    values: Mapping[str, ParameterAtomValue | None],
 ) -> UpdateParameterRows:
     """Build a keyed row update.
 
@@ -289,7 +289,11 @@ def _apply_table_update(
         values = _coerce_table_cells(
             parameter_id=current.id,
             table_type=table_type,
-            values=update.values,
+            values={
+                name: value
+                for name, value in update.values.items()
+                if value is not None
+            },
             path=("values",),
         )
         values.update(
@@ -299,8 +303,17 @@ def _apply_table_update(
                 if isinstance(value, Quantity)
             }
         )
+        unknown = set(update.values) - {column.id for column in table_type.columns}
+        if unknown:
+            raise ValueError(f"{current.id}: unknown columns {sorted(unknown)}")
+        cleared = {name for name, value in update.values.items() if value is None}
         rows = tuple(
-            (dict(row) | values) if index == selected_index else row
+            (
+                {name: value for name, value in row.items() if name not in cleared}
+                | values
+            )
+            if index == selected_index
+            else row
             for index, row in enumerate(current.rows)
         )
     return TableParameterValue(
@@ -405,10 +418,14 @@ def parameter_cell_edits(
         key = {field: source[field] for field in table.primary_key}
         for column in table.columns:
             field = column.id
-            if left is not None and right is not None and left[field] == right[field]:
+            if (
+                left is not None
+                and right is not None
+                and left.get(field) == right.get(field)
+            ):
                 continue
-            previous = left[field] if left is not None else None
-            proposed = right[field] if right is not None else None
+            previous = left.get(field) if left is not None else None
+            proposed = right.get(field) if right is not None else None
             kind = (
                 "added"
                 if left is None

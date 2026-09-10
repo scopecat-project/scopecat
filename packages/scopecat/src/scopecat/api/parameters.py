@@ -21,6 +21,12 @@ from scopecat.config.parameter_updates import (
     update_parameter_rows,
 )
 from scopecat.config.registry.records import ContextConfigRegistrySource
+from scopecat.config.structure import (
+    ParameterStructurePlan,
+    ParameterStructurePreview,
+    parameter_structure_version,
+    preview_parameter_structure,
+)
 from scopecat.daemon.client import DaemonConflictError
 from scopecat.daemon.views import ConfigContextResolution, ConfigEntryView
 from scopecat.kernel.errors import Conflict
@@ -30,12 +36,22 @@ from scopecat.kernel.value_identity import scalar_identity
 from scopecat.kernel.value_types import AtomType, Table
 from scopecat.kernel.value_types import Quantity as QuantityType
 from scopecat.kernel.value_validation import coerce_literal
+from scopecat.records.config import ConfigProfileSnapshot
 from scopecat.records.config_context import ConfigContextRef
 from scopecat.records.parameter import (
     ParameterAtomValue,
+    ParameterDefinition,
     ParameterSnapshot,
     ScalarParameterValue,
     TableParameterValue,
+)
+from scopecat.records.parameter_structure import (
+    AddParameterColumn,
+    AddParameterTable,
+    ChangeParameterColumn,
+    ChangeParameterKey,
+    ParameterStructureEdit,
+    RenameParameterColumn,
 )
 from scopecat.records.sample import SampleSelector
 
@@ -61,6 +77,7 @@ class ParameterWorkspaceOperations(Protocol):
         working_point_id: str,
         label: str,
         parameters: ParameterSnapshot | None = None,
+        structure_plan: ParameterStructurePlan | None = None,
         note: str = "",
     ) -> ConfigEntryView: ...
 
@@ -116,6 +133,7 @@ class ParameterWorkspace(Mapping[str, "ParameterTable"]):
     ) -> None:
         self._operations = operations
         self._base = self._resolve(context)
+        self._structure: list[ParameterStructureEdit] = []
         self._tables: dict[str, ParameterTable] = {}
         self._data: dict[str, _TableData] = {}
         self._scalars: dict[str, ParameterAtomValue] = {}
@@ -170,6 +188,151 @@ class ParameterWorkspace(Mapping[str, "ParameterTable"]):
         table = self[name]
         return table if row_type is None else TypedParameterTable(table, row_type)
 
+    def _structure_plan(self) -> ParameterStructurePlan | None:
+        if not self._structure:
+            return None
+        return ParameterStructurePlan(
+            base=self.version.context,
+            structure_version=parameter_structure_version(
+                self._base.config.parameter_catalog
+            ),
+            edits=tuple(self._structure),
+        )
+
+    @property
+    def _baseline(self) -> ConfigProfileSnapshot:
+        plan = self._structure_plan()
+        return (
+            preview_parameter_structure(self._base.config, plan).config
+            if plan
+            else self._base.config
+        )
+
+    def structure_diff(self) -> ParameterStructurePreview | None:
+        """Review explicit schema changes without saving or changing active defaults."""
+        plan = self._structure_plan()
+        return preview_parameter_structure(self._base.config, plan) if plan else None
+
+    def _stage_structure(self, edits: Sequence[ParameterStructureEdit]) -> None:
+        if self.diff():
+            raise ValueError(
+                "Save or discard value edits before changing the table structure"
+            )
+        plan = ParameterStructurePlan(
+            base=self.version.context,
+            structure_version=parameter_structure_version(
+                self._base.config.parameter_catalog
+            ),
+            edits=(*self._structure, *edits),
+        )
+        preview = preview_parameter_structure(self._base.config, plan)
+        # Old row views must not read a different semantic field/key after a rename.
+        for item in edits:
+            if item.parameter_id in self._data:
+                self._data[item.parameter_id].tokens.clear()
+        self._structure.extend(edits)
+        self._load(preview.config.parameter_snapshot)
+
+    def declare_table[T](
+        self, name: str, row_type: type[T], *, key: str | tuple[str, ...]
+    ) -> TypedParameterTable[T]:
+        """Declare an empty table or add optional fields to an existing declaration.
+
+        Existing values are never initialized from dataclass defaults. Renames,
+        unit conversions and key changes require their explicit operations.
+        Review structure_diff(), then save() before running with a changed schema.
+        """
+        keys = (key,) if isinstance(key, str) else key
+        schema = dataclass_table_schema(row_type, primary_key=keys)
+        definition = self._baseline.parameter_catalog.get(name)
+        edits: list[ParameterStructureEdit] = []
+        if definition is None:
+            edits.append(AddParameterTable(parameter_id=name, table=schema))
+        else:
+            if not isinstance(definition.value_type, Table):
+                raise ValueError(f"{name}: already declared as a scalar")
+            previous = definition.value_type
+            if previous.primary_key != keys:
+                raise ValueError(
+                    f"{name}: key changed from {previous.primary_key} to {keys}; "
+                    "use change_key() explicitly"
+                )
+            old = {c.id: c for c in previous.columns}
+            new = {c.id: c for c in schema.columns}
+            incompatible = tuple(n for n in old if n not in new or old[n] != new[n])
+            if incompatible:
+                raise ValueError(
+                    f"{name}: incompatible structure change in {incompatible}: "
+                    f"before={previous!r}; after={schema!r}. "
+                    "Use rename_column() or convert_unit() explicitly; "
+                    "no automatic migration is applied."
+                )
+            optional = {
+                f.name for f in dataclass_parameter_fields(row_type) if f.optional
+            }
+            for column in schema.columns:
+                if column.id not in old:
+                    if column.id not in optional:
+                        raise ValueError(
+                            f"{name}.{column.id}: new fields on existing rows must be "
+                            "optional; initialize values explicitly"
+                        )
+                    edits.append(
+                        AddParameterColumn(
+                            parameter_id=name,
+                            column=ParameterDefinition(
+                                id=column.id, value_type=column.value_type
+                            ),
+                        )
+                    )
+        if edits:
+            self._stage_structure(edits)
+        return self.table(name, row_type=row_type)
+
+    def rename_column(self, table: str, column: str, new_name: str) -> None:
+        self._stage_structure(
+            (
+                RenameParameterColumn(
+                    parameter_id=table, column_id=column, new_id=new_name
+                ),
+            )
+        )
+
+    def change_key(self, table: str, *, key: str | tuple[str, ...]) -> None:
+        self._stage_structure(
+            (
+                ChangeParameterKey(
+                    parameter_id=table, columns=(key,) if isinstance(key, str) else key
+                ),
+            )
+        )
+
+    def convert_unit(self, table: str, column: str, unit: str) -> None:
+        source = next(c for c in self[table].schema.columns if c.id == column)
+        atom = source.value_type.atom
+        if not isinstance(atom, QuantityType) or atom.unit is None:
+            raise ValueError(
+                f"{table}.{column}: unit conversion requires a quantity column"
+            )
+        target = replace(
+            atom,
+            unit=unit,
+            dimension=None,
+            minimum=_bound(atom.minimum, atom.unit, unit),
+            maximum=_bound(atom.maximum, atom.unit, unit),
+        )
+        self._stage_structure(
+            (
+                ChangeParameterColumn(
+                    parameter_id=table,
+                    column=ParameterDefinition(
+                        id=column, value_type=replace(source.value_type, atom=target)
+                    ),
+                    conversion="compatible_unit",
+                ),
+            )
+        )
+
     def scalar(self, name: str) -> ParameterAtomValue:
         return self._scalars[name]
 
@@ -181,6 +344,8 @@ class ParameterWorkspace(Mapping[str, "ParameterTable"]):
     def copy(self) -> Self:
         """Detach all edits while retaining the same immutable base and connection."""
         copied = type(self)(self._operations, context=self.version)
+        copied._structure = list(self._structure)
+        copied._load(copied._baseline.parameter_snapshot)
         copied._scalars = dict(self._scalars)
         for name, data in self._data.items():
             copied._data[name].load(tuple(data.rows.values()))
@@ -188,15 +353,21 @@ class ParameterWorkspace(Mapping[str, "ParameterTable"]):
 
     def discard(self) -> None:
         """Discard all edits and restore the last saved/rebased version."""
+        self._structure.clear()
         self._load(self._base.config.parameter_snapshot)
 
     def _load(self, snapshot: ParameterSnapshot) -> None:
+        names = {d.id for d in self._baseline.parameter_catalog.definitions}
+        for name in set(self._data) - names:
+            self._data[name].tokens.clear()
+            del self._data[name]
+            del self._tables[name]
         self._scalars = {
             value.id: value.value
             for value in snapshot.values
             if isinstance(value, ScalarParameterValue)
         }
-        for definition in self._base.config.parameter_catalog.definitions:
+        for definition in self._baseline.parameter_catalog.definitions:
             if not isinstance(definition.value_type, Table):
                 continue
             if not definition.value_type.primary_key:
@@ -206,6 +377,9 @@ class ParameterWorkspace(Mapping[str, "ParameterTable"]):
             data = self._data.setdefault(
                 definition.id, _TableData(definition.id, definition.value_type)
             )
+            if data.schema != definition.value_type:
+                data.tokens.clear()
+            data.schema = definition.value_type
             self._tables.setdefault(definition.id, ParameterTable(data))
             stored = snapshot.get(definition.id)
             data.load(stored.rows if isinstance(stored, TableParameterValue) else ())
@@ -214,12 +388,12 @@ class ParameterWorkspace(Mapping[str, "ParameterTable"]):
         """Return a detached description without saving or validating the edits."""
         edits: list[ParameterEdit] = []
         for name, value in self._scalars.items():
-            old = self._base.config.parameter_snapshot.get(name)
+            old = self._baseline.parameter_snapshot.get(name)
             assert isinstance(old, ScalarParameterValue)
             if not _same_value(old.value, value):
                 edits.append(ParameterEdit(name, None, None, old.value, value))
         for name, table in self._data.items():
-            old = self._base.config.parameter_snapshot.get(name)
+            old = self._baseline.parameter_snapshot.get(name)
             rows = old.rows if isinstance(old, TableParameterValue) else ()
             before = {table.identity(table.key(row)): row for row in rows}
             for identity in dict.fromkeys((*before, *table.rows)):
@@ -276,8 +450,8 @@ class ParameterWorkspace(Mapping[str, "ParameterTable"]):
         table = self._data[edit.parameter]
         key = table.key_mapping(edit.key)
         if edit.field is not None:
-            if edit.after is None or isinstance(edit.after, Mapping):
-                raise ValueError("supply a supported scalar cell value")
+            if isinstance(edit.after, Mapping):
+                raise ValueError("supply a supported scalar cell value or None")
             return update_parameter_rows(
                 edit.parameter, key=key, values={edit.field: edit.after}
             )
@@ -292,6 +466,11 @@ class ParameterWorkspace(Mapping[str, "ParameterTable"]):
 
     def freeze(self) -> ConfigContextResolution:
         """Capture exact unsaved edits and original provenance for a future run."""
+        if self._structure:
+            raise ValueError(
+                "Parameter structure has unsaved changes: review structure_diff() "
+                "and save a named version before running."
+            )
         return self._operations.resolve_context(
             self._base.config_source.context, overrides=self._updates()
         )
@@ -303,8 +482,10 @@ class ParameterWorkspace(Mapping[str, "ParameterTable"]):
         to incorporate another editor's version before saving. Existing names are
         never overwritten; choose a new name when the registry reports a conflict.
         """
-        frozen = self.freeze()
-        sample = frozen.config_source.sample
+        parameters = apply_context_overrides(
+            self._baseline, self._updates()
+        ).parameter_snapshot
+        sample = self._base.config_source.sample
         try:
             saved = self._operations.save_context(
                 entry_id=name,
@@ -317,7 +498,8 @@ class ParameterWorkspace(Mapping[str, "ParameterTable"]):
                 ),
                 working_point_id=self.working_point,
                 label=name,
-                parameters=frozen.config.parameter_snapshot,
+                parameters=parameters,
+                structure_plan=self._structure_plan(),
                 note=note,
             )
         except (DaemonConflictError, Conflict) as error:
@@ -330,11 +512,16 @@ class ParameterWorkspace(Mapping[str, "ParameterTable"]):
                 entry_id=saved.entry.id, content_hash=saved.entry.content_hash
             )
         )
+        self._structure.clear()
         self._load(self._base.config.parameter_snapshot)
         return self.version
 
     def rebase(self, *, current: str | ParameterVersion) -> None:
         """Merge independent cells; a conflict leaves the entire buffer unchanged."""
+        if self._structure:
+            raise ValueError(
+                "Save or discard pending structure changes before rebasing"
+            )
         selected = self._resolve(current)
         if selected.config_source.sample != self._base.config_source.sample:
             raise ValueError(
@@ -412,19 +599,23 @@ class ParameterTable(MutableMapping[RowKey, "ParameterRow"]):
         return ParameterRow(self._data, identity, self._data.tokens[identity])
 
     @override
-    def __setitem__(self, key: RowKey, value: Mapping[str, ParameterAtomValue]) -> None:
-        row = dict(value)
+    def __setitem__(
+        self, key: RowKey, value: Mapping[str, ParameterAtomValue | None]
+    ) -> None:
+        row = {field: atom for field, atom in value.items() if atom is not None}
         for field, atom in self._data.key_mapping(key).items():
             if field in row and scalar_identity(
                 self._data.key_value(field, row[field])
             ) != scalar_identity(atom):
                 raise ValueError(f"{self.name}[{key!r}].{field}: row key cannot change")
             row[field] = atom
-        unknown = set(row) - {column.id for column in self.schema.columns}
+        unknown = set(value) - {column.id for column in self.schema.columns}
         if unknown:
             raise KeyError(f"{self.name}[{key!r}]: unknown fields {sorted(unknown)}")
         identity = self._data.identity(key)
-        omitted = set(self._data.rows.get(identity, {})) - set(row)
+        omitted = set(self._data.rows.get(identity, {})) - (
+            set(value) | set(self.schema.primary_key)
+        )
         if omitted:
             raise ValueError(
                 f"{self.name}[{key!r}]: replacement omits fields {sorted(omitted)}; "
@@ -451,7 +642,7 @@ class ParameterTable(MutableMapping[RowKey, "ParameterRow"]):
         return len(self._data.rows)
 
 
-class ParameterRow(MutableMapping[str, ParameterAtomValue]):
+class ParameterRow(MutableMapping[str, ParameterAtomValue | None]):
     """A live keyed row; adapters must read/write this view instead of cached copies."""
 
     def __init__(self, table: _TableData, identity: _Identity, token: object) -> None:
@@ -465,11 +656,14 @@ class ParameterRow(MutableMapping[str, ParameterAtomValue]):
         return self._table.rows[self._identity]
 
     @override
-    def __getitem__(self, field: str) -> ParameterAtomValue:
-        return self._row()[field]
+    def __getitem__(self, field: str) -> ParameterAtomValue | None:
+        row = self._row()
+        if field not in {column.id for column in self._table.schema.columns}:
+            raise KeyError(field)
+        return row.get(field)
 
     @override
-    def __setitem__(self, field: str, value: ParameterAtomValue) -> None:
+    def __setitem__(self, field: str, value: ParameterAtomValue | None) -> None:
         row = self._row()
         if field in self._table.schema.primary_key:
             raise ValueError(
@@ -477,7 +671,10 @@ class ParameterRow(MutableMapping[str, ParameterAtomValue]):
             )
         if field not in {column.id for column in self._table.schema.columns}:
             raise KeyError(f"{self._table.name}.{field}: unknown parameter field")
-        row[field] = value
+        if value is None:
+            row.pop(field, None)
+        else:
+            row[field] = value
 
     @override
     def __delitem__(self, field: str) -> None:
@@ -487,11 +684,13 @@ class ParameterRow(MutableMapping[str, ParameterAtomValue]):
 
     @override
     def __iter__(self) -> Iterator[str]:
-        return iter(self._row())
+        self._row()
+        return (column.id for column in self._table.schema.columns)
 
     @override
     def __len__(self) -> int:
-        return len(self._row())
+        self._row()
+        return len(self._table.schema.columns)
 
 
 class TypedParameterTable[T](Mapping["RowKey", T]):
@@ -634,8 +833,7 @@ def _property(field: DataclassParameterField, *, stored_type: AtomType) -> prope
             "_RowBinding", object.__getattribute__(instance, "_scopecat_binding")
         )
         row, label = binding.row, f"{binding.label}.{field.name}"
-        # Iteration preserves deletion errors; Mapping.__contains__ swallows KeyError.
-        if field.name not in tuple(row):
+        if row[field.name] is None:
             if field.optional:
                 return None
             raise ValueError(
@@ -659,12 +857,8 @@ def _property(field: DataclassParameterField, *, stored_type: AtomType) -> prope
         )
         row, label = binding.row, f"{binding.label}.{field.name}"
         if value is None and field.optional:
-            if field.name not in tuple(row):
-                return
-            raise ValueError(
-                f"{label}: clearing a stored value is not supported yet; "
-                "keep the value or select a context where it is unknown"
-            )
+            row[field.name] = None
+            return
         row[field.name] = _stored(value, field, label=label)
 
     return property(read, write)

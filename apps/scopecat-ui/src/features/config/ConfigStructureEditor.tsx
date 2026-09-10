@@ -326,6 +326,7 @@ export function ConfigStructureEditor({
               {impact.parameter_id}.{impact.column_id ?? "key"}:{" "}
               {
                 {
+                  table_added: "table added",
                   added: "column added",
                   renamed: "column renamed",
                   type_changed: "type or unit changed",

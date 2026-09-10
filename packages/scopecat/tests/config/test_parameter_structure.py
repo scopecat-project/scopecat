@@ -463,3 +463,78 @@ def test_patch_does_not_silently_clear_values_incompatible_with_new_type() -> No
     table = replacement.config.parameter_snapshot.get("observations")
     assert isinstance(table, TableParameterValue)
     assert "frequency" not in table.rows[1]
+
+
+def test_measured_origins_survive_rename_and_only_cleared_cell_loses_evidence() -> None:
+    from scopecat.config.contexts import apply_context_overrides, context_value_origins
+    from scopecat.config.parameter_updates import update_parameter_rows
+
+    base = config()
+    ref = ConfigContextRef(entry_id="measured", content_hash=config_content_hash(base))
+    measured = StructureValueDecision(
+        key={"sample": "a"},
+        value=Quantity(4.8, "GHz"),
+        origin="measured",
+        note="Independent reference acquisition",
+        source_run_id="retained-measurement",
+    )
+    inherited = (
+        ConfigValueOrigin(
+            parameter_id="observations",
+            field_id="frequency",
+            key={"sample": "a"},
+            layer="context",
+            entry=ref,
+            evidence=measured,
+        ),
+    )
+    preview = preview_parameter_structure(
+        base,
+        plan(
+            base,
+            RenameParameterColumn(
+                parameter_id="observations", column_id="frequency", new_id="carrier"
+            ),
+            AddParameterColumn(
+                parameter_id="observations",
+                column=ParameterDefinition(id="quality", value_type=Scalar(Float())),
+            ),
+        ),
+    )
+    selected = ConfigContextRef(
+        entry_id="renamed", content_hash=config_content_hash(preview.config)
+    )
+    mapped = mapped_structure_origins(
+        base, preview, base_ref=ref, selected_ref=selected, inherited=inherited
+    )
+    carrier = next(
+        o for o in mapped if o.key == {"sample": "a"} and o.field_id == "carrier"
+    )
+    assert carrier.evidence == measured
+    quality = next(
+        o for o in mapped if o.key == {"sample": "a"} and o.field_id == "quality"
+    )
+    assert quality.evidence is not None and quality.evidence.origin == "unknown"
+    changes = (
+        update_parameter_rows(
+            "observations", key={"sample": "a"}, values={"carrier": None}
+        ),
+    )
+    cleared = apply_context_overrides(preview.config, changes)
+    origins = context_value_origins(
+        cleared,
+        base=preview.config.parameter_snapshot,
+        base_ref=selected,
+        selected_ref=selected,
+        inherited=mapped,
+        overrides=changes,
+    )
+    emptied = next(
+        o for o in origins if o.key == {"sample": "a"} and o.field_id == "carrier"
+    )
+    assert emptied.evidence is not None and emptied.evidence.origin == "unknown"
+    assert emptied.evidence.source_run_id is None
+    assert (
+        next(o for o in origins if o.key == {"sample": "a"} and o.field_id == "quality")
+        == quality
+    )

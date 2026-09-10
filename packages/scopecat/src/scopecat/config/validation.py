@@ -20,6 +20,7 @@ from scopecat.kernel.value_validation import (
     ValuePath,
     ValueValidationError,
     coerce_literal,
+    coerce_table_rows,
 )
 from scopecat.records.parameter import (
     ParameterAtomValue,
@@ -116,13 +117,12 @@ def coerce_stored_parameter_value(
         )
     if not isinstance(stored, TableParameterValue):
         _raise_shape_mismatch(definition, stored, expected="table", path=path)
-    if allow_missing:
-        return _coerce_partial_parameter_table(definition.id, value_type, stored, path)
     rows = _coerce_parameter_table(
         parameter_id=definition.id,
         value_type=value_type,
         value=stored.rows,
         path=(*path, "rows"),
+        allow_missing=allow_missing,
     )
     return stored.model_copy(
         update={"rows": cast("tuple[dict[str, ParameterAtomValue], ...]", rows)}
@@ -152,9 +152,12 @@ def _coerce_parameter_table(
     value_type: Table,
     value: object,
     path: ValuePath,
+    allow_missing: bool = False,
 ) -> object:
     try:
-        return coerce_literal(value_type, value, path=path)
+        return coerce_table_rows(
+            value_type, value, path=path, allow_missing=allow_missing
+        )
     except ValueValidationError as error:
         msg = f"parameter {parameter_id}: {error.reason}"
         raise ParameterValueValidationError(
@@ -206,41 +209,3 @@ def validate_parameter_representation(
             )
         }
     )
-
-
-def _coerce_partial_parameter_table(
-    parameter_id: str, table: Table, stored: TableParameterValue, path: ValuePath
-) -> TableParameterValue:
-    """Validate present cells and complete physical row keys; absence is unknown."""
-    columns = {column.id: column for column in table.columns}
-    rows: list[dict[str, ParameterAtomValue]] = []
-    keys: list[tuple[ParameterAtomValue, ...]] = []
-    for index, row in enumerate(stored.rows):
-        unknown = set(row) - columns.keys()
-        missing_keys = set(table.primary_key) - row.keys()
-        if unknown or missing_keys:
-            raise ParameterValueValidationError(
-                "invalid_parameter_value",
-                f"parameter {parameter_id}: unknown columns {sorted(unknown)}; "
-                f"missing key columns {sorted(missing_keys)}",
-                path=(*path, "rows", index),
-            )
-        normalized = {
-            field: coerce_parameter_table_cell(
-                parameter_id=parameter_id,
-                column=columns[field],
-                value=value,
-                path=(*path, "rows", index, field),
-            )
-            for field, value in row.items()
-        }
-        key = tuple(normalized[field] for field in table.primary_key)
-        if table.primary_key and key in keys:
-            raise ParameterValueValidationError(
-                "invalid_parameter_value",
-                f"parameter {parameter_id}: duplicate row key",
-                path=(*path, "rows", index),
-            )
-        keys.append(key)
-        rows.append(normalized)
-    return TableParameterValue(id=stored.id, rows=rows)

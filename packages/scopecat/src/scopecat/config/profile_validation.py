@@ -92,6 +92,6 @@ def validate_config_profile(
     problems.extend(_routing_route_problems(config))
 
     if include_parameter_values:
-        problems.extend(resolve_config_parameters(config).problems)
+        problems.extend(resolve_config_parameters(config, allow_missing=True).problems)
 
     return tuple(problems)

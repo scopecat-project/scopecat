@@ -18,7 +18,6 @@ from scopecat.planning.system import ExperimentSystem
 from scopecat.program.control_contract import ControlValidationContext
 from scopecat.program.definitions import ExperimentInvocation
 from scopecat.records.config import ConfigProfileSnapshot
-from scopecat.records.config_context import ContextRunConfigSource
 from scopecat.records.costs import RunCompilationCost
 from scopecat.records.plan_ref import ExperimentPlanRef
 from scopecat.records.run import RunConfigSource
@@ -44,9 +43,7 @@ def _plan_compiled_run(
     system: ExperimentSystem | None,
     config_source: RunConfigSource | None,
 ) -> PlannedRun:
-    environment = build_config_environment(
-        config, allow_missing=isinstance(config_source, ContextRunConfigSource)
-    )
+    environment = build_config_environment(config, allow_missing=True)
     bound = bind_program(experiment.program, environment)
     program = compile_run_program(
         system,

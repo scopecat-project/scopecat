@@ -114,8 +114,9 @@ It needs no hardware. The two acquired runs have the same five frequency points:
   rejects it because no values meet the selection. It is a deliberately useless
   scientific input, not a simulated device failure.
 - The missing carrier prevents the consumer's preview. Today's fixture encodes
-  it by an absent cell; this is **not** proof of the future full `None` table
-  behavior. That acceptance remains with #470.
+  it by an absent cell. `test_unknown_parameter_authoring.py` additionally covers
+  user-declared complete tables, visible `None`, unrelated/required consumers,
+  frozen edits and old-run readback after explicit schema changes.
 
 Run the current executable check from the repository root:
 

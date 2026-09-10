@@ -1,9 +1,12 @@
 """Author edits use real durable registry entries, with no daemon or devices."""
 
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Annotated
 
 import pytest
 from scopecat.api.parameters import ParameterTable, ParameterWorkspace, _TableData
+from scopecat.authoring.parameter_dataclasses import ParameterSpec
 from scopecat.config.contexts import apply_context_overrides, context_value_origins
 from scopecat.config.parameter_updates import ParameterUpdate
 from scopecat.config.registry import (
@@ -17,6 +20,7 @@ from scopecat.config.registry.service import (
     load_config_registry_entry_snapshot,
     save_config_context,
 )
+from scopecat.config.structure import ParameterStructurePlan
 from scopecat.daemon.views import ConfigContextResolution, ConfigEntryView
 from scopecat.kernel.entity import EntityRef
 from scopecat.kernel.errors import Conflict
@@ -101,6 +105,7 @@ class RegistryOperations:
         working_point_id: str,
         label: str,
         parameters: ParameterSnapshot | None = None,
+        structure_plan: ParameterStructurePlan | None = None,
         note: str = "",
     ) -> ConfigEntryView:
         assert sample.revision == self.sample.revision
@@ -111,6 +116,7 @@ class RegistryOperations:
             working_point_id=working_point_id,
             label=label,
             parameters=parameters,
+            structure_plan=structure_plan,
             note=note,
             actor="operator",
             unit_of_work=self.uow,
@@ -381,7 +387,6 @@ def test_entity_keys_accept_plain_ids_without_rewriting_stored_keys() -> None:
 def test_typed_rows_save_reopen_and_discard_share_workspace(
     operations: RegistryOperations,
 ) -> None:
-    from dataclasses import dataclass
 
     @dataclass
     class Qubit:
@@ -408,3 +413,177 @@ def test_typed_rows_save_reopen_and_discard_share_workspace(
     )
     params.discard()
     assert q0.frequency == 5.4
+
+
+# These declarations are ordinary lab-author code. Defaults only construct new rows.
+
+
+@dataclass
+class ProbeParameters:
+    id: str
+    duration: Annotated[float, ParameterSpec(unit="ns")]
+    pi_amplitude: float | None = None
+
+
+@dataclass
+class ExtendedProbeParameters(ProbeParameters):
+    quality: float | None = 0.99
+
+
+def test_declare_complete_unknown_table_save_reopen_and_add_optional_column(
+    operations: RegistryOperations,
+) -> None:
+    params = ParameterWorkspace(operations, context="start")
+    probes = params.declare_table("probes", ProbeParameters, key="id")
+    probes.add(ProbeParameters("q0", 40))
+    assert dict(params["probes"]["q0"]) == {
+        "id": "q0",
+        "duration": Quantity(40, "ns"),
+        "pi_amplitude": None,
+    }
+    structural = params.structure_diff()
+    assert structural is not None
+    assert structural.impacts[0].kind == "table_added"
+    with pytest.raises(ValueError, match="save a named version"):
+        params.freeze()
+    detached = params.copy()
+    assert dict(detached["probes"]["q0"]) == dict(params["probes"]["q0"])
+    version = params.save("unknown-probes")
+    assert params.structure_diff() is None
+    assert not params.diff()
+    reopened = ParameterWorkspace(operations, context=version)
+    declared = reopened.declare_table("probes", ProbeParameters, key="id")
+    assert declared["q0"].pi_amplitude is None
+    assert reopened.structure_diff() is None  # Identical notebook re-execution.
+    extended = reopened.declare_table("probes", ExtendedProbeParameters, key="id")
+    assert extended["q0"].quality is None  # Never hydrate the initializer default.
+    assert reopened["probes"]["q0"]["quality"] is None
+    evolved = reopened.save("with-quality")
+    before = operations.resolve_context(version.context)
+    after = operations.resolve_context(evolved.context)
+    old_duration = next(
+        o
+        for o in before.value_origins
+        if o.parameter_id == "probes" and o.field_id == "duration"
+    )
+    new_duration = next(
+        o
+        for o in after.value_origins
+        if o.parameter_id == "probes" and o.field_id == "duration"
+    )
+    assert new_duration.entry == old_duration.entry
+    assert "quality" not in params["probes"]["q0"]
+
+
+def test_clearing_one_cell_preserves_other_origins_and_frozen_override(
+    operations: RegistryOperations,
+) -> None:
+    params = ParameterWorkspace(operations, context="start")
+    original = params.freeze()
+    params["qubits"]["q0"]["amplitude"] = None
+    frozen = params.freeze()
+    override = frozen.config_source.overrides[0]
+    from scopecat.config.parameter_updates import UpdateParameterRows
+
+    assert isinstance(override, UpdateParameterRows)
+    assert dict(override.values) == {"amplitude": None}
+    assert len(params.diff()) == 1
+    assert next(o for o in frozen.value_origins if o.field_id == "frequency") == next(
+        o for o in original.value_origins if o.field_id == "frequency"
+    )
+    assert (
+        next(o for o in frozen.value_origins if o.field_id == "amplitude").layer
+        == "run_override"
+    )
+    params["qubits"]["q0"]["amplitude"] = 0.2
+    stored = frozen.config.parameter_snapshot.get("qubits")
+    assert isinstance(stored, TableParameterValue)
+    assert "amplitude" not in stored.rows[0]
+    params["qubits"]["q0"]["amplitude"] = None
+    version = params.save("clear-amplitude")
+    reopened = ParameterWorkspace(operations, context=version)
+    assert reopened["qubits"]["q0"]["amplitude"] is None
+    origins = reopened.freeze().value_origins
+    assert next(o for o in origins if o.field_id == "frequency") == next(
+        o for o in original.value_origins if o.field_id == "frequency"
+    )
+    assert (
+        next(o for o in origins if o.field_id == "amplitude").entry == version.context
+    )
+
+
+def test_explicit_rename_unit_and_key_preserve_history_and_addresses(
+    operations: RegistryOperations,
+) -> None:
+    params = ParameterWorkspace(operations, context="start")
+    probes = params.declare_table("probes", ProbeParameters, key="id")
+    probes.add(ProbeParameters("q0", 40))
+    initial = params.save("probe-schema")
+    live = params.table("probes", row_type=ProbeParameters)["q0"]
+    params.convert_unit("probes", "duration", "us")
+    params.rename_column("probes", "duration", "pulse_length")
+    params.rename_column("probes", "id", "qubit")
+    params.change_key("probes", key="qubit")
+    with pytest.raises(KeyError, match="deleted"):
+        _ = live.duration
+    assert params["probes"]["q0"]["pulse_length"] == Quantity(0.04, "us")
+    changed = params.save("probe-renamed")
+    origin = next(
+        o
+        for o in params.freeze().value_origins
+        if o.parameter_id == "probes" and o.field_id == "pulse_length"
+    )
+    assert origin.source_cell is not None
+    assert origin.source_cell.entry == initial.context
+    assert origin.source_cell.field_id == "duration"
+    assert origin.source_cell.key == {"id": "q0"}
+    old = ParameterWorkspace(operations, context=initial)
+    assert old["probes"]["q0"]["duration"] == Quantity(40, "ns")
+    restored = ParameterWorkspace(operations, context=changed)
+    restored["probes"]["q0"]["pi_amplitude"] = 0.5
+    restored.save("new-amplitude")
+    assert (
+        next(
+            o
+            for o in restored.freeze().value_origins
+            if o.parameter_id == "probes" and o.field_id == "pulse_length"
+        )
+        == origin
+    )
+
+
+def test_bootstrap_validation_and_direct_registry_allow_unknown_but_reject_invalid(
+    operations: RegistryOperations,
+) -> None:
+    from scopecat.config.resolution import validate_config_profile
+    from scopecat.kernel.errors import CheckFailed
+
+    params = ParameterWorkspace(operations, context="start")
+    params["qubits"]["q0"]["amplitude"] = None
+    complete = params.freeze().config
+    assert validate_config_profile(complete) == complete
+    published = publish_config_revision(
+        revision=ConfigRevision(
+            source=DirectConfigRevisionSource(complete),
+            entry_id="bootstrap-with-unknown",
+            actor="operator",
+        ),
+        unit_of_work=operations.uow,
+        expected_generation=1,
+    )
+    assert published.entry.content_hash == config_content_hash(complete)
+    # Absence does not relax provided cell types or physical row key completeness.
+    for invalid in ({"id": "q0", "frequency": "bad"}, {"frequency": 5.0}):
+        values = ParameterSnapshot(
+            id=complete.parameter_snapshot.id,
+            values=tuple(
+                TableParameterValue(id="qubits", rows=(invalid,))
+                if value.id == "qubits"
+                else value
+                for value in complete.parameter_snapshot.values
+            ),
+        )
+        with pytest.raises(CheckFailed):
+            validate_config_profile(
+                complete.model_copy(update={"parameter_snapshot": values})
+            )

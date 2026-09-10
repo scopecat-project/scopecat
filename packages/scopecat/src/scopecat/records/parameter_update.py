@@ -65,9 +65,9 @@ class UpdateParameterRows(_ParameterUpdateModel):
     kind: Literal["update_parameter_rows"] = "update_parameter_rows"
     parameter_id: _ParameterId
     key: Mapping[str, ParameterAtomValue] = Field(min_length=1)
-    values: Mapping[str, ParameterAtomValue] = Field(min_length=1)
+    values: Mapping[str, ParameterAtomValue | None] = Field(min_length=1)
 
-    @field_validator("key", "values")
+    @field_validator("key")
     @classmethod
     def freeze_atoms(
         cls,
@@ -75,12 +75,31 @@ class UpdateParameterRows(_ParameterUpdateModel):
     ) -> Mapping[str, ParameterAtomValue]:
         return _freeze_parameter_atoms(value)
 
-    @field_serializer("key", "values")
+    @field_serializer("key")
     def serialize_atoms(
         self,
         value: Mapping[str, ParameterAtomValue],
     ) -> dict[str, ParameterAtomValue]:
         return dict(value)
+
+    # Null in an update explicitly clears one cell. Snapshots still omit unknowns.
+    @field_validator("values")
+    @classmethod
+    def freeze_values(
+        cls, values: Mapping[str, ParameterAtomValue | None]
+    ) -> Mapping[str, ParameterAtomValue | None]:
+        present = _freeze_parameter_atoms(
+            {k: v for k, v in values.items() if v is not None}
+        )
+        return FrozenMapping(
+            (k, present[k] if v is not None else None) for k, v in values.items()
+        )
+
+    @field_serializer("values")
+    def serialize_values(
+        self, values: Mapping[str, ParameterAtomValue | None]
+    ) -> dict[str, ParameterAtomValue | None]:
+        return dict(values)
 
 
 class InsertParameterRows(_ParameterUpdateModel):

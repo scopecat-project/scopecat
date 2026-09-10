@@ -13,7 +13,7 @@ from pydantic import (
 )
 
 from scopecat.kernel.frozen import FrozenMapping
-from scopecat.kernel.value_types import Scalar
+from scopecat.kernel.value_types import Scalar, Table
 from scopecat.records.content import Sha256ContentHash
 from scopecat.records.parameter import ParameterAtomValue, ParameterDefinition
 
@@ -55,6 +55,21 @@ class StructureValueDecision(_StructureModel):
         if self.origin == "measured" and not self.source_run_id:
             raise ValueError("a measured value requires its source run id")
         return self
+
+
+class AddParameterTable(_StructureModel):
+    """Declare a keyed table, initially empty; no initializer values are inferred."""
+
+    kind: Literal["add_table"] = "add_table"
+    parameter_id: str = Field(min_length=1)
+    table: Table
+
+    @field_validator("table")
+    @classmethod
+    def require_key(cls, table: Table) -> Table:
+        if not table.primary_key:
+            raise ValueError("a new author table requires a primary key")
+        return table
 
 
 class AddParameterColumn(_StructureModel):
@@ -116,7 +131,8 @@ class ChangeParameterKey(_StructureModel):
 
 
 type ParameterStructureEdit = Annotated[
-    AddParameterColumn
+    AddParameterTable
+    | AddParameterColumn
     | RenameParameterColumn
     | ChangeParameterColumn
     | ChangeParameterKey,

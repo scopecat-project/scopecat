@@ -4,7 +4,10 @@ from __future__ import annotations
 
 import faulthandler
 import importlib
+import json
 import subprocess
+import sys
+import time
 from pathlib import Path
 from types import SimpleNamespace
 from typing import cast
@@ -22,6 +25,7 @@ from scopecat_server.services.author_revisions import (
 )
 from scopecat_server.storage.sqlite.connection import SQLiteDatabase
 from scopecat_server.storage.sqlite.project_store import SQLiteProjectStore
+from scopecat_server.validation_process import terminate_validation_process_tree
 from scopecat_server.worker_diagnostics import DIAGNOSTIC_LIMIT, diagnostic_excerpt
 
 
@@ -97,9 +101,34 @@ def test_slow_validation_retains_stack_and_reaps_worker(
         '[authors]\nsource_roots=["src"]\nrefresh_roots=["src/authors"]\n'
     )
     pid_file = tmp_path / "worker.pid"
+    owned: list[psutil.Process] = []
+    launched: list[subprocess.Popen[str]] = []
+    communicate_timeouts: list[float | None] = []
+    communicate = subprocess.Popen.communicate
+
+    def observe_communicate(
+        process: subprocess.Popen[str],
+        input: str | None = None,
+        timeout: float | None = None,
+    ) -> tuple[str, str]:
+        communicate_timeouts.append(timeout)
+        if not launched:
+            launched.append(process)
+        return communicate(process, input=input, timeout=timeout)
+
+    def observe_cleanup(
+        process: subprocess.Popen[str], *, owner: psutil.Process | None
+    ) -> tuple[psutil.Process, ...]:
+        result = terminate_validation_process_tree(process, owner=owner)
+        owned.extend(result)
+        return result
+
     (tmp_path / "src/authors/slow.py").write_text(
-        "import os, time\ndef create_application(root):\n"
-        f"    open({str(pid_file)!r}, 'w').write(str(os.getpid()))\n"
+        "import json, os, time, psutil\ndef create_application(root):\n"
+        f"    output = open({str(pid_file)!r}, 'w')\n"
+        "    output.write(json.dumps({'pid': os.getpid(), "
+        "'created': psutil.Process().create_time()}))\n"
+        "    output.close()\n"
         "    time.sleep(120)\n"
     )
     store = SQLiteProjectStore(
@@ -109,22 +138,134 @@ def test_slow_validation_retains_stack_and_reaps_worker(
     try:
         service = AuthorRevisionService(tmp_path, store)
         with (
+            patch.object(subprocess.Popen, "communicate", observe_communicate),
             patch(
-                "scopecat_server.services.author_revisions.subprocess.run",
-                wraps=subprocess.run,
-            ) as run,
+                "scopecat_server.services.author_revisions.subprocess.Popen",
+                wraps=subprocess.Popen,
+            ) as launch,
+            patch(
+                "scopecat_server.services.author_revisions.terminate_validation_process_tree",
+                side_effect=observe_cleanup,
+            ),
             pytest.raises(
                 AuthorValidationTimeout, match="application import"
             ) as caught,
         ):
             service.refresh(expected_generation=0)
-        run.assert_called_once()
-        assert run.call_args.kwargs["timeout"] == 60
+        launch.assert_called_once()
+        assert communicate_timeouts == [60, 5]
         assert "did not publish" in str(caught.value)
         assert service.repository.state().active is None
-        assert not psutil.pid_exists(int(pid_file.read_text()))
+        worker = json.loads(pid_file.read_text())
+        matching = [
+            item
+            for item in owned
+            if item.pid == worker["pid"] and item.create_time() == worker["created"]
+        ]
+        assert matching, [(item.pid, item.create_time()) for item in owned]
+        assert all(not item.is_running() for item in owned)
+        assert launched[0].returncode is not None
+        assert launched[0].poll() == launched[0].returncode
+        assert "owned process identities" in caplog.text
         assert "slow.py" in caplog.text
         assert "create_application" in caplog.text
         assert "stage=application import" in caplog.text
+    finally:
+        store.close()
+
+
+def test_timeout_cleanup_includes_launcher_descendants(tmp_path: Path) -> None:
+    """An explicit waiting launcher reproduces the extra process boundary everywhere."""
+    marker = tmp_path / "child.json"
+    child_code = (
+        "import json, os, sys, time, psutil; "
+        f"output = open({str(marker.with_suffix('.tmp'))!r}, 'w'); "
+        "output.write(json.dumps({'pid': os.getpid(), "
+        "'created': psutil.Process().create_time()})); output.close(); "
+        f"os.replace({str(marker.with_suffix('.tmp'))!r}, {str(marker)!r}); "
+        "print('slow descendant evidence', file=sys.stderr, flush=True); "
+        "time.sleep(120)"
+    )
+    launcher_code = (
+        "import subprocess, sys; "
+        f"child = subprocess.Popen([sys.executable, '-c', {child_code!r}]); "
+        "child.wait()"
+    )
+    process = subprocess.Popen(  # noqa: S603 - controlled fixture code
+        [sys.executable, "-c", launcher_code],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    owner = psutil.Process(process.pid)
+    actual_child: psutil.Process | None = None
+    try:
+        deadline = time.monotonic() + 20
+        while not marker.exists() and time.monotonic() < deadline:
+            time.sleep(0.02)
+        assert marker.exists(), "controlled descendant did not start"
+        child = json.loads(marker.read_text())
+        actual_child = psutil.Process(child["pid"])
+        assert actual_child.create_time() == child["created"]
+        assert child["pid"] != process.pid
+        with pytest.raises(subprocess.TimeoutExpired):
+            process.communicate(timeout=0.1)
+        owned = terminate_validation_process_tree(process, owner=owner)
+        _, stderr = process.communicate(timeout=5)
+        assert any(
+            item.pid == child["pid"] and item.create_time() == child["created"]
+            for item in owned
+        )
+        assert all(not item.is_running() for item in owned)
+        assert process.returncode is not None
+        assert "slow descendant evidence" in stderr
+    finally:
+        if actual_child is not None and actual_child.is_running():
+            actual_child.kill()
+            actual_child.wait(timeout=5)
+        if process.poll() is None:
+            terminate_validation_process_tree(process, owner=owner)
+
+
+def test_interrupted_validation_cleans_up_and_preserves_interrupt(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "src/authors").mkdir(parents=True)
+    (tmp_path / "scopecat.toml").write_text(
+        '[lab]\n[authors]\nsource_roots=["src"]\nrefresh_roots=["src/authors"]\n'
+    )
+    store = SQLiteProjectStore(
+        SQLiteDatabase(tmp_path / "control.sqlite3"), tmp_path / "objects"
+    )
+    store.bootstrap()
+    process = Mock(spec=subprocess.Popen)
+    process.pid = 123
+    owner = Mock(spec=psutil.Process)
+    interruption = KeyboardInterrupt()
+    process.communicate.side_effect = [interruption, ("", "")]
+    try:
+        service = AuthorRevisionService(tmp_path, store)
+        with (
+            patch(
+                "scopecat_server.services.author_revisions.subprocess.Popen",
+                return_value=process,
+            ) as launch,
+            patch(
+                "scopecat_server.services.author_revisions.psutil.Process",
+                return_value=owner,
+            ),
+            patch(
+                "scopecat_server.services.author_revisions.terminate_validation_process_tree",
+                return_value=(),
+            ) as cleanup,
+            pytest.raises(KeyboardInterrupt) as caught,
+        ):
+            service.refresh(expected_generation=0)
+        assert caught.value is interruption
+        launch.assert_called_once()
+        cleanup.assert_called_once_with(process, owner=owner)
+        assert process.communicate.call_count == 2
+        assert process.communicate.call_args.kwargs["timeout"] == 5
+        assert service.repository.state().active is None
     finally:
         store.close()

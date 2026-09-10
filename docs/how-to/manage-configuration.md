@@ -70,12 +70,11 @@ conflicting field to the chosen value and retry. Rebase rejects another sample
 revision, working point or parameter schema. There is no automatic lookup of a
 newer branch and no silent overwrite of another editor's work.
 
-This first dictionary editor exposes existing scalar values and stored tables
-with declared primary keys. It does not create parameter definitions, expose
-unkeyed tables for indexed editing, or clear a field to `None`. Existing missing
-cells stay missing; reading does not supply defaults. Full unknown tables and
-schema evolution belong to the next parameter-structure slice. Unit reads retain
-the stored representation; deliberate compatible-unit edits remain explicit.
+The dictionary editor exposes existing scalar values and keyed tables; it does
+not expose unkeyed tables for indexed editing. Unknown cells read `None`, and
+reads never supply defaults. The dataclass declaration workflow below creates
+new tables and stages explicit schema changes. Unit reads retain the stored
+representation; deliberate compatible-unit edits remain explicit.
 These manual edits do not claim measurement or scientific verification.
 
 ## Use ordinary dataclass rows
@@ -134,9 +133,10 @@ if q0.amplitude is not None:
 ```
 
 `add` refuses to replace an existing key. Declaring an Optional field does not
-clear existing values; clearing a stored cell and installing/evolving complete
-new tables are separate parameter-structure work. An Optional `None` in a new
-row leaves that cell absent.
+clear existing values. Explicit `q0.amplitude = None`, or the equivalent dictionary
+assignment, clears that cell and its former evidence without changing other
+cells' origins. Dictionary rows iterate every declared column; unknowns read
+`None`. Stored snapshots continue to omit unknown atoms.
 
 For maintainers, `sc.dataclass_table_schema(Drive, primary_key=("id",))` is a pure
 adapter to the existing table schema. It performs no project installation or
@@ -146,6 +146,74 @@ also be written as `field(metadata={"parameter": sc.ParameterSpec(unit="GHz")})`
 No Pydantic base class or checker plugin is needed. Editors catch misspelled
 attributes, assigning strings to float fields, and arithmetic on an Optional
 before checking for `None`.
+
+## Declare a new table and evolve its structure
+
+Start from the lab's supplied sample/workpoint context. You can declare a table
+without writing a catalog or Pydantic models:
+
+```python
+@dataclass
+class Probe:
+    id: str
+    duration: Annotated[float, sc.ParameterSpec(unit="ns")]
+    pi_amplitude: float | None = None
+
+
+probes = params.declare_table("probes", Probe, key="id")
+probes.add(Probe("q0", duration=40))
+assert params["probes"]["q0"]["pi_amplitude"] is None
+params.structure_diff()  # added table, affected rows, explicit consumer actions
+params.save("sample-a-probes")
+```
+
+Re-executing an identical declaration is a no-op. A new optional dataclass field
+adds a column, leaving every existing row unknown even if the field has an
+initializer default. Existing column removal, type/unit changes and key changes
+are rejected with the old/new declarations; they are never inferred as renames.
+
+Use explicit operations for supported changes:
+
+```python
+params.convert_unit("probes", "duration", "us")
+params.rename_column("probes", "duration", "pulse_length")
+params.rename_column("probes", "id", "qubit")
+params.change_key("probes", key="qubit")
+params.structure_diff()
+params.save("sample-a-probes-v2")
+```
+
+Compatible unit conversion converts stored values and bounds. Key changes must
+leave every row with a complete, unique key. Structural operations invalidate
+old row views: select a fresh row or bind the updated dataclass after changing
+its fields. A removed table created in an unsaved draft disappears on discard.
+
+Save or discard pending **value** edits before staging a structural operation.
+After staging structure, you can add rows or edit values and save them together.
+Review `structure_diff()` and save a named version **before previewing/running an
+experiment** with the new schema. `freeze()` refuses pending structure changes;
+it never creates hidden saved versions. Ordinary value edits still freeze
+without saving. Reopen earlier versions and runs to read their original schema,
+values and source addresses.
+
+Unknowns are permitted at bootstrap and registry import; supplied values, row
+keys and infrastructure remain validated. Compiled parameter imports validate
+only their declared dependencies. A lookup that needs an unknown column reports
+table, key and field and asks you to supply/calibrate it; an experiment using
+another column can proceed. This is explicit contract validation, not arbitrary
+Python dependency discovery. Known literal-key lookups specialize the selected cell, so another row
+with the same unknown column does not block that lookup. Dynamic key expressions
+conservatively validate all rows of the imported column; use a concrete key for
+a single-sample probe. This slice adds no domain-aware lazy dependency discovery.
+Ordinary Python/dataclass consumers must check Optional values themselves.
+
+For maintainers: storage remains project schema 65 with absent cells representing
+unknowns. The wire adds `add_table` structure edits and permits `null` in keyed
+row **updates**, meaning clear that cell; snapshots do not store null atoms.
+New readers still read old snapshots and runs. Client and daemon must use the
+same current build; older clients cannot consume the new structure records or
+clear intents. This change rewrites no historical records and supplies no
+cross-version migration.
 
 ## Review configuration source changes
 
