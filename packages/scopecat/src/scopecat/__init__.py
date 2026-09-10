@@ -43,6 +43,7 @@ if TYPE_CHECKING:
         instrument,
         temporary_instrument,
     )
+    from scopecat.api.parameters import TypedParameterTable
     from scopecat.api.procedure_planner import ProcedurePlanningContext
     from scopecat.api.procedures import LabProcedureContext
     from scopecat.api.published_analysis import (
@@ -118,6 +119,10 @@ if TYPE_CHECKING:
         parameter_lookup,
         parameter_schema,
         resource_role,
+    )
+    from scopecat.authoring.parameter_dataclasses import (
+        ParameterSpec,
+        dataclass_table_schema,
     )
     from scopecat.automation import (
         CalibrationDefinition,
@@ -300,6 +305,12 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     ),
     "EntityRef": ("scopecat.kernel.entity", "EntityRef"),
     "entity_ref": ("scopecat.kernel.entity", "entity_ref"),
+    "ParameterSpec": ("scopecat.authoring.parameter_dataclasses", "ParameterSpec"),
+    "dataclass_table_schema": (
+        "scopecat.authoring.parameter_dataclasses",
+        "dataclass_table_schema",
+    ),
+    "TypedParameterTable": ("scopecat.api.parameters", "TypedParameterTable"),
     "delete_parameter_rows": ("scopecat.config.parameters", "delete_parameter_rows"),
     "derived_dataset": ("scopecat.analysis.datasets", "derived_dataset"),
     "insert_parameter_rows": ("scopecat.config.parameters", "insert_parameter_rows"),

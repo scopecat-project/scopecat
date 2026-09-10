@@ -3,9 +3,14 @@
 from __future__ import annotations
 
 from collections.abc import Iterator, Mapping, MutableMapping, Sequence
-from dataclasses import dataclass
-from typing import Protocol, Self, cast, override
+from dataclasses import dataclass, replace
+from typing import Protocol, Self, cast, overload, override
 
+from scopecat.authoring.parameter_dataclasses import (
+    DataclassParameterField,
+    dataclass_parameter_fields,
+    dataclass_table_schema,
+)
 from scopecat.config.candidate_merges import merge_parameter_branches
 from scopecat.config.contexts import apply_context_overrides
 from scopecat.config.parameter_updates import (
@@ -19,8 +24,11 @@ from scopecat.config.registry.records import ContextConfigRegistrySource
 from scopecat.daemon.client import DaemonConflictError
 from scopecat.daemon.views import ConfigContextResolution, ConfigEntryView
 from scopecat.kernel.errors import Conflict
+from scopecat.kernel.quantity import Quantity
+from scopecat.kernel.units import compatible_units, convert_linear_value
 from scopecat.kernel.value_identity import scalar_identity
-from scopecat.kernel.value_types import Table
+from scopecat.kernel.value_types import AtomType, Table
+from scopecat.kernel.value_types import Quantity as QuantityType
 from scopecat.kernel.value_validation import coerce_literal
 from scopecat.records.config_context import ConfigContextRef
 from scopecat.records.parameter import (
@@ -148,6 +156,19 @@ class ParameterWorkspace(Mapping[str, "ParameterTable"]):
     @override
     def __len__(self) -> int:
         return len(self._tables)
+
+    @overload
+    def table(self, name: str) -> ParameterTable: ...
+
+    @overload
+    def table[T](self, name: str, *, row_type: type[T]) -> TypedParameterTable[T]: ...
+
+    def table[T](
+        self, name: str, *, row_type: type[T] | None = None
+    ) -> ParameterTable | TypedParameterTable[T]:
+        """Select a dictionary table or bind a standard dataclass view."""
+        table = self[name]
+        return table if row_type is None else TypedParameterTable(table, row_type)
 
     def scalar(self, name: str) -> ParameterAtomValue:
         return self._scalars[name]
@@ -473,10 +494,187 @@ class ParameterRow(MutableMapping[str, ParameterAtomValue]):
         return len(self._row())
 
 
+class TypedParameterTable[T](Mapping["RowKey", T]):
+    """Live typed rows; detached new rows use the ordinary dataclass constructor.
+
+    Assignment edits the shared workspace. Save/preview validates the resulting
+    values. Reading normalizes quantity numbers without editing stored values.
+    A row class should be a data-only, mutable dataclass: constructors and
+    post-init hooks are for new rows and are not run when selecting existing ones.
+    """
+
+    def __init__(self, table: ParameterTable, row_type: type[T]) -> None:
+        self._table = table
+        self._row_type = row_type
+        self._fields = dataclass_parameter_fields(row_type)
+        inferred = dataclass_table_schema(
+            row_type, primary_key=table.schema.primary_key
+        )
+        expected = {field.id: field.value_type for field in table.schema.columns}
+        actual = {field.id: field.value_type for field in inferred.columns}
+        if expected.keys() != actual.keys():
+            raise TypeError(
+                f"{table.name}: dataclass columns differ from the table "
+                f"(missing {sorted(expected.keys() - actual.keys())}, "
+                f"extra {sorted(actual.keys() - expected.keys())}); "
+                "change the schema explicitly before binding"
+            )
+        for name, value_type in actual.items():
+            stored = expected[name].atom
+            declared = value_type.atom
+            if (
+                isinstance(stored, QuantityType)
+                and isinstance(declared, QuantityType)
+                and stored.unit is not None
+                and declared.unit is not None
+                and compatible_units(stored.unit, declared.unit)
+            ):
+                minimum = _bound(stored.minimum, stored.unit, declared.unit)
+                maximum = _bound(stored.maximum, stored.unit, declared.unit)
+                stored = replace(
+                    stored,
+                    unit=declared.unit,
+                    dimension=declared.dimension,
+                    minimum=minimum,
+                    maximum=maximum,
+                )
+            if stored != declared:
+                raise TypeError(
+                    f"{table.name}.{name}: dataclass type/unit/bounds {declared!r} "
+                    f"differ from table {expected[name].atom!r}; "
+                    "match the declaration or change the schema explicitly"
+                )
+
+        properties: dict[str, object] = {
+            field.name: _property(field, stored_type=expected[field.name].atom)
+            for field in self._fields
+        }
+        properties["__slots__"] = ("_scopecat_binding",)
+        self._live_type = type(f"{row_type.__name__}View", (row_type,), properties)
+
+    @override
+    def __getitem__(self, key: RowKey) -> T:
+        row = self._table[key]
+        # This cast represents a validated runtime subclass, not a schema guess.
+        instance = cast("T", object.__new__(self._live_type))
+        object.__setattr__(
+            instance,
+            "_scopecat_binding",
+            _RowBinding(row, f"{self._table.name}[{key!r}]"),
+        )
+        return instance
+
+    @override
+    def __iter__(self) -> Iterator[RowKey]:
+        return iter(self._table)
+
+    @override
+    def __len__(self) -> int:
+        return len(self._table)
+
+    def add(self, row: T) -> T:
+        """Insert a new row; defaults are supplied only by its normal constructor."""
+        if not isinstance(row, self._row_type):
+            raise TypeError(f"{self._table.name}: expected {self._row_type.__name__}")
+        values: dict[str, ParameterAtomValue] = {}
+        for field in self._fields:
+            value = cast("object", getattr(row, field.name))
+            if value is None and field.optional:
+                continue
+            values[field.name] = _stored(
+                value, field, label=f"{self._table.name}.{field.name}"
+            )
+        keys = tuple(values[name] for name in self._table.schema.primary_key)
+        key = keys[0] if len(keys) == 1 else keys
+        if key in self._table:
+            raise ValueError(
+                f"{self._table.name}[{key!r}]: row already exists; edit it explicitly"
+            )
+        self._table[key] = values
+        return self[key]
+
+
+def _bound(value: float | None, source: str, target: str) -> float | None:
+    if value is None or source == target:
+        return value
+    converted = convert_linear_value(value, source, target)
+    if converted is None:
+        raise ValueError(
+            f"cannot convert parameter bound from {source!r} to {target!r}"
+        )
+    return converted
+
+
+def _stored(
+    value: object, field: DataclassParameterField, *, label: str
+) -> ParameterAtomValue:
+    if value is None:
+        raise ValueError(f"{label}: a required parameter cannot be None")
+    atom = field.value_type.atom
+    if isinstance(atom, QuantityType):
+        assert atom.unit is not None
+        if isinstance(value, Quantity):
+            return value.to(atom.unit)
+        if isinstance(value, int | float) and not isinstance(value, bool):
+            return Quantity(float(value), atom.unit)
+    # Ordinary dataclass assignments are not a runtime validation boundary.
+    # The existing workspace validates values when previewing or saving.
+    return cast("ParameterAtomValue", value)
+
+
+@dataclass(frozen=True, slots=True)
+class _RowBinding:
+    row: ParameterRow
+    label: str
+
+
+def _property(field: DataclassParameterField, *, stored_type: AtomType) -> property:
+    def read(instance: object) -> object:
+        binding = cast(
+            "_RowBinding", object.__getattribute__(instance, "_scopecat_binding")
+        )
+        row, label = binding.row, f"{binding.label}.{field.name}"
+        # Iteration preserves deletion errors; Mapping.__contains__ swallows KeyError.
+        if field.name not in tuple(row):
+            if field.optional:
+                return None
+            raise ValueError(
+                f"{label}: parameter is unknown; supply a value or declare it Optional"
+            )
+        value = row[field.name]
+        atom = field.value_type.atom
+        if isinstance(atom, QuantityType):
+            assert atom.unit is not None
+            if isinstance(value, Quantity):
+                return value.to(atom.unit).value
+            if isinstance(value, int | float) and not isinstance(value, bool):
+                assert isinstance(stored_type, QuantityType)
+                assert stored_type.unit is not None
+                return Quantity(float(value), stored_type.unit).to(atom.unit).value
+        return value
+
+    def write(instance: object, value: object) -> None:
+        binding = cast(
+            "_RowBinding", object.__getattribute__(instance, "_scopecat_binding")
+        )
+        row, label = binding.row, f"{binding.label}.{field.name}"
+        if value is None and field.optional:
+            if field.name not in tuple(row):
+                return
+            raise ValueError(
+                f"{label}: clearing a stored value is not supported yet; "
+                "keep the value or select a context where it is unknown"
+            )
+        row[field.name] = _stored(value, field, label=label)
+
+    return property(read, write)
+
+
 __all__ = [
     "ParameterEdit",
     "ParameterRow",
     "ParameterTable",
     "ParameterVersion",
     "ParameterWorkspace",
+    "TypedParameterTable",
 ]

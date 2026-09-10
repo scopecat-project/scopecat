@@ -376,3 +376,35 @@ def test_entity_keys_accept_plain_ids_without_rewriting_stored_keys() -> None:
     assert table["q1"]["qubit"] == EntityRef(id="q1", kind="qubit")
     del table["q1"]
     assert len(table) == 1
+
+
+def test_typed_rows_save_reopen_and_discard_share_workspace(
+    operations: RegistryOperations,
+) -> None:
+    from dataclasses import dataclass
+
+    @dataclass
+    class Qubit:
+        id: str
+        frequency: float
+        amplitude: float | None = 0.25
+
+    params = ParameterWorkspace(operations, context="start")
+    before = params.freeze()
+    table = params.table("qubits", row_type=Qubit)
+    q0 = table["q0"]
+    assert q0.frequency == params["qubits"]["q0"]["frequency"]
+    assert params.diff() == ()
+    assert params.freeze().value_origins == before.value_origins
+    q0.frequency = 5.4
+    frozen = params.freeze()
+    saved = params.save("typed-edits")
+    reopened = ParameterWorkspace(operations, context=saved)
+    assert reopened.table("qubits", row_type=Qubit)["q0"].frequency == 5.4
+    q0.frequency = 5.8
+    assert params["qubits"]["q0"]["frequency"] == 5.8
+    assert (
+        frozen.config.parameter_snapshot == reopened.freeze().config.parameter_snapshot
+    )
+    params.discard()
+    assert q0.frequency == 5.4

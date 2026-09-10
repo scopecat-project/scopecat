@@ -40,7 +40,7 @@ Rows behave like mappings:
 
 ```python
 params["qubits"]["q1"] = {"frequency": 5.8, "amplitude": 0.2}
-row = params["qubits"]["q1"]  # live view, shared with later typed adapters
+row = params["qubits"]["q1"]  # live view, shared with typed views
 row["amplitude"] = 0.25
 row_copy = dict(row)  # detached copy
 another = params.copy()  # independent buffer, including unsaved edits
@@ -77,6 +77,75 @@ cells stay missing; reading does not supply defaults. Full unknown tables and
 schema evolution belong to the next parameter-structure slice. Unit reads retain
 the stored representation; deliberate compatible-unit edits remain explicit.
 These manual edits do not claim measurement or scientific verification.
+
+## Use ordinary dataclass rows
+
+A lab maintainer can declare familiar Python row types. This example binds an
+existing `drive` table whose columns, string key and quantity bounds match the
+declaration:
+
+```python
+from dataclasses import dataclass
+from typing import Annotated
+import scopecat as sc
+
+
+@dataclass
+class Drive:
+    id: str
+    frequency: Annotated[float, sc.ParameterSpec(unit="GHz", minimum=0, maximum=10)]
+    amplitude: float | None = 0.25
+    enabled: bool = True
+
+
+params = lab.config.workspace(context="sample-a-parked")
+drives = params.table("drive", row_type=Drive)
+q0 = drives["q0"]  # editor knows this is a Drive
+q0.frequency = 5.2
+params["drive"]["q0"]["enabled"] = False
+assert q0.enabled is False  # the dictionary and attributes share edits
+params.preview()  # validate before saving or running
+version = params.save("sample-a-drive-trial")
+```
+
+The returned row is a live instance of the declared dataclass type. Plain scalar
+fields support `bool`, `int`, `float`, `str` and `sc.EntityRef`; `float | None`
+exposes an existing unknown cell as `None`. Reading an unknown required field
+reports its table, row and column instead of inventing a value. Use mutable,
+data-only dataclasses; selection does not execute constructors or `__post_init__`.
+Normal dataclass methods, repr and attribute completion remain available.
+
+Naked float attributes use their declared units: `q0.frequency` above returns GHz
+even if the stored value is represented in MHz. A compatible MHz row declaration
+must also express its bounds in MHz. Reads never rewrite the stored quantity or
+its origin. Naked dictionary edits use the underlying table's units; use
+`sc.Quantity(5200, "MHz")` in the dictionary to specify another representation.
+Both interfaces are edit buffers: normal assignments do not promise immediate
+runtime type or range validation. Use `preview()` or `save()` to validate edits.
+`Annotated` metadata does not make float arithmetic dimensionally type-safe.
+
+Defaults apply only through an explicit new-row constructor:
+
+```python
+new = drives.add(Drive(id="q1", frequency=5.8))  # amplitude default is 0.25
+# Existing missing amplitudes still read None, never 0.25.
+if q0.amplitude is not None:
+    q0.amplitude *= 0.9
+```
+
+`add` refuses to replace an existing key. Declaring an Optional field does not
+clear existing values; clearing a stored cell and installing/evolving complete
+new tables are separate parameter-structure work. An Optional `None` in a new
+row leaves that cell absent.
+
+For maintainers, `sc.dataclass_table_schema(Drive, primary_key=("id",))` is a pure
+adapter to the existing table schema. It performs no project installation or
+migration. Binding requires matching columns, scalar types, units and bounds;
+mismatches report the field and require an explicit schema change. Metadata can
+also be written as `field(metadata={"parameter": sc.ParameterSpec(unit="GHz")})`.
+No Pydantic base class or checker plugin is needed. Editors catch misspelled
+attributes, assigning strings to float fields, and arithmetic on an Optional
+before checking for `None`.
 
 ## Review configuration source changes
 
