@@ -10,6 +10,12 @@ models remain in the integrating project.
 The package root exports the `authoring` facade. Target integrations import
 their contracts from the owning submodules so those boundaries stay explicit.
 
+## Ordinary Python pulse recipes
+
+See [Editing a pulse recipe](examples/README.md) for bounded arithmetic over
+concrete quantities and scanned inputs, honest symbolic annotations, and a
+device-free two-point waveform/timing preview.
+
 ## Reference benchmarking protocols
 
 `scopecat_quantum.benchmarking` provides device-independent, versioned circuit

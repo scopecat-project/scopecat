@@ -35,6 +35,7 @@ from scopecat_quantum.pulses import (
 from ._analysis import (
     _pulse_envelope_parts,
 )
+from ._expressions import QuantityExpression
 from ._ir import (
     Acquisition,
     Coupler,
@@ -378,6 +379,11 @@ def _inspection_value(value: object) -> str:
         return value.id
     if isinstance(value, ProgramInput):
         return f"${value.id}"
+    if isinstance(value, QuantityExpression):
+        return (
+            f"({_inspection_value(value.left)} {value.operator} "
+            f"{_inspection_value(value.right)})"
+        )
     if isinstance(value, Quantity):
         return f"{value.value:g} {value.unit}"
     return repr(value)

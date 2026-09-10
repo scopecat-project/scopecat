@@ -43,9 +43,7 @@ from ._analysis import (
     _pulse_envelope_parts,
     _summarize_fragment,
 )
-from ._inspection import (
-    _describe_program_input,
-)
+from ._expressions import QuantityExpression, substitute_expression
 from ._ir import (
     CircuitArgument,
     CircuitFragment,
@@ -75,7 +73,7 @@ from ._ir import (
     _ShiftPhaseFragment,
 )
 
-type _PulseTemplateArgument = Quantity | int | float | ProgramInput
+type _PulseTemplateArgument = Quantity | int | float | ProgramInput | QuantityExpression
 
 type Gate = SingleQubitGate | TwoQubitGate
 
@@ -214,12 +212,12 @@ def _author_gate_call(
     ordered_arguments: list[tuple[str, CircuitArgument]] = []
     for parameter in gate_handle.parameters:
         value = arguments[parameter.id]
-        if isinstance(value, ProgramInput):
+        if isinstance(value, ProgramInput | QuantityExpression):
             if not _program_input_matches_kind(value, parameter.kind):
                 msg = (
                     f"gate {gate_handle.id!r} parameter {parameter.id!r} requires "
                     f"{parameter.kind.value!r}, but input {value.id!r} declares "
-                    f"{_describe_program_input(value)!r}"
+                    f"{value.value_type!r}"
                 )
                 raise TypeError(msg)
         elif not _argument_matches_kind(value, parameter.kind):
@@ -544,7 +542,7 @@ def _validate_fragment_call_arguments(
         if isinstance(actual, Qubit | Coupler):
             msg = f"quantum fragment {definition.id!r} port {name!r} requires a value"
             raise TypeError(msg)
-        if isinstance(actual, ProgramInput):
+        if isinstance(actual, ProgramInput | QuantityExpression):
             expected = _program_input_type(formal, non_negative=False)
             supplied = _program_input_type(actual, non_negative=False)
             if supplied != expected:
@@ -599,10 +597,12 @@ def _instantiate_pulse_template(
         raise ValueError(msg)
 
     expected = {input_handle.id: input_handle for input_handle in template.inputs}
-    input_bindings: dict[ProgramInput, Quantity | int | float | ProgramInput] = {}
+    input_bindings: dict[
+        ProgramInput, Quantity | int | float | ProgramInput | QuantityExpression
+    ] = {}
     for input_id, formal in expected.items():
         selected = inputs[input_id]
-        if isinstance(selected, ProgramInput):
+        if isinstance(selected, ProgramInput | QuantityExpression):
             if selected.value_type != formal.value_type:
                 msg = (
                     f"pulse template input {input_id!r} requires "
@@ -641,7 +641,9 @@ def _substitute_pulse_fragment(
     fragment: QuantumFragment,
     *,
     element_bindings: Mapping[QubitId | CouplerId, QubitId | CouplerId],
-    input_bindings: Mapping[ProgramInput, Quantity | int | float | ProgramInput],
+    input_bindings: Mapping[
+        ProgramInput, Quantity | int | float | ProgramInput | QuantityExpression
+    ],
 ) -> QuantumFragment:
     if isinstance(fragment, _PlayFragment):
         return _PlayFragment(
@@ -717,7 +719,9 @@ def _substitute_pulse_fragment(
 
 def _substitute_envelope(
     envelope: PulseEnvelope | AnalyticEnvelope,
-    bindings: Mapping[ProgramInput, Quantity | int | float | ProgramInput],
+    bindings: Mapping[
+        ProgramInput, Quantity | int | float | ProgramInput | QuantityExpression
+    ],
 ) -> PulseEnvelope | AnalyticEnvelope:
     if not isinstance(envelope, PulseEnvelope):
         return envelope
@@ -790,9 +794,11 @@ def _substitute_envelope(
 
 def _substitute_template_value(
     value: object,
-    bindings: Mapping[ProgramInput, Quantity | int | float | ProgramInput],
+    bindings: Mapping[
+        ProgramInput, Quantity | int | float | ProgramInput | QuantityExpression
+    ],
 ) -> object:
-    return bindings[value] if isinstance(value, ProgramInput) else value
+    return substitute_expression(value, bindings)
 
 
 def _substitute_signal(

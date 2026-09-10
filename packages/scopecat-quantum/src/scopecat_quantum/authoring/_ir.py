@@ -7,12 +7,8 @@ from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Annotated, Literal, Protocol, overload, override
 
-from scopecat import Quantity
 from scopecat.authoring import (
     Input as ExperimentInput,
-)
-from scopecat.authoring import (
-    ScalarType,
 )
 from scopecat.program.value_types import (
     Entity as EntityAtomType,
@@ -40,6 +36,10 @@ from scopecat_quantum.pulses import (
     FrameSignal,
     PlaySignal,
 )
+
+from ._expressions import ProgramInput as ProgramInput
+from ._expressions import QuantityExpression
+from ._expressions import QuantumQuantity as QuantumQuantity
 
 
 @dataclass(frozen=True, slots=True, repr=False)
@@ -175,20 +175,6 @@ class QubitPairSet:
         )
 
 
-@dataclass(frozen=True, slots=True, repr=False)
-class ProgramInput:
-    """One core-typed scalar input shared by circuit and pulse authoring."""
-
-    _id: str
-    value_type: ScalarType
-
-    @property
-    def id(self) -> str:
-        """Return the stable input-port identity."""
-
-        return self._id
-
-
 @dataclass(frozen=True, slots=True, repr=False, eq=False)
 class MeasurementResult:
     """One typed result produced by logical measurement or pulse acquisition."""
@@ -302,10 +288,7 @@ class PulseFragment(QuantumFragment):
     __slots__ = ()
 
 
-type CircuitArgument = GateArgumentValue | ProgramInput
-
-
-type QuantumQuantity = Quantity | ProgramInput
+type CircuitArgument = GateArgumentValue | ProgramInput | QuantityExpression
 
 
 type EntitySetPort = QubitSet | CouplerSet | QubitPairSet

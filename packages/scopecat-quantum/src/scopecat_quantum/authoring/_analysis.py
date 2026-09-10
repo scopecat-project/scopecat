@@ -58,6 +58,7 @@ from scopecat_quantum.pulses import (
     LogicalSignal,
 )
 
+from ._expressions import QuantityExpression, expression_inputs
 from ._ir import (
     Acquisition,
     Coupler,
@@ -293,7 +294,7 @@ def _is_integer_input(value: ProgramInput) -> bool:
 
 
 def _program_input_type(
-    value: ProgramInput,
+    value: ProgramInput | QuantityExpression,
     *,
     non_negative: bool,
 ) -> ScalarType:
@@ -381,7 +382,7 @@ def _program_python_type_matches_gate_kind(
     expected: dict[GateParameterKind, tuple[object, ...]] = {
         GateParameterKind.INTEGER: (int,),
         GateParameterKind.NUMBER: (int, float),
-        GateParameterKind.ANGLE: (Quantity,),
+        GateParameterKind.ANGLE: (Quantity, QuantumQuantity),
     }
     return annotation is object or annotation in expected[kind]
 
@@ -399,7 +400,7 @@ def _program_python_type_matches_scalar(
         FloatAtomType: (float,),
         IntType: (int,),
         PayloadType: (dict, Mapping),
-        QuantityAtomType: (Quantity,),
+        QuantityAtomType: (Quantity, QuantumQuantity),
         StringType: (str,),
     }
     return annotation in expected[type(atom)]
@@ -581,9 +582,9 @@ def _summarize_fragment(fragment: QuantumFragment) -> _FragmentFacts:
                 if isinstance(value, Qubit | Coupler)
             ),
             inputs=tuple(
-                value
+                input_handle
                 for _name, value in fragment.arguments
-                if isinstance(value, ProgramInput)
+                for input_handle in expression_inputs(value)
             ),
             gate_definitions=fragment.definition.envelope.gate_definitions,
         )
@@ -593,9 +594,9 @@ def _summarize_fragment(fragment: QuantumFragment) -> _FragmentFacts:
         return _FragmentFacts(
             element_uses=fragment.qubits,
             inputs=tuple(
-                value
+                input_handle
                 for _argument_id, value in fragment.arguments
-                if isinstance(value, ProgramInput)
+                for input_handle in expression_inputs(value)
             ),
             gate_definitions=(fragment.gate.definition,),
         )
@@ -611,11 +612,7 @@ def _summarize_fragment(fragment: QuantumFragment) -> _FragmentFacts:
             pulse_owners=(_signal_owner(fragment.signal),),
             element_uses=(fragment.result.qubit,),
             inputs=(
-                *(
-                    (fragment.duration,)
-                    if isinstance(fragment.duration, ProgramInput)
-                    else ()
-                ),
+                *expression_inputs(fragment.duration),
                 *_result_dimension_inputs(fragment.result),
             ),
             results=(fragment.result,),
@@ -632,20 +629,14 @@ def _summarize_fragment(fragment: QuantumFragment) -> _FragmentFacts:
             pulse_only=True,
             pulse_owners=(_signal_owner(fragment.signal),),
             element_uses=(_signal_element(fragment.signal),),
-            inputs=(
-                (fragment.duration,)
-                if isinstance(fragment.duration, ProgramInput)
-                else ()
-            ),
+            inputs=expression_inputs(fragment.duration),
         )
     if isinstance(fragment, _ShiftPhaseFragment):
         return _FragmentFacts(
             pulse_only=True,
             pulse_owners=(_signal_owner(fragment.signal),),
             element_uses=(_signal_element(fragment.signal),),
-            inputs=(
-                (fragment.phase,) if isinstance(fragment.phase, ProgramInput) else ()
-            ),
+            inputs=expression_inputs(fragment.phase),
         )
     if isinstance(fragment, _PulseTemplateCallFragment):
         body = _summarize_fragment(fragment.body)
@@ -1058,7 +1049,7 @@ def _envelope_inputs(
         _frequency_reference,
     ) = _pulse_envelope_parts(envelope)
     return tuple(
-        value
+        input_handle
         for value in (
             duration,
             amplitude,
@@ -1069,7 +1060,7 @@ def _envelope_inputs(
             phase,
             frequency_offset,
         )
-        if isinstance(value, ProgramInput)
+        for input_handle in expression_inputs(value)
     )
 
 
@@ -1093,7 +1084,7 @@ def _argument_matches_kind(value: object, kind: GateParameterKind) -> bool:
 
 
 def _program_input_matches_kind(
-    value: ProgramInput,
+    value: ProgramInput | QuantityExpression,
     kind: GateParameterKind,
 ) -> bool:
     atom = value.value_type.atom
