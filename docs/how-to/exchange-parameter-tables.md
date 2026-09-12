@@ -28,8 +28,8 @@ version = params.save("drive-import")
 ```
 
 `preview_json()` validates the whole import without changing the workspace.
-`apply()` checks the base again before editing. If the workspace changed or was
-saved since export/preview, export again and review the edits against the new base.
+`apply()` checks the base again before editing. If this table was edited or the
+workspace was saved since export/preview, export again and review the new base.
 An export is intended for its originating context, not automatic cross-project
 parameter transfer or configuration migration.
 
