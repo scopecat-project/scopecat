@@ -128,6 +128,14 @@ if TYPE_CHECKING:
         ParameterSpec,
         dataclass_table_schema,
     )
+    from scopecat.authoring.parameter_models import (
+        Magnitude,
+        Param,
+        ParameterModel,
+        param,
+        parameter_ref,
+        quantity,
+    )
     from scopecat.automation import (
         CalibrationDefinition,
         CalibrationDependencyEvidence,
@@ -309,6 +317,12 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     ),
     "EntityRef": ("scopecat.kernel.entity", "EntityRef"),
     "entity_ref": ("scopecat.kernel.entity", "entity_ref"),
+    "Magnitude": ("scopecat.authoring.parameter_models", "Magnitude"),
+    "Param": ("scopecat.authoring.parameter_models", "Param"),
+    "ParameterModel": ("scopecat.authoring.parameter_models", "ParameterModel"),
+    "param": ("scopecat.authoring.parameter_models", "param"),
+    "quantity": ("scopecat.authoring.parameter_models", "quantity"),
+    "parameter_ref": ("scopecat.authoring.parameter_models", "parameter_ref"),
     "ParameterSpec": ("scopecat.authoring.parameter_dataclasses", "ParameterSpec"),
     "dataclass_table_schema": (
         "scopecat.authoring.parameter_dataclasses",

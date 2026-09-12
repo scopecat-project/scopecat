@@ -26,6 +26,11 @@ from reference_lab.workflows.authored.ordinary_analysis import (
 from reference_lab.workflows.exploratory_signal import exploratory_signal
 
 
+class CarrierTarget(sc.ParameterModel, table="qubits"):
+    qubit: sc.Param[str] = sc.param(key=True)
+    drive_carrier_frequency: sc.Magnitude[float] = sc.quantity(unit="Hz")
+
+
 def test_typed_candidates_retain_cells_and_independent_policy(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -74,9 +79,9 @@ def test_typed_candidates_retain_cells_and_independent_policy(
             candidate = author.config.stage(
                 edited,
                 name="carrier",
-                table="qubits",
+                table=CarrierTarget,
                 key="q0",
-                fields={"drive_carrier_frequency": "frequency"},
+                fields={CarrierTarget.drive_carrier_frequency: "frequency"},
             )
             manual = (
                 run.analysis("manual estimate")
