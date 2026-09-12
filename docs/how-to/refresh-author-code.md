@@ -11,7 +11,10 @@ form inputs for review; check the new controls before previewing again.
 
 A syntax or import failure displays its file and traceback. The previous catalog
 remains usable. Fix the file and refresh again. Refresh is explicit: saving a file
-alone never changes the active definitions. Concurrent refreshes compare the
+alone never changes the active definitions. Refresh checks source imports and
+declaration contracts without running experiment bodies. Preview checks the
+program built for the selected inputs; a successful refresh alone is not a
+validation of all structural choices. Concurrent refreshes compare the
 observed generation; a losing refresh must inspect the new state before retrying.
 
 ## Notebook path

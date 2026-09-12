@@ -249,7 +249,7 @@ def test_experiment_infers_identity_description_and_runtime_defaults() -> None:
         elaborations += 1
         experiment.use(count_source(count=count))
 
-    assert elaborations == 1
+    assert elaborations == 0
     assert count_experiment.id == "count_experiment"
     assert count_experiment.kind == "count_experiment"
     assert count_experiment.metadata["description"] == "Run one count experiment."
@@ -783,7 +783,7 @@ def test_repeated_default_module_calls_require_explicit_instances() -> None:
         experiment.use(source())
 
     with pytest.raises(ValueError, match="duplicate module instance ids"):
-        sc.experiment(id="test.repeated-defaults")(repeated)
+        sc.experiment(id="test.repeated-defaults")(repeated)()
 
     @sc.experiment(id="test.explicit-instances")
     def explicit(experiment: sc.ExperimentContext) -> None:

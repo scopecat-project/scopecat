@@ -75,8 +75,9 @@ def test_experiment_scan_materializes_values_once_and_accepts_atom_types() -> No
             value_type=sc.EntityType(entity_kind="logical_qubit"),
         )
 
-    assert visits == 1
+    assert visits == 0
     [axis] = inferred().definition.default_point_plan.domain.axes
+    assert visits == 1
     assert axis.value_type == sc.ScalarType(sc.EntityType(entity_kind="logical_qubit"))
 
 
@@ -85,7 +86,7 @@ def test_experiment_scan_requires_a_type_for_empty_values() -> None:
         experiment.scan("empty", ())
 
     with pytest.raises(TypeError, match="empty scan values require value_type"):
-        sc.experiment(empty)
+        sc.experiment(empty)()
 
 
 @pytest.mark.parametrize("scan_first", [False, True])
@@ -103,7 +104,7 @@ def test_experiment_scan_cannot_mix_with_explicit_point_domains(
             experiment.scan("implicit", (1, 2))
 
     with pytest.raises(ValueError, match="cannot be combined"):
-        sc.experiment(mixed)
+        sc.experiment(mixed)()
 
 
 def test_around_scan_requires_compatible_quantity_dimensions() -> None:

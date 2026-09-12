@@ -141,4 +141,4 @@ def test_point_rows_cannot_be_combined_with_grid_scans() -> None:
         experiment.points(({x: 3},))
 
     with pytest.raises(ValueError, match="can only be declared once"):
-        sc.experiment(id="test.mixed-point-domain", kind="point_rows")(definition)
+        sc.experiment(id="test.mixed-point-domain", kind="point_rows")(definition)()

@@ -58,17 +58,21 @@ def test_copy_discovery_and_exact_initial_declaration_identity(
     monkeypatch.delitem(sys.modules, "author_copy")
 
 
-def test_missing_author_control_contract_is_named(
+def test_discovery_accepts_experiments_without_numeric_controls(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(sys, "path", [str(tmp_path), *sys.path])
-    (tmp_path / "bad_author.py").write_text(
-        SOURCE.replace("@sc.experiment(controls=CONTROLS)", "@sc.experiment"),
+    (tmp_path / "plain_author.py").write_text(
+        "import scopecat as sc\n"
+        "@sc.experiment\n"
+        "def plain(ctx: sc.ExperimentContext):\n"
+        "    return None\n",
         encoding="utf-8",
     )
-    with pytest.raises(ValueError, match="bad_author:small: declare a ControlSet"):
-        AuthorExperiments.discover("bad_author")
-    monkeypatch.delitem(sys.modules, "bad_author")
+    author = AuthorExperiments.discover("plain_author").experiments[0]
+    assert author.entry.controls == ()
+    assert author.declaration.bind().definition.controls is author.controls
+    monkeypatch.delitem(sys.modules, "plain_author")
 
 
 def test_reexports_are_not_discovered_twice(
@@ -205,7 +209,7 @@ def test_author_scalar_schema_and_binding_use_the_same_declaration(
         "mode": "long",
     }
     rebound = author.declaration.bind(**values.model_dump())
-    assert rebound.definition != author.invocation.definition
+    assert rebound.definition != author.declaration.bind().definition
     for invalid in (
         {"shots": "64"},
         {"shots": True},
@@ -240,3 +244,103 @@ def test_author_unsupported_form_type_is_rejected_at_discovery(
     with pytest.raises(ValueError, match=r"author input 'option'.*JSON scalar"):
         AuthorExperiments.discover(name)
     monkeypatch.delitem(sys.modules, name)
+
+
+def test_discovery_does_not_construct_a_program_or_require_fake_defaults(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from pydantic import ValidationError
+
+    name = "required_author"
+    monkeypatch.setattr(sys, "path", [str(tmp_path), *sys.path])
+    (tmp_path / f"{name}.py").write_text(
+        "import scopecat as sc\n"
+        "builds = []\n"
+        "@sc.experiment\n"
+        "def required(ctx: sc.ExperimentContext, qubit: str):\n"
+        "    builds.append(qubit)\n"
+        "    return None\n"
+        "@sc.experiment\n"
+        "def empty(ctx: sc.ExperimentContext):\n"
+        "    builds.append('empty')\n"
+        "    return None\n"
+    )
+    try:
+        authors = AuthorExperiments.discover(name)
+        module = importlib.import_module(name)
+        assert module.builds == []
+        author = next(
+            item for item in authors.experiments if item.entry.id == "required"
+        )
+        assert author.entry.request.required == ("qubit",)
+        field = author.entry.request.properties["qubit"]
+        assert not isinstance(field, bool)
+        assert "default" not in field.model_fields_set
+        with pytest.raises(ValidationError, match="qubit"):
+            author.input_model.model_validate({})
+        inputs = author.input_model.model_validate({"qubit": "q0"})
+        author.declaration.bind(**inputs.model_dump())
+        assert module.builds == ["q0"]
+    finally:
+        monkeypatch.delitem(sys.modules, name)
+
+
+def test_required_runtime_inputs_are_visible_and_validate_before_build(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from pydantic import ValidationError
+    from scopecat_testkit.authoring import load_config
+
+    name = "runtime_author"
+    monkeypatch.setattr(sys, "path", [str(tmp_path), *sys.path])
+    (tmp_path / f"{name}.py").write_text(
+        "import scopecat as sc\n"
+        "from typing import Annotated\n"
+        "@sc.experiment\n"
+        "def selected(ctx: sc.ExperimentContext, target: str, "
+        "count: Annotated[sc.Input[int], sc.IntType(minimum=1)], "
+        "gain: sc.Input[float] = 0.5):\n"
+        "    return count * gain\n",
+        encoding="utf-8",
+    )
+    try:
+        author = AuthorExperiments.discover(name).experiments[0]
+        assert author.entry.request.required == ("target", "count")
+        config = load_config()
+        with pytest.raises(ValidationError, match="count"):
+            author.edit(config=config, inputs={"target": "q0"})
+        with pytest.raises(ValidationError, match="count"):
+            author.edit(config=config, inputs={"target": "q0", "count": "2"})
+        invocation = author.edit(config=config, inputs={"target": "q0", "count": 2})
+        assert invocation.input_overrides == {"count": 2, "gain": 0.5}
+        assert invocation.definition.controls is author.controls
+    finally:
+        monkeypatch.delitem(sys.modules, name)
+
+
+def test_result_contract_survives_unloading_the_declaration_module(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    name = "retained_result_author"
+    monkeypatch.setattr(sys, "path", [str(tmp_path), *sys.path])
+    (tmp_path / f"{name}.py").write_text(
+        "from __future__ import annotations\n"
+        "from dataclasses import dataclass\n"
+        "from typing import Annotated\n"
+        "import scopecat as sc\n"
+        "@dataclass\n"
+        "class Signal:\n"
+        "    value: Annotated[sc.ValueRef[float], sc.Result(id='signal')]\n"
+        "@dataclass\n"
+        "class Data:\n"
+        "    signals: tuple[Signal, ...]\n"
+        "@sc.experiment\n"
+        "def observed(ctx: sc.ExperimentContext, gain: sc.Input[float] = 1.) -> Data:\n"
+        "    return Data((Signal(sc.input_ref(gain)),))\n",
+        encoding="utf-8",
+    )
+    author = AuthorExperiments.discover(name).experiments[0]
+    monkeypatch.delitem(sys.modules, name)
+    invocation = author.declaration.bind()
+    assert invocation.definition.result_fields[0].path == ("signals", "0", "value")
+    assert invocation.definition.result_fields[0].variable_id == "signal"

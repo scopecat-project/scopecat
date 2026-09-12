@@ -838,11 +838,13 @@ def test_repeated_program_calls_require_explicit_instances() -> None:
     with pytest.raises(ValueError, match="duplicate module domain execution ids"):
 
         @sc.experiment(id="test.quantum.repeated-defaults")
-        def repeated_defaults(  # pyright: ignore[reportUnusedFunction]
+        def repeated_defaults(
             context: sc.ExperimentContext,
         ) -> None:
             context.use(declaration("q0").with_shots(8))
             context.use(declaration("q0").with_shots(8))
+
+        repeated_defaults()
 
     left = declaration.call("left", "q0").with_shots(8)
     right = declaration.call("right", "q0").with_shots(8)
