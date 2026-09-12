@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 
+import scopecat as sc
 from scopecat.api.calibration_finalizer import (
     CalibrationPublicationPlanningContext,
     CalibrationPublicationProcedureView,
@@ -43,7 +44,7 @@ from scopecat.records.parameter import (
 from scopecat.records.parameter_change import ParameterChangeProposal
 from scopecat.records.run import AnalysisCandidateRunConfigSource
 
-from reference_lab.parameters import DRAG_BETA, QUBIT, QUBITS
+from reference_lab.parameters import QubitParameters
 from reference_lab.workflows.drag_beta_experiment import DragBetaQubit
 from reference_lab.workflows.drag_beta_freshness import (
     DRAG_BETA_CALIBRATION_FANOUT_SCOPE,
@@ -62,7 +63,7 @@ from reference_lab.workflows.drag_beta_verification import (
 )
 
 DRAG_BETA_COMPOSITION_POLICY_ID = "reference-lab.drag-beta-cohort-composition"
-DRAG_BETA_COMPOSITION_POLICY_VERSION = "7"
+DRAG_BETA_COMPOSITION_POLICY_VERSION = "8"
 DRAG_BETA_VERIFICATION_EVIDENCE_STEP = "verification"
 DRAG_BETA_PUBLICATION_ACTOR = "reference-lab-drag-beta-finalizer"
 DRAG_BETA_PUBLICATION_NOTE = "publish verified q0/q1 DRAG calibration cohort"
@@ -87,9 +88,9 @@ def _drag_beta_composition_policy_fingerprint() -> str:
             },
             "targets": list(_DRAG_BETA_TARGET_IDS),
             "owned_path": {
-                "parameter_id": QUBITS.id,
-                "primary_key": QUBIT.id,
-                "column_id": DRAG_BETA.id,
+                "parameter_id": sc.parameter_table_name(QubitParameters),
+                "primary_key": QubitParameters.qubit.name,
+                "column_id": QubitParameters.drag_beta.name,
             },
             "proposal_id": "{qubit}-drag-beta",
             "decision": {
@@ -121,16 +122,13 @@ def _drag_beta_composition_policy_fingerprint() -> str:
                     label="DRAG merged result input projector",
                 ),
                 "cohort_base": python_source_identity(
-                    _drag_beta_cohort_base,
-                    label="DRAG cohort base resolver",
+                    _drag_beta_cohort_base, label="DRAG cohort base resolver"
                 ),
                 "member_material": python_source_identity(
-                    _drag_beta_member_material,
-                    label="DRAG member proof resolver",
+                    _drag_beta_member_material, label="DRAG member proof resolver"
                 ),
                 "qubit_rows": python_source_identity(
-                    _qubit_rows,
-                    label="DRAG owned-row projector",
+                    _qubit_rows, label="DRAG owned-row projector"
                 ),
                 "candidate_id": python_source_identity(
                     _drag_beta_merged_candidate_id,
@@ -297,11 +295,11 @@ def validate_drag_beta_target_owned_proposal(
         raise ValueError("DRAG proposal must contain exactly one parameter delta")
     [delta] = proposal.deltas
     if (
-        delta.parameter_id != QUBITS.id
+        delta.parameter_id != sc.parameter_table_name(QubitParameters)
         or not isinstance(delta.before, TableParameterValue)
-        or not isinstance(delta.after, TableParameterValue)
-        or delta.before.id != QUBITS.id
-        or delta.after.id != QUBITS.id
+        or (not isinstance(delta.after, TableParameterValue))
+        or (delta.before.id != sc.parameter_table_name(QubitParameters))
+        or (delta.after.id != sc.parameter_table_name(QubitParameters))
     ):
         raise ValueError("DRAG proposal must update the qubit parameter table")
 
@@ -309,7 +307,10 @@ def validate_drag_beta_target_owned_proposal(
     after_rows = _qubit_rows(delta.after)
     if before_rows.keys() != after_rows.keys():
         raise ValueError("DRAG proposal cannot add or remove qubit rows")
-    if qubit not in before_rows or DRAG_BETA.id not in before_rows[qubit]:
+    if (
+        qubit not in before_rows
+        or QubitParameters.drag_beta.name not in before_rows[qubit]
+    ):
         raise ValueError("DRAG proposal does not contain its owned beta cell")
     changed_cells: list[tuple[str, str]] = []
     for row_qubit, before in before_rows.items():
@@ -319,7 +320,7 @@ def validate_drag_beta_target_owned_proposal(
         for column_id, before_value in before.items():
             if not scalar_values_equal(before_value, after[column_id]):
                 changed_cells.append((row_qubit, column_id))
-    owned_cell = (qubit, DRAG_BETA.id)
+    owned_cell = (qubit, QubitParameters.drag_beta.name)
     if any(cell != owned_cell for cell in changed_cells):
         raise ValueError("DRAG proposal changed a non-owned parameter cell")
     if owned_cell not in changed_cells:
@@ -525,7 +526,7 @@ def _qubit_rows(
 ) -> dict[str, Mapping[str, ParameterAtomValue]]:
     rows: dict[str, Mapping[str, ParameterAtomValue]] = {}
     for row in table.rows:
-        entity = row.get(QUBIT.id)
+        entity = row.get(QubitParameters.qubit.name)
         if not isinstance(entity, EntityRef) or entity.kind != "logical_qubit":
             raise ValueError("DRAG proposal has an invalid qubit primary key")
         if entity.id in rows:

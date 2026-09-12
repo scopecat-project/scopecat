@@ -6,6 +6,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
 from typing import Protocol
 
+import scopecat as sc
 from scopecat.inspection import (
     CompiledArtifactInspection,
     CompiledProgramInspectionQuery,
@@ -51,7 +52,7 @@ from scopecat_quantum.pulse_recipes import PulseRecipeMaterializationCache
 from scopecat_quantum.realtime import ScheduledBlock
 from scopecat_quantum.targets import TargetCompileEntry
 
-from reference_lab.parameters import QUBITS
+from reference_lab.parameters import QubitParameters
 from reference_lab.point_values import QuantumLabPointValues
 from reference_lab.quantum_compilation.compiler_parameters import (
     QuantumCompilerParameters,
@@ -428,7 +429,7 @@ def _validate_call(
     ):
         raise ValueError("quantum Program result ports changed before compilation")
     compiler_input_ids = tuple(port.id for port in call.program.compiler_inputs)
-    if compiler_input_ids not in ((), (QUBITS.id,)):
+    if compiler_input_ids not in ((), (sc.parameter_table_name(QubitParameters),)):
         raise ValueError("quantum compiler inputs must be the qubits collection")
     for result in program.results:
         binding = call.result(result.id)
@@ -464,7 +465,7 @@ def _compile_points(
         tuple(QuantumCompilerParameters() for _ordinal in point_ordinals)
         if not inputs.compiler
         else inputs.decode_compiler_collection(
-            QUBITS.id,
+            sc.parameter_table_name(QubitParameters),
             QuantumCompilerParameters.from_qubit_rows,
         )
     )

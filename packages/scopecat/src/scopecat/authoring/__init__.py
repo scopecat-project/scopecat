@@ -53,17 +53,8 @@ from scopecat.authoring.parameter_dataclasses import (
     ParameterSpec,
     dataclass_table_schema,
 )
-from scopecat.authoring.parameters import (
-    ParameterAssignment,
-    ParameterCell,
-    ParameterField,
-    ParameterRow,
-    ParameterRowKey,
-    ParameterScalar,
-    ParameterSchema,
+from scopecat.authoring.parameter_models import (
     parameter_catalog,
-    parameter_field,
-    parameter_schema,
 )
 from scopecat.authoring.scans import Axis, PointRow, axis
 from scopecat.kernel.resource_identity import (
@@ -177,14 +168,7 @@ __all__ = [
     "ModuleInput",
     "ModuleInvocation",
     "OneEntity",
-    "ParameterAssignment",
-    "ParameterCell",
-    "ParameterField",
     "ParameterKeyInput",
-    "ParameterRow",
-    "ParameterRowKey",
-    "ParameterScalar",
-    "ParameterSchema",
     "ParameterSpec",
     "PayloadType",
     "PerEntity",
@@ -224,8 +208,6 @@ __all__ = [
     "one",
     "parameter",
     "parameter_catalog",
-    "parameter_field",
     "parameter_lookup",
-    "parameter_schema",
     "resource_role",
 ]

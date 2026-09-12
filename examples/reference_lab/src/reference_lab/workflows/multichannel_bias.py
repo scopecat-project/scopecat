@@ -14,17 +14,7 @@ from scopecat_instruments import (
     temperature_readout,
 )
 
-from reference_lab.parameters import (
-    BIAS_PROFILE,
-    BIAS_PROFILES,
-    BIAS_QUBIT,
-    CALIBRATION_QUBIT,
-    CHANNEL_CALIBRATIONS,
-    FLUX_GAIN,
-    FLUX_OFFSET,
-    FLUX_POLARITY,
-    LOGICAL_BIAS,
-)
+from reference_lab.parameters import BiasProfile, ChannelCalibration
 from reference_lab.workflows.flux_spectroscopy import CRYOSTAT
 
 Q0 = EntityRef(id="q0", kind="logical_qubit")
@@ -39,22 +29,13 @@ OPERATE_PROFILE = "operate"
 def _physical_bias_profile(
     profile: str,
 ) -> sc.PerEntity[sc.ValueRef[sc.Quantity]]:
-    profile_rows = BIAS_PROFILES.join(
-        QUBIT_SELECTION,
-        on=BIAS_QUBIT,
-        where=(BIAS_PROFILE.key(profile),),
-    )
-    calibrations = CHANNEL_CALIBRATIONS.join(
-        QUBIT_SELECTION,
-        on=CALIBRATION_QUBIT,
-    )
     return sc.PerEntity(
         (
             qubit,
-            profile_rows[qubit][LOGICAL_BIAS].ref
-            * calibrations[qubit][FLUX_GAIN].ref
-            * calibrations[qubit][FLUX_POLARITY].ref
-            + calibrations[qubit][FLUX_OFFSET].ref,
+            sc.parameter_ref(BiasProfile.logical_bias, (profile, qubit))
+            * sc.parameter_ref(ChannelCalibration.flux_gain, qubit)
+            * sc.parameter_ref(ChannelCalibration.flux_polarity, qubit)
+            + sc.parameter_ref(ChannelCalibration.flux_offset, qubit),
         )
         for qubit in QUBIT_SELECTION
     )

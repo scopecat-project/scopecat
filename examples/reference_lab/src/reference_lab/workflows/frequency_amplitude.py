@@ -10,7 +10,7 @@ import scopecat as sc
 from scopecat.program.scans import ValuesScanSource
 from scopecat.records.parameter import TableParameterValue
 
-from reference_lab.parameters import DRIVE_CARRIER_FREQUENCY, Q0, QUBIT, QUBITS
+from reference_lab.parameters import QubitParameters
 
 FREQUENCY = sc.Control(
     "frequency",
@@ -35,12 +35,19 @@ AMPLITUDE = sc.Control(
 
 
 def configured_carrier(context: sc.ControlValidationContext) -> sc.Quantity:
-    table = context.config.parameter_snapshot.get(QUBITS.id)
+    table = context.config.parameter_snapshot.get(
+        sc.parameter_table_name(QubitParameters)
+    )
     assert isinstance(table, TableParameterValue)
-    [row] = [row for row in table.rows if row[QUBIT.id] == Q0.key[0].value]
-    value = row[DRIVE_CARRIER_FREQUENCY.id]
+    [row] = [
+        row
+        for row in table.rows
+        if row[QubitParameters.qubit.name]
+        == sc.EntityRef(id="q0", kind="logical_qubit")
+    ]
+    value = row[QubitParameters.drive_carrier_frequency.name]
     assert isinstance(value, float | sc.Quantity)
-    selected = DRIVE_CARRIER_FREQUENCY.value(value).value
+    selected = value if isinstance(value, sc.Quantity) else sc.Quantity(value, "Hz")
     assert isinstance(selected, sc.Quantity)
     return selected.to("GHz")
 
@@ -133,7 +140,10 @@ def frequency_amplitude(context: sc.ExperimentContext) -> SignalDataset:
             inputs={
                 "frequency": FREQUENCY.ref,
                 "amplitude": AMPLITUDE.ref,
-                "reference": Q0[DRIVE_CARRIER_FREQUENCY].ref,
+                "reference": sc.parameter_ref(
+                    QubitParameters.drive_carrier_frequency,
+                    sc.EntityRef(id="q0", kind="logical_qubit"),
+                ),
             },
         ),
     )

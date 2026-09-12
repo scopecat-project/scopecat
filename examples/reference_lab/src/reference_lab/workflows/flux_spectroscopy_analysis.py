@@ -12,12 +12,7 @@ from numpy.typing import ArrayLike, NDArray
 from scipy.optimize import least_squares  # pyright: ignore[reportUnknownVariableType]
 from scopecat.measurements.results import Dataset
 
-from reference_lab.parameters import (
-    FLUX_SWEET_SPOT,
-    Q0_READOUT,
-    RESONANCE_FREQUENCY,
-    RESONATOR_LINEWIDTH,
-)
+from reference_lab.parameters import ReadoutResonator
 from reference_lab.workflows.flux_spectroscopy import FLUX_SPECTROSCOPY
 
 FLUX_SPECTROSCOPY_ANALYSIS_ID = "reference_lab.flux_spectroscopy.analysis"
@@ -306,11 +301,7 @@ def flux_spectroscopy_analysis(context: sc.AnalysisContext) -> sc.Analysis:
     )
     return (
         context.result("Resonator flux spectroscopy")
-        .dataset(
-            "fit-by-bias",
-            fits,
-            title="Resonator fit by DC bias",
-        )
+        .dataset("fit-by-bias", fits, title="Resonator fit by DC bias")
         .fact(
             "selected-sweet-spot",
             sweet_spot,
@@ -341,10 +332,16 @@ def flux_spectroscopy_analysis(context: sc.AnalysisContext) -> sc.Analysis:
         )
         .propose(
             FLUX_SPECTROSCOPY_PROPOSAL_ID,
-            Q0_READOUT.update(
-                RESONANCE_FREQUENCY.value(sweet_spot.resonance_frequency),
-                RESONATOR_LINEWIDTH.value(sweet_spot.linewidth),
-                FLUX_SWEET_SPOT.value(sweet_spot.dc_bias),
+            sc.update_parameter_rows(
+                sc.parameter_table_name(ReadoutResonator),
+                key={"resonator": sc.EntityRef(id="q0", kind="logical_qubit")},
+                values={
+                    ReadoutResonator.resonance_frequency.name: (
+                        sweet_spot.resonance_frequency
+                    ),
+                    ReadoutResonator.linewidth.name: sweet_spot.linewidth,
+                    ReadoutResonator.flux_sweet_spot.name: sweet_spot.dc_bias,
+                },
             ),
             reason=(
                 "Use the maximum-frequency flux sweet spot from the fitted S21 "

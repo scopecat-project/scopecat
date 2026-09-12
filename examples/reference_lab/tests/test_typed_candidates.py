@@ -19,16 +19,12 @@ from scopecat_server.lifecycle import start_project, stop_project
 
 from reference_lab.configuration import EXAMPLE_ROOT
 from reference_lab.exploration import exploration_config
+from reference_lab.parameters import QubitParameters
 from reference_lab.workflows.authored.ordinary_analysis import (
     PeakResult,
     PeakVerification,
 )
 from reference_lab.workflows.exploratory_signal import exploratory_signal
-
-
-class CarrierTarget(sc.ParameterModel, table="qubits"):
-    qubit: sc.Param[str] = sc.param(key=True)
-    drive_carrier_frequency: sc.Magnitude[float] = sc.quantity(unit="Hz")
 
 
 def test_typed_candidates_retain_cells_and_independent_policy(
@@ -79,9 +75,9 @@ def test_typed_candidates_retain_cells_and_independent_policy(
             candidate = author.config.stage(
                 edited,
                 name="carrier",
-                table=CarrierTarget,
+                table=QubitParameters,
                 key="q0",
-                fields={CarrierTarget.drive_carrier_frequency: "frequency"},
+                fields={QubitParameters.drive_carrier_frequency: "frequency"},
             )
             manual = (
                 run.analysis("manual estimate")

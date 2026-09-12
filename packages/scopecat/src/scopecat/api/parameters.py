@@ -2,14 +2,17 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterator, Mapping, MutableMapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, MutableMapping, Sequence
 from dataclasses import dataclass, replace
 from html import escape
 from itertools import islice
 from typing import Protocol, Self, cast, overload, override
 
-from scopecat.authoring.parameter_dataclasses import (
-    DataclassParameterField,
+from scopecat.authoring.parameter_fields import (
+    ResolvedParameterField,
+    convert_parameter_bound,
+    require_parameter_field,
+    stored_parameter_value,
 )
 from scopecat.authoring.parameter_models import (
     ParameterModel,
@@ -38,7 +41,6 @@ from scopecat.daemon.client import DaemonConflictError
 from scopecat.daemon.views import ConfigContextResolution, ConfigEntryView
 from scopecat.kernel.errors import Conflict
 from scopecat.kernel.quantity import Quantity
-from scopecat.kernel.units import compatible_units, convert_linear_value
 from scopecat.kernel.value_identity import scalar_identity
 from scopecat.kernel.value_types import AtomType, Table
 from scopecat.kernel.value_types import Quantity as QuantityType
@@ -133,7 +135,7 @@ class ParameterWorkspace(Mapping[str, "ParameterTable"]):
     composite key uses a tuple in schema order. Row views stay live across edits,
     save, rebase and discard; deleting a row permanently invalidates its views.
     Use ``dict(row)`` for a detached row or ``copy()`` for an independent workspace.
-    Scalar parameters use ``scalar(name)`` and ``set_scalar(name, value)``.
+    Scalar parameters use the mutable values in ``scalars[name]``.
     """
 
     def __init__(
@@ -224,7 +226,7 @@ class ParameterWorkspace(Mapping[str, "ParameterTable"]):
     def table[T](
         self, name: str, *, row_type: type[T] | None = None
     ) -> ParameterTable | TypedParameterTable[T]:
-        """Select a dictionary table or bind a standard dataclass view."""
+        """Select a dictionary table or bind a declared row view."""
         table = self[name]
         return table if row_type is None else TypedParameterTable(table, row_type)
 
@@ -376,8 +378,8 @@ class ParameterWorkspace(Mapping[str, "ParameterTable"]):
             atom,
             unit=unit,
             dimension=None,
-            minimum=_bound(atom.minimum, atom.unit, unit),
-            maximum=_bound(atom.maximum, atom.unit, unit),
+            minimum=convert_parameter_bound(atom.minimum, atom.unit, unit),
+            maximum=convert_parameter_bound(atom.maximum, atom.unit, unit),
         )
         self._stage_structure(
             (
@@ -391,13 +393,10 @@ class ParameterWorkspace(Mapping[str, "ParameterTable"]):
             )
         )
 
-    def scalar(self, name: str) -> ParameterAtomValue:
-        return self._scalars[name]
-
-    def set_scalar(self, name: str, value: ParameterAtomValue) -> None:
-        if name not in self._scalars:
-            raise KeyError(f"unknown scalar parameter {name!r}")
-        self._scalars[name] = value
+    @property
+    def scalars(self) -> ScalarParameters:
+        """Edit existing scalar values; declarations remain explicit schema edits."""
+        return ScalarParameters(lambda: self._scalars)
 
     def copy(self) -> Self:
         """Detach all edits while retaining the same immutable base and connection."""
@@ -599,6 +598,34 @@ class ParameterWorkspace(Mapping[str, "ParameterTable"]):
         )
         self._base = selected
         self._load(merged)
+
+
+class ScalarParameters(Mapping[str, ParameterAtomValue]):
+    """Live scalar values with fixed declared keys, sharing workspace save/diff."""
+
+    def __init__(self, values: Callable[[], dict[str, ParameterAtomValue]]) -> None:
+        self._values = values
+
+    @override
+    def __getitem__(self, name: str) -> ParameterAtomValue:
+        return self._values()[name]
+
+    def __setitem__(self, name: str, value: ParameterAtomValue) -> None:
+        if name not in self._values():
+            raise KeyError(f"unknown scalar parameter {name!r}")
+        self._values()[name] = value
+
+    @override
+    def __iter__(self) -> Iterator[str]:
+        return iter(self._values())
+
+    @override
+    def __len__(self) -> int:
+        return len(self._values())
+
+    @override
+    def __repr__(self) -> str:
+        return repr(dict(self))
 
 
 class _TableData:
@@ -861,11 +888,11 @@ class ParameterRow(MutableMapping[str, ParameterAtomValue | None]):
 
 
 class TypedParameterTable[T](MutableMapping["RowKey", T]):
-    """Live typed rows; detached new rows use the ordinary dataclass constructor.
+    """Live typed rows backed by a shared mutable workspace.
 
     Assignment edits the shared workspace. Save/preview validates the resulting
     values. Reading normalizes quantity numbers without editing stored values.
-    A row class should be a data-only, mutable dataclass: constructors and
+    A row class is a data-only ParameterModel or mutable dataclass: constructors and
     post-init hooks are for new rows and are not run when selecting existing ones.
     """
 
@@ -880,48 +907,60 @@ class TypedParameterTable[T](MutableMapping["RowKey", T]):
         self._table = table
         self._row_type = row_type
         self._fields = parameter_fields(row_type)
-        inferred = parameter_table_schema(
-            row_type, primary_key=table.schema.primary_key
+        key = (
+            parameter_key(row_type)
+            if issubclass(row_type, ParameterModel)
+            else table.schema.primary_key
         )
+        if key != table.schema.primary_key:
+            raise TypeError(
+                f"{table.name}"
+                ": declared primary key "
+                f"{key}"
+                " differs from table "
+                f"{table.schema.primary_key}"
+            )
+        inferred = parameter_table_schema(row_type, primary_key=key)
         expected = {field.id: field.value_type for field in table.schema.columns}
         actual = {field.id: field.value_type for field in inferred.columns}
         if expected.keys() != actual.keys():
             raise TypeError(
-                f"{table.name}: dataclass columns differ from the table "
-                f"(missing {sorted(expected.keys() - actual.keys())}, "
-                f"extra {sorted(actual.keys() - expected.keys())}); "
-                "change the schema explicitly before binding"
+                f"{table.name}"
+                ": declared columns differ from the table (missing "
+                f"{sorted(expected.keys() - actual.keys())}"
+                ", extra "
+                f"{sorted(actual.keys() - expected.keys())}"
+                "); change the schema explicitly before binding"
             )
         for name, value_type in actual.items():
-            stored = expected[name].atom
-            declared = value_type.atom
-            if (
-                isinstance(stored, QuantityType)
-                and isinstance(declared, QuantityType)
-                and stored.unit is not None
-                and declared.unit is not None
-                and compatible_units(stored.unit, declared.unit)
-            ):
-                minimum = _bound(stored.minimum, stored.unit, declared.unit)
-                maximum = _bound(stored.maximum, stored.unit, declared.unit)
-                stored = replace(
-                    stored,
-                    unit=declared.unit,
-                    dimension=declared.dimension,
-                    minimum=minimum,
-                    maximum=maximum,
-                )
-            if stored != declared:
-                raise TypeError(
-                    f"{table.name}.{name}: dataclass type/unit/bounds {declared!r} "
-                    f"differ from table {expected[name].atom!r}; "
-                    "match the declaration or change the schema explicitly"
-                )
+            require_parameter_field(
+                value_type, expected[name], label=f"{table.name}.{name}"
+            )
 
         properties: dict[str, object] = {
             field.name: _property(field, stored_type=expected[field.name].atom)
             for field in self._fields
         }
+        if issubclass(row_type, ParameterModel):
+
+            def editing_values(instance: ParameterModel) -> dict[str, object]:
+                binding = cast(
+                    "_RowBinding",
+                    object.__getattribute__(instance, "_scopecat_binding"),
+                )
+                return {
+                    field.name: getattr(instance, field.name)
+                    for field in self._fields
+                    if field.optional or binding.row[field.name] is not None
+                }
+
+            def detached_copy(instance: ParameterModel) -> ParameterModel:
+                row = object.__new__(row_type)
+                object.__setattr__(row, "_parameter_values", editing_values(instance))
+                return cast("ParameterModel", row)
+
+            properties["_editing_values"] = editing_values
+            properties["copy"] = detached_copy
         properties["__slots__"] = ("_scopecat_binding",)
         self._live_type = type(f"{row_type.__name__}View", (row_type,), properties)
 
@@ -953,7 +992,7 @@ class TypedParameterTable[T](MutableMapping["RowKey", T]):
             value = cast("object", getattr(row, field.name))
             if value is None and field.optional:
                 continue
-            values[field.name] = _stored(
+            values[field.name] = stored_parameter_value(
                 value, field, label=f"{self._table.name}.{field.name}"
             )
         return values
@@ -979,41 +1018,13 @@ class TypedParameterTable[T](MutableMapping["RowKey", T]):
         return self[key]
 
 
-def _bound(value: float | None, source: str, target: str) -> float | None:
-    if value is None or source == target:
-        return value
-    converted = convert_linear_value(value, source, target)
-    if converted is None:
-        raise ValueError(
-            f"cannot convert parameter bound from {source!r} to {target!r}"
-        )
-    return converted
-
-
-def _stored(
-    value: object, field: DataclassParameterField, *, label: str
-) -> ParameterAtomValue:
-    if value is None:
-        raise ValueError(f"{label}: a required parameter cannot be None")
-    atom = field.value_type.atom
-    if isinstance(atom, QuantityType):
-        assert atom.unit is not None
-        if isinstance(value, Quantity):
-            return value.to(atom.unit)
-        if isinstance(value, int | float) and not isinstance(value, bool):
-            return Quantity(float(value), atom.unit)
-    # Ordinary dataclass assignments are not a runtime validation boundary.
-    # The existing workspace validates values when previewing or saving.
-    return cast("ParameterAtomValue", value)
-
-
 @dataclass(frozen=True, slots=True)
 class _RowBinding:
     row: ParameterRow
     label: str
 
 
-def _property(field: DataclassParameterField, *, stored_type: AtomType) -> property:
+def _property(field: ResolvedParameterField, *, stored_type: AtomType) -> property:
     def read(instance: object) -> object:
         binding = cast(
             "_RowBinding", object.__getattribute__(instance, "_scopecat_binding")
@@ -1045,7 +1056,7 @@ def _property(field: DataclassParameterField, *, stored_type: AtomType) -> prope
         if value is None and field.optional:
             row[field.name] = None
             return
-        row[field.name] = _stored(value, field, label=label)
+        row[field.name] = stored_parameter_value(value, field, label=label)
 
     return property(read, write)
 
@@ -1056,6 +1067,7 @@ __all__ = [
     "ParameterTable",
     "ParameterVersion",
     "ParameterWorkspace",
+    "ScalarParameters",
     "TypedParameterTable",
 ]
 

@@ -15,15 +15,7 @@ from scopecat_quantum.measurement_computes import (
     binary_iq_probabilities,
 )
 
-import reference_lab.parameters as lab_parameters
-from reference_lab.parameters import (
-    DRIVE_CARRIER_FREQUENCY,
-    DRIVE_LO_A,
-    LO_FREQUENCY,
-    LO_POWER,
-    QUBITS,
-    READOUT_LO,
-)
+from reference_lab.parameters import LoGroupParameters, QubitParameters
 from reference_lab.quantum_runner import (
     BINARY_IQ_DISCRIMINATOR,
     prepare_quantum_hardware,
@@ -68,14 +60,14 @@ def q0_fixed_if_lo_sweep(
     drive_lo = rf_source(experiment, for_=sc.one(Q0), role="drive-lo")
     drive_lo.ensure(
         frequency=lo_frequency,
-        power=DRIVE_LO_A[LO_POWER].ref,
+        power=sc.parameter_ref(LoGroupParameters.power, "drive-a"),
         output_enabled=True,
         reference_source="external",
     )
     readout_lo = rf_source(experiment, for_=sc.one(Q0), role="readout-lo")
     readout_lo.ensure(
-        frequency=READOUT_LO[LO_FREQUENCY].ref,
-        power=READOUT_LO[LO_POWER].ref,
+        frequency=sc.parameter_ref(LoGroupParameters.frequency, "readout"),
+        power=sc.parameter_ref(LoGroupParameters.power, "readout"),
         output_enabled=True,
         reference_source="external",
     )
@@ -89,9 +81,9 @@ def q0_fixed_if_lo_sweep(
             prepare_los=False,
         )
     )
-    signed_if = (
-        lab_parameters.Q0[DRIVE_CARRIER_FREQUENCY].ref - DRIVE_LO_A[LO_FREQUENCY].ref
-    )
+    signed_if = sc.parameter_ref(
+        QubitParameters.drive_carrier_frequency, "q0"
+    ) - sc.parameter_ref(LoGroupParameters.frequency, "drive-a")
     return FixedIfLoSweepDataset(
         lo_frequency=lo_frequency,
         signed_if_frequency=signed_if,
@@ -106,7 +98,9 @@ def conflicting_drive(experiment: sc.ExperimentContext) -> None:
 
     prepare_quantum_hardware(experiment)
     experiment.use(
-        conflicting_drive_program(qubit="q0").with_compiler_inputs(qubits=QUBITS.ref)
+        conflicting_drive_program(qubit="q0").with_compiler_inputs(
+            qubits=sc.parameter_table_ref(QubitParameters)
+        )
     )
 
 
@@ -230,7 +224,9 @@ def topology_scaled_ramsey(
         phase=sc.Quantity(0.0, "rad"),
     ).with_shots(RAMSEY_SHOTS)
     prepare_quantum_hardware(experiment)
-    configured_call = call.with_compiler_inputs(qubits=QUBITS.ref)
+    configured_call = call.with_compiler_inputs(
+        qubits=sc.parameter_table_ref(QubitParameters)
+    )
     experiment.use(configured_call)
     return TopologyScaledRamseyDataset(
         delay=delay,
@@ -257,7 +253,9 @@ def parallel_raw_ramsey(experiment: sc.ExperimentContext) -> ParallelRawRamseyDa
         q1_phase=sc.Quantity(0.4, "rad"),
     ).with_shots(RAMSEY_SHOTS)
     prepare_quantum_hardware(experiment)
-    configured_call = call.with_compiler_inputs(qubits=QUBITS.ref)
+    configured_call = call.with_compiler_inputs(
+        qubits=sc.parameter_table_ref(QubitParameters)
+    )
     experiment.use(configured_call)
     return ParallelRawRamseyDataset(
         delay=delay,
@@ -283,7 +281,9 @@ def parallel_two_qubit_ramsey(
         q1_phase=sc.Quantity(0.4, "rad"),
     ).with_shots(RAMSEY_SHOTS)
     prepare_quantum_hardware(experiment)
-    results = experiment.use(call.with_compiler_inputs(qubits=QUBITS.ref))
+    results = experiment.use(
+        call.with_compiler_inputs(qubits=sc.parameter_table_ref(QubitParameters))
+    )
     q0_products = binary_iq_probabilities(
         experiment,
         results.q0_iq_shots,

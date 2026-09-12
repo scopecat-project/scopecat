@@ -240,7 +240,7 @@ def test_revision_aware_notebook_prepare_preserves_parameter_context(
     from scopecat.application.author_project import AuthorProject
     from scopecat.records.config_context import ConfigContextRef, ContextRunConfigSource
 
-    from reference_lab.parameters import DRIVE_CARRIER_FREQUENCY, Q0
+    from reference_lab.parameters import QubitParameters
 
     fixture = reference_lab_daemon
     with fixture.application.connect(fixture.url) as lab:
@@ -263,7 +263,13 @@ def test_revision_aware_notebook_prepare_preserves_parameter_context(
         context = ConfigContextRef(
             entry_id=saved.entry.id, content_hash=saved.entry.content_hash
         )
-        overrides = (Q0[DRIVE_CARRIER_FREQUENCY].update(sc.Quantity(5.1, "GHz")),)
+        overrides = (
+            sc.parameter_update(
+                QubitParameters.drive_carrier_frequency,
+                sc.EntityRef(id="q0", kind="logical_qubit"),
+                sc.Quantity(5.1, "GHz"),
+            ),
+        )
         expected = lab.config.resolve_context(context, overrides=overrides)
         with AuthorProject(fixture.url, timeout=120) as authors:
             prepared = authors.prepare(

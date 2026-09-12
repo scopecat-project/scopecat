@@ -1,140 +1,41 @@
-from __future__ import annotations
+"""Declared field updates and identity-preserving composite-key references."""
 
-from typing import TYPE_CHECKING, assert_type
-
-import pytest
+from typing import assert_type
 
 import scopecat as sc
 from scopecat.program.value_refs import internal_value_ref_parameter_lookup
 
-_DEVICE = sc.parameter_field(
-    "device",
-    sc.EntityType(entity_kind="logical_device"),
-)
-_FREQUENCY = sc.parameter_field(
-    "frequency",
-    sc.QuantityType(unit="GHz"),
-)
-_ENABLED = sc.parameter_field("enabled", sc.BoolType())
-_DEVICES = sc.parameter_schema(
-    "device_parameters",
-    fields=(_DEVICE, _FREQUENCY, _ENABLED),
-    primary_key=(_DEVICE,),
-    description="Typed device calibration values.",
-)
-_Q0 = _DEVICES.row(
-    _DEVICE.key("q0"),
-)
+
+class Device(sc.ParameterModel, table="device_parameters"):
+    device: sc.Param[sc.EntityRef] = sc.param(key=True, entity_kind="logical_device")
+    frequency: sc.Magnitude[float] = sc.quantity(unit="GHz")
+    enabled: sc.Param[bool] = sc.param()
 
 
-def test_parameter_schema_owns_catalog_table_and_stable_refs() -> None:
-    frequency = assert_type(
-        _Q0[_FREQUENCY],
-        sc.ParameterCell[sc.Quantity],
-    )
-    assert_type(frequency.ref, sc.ValueRef[sc.Quantity])
-    assert_type(_DEVICES.ref, sc.ValueRef[list[dict[str, object]]])
-
-    assert _DEVICES.ref is _DEVICES.ref
-    assert _Q0[_FREQUENCY] is frequency
-    assert _Q0[_FREQUENCY].ref is frequency.ref
-    assert _DEVICES.value_type == sc.TableType(
-        columns=(
-            sc.TableColumn(
-                "device",
-                sc.ScalarType(sc.EntityType(entity_kind="logical_device")),
-            ),
-            sc.TableColumn(
-                "frequency",
-                sc.ScalarType(sc.QuantityType(unit="GHz")),
-            ),
-            sc.TableColumn("enabled", sc.ScalarType(sc.BoolType())),
-        ),
-        primary_key=("device",),
-    )
-    catalog = sc.parameter_catalog("test-parameters", _DEVICES)
-    assert catalog.get(_DEVICES.id) == _DEVICES.definition
-
-    lookup = internal_value_ref_parameter_lookup(frequency.ref)
-    assert lookup is not None
-    lookup_use, _key = lookup
-    assert lookup_use.table_id == _DEVICES.id
-    assert lookup_use.column_id == _FREQUENCY.id
-
-    if TYPE_CHECKING:
-        frequency.update("invalid")  # pyright: ignore[reportCallIssue, reportArgumentType]
-        _DEVICE.key(3)  # pyright: ignore[reportArgumentType]
-
-
-def test_parameter_row_builds_complete_values_and_typed_updates() -> None:
-    row = _Q0.values(
-        _FREQUENCY.value(5.0),
-        _ENABLED.value(True),
-    )
-    assert row == {
-        "device": sc.EntityRef(id="q0", kind="logical_device"),
-        "frequency": sc.Quantity(5.0, "GHz"),
-        "enabled": True,
-    }
-
-    update = _Q0[_FREQUENCY].update(5.1)
-    assert update.parameter_id == _DEVICES.id
+def test_declared_update_uses_the_same_key_and_unit_as_experiment_reference() -> None:
+    ref = sc.parameter_ref(Device.frequency, "q0")
+    assert_type(ref, sc.ValueRef[sc.Quantity])
+    update = sc.parameter_update(Device.frequency, "q0", 5.1)
     assert update.key == {"device": sc.EntityRef(id="q0", kind="logical_device")}
     assert update.values == {"frequency": sc.Quantity(5.1, "GHz")}
+    lookup = internal_value_ref_parameter_lookup(ref)
+    assert lookup is not None
+    assert lookup[0].table_id == update.parameter_id
+    assert lookup[0].column_id == "frequency"
 
 
-def test_parameter_rows_reject_incomplete_keys_and_foreign_fields() -> None:
-    other = sc.parameter_field("frequency", sc.QuantityType(unit="GHz"))
-    other_key = sc.parameter_field(
-        "device",
-        sc.EntityType(entity_kind="logical_device"),
+def test_composite_references_preserve_entities_when_selection_order_changes() -> None:
+    class Bias(sc.ParameterModel, table="bias"):
+        profile: sc.Param[str] = sc.param(key=True)
+        qubit: sc.Param[sc.EntityRef] = sc.param(key=True, entity_kind="logical_qubit")
+        voltage: sc.Magnitude[float] = sc.quantity(unit="V")
+
+    q0 = sc.EntityRef(id="q0", kind="logical_qubit")
+    q1 = sc.EntityRef(id="q1", kind="logical_qubit")
+    refs = sc.PerEntity(
+        (qubit, sc.parameter_ref(Bias.voltage, ("parked", qubit)))
+        for qubit in sc.each(q1, q0)
     )
-    with pytest.raises(ValueError, match="must match schema primary key"):
-        _DEVICES.row()
-    with pytest.raises(ValueError, match="another schema"):
-        _DEVICES.row(other_key.key("q0"))
-    with pytest.raises(ValueError, match="another schema"):
-        _Q0[other]
-    with pytest.raises(ValueError, match="cover every field"):
-        _Q0.values(_FREQUENCY.value(sc.Quantity(5.0, "GHz")))
-    with pytest.raises(ValueError, match="cannot replace key"):
-        _Q0.update(_DEVICE.value("q1"))
-
-
-def test_parameter_fields_normalize_schema_constrained_values() -> None:
-    normalized_key = _DEVICE.key("q1")
-    assert normalized_key.value == sc.EntityRef(id="q1", kind="logical_device")
-    assert _FREQUENCY.value(sc.Quantity(5_000, "MHz")).value == sc.Quantity(
-        5.0,
-        "GHz",
-    )
-    with pytest.raises(ValueError, match="quantity must use dimension"):
-        _FREQUENCY.value(sc.Quantity(5.0, "ns"))
-
-
-def test_parameter_schema_join_closes_composite_keys_in_declaration_order() -> None:
-    profile = sc.parameter_field("profile", sc.StringType())
-    entity = sc.parameter_field(
-        "entity",
-        sc.EntityType(entity_kind="logical_device"),
-    )
-    value = sc.parameter_field("value", sc.QuantityType(unit="V"))
-    profiles = sc.parameter_schema(
-        "bias_profiles",
-        fields=(profile, entity, value),
-        primary_key=(profile, entity),
-    )
-    q0 = sc.EntityRef(id="q0", kind="logical_device")
-
-    rows = profiles.join(
-        sc.each(q0),
-        on=entity,
-        where=(profile.key("operate"),),
-    )
-
-    mapped = rows.map(lambda row: row[value].ref)
-    assert tuple(rows) == (q0,)
-    assert rows[q0].key == (profile.key("operate"), entity.key(q0))
-    assert mapped[q0] is rows[q0][value].ref
-    with pytest.raises(ValueError, match="close every primary-key field"):
-        profiles.join(sc.each(q0), on=entity)
+    lookup = internal_value_ref_parameter_lookup(refs[q0])
+    assert lookup is not None
+    assert dict(lookup[1]) == {"profile": "parked", "qubit": q0}

@@ -34,11 +34,7 @@ from scopecat_testkit.instrument_host import compose_test_instruments
 from scopecat_testkit.server.in_process_lab import in_process_lab
 
 from reference_lab.configuration import bootstrap_config
-from reference_lab.parameters import (
-    Q0_READOUT,
-    RESONANCE_FREQUENCY,
-    RESONATOR_LINEWIDTH,
-)
+from reference_lab.parameters import ReadoutResonator
 from reference_lab.provider import FLUX_SOURCE_ID, ReferenceLabProvider
 from reference_lab.workflows.flux_spectroscopy import (
     BIAS_POINTS,
@@ -318,11 +314,15 @@ def test_flux_spectroscopy_runs_fits_saves_and_proposes(tmp_path: Path) -> None:
     assert report.entry.filename == "flux-spectroscopy-fit.md"
     assert report.text().startswith("# Resonator flux spectroscopy fit\n")
     assert f"Fitted bias points: {BIAS_POINTS}" in report.text()
-    fitted_frequency = _readout_quantity(candidate, RESONANCE_FREQUENCY.id)
-    fitted_linewidth = _readout_quantity(candidate, RESONATOR_LINEWIDTH.id)
+    fitted_frequency = _readout_quantity(
+        candidate, ReadoutResonator.resonance_frequency.name
+    )
+    fitted_linewidth = _readout_quantity(candidate, ReadoutResonator.linewidth.name)
     assert float(fitted_frequency.to("GHz").value) == pytest.approx(5.06, abs=0.001)
     assert float(fitted_linewidth.to("MHz").value) == pytest.approx(1.0, rel=0.2)
-    active_frequency = _readout_quantity(lab.resolve_config(), RESONANCE_FREQUENCY.id)
+    active_frequency = _readout_quantity(
+        lab.resolve_config(), ReadoutResonator.resonance_frequency.name
+    )
     assert float(active_frequency.to("GHz").value) == pytest.approx(5.0)
 
     review = run.analyze(flux_spectroscopy_fit_review())
@@ -425,7 +425,9 @@ def _readout_quantity(
     value = config.parameter_snapshot.get("readout_resonators")
     assert isinstance(value, TableParameterValue)
     row = next(
-        item for item in value.rows if item["resonator"] == Q0_READOUT.key[0].value
+        item
+        for item in value.rows
+        if item["resonator"] == sc.EntityRef(id="q0", kind="logical_qubit")
     )
     selected = row[field_id]
     assert isinstance(selected, sc.Quantity)

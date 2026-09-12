@@ -7,7 +7,7 @@ import scopecat as sc
 from scopecat import Quantity
 from scopecat_quantum.measurement_computes import BinaryIqProbabilityProducts
 
-from reference_lab.parameters import Q0_DRAG_BETA, Q1_DRAG_BETA
+from reference_lab.parameters import QubitParameters
 from reference_lab.quantum_runner import quantum_capture
 from reference_lab.workflows.drag_beta_calibration import (
     drag_beta_program,
@@ -18,11 +18,6 @@ DRAG_BETA_SPAN = Quantity(1.0, "ns")
 DRAG_BETA_POINTS = 5
 DEFAULT_AMPLIFICATIONS = (1, 2, 3)
 type DragBetaQubit = Literal["q0", "q1"]
-
-_DRAG_BETA_PARAMETERS = {
-    "q0": Q0_DRAG_BETA,
-    "q1": Q1_DRAG_BETA,
-}
 
 
 @dataclass(frozen=True, slots=True)
@@ -43,7 +38,7 @@ def drag_beta_experiment(
 
     beta = experiment.scan(
         "beta",
-        overlay=_DRAG_BETA_PARAMETERS[qubit].ref,
+        overlay=sc.parameter_ref(QubitParameters.drag_beta, qubit),
         span=DRAG_BETA_SPAN,
         points=DRAG_BETA_POINTS,
     )

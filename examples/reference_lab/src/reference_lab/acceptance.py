@@ -7,6 +7,7 @@ import math
 from datetime import UTC, datetime
 from typing import Protocol, cast
 
+import scopecat as sc
 from pydantic import JsonValue
 from scopecat.api.lab import LabClient
 from scopecat.application.author_project import AuthorProject
@@ -24,7 +25,7 @@ from scopecat_instruments import temperature_readout
 
 from reference_lab.configuration import bootstrap_config
 from reference_lab.launch import CATALOG, launch_provider
-from reference_lab.parameters import CHANNEL_DELAY, Q1_CHANNEL_CALIBRATION
+from reference_lab.parameters import ChannelCalibration
 from reference_lab.workflows.coherent_ramsey import coherent_ramsey
 from reference_lab.workflows.frequency_amplitude import CONTROLS, frequency_amplitude
 from reference_lab.workflows.ramsey_experiments import parallel_raw_ramsey
@@ -199,7 +200,7 @@ def capture_acceptance_fixtures(
     # Keep this source lazy: the previously inspected dataset has loaded records.
     table = cast(
         "_ArrowProjection",
-        coherent_run.measurements().project({"iq_mean": mean_id}).to_arrow(),  # pyright: ignore[reportUnknownMemberType]
+        coherent_run.measurements().project({("iq_mean"): mean_id}).to_arrow(),  # pyright: ignore[reportUnknownMemberType]
     )
     assert table.column("iq_mean").to_pylist() == expected_values
     assert table.column("point_index").to_pylist() == [
@@ -223,7 +224,11 @@ def capture_acceptance_fixtures(
         .result()
         .propose(
             "q1-channel-delay",
-            Q1_CHANNEL_CALIBRATION[CHANNEL_DELAY].update(1.0),
+            sc.parameter_update(
+                ChannelCalibration.channel_delay,
+                sc.EntityRef(id="q1", kind="logical_qubit"),
+                1.0,
+            ),
             reason="align q1 acquisition with the shared readout window",
         )
         .save()

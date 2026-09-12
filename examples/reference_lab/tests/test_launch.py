@@ -349,9 +349,10 @@ def test_noop_candidate_preview_reports_reason_without_admitting_work(
     reference_lab_daemon: _Daemon,
     launch_application: LabApplication,
 ) -> None:
+    import scopecat as sc
     from scopecat.config.parameter_updates import materialize_parameter_updates
 
-    from reference_lab.parameters import CHANNEL_DELAY, Q1_CHANNEL_CALIBRATION
+    from reference_lab.parameters import ChannelCalibration
 
     with (
         launch_application.connect(reference_lab_daemon.url) as lab,
@@ -364,7 +365,13 @@ def test_noop_candidate_preview_reports_reason_without_admitting_work(
         parameters, _ = materialize_parameter_updates(
             catalog=original.parameter_catalog,
             base=original.parameter_snapshot,
-            updates=(Q1_CHANNEL_CALIBRATION[CHANNEL_DELAY].update(1.0),),
+            updates=(
+                sc.parameter_update(
+                    ChannelCalibration.channel_delay,
+                    sc.EntityRef(id="q1", kind="logical_qubit"),
+                    1.0,
+                ),
+            ),
             candidate_id="already-at-requested-delay",
         )
         lab.config.set_default(

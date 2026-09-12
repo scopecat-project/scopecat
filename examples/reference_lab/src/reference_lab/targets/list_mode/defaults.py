@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal, cast
 
+import scopecat as sc
 from pydantic import BaseModel, ConfigDict, Field
 from scopecat.kernel.entity import EntityRef
 from scopecat.kernel.quantity import Quantity
@@ -34,26 +35,11 @@ from reference_lab.bench_interfaces import (
     TRIGGER_START_PROGRAM_IDEMPOTENT,
 )
 from reference_lab.parameters import (
-    AWG_OUTPUT_BASELINES,
-    AWG_OUTPUT_OFFSET,
-    AWG_OUTPUT_SLOT,
-    DRIVE_CARRIER_FREQUENCY,
-    IQ_CHAIN,
-    IQ_CHAINS,
-    LO_FREQUENCY,
-    LO_GROUP,
-    LO_GROUPS,
-    MIXER_I_OFFSET,
-    MIXER_II,
-    MIXER_IQ,
-    MIXER_Q_OFFSET,
-    MIXER_QI,
-    MIXER_QQ,
-    QUBIT,
-    QUBITS,
-    READOUT_RESONATORS,
-    RESONANCE_FREQUENCY,
-    RESONATOR,
+    AwgOutputBaseline,
+    IqChainParameters,
+    LoGroupParameters,
+    QubitParameters,
+    ReadoutResonator,
 )
 from reference_lab.physical_policies import (
     IqOffsetOutputSlot,
@@ -756,13 +742,12 @@ def _configured_output_slots(
 
 
 def _awg_output_baselines(config: ConfigProfileSnapshot) -> dict[str, float]:
-    table = config.parameter_snapshot.get(AWG_OUTPUT_BASELINES.id)
+    table = config.parameter_snapshot.get(sc.parameter_table_name(AwgOutputBaseline))
     if not isinstance(table, TableParameterValue):
         raise ValueError("AWG output baseline table is missing")
     return {
-        cast("str", row[AWG_OUTPUT_SLOT.id]): _quantity_value(
-            row[AWG_OUTPUT_OFFSET.id],
-            "V",
+        cast("str", row[AwgOutputBaseline.slot.name]): _quantity_value(
+            row[AwgOutputBaseline.offset.name], "V"
         )
         for row in table.rows
     }
@@ -809,18 +794,22 @@ def _signal_calibrations(
 def _iq_chain_calibrations(
     config: ConfigProfileSnapshot,
 ) -> dict[str, _IqChainCalibration]:
-    table = config.parameter_snapshot.get(IQ_CHAINS.id)
+    table = config.parameter_snapshot.get(sc.parameter_table_name(IqChainParameters))
     if not isinstance(table, TableParameterValue):
         raise ValueError("IQ chain calibration table is missing")
     return {
-        cast("str", row[IQ_CHAIN.id]): _IqChainCalibration(
+        cast("str", row[IqChainParameters.chain.name]): _IqChainCalibration(
             mixer=IqMixerCalibration(
-                ii=cast("float", row[MIXER_II.id]),
-                iq=cast("float", row[MIXER_IQ.id]),
-                qi=cast("float", row[MIXER_QI.id]),
-                qq=cast("float", row[MIXER_QQ.id]),
-                i_offset_v=_quantity_value(row[MIXER_I_OFFSET.id], "V"),
-                q_offset_v=_quantity_value(row[MIXER_Q_OFFSET.id], "V"),
+                ii=cast("float", row[IqChainParameters.mixer_ii.name]),
+                iq=cast("float", row[IqChainParameters.mixer_iq.name]),
+                qi=cast("float", row[IqChainParameters.mixer_qi.name]),
+                qq=cast("float", row[IqChainParameters.mixer_qq.name]),
+                i_offset_v=_quantity_value(
+                    row[IqChainParameters.mixer_i_offset.name], "V"
+                ),
+                q_offset_v=_quantity_value(
+                    row[IqChainParameters.mixer_q_offset.name], "V"
+                ),
             )
         )
         for row in table.rows
@@ -828,25 +817,27 @@ def _iq_chain_calibrations(
 
 
 def _carrier_frequencies(config: ConfigProfileSnapshot) -> dict[tuple[str, str], float]:
-    qubits = config.parameter_snapshot.get(QUBITS.id)
-    resonators = config.parameter_snapshot.get(READOUT_RESONATORS.id)
+    qubits = config.parameter_snapshot.get(sc.parameter_table_name(QubitParameters))
+    resonators = config.parameter_snapshot.get(
+        sc.parameter_table_name(ReadoutResonator)
+    )
     if not isinstance(qubits, TableParameterValue):
         raise ValueError("qubit calibration table is missing")
     if not isinstance(resonators, TableParameterValue):
         raise ValueError("readout resonator calibration table is missing")
     return {
         **{
-            ("drive", cast("EntityRef", row[QUBIT.id]).id): _quantity_value(
-                row[DRIVE_CARRIER_FREQUENCY.id],
-                "Hz",
-            )
+            (
+                "drive",
+                cast("EntityRef", row[QubitParameters.qubit.name]).id,
+            ): _quantity_value(row[QubitParameters.drive_carrier_frequency.name], "Hz")
             for row in qubits.rows
         },
         **{
-            ("readout", cast("EntityRef", row[RESONATOR.id]).id): _quantity_value(
-                row[RESONANCE_FREQUENCY.id],
-                "Hz",
-            )
+            (
+                "readout",
+                cast("EntityRef", row[ReadoutResonator.resonator.name]).id,
+            ): _quantity_value(row[ReadoutResonator.resonance_frequency.name], "Hz")
             for row in resonators.rows
         },
     }
@@ -855,12 +846,12 @@ def _carrier_frequencies(config: ConfigProfileSnapshot) -> dict[tuple[str, str],
 def _lo_calibrations(
     config: ConfigProfileSnapshot,
 ) -> dict[str, _LoCalibration]:
-    table = config.parameter_snapshot.get(LO_GROUPS.id)
+    table = config.parameter_snapshot.get(sc.parameter_table_name(LoGroupParameters))
     if not isinstance(table, TableParameterValue):
         raise ValueError("LO group calibration table is missing")
     return {
-        cast("str", row[LO_GROUP.id]): _LoCalibration(
-            frequency_hz=_quantity_value(row[LO_FREQUENCY.id], "Hz"),
+        cast("str", row[LoGroupParameters.group.name]): _LoCalibration(
+            frequency_hz=_quantity_value(row[LoGroupParameters.frequency.name], "Hz")
         )
         for row in table.rows
     }

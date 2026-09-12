@@ -7,7 +7,7 @@ from typing import Literal, cast
 import numpy as np
 import scopecat as sc
 
-from reference_lab.parameters import DRIVE_CARRIER_FREQUENCY, Q0
+from reference_lab.parameters import QubitParameters
 from reference_lab.quantum_runner import quantum_capture
 from reference_lab.workflows.ramsey import ramsey_program
 from reference_lab.workflows.ramsey_experiments import RamseyDataset
@@ -45,7 +45,10 @@ def signal(
         experiment.compute(
             fn=response,
             frequency=FREQUENCY.ref,
-            center=Q0[DRIVE_CARRIER_FREQUENCY].ref,
+            center=sc.parameter_ref(
+                QubitParameters.drive_carrier_frequency,
+                sc.EntityRef(id="q0", kind="logical_qubit"),
+            ),
             gain=gain,
             polarity=polarity,
         ),
