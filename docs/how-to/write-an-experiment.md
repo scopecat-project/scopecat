@@ -26,11 +26,27 @@ In `examples/reference_lab/src/reference_lab/workflows/authored/signal.py`:
 Keep imported shared operations such as `quantum_capture` and `ramsey_program`
 as library calls unless you intend to maintain those shared capabilities. Their
 compiler, physical mapping and drivers are not needed to edit this experiment.
-A missing `ControlSet`, missing required default or invalid declaration reports
-the source module/function. An invalid control edit reports its field and bound.
-The initial GUI adapter accepts real scalar and quantity controls; it is not an
-arbitrary Python-object or structural-argument editor. A parameter that changes
-Python structure must have a usable default for this initial GUI path.
+Discovery reads the function's input contract without executing its body. Scalar
+inputs (`str`, `int`, `float`, `bool`, or a homogeneous scalar `Literal`) can be
+required: omit the default and supply a value in the launch form or in
+`authors.prepare(..., inputs={...})`. The same applies to scalar `sc.Input[T]`
+runtime inputs that are not owned by a control. Experiments without numeric
+controls need no `ControlSet`.
+
+For example, this declaration appears in the catalog before a qubit is selected:
+
+```python
+@sc.experiment
+def selected_qubit(experiment: sc.ExperimentContext, qubit: str) -> None:
+    experiment.use(my_lab_operation(qubit=qubit))
+```
+
+Structural inputs still use ordinary Python values; `sc.Input[T]` supplies a
+symbolic runtime value inside the body. Complex Python objects require maintained
+composition. An invalid input or control edit reports its field when preparing;
+errors inside the experiment body are reported when the program is built, not
+while importing the declaration. Discovery and successful source refresh do not
+prove that every possible structural input builds a valid experiment.
 
 ## Run and analyze from Python
 

@@ -240,3 +240,5 @@ def test_on_success_state_rejects_point_coordinates() -> None:
                 _TypedSource(source),
                 _DeclaredSourceState(level=level, enabled=False),
             )
+
+        experiment_definition()

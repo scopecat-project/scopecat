@@ -121,6 +121,8 @@ class ControlSet:
         )
 
     def validate(self, context: ControlValidationContext) -> None:
+        if not self.fields and self.validator is None:
+            return
         invocation = context.invocation
         if not isinstance(invocation.point_plan.domain, GridSpec):
             raise ValueError(

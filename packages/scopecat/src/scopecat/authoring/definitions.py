@@ -41,6 +41,7 @@ from scopecat.authoring._module_results import (
 from scopecat.authoring.entity_selection import PerEntity
 from scopecat.authoring.experiments import (
     Experiment,
+    ExperimentInput,
 )
 from scopecat.authoring.member_projection import StateProjector
 from scopecat.authoring.scans import (
@@ -244,6 +245,8 @@ class _ExperimentContract:
 
     signature: inspect.Signature
     runtime_arguments: tuple[tuple[str, ValueRef], ...]
+    inputs: tuple[ExperimentInput, ...]
+    result_types: Mapping[type, Mapping[str, object]]
 
     @property
     def runtime_values(self) -> dict[str, ValueRef]:
@@ -1340,6 +1343,7 @@ def _experiment_from_function[ResultT, **P](
     metadata: Mapping[str, MetadataValue] | None,
     controls: ControlSet | None,
 ) -> Experiment[P, ResultT]:
+    controls = controls or ControlSet(())
     source = cast("DefinitionFunction", fn)
     contract = _experiment_contract(source)
     signature = contract.signature
@@ -1357,10 +1361,9 @@ def _experiment_from_function[ResultT, **P](
             required_inputs.append(parameter.name)
         else:
             input_defaults[parameter.name] = cast("RuntimeInput", default)
-    if controls is not None:
-        contract = _apply_control_defaults(
-            controls, contract, input_defaults, required_inputs
-        )
+    contract = _apply_control_defaults(
+        controls, contract, input_defaults, required_inputs
+    )
     selected_metadata = dict(metadata or {})
     doc = inspect.getdoc(fn)
     if doc is not None:
@@ -1400,10 +1403,12 @@ def _experiment_from_function[ResultT, **P](
         built = cached_build
         if built is None:
             context = ExperimentContext()
-            if controls is not None:
+            if controls.fields:
                 context.grid(*controls.default_axes())
             output = cast("ResultT", source(context, **values))
-            recorded_tree = _record_experiment_output(context, output)
+            recorded_tree = _record_experiment_output(
+                context, output, result_types=contract.result_types
+            )
             recorded_result_refs = dict(_recorded_result_ref_items(recorded_tree))
             definition = context.close_definition_internal(
                 id=selected_id,
@@ -1449,16 +1454,39 @@ def _experiment_from_function[ResultT, **P](
         id=selected_id,
         kind=selected_kind,
         metadata=selected_metadata,
+        inputs=contract.inputs,
+        controls=controls,
     )
-    if not contract.structural_names:
-        build({})
     return authored
+
+
+def _capture_result_types(annotation: object) -> Mapping[type, Mapping[str, object]]:
+    """Resolve declared result trees while their owning modules are still loaded."""
+    resolved: dict[type, Mapping[str, object]] = {}
+
+    def visit(value: object) -> None:
+        if isinstance(value, type) and is_dataclass(value):
+            if value in resolved:
+                return
+            hints = cast(
+                "Mapping[str, object]", get_type_hints(value, include_extras=True)
+            )
+            resolved[value] = hints
+            for member in hints.values():
+                visit(member)
+        else:
+            for argument in cast("tuple[object, ...]", get_args(value)):
+                visit(argument)
+
+    visit(annotation)
+    return resolved
 
 
 def _experiment_contract(fn: DefinitionFunction) -> _ExperimentContract:
     signature = _context_signature(fn, ExperimentContext)
     hints = cast("Mapping[str, object]", get_type_hints(fn, include_extras=True))
     runtime_arguments: list[tuple[str, ValueRef]] = []
+    inputs: list[ExperimentInput] = []
     for parameter in signature.parameters.values():
         if parameter.kind in (
             inspect.Parameter.VAR_POSITIONAL,
@@ -1470,7 +1498,16 @@ def _experiment_contract(fn: DefinitionFunction) -> _ExperimentContract:
             parameter.name,
             cast("object", parameter.annotation),
         )
-        if not _is_runtime_input_annotation(annotation):
+        runtime = _is_runtime_input_annotation(annotation)
+        inputs.append(
+            ExperimentInput(
+                name=parameter.name,
+                annotation=annotation,
+                default=cast("object", parameter.default),
+                runtime=runtime,
+            )
+        )
+        if not runtime:
             continue
         runtime_arguments.append(
             (
@@ -1481,7 +1518,12 @@ def _experiment_contract(fn: DefinitionFunction) -> _ExperimentContract:
                 ),
             )
         )
-    return _ExperimentContract(signature, tuple(runtime_arguments))
+    return _ExperimentContract(
+        signature,
+        tuple(runtime_arguments),
+        tuple(inputs),
+        _capture_result_types(hints.get("return")),
+    )
 
 
 def _module_contract(fn: DefinitionFunction) -> _ModuleContract:
@@ -1542,6 +1584,7 @@ def _record_experiment_output(
     context: ExperimentContext,
     value: object,
     *,
+    result_types: Mapping[type, Mapping[str, object]],
     path: tuple[str, ...] = (),
     policy: Result | None = None,
     explicit_sources: frozenset[tuple[object, ...]] | None = None,
@@ -1620,7 +1663,9 @@ def _record_experiment_output(
             raise TypeError("experiment output product bundles must not be empty")
         hints = cast(
             "Mapping[str, object]",
-            get_type_hints(type(value), include_extras=True),
+            result_types[type(value)]
+            if type(value) in result_types
+            else get_type_hints(type(value), include_extras=True),
         )
         return replace(
             value,
@@ -1628,6 +1673,7 @@ def _record_experiment_output(
                 member.name: _record_experiment_output(
                     context,
                     cast("object", getattr(value, member.name)),
+                    result_types=result_types,
                     path=(*path, member.name),
                     policy=_merge_result_policy(
                         selected_policy,
@@ -1666,7 +1712,9 @@ def _record_experiment_output(
                 raise TypeError("experiment output product bundles must be dataclasses")
             hints = cast(
                 "Mapping[str, object]",
-                get_type_hints(type(first_bundle), include_extras=True),
+                result_types[type(first_bundle)]
+                if type(first_bundle) in result_types
+                else get_type_hints(type(first_bundle), include_extras=True),
             )
             return RecordedProducts(
                 {
@@ -1679,6 +1727,7 @@ def _record_experiment_output(
                             )
                             for entity, item in items
                         ),
+                        result_types=result_types,
                         path=(*path, member.name),
                         policy=_merge_result_policy(
                             selected_policy,
@@ -1696,6 +1745,7 @@ def _record_experiment_output(
                 _record_experiment_output(
                     context,
                     item,
+                    result_types=result_types,
                     path=(*path, entity.kind or "entity", entity.id),
                     policy=selected_policy,
                     explicit_sources=explicit_sources,
@@ -1709,6 +1759,7 @@ def _record_experiment_output(
             _record_experiment_output(
                 context,
                 item,
+                result_types=result_types,
                 path=(*path, str(index)),
                 policy=selected_policy,
                 explicit_sources=explicit_sources,
@@ -1722,7 +1773,9 @@ def _record_experiment_output(
             raise TypeError("experiment output dataclasses must not be empty")
         hints = cast(
             "Mapping[str, object]",
-            get_type_hints(type(value), include_extras=True),
+            result_types[type(value)]
+            if type(value) in result_types
+            else get_type_hints(type(value), include_extras=True),
         )
         return replace(
             value,
@@ -1730,6 +1783,7 @@ def _record_experiment_output(
                 member.name: _record_experiment_output(
                     context,
                     cast("object", getattr(value, member.name)),
+                    result_types=result_types,
                     path=(*path, member.name),
                     policy=_merge_result_policy(
                         selected_policy,

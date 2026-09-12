@@ -7,6 +7,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from typing import Generic, ParamSpec, TypeVar, cast
 
+from scopecat.program.controls import ControlSet
 from scopecat.program.definitions import ExperimentInvocation
 
 type ExperimentBuilder[ResultT] = Callable[
@@ -19,6 +20,20 @@ _ExperimentResultT_co = TypeVar(
     covariant=True,
     default=object,
 )
+
+
+@dataclass(frozen=True, slots=True)
+class ExperimentInput:
+    """One resolved function input, available without constructing a program."""
+
+    name: str
+    annotation: object
+    default: object
+    runtime: bool
+
+    @property
+    def required(self) -> bool:
+        return self.default is inspect.Parameter.empty
 
 
 @dataclass(frozen=True, slots=True, repr=False)
@@ -37,6 +52,8 @@ class Experiment(Generic[_P, _ExperimentResultT_co]):
     id: str
     kind: str
     metadata: Mapping[str, object] = field(repr=False)
+    inputs: tuple[ExperimentInput, ...]
+    controls: ControlSet
 
     @property
     def __wrapped__(self) -> Callable[_P, _ExperimentResultT_co]:

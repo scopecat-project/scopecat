@@ -59,6 +59,8 @@ def test_experiment_definition_reports_literal_errors() -> None:
         ) -> None:
             del experiment, count
 
+        experiment()
+
     assert [problem.code for problem in error.value.problems] == [
         "module_input_type_mismatch",
     ]
@@ -106,6 +108,8 @@ def test_grid_rejects_duplicate_axis_ids() -> None:
                 sc.axis(second, (1.0,)),
                 sc.axis(first, (3.0,)),
             )
+
+        experiment()
 
 
 def test_repeated_axis_overrides_use_the_latest_value() -> None:
@@ -211,6 +215,8 @@ def test_scan_point_does_not_implicitly_bind_consumed_module_input() -> None:
         def experiment(experiment: sc.ExperimentContext) -> None:
             experiment.use(module())
             experiment.grid(sc.axis(point, (1.0,)))
+
+        experiment()
 
 
 def _identity_value(value: object) -> object:

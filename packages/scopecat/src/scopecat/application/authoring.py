@@ -82,11 +82,10 @@ class AuthorLaunchIntent(BaseModel):
 
 @dataclass(frozen=True, slots=True)
 class AuthorExperiment:
-    """One discovered declaration and its default invocation, without a registry DSL."""
+    """One discovered declaration, independent of any constructed invocation."""
 
     declaration: Experiment[..., object]
     input_model: type[BaseModel]
-    invocation: ExperimentInvocation
     controls: ControlSet
     source: Mapping[str, str]
     title: str
@@ -107,7 +106,7 @@ class AuthorExperiment:
                     "code_revision": self.code_revision.model_dump(mode="json")
                     if self.code_revision
                     else None,
-                    "id": self.invocation.definition.id,
+                    "id": self.declaration.id,
                     "declaration": dict(self.source),
                     "inputs": self.input_model.model_json_schema(),
                     "controls": [
@@ -125,7 +124,7 @@ class AuthorExperiment:
     @property
     def entry(self) -> LaunchCatalogEntry:
         return LaunchCatalogEntry(
-            id=self.invocation.definition.id,
+            id=self.declaration.id,
             version=self.fingerprint,
             title=self.title,
             description=self.description,
@@ -182,12 +181,19 @@ class AuthorExperiment:
         | ConfigContextResolution
         | None = None,
         edits: Mapping[str, ControlScalar | AxisSpec] | None = None,
+        inputs: Mapping[str, JsonValue] | None = None,
     ) -> PreparedLabExperiment:
-        prepared = lab.prepare(self.invocation, config=config)
+        invocation = self.declaration.bind(
+            **cast(
+                "dict[str, object]",
+                self.input_model.model_validate(inputs or {}).model_dump(),
+            )
+        )
+        prepared = lab.prepare(invocation, config=config)
         return replace(
             prepared,
             invocation=self.controls.apply(
-                self.invocation, config=prepared.config, edits=edits
+                invocation, config=prepared.config, edits=edits
             ),
         )
 
@@ -201,10 +207,11 @@ class AuthorExperiment:
         | ConfigContextResolution
         | None = None,
         edits: Mapping[str, ControlScalar | AxisSpec] | None = None,
+        inputs: Mapping[str, JsonValue] | None = None,
         sample: str | SampleSelector | None = None,
         operator: str | None = None,
     ) -> RunHandle:
-        return self.prepare(lab, config=config, edits=edits).run(
+        return self.prepare(lab, config=config, edits=edits, inputs=inputs).run(
             name=self.title, metadata=self.provenance, sample=sample, operator=operator
         )
 
@@ -301,33 +308,14 @@ class AuthorExperiments:
                     continue
                 experiment = value
                 try:
-                    invocation = experiment.bind()
-                    controls = invocation.definition.controls
-                    if not isinstance(controls, ControlSet):
-                        raise TypeError(
-                            "declare a ControlSet for the author launch form"
-                        )
-                    missing = [
-                        item.id
-                        for item in invocation.definition.inputs
-                        if item.required
-                        and not item.has_default
-                        and item.id not in invocation.input_overrides
-                    ]
-                    if missing:
-                        raise ValueError(
-                            f"missing input defaults: {', '.join(missing)}"
-                        )
+                    controls = experiment.controls
                     source_identity = python_source_identity(
                         experiment.__wrapped__, label=experiment.id
                     )
                     discovered.append(
                         AuthorExperiment(
                             declaration=experiment,
-                            input_model=author_input_model(
-                                experiment, invocation, controls
-                            ),
-                            invocation=invocation,
+                            input_model=author_input_model(experiment, controls),
                             controls=controls,
                             source={
                                 "module": source_identity["module"],
