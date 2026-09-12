@@ -1,35 +1,21 @@
-"""Small registered consumers for complete, partly unknown parameter tables."""
-
-from dataclasses import dataclass
-from typing import Annotated
+"""Registered consumers use one declaration for editing and run references."""
 
 import scopecat as sc
 
 
-@dataclass
-class ProbeParameters:
-    id: str
-    duration: Annotated[float, sc.ParameterSpec(unit="ns")]
-    pi_amplitude: float | None = None
+class ProbeParameters(sc.ParameterModel, table="probes"):
+    id: sc.Param[str] = sc.param(key=True)
+    duration: sc.Magnitude[float] = sc.quantity(unit="ns")
+    pi_amplitude: sc.Param[float | None] = sc.param(default=None)
 
 
 @sc.experiment(id="reference_lab.duration_probe")
 def duration_probe(experiment: sc.ExperimentContext) -> sc.ValueRef[sc.Quantity]:
     del experiment
-    return sc.parameter_lookup(
-        "probes",
-        key={"id": "q0"},
-        column="duration",
-        value_type=sc.QuantityType(unit="ns"),
-    )
+    return sc.parameter_ref(ProbeParameters.duration, "q0")
 
 
 @sc.experiment(id="reference_lab.pi_probe")
 def pi_probe(experiment: sc.ExperimentContext) -> sc.ValueRef[float]:
     del experiment
-    return sc.parameter_lookup(
-        "probes",
-        key={"id": "q0"},
-        column="pi_amplitude",
-        value_type=sc.FloatType(),
-    )
+    return sc.parameter_ref(ProbeParameters.pi_amplitude, "q0")

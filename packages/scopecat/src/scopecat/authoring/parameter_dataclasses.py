@@ -60,40 +60,44 @@ def dataclass_parameter_fields(row_type: type) -> tuple[DataclassParameterField,
     hints = cast("dict[str, object]", get_type_hints(row_type, include_extras=True))
     result: list[DataclassParameterField] = []
     for field in fields(row_type):
-        annotation: object = hints[field.name]
-        metadata = field.metadata.get("parameter")
-        optional = False
-        while True:
-            if get_origin(annotation) is Annotated:
-                annotation, *extras = cast("tuple[object, ...]", get_args(annotation))
-                specs = [item for item in extras if isinstance(item, ParameterSpec)]
-                if specs:
-                    if len(specs) != 1 or metadata is not None:
-                        raise TypeError(
-                            f"{row_type.__name__}.{field.name}: "
-                            "specify ParameterSpec once"
-                        )
-                    metadata = specs[0]
-                continue
-            if get_origin(annotation) is types.UnionType:
-                args = cast("tuple[object, ...]", get_args(annotation))
-                if len(args) == 2 and type(None) in args:
-                    optional = True
-                    annotation = next(item for item in args if item is not type(None))
-                    continue
-            break
-        if metadata is not None and not isinstance(metadata, ParameterSpec):
-            raise TypeError(
-                f"{row_type.__name__}.{field.name}: "
-                "parameter metadata must be ParameterSpec"
-            )
-        spec = metadata or ParameterSpec()
-        atom = _atom(annotation, spec, label=f"{row_type.__name__}.{field.name}")
-        assert isinstance(annotation, type)
         result.append(
-            DataclassParameterField(field.name, annotation, optional, Scalar(atom))
+            resolve_parameter_field(
+                field.name,
+                hints[field.name],
+                field.metadata.get("parameter"),
+                label=f"{row_type.__name__}.{field.name}",
+            )
         )
     return tuple(result)
+
+
+def resolve_parameter_field(
+    name: str, annotation: object, metadata: object = None, *, label: str
+) -> DataclassParameterField:
+    """Resolve one declaration for dataclass and descriptor parameter frontends."""
+    optional = False
+    while True:
+        if get_origin(annotation) is Annotated:
+            annotation, *extras = cast("tuple[object, ...]", get_args(annotation))
+            specs = [item for item in extras if isinstance(item, ParameterSpec)]
+            if specs:
+                if len(specs) != 1 or metadata is not None:
+                    raise TypeError(f"{label}: specify ParameterSpec once")
+                metadata = specs[0]
+            continue
+        if get_origin(annotation) is types.UnionType:
+            args = cast("tuple[object, ...]", get_args(annotation))
+            if len(args) == 2 and type(None) in args:
+                optional = True
+                annotation = next(item for item in args if item is not type(None))
+                continue
+        break
+    if metadata is not None and not isinstance(metadata, ParameterSpec):
+        raise TypeError(f"{label}: parameter metadata must be ParameterSpec")
+    spec = metadata or ParameterSpec()
+    atom = _atom(annotation, spec, label=f"{label}")
+    assert isinstance(annotation, type)
+    return DataclassParameterField(name, annotation, optional, Scalar(atom))
 
 
 def _atom(
@@ -139,12 +143,23 @@ def dataclass_table_schema(row_type: type, *, primary_key: tuple[str, ...]) -> T
     Optional fields describe unknown cells, not a nullable wire scalar. Defaults
     remain ordinary constructor behavior and are never applied to existing rows.
     """
-    declarations = dataclass_parameter_fields(row_type)
+    return table_from_parameter_fields(
+        dataclass_parameter_fields(row_type),
+        primary_key=primary_key,
+        label=row_type.__name__,
+    )
+
+
+def table_from_parameter_fields(
+    declarations: tuple[DataclassParameterField, ...],
+    *,
+    primary_key: tuple[str, ...],
+    label: str,
+) -> Table:
+    """Build the same wire schema for each supported declaration frontend."""
     for field in declarations:
         if field.name in primary_key and field.optional:
-            raise TypeError(
-                f"{row_type.__name__}.{field.name}: a primary key cannot be Optional"
-            )
+            raise TypeError(f"{label}.{field.name}: a primary key cannot be Optional")
     return Table(
         columns=tuple(
             TableColumn(field.name, field.value_type) for field in declarations

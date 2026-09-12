@@ -36,10 +36,14 @@ def test_new_table_unknowns_freeze_and_structural_history() -> None:
             label="New sample",
         )
         params = lab.config.workspace(context="author-unknown-start")
-        probes = params.declare_table("probes", ProbeParameters, key="id")
-        probes.add(ProbeParameters("q0", 40))
-        probes.add(ProbeParameters("q1", 60))
+        probes = params.declare_table(ProbeParameters)
+        probes.add(ProbeParameters(id="q0", duration=40))
+        probes.add(ProbeParameters(id="q1", duration=60))
         initial = params.save("author-unknown-probes")
+        assert params[ProbeParameters]["q0"].duration == 40
+        assert (
+            lab.config.workspace(context=initial)[ProbeParameters]["q0"].duration == 40
+        )
         assert params["probes"]["q0"]["pi_amplitude"] is None
         # Imports require the consumed column; the other unknown never blocks.
         run = lab.run(duration_probe(), config=params.freeze())

@@ -1,5 +1,10 @@
 # Review and publish project configuration
 
+For declarations shared by parameter editing and experiments, start with
+[parameter models](declare-parameter-models.md). The same workspace also supports
+ordinary dataclass and dictionary views described below.
+
+
 A project's `src/<package>/configuration.py` is ordinary version-controlled
 Python. The daemon owns the accepted configuration history; it does not watch or
 rewrite that source file.

@@ -26,6 +26,7 @@ nav = [
     { "Use measurement data" = "how-to/use-measurement-data.md" },
     { "Compare retained runs" = "how-to/retained-run-comparison.md" },
     { "Manage configuration" = "how-to/manage-configuration.md" },
+    { "Declare parameter models" = "how-to/declare-parameter-models.md" },
     { "Back up and restore" = "how-to/backup-and-restore.md" },
   ] },
   { "Concepts" = [

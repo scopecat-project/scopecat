@@ -12,6 +12,10 @@ from scopecat.api.parameter_candidates import ParameterCandidate, stage_candidat
 from scopecat.api.parameters import ParameterVersion, ParameterWorkspace, RowKey
 from scopecat.api.published_analysis import AnalysisResult, PublishedAnalysis
 from scopecat.api.run import RunHandle, run_handle_id
+from scopecat.authoring.parameter_models import (
+    ParameterFieldIdentity,
+    ParameterModel,
+)
 from scopecat.config.candidates import (
     CandidateConfig,
     CandidateSelection,
@@ -89,9 +93,9 @@ class LabConfigOperations:
         result: AnalysisResult[ResultT],
         *,
         name: str,
-        table: str,
+        table: str | type[ParameterModel],
         key: RowKey,
-        fields: Mapping[str, str],
+        fields: Mapping[str | ParameterFieldIdentity, str],
         note: str = "",
     ) -> ParameterCandidate:
         """Save a receipt-backed cell proposal; fields maps target to result name."""

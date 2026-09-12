@@ -10,8 +10,13 @@ from typing import Protocol, Self, cast, overload, override
 
 from scopecat.authoring.parameter_dataclasses import (
     DataclassParameterField,
-    dataclass_parameter_fields,
-    dataclass_table_schema,
+)
+from scopecat.authoring.parameter_models import (
+    ParameterModel,
+    parameter_fields,
+    parameter_key,
+    parameter_table_name,
+    parameter_table_schema,
 )
 from scopecat.config.candidate_merges import merge_parameter_branches
 from scopecat.config.contexts import apply_context_overrides
@@ -186,8 +191,20 @@ class ParameterWorkspace(Mapping[str, "ParameterTable"]):
     def working_point(self) -> str:
         return self._base.config_source.sample.context_id or ""
 
+    @overload
+    def __getitem__(self, name: str) -> ParameterTable: ...
+
+    @overload
+    def __getitem__[T: ParameterModel](
+        self, name: type[T]
+    ) -> TypedParameterTable[T]: ...
+
     @override
-    def __getitem__(self, name: str) -> ParameterTable:
+    def __getitem__[T: ParameterModel](
+        self, name: str | type[T]
+    ) -> ParameterTable | TypedParameterTable[T]:
+        if not isinstance(name, str):
+            return TypedParameterTable(self[parameter_table_name(name)], name)
         return self._tables[name]
 
     @override
@@ -256,8 +273,22 @@ class ParameterWorkspace(Mapping[str, "ParameterTable"]):
         self._structure.extend(edits)
         self._load(preview.config.parameter_snapshot)
 
+    @overload
+    def declare_table[T: ParameterModel](
+        self, name: type[T]
+    ) -> TypedParameterTable[T]: ...
+
+    @overload
     def declare_table[T](
         self, name: str, row_type: type[T], *, key: str | tuple[str, ...]
+    ) -> TypedParameterTable[T]: ...
+
+    def declare_table[T](
+        self,
+        name: str | type[T],
+        row_type: type[T] | None = None,
+        *,
+        key: str | tuple[str, ...] | None = None,
     ) -> TypedParameterTable[T]:
         """Declare an empty table or add optional fields to an existing declaration.
 
@@ -265,8 +296,14 @@ class ParameterWorkspace(Mapping[str, "ParameterTable"]):
         unit conversions and key changes require their explicit operations.
         Review structure_diff(), then save() before running with a changed schema.
         """
+        if not isinstance(name, str):
+            if not issubclass(name, ParameterModel):
+                raise TypeError("class declarations require ParameterModel")
+            row_type, key, name = name, parameter_key(name), parameter_table_name(name)
+        if row_type is None or key is None:
+            raise TypeError("dataclass declarations require row_type and key")
         keys = (key,) if isinstance(key, str) else key
-        schema = dataclass_table_schema(row_type, primary_key=keys)
+        schema = parameter_table_schema(row_type, primary_key=keys)
         definition = self._baseline.parameter_catalog.get(name)
         edits: list[ParameterStructureEdit] = []
         if definition is None:
@@ -290,9 +327,7 @@ class ParameterWorkspace(Mapping[str, "ParameterTable"]):
                     "Use rename_column() or convert_unit() explicitly; "
                     "no automatic migration is applied."
                 )
-            optional = {
-                f.name for f in dataclass_parameter_fields(row_type) if f.optional
-            }
+            optional = {f.name for f in parameter_fields(row_type) if f.optional}
             for column in schema.columns:
                 if column.id not in old:
                     if column.id not in optional:
@@ -825,7 +860,7 @@ class ParameterRow(MutableMapping[str, ParameterAtomValue | None]):
         return len(self._table.schema.columns)
 
 
-class TypedParameterTable[T](Mapping["RowKey", T]):
+class TypedParameterTable[T](MutableMapping["RowKey", T]):
     """Live typed rows; detached new rows use the ordinary dataclass constructor.
 
     Assignment edits the shared workspace. Save/preview validates the resulting
@@ -844,8 +879,8 @@ class TypedParameterTable[T](Mapping["RowKey", T]):
     def __init__(self, table: ParameterTable, row_type: type[T]) -> None:
         self._table = table
         self._row_type = row_type
-        self._fields = dataclass_parameter_fields(row_type)
-        inferred = dataclass_table_schema(
+        self._fields = parameter_fields(row_type)
+        inferred = parameter_table_schema(
             row_type, primary_key=table.schema.primary_key
         )
         expected = {field.id: field.value_type for field in table.schema.columns}
@@ -910,8 +945,7 @@ class TypedParameterTable[T](Mapping["RowKey", T]):
     def __len__(self) -> int:
         return len(self._table)
 
-    def add(self, row: T) -> T:
-        """Insert a new row; defaults are supplied only by its normal constructor."""
+    def _row_values(self, row: T) -> dict[str, ParameterAtomValue]:
         if not isinstance(row, self._row_type):
             raise TypeError(f"{self._table.name}: expected {self._row_type.__name__}")
         values: dict[str, ParameterAtomValue] = {}
@@ -922,6 +956,19 @@ class TypedParameterTable[T](Mapping["RowKey", T]):
             values[field.name] = _stored(
                 value, field, label=f"{self._table.name}.{field.name}"
             )
+        return values
+
+    @override
+    def __setitem__(self, key: RowKey, row: T) -> None:
+        self._table[key] = self._row_values(row)
+
+    @override
+    def __delitem__(self, key: RowKey) -> None:
+        del self._table[key]
+
+    def add(self, row: T) -> T:
+        """Insert a detached row; defaults never fill existing unknown values."""
+        values = self._row_values(row)
         keys = tuple(values[name] for name in self._table.schema.primary_key)
         key = keys[0] if len(keys) == 1 else keys
         if key in self._table:

@@ -13,6 +13,11 @@ from scopecat.api.parameters import RowKey
 from scopecat.api.project_analysis import RemoteProjectAnalysisOperations
 from scopecat.api.published_analysis import AnalysisResult, PublishedAnalysis
 from scopecat.api.run import RunHandle
+from scopecat.authoring.parameter_models import (
+    ParameterFieldIdentity,
+    ParameterModel,
+    parameter_table_name,
+)
 from scopecat.config.candidates import CandidateConfig
 from scopecat.config.parameter_updates import update_parameter_rows
 from scopecat.daemon.client import DaemonClient, DaemonConflictError
@@ -161,12 +166,24 @@ def stage_candidate[ResultT](
     result: AnalysisResult[ResultT],
     *,
     name: str,
-    table: str,
+    table: str | type[ParameterModel],
     key: RowKey,
-    fields: Mapping[str, str],
+    fields: Mapping[str | ParameterFieldIdentity, str],
     note: str = "",
 ) -> ParameterCandidate:
     """Map exact receipt fields into existing keyed cell proposals."""
+    table = table if isinstance(table, str) else parameter_table_name(table)
+    targets: dict[str, str] = {}
+    for target, source in fields.items():
+        if not isinstance(target, str):
+            if parameter_table_name(target.owner) != table:
+                raise ValueError(
+                    f"{target.name}: field belongs to a different table than {table}"
+                )
+            target = target.name
+        if target in targets:
+            raise ValueError(f"{table}.{target}: duplicate candidate target")
+        targets[target] = source
     run, publication, value = _managed_result(operations, result)
     definition = run.config.parameter_catalog.get(table)
     if definition is None or not isinstance(definition.value_type, Table):
@@ -184,7 +201,7 @@ def stage_candidate[ResultT](
         for field, item in zip(schema.primary_key, keys, strict=True)
     }
     values: dict[str, ParameterAtomValue] = {}
-    for target, source in fields.items():
+    for target, source in targets.items():
         label = f"{table}[{key!r}].{target}"
         if target not in columns or target in schema.primary_key:
             raise ValueError(f"{label}: select an existing non-key field")
@@ -209,7 +226,7 @@ def stage_candidate[ResultT](
     saved = (
         context.result()
         .fact("fit", evidence, schema=ordinary_result_schema(type(value)))
-        .artifact("cell-mapping", text=str(dict(fields)))
+        .artifact("cell-mapping", text=str(targets))
         .propose(
             name,
             update_parameter_rows(table, key=selected_key, values=values),
