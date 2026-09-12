@@ -40,6 +40,7 @@ uv run --locked --package reference-lab --group test pytest examples/reference_l
 - [Supervised laboratory pilot roadmap](lab-pilot-roadmap.md)
 - [Pilot work slices and acceptance fixtures](pilot-work-slices.md)
 - [Architecture](architecture/index.md)
+- [Structured authoring direction](architecture/structured-authoring.md) (proposal)
 - [Scalability benchmarks](scalability.md)
 - [Project charter](project-charter.md)
 
