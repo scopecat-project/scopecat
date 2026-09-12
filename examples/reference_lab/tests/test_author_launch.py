@@ -15,6 +15,7 @@ import pytest
 import scopecat as sc
 from scopecat.api.analysis import AnalysisDefinition, AnalysisStep
 from scopecat.application import LabApplication
+from scopecat.application.author_project import AuthorProject
 from scopecat.application.launch import LaunchCatalog, LaunchPreview, LaunchSubmission
 from scopecat.daemon.client import DaemonClient, DaemonConflictError
 from scopecat.kernel.frozen import thaw_json_value
@@ -60,6 +61,11 @@ def reference_lab_daemon(
             '.fact("mean", float(selected.mean()))',
             '.fact("mean", float(selected.max()))',
         )
+    )
+    source += (
+        "\n@sc.experiment\n"
+        "def required_target(context: sc.ExperimentContext, qubit: str) -> None:\n"
+        "    del context, qubit\n"
     )
     source_path.write_text(source, encoding="utf-8")
     project = load_project(root / "scopecat.toml")
@@ -305,3 +311,19 @@ def test_revision_aware_notebook_prepare_preserves_parameter_context(
         assert run.samples[0].sample_id == "notebook-context"
         assert run.samples[0].context_id == "shifted"
         assert lab.config.active() == active
+
+
+def test_required_author_input_diagnostics_survive_the_worker_boundary(
+    reference_lab_daemon: AuthorDaemon,
+) -> None:
+    with AuthorProject(reference_lab_daemon.url) as author:
+        entry = next(
+            item for item in author.catalog().entries if item.id == "required_target"
+        )
+        assert entry.request.required == ("qubit",)
+        with pytest.raises(httpx2.HTTPStatusError, match="qubit: Field required"):
+            author.prepare("required_target")
+        with pytest.raises(httpx2.HTTPStatusError, match="qubit: Input should be"):
+            author.prepare("required_target", inputs={"qubit": 12})
+        prepared = author.prepare("required_target", inputs={"qubit": "q0"})
+        assert prepared.request.inputs == {"qubit": "q0"}

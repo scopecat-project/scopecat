@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, cast
 
 import httpx2
 import scopecat as sc
+from pydantic import ValidationError
 from scopecat.application.experiment_plans import validate_plan_launch
 from scopecat.application.launch import (
     LaunchCatalog,
@@ -169,4 +170,14 @@ if __name__ == "__main__":
     # The subprocess JSON protocol and redirected diagnostics are UTF-8 on every OS.
     for stream in (sys.stdin, sys.stdout, sys.stderr):
         cast("TextIOWrapper", stream).reconfigure(encoding="utf-8")
-    main()
+    try:
+        main()
+    except ValidationError as error:
+        # The parent reports the last diagnostic line. Preserve field locations
+        # there instead of leaving only Pydantic's trailing documentation URL.
+        details = "; ".join(
+            f"{'.'.join(str(part) for part in item['loc']) or 'value'}: {item['msg']}"
+            for item in error.errors(include_url=False, include_input=False)
+        )
+        print(" ".join(f"{error.title}: {details}".splitlines()), file=sys.stderr)
+        raise SystemExit(1) from None
