@@ -97,6 +97,9 @@ silently using a different lookup from the model's experiment references.
 Edit existing scalar values with `params.scalars["repetitions"] = 128`; these use
 the same diff, freeze and save path as table edits. Schema additions are explicit.
 
+For external editing, use [JSON or pandas exchange](exchange-parameter-tables.md).
+Imports preview explicit changes and preserve untouched cell origins.
+
 ## Use fields in an experiment
 
 ```python

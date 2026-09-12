@@ -27,6 +27,7 @@ nav = [
     { "Compare retained runs" = "how-to/retained-run-comparison.md" },
     { "Manage configuration" = "how-to/manage-configuration.md" },
     { "Declare parameter models" = "how-to/declare-parameter-models.md" },
+    { "Exchange parameter tables" = "how-to/exchange-parameter-tables.md" },
     { "Back up and restore" = "how-to/backup-and-restore.md" },
   ] },
   { "Concepts" = [
