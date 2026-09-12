@@ -10,6 +10,7 @@ from typing import TypedDict
 
 import numpy as np
 import pandas as pd
+import scopecat as sc
 from scopecat.analysis.facts import AnalysisFactSchema
 from scopecat.api.comparison import comparison_inputs, save_comparison
 from scopecat.api.lab import LabClient
@@ -31,7 +32,7 @@ from scopecat.records.control_edit import ControlEdit
 from scopecat.records.launch_request import LaunchRequest
 
 from reference_lab.control_launch import CONTROL_ENTRY
-from reference_lab.parameters import DRIVE_CARRIER_FREQUENCY, Q0
+from reference_lab.parameters import QubitParameters
 from reference_lab.workflows.authored.comparison import MODEL, SignalFit, fit_signal
 
 
@@ -230,7 +231,11 @@ def comparison_provider(lab: LabClient, request: ComparisonRequest) -> Compariso
         .fact("next-input", suggestion, schema=NEXT_INPUT_SCHEMA)
         .propose(
             "carrier",
-            Q0[DRIVE_CARRIER_FREQUENCY].update(Quantity(fit.center_ghz, "GHz")),
+            sc.parameter_update(
+                QubitParameters.drive_carrier_frequency,
+                sc.EntityRef(id="q0", kind="logical_qubit"),
+                Quantity(fit.center_ghz, "GHz"),
+            ),
             reason=(
                 "Explicit candidate from the retained signal comparison; "
                 "no default activation"

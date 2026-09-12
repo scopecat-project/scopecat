@@ -16,7 +16,7 @@ from scopecat.records.parameter import ParameterSnapshot, TableParameterValue
 from scopecat.records.sample import SampleRevisionDraft
 
 from reference_lab.configuration import bootstrap_config
-from reference_lab.parameters import DRIVE_CARRIER_FREQUENCY, QUBIT, QUBITS
+from reference_lab.parameters import QubitParameters
 from reference_lab.workflows.exploratory_signal import exploratory_signal
 
 
@@ -30,21 +30,25 @@ class ExplorationCase:
 def exploration_config(carrier: sc.Quantity | None) -> ConfigProfileSnapshot:
     """An explicit trial snapshot; None deliberately leaves q0's carrier missing."""
     base = bootstrap_config()
-    table = base.parameter_snapshot.get(QUBITS.id)
+    table = base.parameter_snapshot.get(sc.parameter_table_name(QubitParameters))
     assert isinstance(table, TableParameterValue)
     rows = [dict(row) for row in table.rows]
     row = next(
-        row for row in rows if row[QUBIT.id] == EntityRef(id="q0", kind="logical_qubit")
+        row
+        for row in rows
+        if row[QubitParameters.qubit.name] == EntityRef(id="q0", kind="logical_qubit")
     )
     if carrier is None:
-        del row[DRIVE_CARRIER_FREQUENCY.id]
+        del row[QubitParameters.drive_carrier_frequency.name]
     else:
-        row[DRIVE_CARRIER_FREQUENCY.id] = carrier
+        row[QubitParameters.drive_carrier_frequency.name] = carrier
     parameters = ParameterSnapshot(
         id=base.parameter_snapshot.id,
         values=tuple(
-            TableParameterValue(id=QUBITS.id, rows=tuple(rows))
-            if value.id == QUBITS.id
+            TableParameterValue(
+                id=sc.parameter_table_name(QubitParameters), rows=tuple(rows)
+            )
+            if value.id == sc.parameter_table_name(QubitParameters)
             else value
             for value in base.parameter_snapshot.values
         ),

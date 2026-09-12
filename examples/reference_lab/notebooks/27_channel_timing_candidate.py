@@ -7,7 +7,7 @@ import scopecat as sc
 
 from reference_lab.configuration import EXAMPLE_ROOT
 from reference_lab.notebook import show
-from reference_lab.parameters import CHANNEL_DELAY, Q1_CHANNEL_CALIBRATION
+from reference_lab.parameters import ChannelCalibration
 from reference_lab.workflows.ramsey_experiments import parallel_two_qubit_ramsey
 
 # %%
@@ -22,7 +22,11 @@ with sc.open_project(EXAMPLE_ROOT).connect(operator="gallery") as lab:
         .result()
         .propose(
             "q1-channel-delay",
-            Q1_CHANNEL_CALIBRATION.update(CHANNEL_DELAY.value(1.0)),
+            sc.update_parameter_rows(
+                sc.parameter_table_name(ChannelCalibration),
+                key={"qubit": sc.EntityRef(id="q1", kind="logical_qubit")},
+                values={ChannelCalibration.channel_delay.name: sc.Quantity(1.0, "ns")},
+            ),
             reason="align q1 acquisition with the shared readout window",
         )
     )

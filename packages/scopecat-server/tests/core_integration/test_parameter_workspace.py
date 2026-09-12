@@ -289,12 +289,12 @@ def test_invalid_edits_remain_editable_and_report_fields(
 
 def test_scalar_edits_and_unchanged_named_copy(operations: RegistryOperations) -> None:
     params = ParameterWorkspace(operations, context="start")
-    original = params.scalar("drive_frequency")
-    params.set_scalar("drive_frequency", Quantity(5.2, "GHz"))
+    original = params.scalars["drive_frequency"]
+    params.scalars["drive_frequency"] = Quantity(5.2, "GHz")
     version = params.save("scalar")
     reopened = ParameterWorkspace(operations, context=version)
-    assert reopened.scalar("drive_frequency") == Quantity(5.2, "GHz")
-    assert original != reopened.scalar("drive_frequency")
+    assert reopened.scalars["drive_frequency"] == Quantity(5.2, "GHz")
+    assert original != reopened.scalars["drive_frequency"]
     assert reopened.save("copy").name == "copy"
     with pytest.raises(ValueError, match="Existing versions are immutable"):
         reopened.save("start")
@@ -346,10 +346,10 @@ def test_compatible_unit_read_and_rebase_do_not_rewrite_origins(
     operations: RegistryOperations,
 ) -> None:
     first = ParameterWorkspace(operations, context="start")
-    first.set_scalar("drive_frequency", Quantity(5200, "MHz"))
+    first.scalars["drive_frequency"] = Quantity(5200, "MHz")
     version = first.save("megahertz")
     second = ParameterWorkspace(operations, context=version)
-    assert second.scalar("drive_frequency") == Quantity(5200, "MHz")
+    assert second.scalars["drive_frequency"] == Quantity(5200, "MHz")
     assert second.diff() == ()
     second["qubits"]["q0"]["amplitude"] = 0.3
     frozen = second.freeze()

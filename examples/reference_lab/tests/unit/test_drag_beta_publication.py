@@ -4,6 +4,7 @@ from types import SimpleNamespace
 from typing import cast
 
 import pytest
+import scopecat as sc
 from scopecat import Quantity
 from scopecat.api.calibration_finalizer import CalibrationPublicationPlanningContext
 from scopecat.api.calibration_publication import CalibrationCohortPublicationPlan
@@ -21,13 +22,7 @@ from scopecat.records.parameter_change import (
 )
 
 from reference_lab.configuration import bootstrap_config
-from reference_lab.parameters import (
-    Q0,
-    Q0_DRAG_BETA,
-    Q1_DRAG_BETA,
-    QUARTER_TURN_DURATION,
-    QUBITS,
-)
+from reference_lab.parameters import QubitParameters
 from reference_lab.workflows import drag_beta_publication
 from reference_lab.workflows.drag_beta_experiment import DragBetaQubit
 from reference_lab.workflows.drag_beta_freshness import (
@@ -205,7 +200,11 @@ def test_drag_beta_proposal_may_change_only_its_owned_target_cell() -> None:
     base = bootstrap_config()
     q0_candidate = _updated_config(
         base,
-        Q0_DRAG_BETA.update(Quantity(0.125, "ns")),
+        sc.parameter_update(
+            QubitParameters.drag_beta,
+            sc.EntityRef(id="q0", kind="logical_qubit"),
+            Quantity(0.125, "ns"),
+        ),
         candidate_id="q0-candidate",
     )
 
@@ -216,7 +215,11 @@ def test_drag_beta_proposal_may_change_only_its_owned_target_cell() -> None:
 
     q1_candidate = _updated_config(
         base,
-        Q1_DRAG_BETA.update(Quantity(-0.25, "ns")),
+        sc.parameter_update(
+            QubitParameters.drag_beta,
+            sc.EntityRef(id="q1", kind="logical_qubit"),
+            Quantity(-0.25, "ns"),
+        ),
         candidate_id="q1-candidate",
     )
     with pytest.raises(ValueError, match="non-owned parameter cell"):
@@ -227,7 +230,11 @@ def test_drag_beta_proposal_may_change_only_its_owned_target_cell() -> None:
 
     upstream_candidate = _updated_config(
         base,
-        Q0[QUARTER_TURN_DURATION].update(Quantity(17.0, "ns")),
+        sc.parameter_update(
+            QubitParameters.quarter_turn_duration,
+            sc.EntityRef(id="q0", kind="logical_qubit"),
+            Quantity(17.0, "ns"),
+        ),
         candidate_id="upstream-candidate",
     )
     with pytest.raises(ValueError, match="non-owned parameter cell"):
@@ -245,8 +252,16 @@ def test_drag_beta_proposal_may_change_only_its_owned_target_cell() -> None:
 
 def test_drag_beta_composition_rejects_changed_verified_semantic_inputs() -> None:
     base = bootstrap_config()
-    q0_update = Q0_DRAG_BETA.update(Quantity(0.125, "ns"))
-    q1_update = Q1_DRAG_BETA.update(Quantity(-0.25, "ns"))
+    q0_update = sc.parameter_update(
+        QubitParameters.drag_beta,
+        sc.EntityRef(id="q0", kind="logical_qubit"),
+        Quantity(0.125, "ns"),
+    )
+    q1_update = sc.parameter_update(
+        QubitParameters.drag_beta,
+        sc.EntityRef(id="q1", kind="logical_qubit"),
+        Quantity(-0.25, "ns"),
+    )
     q0_candidate = _updated_config(
         base,
         q0_update,
@@ -272,7 +287,11 @@ def test_drag_beta_composition_rejects_changed_verified_semantic_inputs() -> Non
         base,
         q0_update,
         q1_update,
-        Q0[QUARTER_TURN_DURATION].update(Quantity(17.0, "ns")),
+        sc.parameter_update(
+            QubitParameters.quarter_turn_duration,
+            sc.EntityRef(id="q0", kind="logical_qubit"),
+            Quantity(17.0, "ns"),
+        ),
         candidate_id="merged-with-upstream-change",
     )
     with pytest.raises(ValueError, match="verified semantic inputs"):
@@ -296,8 +315,8 @@ def _proposal(
     *,
     proposal_id: str,
 ) -> ParameterChangeProposal:
-    before = base.parameter_snapshot.get(QUBITS.id)
-    after = candidate.parameter_snapshot.get(QUBITS.id)
+    before = base.parameter_snapshot.get(sc.parameter_table_name(QubitParameters))
+    after = candidate.parameter_snapshot.get(sc.parameter_table_name(QubitParameters))
     assert isinstance(before, TableParameterValue)
     assert isinstance(after, TableParameterValue)
     return ParameterChangeProposal(
@@ -309,7 +328,7 @@ def _proposal(
         reason="test target-owned DRAG proposal",
         deltas=(
             ParameterValueDelta(
-                parameter_id=QUBITS.id,
+                parameter_id=sc.parameter_table_name(QubitParameters),
                 before=before,
                 after=after,
             ),

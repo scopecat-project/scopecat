@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 import pytest
+import scopecat as sc
 from scopecat import Quantity
 from scopecat.api.calibration_planner import CalibrationPlanningContext
 from scopecat.automation import (
@@ -15,14 +16,7 @@ from scopecat.config.parameter_updates import ParameterUpdate
 from scopecat.records.config import ConfigProfileSnapshot, config_content_hash
 
 from reference_lab.configuration import bootstrap_config
-from reference_lab.parameters import (
-    DRIVE_LO_A,
-    LO_FREQUENCY,
-    Q0,
-    Q0_DRAG_BETA,
-    Q1_DRAG_BETA,
-    QUARTER_TURN_DURATION,
-)
+from reference_lab.parameters import LoGroupParameters, QubitParameters
 from reference_lab.workflows.drag_beta_freshness import (
     DRAG_BETA_CALIBRATION_TARGETS,
     DRAG_BETA_CALIBRATION_VERSION,
@@ -102,12 +96,20 @@ def test_drag_beta_freshness_tracks_own_beta_but_not_peer_beta() -> None:
     initial = bootstrap_config()
     q0_changed = _updated_config(
         initial,
-        Q0_DRAG_BETA.update(Quantity(0.6, "ns")),
+        sc.parameter_update(
+            QubitParameters.drag_beta,
+            sc.EntityRef(id="q0", kind="logical_qubit"),
+            Quantity(0.6, "ns"),
+        ),
         candidate_id="q0-beta-changed",
     )
     q1_changed = _updated_config(
         initial,
-        Q1_DRAG_BETA.update(Quantity(0.55, "ns")),
+        sc.parameter_update(
+            QubitParameters.drag_beta,
+            sc.EntityRef(id="q1", kind="logical_qubit"),
+            Quantity(0.55, "ns"),
+        ),
         candidate_id="q1-beta-changed",
     )
 
@@ -130,8 +132,14 @@ def test_drag_beta_freshness_tracks_own_beta_but_not_peer_beta() -> None:
 @pytest.mark.parametrize(
     "update",
     (
-        Q0[QUARTER_TURN_DURATION].update(Quantity(17.0, "ns")),
-        DRIVE_LO_A[LO_FREQUENCY].update(Quantity(4.86e9, "Hz")),
+        sc.parameter_update(
+            QubitParameters.quarter_turn_duration,
+            sc.EntityRef(id="q0", kind="logical_qubit"),
+            Quantity(17.0, "ns"),
+        ),
+        sc.parameter_update(
+            LoGroupParameters.frequency, "drive-a", Quantity(4860000000.0, "Hz")
+        ),
     ),
 )
 def test_drag_beta_freshness_tracks_non_owned_prerequisites(
@@ -169,8 +177,16 @@ def test_drag_beta_freshness_tracks_verification_threshold() -> None:
 
 def test_drag_beta_candidate_projection_matches_merged_sibling_results() -> None:
     initial = bootstrap_config()
-    q0_update = Q0_DRAG_BETA.update(Quantity(0.6, "ns"))
-    q1_update = Q1_DRAG_BETA.update(Quantity(0.55, "ns"))
+    q0_update = sc.parameter_update(
+        QubitParameters.drag_beta,
+        sc.EntityRef(id="q0", kind="logical_qubit"),
+        Quantity(0.6, "ns"),
+    )
+    q1_update = sc.parameter_update(
+        QubitParameters.drag_beta,
+        sc.EntityRef(id="q1", kind="logical_qubit"),
+        Quantity(0.55, "ns"),
+    )
     q0_candidate = _updated_config(
         initial,
         q0_update,
@@ -201,7 +217,11 @@ def test_drag_beta_candidate_projection_matches_merged_sibling_results() -> None
         initial,
         q0_update,
         q1_update,
-        Q0[QUARTER_TURN_DURATION].update(Quantity(17.0, "ns")),
+        sc.parameter_update(
+            QubitParameters.quarter_turn_duration,
+            sc.EntityRef(id="q0", kind="logical_qubit"),
+            Quantity(17.0, "ns"),
+        ),
         candidate_id="merged-with-upstream-change",
     )
     assert drag_beta_semantic_freshness_inputs(

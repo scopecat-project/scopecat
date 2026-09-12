@@ -19,7 +19,7 @@ from scopecat.records.analysis import (
     AnalysisUncertaintyProjection,
 )
 
-from reference_lab.parameters import Q0_DRAG_BETA, Q1_DRAG_BETA
+from reference_lab.parameters import QubitParameters
 from reference_lab.workflows.drag_beta_calibration import (
     NEGATIVE_CANDIDATE_ID,
     POSITIVE_CANDIDATE_ID,
@@ -31,10 +31,6 @@ from reference_lab.workflows.drag_beta_experiment import (
 
 _DRAG_BETA_FIT_MODEL_ID = "reference_lab.drag_beta.shared_n2_quadratic.v1"
 _DRAG_BETA_ANALYSIS_KEY = "drag-beta-calibration"
-_DRAG_BETA_PARAMETERS = {
-    "q0": Q0_DRAG_BETA,
-    "q1": Q1_DRAG_BETA,
-}
 _BETA_FIELD = sc.AnalysisField(
     id="beta_ns",
     role="coordinate",
@@ -259,7 +255,7 @@ def drag_beta_analysis(
         )
         .propose(
             f"{qubit}-drag-beta",
-            _DRAG_BETA_PARAMETERS[qubit].update(fit.beta_hat),
+            sc.parameter_update(QubitParameters.drag_beta, qubit, fit.beta_hat),
             reason=(
                 f"Shared N² quadratic fit selected the {qubit} DRAG beta used by "
                 f"{POSITIVE_CANDIDATE_ID!r} and {NEGATIVE_CANDIDATE_ID!r}; "

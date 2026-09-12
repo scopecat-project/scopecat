@@ -13,12 +13,9 @@ from reference_lab.bench_interfaces import (
     ANALOG_WAVEFORM_OUTPUT_OFFSET,
 )
 from reference_lab.parameters import (
-    AWG_OUTPUT_OFFSET,
-    DRIVE_AWG_OFFSET_GUARD_BASELINE,
     DRIVE_AWG_OFFSET_GUARD_SLOT_ID,
-    MIXER_I_OFFSET,
-    MIXER_Q_OFFSET,
-    READOUT_IQ_CHAIN,
+    AwgOutputBaseline,
+    IqChainParameters,
 )
 
 IQ_OFFSET_COUPLING_POLICY_ID = "reference_lab.iq-offset.coupling-groups.v2"
@@ -39,13 +36,13 @@ class IqOffsetOutputSlot:
 
     id: str
     role_id: str
-    baseline_row: sc.ParameterRow
+    baseline_key: str
 
 
 DRIVE_AWG_OFFSET_GUARD = IqOffsetOutputSlot(
     id=DRIVE_AWG_OFFSET_GUARD_SLOT_ID,
     role_id="iq-offset-guard",
-    baseline_row=DRIVE_AWG_OFFSET_GUARD_BASELINE,
+    baseline_key=DRIVE_AWG_OFFSET_GUARD_SLOT_ID,
 )
 IQ_OFFSET_OUTPUT_SLOTS = (DRIVE_AWG_OFFSET_GUARD,)
 
@@ -280,7 +277,7 @@ def ensure_grouped_iq_offsets(
     context: sc.ExperimentContext | sc.ModuleContext,
     *,
     qubits: sc.EachEntity,
-    drive_iq_chains: Sequence[tuple[EntityRef, sc.ParameterRow]],
+    drive_iq_chains: Sequence[tuple[EntityRef, str]],
     policy: IqOffsetPolicyDefinition = REFERENCE_IQ_OFFSET_POLICY,
 ) -> None:
     """Apply the logical host side of the reviewed IQ-offset policy."""
@@ -330,22 +327,30 @@ def ensure_grouped_iq_offsets(
         (
             *(
                 drive_i[entity].state_target(
-                    {ANALOG_WAVEFORM_OUTPUT_OFFSET: row[MIXER_I_OFFSET].ref}
+                    {
+                        ANALOG_WAVEFORM_OUTPUT_OFFSET: sc.parameter_ref(
+                            IqChainParameters.mixer_i_offset, row
+                        )
+                    }
                 )
                 for entity, row in drive_iq_chains
             ),
             *(
                 drive_q[entity].state_target(
-                    {ANALOG_WAVEFORM_OUTPUT_OFFSET: row[MIXER_Q_OFFSET].ref}
+                    {
+                        ANALOG_WAVEFORM_OUTPUT_OFFSET: sc.parameter_ref(
+                            IqChainParameters.mixer_q_offset, row
+                        )
+                    }
                 )
                 for entity, row in drive_iq_chains
             ),
             *(
                 readout_i[entity].state_target(
                     {
-                        ANALOG_WAVEFORM_OUTPUT_OFFSET: READOUT_IQ_CHAIN[
-                            MIXER_I_OFFSET
-                        ].ref
+                        ANALOG_WAVEFORM_OUTPUT_OFFSET: sc.parameter_ref(
+                            IqChainParameters.mixer_i_offset, "readout"
+                        )
                     }
                 )
                 for entity in qubits
@@ -353,9 +358,9 @@ def ensure_grouped_iq_offsets(
             *(
                 readout_q[entity].state_target(
                     {
-                        ANALOG_WAVEFORM_OUTPUT_OFFSET: READOUT_IQ_CHAIN[
-                            MIXER_Q_OFFSET
-                        ].ref
+                        ANALOG_WAVEFORM_OUTPUT_OFFSET: sc.parameter_ref(
+                            IqChainParameters.mixer_q_offset, "readout"
+                        )
                     }
                 )
                 for entity in qubits
@@ -363,9 +368,9 @@ def ensure_grouped_iq_offsets(
             *(
                 resource.state_target(
                     {
-                        ANALOG_WAVEFORM_OUTPUT_OFFSET: slot.baseline_row[
-                            AWG_OUTPUT_OFFSET
-                        ].ref
+                        ANALOG_WAVEFORM_OUTPUT_OFFSET: sc.parameter_ref(
+                            AwgOutputBaseline.offset, slot.baseline_key
+                        )
                     }
                 )
                 for slot, resource in output_slots

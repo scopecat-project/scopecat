@@ -13,9 +13,16 @@ from scopecat.api.parameters import RowKey
 from scopecat.api.project_analysis import RemoteProjectAnalysisOperations
 from scopecat.api.published_analysis import AnalysisResult, PublishedAnalysis
 from scopecat.api.run import RunHandle
+from scopecat.authoring.parameter_fields import (
+    ResolvedParameterField,
+    require_parameter_field,
+    stored_parameter_value,
+)
 from scopecat.authoring.parameter_models import (
     ParameterFieldIdentity,
     ParameterModel,
+    parameter_fields,
+    parameter_key,
     parameter_table_name,
 )
 from scopecat.config.candidates import CandidateConfig
@@ -174,12 +181,20 @@ def stage_candidate[ResultT](
     """Map exact receipt fields into existing keyed cell proposals."""
     table = table if isinstance(table, str) else parameter_table_name(table)
     targets: dict[str, str] = {}
+    declarations: dict[str, ResolvedParameterField] = {}
+    declared_keys: set[tuple[str, ...]] = set()
     for target, source in fields.items():
         if not isinstance(target, str):
             if parameter_table_name(target.owner) != table:
                 raise ValueError(
                     f"{target.name}: field belongs to a different table than {table}"
                 )
+            declared_keys.add(parameter_key(target.owner))
+            declarations[target.name] = next(
+                field
+                for field in parameter_fields(target.owner)
+                if field.name == target.name
+            )
             target = target.name
         if target in targets:
             raise ValueError(f"{table}.{target}: duplicate candidate target")
@@ -189,6 +204,8 @@ def stage_candidate[ResultT](
     if definition is None or not isinstance(definition.value_type, Table):
         raise ValueError(f"{table}: select an existing parameter table")
     schema = definition.value_type
+    if any(declared != schema.primary_key for declared in declared_keys):
+        raise ValueError(f"{table}: declared primary key differs from the frozen table")
     keys = key if isinstance(key, tuple) else (key,)
     if not schema.primary_key or len(keys) != len(schema.primary_key):
         raise ValueError(f"{table}[{key!r}]: expected key fields {schema.primary_key}")
@@ -212,6 +229,10 @@ def stage_candidate[ResultT](
             raise ValueError(
                 f"{label}: result.{source} is unknown; no candidate was staged"
             )
+        if target in declarations:
+            declared = declarations[target]
+            require_parameter_field(declared.value_type, columns[target], label=label)
+            selected = stored_parameter_value(selected, declared, label=label)
         values[target] = cast(
             "ParameterAtomValue",
             coerce_literal(columns[target], selected, path=(table, str(key), target)),

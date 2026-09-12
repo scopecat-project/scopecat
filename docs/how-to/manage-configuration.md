@@ -57,8 +57,8 @@ edited in place; delete and insert the row to change its identity. `del
 params["qubits"]["q1"]` removes a row and permanently invalidates views of that
 row, even if the same key is subsequently inserted. Views of retained rows stay
 live across save, discard and rebase. Composite keys use a tuple in declared
-primary-key order. Scalar parameters use `params.scalar("name")` and
-`params.set_scalar("name", value)`.
+primary-key order. Edit existing scalar parameters with `params.scalars["name"] = value`.
+Adding or removing a declaration remains an explicit schema change.
 
 To combine another editor's saved branch, choose it explicitly:
 
@@ -426,14 +426,14 @@ from scopecat.config.structure import (
 from scopecat.records.parameter import ParameterDefinition
 from scopecat.records.parameter_structure import AddParameterColumn
 
-quality = sc.parameter_field("quality", sc.FloatType())
+quality = ParameterDefinition(id="quality", value_type=sc.ScalarType(sc.FloatType()))
 plan = ParameterStructurePlan(
     base=context_ref,
     structure_version=parameter_structure_version(saved.config.parameter_catalog),
     edits=(
         AddParameterColumn(
             parameter_id="qubits",
-            column=ParameterDefinition(id=quality.id, value_type=quality.value_type),
+            column=quality,
         ),
     ),
 )

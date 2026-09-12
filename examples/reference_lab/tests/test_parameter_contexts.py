@@ -16,13 +16,7 @@ from scopecat.records.sample import SampleRevisionDraft
 from reference_lab.application import create_application
 from reference_lab.configuration import EXAMPLE_ROOT
 from reference_lab.exploration import exploration_cases, exploration_config
-from reference_lab.parameters import (
-    DRAG_BETA,
-    DRIVE_CARRIER_FREQUENCY,
-    Q0,
-    QUBIT,
-    QUBITS,
-)
+from reference_lab.parameters import QubitParameters
 from reference_lab.workflows.exploratory_signal import exploratory_signal
 
 
@@ -81,7 +75,13 @@ def test_contexts_select_parameters_and_preserve_sample_and_run_history(
                 ).copy()
         trial = lab.config.resolve_context(
             refs[0],
-            overrides=(Q0[DRIVE_CARRIER_FREQUENCY].update(sc.Quantity(5.1, "GHz")),),
+            overrides=(
+                sc.parameter_update(
+                    QubitParameters.drive_carrier_frequency,
+                    sc.EntityRef(id="q0", kind="logical_qubit"),
+                    sc.Quantity(5.1, "GHz"),
+                ),
+            ),
         )
         submit_run = DaemonClient.submit_run
 
@@ -166,17 +166,21 @@ def test_context_unknown_values_block_only_the_experiment_that_needs_them() -> N
             content=SampleRevisionDraft(display_name="Unknown values"),
         )
         config = exploration_config(None)
-        table = config.parameter_snapshot.get(QUBITS.id)
+        table = config.parameter_snapshot.get(sc.parameter_table_name(QubitParameters))
         assert isinstance(table, TableParameterValue)
         rows = [dict(row) for row in table.rows]
         for row in rows:
-            if row[QUBIT.id] == Q0.key[0].value:
-                row.pop(DRAG_BETA.id)
+            if row[QubitParameters.qubit.name] == sc.EntityRef(
+                id="q0", kind="logical_qubit"
+            ):
+                row.pop(QubitParameters.drag_beta.name)
         parameters = ParameterSnapshot(
             id=config.parameter_snapshot.id,
             values=tuple(
-                TableParameterValue(id=QUBITS.id, rows=rows)
-                if value.id == QUBITS.id
+                TableParameterValue(
+                    id=sc.parameter_table_name(QubitParameters), rows=rows
+                )
+                if value.id == sc.parameter_table_name(QubitParameters)
                 else value
                 for value in config.parameter_snapshot.values
             ),
@@ -198,11 +202,20 @@ def test_context_unknown_values_block_only_the_experiment_that_needs_them() -> N
             lab.preview(exploratory_signal(), config=ref)
         resolved = lab.config.resolve_context(
             ref,
-            overrides=(Q0[DRIVE_CARRIER_FREQUENCY].update(sc.Quantity(4.8, "GHz")),),
+            overrides=(
+                sc.parameter_update(
+                    QubitParameters.drive_carrier_frequency,
+                    sc.EntityRef(id="q0", kind="logical_qubit"),
+                    sc.Quantity(4.8, "GHz"),
+                ),
+            ),
         )
-        assert any(DRAG_BETA.id in item for item in resolved.missing_values)
+        assert any(
+            QubitParameters.drag_beta.name in item for item in resolved.missing_values
+        )
         assert not any(
-            DRIVE_CARRIER_FREQUENCY.id in item for item in resolved.missing_values
+            QubitParameters.drive_carrier_frequency.name in item
+            for item in resolved.missing_values
         )
         assert lab.run(exploratory_signal(), config=resolved).status == "completed"
         assert lab.config.active() == active

@@ -37,7 +37,7 @@ from reference_lab.bench_interfaces import (
 )
 from reference_lab.compiler import QuantumLabCompiler
 from reference_lab.configuration import bootstrap_config
-from reference_lab.parameters import QUBITS
+from reference_lab.parameters import QubitParameters
 from reference_lab.payloads import reference_lab_payload_codecs
 from reference_lab.provider import ReferenceLabProvider
 from reference_lab.quantum_runner import (
@@ -91,7 +91,7 @@ def _parallel_set_readout_experiment(
     results = experiment.use(
         _parallel_set_readout(("q0", "q1"))
         .with_shots(7)
-        .with_compiler_inputs(qubits=QUBITS.ref)
+        .with_compiler_inputs(qubits=sc.parameter_table_ref(QubitParameters))
     )
     experiment.alias(results.iq_shots)
 
@@ -107,13 +107,9 @@ def _reset_guard_before_quantum(experiment: sc.ExperimentContext) -> None:
     )
     guard.invoke(ANALOG_WAVEFORM_OUTPUT_RESET)
     results = experiment.use(
-        drag_beta_program(
-            qubit="q0",
-            amplification=2,
-            beta=sc.Quantity(0.5, "ns"),
-        )
+        drag_beta_program(qubit="q0", amplification=2, beta=sc.Quantity(0.5, "ns"))
         .with_shots(7)
-        .with_compiler_inputs(qubits=QUBITS.ref)
+        .with_compiler_inputs(qubits=sc.parameter_table_ref(QubitParameters))
     )
     experiment.alias(results.iq_shots)
 

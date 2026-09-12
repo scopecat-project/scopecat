@@ -8,7 +8,7 @@ from typing import Annotated, cast
 import numpy as np
 import scopecat as sc
 
-from reference_lab.parameters import QUBITS
+from reference_lab.parameters import QubitParameters
 from reference_lab.quantum_runner import prepare_quantum_hardware
 from reference_lab.workflows.ramsey import ramsey_program
 
@@ -34,13 +34,9 @@ def coherent_ramsey(experiment: sc.ExperimentContext) -> CoherentRamseyDataset:
     phase = experiment.scan("phase", (sc.Quantity(0, "rad"), sc.Quantity(1, "rad")))
     prepare_quantum_hardware(experiment)
     capture = experiment.use(
-        ramsey_program(
-            qubit="q0",
-            delay=delay,
-            phase=phase,
-        )
+        ramsey_program(qubit="q0", delay=delay, phase=phase)
         .with_shots(16)
-        .with_compiler_inputs(qubits=QUBITS.ref)
+        .with_compiler_inputs(qubits=sc.parameter_table_ref(QubitParameters))
     )
     mean = cast(
         "sc.ProductRef[complex]",

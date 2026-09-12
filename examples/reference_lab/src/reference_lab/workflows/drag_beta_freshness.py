@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import cast
 
+import scopecat as sc
 from pydantic import BaseModel, ConfigDict, Field
 from scopecat import Quantity
 from scopecat.api.calibration_planner import CalibrationPlanningContext
@@ -22,7 +23,7 @@ from scopecat.records.content import Sha256ContentHash
 from scopecat.records.parameter import StoredParameterValue, TableParameterValue
 from scopecat.records.run import ConfigRegistryRunConfigSource
 
-from reference_lab.parameters import DRAG_BETA, QUBIT, QUBITS
+from reference_lab.parameters import QubitParameters
 from reference_lab.workflows.drag_beta_experiment import DragBetaQubit
 from reference_lab.workflows.drag_beta_procedure import (
     DragBetaVerificationIntent,
@@ -77,11 +78,13 @@ def drag_beta_semantic_freshness_inputs(
     or the peer's result as a new prerequisite.
     """
 
-    qubit_table = config.parameter_snapshot.get(QUBITS.id)
+    qubit_table = config.parameter_snapshot.get(
+        sc.parameter_table_name(QubitParameters)
+    )
     if not isinstance(qubit_table, TableParameterValue):
         raise ValueError("DRAG freshness requires the qubit parameter table")
     rows = _drag_beta_rows(qubit_table)
-    active_drag_beta = rows[qubit][DRAG_BETA.id]
+    active_drag_beta = rows[qubit][QubitParameters.drag_beta.name]
     if not isinstance(active_drag_beta, Quantity):
         raise ValueError("DRAG freshness requires a quantity-valued active beta")
 
@@ -93,9 +96,9 @@ def drag_beta_semantic_freshness_inputs(
             "codec": _DRAG_BETA_PREREQUISITE_CODEC,
             "owned_paths": [
                 {
-                    "parameter_id": QUBITS.id,
-                    "key": {QUBIT.id: owned_qubit},
-                    "column": DRAG_BETA.id,
+                    "parameter_id": sc.parameter_table_name(QubitParameters),
+                    "key": {QubitParameters.qubit.name: owned_qubit},
+                    "column": QubitParameters.drag_beta.name,
                 }
                 for owned_qubit in _DRAG_BETA_QUBITS
             ],
@@ -192,7 +195,7 @@ def _drag_beta_rows(
             continue
         if qubit in selected:
             raise ValueError(f"DRAG freshness found duplicate qubit row: {qubit}")
-        if DRAG_BETA.id not in row:
+        if QubitParameters.drag_beta.name not in row:
             raise ValueError(f"DRAG freshness qubit row has no beta: {qubit}")
         selected[qubit] = cast("Mapping[str, object]", row)
     if set(selected) != set(_DRAG_BETA_QUBITS):
@@ -203,7 +206,9 @@ def _drag_beta_rows(
 def _project_parameter_value(
     value: StoredParameterValue,
 ) -> object:
-    if not isinstance(value, TableParameterValue) or value.id != QUBITS.id:
+    if not isinstance(
+        value, TableParameterValue
+    ) or value.id != sc.parameter_table_name(QubitParameters):
         return value.model_dump(mode="json")
     projected = value.model_copy(
         update={
@@ -211,7 +216,8 @@ def _project_parameter_value(
                 {
                     column_id: cell
                     for column_id, cell in row.items()
-                    if column_id != DRAG_BETA.id or _drag_beta_row_qubit(row) is None
+                    if column_id != QubitParameters.drag_beta.name
+                    or _drag_beta_row_qubit(row) is None
                 }
                 for row in value.rows
             )
@@ -223,7 +229,7 @@ def _project_parameter_value(
 def _drag_beta_row_qubit(
     row: Mapping[str, object],
 ) -> DragBetaQubit | None:
-    entity = row.get(QUBIT.id)
+    entity = row.get(QubitParameters.qubit.name)
     if (
         not isinstance(entity, EntityRef)
         or entity.kind != "logical_qubit"

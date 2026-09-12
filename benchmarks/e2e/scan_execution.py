@@ -51,16 +51,7 @@ from reference_lab.bench_interfaces import (
 )
 from reference_lab.compiler import QuantumLabCompiler
 from reference_lab.configuration import EXAMPLE_ROOT, bootstrap_config
-from reference_lab.parameters import (
-    DRIVE_LO_A,
-    DRIVE_LO_B,
-    IQ_CHAIN,
-    IQ_CHAINS,
-    LO_FREQUENCY,
-    LO_POWER,
-    QUBITS,
-    READOUT_LO,
-)
+from reference_lab.parameters import LoGroupParameters, QubitParameters
 from reference_lab.payloads import (
     AwgProgramDocument,
     MaterializedAwgProgramDocument,
@@ -1732,7 +1723,9 @@ def _select_multiqubit_results(
     else:
         prepare_quantum_hardware(experiment)
     results = experiment.use(
-        call.with_shots(scenario.shots).with_compiler_inputs(qubits=QUBITS.ref)
+        call.with_shots(scenario.shots).with_compiler_inputs(
+            qubits=sc.parameter_table_ref(QubitParameters)
+        )
     )
     if scenario.retention == "discard":
         return
@@ -1809,14 +1802,14 @@ def _scopecat_invocation(scenario: ScanScenario) -> sc.ExperimentInvocation:
             drive_lo = rf_source(experiment, for_=sc.one(_Q0), role="drive-lo")
             drive_lo.ensure(
                 frequency=scan_value,
-                power=DRIVE_LO_A[LO_POWER].ref,
+                power=sc.parameter_ref(LoGroupParameters.power, "drive-a"),
                 output_enabled=True,
                 reference_source="external",
             )
             readout_lo = rf_source(experiment, for_=sc.one(_Q0), role="readout-lo")
             readout_lo.ensure(
-                frequency=READOUT_LO[LO_FREQUENCY].ref,
-                power=READOUT_LO[LO_POWER].ref,
+                frequency=sc.parameter_ref(LoGroupParameters.frequency, "readout"),
+                power=sc.parameter_ref(LoGroupParameters.power, "readout"),
                 output_enabled=True,
                 reference_source="external",
             )
@@ -1872,7 +1865,9 @@ def _capture_scaled_quantum_program(
     qubit_count: int,
 ) -> BinaryIqProbabilityProducts:
     _prepare_scaled_quantum_hardware(experiment, qubit_count=qubit_count)
-    results = experiment.use(call.with_compiler_inputs(qubits=QUBITS.ref))
+    results = experiment.use(
+        call.with_compiler_inputs(qubits=sc.parameter_table_ref(QubitParameters))
+    )
     return binary_iq_probabilities(
         experiment,
         results.iq_shots,
@@ -1893,13 +1888,7 @@ def _prepare_scaled_quantum_hardware(
     ensure_grouped_iq_offsets(
         experiment,
         qubits=selected_qubits,
-        drive_iq_chains=tuple(
-            (
-                qubit,
-                IQ_CHAINS.row(IQ_CHAIN.key(f"drive-{qubit.id}")),
-            )
-            for qubit in qubits
-        ),
+        drive_iq_chains=tuple((qubit, f"drive-{qubit.id}") for qubit in qubits),
         policy=SCALABLE_IQ_OFFSET_POLICY,
     )
     remaining_qubits = qubits[4:]
@@ -1914,11 +1903,9 @@ def _prepare_scaled_quantum_hardware(
             tuple(
                 (
                     qubit,
-                    (
-                        DRIVE_LO_A[LO_FREQUENCY].ref
-                        if qubit.id in drive_a_qubit_ids
-                        else DRIVE_LO_B[LO_FREQUENCY].ref
-                    ),
+                    sc.parameter_ref(LoGroupParameters.frequency, "drive-a")
+                    if qubit.id in drive_a_qubit_ids
+                    else sc.parameter_ref(LoGroupParameters.frequency, "drive-b"),
                 )
                 for qubit in qubits
             )
@@ -1927,11 +1914,9 @@ def _prepare_scaled_quantum_hardware(
             tuple(
                 (
                     qubit,
-                    (
-                        DRIVE_LO_A[LO_POWER].ref
-                        if qubit.id in drive_a_qubit_ids
-                        else DRIVE_LO_B[LO_POWER].ref
-                    ),
+                    sc.parameter_ref(LoGroupParameters.power, "drive-a")
+                    if qubit.id in drive_a_qubit_ids
+                    else sc.parameter_ref(LoGroupParameters.power, "drive-b"),
                 )
                 for qubit in qubits
             )
@@ -1941,8 +1926,8 @@ def _prepare_scaled_quantum_hardware(
     )
     readout_lo = rf_source(experiment, for_=selected_qubits, role="readout-lo")
     readout_lo.ensure(
-        frequency=READOUT_LO[LO_FREQUENCY].ref,
-        power=READOUT_LO[LO_POWER].ref,
+        frequency=sc.parameter_ref(LoGroupParameters.frequency, "readout"),
+        power=sc.parameter_ref(LoGroupParameters.power, "readout"),
         output_enabled=True,
         reference_source="external",
     )

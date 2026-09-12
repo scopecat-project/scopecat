@@ -20,14 +20,13 @@ from scopecat.records.sample import SampleRevisionDraft
 
 from reference_lab.application import create_application
 from reference_lab.configuration import EXAMPLE_ROOT
-from reference_lab.parameters import DRIVE_CARRIER_FREQUENCY, Q0, QUBIT, QUBITS
+from reference_lab.parameters import QubitParameters
 from reference_lab.workflows.exploratory_signal import exploratory_signal, response
 
-QUALITY = sc.parameter_field("quality", sc.FloatType())
-QUALITY_TABLE = sc.parameter_schema(
-    "qubits", fields=(QUBIT, QUALITY), primary_key=(QUBIT,)
-)
-QUALITY_Q0 = QUALITY_TABLE.row(QUBIT.key("q0"))
+
+class Quality(sc.ParameterModel, table="qubits"):
+    qubit: sc.Param[sc.EntityRef] = sc.param(key=True, entity_kind="logical_qubit")
+    quality: sc.Param[float] = sc.param()
 
 
 @sc.experiment(id="reference_lab.structure_quality_signal")
@@ -38,8 +37,8 @@ def quality_signal(experiment: sc.ExperimentContext) -> sc.ValueRef[float]:
         experiment.compute(
             fn=response,
             frequency=frequency,
-            center=Q0[DRIVE_CARRIER_FREQUENCY].ref,
-            gain=QUALITY_Q0[QUALITY].ref,
+            center=sc.parameter_ref(QubitParameters.drive_carrier_frequency, "q0"),
+            gain=sc.parameter_ref(Quality.quality, "q0"),
         ),
     )
 
@@ -76,15 +75,16 @@ def test_structure_unknown_column_and_old_run_retention() -> None:
             ),
             edits=(
                 AddParameterColumn(
-                    parameter_id=QUBITS.id,
+                    parameter_id=sc.parameter_table_name(QubitParameters),
                     column=ParameterDefinition(
-                        id=QUALITY.id, value_type=QUALITY.value_type
+                        id=Quality.quality.name,
+                        value_type=sc.ScalarType(sc.FloatType()),
                     ),
                 ),
             ),
         )
         preview = lab.config.preview_structure(plan)
-        assert any(QUALITY.id in path for path in preview.missing_values)
+        assert any(Quality.quality.name in path for path in preview.missing_values)
         saved = lab.config.save_context(
             entry_id="structure-with-quality",
             base=base,
@@ -102,7 +102,7 @@ def test_structure_unknown_column_and_old_run_retention() -> None:
         with pytest.raises((ValueError, KeyError, CheckFailed), match="quality"):
             lab.preview(quality_signal(), config=ref)
         resolved = lab.config.resolve_context(
-            ref, overrides=(QUALITY_Q0[QUALITY].update(0.8),)
+            ref, overrides=(sc.parameter_update(Quality.quality, "q0", 0.8),)
         )
         assert lab.run(quality_signal(), config=resolved).status == "completed"
         retained = lab.get_run(original.id)

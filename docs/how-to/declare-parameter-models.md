@@ -21,6 +21,28 @@ unknown editing values, not nullable numeric experiment inputs. The type system
 does not prove physical unit dimensions or numeric bounds; save/preview uses the
 existing schema checks.
 
+## Declare choices and initial project values
+
+Use `Param[Literal["constant", "cosine_flat_top"]]` for a closed set of strings.
+The same annotation supplies editor completion and the persisted choice constraint.
+`sc.param(default="constant")` only initializes new rows. A model's docstring is
+its table description.
+
+A laboratory maintainer can build the initial catalog and snapshot directly:
+
+```python
+catalog = sc.parameter_catalog("lab-parameters", Drive)
+initial = sc.parameter_snapshot(
+    "lab-initial",
+    tables={Drive: [Drive(qubit="q0"), Drive(qubit="q1", duration=80)]},
+)
+```
+
+These return the existing durable records, ready for the laboratory configuration
+builder. An empty list creates an empty table; optional unknown cells remain
+absent. Unit conversion, key validation and choice/bound checks reuse the existing
+configuration validation. This does not install a default or alter a project.
+
 ## Create or edit a table
 
 Given an existing author session and named parameter context:
@@ -54,6 +76,26 @@ The supplied key must match the object's key. Editing an existing key directly i
 rejected. Deleting a row invalidates previously selected row views. Renames, key
 changes and unit conversions still use the explicit workspace structure APIs;
 changing a Python class alone never migrates saved data.
+
+## Inspect and copy rows
+
+```python
+row = params[Drive]["q0"]
+print(row)
+detached = row.copy()
+detached.duration = 96
+# The original workspace is unchanged until this explicit replacement.
+params[Drive]["q0"] = detached
+```
+
+`row.copy()`, `copy.copy(row)` and `copy.deepcopy(row)` produce independent model
+values. Unknown required fields display as `<unknown>` and remain unknown in a
+copy; reading one still raises a useful error. Constructor defaults never fill
+copied unknown cells. A bound view rejects a changed primary key rather than
+silently using a different lookup from the model's experiment references.
+
+Edit existing scalar values with `params.scalars["repetitions"] = 128`; these use
+the same diff, freeze and save path as table edits. Schema additions are explicit.
 
 ## Use fields in an experiment
 
@@ -94,11 +136,21 @@ remains authoritative, `None` cannot be staged, and independent verification is
 still required before publishing a default. A field from another table is
 rejected. See [candidate verification](verify-parameter-candidates.md).
 
-## Existing declarations
+Numeric results mapped to a `Magnitude` field use that field's declared unit;
+`Quantity` results retain their explicit physical unit. Editing and candidate
+mapping check declarations against the stored schema using the same compatibility
+rule. Managed receipts remain the source of the actual result values.
 
-Standard dataclass views remain available for ordinary data interoperation.
-The new class-based entry is the preferred route for shared experiment parameter
-declarations. Existing `ParameterSchema` consumers are not removed by this
-integration; migrate their actual readers, initial values and candidate writers
-together before removing those legacy handles. No parameter storage migration or
-new database is introduced by this API.
+## Maintainer integrations
+
+Use `sc.parameter_table_ref(Drive)` for a compiler/policy input that needs the
+complete frozen table, and `sc.parameter_definition(Drive.duration)` when an
+explicit schema edit needs that column's definition. Specialist analysis code can
+build a proposed cell edit with `sc.parameter_update(Drive.duration, "q0", 96)`;
+it enters the existing proposal/review path and does not activate a default.
+
+Standard dataclass views remain available for data interoperation. Shared
+laboratory declarations use `ParameterModel`. The former `parameter_field`,
+`parameter_schema`, field/key/assignment/row/cell handles have been removed after
+migrating their readers and writers. Existing snapshots and retained runs keep
+their durable representation; removing Python handles does not migrate storage.

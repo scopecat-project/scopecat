@@ -9,6 +9,7 @@ from __future__ import annotations
 import shutil
 from pathlib import Path
 
+import scopecat as sc
 from scopecat import Quantity
 from scopecat.api.project_worker import ProjectAutomationWorker
 from scopecat.config.registry.records import CalibrationCohortMergeRegistrySource
@@ -17,7 +18,7 @@ from scopecat_server.lifecycle import start_project, stop_project
 
 from reference_lab.application import create_application
 from reference_lab.configuration import EXAMPLE_ROOT
-from reference_lab.parameters import Q0_DRAG_BETA
+from reference_lab.parameters import QubitParameters
 from reference_lab.workflows.drag_beta_automatic_publication import (
     DRAG_BETA_PUBLICATION_POLICY_REF,
 )
@@ -141,8 +142,10 @@ def test_resident_automatic_publication_survives_restart_and_q0_only(
             )
             external_q0 = lab.config.set_default(
                 lab.config.edit(active_published.config).apply(
-                    Q0_DRAG_BETA.update(
-                        Quantity(q0_inputs.active_drag_beta_ns + 0.5, "ns")
+                    sc.parameter_update(
+                        QubitParameters.drag_beta,
+                        sc.EntityRef(id="q0", kind="logical_qubit"),
+                        Quantity(q0_inputs.active_drag_beta_ns + 0.5, "ns"),
                     )
                 ),
                 entry_id="resident-external-q0-drag-beta-drift",

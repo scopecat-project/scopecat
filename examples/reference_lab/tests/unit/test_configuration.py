@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pytest
+import scopecat as sc
 from scopecat.config.parameter_resolution import validate_parameter_snapshot
 from scopecat.kernel.entity import EntityRef
 from scopecat.kernel.quantity import Quantity
@@ -20,19 +21,7 @@ from reference_lab.bench_interfaces import (
     TRIGGER_START_PROGRAM_IDEMPOTENT,
 )
 from reference_lab.configuration import bootstrap_config
-from reference_lab.parameters import (
-    IQ_CHAIN,
-    IQ_CHAINS,
-    LO_FREQUENCY,
-    LO_GROUP,
-    LO_GROUPS,
-    MIXER_I_OFFSET,
-    MIXER_II,
-    MIXER_IQ,
-    MIXER_Q_OFFSET,
-    MIXER_QI,
-    MIXER_QQ,
-)
+from reference_lab.parameters import IqChainParameters, LoGroupParameters
 from reference_lab.physical_policies import (
     DRIVE_AWG_OFFSET_GUARD,
     REFERENCE_IQ_OFFSET_POLICY,
@@ -214,10 +203,13 @@ def test_target_configuration_keeps_topology_separate_from_calibration() -> None
         for group in _configured_target(config).host_state_policy.coupling_groups
     ] == [group.id for group in REFERENCE_IQ_OFFSET_POLICY.coupling_groups]
     assert isinstance(
-        config.parameter_snapshot.get(IQ_CHAINS.id),
+        config.parameter_snapshot.get(sc.parameter_table_name(IqChainParameters)),
         TableParameterValue,
     )
-    assert isinstance(config.parameter_snapshot.get(LO_GROUPS.id), TableParameterValue)
+    assert isinstance(
+        config.parameter_snapshot.get(sc.parameter_table_name(LoGroupParameters)),
+        TableParameterValue,
+    )
 
 
 def test_iq_guard_slot_resolves_physical_output_only_through_routing() -> None:
@@ -511,37 +503,40 @@ def test_lab_rf_routing_retains_component_scope_outside_domain_target() -> None:
 
 def test_list_mode_target_resolves_lo_and_mixer_from_reviewed_parameters() -> None:
     config = bootstrap_config()
-    lo_table = config.parameter_snapshot.get(LO_GROUPS.id)
-    mixer_table = config.parameter_snapshot.get(IQ_CHAINS.id)
+    lo_table = config.parameter_snapshot.get(sc.parameter_table_name(LoGroupParameters))
+    mixer_table = config.parameter_snapshot.get(
+        sc.parameter_table_name(IqChainParameters)
+    )
     assert isinstance(lo_table, TableParameterValue)
     assert isinstance(mixer_table, TableParameterValue)
 
     lo_rows = tuple(
-        {
-            **dict(row),
-            LO_FREQUENCY.id: Quantity(4.80e9, "Hz"),
-        }
-        if row[LO_GROUP.id] == "drive-a"
+        {**dict(row), LoGroupParameters.frequency.name: Quantity(4800000000.0, "Hz")}
+        if row[LoGroupParameters.group.name] == "drive-a"
         else row
         for row in lo_table.rows
     )
     mixer_rows = tuple(
         {
             **dict(row),
-            MIXER_II.id: 0.9,
-            MIXER_IQ.id: 0.1,
-            MIXER_QI.id: -0.2,
-            MIXER_QQ.id: 1.1,
-            MIXER_I_OFFSET.id: Quantity(0.01, "V"),
-            MIXER_Q_OFFSET.id: Quantity(-0.02, "V"),
+            IqChainParameters.mixer_ii.name: 0.9,
+            IqChainParameters.mixer_iq.name: 0.1,
+            IqChainParameters.mixer_qi.name: -0.2,
+            IqChainParameters.mixer_qq.name: 1.1,
+            IqChainParameters.mixer_i_offset.name: Quantity(0.01, "V"),
+            IqChainParameters.mixer_q_offset.name: Quantity(-0.02, "V"),
         }
-        if (row[IQ_CHAIN.id] == "drive-q0")
+        if row[IqChainParameters.chain.name] == "drive-q0"
         else row
         for row in mixer_table.rows
     )
     replacements = {
-        LO_GROUPS.id: lo_table.model_copy(update={"rows": lo_rows}),
-        IQ_CHAINS.id: mixer_table.model_copy(update={"rows": mixer_rows}),
+        sc.parameter_table_name(LoGroupParameters): lo_table.model_copy(
+            update={"rows": lo_rows}
+        ),
+        sc.parameter_table_name(IqChainParameters): mixer_table.model_copy(
+            update={"rows": mixer_rows}
+        ),
     }
     snapshot = config.parameter_snapshot.model_copy(
         update={

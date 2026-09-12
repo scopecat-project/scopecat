@@ -7,7 +7,7 @@ from typing import Annotated, cast
 import numpy as np
 import scopecat as sc
 
-from reference_lab.parameters import DRIVE_CARRIER_FREQUENCY, Q0
+from reference_lab.parameters import QubitParameters
 
 
 def response(frequency: sc.Quantity, center: sc.Quantity, gain: float) -> float:
@@ -27,7 +27,10 @@ def exploratory_signal(
         experiment.compute(
             fn=response,
             frequency=frequency,
-            center=Q0[DRIVE_CARRIER_FREQUENCY].ref,
+            center=sc.parameter_ref(
+                QubitParameters.drive_carrier_frequency,
+                sc.EntityRef(id="q0", kind="logical_qubit"),
+            ),
             gain=gain,
         ),
     )

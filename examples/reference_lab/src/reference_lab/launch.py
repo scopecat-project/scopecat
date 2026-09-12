@@ -37,7 +37,7 @@ from scopecat.records.manual_preview import ManualPreviewFence
 
 from reference_lab.control_launch import CONTROL_ENTRY, control_launch
 from reference_lab.launch_config import launch_config
-from reference_lab.parameters import CHANNEL_DELAY, Q1_CHANNEL_CALIBRATION
+from reference_lab.parameters import ChannelCalibration
 from reference_lab.workflows.ramsey_experiments import RAMSEY_SHOTS, parallel_raw_ramsey
 from reference_lab.workflows.temperature_diagnostic import (
     TemperatureDiagnosticIntent,
@@ -94,7 +94,11 @@ def timing_analysis(context: sc.AnalysisContext, delay_ns: float) -> sc.Analysis
     context.measurements()
     return context.result("Channel timing candidate").propose(
         "q1-channel-delay",
-        Q1_CHANNEL_CALIBRATION[CHANNEL_DELAY].update(delay_ns),
+        sc.parameter_update(
+            ChannelCalibration.channel_delay,
+            sc.EntityRef(id="q1", kind="logical_qubit"),
+            delay_ns,
+        ),
         reason="align q1 acquisition with the shared readout window",
     )
 
@@ -234,7 +238,11 @@ def launch_provider(lab: LabClient, request: LaunchRequest) -> LaunchResult:
                 catalog=config.parameter_catalog,
                 base=config.parameter_snapshot,
                 updates=(
-                    Q1_CHANNEL_CALIBRATION[CHANNEL_DELAY].update(inputs.delay_ns),
+                    sc.parameter_update(
+                        ChannelCalibration.channel_delay,
+                        sc.EntityRef(id="q1", kind="logical_qubit"),
+                        inputs.delay_ns,
+                    ),
                 ),
                 candidate_id="preflight-channel-timing.parameters",
             )

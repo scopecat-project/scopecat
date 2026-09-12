@@ -13,13 +13,10 @@ from scopecat.program.products import ModuleProductDecl, ProductValueSpec
 from scopecat.records.config import ConfigProfileSnapshot
 from scopecat.records.parameter import TableParameterValue
 
-_DEVICE = sc.parameter_field("device", sc.StringType())
-_THRESHOLD = sc.parameter_field("threshold", sc.FloatType())
-_CLASSIFIER_ROWS = sc.parameter_schema(
-    "classifier_rows",
-    fields=(_DEVICE, _THRESHOLD),
-    primary_key=(_DEVICE,),
-)
+
+class ClassifierRow(sc.ParameterModel, table="classifier_rows"):
+    device: sc.Param[str] = sc.param(key=True)
+    threshold: sc.Param[float] = sc.param()
 
 
 def _config_with_classifier_rows() -> ConfigProfileSnapshot:
@@ -30,7 +27,7 @@ def _config_with_classifier_rows() -> ConfigProfileSnapshot:
                 update={
                     "definitions": (
                         *config.parameter_catalog.definitions,
-                        _CLASSIFIER_ROWS.definition,
+                        sc.parameter_definition(ClassifierRow),
                     )
                 }
             )
@@ -41,7 +38,7 @@ def _config_with_classifier_rows() -> ConfigProfileSnapshot:
             "values": (
                 *config.parameter_snapshot.values,
                 TableParameterValue(
-                    id=_CLASSIFIER_ROWS.id,
+                    id=sc.parameter_table_name(ClassifierRow),
                     rows=(
                         {"device": "q0", "threshold": 0.25},
                         {"device": "q1", "threshold": 0.5},
@@ -83,7 +80,7 @@ def test_measurement_compute_materializes_parameter_table_inputs_per_point() -> 
             "classify",
             fn=_classify,
             signal=call.results.signal,
-            rows=_CLASSIFIER_ROWS.ref,
+            rows=sc.parameter_table_ref(ClassifierRow),
             output_type=sc.ScalarType(sc.FloatType()),
         )
         assert isinstance(result, sc.ProductRef)
