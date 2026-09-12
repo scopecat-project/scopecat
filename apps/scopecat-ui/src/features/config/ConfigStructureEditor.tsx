@@ -323,9 +323,11 @@ export function ConfigStructureEditor({
           <p>{preview.data.consumer_scope}</p>
           {preview.data.impacts.map((impact, index) => (
             <p key={index}>
-              {impact.parameter_id}.{impact.column_id ?? "key"}:{" "}
+              {impact.parameter_id}
+              {impact.column_id ? `.${impact.column_id}` : ""}:{" "}
               {
                 {
+                  scalar_added: "scalar added",
                   table_added: "table added",
                   added: "column added",
                   renamed: "column renamed",

@@ -22,8 +22,10 @@ from scopecat.api.parameter_exchange import (
 from scopecat.authoring.parameter_fields import (
     ResolvedParameterField,
     convert_parameter_bound,
+    dynamic_parameter_field,
     require_parameter_field,
     stored_parameter_value,
+    table_from_parameter_fields,
 )
 from scopecat.authoring.parameter_models import (
     ParameterModel,
@@ -50,12 +52,24 @@ from scopecat.config.structure import (
 )
 from scopecat.daemon.client import DaemonConflictError
 from scopecat.daemon.views import ConfigContextResolution, ConfigEntryView
+from scopecat.kernel.entity import EntityRef
 from scopecat.kernel.errors import Conflict
 from scopecat.kernel.quantity import Quantity
 from scopecat.kernel.value_identity import scalar_identity
-from scopecat.kernel.value_types import AtomType, Table
+from scopecat.kernel.value_types import (
+    AtomType,
+    Bool,
+    Entity,
+    Float,
+    Int,
+    Scalar,
+    String,
+    Table,
+)
 from scopecat.kernel.value_types import Quantity as QuantityType
 from scopecat.kernel.value_validation import coerce_literal
+from scopecat.program.value_refs import ValueRef
+from scopecat.program.values import ParameterKeyInput, parameter_lookup
 from scopecat.records.config import ConfigProfileSnapshot
 from scopecat.records.config_context import ConfigContextRef
 from scopecat.records.parameter import (
@@ -67,6 +81,7 @@ from scopecat.records.parameter import (
 )
 from scopecat.records.parameter_structure import (
     AddParameterColumn,
+    AddParameterScalar,
     AddParameterTable,
     ChangeParameterColumn,
     ChangeParameterKey,
@@ -277,27 +292,53 @@ class ParameterWorkspace(Mapping[str, "ParameterTable"]):
         self, name: str, row_type: type[T], *, key: str | tuple[str, ...]
     ) -> TypedParameterTable[T]: ...
 
+    @overload
+    def declare_table(
+        self, name: str, *, key: str | tuple[str, ...], columns: Mapping[str, object]
+    ) -> ParameterTable: ...
+
     def declare_table[T](
         self,
         name: str | type[T],
         row_type: type[T] | None = None,
         *,
         key: str | tuple[str, ...] | None = None,
-    ) -> TypedParameterTable[T]:
-        """Declare an empty table or add optional fields to an existing declaration.
+        columns: Mapping[str, object] | None = None,
+    ) -> ParameterTable | TypedParameterTable[T]:
+        """Declare a table from a model/dataclass or dynamic named Python types.
 
-        Existing values are never initialized from dataclass defaults. Renames,
-        unit conversions and key changes require their explicit operations.
-        Review structure_diff(), then save() before running with a changed schema.
+        Existing values never acquire defaults. Existing declarations may only
+        add optional columns; rename, key and unit changes remain explicit.
         """
         if not isinstance(name, str):
+            if columns is not None or row_type is not None or key is not None:
+                raise TypeError("model declarations already supply columns and key")
             if not issubclass(name, ParameterModel):
                 raise TypeError("class declarations require ParameterModel")
             row_type, key, name = name, parameter_key(name), parameter_table_name(name)
-        if row_type is None or key is None:
-            raise TypeError("dataclass declarations require row_type and key")
+        if key is None:
+            raise TypeError("declare_table requires a primary key")
         keys = (key,) if isinstance(key, str) else key
-        schema = parameter_table_schema(row_type, primary_key=keys)
+        if columns is not None:
+            if row_type is not None:
+                raise TypeError("choose columns or row_type, not both")
+            fields = tuple(dynamic_parameter_field(n, d) for n, d in columns.items())
+            schema = table_from_parameter_fields(fields, primary_key=keys, label=name)
+        else:
+            if row_type is None:
+                raise TypeError("supply columns, a ParameterModel or a dataclass")
+            fields = parameter_fields(row_type)
+            schema = parameter_table_schema(row_type, primary_key=keys)
+        self._declare_schema(name, schema, fields)
+        return (
+            self.table(name)
+            if row_type is None
+            else self.table(name, row_type=row_type)
+        )
+
+    def _declare_schema(
+        self, name: str, schema: Table, fields: tuple[ResolvedParameterField, ...]
+    ) -> None:
         definition = self._baseline.parameter_catalog.get(name)
         edits: list[ParameterStructureEdit] = []
         if definition is None:
@@ -306,9 +347,10 @@ class ParameterWorkspace(Mapping[str, "ParameterTable"]):
             if not isinstance(definition.value_type, Table):
                 raise ValueError(f"{name}: already declared as a scalar")
             previous = definition.value_type
-            if previous.primary_key != keys:
+            if previous.primary_key != schema.primary_key:
                 raise ValueError(
-                    f"{name}: key changed from {previous.primary_key} to {keys}; "
+                    f"{name}: key changed from {previous.primary_key} "
+                    f"to {schema.primary_key}; "
                     "use change_key() explicitly"
                 )
             old = {c.id: c for c in previous.columns}
@@ -321,25 +363,56 @@ class ParameterWorkspace(Mapping[str, "ParameterTable"]):
                     "Use rename_column() or convert_unit() explicitly; "
                     "no automatic migration is applied."
                 )
-            optional = {f.name for f in parameter_fields(row_type) if f.optional}
-            for column in schema.columns:
-                if column.id not in old:
-                    if column.id not in optional:
+            optional = {f.name for f in fields if f.optional}
+            for col in schema.columns:
+                if col.id not in old:
+                    if col.id not in optional:
                         raise ValueError(
-                            f"{name}.{column.id}: new fields on existing rows must be "
+                            f"{name}.{col.id}: new fields on existing rows must be "
                             "optional; initialize values explicitly"
                         )
                     edits.append(
                         AddParameterColumn(
                             parameter_id=name,
                             column=ParameterDefinition(
-                                id=column.id, value_type=column.value_type
+                                id=col.id, value_type=col.value_type
                             ),
                         )
                     )
         if edits:
             self._stage_structure(edits)
-        return self.table(name, row_type=row_type)
+
+    def add_column(self, table: str, name: str, declaration: object) -> None:
+        """Add an optional column, leaving existing rows explicitly unknown."""
+        resolved = dynamic_parameter_field(name, declaration)
+        if not resolved.optional:
+            raise TypeError(
+                f"{table}.{name}: new columns must be optional; use T | None"
+            )
+        self._stage_structure(
+            (
+                AddParameterColumn(
+                    parameter_id=table,
+                    column=ParameterDefinition(id=name, value_type=resolved.value_type),
+                ),
+            )
+        )
+
+    def declare_scalar(
+        self, name: str, declaration: object, *, value: ParameterAtomValue
+    ) -> None:
+        """Create a scalar with an explicit value; reject existing declarations."""
+        resolved = dynamic_parameter_field(name, declaration)
+        initial = stored_parameter_value(value, resolved, label=name)
+        self._stage_structure(
+            (
+                AddParameterScalar(
+                    parameter_id=name,
+                    value_type=resolved.value_type,
+                    value=initial,
+                ),
+            )
+        )
 
     def rename_column(self, table: str, column: str, new_name: str) -> None:
         self._stage_structure(
@@ -770,6 +843,62 @@ class ParameterTable(MutableMapping[RowKey, "ParameterRow"]):
             else None
         )
 
+    @overload
+    def ref[T](
+        self,
+        column: str,
+        key: ParameterKeyInput | tuple[ParameterKeyInput, ...],
+        *,
+        as_type: type[T],
+    ) -> ValueRef[T]: ...
+
+    @overload
+    def ref(
+        self, column: str, key: ParameterKeyInput | tuple[ParameterKeyInput, ...]
+    ) -> ValueRef[object]: ...
+
+    def ref[T](
+        self,
+        column: str,
+        key: ParameterKeyInput | tuple[ParameterKeyInput, ...],
+        *,
+        as_type: type[T] | None = None,
+    ) -> ValueRef[T] | ValueRef[object]:
+        """Capture a symbolic lookup from this schema, without reading cell values.
+
+        as_type checks/narrows the Python result type; units and key metadata
+        always come from the table. Subsequent edits do not mutate the reference.
+        """
+        selected = next((c for c in self.schema.columns if c.id == column), None)
+        if selected is None:
+            raise KeyError(f"{self.name}.{column}: unknown column")
+        result_type = _reference_python_type(selected.value_type)
+        if as_type is not None and as_type is not result_type:
+            raise TypeError(
+                f"{self.name}.{column}: reference returns {result_type.__name__}"
+            )
+        parts = key if isinstance(key, tuple) else (key,)
+        if len(parts) != len(self.schema.primary_key):
+            raise ValueError(f"{self.name}: expected keys {self.schema.primary_key}")
+        normalized: dict[str, ParameterKeyInput] = {}
+        for name, value in zip(self.schema.primary_key, parts, strict=True):
+            if value is None:
+                raise ValueError(f"{self.name}.{name}: a primary key cannot be unknown")
+            normalized[name] = (
+                value
+                if isinstance(value, ValueRef)
+                else self._data.key_value(name, value)
+            )
+        return cast(
+            "ValueRef[T]",
+            parameter_lookup(
+                self.name,
+                key=normalized,
+                column=column,
+                value_type=selected.value_type,
+            ),
+        )
+
     def export_json(self) -> str:
         """Export an editable document with canonical units and exact base identity."""
         return export_table_json(self)
@@ -1142,3 +1271,18 @@ def _display_cell(value: object, atom: AtomType) -> str:
     ):
         return f"{value:g} {atom.unit}"
     return _display_atom(value)
+
+
+def _reference_python_type(value_type: Scalar) -> type:
+    atom = value_type.atom
+    for shape, python_type in (
+        (Bool, bool),
+        (Int, int),
+        (Float, float),
+        (String, str),
+        (Entity, EntityRef),
+        (QuantityType, Quantity),
+    ):
+        if isinstance(atom, shape):
+            return python_type
+    raise TypeError(f"unsupported dynamic reference type: {atom!r}")

@@ -33,10 +33,13 @@ from scopecat.records.parameter import (
     ParameterCatalog,
     ParameterDefinition,
     ParameterSnapshot,
+    ScalarParameterValue,
+    StoredParameterValue,
     TableParameterValue,
 )
 from scopecat.records.parameter_structure import (
     AddParameterColumn,
+    AddParameterScalar,
     AddParameterTable,
     ChangeParameterColumn,
     ChangeParameterKey,
@@ -75,7 +78,9 @@ class StructureColumnImpact(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     parameter_id: str
     column_id: str | None = None
-    kind: Literal["table_added", "added", "renamed", "type_changed", "key_changed"]
+    kind: Literal[
+        "scalar_added", "table_added", "added", "renamed", "type_changed", "key_changed"
+    ]
     affected_rows: int
     missing_rows: tuple[int, ...] = ()
     consumer_action: str
@@ -144,26 +149,8 @@ def preview_parameter_structure(
         for column in definition.value_type.columns
     }
     for edit in plan.edits:
-        if isinstance(edit, AddParameterTable):
-            if edit.parameter_id in definitions:
-                raise ValueError(f"{edit.parameter_id}: parameter already exists")
-            definitions[edit.parameter_id] = ParameterDefinition(
-                id=edit.parameter_id, value_type=edit.table
-            )
-            values[edit.parameter_id] = TableParameterValue(
-                id=edit.parameter_id, rows=()
-            )
-            impacts.append(
-                StructureColumnImpact(
-                    parameter_id=edit.parameter_id,
-                    kind="table_added",
-                    affected_rows=0,
-                    consumer_action=(
-                        "Add explicitly initialized rows; "
-                        "missing non-key cells remain unknown."
-                    ),
-                )
-            )
+        if isinstance(edit, AddParameterScalar | AddParameterTable):
+            impacts.append(_add_parameter(edit, definitions, values))
             continue
         definition = definitions.get(edit.parameter_id)
         if definition is None or not isinstance(definition.value_type, Table):
@@ -504,6 +491,12 @@ def mapped_structure_origins(
         )
         if item.field_id is None
     ]
+    origins.extend(
+        ConfigValueOrigin(parameter_id=value.id, layer="context", entry=selected_ref)
+        for value in preview.config.parameter_snapshot.values
+        if isinstance(value, ScalarParameterValue)
+        and before.parameter_snapshot.get(value.id) is None
+    )
     for mapping in preview.cell_mappings:
         definition = preview.config.parameter_catalog.get(mapping.parameter_id)
         old_definition = before.parameter_catalog.get(mapping.parameter_id)
@@ -582,3 +575,34 @@ def mapped_structure_origins(
             )
         )
     return tuple(origins)
+
+
+def _add_parameter(
+    edit: AddParameterScalar | AddParameterTable,
+    definitions: dict[str, ParameterDefinition],
+    values: dict[str, StoredParameterValue],
+) -> StructureColumnImpact:
+    if edit.parameter_id in definitions:
+        raise ValueError(f"{edit.parameter_id}: parameter already exists")
+    if isinstance(edit, AddParameterScalar):
+        value_type = edit.value_type
+        value = ScalarParameterValue(id=edit.parameter_id, value=edit.value)
+        kind = "scalar_added"
+        action = "Review the explicit manual initial value before saving."
+    else:
+        value_type = edit.table
+        value = TableParameterValue(id=edit.parameter_id, rows=())
+        kind = "table_added"
+        action = (
+            "Add explicitly initialized rows; missing non-key cells remain unknown."
+        )
+    definitions[edit.parameter_id] = ParameterDefinition(
+        id=edit.parameter_id, value_type=value_type
+    )
+    values[edit.parameter_id] = value
+    return StructureColumnImpact(
+        parameter_id=edit.parameter_id,
+        kind=kind,
+        affected_rows=0,
+        consumer_action=action,
+    )
