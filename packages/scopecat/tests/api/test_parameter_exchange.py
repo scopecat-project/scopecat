@@ -78,6 +78,10 @@ def test_import_rejects_stale_export_and_stale_preview_without_partial_edits() -
         target.preview_json(original)
     assert target["001"]["frequency"] == sc.Quantity(5100, "MHz")
     assert target["002"]["amplitude"] == 0.3
+    unchanged = target.preview_json(target.export_json())
+    target["001"]["frequency"] = sc.Quantity(5.1, "GHz")
+    with pytest.raises(ValueError, match="changed after preview"):
+        unchanged.apply()
 
 
 def test_row_deletion_is_explicit_and_invalid_external_shapes_are_rejected() -> None:

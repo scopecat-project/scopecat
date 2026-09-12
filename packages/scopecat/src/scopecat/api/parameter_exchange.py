@@ -78,14 +78,15 @@ def _normalized(
     return tuple(normalized.rows)
 
 
-def _rows(table: ExchangeTable) -> tuple[_Row, ...]:
-    return _normalized(
-        table,
-        tuple(
-            {name: value for name, value in table[key].items() if value is not None}
-            for key in table
-        ),
+def _raw_rows(table: ExchangeTable) -> tuple[_Row, ...]:
+    return tuple(
+        {name: value for name, value in table[key].items() if value is not None}
+        for key in table
     )
+
+
+def _rows(table: ExchangeTable) -> tuple[_Row, ...]:
+    return _normalized(table, _raw_rows(table))
 
 
 def _key(table: ExchangeTable, row: _Row) -> RowKey:
@@ -98,7 +99,8 @@ def _identity(table: ExchangeTable, row: _Row) -> _Identity:
 
 
 def _document(table: ExchangeTable) -> _Document:
-    stored = _rows(table)
+    raw = _raw_rows(table)
+    stored = _normalized(table, raw)
     rows: list[dict[str, JsonValue]] = []
     for row in stored:
         exported: dict[str, JsonValue] = {}
@@ -127,7 +129,12 @@ def _document(table: ExchangeTable) -> _Document:
         rows=rows,
     )
     canonical = json.dumps(
-        document.model_dump(mode="json"),
+        {
+            "document": document.model_dump(mode="json"),
+            "stored": TableParameterValue(id=table.name, rows=raw).model_dump(
+                mode="json"
+            ),
+        },
         sort_keys=True,
         separators=(",", ":"),
         allow_nan=False,
