@@ -43,7 +43,9 @@ jobs:
 
       - name: Run tests with Windows hang diagnostics
         if: runner.os == 'Windows'
-        timeout-minutes: 15
+        # Retained-run and source-refresh journeys share two Windows workers.
+        # Keep headroom for the full suite within the 20-minute job limit.
+        timeout-minutes: 18
         env:
           SCOPECAT_TEST_DIAGNOSTICS: test-diagnostics
         run: uv run --locked python -m pytest -p scripts.pytest_windows_diagnostics
