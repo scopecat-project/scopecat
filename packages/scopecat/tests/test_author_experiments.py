@@ -12,7 +12,7 @@ import pytest
 
 from scopecat.api.lab import LabClient
 from scopecat.application import LabApplication
-from scopecat.application.authoring import AuthorExperiments
+from scopecat.application.authoring import AuthorExperiment, AuthorExperiments
 from scopecat.application.launch import LaunchCatalog
 from scopecat.automation.definition import ProcedureRegistry
 from scopecat.planning.catalog import InstrumentContractCatalog
@@ -46,6 +46,13 @@ def test_copy_discovery_and_exact_initial_declaration_identity(
     retained_ref = first.procedures[0].ref
     path.write_text(
         SOURCE.replace("return LEVEL.ref", "return LEVEL.ref + 2"), encoding="utf-8"
+    )
+    # Rediscovery of a retained module must never label old bytecode with new text.
+    stale = AuthorExperiments.discover("author_copy").experiments[0]
+    assert stale.fingerprint == first.experiments[0].fingerprint
+    assert (
+        AuthorExperiment.from_declaration(stale.declaration).fingerprint
+        == stale.fingerprint
     )
     monkeypatch.delitem(sys.modules, "author_copy.small")
     importlib.invalidate_caches()

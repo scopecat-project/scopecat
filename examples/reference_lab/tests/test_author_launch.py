@@ -7,6 +7,7 @@ import time
 from collections.abc import Generator
 from dataclasses import dataclass
 from importlib import import_module
+from pathlib import Path
 from typing import cast
 
 import httpx2
@@ -38,6 +39,7 @@ class AuthorDaemon:
     application: LabApplication
     source: str
     analysis: AnalysisStep
+    root: Path
 
 
 @pytest.fixture(scope="module")
@@ -88,7 +90,7 @@ def reference_lab_daemon(
                 )()
             # Keep the loaded objects, not snapshot import paths, across the
             # function-scoped loader isolation used by the rest of this suite.
-            yield AuthorDaemon(endpoint.base_url, application, source, analysis)
+            yield AuthorDaemon(endpoint.base_url, application, source, analysis, root)
         finally:
             stop_project(project)
 
@@ -327,3 +329,86 @@ def test_required_author_input_diagnostics_survive_the_worker_boundary(
             author.prepare("required_target", inputs={"qubit": 12})
         prepared = author.prepare("required_target", inputs={"qubit": "q0"})
         assert prepared.request.inputs == {"qubit": "q0"}
+
+
+def test_editable_request_rebuilds_and_reuses_saved_plan(
+    reference_lab_daemon: AuthorDaemon,
+    tmp_path: Path,
+) -> None:
+    fixture = reference_lab_daemon
+    assert fixture.application.authors is not None
+    declaration = fixture.application.authors.get("copied_signal").declaration
+    request = declaration.request(gain=1.0)
+    request.values["gain"] = 2.0
+    frequencies = np.array([4.7, 4.8, 4.9])
+    request.values["frequency"] = sc.Scan(
+        sc.Quantity(value, "GHz") for value in cast("list[float]", frequencies.tolist())
+    )
+    frequencies[:] = 5.2
+    with AuthorProject(fixture.url, receipts=tmp_path / "receipts") as author:
+        scanned = author.prepare(request)
+        assert scanned.request.control_edits["frequency"].mode == "scan"
+        assert scanned.preview.point_count == 3
+        alternative = request.copy()
+        alternative.values["frequency"] = sc.Quantity(4.8, "GHz")
+        alternative.values["polarity"] = "negative"
+        fixed = author.prepare(alternative)
+        assert fixed.preview.point_count == 1
+        assert scanned.request.inputs["polarity"] == "positive"
+        assert fixed.request.inputs["polarity"] == "negative"
+        saved = scanned.save_plan("Editable request scan", saved_by="alice")
+        reopened = author.prepare_plan(saved.ref, actor="bob")
+        assert reopened.request.inputs == scanned.request.inputs
+        assert reopened.request.control_edits == scanned.request.control_edits
+        assert reopened.preview.code_revision == scanned.preview.code_revision
+        assert reopened.preview.point_count == 3
+        positive = reopened.run().wait(timeout=30).result()
+        negative = fixed.run().wait(timeout=30).result()
+        assert np.all(
+            np.asarray(positive.measurements()["result"].require_values(), dtype=float)
+            > 0
+        )
+        assert np.all(
+            np.asarray(negative.measurements()["result"].require_values(), dtype=float)
+            < 0
+        )
+        assert scanned.request.control_edits["frequency"].mode == "scan"
+        with pytest.raises(ValueError, match=r"request\.values"):
+            author.prepare(request, inputs={"polarity": "negative"})
+        invalid = request.copy()
+        invalid.values["gain"] = sc.Scan([1, 2])
+        with pytest.raises(ValueError, match="gain: input is not scannable"):
+            author.prepare(invalid)
+        invalid.values["gain"] = 2
+        invalid.values["polarity"] = sc.Scan([1, 2])
+        with pytest.raises(ValueError, match="polarity"):
+            author.prepare(invalid)
+
+
+def test_imported_request_rejects_changed_declaration_but_can_select_old_revision(
+    reference_lab_daemon: AuthorDaemon,
+) -> None:
+    fixture = reference_lab_daemon
+    assert fixture.application.authors is not None
+    declaration = fixture.application.authors.get("copied_signal").declaration
+    request = declaration.request(gain=1.0)
+    path = fixture.root / "src/reference_lab/workflows/authored/signal.py"
+    with AuthorProject(fixture.url) as author:
+        original = author.prepare(request)
+        try:
+            path.write_text(
+                fixture.source.replace('= "positive",', '= "negative",'),
+                encoding="utf-8",
+            )
+            changed = author.refresh()
+            assert changed.active != original.preview.code_revision
+            with pytest.raises(ValueError, match="imported declaration does not match"):
+                author.prepare(request)
+            retained = author.prepare(
+                request, code_revision=original.preview.code_revision
+            )
+            assert retained.request.inputs == original.request.inputs
+            assert retained.preview.code_revision == original.preview.code_revision
+        finally:
+            path.write_text(fixture.source, encoding="utf-8")
+            author.refresh()

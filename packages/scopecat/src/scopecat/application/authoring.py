@@ -95,6 +95,28 @@ class AuthorExperiment:
     )
     fingerprint: Sha256ContentHash = field(init=False)
 
+    @classmethod
+    def from_declaration(
+        cls,
+        declaration: Experiment[..., object],
+        *,
+        code_revision: AuthorRevisionRef | None = None,
+    ) -> AuthorExperiment:
+        """Use the same contract for discovery and imported Python requests."""
+        return cls(
+            declaration=declaration,
+            input_model=author_input_model(declaration, declaration.controls),
+            controls=declaration.controls,
+            source=declaration.source,
+            title=str(
+                declaration.metadata.get(
+                    "title", declaration.__name__.replace("_", " ")
+                )
+            ),
+            description=inspect.getdoc(declaration.__wrapped__) or declaration.id,
+            code_revision=code_revision,
+        )
+
     def __post_init__(self) -> None:
         object.__setattr__(self, "source", MappingProxyType(dict(self.source)))
         object.__setattr__(
@@ -308,27 +330,9 @@ class AuthorExperiments:
                     continue
                 experiment = value
                 try:
-                    controls = experiment.controls
-                    source_identity = python_source_identity(
-                        experiment.__wrapped__, label=experiment.id
-                    )
                     discovered.append(
-                        AuthorExperiment(
-                            declaration=experiment,
-                            input_model=author_input_model(experiment, controls),
-                            controls=controls,
-                            source={
-                                "module": source_identity["module"],
-                                "qualname": source_identity["qualname"],
-                                "source": source_identity["source"],
-                            },
-                            title=str(
-                                experiment.metadata.get(
-                                    "title", experiment.__name__.replace("_", " ")
-                                )
-                            ),
-                            description=inspect.getdoc(experiment.__wrapped__)
-                            or experiment.id,
+                        AuthorExperiment.from_declaration(
+                            experiment, code_revision=loading_revision.get()
                         )
                     )
                 except (TypeError, ValueError) as error:
