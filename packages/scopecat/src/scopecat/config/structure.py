@@ -491,6 +491,12 @@ def mapped_structure_origins(
         )
         if item.field_id is None
     ]
+    origins.extend(
+        ConfigValueOrigin(parameter_id=value.id, layer="context", entry=selected_ref)
+        for value in preview.config.parameter_snapshot.values
+        if isinstance(value, ScalarParameterValue)
+        and before.parameter_snapshot.get(value.id) is None
+    )
     for mapping in preview.cell_mappings:
         definition = preview.config.parameter_catalog.get(mapping.parameter_id)
         old_definition = before.parameter_catalog.get(mapping.parameter_id)

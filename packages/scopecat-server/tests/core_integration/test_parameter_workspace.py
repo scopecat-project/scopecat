@@ -677,6 +677,14 @@ def test_dynamic_declarations_reopen_and_adopt_model_without_migration(
     reopened = ParameterWorkspace(operations, context=version)
     assert reopened["exploration"]["001"]["amplitude"] is None
     assert reopened.scalars["attempts"] == 3
+    initial_origin = next(
+        item
+        for item in reopened.freeze().value_origins
+        if item.parameter_id == "attempts"
+    )
+    assert initial_origin.entry.entry_id == version.name
+    assert initial_origin.layer == "context"
+    assert initial_origin.evidence is None
 
     class Exploration(sc.ParameterModel, table="exploration"):
         qubit: sc.Param[str] = sc.param(key=True)
