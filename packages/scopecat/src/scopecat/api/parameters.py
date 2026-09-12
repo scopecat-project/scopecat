@@ -6,8 +6,19 @@ from collections.abc import Callable, Iterator, Mapping, MutableMapping, Sequenc
 from dataclasses import dataclass, replace
 from html import escape
 from itertools import islice
-from typing import Protocol, Self, cast, overload, override
+from typing import TYPE_CHECKING, Protocol, Self, cast, overload, override
 
+if TYPE_CHECKING:
+    import pandas as pd
+
+from scopecat.api.parameter_edits import ParameterEdit, RowKey, same_parameter_value
+from scopecat.api.parameter_exchange import (
+    ParameterImport,
+    export_table_json,
+    preview_table_dataframe,
+    preview_table_json,
+    table_dataframe,
+)
 from scopecat.authoring.parameter_fields import (
     ResolvedParameterField,
     convert_parameter_bound,
@@ -91,15 +102,7 @@ class ParameterWorkspaceOperations(Protocol):
     ) -> ConfigEntryView: ...
 
 
-type RowKey = ParameterAtomValue | tuple[ParameterAtomValue, ...]
 type _Identity = tuple[tuple[object, ...], ...]
-
-
-def _same_value(left: object, right: object) -> bool:
-    # Python's True == 1 must not hide an invalid scalar/cell edit from validation.
-    if isinstance(left, bool) != isinstance(right, bool):
-        return False
-    return left == right
 
 
 @dataclass(frozen=True, slots=True)
@@ -115,17 +118,6 @@ class ParameterVersion:
     @property
     def name(self) -> str:
         return self.context.entry_id
-
-
-@dataclass(frozen=True, slots=True)
-class ParameterEdit:
-    """One readable cell/row change; None denotes an absent value in this slice."""
-
-    parameter: str
-    key: RowKey | None
-    field: str | None
-    before: ParameterAtomValue | Mapping[str, ParameterAtomValue] | None
-    after: ParameterAtomValue | Mapping[str, ParameterAtomValue] | None
 
 
 class ParameterWorkspace(Mapping[str, "ParameterTable"]):
@@ -449,7 +441,7 @@ class ParameterWorkspace(Mapping[str, "ParameterTable"]):
         for name, value in self._scalars.items():
             old = self._baseline.parameter_snapshot.get(name)
             assert isinstance(old, ScalarParameterValue)
-            if not _same_value(old.value, value):
+            if not same_parameter_value(old.value, value):
                 edits.append(ParameterEdit(name, None, None, old.value, value))
         for name, table in self._data.items():
             old = self._baseline.parameter_snapshot.get(name)
@@ -465,7 +457,9 @@ class ParameterWorkspace(Mapping[str, "ParameterTable"]):
                     edits.append(ParameterEdit(name, key, None, previous, current))
                 else:
                     for field in dict.fromkeys((*previous, *current)):
-                        if not _same_value(previous.get(field), current.get(field)):
+                        if not same_parameter_value(
+                            previous.get(field), current.get(field)
+                        ):
                             edits.append(
                                 ParameterEdit(
                                     name,
@@ -768,6 +762,39 @@ class ParameterTable(MutableMapping[RowKey, "ParameterRow"]):
     def schema(self) -> Table:
         return self._data.schema
 
+    @property
+    def context(self) -> ConfigContextRef | None:
+        return (
+            self._data.resolution.config_source.context
+            if self._data.resolution
+            else None
+        )
+
+    def export_json(self) -> str:
+        """Export an editable document with canonical units and exact base identity."""
+        return export_table_json(self)
+
+    def preview_json(
+        self, text: str, *, delete_missing: bool = False
+    ) -> ParameterImport:
+        """Validate an external edit and return its unapplied changes."""
+        return preview_table_json(self, text, delete_missing=delete_missing)
+
+    def to_dataframe(self) -> pd.DataFrame:
+        """Export an independent pandas frame; metadata stays in frame.attrs."""
+        return table_dataframe(self)
+
+    def preview_dataframe(
+        self,
+        frame: pd.DataFrame,
+        *,
+        nan_as_unknown: bool = False,
+        delete_missing: bool = False,
+    ) -> ParameterImport:
+        return preview_table_dataframe(
+            self, frame, nan_as_unknown=nan_as_unknown, delete_missing=delete_missing
+        )
+
     @override
     def __getitem__(self, key: RowKey) -> ParameterRow:
         identity = self._data.identity(key)
@@ -984,6 +1011,29 @@ class TypedParameterTable[T](MutableMapping["RowKey", T]):
     def __len__(self) -> int:
         return len(self._table)
 
+    def export_json(self) -> str:
+        """Export canonical stored units, including their metadata."""
+        return self._table.export_json()
+
+    def preview_json(
+        self, text: str, *, delete_missing: bool = False
+    ) -> ParameterImport:
+        return self._table.preview_json(text, delete_missing=delete_missing)
+
+    def to_dataframe(self) -> pd.DataFrame:
+        return self._table.to_dataframe()
+
+    def preview_dataframe(
+        self,
+        frame: pd.DataFrame,
+        *,
+        nan_as_unknown: bool = False,
+        delete_missing: bool = False,
+    ) -> ParameterImport:
+        return self._table.preview_dataframe(
+            frame, nan_as_unknown=nan_as_unknown, delete_missing=delete_missing
+        )
+
     def _row_values(self, row: T) -> dict[str, ParameterAtomValue]:
         if not isinstance(row, self._row_type):
             raise TypeError(f"{self._table.name}: expected {self._row_type.__name__}")
@@ -1067,6 +1117,7 @@ __all__ = [
     "ParameterTable",
     "ParameterVersion",
     "ParameterWorkspace",
+    "RowKey",
     "ScalarParameters",
     "TypedParameterTable",
 ]

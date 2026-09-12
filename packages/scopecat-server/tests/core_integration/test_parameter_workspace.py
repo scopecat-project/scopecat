@@ -605,3 +605,39 @@ def test_notebook_workspace_views_keep_saved_origins_and_context(
     assert "Unknown" in repr(table["q0"])
     assert "Saved ·" in table.render_html()  # Other cells retain provenance.
     assert "sha256" not in repr(workspace)
+
+
+def test_external_parameter_edits_preserve_other_cell_origins_and_exact_context(
+    operations: RegistryOperations,
+) -> None:
+    import json
+
+    params = ParameterWorkspace(operations, context="start")
+    target = params["qubits"]
+    document = json.loads(target.export_json())
+    document["rows"][0]["frequency"] = 5.25
+    preview = target.preview_json(json.dumps(document))
+    assert [(edit.field, edit.after) for edit in preview.diff] == [("frequency", 5.25)]
+    assert params.diff() == ()
+    preview.apply()
+    frozen = params.freeze()
+    version = params.save("imported-values", note="Reviewed external parameter edit")
+    assert frozen.config_source.context.entry_id == "start"
+    reopened = ParameterWorkspace(operations, context=version)
+    origins = {
+        item.field_id: item
+        for item in reopened.freeze().value_origins
+        if item.parameter_id == "qubits"
+    }
+    assert origins["amplitude"].entry.entry_id == "lab"
+    assert origins["frequency"].entry.entry_id == "imported-values"
+    assert (
+        load_active_config_registry_snapshot(unit_of_work=operations.uow).entry.id
+        == "lab"
+    )
+    with pytest.raises(ValueError, match="stale"):
+        reopened["qubits"].preview_json(json.dumps(document))
+    unchanged = reopened["qubits"].preview_json(reopened["qubits"].export_json())
+    reopened.save("another-version")
+    with pytest.raises(ValueError, match="changed after preview"):
+        unchanged.apply()
