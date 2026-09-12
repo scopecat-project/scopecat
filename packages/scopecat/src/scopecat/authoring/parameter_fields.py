@@ -38,6 +38,36 @@ class ParameterSpec:
 
 
 @dataclass(frozen=True, slots=True)
+class ParameterColumn:
+    """A runtime column declaration, independent of any Python row class."""
+
+    annotation: object
+    spec: ParameterSpec
+
+
+def column(
+    annotation: object,
+    *,
+    unit: str | None = None,
+    minimum: float | None = None,
+    maximum: float | None = None,
+    entity_kind: str | None = None,
+) -> ParameterColumn:
+    """Attach units/bounds/entity metadata to a dynamic Python type declaration."""
+    return ParameterColumn(
+        annotation, ParameterSpec(unit, minimum, maximum, entity_kind)
+    )
+
+
+def dynamic_parameter_field(name: str, declaration: object) -> ResolvedParameterField:
+    if isinstance(declaration, ParameterColumn):
+        return resolve_parameter_field(
+            name, declaration.annotation, declaration.spec, label=name
+        )
+    return resolve_parameter_field(name, declaration, label=name)
+
+
+@dataclass(frozen=True, slots=True)
 class ResolvedParameterField:
     """Resolved field declaration shared by schema inference and live views."""
 

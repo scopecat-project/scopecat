@@ -1673,6 +1673,21 @@ export interface components {
             values: components["schemas"]["StructureValueDecision"][];
         };
         /**
+         * AddParameterScalar
+         * @description Declare one scalar with an explicit manually supplied initial value.
+         */
+        AddParameterScalar: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "add_scalar";
+            /** Parameter Id */
+            parameter_id: string;
+            value: components["schemas"]["ParameterAtomValue"];
+            value_type: components["schemas"]["Scalar"];
+        };
+        /**
          * AddParameterTable
          * @description Declare a keyed table, initially empty; no initializer values are inferred.
          */
@@ -6017,7 +6032,7 @@ export interface components {
             /** Values */
             values?: components["schemas"]["StoredParameterValue"][];
         };
-        ParameterStructureEdit: components["schemas"]["AddParameterTable"] | components["schemas"]["AddParameterColumn"] | components["schemas"]["RenameParameterColumn"] | components["schemas"]["ChangeParameterColumn"] | components["schemas"]["ChangeParameterKey"];
+        ParameterStructureEdit: components["schemas"]["AddParameterScalar"] | components["schemas"]["AddParameterTable"] | components["schemas"]["AddParameterColumn"] | components["schemas"]["RenameParameterColumn"] | components["schemas"]["ChangeParameterColumn"] | components["schemas"]["ChangeParameterKey"];
         /**
          * ParameterStructureOrigin
          * @description Retain the declaration; old configurations and runs are never rewritten.
@@ -8440,7 +8455,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "table_added" | "added" | "renamed" | "type_changed" | "key_changed";
+            kind: "scalar_added" | "table_added" | "added" | "renamed" | "type_changed" | "key_changed";
             /**
              * Missing Rows
              * @default []

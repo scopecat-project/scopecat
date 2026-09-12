@@ -119,6 +119,7 @@ if TYPE_CHECKING:
         ParameterSpec,
         dataclass_table_schema,
     )
+    from scopecat.authoring.parameter_fields import ParameterColumn, column
     from scopecat.authoring.parameter_models import (
         Magnitude,
         Param,
@@ -261,6 +262,8 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "input_ref": ("scopecat.authoring", "input_ref"),
     "module": ("scopecat.authoring", "module"),
     "one": ("scopecat.authoring", "one"),
+    "column": ("scopecat.authoring.parameter_fields", "column"),
+    "ParameterColumn": ("scopecat.authoring.parameter_fields", "ParameterColumn"),
     "parameter": ("scopecat.authoring", "parameter"),
     "parameter_catalog": ("scopecat.authoring.parameter_models", "parameter_catalog"),
     "parameter_lookup": ("scopecat.authoring", "parameter_lookup"),

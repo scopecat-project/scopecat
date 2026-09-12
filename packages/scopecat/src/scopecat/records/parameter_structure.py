@@ -57,6 +57,15 @@ class StructureValueDecision(_StructureModel):
         return self
 
 
+class AddParameterScalar(_StructureModel):
+    """Declare one scalar with an explicit manually supplied initial value."""
+
+    kind: Literal["add_scalar"] = "add_scalar"
+    parameter_id: str = Field(min_length=1)
+    value_type: Scalar
+    value: ParameterAtomValue
+
+
 class AddParameterTable(_StructureModel):
     """Declare a keyed table, initially empty; no initializer values are inferred."""
 
@@ -131,7 +140,8 @@ class ChangeParameterKey(_StructureModel):
 
 
 type ParameterStructureEdit = Annotated[
-    AddParameterTable
+    AddParameterScalar
+    | AddParameterTable
     | AddParameterColumn
     | RenameParameterColumn
     | ChangeParameterColumn

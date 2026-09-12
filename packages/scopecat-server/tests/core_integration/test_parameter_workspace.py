@@ -23,7 +23,7 @@ from scopecat.config.registry.service import (
 from scopecat.config.structure import ParameterStructurePlan
 from scopecat.daemon.views import ConfigContextResolution, ConfigEntryView
 from scopecat.kernel.entity import EntityRef
-from scopecat.kernel.errors import Conflict
+from scopecat.kernel.errors import CheckFailed, Conflict
 from scopecat.kernel.quantity import Quantity
 from scopecat.kernel.value_types import (
     Entity,
@@ -641,3 +641,125 @@ def test_external_parameter_edits_preserve_other_cell_origins_and_exact_context(
     reopened.save("another-version")
     with pytest.raises(ValueError, match="changed after preview"):
         unchanged.apply()
+
+
+def test_dynamic_declarations_reopen_and_adopt_model_without_migration(
+    operations: RegistryOperations,
+) -> None:
+    from typing import Literal
+
+    import scopecat as sc
+
+    params = ParameterWorkspace(operations, context="start")
+    dynamic = params.declare_table(
+        "exploration",
+        key="qubit",
+        columns={
+            "qubit": str,
+            "duration": sc.column(float, unit="ns", minimum=4),
+            "shape": Literal["constant", "gaussian"],
+        },
+    )
+    dynamic["001"] = {"duration": sc.Quantity(64, "ns"), "shape": "constant"}
+    with pytest.raises(ValueError, match="Save or discard"):
+        params.add_column("exploration", "amplitude", float | None)
+    params.save("dynamic-start")
+    params.add_column("exploration", "amplitude", float | None)
+    params.declare_scalar("attempts", sc.column(int, minimum=1), value=3)
+    structure = params.structure_diff()
+    assert structure is not None
+    assert {impact.kind for impact in structure.impacts} == {"added", "scalar_added"}
+    # The same wire plan survives transport, including explicit scalar values.
+    plan = params._structure_plan()
+    assert plan is not None
+    assert ParameterStructurePlan.model_validate_json(plan.model_dump_json()) == plan
+    version = params.save("dynamic-complete")
+    reopened = ParameterWorkspace(operations, context=version)
+    assert reopened["exploration"]["001"]["amplitude"] is None
+    assert reopened.scalars["attempts"] == 3
+
+    class Exploration(sc.ParameterModel, table="exploration"):
+        qubit: sc.Param[str] = sc.param(key=True)
+        duration: sc.Magnitude[float] = sc.quantity(unit="ns", minimum=4)
+        shape: sc.Param[Literal["constant", "gaussian"]] = sc.param()
+        amplitude: sc.Param[float | None] = sc.param(default=0.5)
+
+    typed = reopened[Exploration]
+    assert typed["001"].duration == 64
+    assert typed["001"].amplitude is None
+    typed["001"].duration = 80
+    reopened.scalars["attempts"] = 4
+    final = reopened.save("dynamic-edited")
+    restored = ParameterWorkspace(operations, context=final)
+    assert restored[Exploration]["001"].duration == 80
+    assert restored.scalars["attempts"] == 4
+    assert any(
+        o.parameter_id == "attempts" and o.entry.entry_id == final.name
+        for o in restored.freeze().value_origins
+    )
+    assert ParameterWorkspace(operations, context="dynamic-start")["exploration"][
+        "001"
+    ]["duration"] == sc.Quantity(64, "ns")
+    assert (
+        load_active_config_registry_snapshot(unit_of_work=operations.uow).entry.id
+        == "lab"
+    )
+
+
+def test_dynamic_structure_rejections_leave_the_draft_unchanged(
+    operations: RegistryOperations,
+) -> None:
+    import scopecat as sc
+
+    params = ParameterWorkspace(operations, context="start")
+    with pytest.raises(TypeError, match="Optional"):
+        params.declare_table("bad", key="id", columns={"id": str | None})
+    with pytest.raises(TypeError, match="optional"):
+        params.add_column("qubits", "quality", float)
+    with pytest.raises(ValueError, match="already exists"):
+        params.declare_scalar("drive_frequency", float, value=3.0)
+    before = params.freeze()
+    with pytest.raises(CheckFailed, match="invalid"):
+        params.declare_scalar("invalid", sc.column(int, minimum=1), value=0)
+    assert params.freeze() == before
+    assert "invalid" not in params.scalars
+
+
+def test_dynamic_references_keep_schema_without_reading_unknown_values(
+    operations: RegistryOperations,
+) -> None:
+    from typing import assert_type
+
+    import scopecat as sc
+    from scopecat.program.value_refs import internal_value_ref_parameter_lookup
+
+    params = ParameterWorkspace(operations, context="start")
+    table = params.declare_table(
+        "pairs",
+        key=("left", "right"),
+        columns={
+            "left": str,
+            "right": str,
+            "duration": sc.column(float | None, unit="ns"),
+        },
+    )
+    table[("q0", "q1")] = {"duration": None}
+    ref = table.ref("duration", ("q0", "q1"), as_type=sc.Quantity)
+    assert_type(ref, sc.ValueRef[sc.Quantity])
+    locator = internal_value_ref_parameter_lookup(ref)
+    assert locator is not None
+    assert dict(locator[1]) == {"left": "q0", "right": "q1"}
+    assert locator[0].result_type.atom == sc.QuantityType(unit="ns")
+    with pytest.raises(TypeError, match="Quantity"):
+        table.ref("duration", ("q0", "q1"), as_type=float)
+    with pytest.raises(ValueError, match="expected keys"):
+        table.ref("duration", "q0")
+    params.save("pair-start")
+    params.convert_unit("pairs", "duration", "us")
+    new = internal_value_ref_parameter_lookup(
+        params["pairs"].ref("duration", ("q0", "q1"))
+    )
+    assert new is not None
+    assert new[0].result_type.atom == sc.QuantityType(unit="us")
+    assert locator[0].result_type.atom == sc.QuantityType(unit="ns")
+    assert params["pairs"][("q0", "q1")]["duration"] is None

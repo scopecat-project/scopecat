@@ -1,5 +1,7 @@
 # Declare parameters once for editing and experiments
 
+For exploration without a class, start with [dynamic tables](declare-dynamic-parameters.md).
+
 Use a `ParameterModel` when the same fields appear in parameter editing,
 experiment inputs and analysis candidate targets. A class attribute identifies a
 field; an instance reads and writes concrete values. No separate field constants,
