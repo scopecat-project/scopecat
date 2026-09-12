@@ -20,8 +20,8 @@ from reference_lab.workflows.drag_beta_publication import (
 def test_drag_beta_durable_capability_manifest_changes_explicitly() -> None:
     """Require an intentional version-and-fingerprint review for code changes."""
 
-    # Plan-aware run requests change the durable child protocol and its dependent
-    # calibration/publication capabilities; measurement and fit logic is unchanged.
+    # Parameter-model access changes composition implementation identity.
+    # Bump composition/publication versions; measurement and fit stay unchanged.
     assert {
         "manual_procedure": drag_beta_calibration_procedure.ref.model_dump(mode="json"),
         "verification_procedure": drag_beta_verification_procedure.ref.model_dump(
@@ -60,18 +60,16 @@ def test_drag_beta_durable_capability_manifest_changes_explicitly() -> None:
         },
         "composition": {
             "id": "reference-lab.drag-beta-cohort-composition",
-            "version": "7",
+            "version": "8",
             "fingerprint": (
-                "sha256:432673fe8137d0554f767a4485dece6"
-                "45f5b335b56b8b69fa640e30329842005"
+                "sha256:174c741e2f5c541bf9c1a5dc283b6783c05f01c73f033a82179b39def1e96cdd"
             ),
         },
         "automatic_publication": {
             "id": "reference-lab.drag-beta-automatic-publication",
-            "version": "7",
+            "version": "8",
             "fingerprint": (
-                "sha256:5254f0981ce431ea1af525dae0db07c"
-                "c2c1cbc316bb68ae4e0ca8c8ab0e03b63"
+                "sha256:0e164bb08b5b428c589090d68720ca778145c11c38f840dd0b5f31acb8a4f437"
             ),
             "calibration": {
                 "id": "reference-lab.drag-beta-freshness",
@@ -84,10 +82,9 @@ def test_drag_beta_durable_capability_manifest_changes_explicitly() -> None:
             },
             "composition_policy": {
                 "id": "reference-lab.drag-beta-cohort-composition",
-                "version": "7",
+                "version": "8",
                 "fingerprint": (
-                    "sha256:432673fe8137d0554f767a4485dece6"
-                    "45f5b335b56b8b69fa640e30329842005"
+                    "sha256:174c741e2f5c541bf9c1a5dc283b6783c05f01c73f033a82179b39def1e96cdd"
                 ),
             },
         },

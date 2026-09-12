@@ -198,3 +198,40 @@ def test_model_binding_rejects_a_changed_lookup_key() -> None:
     changed.load(({"qubit": "q0", "duration": sc.Quantity(64, "ns")},))
     with pytest.raises(TypeError, match="primary key"):
         TypedParameterTable(ParameterTable(changed), Drive)
+
+
+def test_model_survives_project_module_unload_and_can_be_extended() -> None:
+    import sys
+    from types import ModuleType
+    from typing import cast
+
+    module = ModuleType("temporary_parameter_project")
+    sys.modules[module.__name__] = module
+    try:
+        exec(  # noqa: S102 - fixed source models project module unloading
+            "from __future__ import annotations\n"
+            "import scopecat as sc\n"
+            "class Retained(sc.ParameterModel, table='retained'):\n"
+            "    key: sc.Param[str] = sc.param(key=True)\n"
+            "    duration: sc.Magnitude[float] = sc.quantity(unit='ns', default=64)\n",
+            module.__dict__,
+        )
+        model = cast("type[sc.ParameterModel]", module.__dict__["Retained"])
+    finally:
+        del sys.modules[module.__name__]
+    definition = sc.parameter_definition(model)
+    assert definition.id == "retained"
+    raw = ParameterTable(
+        _TableData("retained", parameter_table_schema(model, primary_key=("key",)))
+    )
+    rows = TypedParameterTable(raw, model)
+    rows["q0"] = model(key="q0")
+    assert "duration=64" in repr(rows["q0"].copy())
+
+    class Extended(model, table="extended"):
+        amplitude: sc.Param[float] = sc.param(default=0.2)
+
+    assert [
+        column.id
+        for column in parameter_table_schema(Extended, primary_key=("key",)).columns
+    ] == ["key", "duration", "amplitude"]

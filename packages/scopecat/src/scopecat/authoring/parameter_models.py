@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from annotationlib import get_annotations
 from collections.abc import Mapping, Sequence
 from copy import copy, deepcopy
 from typing import (
@@ -12,7 +13,6 @@ from typing import (
     dataclass_transform,
     get_args,
     get_origin,
-    get_type_hints,
     overload,
     override,
 )
@@ -158,11 +158,13 @@ class ParameterModel:
 
     _parameter_table: ClassVar[str] = ""
     _parameter_values: dict[str, object]
+    _parameter_fields: ClassVar[tuple[ResolvedParameterField, ...]] = ()
 
     def __init_subclass__(cls, *, table: str | None = None) -> None:
         super().__init_subclass__()
         if table is not None:
             cls._parameter_table = table
+        cls._parameter_fields = _resolve_model_fields(cls)
 
     def __init__(self, **values: object) -> None:
         self._parameter_values = {}
@@ -219,8 +221,21 @@ def parameter_table_name(model: type[ParameterModel]) -> str:
 def parameter_fields(row_type: type[object]) -> tuple[ResolvedParameterField, ...]:
     if not issubclass(row_type, ParameterModel):
         return dataclass_parameter_fields(row_type)
-    hints = cast("dict[str, object]", get_type_hints(row_type, include_extras=True))
-    result: list[ResolvedParameterField] = []
+    return row_type._parameter_fields  # pyright: ignore[reportPrivateUsage]
+
+
+def _resolve_model_fields(
+    row_type: type[ParameterModel],
+) -> tuple[ResolvedParameterField, ...]:
+    # Resolve each declaration while its module is loaded. Project switching can
+    # remove that module later; inherited fields already carry resolved types.
+    hints = cast("dict[str, object]", get_annotations(row_type, eval_str=True))
+    result = {
+        field.name: field
+        for base in reversed(row_type.__bases__)
+        if issubclass(base, ParameterModel)
+        for field in parameter_fields(base)
+    }
     for name, annotation in hints.items():
         origin = get_origin(annotation)
         if origin not in (Param, Magnitude):
@@ -235,16 +250,6 @@ def parameter_fields(row_type: type[object]) -> tuple[ResolvedParameterField, ..
                 f"{row_type.__name__}.{name}: parameter names cannot start with '_' "
             )
         descriptor = cast("object", getattr(row_type, name))
-        # Bound workspace subclasses replace descriptors with live properties.
-        if isinstance(descriptor, property):
-            descriptor = cast(
-                "object",
-                next(
-                    vars(base)[name]
-                    for base in row_type.__mro__[1:]
-                    if name in vars(base)
-                ),
-            )
         if not isinstance(descriptor, _Field):
             raise TypeError(f"{row_type.__name__}.{name}: use param() or quantity()")
         selected = cast("_Field[object]", descriptor)
@@ -254,10 +259,10 @@ def parameter_fields(row_type: type[object]) -> tuple[ResolvedParameterField, ..
         )
         if origin is Magnitude and field.python_type is not float:
             raise TypeError(f"{row_type.__name__}.{name}: Magnitude requires float")
-        result.append(field)
+        result[name] = field
     if not result:
         raise TypeError(f"{row_type.__name__}: declare at least one parameter field")
-    return tuple(result)
+    return tuple(result.values())
 
 
 def parameter_key(model: type[ParameterModel]) -> tuple[str, ...]:
