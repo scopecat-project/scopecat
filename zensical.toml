@@ -66,6 +66,7 @@ nav = [
     { "Pilot work slices and acceptance fixtures" = "development/pilot-work-slices.md" },
     { "Architecture" = [
       "development/architecture/index.md",
+      { "Structured authoring direction" = "development/architecture/structured-authoring.md" },
       { "Experiment execution" = "development/architecture/execution.md" },
       { "Lab daemon" = "development/architecture/daemon.md" },
     ] },
