@@ -38,6 +38,61 @@ revision and the preview's manual-state fence. Editing the workspace afterwards
 does not alter `checked`. Running after a relevant laboratory change may require
 a new preview. Saving a named parameter version does not publish a shared default.
 
+## Edit a request before preparing
+
+When the laboratory's author package is installed in the notebook environment,
+use its experiment declaration to create a request. Request creation checks the
+function's call signature and captures supplied values; it does not build the
+program, import a device SDK or acquire data. Importing a laboratory module still
+executes that module's ordinary Python top-level code.
+
+```python
+from reference_lab.workflows.authored.signal import signal
+
+request = signal.request(gain=1.0, polarity="positive")
+request.values["frequency"] = sc.Scan(sc.Quantity(f, "GHz") for f in (5.0, 5.1, 5.2))
+with project.authoring() as author:
+    parameters = author.config.workspace(context="my-sample-start")
+    checked = author.prepare(request, parameters=parameters)
+    alternative = request.copy()
+    alternative.values["frequency"] = sc.Quantity(5.1, "GHz")
+    alternative.values["polarity"] = "negative"
+    next_checked = author.prepare(alternative, parameters=parameters)
+    plan = checked.save_plan("Positive resonance scan", saved_by="operator")
+    reopened = author.prepare_plan(plan.ref, actor="operator")
+```
+
+`values` is one mutable dictionary for structural inputs, runtime inputs and
+editable numeric controls. Assign `sc.Scan(...)` to select a scan; assign a scalar
+to return to a fixed point. Only declared scannable controls accept scans. `Scan`
+captures its iterable immediately, so changing a NumPy array later cannot change
+its values. Requests capture their initial inputs and `copy()` deep-copies edited
+data while retaining the same declaration. Arrays assigned directly are ordinary
+input values, never implicit scans; managed scalar forms reject them.
+
+Function arguments have the declaration's static types. Dictionary edits have
+value type `object` and are checked at preparation, including unknown names,
+required inputs, units, bounds and scannability. This does not provide generated,
+statically checked attributes such as `request.frequency`. A request has no
+`output` or cached program: each preparation rebuilds from the selected managed
+source. Structural edits therefore produce the corresponding new result tree.
+Already prepared launches and saved plans keep their captured inputs and code.
+Pass configuration/parameters and the execution actor to `prepare`; do not also
+pass `inputs`, `fixed`, `scans` or `control_edits` when supplying a request.
+
+An imported declaration retains its source identity from load time. Preparation
+compares that contract with the selected revision and rejects a mismatch. After
+editing a declaration, explicitly refresh the session and reload the notebook's
+experiment module, or select the original revision. Helpers execute from the
+selected managed revision; importing a request does not pin notebook helper
+objects or claim to fingerprint their transitive dependencies.
+
+The explicit `.request(...)` factory is the current managed editing API.
+`experiment(...)` and `.bind(...)` still construct immutable invocations for local
+composition. Making the ordinary call create a request, consolidating control
+metadata into function inputs, and adding a concrete typed editing model remain
+separate convergence work; they are not implemented by this factory.
+
 ## Restart Python and read the same result
 
 The receipt path is printed/stored by your notebook, and receipts are also kept

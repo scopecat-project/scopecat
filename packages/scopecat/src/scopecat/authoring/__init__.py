@@ -38,6 +38,8 @@ from scopecat.authoring.entity_selection import (
 )
 from scopecat.authoring.experiments import (
     ExperimentInvocation,
+    ExperimentRequest,
+    Scan,
 )
 from scopecat.authoring.instrument_recorder import (
     InstrumentRecorder,
@@ -157,6 +159,7 @@ __all__ = [
     "ExperimentContext",
     "ExperimentInvocation",
     "ExperimentModule",
+    "ExperimentRequest",
     "FloatType",
     "Input",
     "InstrumentRecorder",
@@ -185,6 +188,7 @@ __all__ = [
     "RuntimeInput",
     "ScalarInput",
     "ScalarType",
+    "Scan",
     "StateProjector",
     "StateTarget",
     "StringType",

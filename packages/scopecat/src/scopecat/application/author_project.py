@@ -20,6 +20,7 @@ from scopecat.api.parameter_candidates import ParameterCandidate
 from scopecat.api.parameters import ParameterWorkspace
 from scopecat.api.published_analysis import AnalysisResult
 from scopecat.api.run import RunHandle
+from scopecat.application.authoring import AuthorExperiment
 from scopecat.application.experiment_plans import plan_definition, plan_launch_request
 from scopecat.application.launch import (
     LaunchCatalog,
@@ -27,6 +28,7 @@ from scopecat.application.launch import (
     LaunchPreview,
     LaunchSubmission,
 )
+from scopecat.authoring.experiments import ExperimentRequest, Scan
 from scopecat.automation.models import ProcedureRun, RunOutputRef
 from scopecat.automation.wire import (
     ProcedureCancelCommand,
@@ -121,7 +123,7 @@ class AuthorProject(DaemonClient):
 
     def prepare(
         self,
-        experiment: str,
+        experiment: str | ExperimentRequest,
         *,
         control_edits: dict[str, ControlEdit] | None = None,
         fixed: Mapping[str, SupportsFloat | Quantity] | None = None,
@@ -136,6 +138,15 @@ class AuthorProject(DaemonClient):
         actor: str = "operator",
     ) -> AuthorPreparedLaunch:
         """Select the current declaration and retain a preview's exact submission."""
+        draft = experiment.copy() if isinstance(experiment, ExperimentRequest) else None
+        if draft is not None:
+            if any(
+                value is not None for value in (inputs, control_edits, fixed, scans)
+            ):
+                raise ValueError(
+                    "request.values already selects inputs and scans; edit the request"
+                )
+            experiment = draft.declaration.id
         candidate_source = None
         sample_binding = None
         if candidate is not None:
@@ -193,6 +204,38 @@ class AuthorProject(DaemonClient):
             raise ValueError(
                 f"Unknown experiment {experiment!r}; "
                 "inspect author.catalog() for available names"
+            )
+        if draft is not None:
+            declaration = AuthorExperiment.from_declaration(
+                draft.declaration, code_revision=catalog.code_revision
+            )
+            if declaration.fingerprint != entry.version:
+                raise ValueError(
+                    f"{entry.id}: imported declaration does not match "
+                    "the selected source revision; "
+                    "reload the experiment module or explicitly select "
+                    "its original revision"
+                )
+            values = dict(draft.values)
+            for control in declaration.controls.fields:
+                if control.id not in values:
+                    continue
+                value = values.pop(control.id)
+                if isinstance(value, Scan):
+                    if not control.scannable:
+                        raise ValueError(f"{control.id}: input is not scannable")
+                    edits[control.id] = ControlEdit(
+                        mode="scan",
+                        axis=AxisValuesSourceRecord(
+                            values=[control.normalize(item) for item in value.values]
+                        ),
+                    )
+                else:
+                    edits[control.id] = ControlEdit(
+                        mode="fixed", value=control.normalize(value)
+                    )
+            inputs = declaration.input_model.model_validate(values).model_dump(
+                mode="json"
             )
         declared_inputs = {
             name: field.default

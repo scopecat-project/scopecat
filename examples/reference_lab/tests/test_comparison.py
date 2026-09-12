@@ -156,7 +156,7 @@ def test_two_retained_runs_fit_candidate_rejection_and_handoff() -> None:
             item.run_id
             for item in saved.inputs
             if isinstance(item, MeasurementAnalysisRecordInput)
-        } == run_ids
+        } == {run.id for run in runs}
         assert fit.primary_hash == inspected.primary.content_hash
         assert fit.secondary_hash == inspected.secondary.content_hash
         assert len(saved.executions) == 1

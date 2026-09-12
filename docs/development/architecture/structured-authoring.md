@@ -257,6 +257,11 @@ scientific validity on another laboratory setup.
 Function-style creation remains a strong candidate: calling an experiment creates
 a request rather than acquiring data. Whether that request is mutable, uses an
 explicit input model, or has a concrete request type is still under evaluation.
+The first managed implementation offers `experiment.request(...)` with mutable
+`values`, explicit `Scan` intent, isolated copies and source-contract matching.
+It reuses preparation and saved plans; ordinary calls still build invocations.
+See [the notebook workflow](../../how-to/managed-author-session.md#edit-a-request-before-preparing)
+for its delivered typing and version-selection boundaries.
 Do not choose a public syntax solely to resemble future GUI internals.
 
 Regardless of syntax:
