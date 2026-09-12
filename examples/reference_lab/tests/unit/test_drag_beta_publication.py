@@ -56,7 +56,7 @@ def test_drag_beta_composition_policy_has_exact_stable_contract(
     )
     assert DRAG_BETA_COMPOSITION_POLICY_FINGERPRINT.startswith("sha256:")
     assert len(DRAG_BETA_COMPOSITION_POLICY_FINGERPRINT) == len("sha256:") + 64
-    assert DRAG_BETA_COMPOSITION_POLICY_VERSION == "7"
+    assert DRAG_BETA_COMPOSITION_POLICY_VERSION == "8"
     assert DRAG_BETA_VERIFICATION_EVIDENCE_STEP == "verification"
     assert drag_beta_composition_policy_ref() == DRAG_BETA_COMPOSITION_POLICY_REF
 
