@@ -89,9 +89,63 @@ objects or claim to fingerprint their transitive dependencies.
 
 The explicit `.request(...)` factory is the current managed editing API.
 `experiment(...)` and `.bind(...)` still construct immutable invocations for local
-composition. Making the ordinary call create a request, consolidating control
-metadata into function inputs, and adding a concrete typed editing model remain
+composition. Making the ordinary call create a request and adding a concrete typed editing model remain
 separate convergence work; they are not implemented by this factory.
+
+## Declare controls next to their inputs
+
+In the laboratory's author module, use standard `Annotated` metadata rather than
+separate control constants. The parameter name owns the ID; its Python default
+owns the starting value. The body receives a symbolic input or scan coordinate.
+
+```python
+from typing import Annotated
+import scopecat as sc
+
+
+@sc.experiment
+def amplitude_probe(
+    experiment: sc.ExperimentContext,
+    amplitude: Annotated[
+        sc.Input[float], sc.ControlSpec(minimum=0, maximum=0.9, scannable=True)
+    ] = 0.1,
+    gain: Annotated[sc.Input[float], sc.ControlSpec(minimum=0)] = 1.0,
+) -> sc.Input[float]:
+    return amplitude * gain
+```
+
+`amplitude_probe.request()` includes both defaults. Edit
+`request.values["amplitude"] = sc.Scan([0.1, 0.2])` to scan; assigning `0.15`
+returns to a fixed coordinate. `amplitude_probe(amplitude=0.15)` likewise builds
+one fixed coordinate, with no duplicate runtime input source. `gain` remains a
+scalar runtime input and cannot be scanned. GUI controls, bounds, units and saved
+plans come from the same derived `ControlSet`.
+
+`ControlSpec` supports `float` and `Quantity` inputs, with optional `unit`,
+`minimum`, `maximum`, `title`, `group` and `scannable`. A `Quantity` default supplies
+its unit when the metadata omits it. For example,
+`Annotated[sc.Input[sc.Quantity], sc.ControlSpec(minimum=4, scannable=True)] = sc.Quantity(16, "ns")`.
+Quantities are immutable and safe as Python defaults. The maintained lint config
+recognizes them; author files also disable basedpyright's optional blanket
+`reportCallInDefaultInitializer` diagnostic locally, preserving other type checks.
+
+Omit a Python default when the operator must choose a value. Required quantity
+controls must specify `unit` in `ControlSpec`. Discovery still succeeds; the GUI
+shows an empty required field, and preparation rejects missing values. A required
+scan can be supplied directly via `author.prepare("name", scans={...})` without
+inventing a scalar starting value. The typed `.request(...)` factory continues
+to require the function's creation arguments before dictionary editing.
+
+`Input[T]` honestly describes concrete caller values and symbolic body references;
+it does not make symbolic values behave like ordinary numbers in Python control
+flow. Keep target names, integer shot counts and structural choices as normal
+Python parameters. A structural edit rebuilds the program during preparation.
+
+Use one metadata owner: do not repeat a field in both `ControlSpec` and an explicit
+`ControlSet`, or combine `ControlSpec` with a second `ValueType` declaration.
+Maintainers can still supply explicit owned/derived controls and a project
+validator through `ControlSet`; the metadata-derived fields join that same set.
+It is the existing validation and execution contract, not another control registry.
 
 ## Restart Python and read the same result
 

@@ -38,6 +38,7 @@ from scopecat.authoring._module_results import (
     RecordedProducts,
     module_result_value_exports,
 )
+from scopecat.authoring.control_metadata import ControlSpec
 from scopecat.authoring.entity_selection import PerEntity
 from scopecat.authoring.experiments import (
     Experiment,
@@ -68,7 +69,7 @@ from scopecat.kernel.quantity import Quantity as QuantityValue
 from scopecat.kernel.resource_identity import ResourceRoleInput
 from scopecat.kernel.value_type_compatibility import is_assignable
 from scopecat.program.bindings import BindingIntent
-from scopecat.program.controls import ControlSet
+from scopecat.program.controls import Control, ControlScalar, ControlSet
 from scopecat.program.definitions import (
     ExperimentDef,
     ExperimentInvocation,
@@ -1317,7 +1318,10 @@ def _apply_control_defaults(
     required_inputs: list[str],
 ) -> _ExperimentContract:
     runtime_arguments = dict(contract.runtime_arguments)
+    declared = {item.name for item in contract.inputs if item.control is not None}
     for control in controls.fields:
+        if control.id in declared:
+            continue
         if control.ownership != "editable" or control.scannable:
             continue
         if control.id not in contract.runtime_names:
@@ -1329,9 +1333,10 @@ def _apply_control_defaults(
             )
         if control.id in input_defaults:
             raise ValueError("declare controlled defaults only on Control")
-        input_defaults[control.id] = control.default
         runtime_arguments[control.id] = authoring_input(control.id, control.value_type)
-        required_inputs.remove(control.id)
+        if control.default is not None:
+            input_defaults[control.id] = control.default
+            required_inputs.remove(control.id)
     return replace(contract, runtime_arguments=tuple(runtime_arguments.items()))
 
 
@@ -1343,15 +1348,25 @@ def _experiment_from_function[ResultT, **P](
     metadata: Mapping[str, MetadataValue] | None,
     controls: ControlSet | None,
 ) -> Experiment[P, ResultT]:
-    controls = controls or ControlSet(())
     source = cast("DefinitionFunction", fn)
     contract = _experiment_contract(source)
+    declared_controls = tuple(
+        item.control for item in contract.inputs if item.control is not None
+    )
+    controls = controls or ControlSet(())
+    if declared_controls:
+        controls = ControlSet(
+            (*declared_controls, *controls.fields), validator=controls.validator
+        )
+    coordinates = {
+        control.id: control for control in declared_controls if control.scannable
+    }
     signature = contract.signature
     runtime_names = contract.runtime_names
     runtime_parameters = tuple(
         parameter
         for parameter in signature.parameters.values()
-        if parameter.name in runtime_names
+        if parameter.name in runtime_names and parameter.name not in coordinates
     )
     input_defaults: dict[str, RuntimeInput] = {}
     required_inputs: list[str] = []
@@ -1383,8 +1398,11 @@ def _experiment_from_function[ResultT, **P](
     def build(arguments: Mapping[str, object]) -> ExperimentInvocation[ResultT]:
         nonlocal cached_build
         values: dict[str, object] = dict(contract.runtime_values)
+        values.update({name: control.ref for name, control in coordinates.items()})
         runtime_inputs: dict[str, RuntimeInput] = {}
         for parameter in signature.parameters.values():
+            if parameter.name in coordinates:
+                continue
             if parameter.name in runtime_names:
                 if parameter.name in arguments:
                     runtime_inputs[parameter.name] = cast(
@@ -1417,6 +1435,7 @@ def _experiment_from_function[ResultT, **P](
                 input_ports=tuple(
                     _input_port(name, value)
                     for name, value in contract.runtime_arguments
+                    if name not in coordinates
                 ),
                 input_defaults=input_defaults,
                 required_inputs=tuple(required_inputs),
@@ -1437,13 +1456,17 @@ def _experiment_from_function[ResultT, **P](
             definitions=definition.inputs,
             inputs=captured_inputs,
         )
-        return ExperimentInvocation(
+        invocation = ExperimentInvocation(
             definition=definition,
             input_overrides=captured_inputs,
             point_plan_override=None,
             output=output,
             recorded_result_refs=recorded_result_refs,
         )
+        for name, control in coordinates.items():
+            if name in arguments:
+                invocation = invocation.with_axis(control.fixed_axis(arguments[name]))
+        return invocation
 
     authored = Experiment(
         _callable=cast("Callable[P, ResultT]", fn),
@@ -1482,6 +1505,46 @@ def _capture_result_types(annotation: object) -> Mapping[type, Mapping[str, obje
     return resolved
 
 
+def _input_control(
+    annotation: object, *, parameter: inspect.Parameter
+) -> Control | None:
+    while isinstance(annotation, TypeAliasType):
+        annotation = cast("object", annotation.__value__)
+    if get_origin(annotation) is not Annotated:
+        return None
+    python_type, *metadata = cast("tuple[object, ...]", get_args(annotation))
+    specs = [item for item in metadata if isinstance(item, ControlSpec)]
+    if not specs:
+        return None
+    if len(specs) != 1 or any(_is_value_type(item) for item in metadata):
+        raise TypeError(
+            f"{parameter.name}: declare numeric metadata once, using one ControlSpec"
+        )
+    spec = specs[0]
+    default = cast("object", parameter.default)
+    if default is None:
+        raise TypeError(
+            f"{parameter.name}: omit the default for a required numeric control"
+        )
+    control = Control(
+        parameter.name,
+        default=None
+        if default is inspect.Parameter.empty
+        else cast("ControlScalar", default),
+        unit=spec.unit,
+        minimum=spec.minimum,
+        maximum=spec.maximum,
+        title=spec.title,
+        group=spec.group,
+        scannable=spec.scannable,
+    )
+    if not _python_annotation_matches(python_type, control.value_type):
+        raise TypeError(
+            f"{parameter.name}: ControlSpec type/unit must match its Input annotation"
+        )
+    return control
+
+
 def _experiment_contract(fn: DefinitionFunction) -> _ExperimentContract:
     signature = _context_signature(fn, ExperimentContext)
     hints = cast("Mapping[str, object]", get_type_hints(fn, include_extras=True))
@@ -1499,12 +1562,18 @@ def _experiment_contract(fn: DefinitionFunction) -> _ExperimentContract:
             cast("object", parameter.annotation),
         )
         runtime = _is_runtime_input_annotation(annotation)
+        control = _input_control(annotation, parameter=parameter)
+        if control is not None and not runtime:
+            raise TypeError(
+                f"{parameter.name}: ControlSpec requires an Input annotation"
+            )
         inputs.append(
             ExperimentInput(
                 name=parameter.name,
                 annotation=annotation,
                 default=cast("object", parameter.default),
                 runtime=runtime,
+                control=control,
             )
         )
         if not runtime:
@@ -1514,7 +1583,9 @@ def _experiment_contract(fn: DefinitionFunction) -> _ExperimentContract:
                 parameter.name,
                 authoring_input(
                     parameter.name,
-                    _annotation_value_type(annotation, parameter=parameter.name),
+                    control.value_type
+                    if control is not None
+                    else _annotation_value_type(annotation, parameter=parameter.name),
                 ),
             )
         )

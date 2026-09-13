@@ -63,3 +63,14 @@ it.each(["dBm", "unknown-project-unit"])(
     });
   },
 );
+
+it("keeps a required control empty and offers only explicit sources", () => {
+  const control = { ...frequency, default: null };
+  const drafts = initialControlDrafts([control]);
+  render(<ControlFields controls={[control]} drafts={drafts} onChange={() => {}} />);
+  expect(screen.getByText("Frequency (required)")).toBeVisible();
+  expect(screen.getByLabelText("Frequency")).toHaveValue(null);
+  expect(screen.getByLabelText("Frequency")).toBeRequired();
+  expect(screen.queryByRole("option", { name: "Declared default" })).toBeNull();
+  expect(() => controlEdits(drafts)).toThrow("finite numbers");
+});

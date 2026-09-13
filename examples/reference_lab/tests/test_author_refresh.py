@@ -100,7 +100,7 @@ def test_refresh_freezes_admission_and_analysis_across_restore(
         + source[helper_end:]
     )
     analysis_start = source.index("@sc.analysis_step")
-    analysis_end = source.index("DELAY =", analysis_start)
+    analysis_end = source.index("@sc.experiment", analysis_start)
     analysis = source[analysis_start:analysis_end]
     source = source[:analysis_start] + source[analysis_end:]
     source_path.write_text(source.replace("import numpy as np\n", ""))
@@ -135,7 +135,10 @@ def test_refresh_freezes_admission_and_analysis_across_restore(
             )
             source_path.write_text(
                 source_path.read_text()
-                .replace('default=1.0, title="Gain"', 'default=3.0, title="Gain"')
+                .replace(
+                    'sc.ControlSpec(title="Gain")] = 1.0',
+                    'sc.ControlSpec(title="Gain")] = 3.0',
+                )
                 .replace('= "positive",', '= "negative",')
             )
             third = authors.refresh(expected_generation=second.generation)
@@ -254,8 +257,8 @@ def recipe_amplitude() -> float:
     signal_path.write_text(
         signal_path.read_text()
         .replace(
-            "FREQUENCY = sc.Control(",
-            "from .recipe import recipe_amplitude\n\nFREQUENCY = sc.Control(",
+            "def response(",
+            "from .recipe import recipe_amplitude\n\ndef response(",
         )
         .replace("return gain /", "return recipe_amplitude() * gain /")
     )
