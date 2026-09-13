@@ -319,6 +319,21 @@ class ExperimentContext:
             metadata=metadata,
         )
 
+    def coordinate[T](self, value: Input[T], /) -> CoordinateRef[T]:
+        """View a declared point coordinate with its concrete value type.
+
+        Use for ControlSpec inputs or coordinates returned by scan(). This does
+        not create an axis, change traversal, or record an extra result. Return
+        the handle to include the coordinate in the normal result tree.
+        """
+        if not isinstance(value, CoordinateRef):
+            raise TypeError(
+                "coordinate() requires a direct point coordinate; declare an "
+                "Input with ControlSpec or use the coordinate returned by scan(). "
+                "Return computed values directly as results."
+            )
+        return cast("CoordinateRef[T]", value)
+
     @overload
     def use[ResultT](
         self,

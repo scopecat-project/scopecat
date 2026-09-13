@@ -294,3 +294,17 @@ For deliberate old-code selection, retain `checked.preview.code_revision` and us
 same revision. Saved experiment plans also retain exact code/configuration.
 Registered analysis still uses `author.analyze(..., code_revision=...)`; ordinary
 analysis-function convenience belongs to the next implementation slice.
+
+
+### Return a typed point coordinate
+
+A signature input annotated with `Input[T]` and `ControlSpec(...)` already has
+an automatic point coordinate, including when its value is fixed. Use
+`context.coordinate(amplitude)` in the experiment body to obtain a
+`CoordinateRef[T]` for a typed result dataclass without a cast. Returning that
+handle uses the existing result field name and recording path; the helper does
+not add another record or change the scan.
+
+The helper also accepts coordinates returned by `context.scan(...)`. It rejects
+ordinary runtime inputs and computed expressions: those are values, not direct
+point coordinates. Return computed values as ordinary results instead.
