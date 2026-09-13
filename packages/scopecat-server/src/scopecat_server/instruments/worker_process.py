@@ -7,7 +7,7 @@ from importlib import import_module
 from pathlib import Path
 from typing import cast
 
-from .worker_output import capture_worker_output
+from scopecat_server._startup_diagnostics import begin, finish, stage
 
 
 def run_instrument_worker(
@@ -18,17 +18,23 @@ def run_instrument_worker(
 ) -> None:
     """Load the driver RPC runtime only after the spawned process is ready."""
 
-    with capture_worker_output(Path(project_root), generation):
-        worker = import_module("scopecat_server.instruments.worker")
-        worker_main = cast(
-            "Callable[[object, str, str], None]",
-            worker._instrument_worker_main,
-        )
-        worker_main(
-            connection,
-            project_root,
-            instrument_backend_spec,
-        )
+    begin(process="instrument")
+    stage(f"generation={generation}; importing output capture")
+    try:
+        from .worker_output import capture_worker_output
+
+        stage("initializing output capture")
+        with capture_worker_output(Path(project_root), generation):
+            stage("output capture ready; importing RPC runtime")
+            worker = import_module("scopecat_server.instruments.worker")
+            stage("RPC runtime imported")
+            worker_main = cast(
+                "Callable[[object, str, str], None]",
+                worker._instrument_worker_main,
+            )
+            worker_main(connection, project_root, instrument_backend_spec)
+    finally:
+        finish()
 
 
 __all__ = ["run_instrument_worker"]

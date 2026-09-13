@@ -342,7 +342,12 @@ def test_cli_daemon_first_use_loop_uses_dynamic_port_and_cleans_record(
     assert len(logs) == 2
     for log in logs:
         evidence = log.read_text(encoding="utf-8")
-        assert "python entry; importing CLI" in evidence
+        assert (
+            f"python entry; pid={log.stem.removeprefix('daemon-startup-')} parent="
+            in evidence
+        )
+        assert "instrument child spawned pid=" in evidence
+        assert "instrument readiness decoded: ready" in evidence
         assert "runtime constructed; publishing endpoint" in evidence
         assert "starting HTTP server" in evidence
 
