@@ -791,3 +791,59 @@ def test_repeated_default_module_calls_require_explicit_instances() -> None:
         experiment.use(source.instantiate("right"))
 
     compile_invocation(explicit.build())
+
+
+@dataclass(frozen=True)
+class _CoordinateData:
+    amplitude: sc.CoordinateRef[sc.Quantity]
+
+
+_COORDINATE_DEFAULT = sc.Quantity(0.1, "arb")
+
+
+@pytest.mark.parametrize("scanned", [False, True])
+def test_coordinate_view_preserves_control_and_durable_result(scanned: bool) -> None:
+
+    @sc.experiment
+    def probe(
+        ctx: sc.ExperimentContext,
+        amplitude: Annotated[
+            sc.Input[sc.Quantity], sc.ControlSpec(scannable=True)
+        ] = _COORDINATE_DEFAULT,
+    ) -> _CoordinateData:
+        coordinate = assert_type(
+            ctx.coordinate(amplitude), sc.CoordinateRef[sc.Quantity]
+        )
+        assert coordinate is amplitude
+        return _CoordinateData(coordinate)
+
+    invocation = probe.build()
+    if scanned:
+        invocation = invocation.grid(sc.axis(invocation.output.amplitude, [0.1, 0.2]))
+    compile_invocation(invocation)
+    assert invocation.result_ref("amplitude") is not None
+    assert invocation.definition.record_selections == ()
+    [field] = invocation.definition.result_fields
+    assert field.path == ("amplitude",)
+    assert field.variable_id == "amplitude"
+
+
+def test_coordinate_view_explains_non_coordinate_input() -> None:
+    @sc.experiment
+    def probe(ctx: sc.ExperimentContext, value: sc.Input[float]) -> None:
+        ctx.coordinate(value)
+
+    with pytest.raises(TypeError, match="ControlSpec"):
+        probe.build(0.1)
+
+
+def test_non_scannable_control_remains_an_ordinary_value() -> None:
+    @sc.experiment
+    def probe(
+        ctx: sc.ExperimentContext,
+        gain: Annotated[sc.Input[float], sc.ControlSpec(minimum=0)] = 1.0,
+    ) -> None:
+        ctx.coordinate(gain)
+
+    with pytest.raises(TypeError, match=r"ControlSpec\(scannable=True\)"):
+        probe.build()
