@@ -46,14 +46,14 @@ def test_new_table_unknowns_freeze_and_structural_history() -> None:
         )
         assert params["probes"]["q0"]["pi_amplitude"] is None
         # Imports require the consumed column; the other unknown never blocks.
-        run = lab.run(duration_probe(), config=params.freeze())
+        run = lab.run(duration_probe.build(), config=params.freeze())
         assert run.status == "completed"
         original = run.snapshot
         with pytest.raises(CheckFailed, match=r"probes.*q0.*pi_amplitude.*unknown"):
-            lab.preview(pi_probe(), config=params.freeze())
+            lab.preview(pi_probe.build(), config=params.freeze())
         probes["q0"].pi_amplitude = 0.2
         frozen = params.freeze()
-        prepared = lab.prepare(pi_probe(), config=frozen)
+        prepared = lab.prepare(pi_probe.build(), config=frozen)
         assert prepared.preview().point_count == 1
         probes["q0"].pi_amplitude = None
         filled = prepared.run()

@@ -128,7 +128,7 @@ def test_generated_symbolic_client_preserves_exact_resource_requirements() -> No
             level=Quantity(0.05, "V"),
         )
 
-    invocation = authored()
+    invocation = authored.build()
     [resource] = invocation.definition.interface.resources
     assert resource.id == "drive.source"
     assert resource.selector.capabilities == (
@@ -171,7 +171,7 @@ def test_generated_client_use_outside_exact_requirements_fails_verification() ->
         )
 
     with pytest.raises(CheckFailed) as error:
-        compile_invocation(authored())
+        compile_invocation(authored.build())
 
     assert [problem.code for problem in error.value.problems] == [
         "module_resource_port_capability_missing",
@@ -570,7 +570,7 @@ def test_returned_group_bundle_records_one_variable_per_field() -> None:
         analyzers.ensure(points=5)
         return analyzers.sweep()
 
-    invocation = definition()
+    invocation = definition.build()
     selections = invocation.definition.record_selections
     assert all(isinstance(selection, EntityRecordSelection) for selection in selections)
     grouped = tuple(

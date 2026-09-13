@@ -122,7 +122,7 @@ def test_flux_spectroscopy_runs_fits_saves_and_proposes(tmp_path: Path) -> None:
         instrument_backend=composition.backend,
     )
 
-    invocation = flux_spectroscopy()
+    invocation = flux_spectroscopy.build()
     schema = assert_type(invocation.output, FluxSpectroscopyDataset)
     frequency_record_id = "trace/frequency"
     s_parameter_record_id = "trace/s_parameter"
@@ -409,7 +409,7 @@ def test_flux_spectroscopy_failure_aborts_with_bias_disabled(
     )
 
     with pytest.raises(RunIndeterminate):
-        lab.prepare(flux_spectroscopy()).run()
+        lab.prepare(flux_spectroscopy.build()).run()
 
     [run] = lab.runs().items
     assert run.status == "unknown"

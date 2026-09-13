@@ -150,7 +150,7 @@ def ragged_scope_capture(
     )
 
 
-RAGGED_SCOPE_CAPTURE = ragged_scope_capture()
+RAGGED_SCOPE_CAPTURE = ragged_scope_capture.build()
 
 
 __all__ = [

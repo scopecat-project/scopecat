@@ -103,7 +103,7 @@ def test_ensure_remains_one_coherent_effect_through_local_planning() -> None:
         experiment.use(module())
 
     bound = bind_invocation(
-        experiment(),
+        experiment.build(),
         config_profile=config_with_physical_resources(
             {"source-device": (_SOURCE.interface_id,)}
         ),
@@ -147,7 +147,7 @@ def test_adjacent_ensure_calls_remain_separate_state_effects() -> None:
         experiment.use(module())
 
     bound = bind_invocation(
-        experiment(),
+        experiment.build(),
         config_profile=config_with_physical_resources(
             {"source-device": (_SOURCE.interface_id,)}
         ),
@@ -180,7 +180,7 @@ def test_root_success_state_is_materialized_outside_point_effects() -> None:
         )
 
     bound = bind_invocation(
-        experiment_definition(),
+        experiment_definition.build(),
         config_profile=config_with_physical_resources(
             {"source-device": (_SOURCE.interface_id,)}
         ),
@@ -241,4 +241,4 @@ def test_on_success_state_rejects_point_coordinates() -> None:
                 _DeclaredSourceState(level=level, enabled=False),
             )
 
-        experiment_definition()
+        experiment_definition.build()

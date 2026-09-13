@@ -87,5 +87,5 @@ def test_missing_carrier_is_not_replaced_with_a_known_working_value() -> None:
     ) as lab:
         active = lab.config.active()
         with pytest.raises((ValueError, KeyError), match="drive_carrier_frequency"):
-            lab.preview(exploratory_signal(), config=exploration_config(None))
+            lab.preview(exploratory_signal.build(), config=exploration_config(None))
         assert lab.config.active() == active

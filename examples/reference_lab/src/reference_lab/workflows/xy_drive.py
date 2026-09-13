@@ -344,7 +344,7 @@ def xy_lo_sweep(experiment: sc.ExperimentContext) -> XYLoSweepDataset:
     )
 
 
-XY_LO_SWEEP = xy_lo_sweep()
+XY_LO_SWEEP = xy_lo_sweep.build()
 
 
 __all__ = [

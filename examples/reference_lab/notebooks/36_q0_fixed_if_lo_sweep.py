@@ -13,7 +13,7 @@ from reference_lab.workflows.ramsey_experiments import (
 
 # %%
 with sc.open_project(EXAMPLE_ROOT).connect(operator="gallery") as lab:
-    invocation = q0_fixed_if_lo_sweep()
+    invocation = q0_fixed_if_lo_sweep.build()
     preview = lab.preview(invocation)
     run = lab.run(
         invocation,

@@ -84,7 +84,7 @@ def flux_spectroscopy(
     )
 
 
-FLUX_SPECTROSCOPY = flux_spectroscopy()
+FLUX_SPECTROSCOPY = flux_spectroscopy.build()
 
 
 __all__ = [

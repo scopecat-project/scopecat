@@ -1,5 +1,8 @@
 # Declare experiment controls once
 
+Ordinary authors should start with [input-owned control metadata](managed-author-session.md#declare-controls-next-to-their-inputs).
+This page covers the explicit maintained control contract, ownership and project validators.
+
 `sc.Control` describes a maintained numeric control: its default, unit, bounds,
 label, group, ownership, and provenance. Attach its `sc.ControlSet` explicitly
 with `@sc.experiment(controls=controls)`. It supplies the same defaults to
@@ -16,7 +19,7 @@ from reference_lab.workflows.frequency_amplitude import (
 )
 
 config = bootstrap_config()
-original = frequency_amplitude()
+original = frequency_amplitude.build()
 fixed = CONTROLS.apply(
     original, config=config, edits={"frequency": sc.Quantity(4900, "MHz")}
 )

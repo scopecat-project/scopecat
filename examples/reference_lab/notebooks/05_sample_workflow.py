@@ -60,7 +60,7 @@ with sc.open_project(EXAMPLE_ROOT).connect(operator="gallery") as lab:
         operation_id="reference-lab:sample:chip-a17:mount",
     )
     run = lab.run(
-        q0_ramsey(),
+        q0_ramsey.build(),
         name="Chip A17 q0 Ramsey",
         tags=("gallery", "sample", "ramsey"),
         sample=chip.selector(context_id="virtual-cooldown-1"),

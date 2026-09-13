@@ -34,7 +34,7 @@ def test_experiment_scan_infers_coordinate_shape_without_sampling_bounds() -> No
         )
         experiment.use(bounded_consumer(count=count, bias=bias))
 
-    invocation = inferred()
+    invocation = inferred.build()
     plan = invocation.definition.default_point_plan
     assert isinstance(plan.domain, GridSpec)
     count_axis, bias_axis = plan.domain.axes
@@ -52,7 +52,7 @@ def test_experiment_scan_preserves_explicit_coordinate_admissibility() -> None:
             value_type=sc.QuantityType(unit="V", minimum=-1.0, maximum=1.0),
         )
 
-    [axis] = constrained().definition.default_point_plan.domain.axes
+    [axis] = constrained.build().definition.default_point_plan.domain.axes
     assert axis.value_type == sc.ScalarType(
         sc.QuantityType(unit="V", minimum=-1.0, maximum=1.0)
     )
@@ -76,7 +76,7 @@ def test_experiment_scan_materializes_values_once_and_accepts_atom_types() -> No
         )
 
     assert visits == 0
-    [axis] = inferred().definition.default_point_plan.domain.axes
+    [axis] = inferred.build().definition.default_point_plan.domain.axes
     assert visits == 1
     assert axis.value_type == sc.ScalarType(sc.EntityType(entity_kind="logical_qubit"))
 
@@ -86,7 +86,7 @@ def test_experiment_scan_requires_a_type_for_empty_values() -> None:
         experiment.scan("empty", ())
 
     with pytest.raises(TypeError, match="empty scan values require value_type"):
-        sc.experiment(empty)()
+        sc.experiment(empty).build()
 
 
 @pytest.mark.parametrize("scan_first", [False, True])
@@ -104,7 +104,7 @@ def test_experiment_scan_cannot_mix_with_explicit_point_domains(
             experiment.scan("implicit", (1, 2))
 
     with pytest.raises(ValueError, match="cannot be combined"):
-        sc.experiment(mixed)()
+        sc.experiment(mixed).build()
 
 
 def test_around_scan_requires_compatible_quantity_dimensions() -> None:

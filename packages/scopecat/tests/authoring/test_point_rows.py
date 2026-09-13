@@ -34,7 +34,7 @@ def test_point_rows_compile_materialize_and_persist_layout() -> None:
         )
         experiment.alias(x, record_id="observed_x")
 
-    invocation = experiment()
+    invocation = experiment.build()
     compiled = compile_invocation(invocation)
 
     assert compiled.program.program.point_domain_layout == "point_cloud"
@@ -81,7 +81,7 @@ def test_empty_point_rows_are_a_zero_point_domain() -> None:
         experiment.points((), coordinates=(x, y))
         experiment.alias(x, record_id="observed_x")
 
-    invocation = experiment()
+    invocation = experiment.build()
     compiled = compile_invocation(invocation)
     request_points = compiled.request.point_plan.domain
     assert isinstance(request_points, PointCloudDomainRecord)
@@ -141,4 +141,6 @@ def test_point_rows_cannot_be_combined_with_grid_scans() -> None:
         experiment.points(({x: 3},))
 
     with pytest.raises(ValueError, match="can only be declared once"):
-        sc.experiment(id="test.mixed-point-domain", kind="point_rows")(definition)()
+        sc.experiment(id="test.mixed-point-domain", kind="point_rows")(
+            definition
+        ).build()

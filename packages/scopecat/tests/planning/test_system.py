@@ -729,7 +729,7 @@ def test_recorded_compute_runs_without_an_instrument_provider() -> None:
         experiment.alias(score)
 
     bound = bind_program(
-        compile_invocation(definition()).program,
+        compile_invocation(definition.build()).program,
         build_config_environment(load_config()),
     )
     plan = ExperimentSystem(instrument_catalog=_catalog(bound)).compile(bound)
@@ -779,7 +779,7 @@ def test_array_compute_results_are_ordered_and_recordable() -> None:
         experiment.alias(maximum)
 
     bound = bind_program(
-        compile_invocation(definition()).program,
+        compile_invocation(definition.build()).program,
         build_config_environment(load_config()),
     )
     plan = ExperimentSystem(instrument_catalog=_catalog(bound)).compile(bound)
@@ -815,7 +815,7 @@ def test_plan_stage_value_record_is_materialized_per_point() -> None:
         experiment.alias(sc.input_ref(threshold))
 
     bound = bind_program(
-        compile_invocation(definition()).program,
+        compile_invocation(definition.build()).program,
         build_config_environment(load_config()),
     )
     plan = ExperimentSystem(instrument_catalog=_catalog(bound)).compile(bound)
@@ -842,7 +842,7 @@ def test_planning_executes_repeated_grid_in_snake_order() -> None:
         )
 
     bound = bind_program(
-        compile_invocation(definition()).program,
+        compile_invocation(definition.build()).program,
         build_config_environment(load_config()),
     )
     plan = ExperimentSystem(instrument_catalog=_catalog(bound)).compile(bound)
@@ -870,7 +870,7 @@ def test_planning_and_preview_resolve_grouped_snake_as_one_schedule() -> None:
         experiment.group_points("y-within-x", varying=(y,))
 
     bound = bind_program(
-        compile_invocation(definition()).program,
+        compile_invocation(definition.build()).program,
         build_config_environment(load_config()),
     )
     plan = ExperimentSystem(instrument_catalog=_catalog(bound)).compile(bound)

@@ -66,7 +66,7 @@ def launch_frequency_amplitude(
 ) -> None:
     invocation = edit_controls(
         CONTROLS,
-        frequency_amplitude(),
+        frequency_amplitude.build(),
         config=intent.initial_config,
         edits=intent.edits,
     )
@@ -88,7 +88,10 @@ def control_launch(
         )
     config, source = launch_config(lab, request)
     invocation = edit_controls(
-        CONTROLS, frequency_amplitude(), config=config, edits=request.control_edits
+        CONTROLS,
+        frequency_amplitude.build(),
+        config=config,
+        edits=request.control_edits,
     )
     if request.action == "preview":
         preview = lab.preview_invocation(

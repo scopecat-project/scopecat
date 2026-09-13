@@ -527,7 +527,7 @@ def test_composed_module_input_keeps_its_declared_compute_input_type() -> None:
 
     config = config_with_physical_resources({"drive-a": (play_interface.interface_id,)})
     plan = materialize_local_execution(
-        bind_invocation(experiment(), config_profile=config)
+        bind_invocation(experiment.build(), config_profile=config)
     )
 
     [call] = operations_of_type(plan, ComputeOperation, point_index=0)
@@ -563,7 +563,7 @@ def test_composed_state_expression_keeps_its_declared_value_type() -> None:
 
     config = load_config()
     plan = materialize_local_execution(
-        bind_invocation(experiment(), config_profile=config)
+        bind_invocation(experiment.build(), config_profile=config)
     )
 
     [operation] = operations_of_type(plan, ApplyStateOperation, point_index=0)

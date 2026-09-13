@@ -545,7 +545,7 @@ def residency_experiment(points: int = 2) -> sc.ExperimentInvocation:
         result = context.use(call)
         context.alias(result.signal, record_id="signal")
 
-    return experiment()
+    return experiment.build()
 
 
 def check_connection_residency(

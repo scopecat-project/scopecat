@@ -21,9 +21,9 @@ from reference_lab.workflows.drag_beta_verification import (
 )
 
 DRAG_BETA_PROCEDURE_ID = "reference-lab.drag-beta-calibration"
-DRAG_BETA_PROCEDURE_VERSION = "7"
+DRAG_BETA_PROCEDURE_VERSION = "8"
 DRAG_BETA_VERIFICATION_PROCEDURE_ID = "reference-lab.drag-beta-verification"
-DRAG_BETA_VERIFICATION_PROCEDURE_VERSION = "6"
+DRAG_BETA_VERIFICATION_PROCEDURE_VERSION = "7"
 
 
 def drag_beta_calibration_request_key(
@@ -116,7 +116,7 @@ def drag_beta_calibration_procedure(
 
     baseline = context.run(
         "baseline",
-        drag_beta_experiment(),
+        drag_beta_experiment.build(),
         config=intent.initial_config,
         config_source=intent.initial_config_source,
         name="DRAG beta rough calibration",
@@ -130,7 +130,7 @@ def drag_beta_calibration_procedure(
     candidate = context.published_analysis(fit).candidate_config()
     candidate_run = context.run(
         "candidate",
-        drag_beta_experiment(),
+        drag_beta_experiment.build(),
         config=candidate,
         inputs=(fit,),
         name="DRAG beta candidate check",
@@ -173,7 +173,7 @@ def drag_beta_verification_procedure(
 
     baseline = context.run(
         "baseline",
-        drag_beta_experiment(intent.qubit),
+        drag_beta_experiment.build(intent.qubit),
         config=intent.initial_config,
         config_source=intent.initial_config_source,
         name=f"{intent.qubit} DRAG beta calibration baseline",
@@ -187,7 +187,7 @@ def drag_beta_verification_procedure(
     candidate = context.published_analysis(fit).candidate_config()
     candidate_run = context.run(
         "candidate",
-        drag_beta_experiment(intent.qubit),
+        drag_beta_experiment.build(intent.qubit),
         config=candidate,
         inputs=(fit,),
         name=f"{intent.qubit} DRAG beta candidate check",

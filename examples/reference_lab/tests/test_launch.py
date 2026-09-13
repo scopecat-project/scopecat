@@ -445,7 +445,7 @@ def test_http_controls_persist_one_source_and_match_notebook_edits(
             )
             notebook = edit_controls(
                 CONTROLS,
-                frequency_amplitude(),
+                frequency_amplitude.build(),
                 config=bootstrap_config(),
                 edits=request.control_edits,
             )

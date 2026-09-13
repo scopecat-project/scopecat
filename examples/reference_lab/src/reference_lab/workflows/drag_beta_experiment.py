@@ -63,7 +63,7 @@ def drag_beta_experiment(
     )
 
 
-DRAG_BETA_EXPERIMENT = drag_beta_experiment()
+DRAG_BETA_EXPERIMENT = drag_beta_experiment.build()
 
 
 __all__ = [

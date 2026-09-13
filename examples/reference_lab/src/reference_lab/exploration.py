@@ -86,7 +86,7 @@ def seed_exploration(lab: LabClient) -> tuple[str, ...]:
         )
     return tuple(
         lab.run(
-            exploratory_signal(),
+            exploratory_signal.build(),
             config=case.config,
             sample=lab.samples.handle(case.sample_id).selector(
                 context_id=case.context_id

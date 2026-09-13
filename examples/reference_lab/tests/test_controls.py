@@ -24,7 +24,7 @@ from reference_lab.workflows.frequency_amplitude import (
 def test_project_constraints_reject_direct_and_form_edits_before_planning() -> None:
     config = bootstrap_config()
     invocation = (
-        frequency_amplitude()
+        frequency_amplitude.build()
         .with_axis(sc.axis(FREQUENCY.ref, [sc.Quantity(5.4, "GHz")]))
         .with_axis(sc.axis(AMPLITUDE.ref, [sc.Quantity(0.3, "V")]))
     )
@@ -36,7 +36,7 @@ def test_project_constraints_reject_direct_and_form_edits_before_planning() -> N
     with pytest.raises(ValueError, match="Amplitude"):
         edit_controls(
             CONTROLS,
-            frequency_amplitude(),
+            frequency_amplitude.build(),
             config=config,
             edits={
                 "frequency": ControlEdit(mode="fixed", value=sc.Quantity(5400, "MHz")),
@@ -46,7 +46,7 @@ def test_project_constraints_reject_direct_and_form_edits_before_planning() -> N
     with pytest.raises(ValueError, match="64"):
         edit_controls(
             CONTROLS,
-            frequency_amplitude(),
+            frequency_amplitude.build(),
             config=config,
             edits={
                 "frequency": ControlEdit(
@@ -62,5 +62,5 @@ def test_project_constraints_reject_direct_and_form_edits_before_planning() -> N
 
     with pytest.raises(ValueError, match="64"):
         plan_experiment_invocation(
-            frequency_amplitude().with_repeat(65), config=config, system=system
+            frequency_amplitude.build().with_repeat(65), config=config, system=system
         )

@@ -40,7 +40,7 @@ Then rebuild the same invocation and resume the existing run:
 
 ```python
 run = lab.get_run("01K...")
-invocation = FREQUENCY_SCAN(
+invocation = FREQUENCY_SCAN.build(
     device="q0",
     frequencies=frequencies,
 )

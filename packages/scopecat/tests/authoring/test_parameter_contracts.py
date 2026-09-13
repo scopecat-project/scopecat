@@ -60,7 +60,7 @@ def _resolve_root_domain_dependency(
             )
         )
 
-    bind_invocation(experiment(), config_profile=config)
+    bind_invocation(experiment.build(), config_profile=config)
 
 
 def _empty_module(id: str) -> sc.ExperimentModule[None, ...]:
@@ -79,7 +79,7 @@ def _axis_invocation(id: str, *axes: sc.Axis) -> sc.ExperimentInvocation:
         experiment.use(module())
         experiment.grid(*axes)
 
-    return experiment()
+    return experiment.build()
 
 
 def _config_with_parameter_table(
@@ -247,7 +247,7 @@ def test_parameter_contract_survives_nested_elaboration() -> None:
         experiment.use(parent(frequency=parameter))
 
     with pytest.raises(CheckFailed) as error:
-        bind_invocation(experiment(), config_profile=load_config())
+        bind_invocation(experiment.build(), config_profile=load_config())
 
     assert error.value.problems[0].code == "authoring_parameter_type_mismatch"
 
@@ -463,7 +463,7 @@ def test_parameter_overlay_specializes_consumers_against_its_point_column() -> N
         )
 
     resolved = bind_invocation(
-        experiment(),
+        experiment.build(),
         config_profile=_config_with_parameter_table(),
     )
 
@@ -579,7 +579,7 @@ def test_parameter_lookup_checks_primary_key_shape_and_typed_key_values() -> Non
         )
 
     bind_invocation(
-        experiment(device="q0"),
+        experiment.build(device="q0"),
         config_profile=config,
     )
 
@@ -629,7 +629,7 @@ def test_parameter_lookup_checks_primary_key_shape_and_typed_key_values() -> Non
                 )
             )
 
-        bind_invocation(wrong_experiment(device="q0"), config_profile=config)
+        bind_invocation(wrong_experiment.build(device="q0"), config_profile=config)
 
     assert wrong_key_shape.value.problems[0].code == (
         "authoring_parameter_lookup_key_mismatch"

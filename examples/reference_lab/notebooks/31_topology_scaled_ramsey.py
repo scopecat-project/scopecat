@@ -15,7 +15,7 @@ program_tree = topology_scaled_ramsey_program.draw()
 
 # %%
 with sc.open_project(EXAMPLE_ROOT).connect(operator="gallery") as lab:
-    invocation = topology_scaled_ramsey()
+    invocation = topology_scaled_ramsey.build()
     preview = lab.preview(invocation)
     run = lab.run(
         invocation,

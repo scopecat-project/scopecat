@@ -931,7 +931,7 @@ def test_downstream_compute_receives_result_in_its_declared_type(
     config = config_with_physical_resources(
         {"source-0": (play_interface.interface_id,)}
     )
-    bound = bind_invocation(experiment(), config_profile=config)
+    bound = bind_invocation(experiment.build(), config_profile=config)
     manifest = execute_bound_run(
         config=config,
         experiment=ProgramFixture(logical=bound.program, bindings=bound.bindings),

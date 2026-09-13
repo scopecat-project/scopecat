@@ -217,7 +217,7 @@ def test_parallel_qubit_set_compiles_to_one_entity_axis_result_group() -> None:
         payload_codecs=reference_lab_payload_codecs(),
     )
     bound = bind_program(
-        compile_invocation(_parallel_set_readout_experiment()).program,
+        compile_invocation(_parallel_set_readout_experiment.build()).program,
         build_config_environment(config),
     )
 
@@ -284,7 +284,7 @@ def _logical_measurement_values(
         system=composition.system,
         instrument_backend=composition.backend,
     )
-    run = lab.prepare(drag_beta_experiment()).run()
+    run = lab.prepare(drag_beta_experiment.build()).run()
     return tuple(
         (record.coordinates, record.observables)
         for record in run.measurements().records
@@ -302,7 +302,7 @@ def test_lab_runner_places_the_reusable_capture_module() -> None:
         quantum_capture(call),
         sc.ModuleInvocation[BinaryIqProbabilityProducts],
     )
-    invocation = run_quantum(call)
+    invocation = run_quantum.build(call)
     logical = compile_invocation(invocation).program.program
 
     assert capture.instance_id == "capture"
@@ -333,7 +333,7 @@ def test_lab_runner_places_the_reusable_capture_module() -> None:
 
 def test_fixed_experiment_and_structural_runner_share_lab_measurement_policy() -> None:
     direct = compile_invocation(
-        run_quantum(
+        run_quantum.build(
             drag_beta_program(
                 qubit="q0",
                 amplification=2,
@@ -341,7 +341,7 @@ def test_fixed_experiment_and_structural_runner_share_lab_measurement_policy() -
             ).with_shots(7)
         )
     ).program.program
-    fixed = compile_invocation(drag_beta_experiment()).program.program
+    fixed = compile_invocation(drag_beta_experiment.build()).program.program
 
     assert [record.record_id for record in direct.product_record_selections] == [
         "probability_0",
@@ -377,7 +377,7 @@ def test_quantum_target_executes_through_reserved_bare_instruments(
         instrument_backend=composition.backend,
     )
 
-    run = lab.prepare(drag_beta_experiment()).run()
+    run = lab.prepare(drag_beta_experiment.build()).run()
 
     assert run.status == "completed"
     assert len(run.measurements().records) == 15
@@ -433,7 +433,7 @@ def test_quantum_preview_inspects_only_the_selected_point_without_device_effects
         system=composition.system,
         instrument_backend=composition.backend,
     )
-    invocation = drag_beta_experiment()
+    invocation = drag_beta_experiment.build()
     prepared = lab.prepare(invocation)
 
     preview = prepared.preview(point="last")
@@ -654,7 +654,7 @@ def test_reviewed_los_prepare_once_without_fragmenting_quantum_batches() -> None
         payload_codecs=reference_lab_payload_codecs(),
     )
     bound = bind_program(
-        compile_invocation(drag_beta_experiment()).program,
+        compile_invocation(drag_beta_experiment.build()).program,
         build_config_environment(config),
     )
 
@@ -755,7 +755,7 @@ def test_guard_reset_invalidates_state_required_by_quantum_domain() -> None:
         payload_codecs=reference_lab_payload_codecs(),
     )
     bound = bind_program(
-        compile_invocation(_reset_guard_before_quantum()).program,
+        compile_invocation(_reset_guard_before_quantum.build()).program,
         build_config_environment(config),
     )
 
@@ -790,7 +790,7 @@ def test_fixed_if_lo_sweep_bounds_real_time_batches_with_host_effects() -> None:
         payload_codecs=reference_lab_payload_codecs(),
     )
     bound = bind_program(
-        compile_invocation(q0_fixed_if_lo_sweep()).program,
+        compile_invocation(q0_fixed_if_lo_sweep.build()).program,
         build_config_environment(config),
     )
 

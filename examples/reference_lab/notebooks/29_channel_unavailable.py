@@ -12,7 +12,7 @@ from reference_lab.workflows.ramsey_experiments import parallel_raw_ramsey
 
 # %%
 with sc.open_project(EXAMPLE_ROOT).connect(operator="gallery") as lab:
-    invocation = parallel_raw_ramsey()
+    invocation = parallel_raw_ramsey.build()
     run = lab.run(
         invocation,
         name="Entity-axis multiplexed Ramsey readout",

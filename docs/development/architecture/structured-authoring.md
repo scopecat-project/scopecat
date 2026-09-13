@@ -254,12 +254,13 @@ scientific validity on another laboratory setup.
 
 ## Constraints on the near-term request design
 
-Function-style creation remains a strong candidate: calling an experiment creates
-a request rather than acquiring data. Whether that request is mutable, uses an
-explicit input model, or has a concrete request type is still under evaluation.
-The first managed implementation offers `experiment.request(...)` with mutable
-`values`, explicit `Scan` intent, isolated copies and source-contract matching.
-It reuses preparation and saved plans; ordinary calls still build invocations.
+Function-style creation now returns a mutable experiment request: `experiment(...)`
+captures `values`, explicit `Scan` intent and source-contract identity without
+executing the body. Isolated copies, managed preparation and saved plans retain
+the existing contracts. `experiment.build(...)` explicitly constructs a local
+immutable invocation; low-level `.bind(...)` supports partial runtime assembly.
+The redundant `.request(...)` factory has been removed. A concrete typed editing
+model remains a possible frontend to this same contract, not another registry.
 `Annotated[Input[T], ControlSpec(...)]` now derives numeric controls and symbolic
 references from the signature, including required controls without fake defaults.
 See [the notebook workflow](../../how-to/managed-author-session.md#edit-a-request-before-preparing)

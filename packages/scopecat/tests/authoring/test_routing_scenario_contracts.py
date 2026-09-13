@@ -81,7 +81,7 @@ def test_entity_resource_selection_is_deterministic_across_instruments() -> None
         experiment.use(module(qubit))
         experiment.grid(axis(qubit, ("q1", "q0", "q1")))
 
-    resolved = bind_invocation(experiment(), config_profile=config)
+    resolved = bind_invocation(experiment.build(), config_profile=config)
     preview = materialized_effects_contract(
         resolved,
         resolved.environment.parameters,
@@ -174,7 +174,7 @@ def test_acquisition_selects_point_local_instruments_and_channels(
         experiment.grid(axis(qubit, ("q0", "q1", "q0")))
         experiment.alias(result)
 
-    resolved = bind_invocation(experiment(), config_profile=config)
+    resolved = bind_invocation(experiment.build(), config_profile=config)
     preview = materialized_effects_contract(
         resolved,
         resolved.environment.parameters,
@@ -274,7 +274,7 @@ def test_readout_source_and_digitizer_are_explicit_independent_ports() -> None:
         result = experiment.use(module(qubit))
         experiment.alias(result)
 
-    resolved = bind_invocation(experiment(qubit="q0"), config_profile=config)
+    resolved = bind_invocation(experiment.build(qubit="q0"), config_profile=config)
     preview = materialized_effects_contract(
         resolved,
         resolved.environment.parameters,

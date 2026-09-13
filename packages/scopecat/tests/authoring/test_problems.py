@@ -59,7 +59,7 @@ def test_experiment_definition_reports_literal_errors() -> None:
         ) -> None:
             del experiment, count
 
-        experiment()
+        experiment.build()
 
     assert [problem.code for problem in error.value.problems] == [
         "module_input_type_mismatch",
@@ -109,7 +109,7 @@ def test_grid_rejects_duplicate_axis_ids() -> None:
                 sc.axis(first, (3.0,)),
             )
 
-        experiment()
+        experiment.build()
 
 
 def test_repeated_axis_overrides_use_the_latest_value() -> None:
@@ -120,7 +120,9 @@ def test_repeated_axis_overrides_use_the_latest_value() -> None:
         experiment.grid(sc.axis(point, (1.0,)))
 
     invocation = (
-        experiment().with_axis(sc.axis(point, (2.0,))).with_axis(sc.axis(point, (3.0,)))
+        experiment.build()
+        .with_axis(sc.axis(point, (2.0,)))
+        .with_axis(sc.axis(point, (3.0,)))
     )
 
     assert invocation.point_plan.domain.axes == (sc.axis(point, (3.0,)),)
@@ -181,7 +183,7 @@ def test_unused_child_binding_accepts_an_explicit_outer_value() -> None:
     def experiment(experiment: sc.ExperimentContext) -> None:
         experiment.use(outer(1.0))
 
-    bind_invocation(experiment(), config_profile=load_config())
+    bind_invocation(experiment.build(), config_profile=load_config())
 
 
 def test_unused_child_expression_binding_accepts_an_explicit_outer_value() -> None:
@@ -202,7 +204,7 @@ def test_unused_child_expression_binding_accepts_an_explicit_outer_value() -> No
     def experiment(experiment: sc.ExperimentContext) -> None:
         experiment.use(outer(1.0))
 
-    bind_invocation(experiment(), config_profile=load_config())
+    bind_invocation(experiment.build(), config_profile=load_config())
 
 
 def test_scan_point_does_not_implicitly_bind_consumed_module_input() -> None:
@@ -216,7 +218,7 @@ def test_scan_point_does_not_implicitly_bind_consumed_module_input() -> None:
             experiment.use(module())
             experiment.grid(sc.axis(point, (1.0,)))
 
-        experiment()
+        experiment.build()
 
 
 def _identity_value(value: object) -> object:

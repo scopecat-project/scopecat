@@ -15,8 +15,8 @@ name, unit, source mode and bounds from the same Python declaration.
 
 In `examples/reference_lab/src/reference_lab/workflows/authored/signal.py`:
 
-- Change the frequency default or bounds on `FREQUENCY`, or the response helper.
-- Change `DELAY`, the Ramsey phase or shot count to compose supported timing.
+- Change the frequency default or bounds on the `frequency` input, or the response helper.
+- Change the `delay` input, the Ramsey phase or shot count to compose supported timing.
 - Change `selected_mean` to choose data differently or use your own fitting code.
 - To create a new experiment, copy a function or file inside the author folder and
   give the experiment function a distinct name (or an explicit distinct decorator
@@ -74,9 +74,11 @@ scanned intent remain distinct even when they evaluate the same physical point.
 Changing controls invalidates the previous preview.
 
 See [refresh author code](refresh-author-code.md) for explicit old/new revision
-analysis over retained data. Direct `signal.prepare/run` and `run.analyze` remain
-available for a deliberately loaded Python process, including arbitrary supported
-analysis arguments. Direct imports do not hot-reload; their declaration-only
+analysis over retained data. In a managed author session, create a request with
+`signal(...)`, edit its `values` and pass it to `authors.prepare(request)`.
+Maintainers can explicitly build a local invocation with `signal.build(...)`
+and use the low-level lab API; retained runs also support `run.analyze` with
+arbitrary supported analysis arguments. Direct imports do not hot-reload; their declaration-only
 provenance must not be confused with the full revision-aware path.
 
 ## Use the same declaration in the GUI

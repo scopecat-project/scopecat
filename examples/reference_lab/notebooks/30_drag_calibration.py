@@ -33,7 +33,7 @@ if (
     or initial_config_source.registry_generation is None
 ):
     raise RuntimeError("active config has no exact registry generation")
-prepared = lab.prepare(drag_beta_experiment(), config=initial_config)
+prepared = lab.prepare(drag_beta_experiment.build(), config=initial_config)
 preview = prepared.preview()
 procedure = lab.procedures.start(
     drag_beta_calibration_procedure,
@@ -95,7 +95,7 @@ accepted_source = ConfigRegistryRunConfigSource(
 )
 
 production_run = lab.execute_invocation(
-    production_drag_experiment(),
+    production_drag_experiment.build(),
     config=accepted.config,
     config_source=accepted_source,
     name="Production X90 with accepted DRAG beta",

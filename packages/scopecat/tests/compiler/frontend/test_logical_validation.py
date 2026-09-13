@@ -54,7 +54,7 @@ def _resolve(module: sc.ExperimentModule[None, ...]) -> None:
         experiment.use(module())
 
     bind_invocation(
-        experiment(),
+        experiment.build(),
         config_profile=load_config(),
     )
 
@@ -221,7 +221,7 @@ def test_static_record_schema_is_checked_before_parameter_catalog() -> None:
         )
 
     with pytest.raises(CheckFailed) as error:
-        bind_invocation(experiment(), config_profile=load_config())
+        bind_invocation(experiment.build(), config_profile=load_config())
 
     assert error.value.problems[0].code == ("product_axis_duplicate")
     assert error.value.problems[0].location == model_location(
@@ -331,7 +331,7 @@ def test_product_axis_rejects_point_dependent_value() -> None:
 
     with pytest.raises(CheckFailed) as error:
         bind_invocation(
-            experiment(),
+            experiment.build(),
             config_profile=load_config(),
         )
 
@@ -363,7 +363,7 @@ def test_direct_compute_edge_is_topologically_ordered() -> None:
     def experiment(experiment: sc.ExperimentContext) -> None:
         experiment.use(module())
 
-    compiled = compile_invocation(experiment())
+    compiled = compile_invocation(experiment.build())
 
     assert [
         operation.id.local_id for operation in compiled.program.program.compute_nodes
@@ -381,7 +381,7 @@ def test_compile_preserves_request_input_and_normalizes_logical_input() -> None:
     ) -> None:
         del experiment, subject
 
-    compiled = compile_invocation(experiment(subject="q0"))
+    compiled = compile_invocation(experiment.build(subject="q0"))
 
     assert compiled.request.inputs == {"subject": "q0"}
     assert compiled.program.program.inputs == {"subject": EntityRef(id="q0")}
@@ -395,7 +395,7 @@ def test_compile_invocation_projects_request_metadata() -> None:
     ) -> None:
         del experiment, subject
 
-    invocation = experiment(subject="q0")
+    invocation = experiment.build(subject="q0")
 
     compiled = compile_invocation(
         invocation,

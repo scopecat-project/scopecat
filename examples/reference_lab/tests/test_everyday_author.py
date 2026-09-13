@@ -24,9 +24,11 @@ def test_everyday_author_retained_inputs_and_unknown_consumer() -> None:
         active = lab.config.active()
         inputs = everyday_author_inputs()
         with pytest.raises((ValueError, KeyError), match="drive_carrier_frequency"):
-            lab.preview(exploratory_signal(), config=inputs.missing)
+            lab.preview(exploratory_signal.build(), config=inputs.missing)
         assert (
-            lab.prepare(exploratory_signal(), config=inputs.known).preview().point_count
+            lab.prepare(exploratory_signal.build(), config=inputs.known)
+            .preview()
+            .point_count
             == 5
         )
         acquired = acquire_everyday_author_inputs(lab)

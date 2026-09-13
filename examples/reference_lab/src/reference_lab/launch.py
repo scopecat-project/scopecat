@@ -81,7 +81,7 @@ class LaunchIntent(TemperatureDiagnosticIntent):
 def launch_temperature(context: LabProcedureContext, intent: LaunchIntent) -> None:
     context.run(
         "diagnostic",
-        temperature_diagnostic(),
+        temperature_diagnostic.build(),
         config=intent.initial_config,
         config_source=intent.config_source,
         operator=intent.actor,
@@ -108,7 +108,7 @@ def launch_channel_timing(context: LabProcedureContext, intent: LaunchIntent) ->
     inputs = TimingRequest.model_validate(intent.inputs)
     source = context.run(
         "source",
-        parallel_raw_ramsey(),
+        parallel_raw_ramsey.build(),
         config=intent.initial_config,
         config_source=intent.config_source,
         operator=intent.actor,
@@ -117,7 +117,7 @@ def launch_channel_timing(context: LabProcedureContext, intent: LaunchIntent) ->
     candidate = context.published_analysis(proposal).candidate_config()
     verified = context.run(
         "candidate",
-        parallel_raw_ramsey(),
+        parallel_raw_ramsey.build(),
         config=candidate,
         inputs=(proposal,),
         operator=intent.actor,
@@ -191,9 +191,9 @@ def launch_provider(lab: LabClient, request: LaunchRequest) -> LaunchResult:
         DiagnosticRequest if entry.kind == "diagnostic" else TimingRequest
     ).model_validate(request.inputs)
     invocation = (
-        temperature_diagnostic()
+        temperature_diagnostic.build()
         if entry.kind == "diagnostic"
-        else parallel_raw_ramsey()
+        else parallel_raw_ramsey.build()
     )
     definition = (
         launch_temperature if entry.kind == "diagnostic" else launch_channel_timing

@@ -11,7 +11,7 @@ from reference_lab.workflows.ramsey_experiments import flux_ramsey
 
 # %%
 with sc.open_project(EXAMPLE_ROOT).connect(operator="gallery") as lab:
-    invocation = flux_ramsey()
+    invocation = flux_ramsey.build()
     preview = lab.preview(invocation)
     run = lab.run(
         invocation,

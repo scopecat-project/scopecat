@@ -49,7 +49,7 @@ executes that module's ordinary Python top-level code.
 ```python
 from reference_lab.workflows.authored.signal import signal
 
-request = signal.request(gain=1.0, polarity="positive")
+request = signal(gain=1.0, polarity="positive")
 request.values["frequency"] = sc.Scan(sc.Quantity(f, "GHz") for f in (5.0, 5.1, 5.2))
 with project.authoring() as author:
     parameters = author.config.workspace(context="my-sample-start")
@@ -87,10 +87,17 @@ experiment module, or select the original revision. Helpers execute from the
 selected managed revision; importing a request does not pin notebook helper
 objects or claim to fingerprint their transitive dependencies.
 
-The explicit `.request(...)` factory is the current managed editing API.
-`experiment(...)` and `.bind(...)` still construct immutable invocations for local
-composition. Making the ordinary call create a request and adding a concrete typed editing model remain
-separate convergence work; they are not implemented by this factory.
+Calling `experiment(...)` creates an editable request without executing its body.
+`author.prepare(request)` builds and validates it against the selected managed
+revision. There is no separate `.request(...)` factory.
+
+Maintainers who need a local immutable program use `experiment.build(...)`.
+It preserves checked function arguments and the typed `invocation.output` tree;
+it does not acquire data or select a managed source revision. Existing low-level
+`.bind(...)` supports partial runtime inputs while assembling an invocation;
+structural inputs must still be complete. These built objects are separate from
+editable requests. Request dictionary edits do not synthesize statically checked
+attributes; concrete typed editing remains separate work.
 
 ## Declare controls next to their inputs
 
@@ -114,9 +121,9 @@ def amplitude_probe(
     return amplitude * gain
 ```
 
-`amplitude_probe.request()` includes both defaults. Edit
+`amplitude_probe()` includes both defaults. Edit
 `request.values["amplitude"] = sc.Scan([0.1, 0.2])` to scan; assigning `0.15`
-returns to a fixed coordinate. `amplitude_probe(amplitude=0.15)` likewise builds
+returns to a fixed coordinate. `amplitude_probe.build(amplitude=0.15)` explicitly builds
 one fixed coordinate, with no duplicate runtime input source. `gain` remains a
 scalar runtime input and cannot be scanned. GUI controls, bounds, units and saved
 plans come from the same derived `ControlSet`.
@@ -133,7 +140,7 @@ Omit a Python default when the operator must choose a value. Required quantity
 controls must specify `unit` in `ControlSpec`. Discovery still succeeds; the GUI
 shows an empty required field, and preparation rejects missing values. A required
 scan can be supplied directly via `author.prepare("name", scans={...})` without
-inventing a scalar starting value. The typed `.request(...)` factory continues
+inventing a scalar starting value. The typed experiment call continues
 to require the function's creation arguments before dictionary editing.
 
 `Input[T]` honestly describes concrete caller values and symbolic body references;

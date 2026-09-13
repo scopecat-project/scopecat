@@ -253,22 +253,22 @@ def test_experiment_infers_identity_description_and_runtime_defaults() -> None:
     assert count_experiment.id == "count_experiment"
     assert count_experiment.kind == "count_experiment"
     assert count_experiment.metadata["description"] == "Run one count experiment."
-    default_invocation = count_experiment()
+    default_invocation = count_experiment.build()
     assert elaborations == 1
     assert default_invocation.definition.id == count_experiment.id
     assert default_invocation.definition.inputs[0].default == 2
     assert default_invocation.input_overrides == {}
     signature = inspect.signature(count_experiment)
     assert signature.parameters["count"].default == 2
-    assert signature.return_annotation is sc.ExperimentInvocation
+    assert signature.return_annotation is sc.ExperimentRequest
     assert isinstance(count_experiment, sc.Experiment)
-    invocation = assert_type(count_experiment(3), sc.ExperimentInvocation[None])
+    invocation = assert_type(count_experiment.build(3), sc.ExperimentInvocation[None])
     assert invocation.definition is default_invocation.definition
     assert invocation.input_overrides == {"count": 3}
 
     if TYPE_CHECKING:
-        count_experiment(count="invalid")  # pyright: ignore[reportArgumentType]
-        count_experiment(unknown=3)  # pyright: ignore[reportCallIssue]
+        count_experiment.build(count="invalid")  # pyright: ignore[reportArgumentType]
+        count_experiment.build(unknown=3)  # pyright: ignore[reportCallIssue]
 
 
 def test_experiment_returns_a_typed_dataset_schema() -> None:
@@ -283,7 +283,7 @@ def test_experiment_returns_a_typed_dataset_schema() -> None:
         )
 
     invocation = assert_type(
-        count_experiment(),
+        count_experiment.build(),
         sc.ExperimentInvocation[_CountDataset],
     )
     output = assert_type(invocation.output, _CountDataset)
@@ -299,7 +299,7 @@ def test_returned_values_are_durable_without_explicit_record_calls() -> None:
         return count + 1
 
     computed_experiment = sc.experiment(computed)
-    computed_invocation = computed_experiment()
+    computed_invocation = computed_experiment.build()
     [computed_record] = computed_invocation.definition.record_selections
     assert computed_record.record_id == "result"
     [logical_record] = compile_invocation(
@@ -317,7 +317,7 @@ def test_returned_values_are_durable_without_explicit_record_calls() -> None:
         return experiment.use(product_source())
 
     product_experiment = sc.experiment(product)
-    [product_record] = product_experiment().definition.record_selections
+    [product_record] = product_experiment.build().definition.record_selections
     assert isinstance(product_record, RecordSelection)
     assert product_record.product_id.local_id == "signal"
     assert product_record.record_id == "result"
@@ -338,7 +338,7 @@ def test_return_paths_name_product_bundles_and_named_values() -> None:
             score=cast("sc.ValueRef[float]", score),
         )
 
-    selections = definition().definition.record_selections
+    selections = definition.build().definition.record_selections
 
     assert [selection.record_id for selection in selections] == [
         "capture/signal",
@@ -362,7 +362,7 @@ def test_homogeneous_per_entity_return_uses_one_entity_indexed_record() -> None:
             )
         )
 
-    invocation = definition()
+    invocation = definition.build()
     selections = invocation.definition.record_selections
 
     [selection] = selections
@@ -398,7 +398,7 @@ def test_return_annotations_refine_durable_record_policy() -> None:
             score=cast("sc.ValueRef[float]", score),
         )
 
-    signal, reference, score = definition().definition.record_selections
+    signal, reference, score = definition.build().definition.record_selections
 
     assert [selection.record_id for selection in (signal, reference, score)] == [
         "science/capture/signal",
@@ -418,7 +418,7 @@ def test_repeated_return_source_creates_aliases_without_duplicate_product_uses()
         signal = experiment._product("internal/signal")
         return _ReturnedAliases(primary=signal, diagnostic=signal)
 
-    primary, diagnostic = definition().definition.record_selections
+    primary, diagnostic = definition.build().definition.record_selections
 
     assert isinstance(primary, RecordSelection)
     assert isinstance(diagnostic, RecordSelection)
@@ -440,7 +440,7 @@ def test_returned_explicit_record_is_not_selected_twice() -> None:
         experiment.alias(score)
         return score
 
-    assert len(definition().definition.record_selections) == 1
+    assert len(definition.build().definition.record_selections) == 1
 
 
 def test_analysis_decorator_preserves_configuration_signature() -> None:
@@ -522,7 +522,7 @@ def test_experiment_separates_runtime_inputs_from_structural_arguments() -> None
         mixed.bind(value=2)
 
     first = mixed.bind(scan_values=(1, 2, 3))
-    second = mixed(value=4, scan_values=(5, 6))
+    second = mixed.build(value=4, scan_values=(5, 6))
 
     assert elaborations == 2
     assert [input_.id for input_ in first.definition.inputs] == ["value"]
@@ -555,10 +555,10 @@ def test_plain_experiment_arguments_are_structural() -> None:
     assert elaborations == 0
     signature = inspect.signature(count_experiment)
     assert signature.parameters["count"].default == 2
-    assert signature.return_annotation is sc.ExperimentInvocation
-    default_invocation = count_experiment()
+    assert signature.return_annotation is sc.ExperimentRequest
+    default_invocation = count_experiment.build()
     selected_invocation = assert_type(
-        count_experiment(3),
+        count_experiment.build(3),
         sc.ExperimentInvocation[None],
     )
     assert elaborations == 2
@@ -569,8 +569,8 @@ def test_plain_experiment_arguments_are_structural() -> None:
     compile_invocation(selected_invocation)
 
     if TYPE_CHECKING:
-        count_experiment("invalid")  # pyright: ignore[reportArgumentType]
-        count_experiment(unknown=3)  # pyright: ignore[reportCallIssue]
+        count_experiment.build("invalid")  # pyright: ignore[reportArgumentType]
+        count_experiment.build(unknown=3)  # pyright: ignore[reportCallIssue]
 
 
 def test_plain_module_arguments_specialize_a_closed_typed_invocation() -> None:
@@ -635,7 +635,7 @@ def test_symbolic_structural_argument_becomes_a_private_module_import() -> None:
             record_id="selected_result",
         )
 
-    compile_invocation(authored())
+    compile_invocation(authored.build())
 
 
 def test_nested_structural_values_are_deduplicated_deterministically() -> None:
@@ -746,7 +746,7 @@ def test_use_returns_typed_results_and_requires_an_occurrence() -> None:
         value = assert_type(experiment.use(parent()), sc.ValueRef)
         experiment.alias(value)
 
-    compile_invocation(authored())
+    compile_invocation(authored.build())
 
     for context in (sc.ModuleContext(), sc.ExperimentContext()):
         with pytest.raises(
@@ -783,11 +783,11 @@ def test_repeated_default_module_calls_require_explicit_instances() -> None:
         experiment.use(source())
 
     with pytest.raises(ValueError, match="duplicate module instance ids"):
-        sc.experiment(id="test.repeated-defaults")(repeated)()
+        sc.experiment(id="test.repeated-defaults")(repeated).build()
 
     @sc.experiment(id="test.explicit-instances")
     def explicit(experiment: sc.ExperimentContext) -> None:
         experiment.use(source.instantiate("left"))
         experiment.use(source.instantiate("right"))
 
-    compile_invocation(explicit())
+    compile_invocation(explicit.build())

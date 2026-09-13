@@ -228,7 +228,7 @@ def test_in_process_lab_records_compute_value_without_instruments(
     run = lab.prepare(compute_only).run()
     dataset = run.measurements()
     stored_result = run.result()
-    typed_result = run.result(compute_only().output)
+    typed_result = run.result(compute_only.build().output)
 
     assert run.status == "completed"
     assert isinstance(dataset, Dataset)
@@ -274,7 +274,7 @@ def test_in_process_lab_records_returned_scan_without_instruments(
     dataset = run.measurements()
     records = dataset.records
     stored_result = run.result()
-    typed_result = run.result(coordinate_only().output)
+    typed_result = run.result(coordinate_only.build().output)
 
     assert run.status == "completed"
     assert dataset.schema.primary_coordinates == ("value",)
@@ -309,7 +309,7 @@ def test_structured_host_compute_is_one_public_compute(tmp_path: Path) -> None:
         ),
     )
 
-    prepared = lab.prepare(structured())
+    prepared = lab.prepare(structured.build())
     preview = prepared.preview()
     [compute] = preview.computes
     assert compute.id == "structured_compute"
@@ -319,7 +319,7 @@ def test_structured_host_compute_is_one_public_compute(tmp_path: Path) -> None:
     assert compute.demanded_by == ("record:doubled", "record:label")
 
     run = prepared.run()
-    result = run.result(structured().output)
+    result = run.result(structured.build().output)
     [point] = result
     assert point.value(result.output.doubled) == 6
     assert point.value(result.output.label) == "value-3"
@@ -355,7 +355,7 @@ def test_host_unit_conversion_is_recordable_and_visible_in_preview(
         ),
     )
 
-    prepared = lab.prepare(converted())
+    prepared = lab.prepare(converted.build())
     preview = prepared.preview()
     assert preview.host_compute_ids == ("source_voltage", "convert_unit_value")
     assert preview.observation_compute_ids == ()
@@ -365,7 +365,7 @@ def test_host_unit_conversion_is_recordable_and_visible_in_preview(
         "target_unit",
     )
 
-    result = prepared.run().result(converted().output)
+    result = prepared.run().result(converted.build().output)
     assert result[0].value(result.output.voltage) == sc.Quantity(125.0, "mV")
 
 

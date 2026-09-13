@@ -43,6 +43,7 @@ from scopecat.authoring.entity_selection import PerEntity
 from scopecat.authoring.experiments import (
     Experiment,
     ExperimentInput,
+    ExperimentRequest,
 )
 from scopecat.authoring.member_projection import StateProjector
 from scopecat.authoring.scans import (
@@ -1471,7 +1472,7 @@ def _experiment_from_function[ResultT, **P](
     authored = Experiment(
         _callable=cast("Callable[P, ResultT]", fn),
         _signature=signature.replace(
-            return_annotation=ExperimentInvocation,
+            return_annotation=ExperimentRequest,
         ),
         _builder=build,
         id=selected_id,
