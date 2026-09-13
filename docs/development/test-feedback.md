@@ -82,3 +82,23 @@ Slow journey phases are also product performance signals. Investigate repeated
 prepare, source loading, analysis and reads before replacing them with seeded
 fixtures. The [author performance baseline](author-performance.md) measures the
 actual notebook prepare boundary, which direct scan execution does not cover.
+
+## Candidate policy assertion placement
+
+`test_typed_candidates_retain_cells_and_independent_policy` retains the real
+managed-author chain: acquire, fit, stage named cells, prepare the exact candidate,
+acquire independent verification data, run its policy, publish explicitly, reject
+stale admission without side effects, and restore the previous default. Unknown
+fit fields, receipt authority, candidate identity and unrelated-cell preservation
+remain checked there.
+
+`test_typed_candidate_policy_uses_retained_decision_and_workpoint` checks negative
+policy branches through in-process HTTP and real SQLite publications. It seeds
+completed measurement records through admission/executor services and registers an
+explicit source bundle, without running an instrument or analysis worker. It
+proves that editing a returned dataclass cannot override a retained rejection,
+that rejection remains inspectable, and that both the ordinary client and verified
+publication endpoint reject another workpoint. Source capture/execution is covered
+by the real journey; this fixture does not claim to validate managed analysis
+execution or source validation. No production deadlines, retry rules or CI
+selection change with this split.

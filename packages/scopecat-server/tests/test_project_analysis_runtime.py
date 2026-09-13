@@ -16,10 +16,11 @@ import pytest
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 from scopecat.analysis.datasets import DerivedDataset, derived_dataset
-from scopecat.analysis.facts import AnalysisFactSchema
+from scopecat.analysis.facts import AnalysisFactSchema, ordinary_result_schema
 from scopecat.analysis.service import MeasurementAnalysisInput
 from scopecat.api.analysis import Analysis, AnalysisContext, analysis_step
 from scopecat.api.lab import LabClient
+from scopecat.api.parameter_candidates import ParameterCandidate
 from scopecat.api.published_analysis import PublishedAnalysis
 from scopecat.automation import (
     AnalysisPublicationOutputRef,
@@ -99,6 +100,8 @@ from scopecat.measurements.dataset import Dataset
 from scopecat.measurements.recording_arrow import (
     encode_measurement_append,
 )
+from scopecat.project import load_project
+from scopecat.project_sources import capture_sources
 from scopecat.records.analysis import (
     AnalysisRecord,
     MeasurementAnalysisRecordInput,
@@ -2255,3 +2258,113 @@ def test_primary_run_analysis_checks_secondary_owner_and_exact_content(
                 primary.published_analysis(saved.id).publication_hash
                 == saved.publication_hash
             )
+
+
+def test_typed_candidate_policy_uses_retained_decision_and_workpoint(
+    tmp_path: Path,
+) -> None:
+    """Seed terminal records through services; policy checks need no acquisition.
+
+    The reference journey covers actual managed analysis/source capture. Here the
+    registered source bundle and result facts are explicit fixtures, while HTTP,
+    SQLite receipts and both client/server verification remain real.
+    """
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src/policy.py").write_text("# Retained policy fixture.\n")
+    (tmp_path / "scopecat.toml").write_text(
+        '[lab]\napplication="policy:create_application"\n'
+        '[authors]\nsource_roots=["src"]\nrefresh_roots=["src"]\n'
+    )
+    bundle = capture_sources(load_project(tmp_path / "scopecat.toml"))
+    schema = ordinary_result_schema(_CandidateDecision)
+    with (
+        LocalDaemonRuntime(tmp_path, bootstrap_config=_config()) as runtime,
+        TestClient(runtime.app()) as transport,
+    ):
+        runtime.application.author_revisions.repository.publish(
+            bundle, expected_generation=0
+        )
+        lab = LabClient(_daemon_client(transport))
+        sample = lab.samples.create(
+            "policy-sample",
+            kind="synthetic",
+            content=SampleRevisionDraft(display_name="Policy sample"),
+        )
+        baseline_submission = _submission("policy-baseline").model_copy(
+            update={
+                "request": RunRequest(
+                    experiment_id="scratch",
+                    samples=(SampleSelector(sample_id=sample.id),),
+                )
+            }
+        )
+        baseline_id = _complete_signal_run(
+            runtime,
+            submission_id="policy-baseline",
+            signal=0.8,
+            submission=baseline_submission,
+        )
+        proposal = _analysis_proposal(baseline_id)
+        runtime.application.runs.save_run_analysis(
+            baseline_id, _analysis_command(proposal)
+        )
+        baseline = lab.get_run(baseline_id)
+        candidate = ParameterCandidate(
+            lab.config, baseline.published_analysis("fit").candidate_config()
+        )
+        config, source = lab.config.resolve_with_source(candidate.config)
+        for context_id in (None, "different-point"):
+            submission_id = f"policy-{context_id}"
+            submission = _submission(submission_id).model_copy(
+                update={
+                    "config": config,
+                    "config_source": source,
+                    "request": RunRequest(
+                        experiment_id="scratch",
+                        samples=(
+                            SampleSelector(sample_id=sample.id, context_id=context_id),
+                        ),
+                    ),
+                }
+            )
+            run_id = _complete_signal_run(
+                runtime, submission_id=submission_id, signal=1.1, submission=submission
+            )
+            run = lab.get_run(run_id)
+            accepted = context_id is not None
+            result = (
+                run.analysis("Policy fixture")
+                .result()
+                .fact("result", _CandidateDecision(accepted=accepted), schema=schema)
+                .fact("author_code_revision", bundle.manifest.ref.content_hash)
+                .save()
+                .result_as(_CandidateDecision)
+            )
+            if context_id is None:
+                # Editing the returned dataclass cannot override the saved rejection.
+                with pytest.raises(ValueError, match="verification rejected"):
+                    candidate.verify(replace(result, value=_CandidateDecision(True)))
+                [decision] = lab.analysis_summaries().items
+                assert (
+                    not lab.published_analysis(decision.entry.id)
+                    .fact_as("decision", schema)
+                    .accepted
+                )
+            else:
+                with pytest.raises(ValueError, match="sample revision/workpoint"):
+                    candidate.verify(result)
+                unsafe = lab.analysis("Wrong point", key="wrong-point")
+                unsafe.measurements(baseline, id="baseline")
+                unsafe.measurements(run, id="candidate")
+                verification = (
+                    unsafe.result().fact("decision", result.value, schema=schema).save()
+                )
+                with pytest.raises(
+                    DaemonConflictError, match="same sample revision/workpoint"
+                ):
+                    lab.config.accept_verified(
+                        candidate.config,
+                        verified_by=(verification, "decision"),
+                        entry_id="wrong-point",
+                    )
+        assert lab.config.active().entry.id != "wrong-point"
