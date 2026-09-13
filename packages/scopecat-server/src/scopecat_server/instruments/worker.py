@@ -337,14 +337,17 @@ class SubprocessInstrumentBackendEndpoint:
             assert startup.driver_catalog is not None
             assert startup.payload_catalog is not None
             self._provider_id = startup.provider_id
+            startup_stage("materializing driver catalog")
             self._driver_catalog = _model_from_body(
                 DriverCatalog,
                 startup.driver_catalog,
             )
+            startup_stage("driver catalog ready; materializing payload catalog")
             self._payload_catalog = _model_from_body(
                 PayloadCodecCatalog,
                 startup.payload_catalog,
             )
+            startup_stage("payload catalog ready; starting instrument receiver")
             self._worker_pid = startup.worker_pid
             self._diagnostic = startup.diagnostic
             self._available = True
@@ -354,6 +357,7 @@ class SubprocessInstrumentBackendEndpoint:
                 daemon=True,
             )
             self._receiver.start()
+            startup_stage("instrument endpoint ready")
         except BaseException:
             parent.close()
             _stop_process(process, shutdown_timeout)

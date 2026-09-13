@@ -28,7 +28,9 @@ def begin(*, process: Literal["daemon", "instrument"] = "daemon") -> None:
         f"python entry; pid={os.getpid()} parent={os.getppid()} "
         f"clock_ns={time.monotonic_ns()}"
     )
-    faulthandler.dump_traceback_later(5, file=_stream)
+    # The daemon may finish child readiness after the old five-second sample.
+    # Capture its remaining construction closer to the unchanged health deadline.
+    faulthandler.dump_traceback_later(8 if process == "daemon" else 5, file=_stream)
 
 
 def stage(message: str) -> None:

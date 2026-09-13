@@ -204,7 +204,10 @@ before one normal `start`. Windows CI already retains this directory. The
 factory loading/construction, catalog description and readiness transmission.
 PID, parent PID, generation and same-host monotonic clock anchors correlate the
 files without exposing environment contents or Python locals. This opt-in probe
-samples one stack after five seconds; the child cancels it when readiness is sent.
+samples one daemon stack after eight seconds and one instrument stack after five
+seconds; the child cancels its sample when readiness is sent. These offsets start
+at Python entry, not process launch, and do not alter the ten-second health
+deadline. A stack sample alone does not mean startup failed.
 
 A parent blocked in `Connection.poll` does not identify a slow import or driver.
 Use the child's last phase and stack to locate the wait. A missing child entry
@@ -218,3 +221,14 @@ termination at the existing endpoint startup timeout. This is diagnostic coverag
 not a reproduction or fix of intermittent Windows startup. Neither the daemon's
 health deadline nor worker deadlines, retries, persistence or acquisition behavior
 are changed. Broader startup reliability remains tracked in issue #465.
+
+
+After readiness decoding, daemon stages distinguish driver/payload catalog
+materialization, receiver startup, offline schema inspection, object-store setup,
+SQLite connection/WAL/schema initialization, service composition, application
+construction, configuration bootstrap and application service startup. The last
+completed stage identifies the interval to investigate; an eight-second stack can
+locate code still running within it. A controlled configuration-factory stall
+checks this post-readiness evidence using the normal start deadline. It does not
+reproduce the intermittent Windows failure. Retain the phase log even if Python
+entry was too late for the sample to occur before the parent's health deadline.
