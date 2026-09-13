@@ -66,7 +66,7 @@ def test_structure_unknown_column_and_old_run_retention() -> None:
         base = ConfigContextRef(
             entry_id=old_context.entry.id, content_hash=old_context.entry.content_hash
         )
-        original = lab.run(exploratory_signal(), config=base)
+        original = lab.run(exploratory_signal.build(), config=base)
         original_json = original.config.model_dump_json()
         plan = ParameterStructurePlan(
             base=base,
@@ -98,14 +98,14 @@ def test_structure_unknown_column_and_old_run_retention() -> None:
         ref = ConfigContextRef(
             entry_id=saved.entry.id, content_hash=saved.entry.content_hash
         )
-        assert lab.run(exploratory_signal(), config=ref).status == "completed"
+        assert lab.run(exploratory_signal.build(), config=ref).status == "completed"
         with pytest.raises((ValueError, KeyError, CheckFailed), match="quality"):
-            lab.preview(quality_signal(), config=ref)
+            lab.preview(quality_signal.build(), config=ref)
         resolved = lab.config.resolve_context(
             ref, overrides=(sc.parameter_update(Quality.quality, "q0", 0.8),)
         )
-        assert lab.run(quality_signal(), config=resolved).status == "completed"
+        assert lab.run(quality_signal.build(), config=resolved).status == "completed"
         retained = lab.get_run(original.id)
         assert retained.config.model_dump_json() == original_json
         assert lab.config.active() == active
-        assert lab.run(exploratory_signal(), config=base).status == "completed"
+        assert lab.run(exploratory_signal.build(), config=base).status == "completed"

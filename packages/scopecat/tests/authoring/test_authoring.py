@@ -232,7 +232,7 @@ def test_compute_inputs_close_experiment_inputs_before_logical_verification() ->
         )
 
     compiled = compile_invocation(
-        experiment(
+        experiment.build(
             qubit="q0",
             pulse_length=Quantity(value=20.0, unit="ns"),
         )
@@ -547,7 +547,7 @@ def test_bound_entity_input_can_select_a_default_parameter_lookup_center() -> No
         )
         experiment.alias(signal)
 
-    resolved = bind_invocation(experiment(qubit="q0"), config_profile=config)
+    resolved = bind_invocation(experiment.build(qubit="q0"), config_profile=config)
     preview = materialized_effects_contract(
         resolved,
         resolved.environment.parameters,
@@ -630,7 +630,7 @@ def test_elaboration_invocation_expressions_bind_local_inputs() -> None:
             )
         )
 
-    assembly = compile_invocation(experiment()).program.program
+    assembly = compile_invocation(experiment.build()).program.program
 
     assert "drive_frequency" not in assembly.inputs
     assert _logical_binding_expression(assembly, 0) == param(
@@ -688,7 +688,7 @@ def test_elaboration_defers_nested_expression_and_literal_bindings() -> None:
             )
         )
 
-    assembly = compile_invocation(experiment()).program.program
+    assembly = compile_invocation(experiment.build()).program.program
 
     expression = _logical_binding_expression(assembly, 0)
     assert evaluate_scalar(expression, EvalContext()) == 1.75
@@ -909,7 +909,7 @@ def test_experiment_invocation_runs_composed_modules_directly() -> None:
         experiment.alias(signal)
 
     resolved = bind_invocation(
-        experiment().with_axis(
+        experiment.build().with_axis(
             sc.axis(
                 DRIVE_FREQUENCY_POINT,
                 center=sc.parameter("drive_frequency", _QUANTITY_VALUE),
@@ -1016,7 +1016,7 @@ def test_resource_port_can_select_by_fixed_entity_input() -> None:
         )
 
     resolved = bind_invocation(
-        experiment(qubit="q1"),
+        experiment.build(qubit="q1"),
         config_profile=config,
     )
 
@@ -1047,7 +1047,7 @@ def test_explicit_config_binds_experiment() -> None:
     def experiment(experiment: sc.ExperimentContext) -> None:
         experiment.use(module())
 
-    resolved = bind_invocation(experiment(), config_profile=config)
+    resolved = bind_invocation(experiment.build(), config_profile=config)
     preview = materialized_effects_contract(
         resolved,
         resolved.environment.parameters,

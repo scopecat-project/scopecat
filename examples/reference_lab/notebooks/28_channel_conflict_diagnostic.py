@@ -13,7 +13,7 @@ from reference_lab.workflows.ramsey_experiments import conflicting_drive
 # %%
 try:
     with sc.open_project(EXAMPLE_ROOT).connect(operator="gallery") as lab:
-        lab.preview(conflicting_drive())
+        lab.preview(conflicting_drive.build())
 except PulseValidationError as error:
     conflict_codes = [issue.code for issue in error.issues]
     conflict_messages = [issue.message for issue in error.issues]

@@ -12,7 +12,9 @@ from reference_lab.workflows.temperature_diagnostic import temperature_diagnosti
 # %%
 project = sc.open_project(EXAMPLE_ROOT)
 with project.connect(operator="gallery") as first_session:
-    run = first_session.run(temperature_diagnostic(), name="Session lifetime sample")
+    run = first_session.run(
+        temperature_diagnostic.build(), name="Session lifetime sample"
+    )
     snapshot = run.snapshot
     retained_records = run.measurements().records
     lazy_measurements = run.measurements()

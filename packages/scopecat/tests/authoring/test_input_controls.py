@@ -31,8 +31,8 @@ def test_signature_defaults_and_coordinate_bind_have_one_source() -> None:
     declaration = AuthorExperiment.from_declaration(probe)
     assert declaration.entry.controls[0].default == sc.Quantity(5, "GHz")
     assert declaration.entry.request.properties == {}
-    original = probe()
-    changed = probe(frequency=sc.Quantity(5200, "MHz"), gain=1.5)
+    original = probe.build()
+    changed = probe.build(frequency=sc.Quantity(5200, "MHz"), gain=1.5)
     request = compile_invocation(changed).request
     assert set(request.inputs) == {"gain"}
     assert request.inputs["gain"] == 1.5
@@ -44,9 +44,9 @@ def test_signature_defaults_and_coordinate_bind_have_one_source() -> None:
     assert changed_source.values == (sc.Quantity(5.2, "GHz"),)
     assert original_source.values == (sc.Quantity(5, "GHz"),)
     assert isinstance(changed.output[0], sc.CoordinateRef)
-    assert probe.request().values == {"frequency": sc.Quantity(5, "GHz"), "gain": 1.0}
+    assert probe().values == {"frequency": sc.Quantity(5, "GHz"), "gain": 1.0}
     with pytest.raises(ValueError, match="at most"):
-        probe(frequency=sc.Quantity(7, "GHz"))
+        probe.build(frequency=sc.Quantity(7, "GHz"))
 
 
 def test_required_control_is_discoverable_and_can_be_supplied_as_a_scan() -> None:

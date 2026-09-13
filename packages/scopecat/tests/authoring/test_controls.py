@@ -56,7 +56,7 @@ def controlled(
 
 def test_scalar_axis_replacement_has_one_source_and_preserves_explicit_scan() -> None:
     config = load_config()
-    original = controlled()
+    original = controlled.build()
     scalar = CONTROLS.apply(
         original, config=config, edits={"frequency": sc.Quantity(5200, "MHz")}
     )
@@ -80,7 +80,7 @@ def test_scalar_axis_replacement_has_one_source_and_preserves_explicit_scan() ->
 def test_project_validation_cannot_be_bypassed_by_direct_axis_edit() -> None:
     config = load_config()
     unsafe = (
-        controlled()
+        controlled.build()
         .with_axis(sc.axis(FREQUENCY.ref, [sc.Quantity(5.8, "GHz")]))
         .with_axis(sc.axis(AMPLITUDE.ref, [sc.Quantity(0.3, "V")]))
     )
@@ -92,9 +92,9 @@ def test_project_validation_cannot_be_bypassed_by_direct_axis_edit() -> None:
     with pytest.raises(ValueError, match="project limit"):
         CONTROLS.apply(unsafe, config=config)
     with pytest.raises(ValueError, match="unknown control"):
-        CONTROLS.apply(controlled(), config=config, edits={"missing": 1.0})
+        CONTROLS.apply(controlled.build(), config=config, edits={"missing": 1.0})
     with pytest.raises(ValueError, match="needs a scalar/default"):
-        CONTROLS.apply(controlled().without_axis(FREQUENCY.ref), config=config)
+        CONTROLS.apply(controlled.build().without_axis(FREQUENCY.ref), config=config)
 
 
 def test_control_scalar_input_type_cannot_disagree_with_declaration() -> None:
@@ -198,7 +198,7 @@ def test_owned_preview_rejects_invalid_resolved_value(resolved: sc.Quantity) -> 
         return None
 
     with pytest.raises((ValueError, TypeError)):
-        control_values(controls, owned(), config=load_config())
+        control_values(controls, owned.build(), config=load_config())
 
 
 def test_control_range_must_fit_its_declared_input_type() -> None:

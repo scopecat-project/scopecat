@@ -201,7 +201,7 @@ def test_structural_domain_call_captures_external_values_once() -> None:
     def experiment(context: sc.ExperimentContext) -> None:
         context.alias(context.use(invocation))
 
-    compile_invocation(experiment())
+    compile_invocation(experiment.build())
 
 
 def test_domain_call_result_preserves_its_complete_product_schema() -> None:
@@ -332,7 +332,7 @@ def test_table_module_input_reaches_domain_batch_through_nested_forwarding() -> 
         experiment.use(root(sc.input_ref(rows)))
 
     bound = bind_invocation(
-        experiment(rows=[{"id": 1, "gain": 0.5}, {"id": 2, "gain": 0.75}]),
+        experiment.build(rows=[{"id": 1, "gain": 0.5}, {"id": 2, "gain": 0.75}]),
         config_profile=load_config(),
     )
 
@@ -553,7 +553,7 @@ def test_experiment_domain_execution_lowers_plan_inputs_and_composed_product_use
         experiment.alias(selected_product, record_id="counts_second")
 
     resolved = bind_invocation(
-        experiment(),
+        experiment.build(),
         config_profile=load_config(),
     )
     typed = resolved.bindings

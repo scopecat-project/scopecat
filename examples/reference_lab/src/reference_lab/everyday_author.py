@@ -51,9 +51,13 @@ def acquire_everyday_author_inputs(lab: LabClient) -> EverydayAuthorRuns:
     config = everyday_author_inputs().known
     return EverydayAuthorRuns(
         peaked=lab.run(
-            exploratory_signal(gain=1.0), config=config, name="Author fixture: peak"
+            exploratory_signal.build(gain=1.0),
+            config=config,
+            name="Author fixture: peak",
         ).id,
         flat=lab.run(
-            exploratory_signal(gain=0.0), config=config, name="Author fixture: flat"
+            exploratory_signal.build(gain=0.0),
+            config=config,
+            name="Author fixture: flat",
         ).id,
     )

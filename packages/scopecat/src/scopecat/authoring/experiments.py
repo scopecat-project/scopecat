@@ -1,4 +1,4 @@
-"""Callable Python UX for immutable experiment invocations."""
+"""Callable experiment requests and explicit immutable program construction."""
 
 from __future__ import annotations
 
@@ -93,7 +93,7 @@ class Experiment(Generic[_P, _ExperimentResultT_co]):
     def __signature__(self) -> inspect.Signature:
         return self._signature
 
-    def __call__(
+    def build(
         self,
         *args: _P.args,
         **kwargs: _P.kwargs,
@@ -103,7 +103,7 @@ class Experiment(Generic[_P, _ExperimentResultT_co]):
         bound = self._signature.bind(*args, **kwargs)
         return self._builder(cast("Mapping[str, object]", bound.arguments))
 
-    def request(
+    def __call__(
         self,
         *args: _P.args,
         **kwargs: _P.kwargs,

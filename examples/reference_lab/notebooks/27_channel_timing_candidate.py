@@ -13,7 +13,7 @@ from reference_lab.workflows.ramsey_experiments import parallel_two_qubit_ramsey
 # %%
 with sc.open_project(EXAMPLE_ROOT).connect(operator="gallery") as lab:
     source_run = lab.run(
-        parallel_two_qubit_ramsey(),
+        parallel_two_qubit_ramsey.build(),
         name="Channel timing source",
         tags=("gallery", "channel-calibration"),
     )
@@ -33,7 +33,7 @@ with sc.open_project(EXAMPLE_ROOT).connect(operator="gallery") as lab:
     published = analysis.save()
     candidate = published.candidate_config()
     candidate_run = lab.run(
-        parallel_two_qubit_ramsey(),
+        parallel_two_qubit_ramsey.build(),
         config=candidate,
         name="Channel timing candidate check",
         tags=("gallery", "channel-calibration", "candidate"),

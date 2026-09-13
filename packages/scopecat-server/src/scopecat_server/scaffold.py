@@ -190,7 +190,7 @@ def first_run(experiment: sc.ExperimentContext) -> TemperatureSampleProducts:
 # %%
 project = sc.open_project(PROJECT_ROOT)
 with project.connect() as lab:
-    run = lab.run(first_run(), name="First run")
+    run = lab.run(first_run.build(), name="First run")
     summary = {"run_id": run.id, "status": run.status}
 
 print(summary)

@@ -11,7 +11,7 @@ from reference_lab.workflows.ramsey_experiments import q0_ramsey
 
 # %%
 with sc.open_project(EXAMPLE_ROOT).connect(operator="gallery") as lab:
-    invocation = q0_ramsey()
+    invocation = q0_ramsey.build()
     preview = lab.preview(invocation)
     run = lab.run(invocation, name="q0 Ramsey", tags=("gallery", "ramsey", "q0"))
     data = run.measurements()

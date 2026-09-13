@@ -52,7 +52,7 @@ def _resolve(
             experiment.grid(scan)
 
     bind_invocation(
-        experiment_definition(),
+        experiment_definition.build(),
         config_profile=load_config(),
     )
 
@@ -121,7 +121,7 @@ def test_nested_module_preserves_bound_point_dependency() -> None:
         experiment.use(parent(parent_frequency))
         experiment.grid(sc.axis(parent_frequency, (5.0,), unit="GHz"))
 
-    assembly = compile_invocation(experiment()).program.program
+    assembly = compile_invocation(experiment.build()).program.program
     assert tuple(
         (dependency.id, dependency.value_type)
         for dependency in assembly.point_dependencies

@@ -347,7 +347,7 @@ def test_editable_request_rebuilds_and_reuses_saved_plan(
     fixture = reference_lab_daemon
     assert fixture.application.authors is not None
     declaration = fixture.application.authors.get("copied_signal").declaration
-    request = declaration.request(gain=1.0)
+    request = declaration(gain=1.0)
     request.values["gain"] = 2.0
     frequencies = np.array([4.7, 4.8, 4.9])
     request.values["frequency"] = sc.Scan(
@@ -400,7 +400,7 @@ def test_imported_request_rejects_changed_declaration_but_can_select_old_revisio
     fixture = reference_lab_daemon
     assert fixture.application.authors is not None
     declaration = fixture.application.authors.get("copied_signal").declaration
-    request = declaration.request(gain=1.0)
+    request = declaration(gain=1.0)
     path = fixture.root / "src/reference_lab/workflows/authored/signal.py"
     with AuthorProject(fixture.url) as author:
         original = author.prepare(request)

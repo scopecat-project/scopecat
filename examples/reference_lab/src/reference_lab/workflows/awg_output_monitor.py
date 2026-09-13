@@ -190,7 +190,7 @@ def awg_output_monitor(
     )
 
 
-AWG_OUTPUT_MONITOR = awg_output_monitor()
+AWG_OUTPUT_MONITOR = awg_output_monitor.build()
 
 
 __all__ = [

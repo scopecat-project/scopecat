@@ -100,7 +100,7 @@ def multichannel_dc_bias(
     )
 
 
-MULTICHANNEL_DC_BIAS = multichannel_dc_bias()
+MULTICHANNEL_DC_BIAS = multichannel_dc_bias.build()
 
 
 __all__ = [

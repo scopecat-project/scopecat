@@ -18,7 +18,7 @@ program_tree = topology_scaled_ramsey_program.draw()
 # %%
 with sc.open_project(EXAMPLE_ROOT).connect(operator="gallery") as lab:
     preview = lab.preview(
-        topology_scaled_ramsey(),
+        topology_scaled_ramsey.build(),
         inspection_query=CompiledProgramInspectionQuery(
             layer_id="physical",
             limit=8,

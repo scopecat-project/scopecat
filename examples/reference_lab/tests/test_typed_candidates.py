@@ -165,7 +165,7 @@ def test_typed_candidates_retain_cells_and_independent_policy(
                     replace(rejected, value=replace(rejected.value, accepted=True))
                 )
             wrong_point_run = lab.run(
-                exploratory_signal(),
+                exploratory_signal.build(),
                 config=candidate.config,
                 sample=SampleSelector(
                     sample_id=sample.id, context_id="different-point"

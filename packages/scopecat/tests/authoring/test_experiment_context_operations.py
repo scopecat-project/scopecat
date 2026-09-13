@@ -114,7 +114,7 @@ def test_experiment_authors_root_device_operations_without_a_module() -> None:
             _DeviceTarget(level=0.0, enabled=False),
         )
 
-    invocation = direct()
+    invocation = direct.build()
     root_resources = invocation.definition.interface.resources
     assert [port.qualified_id for port in root_resources] == ["device"]
 
@@ -167,7 +167,7 @@ def test_experiment_supports_direct_root_authoring() -> None:
         )
         experiment.alias(signal)
 
-    program = compile_invocation(direct()).program.program
+    program = compile_invocation(direct.build()).program.program
 
     assert [port.id for port in program.resource_ports] == ["device"]
     assert [product.qualified_id for product in program.product_declarations] == [
@@ -207,7 +207,7 @@ def test_public_capability_resources_support_lab_owned_group_composition() -> No
             ),
         )
 
-    invocation = direct()
+    invocation = direct.build()
     assert [
         port.selector.capabilities for port in invocation.definition.interface.resources
     ] == [
@@ -247,7 +247,7 @@ def test_public_capability_resource_supports_lab_owned_acquisition() -> None:
         monitor.acquire({_DEVICE_SIGNAL: signal})
         experiment.alias(signal)
 
-    logical = compile_invocation(direct()).program.program
+    logical = compile_invocation(direct.build()).program.program
 
     [acquisition] = logical.acquisitions
     assert acquisition.resource_port_id.local_id == "monitor"
@@ -265,7 +265,7 @@ def test_public_capability_resource_supports_exact_operation_requirement() -> No
         )
         device.invoke(_DEVICE_TRIGGER)
 
-    invocation = direct()
+    invocation = direct.build()
     [port] = invocation.definition.interface.resources
     assert port.selector.capabilities == (_DEVICE_TRIGGER,)
 
@@ -284,7 +284,7 @@ def test_experiment_records_a_compute_result_as_a_named_dataset_value() -> None:
         )
         experiment.alias(score)
 
-    logical = compile_invocation(direct()).program.program
+    logical = compile_invocation(direct.build()).program.program
 
     assert logical.product_record_selections == ()
     [record] = logical.value_record_selections
@@ -320,7 +320,7 @@ def test_experiment_composes_and_records_array_compute_results() -> None:
         experiment.alias(peak)
         assert trace_record.dims == ("point", "sample")
 
-    logical = compile_invocation(direct()).program.program
+    logical = compile_invocation(direct.build()).program.program
 
     assert [node.id.local_id for node in logical.compute_nodes] == ["trace", "peak"]
     assert logical.compute_nodes[1].inputs[0][1] == logical.compute_nodes[0].result_id
@@ -346,7 +346,7 @@ def test_experiment_derives_record_id_from_module_source_identity() -> None:
         experiment.alias(score)
         experiment.alias(trace)
 
-    logical = compile_invocation(direct()).program.program
+    logical = compile_invocation(direct.build()).program.program
 
     [record] = logical.value_record_selections
     [trace] = logical.product_record_selections
@@ -367,7 +367,7 @@ def test_value_record_namespaces_preserve_segment_identity() -> None:
         experiment.alias(score, namespace="analysis%2Fdaily")
         experiment.alias(score, namespace="analysis/daily")
 
-    logical = compile_invocation(direct()).program.program
+    logical = compile_invocation(direct.build()).program.program
 
     assert [record.id for record in logical.value_record_selections] == [
         "analysis%2Fdaily/score",

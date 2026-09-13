@@ -1855,7 +1855,7 @@ def _scopecat_invocation(scenario: ScanScenario) -> sc.ExperimentInvocation:
             )
         experiment.alias(probabilities.probability_1)
 
-    return benchmark_scan()
+    return benchmark_scan.build()
 
 
 def _capture_scaled_quantum_program(

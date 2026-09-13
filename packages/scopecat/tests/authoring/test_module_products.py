@@ -198,7 +198,7 @@ def test_selected_product_lowers_schema_and_acquisition_metadata_independently(
         experiment.alias(call.result)
 
     resolved = bind_invocation(
-        experiment_definition(),
+        experiment_definition.build(),
         config_profile=load_config(),
     )
 
@@ -236,7 +236,7 @@ def test_product_axes_use_product_local_dimensions_by_default() -> None:
         experiment.use(call)
 
     resolved = bind_invocation(
-        experiment_definition(),
+        experiment_definition.build(),
         config_profile=load_config(),
     )
 
@@ -280,7 +280,7 @@ def test_product_axes_share_dimensions_only_when_explicit() -> None:
         experiment.use(call)
 
     resolved = bind_invocation(
-        experiment_definition(),
+        experiment_definition.build(),
         config_profile=load_config(),
     )
 
@@ -320,7 +320,7 @@ def test_categorical_product_axis_lowers_to_its_label_count() -> None:
         experiment.use(call)
 
     resolved = bind_invocation(
-        experiment_definition(),
+        experiment_definition.build(),
         config_profile=load_config(),
     )
 
@@ -343,7 +343,7 @@ def test_variable_product_axis_lowers_without_inventing_a_fixed_extent() -> None
         experiment.use(module())
 
     resolved = bind_invocation(
-        experiment_definition(),
+        experiment_definition.build(),
         config_profile=load_config(),
     )
 
@@ -403,7 +403,7 @@ def test_conflicting_explicitly_shared_product_axes_are_rejected() -> None:
         experiment.use(call)
 
     with pytest.raises(CheckFailed) as error:
-        compile_invocation(experiment_definition())
+        compile_invocation(experiment_definition.build())
 
     assert [problem.code for problem in error.value.problems] == [
         "product_axis_conflict"
@@ -496,7 +496,7 @@ def test_multi_product_result_mapping_lowers_from_public_authoring_api(
         experiment.alias(call.result.default)
 
     resolved = bind_invocation(
-        experiment_definition(),
+        experiment_definition.build(),
         config_profile=load_config(),
     )
 
@@ -618,7 +618,7 @@ def test_explicit_instances_select_same_named_products_independently(
         )
 
     resolved = bind_invocation(
-        experiment_definition(),
+        experiment_definition.build(),
         config_profile=load_config(),
     )
 
@@ -706,7 +706,7 @@ def test_nested_product_references_receive_each_parent_instance_prefix(
         )
 
     resolved = bind_invocation(
-        experiment_definition(),
+        experiment_definition.build(),
         config_profile=load_config(),
     )
 
@@ -759,7 +759,7 @@ def test_repeated_product_selection_creates_distinct_use_occurrences(
         )
 
     resolved = bind_invocation(
-        experiment_definition(),
+        experiment_definition.build(),
         config_profile=load_config(),
     )
 
@@ -802,7 +802,7 @@ def test_product_refs_are_nominally_owned_by_the_selected_instance() -> None:
     )
 
     with pytest.raises(CheckFailed) as error:
-        compile_invocation(experiment())
+        compile_invocation(experiment.build())
 
     assert [problem.code for problem in error.value.problems] == [
         "module_product_foreign_instance"

@@ -59,7 +59,7 @@ def test_typed_each_resources_route_to_different_instruments() -> None:
     )
     assert record_ids == ("s_parameter",)
 
-    bound = bind_invocation(experiment(points=3), config_profile=config)
+    bound = bind_invocation(experiment.build(points=3), config_profile=config)
     assert tuple(record.id for record in bound.bindings.product_record_uses) == (
         "frequency",
         "s_parameter",
@@ -123,7 +123,7 @@ def test_resource_roles_route_one_entity_to_two_equivalent_instruments() -> None
         context.alias(drive.sweep())
         context.alias(readout.sweep())
 
-    invocation = experiment()
+    invocation = experiment.build()
     assert [
         port.selector.role.role_id for port in invocation.definition.interface.resources
     ] == ["drive", "readout"]

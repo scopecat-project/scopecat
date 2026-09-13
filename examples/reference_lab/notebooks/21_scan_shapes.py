@@ -12,7 +12,7 @@ from reference_lab.workflows.flux_spectroscopy import flux_spectroscopy
 
 # %%
 with sc.open_project(EXAMPLE_ROOT).connect(operator="gallery") as lab:
-    flux = flux_spectroscopy()
+    flux = flux_spectroscopy.build()
     sparse_flux = flux.points(
         (
             {flux.output.dc_bias: sc.Quantity(-0.20, "V")},
@@ -28,7 +28,7 @@ with sc.open_project(EXAMPLE_ROOT).connect(operator="gallery") as lab:
         tags=("gallery", "point-cloud"),
     )
 
-    drag = drag_beta_experiment()
+    drag = drag_beta_experiment.build()
     repeated_snake = (
         drag.grid(
             sc.axis(

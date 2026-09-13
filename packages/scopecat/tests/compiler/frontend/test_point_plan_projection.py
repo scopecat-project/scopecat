@@ -43,7 +43,7 @@ def test_compile_projects_the_base_grid_and_composes_the_expanded_plan() -> None
             traversal="snake",
         )
 
-    compiled = compile_invocation(repeated())
+    compiled = compile_invocation(repeated.build())
     request_plan = compiled.request.point_plan
     program = compiled.program.program
 
@@ -70,7 +70,7 @@ def test_inferred_scan_declares_paired_execution_rows() -> None:
             varying=(prepared_state,),
         )
 
-    compiled = compile_invocation(paired())
+    compiled = compile_invocation(paired.build())
 
     grouping = compiled.request.point_plan.schedule.grouping
     assert grouping is not None
@@ -98,7 +98,7 @@ def test_point_grouping_is_independent_of_explicit_grid_declaration_order() -> N
         experiment.group_points("x-comparison", varying=(x,))
         experiment.grid(sc.axis(x, (0, 1)))
 
-    compiled = compile_invocation(blocked())
+    compiled = compile_invocation(blocked.build())
 
     assert compiled.request.point_plan.schedule.grouping is not None
     assert compiled.request.point_plan.schedule.grouping.id == "x-comparison"
@@ -112,7 +112,7 @@ def test_point_grouping_rejects_a_coordinate_outside_the_point_domain() -> None:
     def grouped(experiment: sc.ExperimentContext) -> None:
         experiment.grid(sc.axis(x, (0, 1)))
 
-    invocation = grouped().with_point_grouping(
+    invocation = grouped.build().with_point_grouping(
         "invalid-comparison",
         varying=(missing,),
     )
@@ -134,7 +134,7 @@ def test_compile_records_adaptive_policy_without_serializing_optimizer() -> None
 
     optimizer = _Optimizer()
     compiled = compile_invocation(
-        adaptive_grid().adaptive(optimizer, max_points=8, axes=(x,))
+        adaptive_grid.build().adaptive(optimizer, max_points=8, axes=(x,))
     )
 
     assert compiled.adaptive_domain_plan is not None
@@ -153,7 +153,7 @@ def test_adaptive_point_domain_rejects_recovery_grouping_until_supported() -> No
     def adaptive_grid(experiment: sc.ExperimentContext) -> None:
         experiment.grid(sc.axis(x, (0, 1)))
 
-    invocation = adaptive_grid().with_point_grouping(
+    invocation = adaptive_grid.build().with_point_grouping(
         "adaptive-comparison",
         varying=(x,),
     )
@@ -177,7 +177,7 @@ def test_compile_expands_point_repeat_within_each_point_cloud_row() -> None:
             repeat_mode="point",
         )
 
-    compiled = compile_invocation(repeated())
+    compiled = compile_invocation(repeated.build())
     request_plan = compiled.request.point_plan
     program = compiled.program.program
 
@@ -198,7 +198,7 @@ def test_synthetic_repeat_satisfies_an_authored_point_dependency() -> None:
         experiment.grid(repeat=2)
         experiment.alias(repeat, record_id="observed_repeat")
 
-    compiled = compile_invocation(repeated())
+    compiled = compile_invocation(repeated.build())
     request_domain = compiled.request.point_plan.domain
     program = compiled.program.program
 

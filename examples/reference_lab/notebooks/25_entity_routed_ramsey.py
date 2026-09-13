@@ -11,7 +11,7 @@ from reference_lab.workflows.ramsey_experiments import entity_routed_ramsey
 
 # %%
 with sc.open_project(EXAMPLE_ROOT).connect(operator="gallery") as lab:
-    invocation = entity_routed_ramsey()
+    invocation = entity_routed_ramsey.build()
     preview = lab.preview(invocation)
     run = lab.run(
         invocation,

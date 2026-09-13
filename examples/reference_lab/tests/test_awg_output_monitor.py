@@ -158,7 +158,7 @@ def test_monitor_and_quantum_target_claim_the_same_physical_awg() -> None:
             build_config_environment(config),
         ),
     )
-    quantum_compiled = compile_invocation(drag_beta_experiment())
+    quantum_compiled = compile_invocation(drag_beta_experiment.build())
     quantum_plan = compile_run_program(
         composition.system,
         bound=bind_program(

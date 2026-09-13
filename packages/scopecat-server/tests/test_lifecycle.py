@@ -72,7 +72,7 @@ def test_init_creates_runnable_python_project_and_does_not_overwrite(
     assert notebook.is_file()
     notebook_source = notebook.read_text(encoding="utf-8")
     assert "quantum_lab_demo" not in notebook_source
-    assert 'lab.run(first_run(), name="First run")' in notebook_source
+    assert 'lab.run(first_run.build(), name="First run")' in notebook_source
     assert "lab.prepare(" not in notebook_source
 
     bootstrap = project.load_bootstrap()

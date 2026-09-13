@@ -129,7 +129,7 @@ def test_explicit_instances_own_independent_resource_ports() -> None:
         experiment.use(call)
 
     resolved = bind_invocation(
-        experiment_definition(),
+        experiment_definition.build(),
         config_profile=load_config(),
     )
     assert [
@@ -303,7 +303,7 @@ def test_hierarchical_effects_keep_source_order_and_duplicate_occurrences() -> N
     def experiment(experiment: sc.ExperimentContext) -> None:
         experiment.use(module.instantiate("root"))
 
-    bound = bind_invocation(experiment(), config_profile=load_config())
+    bound = bind_invocation(experiment.build(), config_profile=load_config())
     assert [
         "binding"
         if isinstance(effect, LogicalStateAssignment)
@@ -469,7 +469,7 @@ def test_state_binding_keeps_interface_and_property_ids_structured() -> None:
         experiment.use(call)
 
     resolved = bind_invocation(
-        experiment_definition(),
+        experiment_definition.build(),
         config_profile=config_with_physical_resources(
             {"source-0": ("test.set_offset/v1",)}
         ),

@@ -374,7 +374,7 @@ selected = ConfigContextRef(
     content_hash=copy.entry.content_hash,
 )
 resolved = lab.config.resolve_context(selected)
-prepared = lab.prepare(my_experiment(), config=resolved)
+prepared = lab.prepare(my_experiment.build(), config=resolved)
 prepared.preview()
 run = prepared.run()
 ```

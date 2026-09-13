@@ -23,7 +23,7 @@ class _ArrowRecordBatch(Protocol):
 
 # %%
 with sc.open_project(EXAMPLE_ROOT).connect(operator="gallery") as lab:
-    invocation = flux_spectroscopy()
+    invocation = flux_spectroscopy.build()
     compact = invocation.with_axis(
         sc.axis(
             invocation.output.dc_bias,

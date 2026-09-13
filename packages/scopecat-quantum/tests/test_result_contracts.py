@@ -197,7 +197,7 @@ def test_bounded_result_dimensions_cross_authoring_target_and_result_mapping() -
     def experiment(context: sc.ExperimentContext) -> None:
         context.alias(context.use(call).trace)
 
-    compiled = compile_invocation(experiment())
+    compiled = compile_invocation(experiment.build())
     bound = bind_program(
         compiled.program,
         build_config_environment(_config_with_two_qubits()),

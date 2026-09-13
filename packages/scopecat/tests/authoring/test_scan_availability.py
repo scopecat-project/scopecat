@@ -48,7 +48,7 @@ def test_default_scan_center_rejects_external_operation() -> None:
     )
 
     with pytest.raises(CheckFailed) as error:
-        resolution.compile_invocation(experiment())
+        resolution.compile_invocation(experiment.build())
 
     problem = error.value.problems[0]
     assert problem.code == "value_requires_execution"
@@ -80,7 +80,7 @@ def test_invocation_scan_center_rejects_external_operation() -> None:
     def experiment_definition(experiment: sc.ExperimentContext) -> None:
         experiment.use(call)
 
-    invocation = experiment_definition().with_axis(
+    invocation = experiment_definition.build().with_axis(
         sc.axis(
             target,
             center=center,
@@ -121,7 +121,7 @@ def test_scan_center_accepts_module_result_resolved_to_literal_input() -> None:
             )
         )
 
-    compiled = resolution.compile_invocation(experiment_definition())
+    compiled = resolution.compile_invocation(experiment_definition.build())
 
     domain = compiled.request.point_plan.domain
     assert isinstance(domain, GridDomainRecord)

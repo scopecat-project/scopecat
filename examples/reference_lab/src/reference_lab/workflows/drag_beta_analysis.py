@@ -273,7 +273,7 @@ def drag_beta_observation_frame(
 ) -> pl.DataFrame:
     """Project one DRAG run into the canonical comparison columns."""
 
-    schema = drag_beta_experiment(qubit).output
+    schema = drag_beta_experiment.build(qubit).output
     frame = (
         dataset.bind(schema)
         .project(

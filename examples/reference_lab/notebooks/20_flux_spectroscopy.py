@@ -24,7 +24,7 @@ with sc.open_project(PROJECT_ROOT).connect(operator="notebook-demo") as lab:
         flux_spectroscopy_fit_review,
     )
 
-    invocation = flux_spectroscopy()
+    invocation = flux_spectroscopy.build()
     preview = lab.preview(invocation)
     run = lab.run(
         invocation,

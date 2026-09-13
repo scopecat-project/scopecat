@@ -414,7 +414,7 @@ def test_program_call_owns_domain_effect_shots_and_named_products() -> None:
         results = context.use(call)
         context.alias(results.iq_shots)
 
-    invocation = experiment()
+    invocation = experiment.build()
     [selection] = invocation.definition.record_selections
     assert isinstance(selection, RecordSelection)
     assert selection.product_id.qualified_name == "call/iq_shots"
@@ -451,7 +451,7 @@ def test_program_results_share_one_explicit_shot_dimension() -> None:
         context.use(call)
         return call.entity_results()
 
-    compiled = compile_invocation(experiment())
+    compiled = compile_invocation(experiment.build())
     bound = bind_program(
         compiled.program,
         build_config_environment(
@@ -562,7 +562,7 @@ def test_qubit_set_retains_parallel_authoring_and_owns_entity_axis_result() -> N
         results = context.use(call)
         context.alias(results.iq_shots)
 
-    compiled = compile_invocation(experiment())
+    compiled = compile_invocation(experiment.build())
     config = load_config_snapshot_document(
         _REPO_ROOT / "fixtures" / "core" / "simple_scan" / "config-snapshot.json"
     )
@@ -610,7 +610,7 @@ def test_qubit_set_can_resolve_a_topology_selection_intent() -> None:
     def experiment(context: sc.ExperimentContext) -> None:
         context.alias(context.use(call).iq_shots)
 
-    compiled = compile_invocation(experiment())
+    compiled = compile_invocation(experiment.build())
     config = load_config_snapshot_document(
         _REPO_ROOT / "fixtures" / "core" / "simple_scan" / "config-snapshot.json"
     )
@@ -730,7 +730,7 @@ def test_pair_set_can_resolve_a_topology_matching_intent() -> None:
     def experiment(context: sc.ExperimentContext) -> None:
         context.use(call)
 
-    compiled = compile_invocation(experiment())
+    compiled = compile_invocation(experiment.build())
     config = load_config_snapshot_document(
         _REPO_ROOT / "fixtures" / "core" / "simple_scan" / "config-snapshot.json"
     )
@@ -844,7 +844,7 @@ def test_repeated_program_calls_require_explicit_instances() -> None:
             context.use(declaration("q0").with_shots(8))
             context.use(declaration("q0").with_shots(8))
 
-        repeated_defaults()
+        repeated_defaults.build()
 
     left = declaration.call("left", "q0").with_shots(8)
     right = declaration.call("right", "q0").with_shots(8)
@@ -854,7 +854,7 @@ def test_repeated_program_calls_require_explicit_instances() -> None:
         context.use(left)
         context.use(right)
 
-    compile_invocation(repeated_explicit())
+    compile_invocation(repeated_explicit.build())
     assert left.results.iq.id == "left/iq"
     assert right.results.iq.id == "right/iq"
 
@@ -914,7 +914,7 @@ def test_bounded_control_compiles_into_shared_typed_program(scannable: bool) -> 
         def scanned(context: sc.ExperimentContext) -> None:
             context.use(timed_delay("q0", duration.ref))
 
-        invocation = scanned().with_axis(
+        invocation = scanned.build().with_axis(
             sc.axis(duration.ref, [sc.Quantity(4, "ns"), sc.Quantity(1000, "ns")])
         )
     else:

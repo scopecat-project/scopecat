@@ -82,7 +82,7 @@ def spectrum(experiment: sc.ExperimentContext) -> Spectrum:
 The same logical handles select variables from the completed dataset:
 
 ```python
-result = run.result(spectrum().output)
+result = run.result(spectrum.build().output)
 trace = result.dataset.traces(result.output.trace.s_parameter)
 ```
 
@@ -325,7 +325,7 @@ Invocation edits are immutable and orthogonal:
 
 ```python
 edited = (
-    spectroscopy()
+    spectroscopy.build()
     .bind(sample="q0")
     .with_axis(sc.axis(power, (-35.0, -30.0, -25.0), unit="dBm"))
     .without_axis(bias)
@@ -371,7 +371,7 @@ class Optimizer:
         )
 
 
-adaptive = spectroscopy().adaptive(Optimizer(), max_points=32)
+adaptive = spectroscopy.build().adaptive(Optimizer(), max_points=32)
 ```
 
 The authored points form the initial prefix. By default every coordinate is
@@ -633,7 +633,7 @@ parameter proposals.
 `lab.preview(...)` exposes the compiler's decision without leaking compiler IR:
 
 ```python
-preview = lab.preview(spectrum())
+preview = lab.preview(spectrum.build())
 for compute in preview.computes:
     print(
         compute.id,

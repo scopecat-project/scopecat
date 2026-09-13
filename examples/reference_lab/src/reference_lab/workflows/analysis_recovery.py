@@ -31,7 +31,9 @@ def temperature_summary(context: sc.AnalysisContext, *, fail: bool) -> sc.Analys
 def failed_temperature_analysis(
     context: LabProcedureContext, intent: TemperatureDiagnosticIntent
 ) -> None:
-    run = context.run("sample", temperature_diagnostic(), config=intent.initial_config)
+    run = context.run(
+        "sample", temperature_diagnostic.build(), config=intent.initial_config
+    )
     context.analyze_run("summary", run, temperature_summary(fail=True))
 
 

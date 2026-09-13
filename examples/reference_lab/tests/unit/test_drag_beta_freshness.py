@@ -48,7 +48,7 @@ def test_drag_beta_freshness_ignores_registry_only_provenance_changes() -> None:
         target,
     )
 
-    assert DRAG_BETA_CALIBRATION_VERSION == "7"
+    assert DRAG_BETA_CALIBRATION_VERSION == "8"
     assert first_observation.inputs == drag_beta_semantic_freshness_inputs(
         config,
         "q0",

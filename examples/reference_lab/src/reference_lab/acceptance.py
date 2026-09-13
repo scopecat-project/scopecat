@@ -142,7 +142,10 @@ def capture_acceptance_fixtures(
     controls_scan = _checked_launch_preview(client, scan_request)
     assert isinstance(controls_scan, LaunchPreview) and controls_scan.point_count == 6
     controlled = edit_controls(
-        CONTROLS, frequency_amplitude(), config=config, edits=scan_request.control_edits
+        CONTROLS,
+        frequency_amplitude.build(),
+        config=config,
+        edits=scan_request.control_edits,
     )
     controlled_run = lab.run(controlled, config=config)
     assert controlled_run.status == "completed"
@@ -167,13 +170,13 @@ def capture_acceptance_fixtures(
             2 * math.pi * (frequency.value - reference_value.value)
         )
         assert math.isclose(response.value, expected, rel_tol=1e-12, abs_tol=1e-12)
-    diagnostic_run = lab.run(temperature_diagnostic(), config=config)
+    diagnostic_run = lab.run(temperature_diagnostic.build(), config=config)
     assert diagnostic_run.status == "completed"
     assert lab.config.active() == active
     diagnostic = client.measurement_preview(diagnostic_run.id)
     assert diagnostic.items == diagnostic_run.measurements().records
 
-    coherent = coherent_ramsey()
+    coherent = coherent_ramsey.build()
     coherent_run = lab.run(coherent, config=config)
     assert coherent_run.status == "completed"
     coherent_data = coherent_run.measurements()
@@ -212,12 +215,12 @@ def capture_acceptance_fixtures(
 
     before = client.list_runs()
     with lab.review(
-        temperature_diagnostic(), config=config, name="Temperature diagnostic"
+        temperature_diagnostic.build(), config=config, name="Temperature diagnostic"
     ) as review:
         inspection = review.session
     assert client.list_runs() == before
 
-    invocation = parallel_raw_ramsey()
+    invocation = parallel_raw_ramsey.build()
     source = lab.run(invocation, config=config, name="Reference lab acceptance source")
     analysis = (
         source.analysis("Channel timing review")

@@ -73,7 +73,7 @@ def test_record_demand_retains_source_use_and_prunes_dead_compute(
         experiment.alias(result, record_id="first")
         experiment.alias(result, record_id="second")
 
-    resolved = bind_invocation(experiment(), config_profile=load_config())
+    resolved = bind_invocation(experiment.build(), config_profile=load_config())
     program = resolved.bindings
 
     first, middle, final = program.measurement_computes
@@ -142,7 +142,7 @@ def test_hidden_input_use_ids_are_stable_and_scoped(tmp_path: Path) -> None:
 
     def compile_input_use_ids() -> dict[str, str]:
         program = bind_invocation(
-            experiment(),
+            experiment.build(),
             config_profile=load_config(),
         ).bindings
         return {
@@ -196,7 +196,7 @@ def test_measurement_compute_mints_one_live_use_for_each_named_input() -> None:
         result = experiment.use(module())
         experiment.alias(result)
 
-    bound = bind_invocation(experiment(), config_profile=load_config())
+    bound = bind_invocation(experiment.build(), config_profile=load_config())
 
     [compute] = bound.bindings.measurement_computes
     assert [(item.id, item.product_id.qualified_name) for item in compute.inputs] == [
@@ -221,7 +221,7 @@ def test_recorded_product_requires_a_producer() -> None:
         experiment.alias(result)
 
     with pytest.raises(CheckFailed) as error:
-        bind_invocation(experiment(), config_profile=load_config())
+        bind_invocation(experiment.build(), config_profile=load_config())
 
     assert [problem.code for problem in error.value.problems] == [
         "product_acquire_missing"

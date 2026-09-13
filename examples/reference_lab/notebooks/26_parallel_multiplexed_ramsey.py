@@ -11,7 +11,7 @@ from reference_lab.workflows.ramsey_experiments import parallel_two_qubit_ramsey
 
 # %%
 with sc.open_project(EXAMPLE_ROOT).connect(operator="gallery") as lab:
-    invocation = parallel_two_qubit_ramsey()
+    invocation = parallel_two_qubit_ramsey.build()
     preview = lab.preview(invocation)
     run = lab.run(
         invocation,

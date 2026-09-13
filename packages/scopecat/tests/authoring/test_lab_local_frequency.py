@@ -71,7 +71,7 @@ def test_fixed_if_lo_scan_is_a_small_lab_local_authoring_policy() -> None:
             signed_if=sc.Quantity(-100, "MHz"),
         )
 
-    logical = compile_invocation(spectrum()).program.program
+    logical = compile_invocation(spectrum.build()).program.program
 
     assert captured is not None
     assert _evaluate(

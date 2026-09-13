@@ -43,4 +43,4 @@ class TemperatureDiagnosticIntent(BaseModel):
 def temperature_diagnostic_procedure(
     context: LabProcedureContext, intent: TemperatureDiagnosticIntent
 ) -> None:
-    context.run("sample", temperature_diagnostic(), config=intent.initial_config)
+    context.run("sample", temperature_diagnostic.build(), config=intent.initial_config)

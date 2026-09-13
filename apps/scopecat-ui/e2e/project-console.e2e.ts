@@ -105,7 +105,7 @@ with project.connect() as lab:
     original_start = client.start_executor
     original_ingest = client.ingest_measurements
     prepared = lab.prepare(
-        live_scan(),
+        live_scan.build(),
     )
 
     def gated_submit(submission):
@@ -212,7 +212,7 @@ with project.connect() as lab:
 
     client.start_executor = observed_start
     try:
-        prepared = lab.prepare(adaptive_scan().adaptive(GatedOptimizer(), max_points=5))
+        prepared = lab.prepare(adaptive_scan.build().adaptive(GatedOptimizer(), max_points=5))
         run = prepared.run(name="Adaptive operator queue E2E")
         summary = {"run_id": run.id, "status": run.status}
     finally:

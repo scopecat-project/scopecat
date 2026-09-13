@@ -91,7 +91,7 @@ def test_measurement_compute_materializes_parameter_table_inputs_per_point() -> 
         context.alias(context.use(module()), record_id="classified")
 
     bound = bind_invocation(
-        experiment(),
+        experiment.build(),
         config_profile=_config_with_classifier_rows(),
     )
     bound_points = prepare_bound_points(bound)

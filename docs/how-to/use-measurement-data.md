@@ -195,7 +195,7 @@ When code starts from the experiment's returned value, use the corresponding
 typed view:
 
 ```python
-result = run.result(spectrum().output)
+result = run.result(spectrum.build().output)
 complete = result.where_available(result.output.temperature)
 rows = complete.rows(build_fit_row)
 ```

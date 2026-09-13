@@ -55,7 +55,7 @@ def test_contexts_select_parameters_and_preserve_sample_and_run_history(
             )
             refs.append(ref)
             resolved = lab.config.resolve_context(ref)
-            prepared = lab.prepare(exploratory_signal(), config=resolved)
+            prepared = lab.prepare(exploratory_signal.build(), config=resolved)
             assert prepared.preview().point_count == 5
             run = prepared.run()
             assert run.status == "completed"
@@ -106,7 +106,7 @@ def test_contexts_select_parameters_and_preserve_sample_and_run_history(
             with pytest.raises(
                 DaemonConflictError, match="sample identity was changed"
             ):
-                lab.run(exploratory_signal(), config=refs[0])
+                lab.run(exploratory_signal.build(), config=refs[0])
 
         def stale_source(
             client: DaemonClient, submission: RunSubmission
@@ -125,22 +125,22 @@ def test_contexts_select_parameters_and_preserve_sample_and_run_history(
             with pytest.raises(
                 DaemonConflictError, match="changed since context resolution"
             ):
-                lab.run(exploratory_signal(), config=refs[0])
+                lab.run(exploratory_signal.build(), config=refs[0])
 
         assert trial.config_source.overrides
-        trial_run = lab.run(exploratory_signal(), config=trial)
+        trial_run = lab.run(exploratory_signal.build(), config=trial)
         assert (
             np.argmax(np.asarray(trial_run.measurements()["result"].require_values()))
             == 4
         )
-        restored = lab.run(exploratory_signal(), config=refs[0])
+        restored = lab.run(exploratory_signal.build(), config=refs[0])
         assert (
             np.argmax(np.asarray(restored.measurements()["result"].require_values()))
             == 1
         )
         with pytest.raises(ValueError, match="sample does not match"):
             lab.run(
-                exploratory_signal(),
+                exploratory_signal.build(),
                 config=refs[0],
                 sample=lab.samples.handle("context-b"),
             )
@@ -199,7 +199,7 @@ def test_context_unknown_values_block_only_the_experiment_that_needs_them() -> N
             entry_id=saved.entry.id, content_hash=saved.entry.content_hash
         )
         with pytest.raises((ValueError, KeyError), match="drive_carrier_frequency"):
-            lab.preview(exploratory_signal(), config=ref)
+            lab.preview(exploratory_signal.build(), config=ref)
         resolved = lab.config.resolve_context(
             ref,
             overrides=(
@@ -217,7 +217,9 @@ def test_context_unknown_values_block_only_the_experiment_that_needs_them() -> N
             QubitParameters.drive_carrier_frequency.name in item
             for item in resolved.missing_values
         )
-        assert lab.run(exploratory_signal(), config=resolved).status == "completed"
+        assert (
+            lab.run(exploratory_signal.build(), config=resolved).status == "completed"
+        )
         assert lab.config.active() == active
 
 
