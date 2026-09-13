@@ -106,6 +106,7 @@ class LocalDaemonRuntime:
         database = self.state_dir / "control.sqlite3"
         objects = self.state_dir / "objects"
         project_bootstrap: BootstrapConfigFactory | None = None
+        sqlite: SQLiteDatabase | None = None
 
         try:
             if bootstrap_spec is not None:
@@ -264,6 +265,9 @@ class LocalDaemonRuntime:
             if instrument_endpoint is not None:
                 with suppress(Exception):
                     instrument_endpoint.shutdown()
+            if sqlite is not None:
+                with suppress(Exception):
+                    sqlite.close()
             self._owner_lock.release()
             raise
 

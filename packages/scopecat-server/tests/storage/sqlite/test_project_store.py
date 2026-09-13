@@ -455,3 +455,22 @@ def test_bootstrap_refuses_tables_without_a_project_schema(tmp_path: Path) -> No
     store = SQLiteProjectStore(SQLiteDatabase(database), tmp_path / "objects")
     with pytest.raises(SchemaVersionError, match="Preserve the original project"):
         store.bootstrap()
+
+
+def test_bootstrap_retains_wal_until_database_shutdown(tmp_path: Path) -> None:
+    database = SQLiteDatabase(tmp_path / "control.sqlite3")
+    store = SQLiteProjectStore(database, tmp_path / "objects")
+    store.bootstrap()
+    wal = tmp_path / "control.sqlite3-wal"
+    assert wal.exists()
+    with database.write_transaction() as connection:
+        connection.execute("CREATE TABLE startup_probe (value TEXT)")
+        connection.execute("INSERT INTO startup_probe VALUES ('retained')")
+    store.close()
+    assert not wal.exists()
+    with sqlite3.connect(database.path) as reopened:
+        assert reopened.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+        assert (
+            reopened.execute("SELECT value FROM startup_probe").fetchone()[0]
+            == "retained"
+        )
