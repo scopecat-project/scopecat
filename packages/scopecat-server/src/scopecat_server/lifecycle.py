@@ -30,6 +30,7 @@ from scopecat.daemon.endpoint import (
 from scopecat.daemon.health import DaemonHealth
 from scopecat.project import Project, open_project
 
+from . import _startup_diagnostics
 from .scaffold import scaffold_paths, write_project_scaffold
 
 type DaemonState = Literal["running", "stopped", "stale", "degraded"]
@@ -131,10 +132,12 @@ def serve_project(
 ) -> None:
     """Serve one project in the foreground and publish its actual endpoint."""
 
+    _startup_diagnostics.stage("project opened; importing runtime")
     import uvicorn
 
     from .runtime import LocalDaemonRuntime
 
+    _startup_diagnostics.stage("runtime imported; inspecting daemon")
     status = inspect_daemon(project)
     if status.state in {"running", "degraded"}:
         raise DaemonLifecycleError(
@@ -148,12 +151,14 @@ def serve_project(
     runtime: LocalDaemonRuntime | None = None
     record: DaemonEndpointRecord | None = None
     try:
+        _startup_diagnostics.stage("constructing runtime")
         runtime = LocalDaemonRuntime(
             project.root,
             bootstrap_spec=project.bootstrap_spec,
             instrument_backend_spec=project.instrument_backend_spec,
             lease_ttl=lease_ttl,
         )
+        _startup_diagnostics.stage("runtime constructed; publishing endpoint")
         shutdown_token = secrets.token_urlsafe(32)
         record = DaemonEndpointRecord(
             project_root=project.root,
@@ -184,6 +189,7 @@ def serve_project(
                 lifespan="on",
             )
         )
+        _startup_diagnostics.stage("starting HTTP server")
         server.run(sockets=[listener])
     finally:
         if record is not None:
@@ -222,7 +228,11 @@ def start_project(
     command = [
         sys.executable,
         "-m",
-        "scopecat_server.cli",
+        (
+            "scopecat_server._daemon_entry"
+            if "SCOPECAT_STARTUP_DIAGNOSTICS" in os.environ
+            else "scopecat_server.cli"
+        ),
         "serve",
         str(project.root),
         "--host",

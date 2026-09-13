@@ -256,6 +256,8 @@ def test_cli_daemon_first_use_loop_uses_dynamic_port_and_cleans_record(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    diagnostics = tmp_path / "startup-diagnostics"
+    monkeypatch.setenv("SCOPECAT_STARTUP_DIAGNOSTICS", str(diagnostics))
     runner = CliRunner()
     initialize_project(tmp_path)
     static_dir = tmp_path / "test-ui"
@@ -336,6 +338,13 @@ def test_cli_daemon_first_use_loop_uses_dynamic_port_and_cleans_record(
             stop_project(project)
 
     assert not daemon_record_path(tmp_path).exists()
+    logs = list(diagnostics.glob("daemon-startup-*.log"))
+    assert len(logs) == 2
+    for log in logs:
+        evidence = log.read_text(encoding="utf-8")
+        assert "python entry; importing CLI" in evidence
+        assert "runtime constructed; publishing endpoint" in evidence
+        assert "starting HTTP server" in evidence
 
 
 def test_cli_start_rejects_conflicting_gui_modes(tmp_path: Path) -> None:
