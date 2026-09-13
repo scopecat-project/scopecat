@@ -8,7 +8,7 @@ from collections.abc import Generator
 from dataclasses import dataclass
 from importlib import import_module
 from pathlib import Path
-from typing import cast
+from typing import Literal, cast
 
 import httpx2
 import numpy as np
@@ -340,7 +340,16 @@ def test_required_author_input_diagnostics_survive_the_worker_boundary(
         assert prepared.request.inputs == {"qubit": "q0"}
 
 
+@dataclass
+class SignalInputs:
+    gain: float
+    frequency: sc.Quantity | sc.Scan
+    polarity: Literal["positive", "negative"]
+
+
+@pytest.mark.parametrize("typed", [False, True])
 def test_editable_request_rebuilds_and_reuses_saved_plan(
+    typed: bool,
     reference_lab_daemon: AuthorDaemon,
     tmp_path: Path,
 ) -> None:
@@ -355,13 +364,20 @@ def test_editable_request_rebuilds_and_reuses_saved_plan(
     )
     frequencies[:] = 5.2
     with AuthorProject(fixture.url, receipts=tmp_path / "receipts") as author:
-        scanned = author.prepare(request)
+        selected = request.typed(SignalInputs) if typed else request
+        scanned = author.prepare(selected)
         assert scanned.request.control_edits["frequency"].mode == "scan"
         assert scanned.preview.point_count == 3
         alternative = request.copy()
         alternative.values["frequency"] = sc.Quantity(4.8, "GHz")
         alternative.values["polarity"] = "negative"
-        fixed = author.prepare(alternative)
+        if typed:
+            typed_alternative = selected.typed(SignalInputs).copy()
+            typed_alternative.values.frequency = sc.Quantity(4.8, "GHz")
+            typed_alternative.values.polarity = "negative"
+            fixed = author.prepare(typed_alternative)
+        else:
+            fixed = author.prepare(alternative)
         assert fixed.preview.point_count == 1
         assert scanned.request.inputs["polarity"] == "positive"
         assert fixed.request.inputs["polarity"] == "negative"

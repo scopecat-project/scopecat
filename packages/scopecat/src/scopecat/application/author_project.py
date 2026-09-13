@@ -123,7 +123,7 @@ class AuthorProject(DaemonClient):
 
     def prepare(
         self,
-        experiment: str | ExperimentRequest,
+        experiment: str | ExperimentRequest[object, object],
         *,
         control_edits: dict[str, ControlEdit] | None = None,
         fixed: Mapping[str, SupportsFloat | Quantity] | None = None,
@@ -216,7 +216,7 @@ class AuthorProject(DaemonClient):
                     "reload the experiment module or explicitly select "
                     "its original revision"
                 )
-            values = dict(draft.values)
+            values = draft.snapshot()
             for control in declaration.controls.fields:
                 if control.id not in values:
                     continue

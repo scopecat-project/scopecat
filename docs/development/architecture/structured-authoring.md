@@ -259,8 +259,10 @@ captures `values`, explicit `Scan` intent and source-contract identity without
 executing the body. Isolated copies, managed preparation and saved plans retain
 the existing contracts. `experiment.build(...)` explicitly constructs a local
 immutable invocation; low-level `.bind(...)` supports partial runtime assembly.
-The redundant `.request(...)` factory has been removed. A concrete typed editing
-model remains a possible frontend to this same contract, not another registry.
+The redundant `.request(...)` factory has been removed. An optional `.typed(InputDataclass)` copy offers concrete mutable field types
+through the same request contract. Its field names cover the selected values;
+defaults and controls remain declaration-owned. This explicit editing type does
+not synthesize static attributes from a function signature or add a registry.
 `Annotated[Input[T], ControlSpec(...)]` now derives numeric controls and symbolic
 references from the signature, including required controls without fake defaults.
 See [the notebook workflow](../../how-to/managed-author-session.md#edit-a-request-before-preparing)

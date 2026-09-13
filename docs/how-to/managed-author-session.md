@@ -80,6 +80,49 @@ Already prepared launches and saved plans keep their captured inputs and code.
 Pass configuration/parameters and the execution actor to `prepare`; do not also
 pass `inputs`, `fixed`, `scans` or `control_edits` when supplying a request.
 
+### Optional typed field editing
+
+Keep the dictionary for quick exploration. For a repeatedly edited request, an
+ordinary mutable dataclass gives your editor explicit field types:
+
+```python
+from dataclasses import dataclass
+from typing import Literal
+
+
+@dataclass
+class SignalInputs:
+    gain: float
+    frequency: sc.Quantity | sc.Scan
+    polarity: Literal["positive", "negative"]
+
+
+request = signal(gain=1.0).typed(SignalInputs)
+request.values.frequency = sc.Scan(sc.Quantity(f, "GHz") for f in (5.0, 5.1))
+request.values.polarity = "negative"
+alternative = request.copy()
+alternative.values.frequency = sc.Quantity(5.1, "GHz")
+with project.authoring() as author:
+    checked = author.prepare(request)
+```
+
+`typed(InputClass)` creates an isolated request with a dataclass as its sole
+value store; `copy()` preserves that concrete type. Its fields must cover the
+current request values exactly, including editable controls. Omit class defaults:
+selected values, including defaults, come from the ordinary experiment call.
+Use `Quantity | Scan` only for scannable controls. Structural fields retain their
+ordinary Python types. `snapshot()` returns an isolated dictionary and preserves
+`Quantity` and `Scan` objects instead of recursively converting them to records.
+
+This is a manually maintained editing type, not another experiment declaration.
+As with ordinary dataclasses, its annotations do not validate Python values at
+runtime; keep them aligned with the experiment signature. Editors check subsequent
+field assignments, while `prepare` enforces the original declaration's values,
+units, bounds and scan capabilities through the same path as dictionary requests.
+No controls, defaults, source registry or program are generated from this class.
+Changing the experiment's input names requires updating this optional editing type.
+Saved plans retain the prepared values, not the notebook's Python dataclass type.
+
 An imported declaration retains its source identity from load time. Preparation
 compares that contract with the selected revision and rejects a mismatch. After
 editing a declaration, explicitly refresh the session and reload the notebook's
