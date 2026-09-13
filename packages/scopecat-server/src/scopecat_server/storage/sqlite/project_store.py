@@ -9,6 +9,7 @@ from contextlib import closing
 from pathlib import Path
 from typing import cast
 
+from scopecat_server._startup_diagnostics import stage as startup_stage
 from scopecat_server.storage.sqlite.connection import SQLiteDatabase
 from scopecat_server.storage.sqlite.object_store import ImmutableObjectStore
 from scopecat_server.storage.sqlite.schema import (
@@ -49,11 +50,16 @@ class SQLiteProjectStore:
             # Reject old stores before creating directories or changing their
             # journal mode. Opening a project never implicitly upgrades it.
             if self.database.exists():
+                startup_stage("inspecting existing store schema")
                 inspect_project_schema(self.database)
+            startup_stage("initializing object store")
             self.database.parent.mkdir(parents=True, exist_ok=True)
             self.objects.bootstrap()
+            startup_stage("opening initialization connection")
             with self.sqlite.initialization_connection() as connection:
+                startup_stage("initialization connection open; configuring WAL")
                 connection.execute("PRAGMA journal_mode = WAL")
+                startup_stage("WAL configured; checking or creating schema")
                 if _has_project_schema(connection):
                     self._require_current_version(connection)
                 elif _has_application_tables(connection):
@@ -62,8 +68,10 @@ class SQLiteProjectStore:
                         + _VERSION_GUIDANCE
                     )
                 else:
+                    startup_stage("creating project schema")
                     connection.executescript(PROJECT_SCHEMA_SQL)
                     self._require_current_version(connection)
+            startup_stage("project schema ready")
         except SchemaVersionError:
             raise
         except (OSError, sqlite3.Error) as error:

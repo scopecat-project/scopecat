@@ -22,6 +22,7 @@ from scopecat.project import load_bootstrap_factory
 from scopecat.project_state import ProjectStateServices
 from scopecat.records.config import ConfigProfileSnapshot, config_content_hash
 
+from scopecat_server._startup_diagnostics import stage as startup_stage
 from scopecat_server.command_payloads import CommandPayloadService
 from scopecat_server.services.active_measurements import ActiveMeasurementStore
 from scopecat_server.services.admission import AdmissionService
@@ -121,10 +122,12 @@ class LocalDaemonRuntime:
                     instrument_backend_spec,
                 )
 
+            startup_stage("initializing project store")
             sqlite = SQLiteDatabase(database)
             project_store = SQLiteProjectStore(sqlite, objects)
             project_store.bootstrap()
 
+            startup_stage("project store ready; composing services")
             control = SQLiteControlPlane(sqlite)
             automation_store = SQLiteAutomationStore(sqlite)
             calibration_cohort_store = SQLiteCalibrationCohortStore(sqlite)
@@ -225,6 +228,7 @@ class LocalDaemonRuntime:
                 executor=executor,
                 shutdown_timeout_seconds=instrument_shutdown_grace.total_seconds(),
             )
+            startup_stage("services composed; constructing daemon application")
             application = DaemonApplication(
                 project_root=self.project_root,
                 project_id=project_id,
@@ -244,6 +248,7 @@ class LocalDaemonRuntime:
                 point_plans=point_plans,
                 samples=samples,
             )
+            startup_stage("daemon application ready; bootstrapping config registry")
             try:
                 bootstrap_source = (
                     bootstrap_config
@@ -255,7 +260,9 @@ class LocalDaemonRuntime:
                         config_service,
                         bootstrap_source,
                     )
+                startup_stage("config registry ready; starting application services")
                 application.start()
+                startup_stage("application services started")
             except BaseException:
                 application.close()
                 raise

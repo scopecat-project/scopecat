@@ -347,7 +347,12 @@ def test_cli_daemon_first_use_loop_uses_dynamic_port_and_cleans_record(
             in evidence
         )
         assert "instrument child spawned pid=" in evidence
+        assert "launch request to Python entry:" in evidence
         assert "instrument readiness decoded: ready" in evidence
+        assert "instrument endpoint ready" in evidence
+        assert "project schema ready" in evidence
+        assert "services composed; constructing daemon application" in evidence
+        assert "application services started" in evidence
         assert "runtime constructed; publishing endpoint" in evidence
         assert "starting HTTP server" in evidence
 
@@ -423,3 +428,32 @@ class _FakeProcess:
 
     def terminate(self) -> None:
         self.terminate_calls += 1
+
+
+def test_startup_trace_locates_config_stall_after_instrument_readiness(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    diagnostics = tmp_path / "startup-diagnostics"
+    monkeypatch.setenv("SCOPECAT_STARTUP_DIAGNOSTICS", str(diagnostics))
+    initialize_project(tmp_path)
+    configuration = tmp_path / "src/scopecat_lab/configuration.py"
+    configuration.write_text(
+        configuration.read_text().replace(
+            "def bootstrap_config() -> ConfigProfileSnapshot:",
+            "def bootstrap_config() -> ConfigProfileSnapshot:\n"
+            "    import time\n    while True:\n        time.sleep(1)",
+        )
+    )
+    with pytest.raises(DaemonLifecycleError, match="healthy within 10 seconds"):
+        start_project(open_project(tmp_path))
+    [trace] = diagnostics.glob("daemon-startup-*.log")
+    evidence = trace.read_text()
+    assert "launch request to Python entry:" in evidence
+    assert "instrument endpoint ready" in evidence
+    assert "project schema ready" in evidence
+    assert "daemon application ready; bootstrapping config registry" in evidence
+    assert "Timeout (0:00:08)" in evidence
+    assert "in bootstrap_config" in evidence
+    assert "config registry ready; starting application services" not in evidence
+    assert not daemon_record_path(tmp_path).exists()

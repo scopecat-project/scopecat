@@ -259,6 +259,11 @@ def start_project(
             stdout=log,
             stderr=subprocess.STDOUT,
             start_new_session=sys.platform != "win32",
+            env=(
+                {**os.environ, "SCOPECAT_STARTUP_LAUNCH_NS": str(time.monotonic_ns())}
+                if "SCOPECAT_STARTUP_DIAGNOSTICS" in os.environ
+                else None
+            ),
             creationflags=(
                 subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
             ),
