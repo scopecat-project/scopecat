@@ -16,6 +16,7 @@ from threading import Event, Lock, Thread
 from typing import Literal, cast
 
 from pydantic import BaseModel, ConfigDict
+from scopecat.kernel.interaction_timing import record_timing
 
 _LOG = logging.getLogger(__name__)
 
@@ -142,14 +143,14 @@ class ProjectProcedureWorkers:
         root = self.root()
         log_path = root / ".scopecat" / "console-worker.log"
         log_path.parent.mkdir(parents=True, exist_ok=True)
+        record_timing("procedure_dispatch", procedure_id=procedure_id)
         with log_path.open("ab") as log:
             self._children[procedure_id] = subprocess.Popen(  # noqa: S603 - fixed interpreter and module; no shell
                 [
                     sys.executable,
                     "-m",
-                    "scopecat_server.launch_worker",
+                    "scopecat_server.procedure_worker",
                     str(root),
-                    "--procedure",
                     procedure_id,
                 ],
                 stdin=subprocess.DEVNULL,

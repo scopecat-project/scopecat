@@ -185,3 +185,13 @@ records virtual inputs outside measurement, then times ordinary analysis and
 comparison inspect/fit with repeated and edited arguments. It includes separate
 HTTP phase evidence for both surfaces and performs normal publication on every
 operation. See the same author performance guide for pool and source semantics.
+
+Measure ordinary author submission through first visible retained data:
+
+```console
+uv run --locked python -m benchmarks run author-first-data --repetitions 2
+```
+
+This virtual signal case records process startup, measurement transport and an
+independent ordinary result reader. See [timing boundaries](../docs/development/author-performance.md#submission-to-first-visible-data)
+for observer overhead and the distinction from hardware acquisition and GUI rendering.

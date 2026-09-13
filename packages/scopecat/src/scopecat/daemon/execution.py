@@ -40,6 +40,7 @@ from scopecat.daemon.wire import (
 )
 from scopecat.execution.services import ExecutionSession, QueuedOperatorDomainRequest
 from scopecat.kernel.content_identity import content_fingerprint, stable_content_hash
+from scopecat.kernel.interaction_timing import record_timing
 from scopecat.kernel.points import AcceptedRunPoint
 from scopecat.kernel.problems import Problem
 from scopecat.optimization import DomainProposalDecision
@@ -640,6 +641,8 @@ class _DaemonMeasurementRepository:
         self,
         batch: MeasurementDatasetBatch,
     ) -> tuple[MeasurementDatasetReceipt, ...]:
+        if self._next_acquisition_index == 0 and not self._pending:
+            record_timing("first_measurement_ready", run_id=self._authority.run_id)
         self._pending.extend(batch.records)
         self._pending_value_bytes += sum(
             _measurement_record_value_bytes(record) for record in batch.records

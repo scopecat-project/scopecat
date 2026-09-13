@@ -12,6 +12,12 @@ BENCHMARK_CASES = (
         summary="Retained analysis and comparison through real author HTTP APIs",
     ),
     BenchmarkCase(
+        id="author-first-data",
+        kind="e2e",
+        module="benchmarks.e2e.author_first_data",
+        summary="Ordinary author submission through first visible data",
+    ),
+    BenchmarkCase(
         id="author-prepare",
         kind="e2e",
         module="benchmarks.e2e.author_prepare",
