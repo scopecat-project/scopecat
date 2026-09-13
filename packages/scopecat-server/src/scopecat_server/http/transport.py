@@ -455,6 +455,9 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
             completed.stderr, total_seconds=time.perf_counter() - started
         )
         if completed.returncode:
+            logging.getLogger(__name__).error(
+                "Retained %s failed:\n%s", operation, completed.stderr
+            )
             lines = completed.stderr.strip().splitlines()
             raise HTTPException(
                 422, lines[-1] if lines else f"Retained {operation} failed"
