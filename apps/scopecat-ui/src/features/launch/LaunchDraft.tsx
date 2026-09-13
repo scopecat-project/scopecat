@@ -357,8 +357,9 @@ function ProjectDraft({
         select,
         update: (change) => setDraft((current) => (current ? change(current) : current)),
         isCurrent: (revision) => alive.current && latest.current?.revision === revision,
-        configurationReady:
-          matchesConfiguration && !configuration.isFetching && !configuration.isError,
+        // Background event refreshes must not swallow a click on a checked preview.
+        // Admission still validates its configuration; a failed or changed read blocks it.
+        configurationReady: matchesConfiguration && !configuration.isError,
       }}
     >
       {children}

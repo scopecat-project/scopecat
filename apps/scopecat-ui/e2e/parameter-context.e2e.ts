@@ -111,7 +111,18 @@ test("saves and launches two physical samples at two working points without acti
         sample: { sample_id: `context-${sample}`, revision: 1, context_id: point },
       });
       await expect(page.getByText("Preview ready", { exact: true })).toBeVisible();
+      const submitting = page.waitForResponse(
+        (response) =>
+          response.url().endsWith("/experiment-launcher/submit") &&
+          response.request().method() === "POST",
+      );
       await page.getByRole("button", { name: "Start acquisition", exact: true }).click();
+      const submission = await submitting;
+      expect(submission.status(), await submission.text()).toBe(200);
+      expect(submission.request().postDataJSON()).toMatchObject({
+        experiment: index % 2 === 0 ? "signal" : "frequency-amplitude",
+        context: { entry_id: saved.entry.id },
+      });
       await expect(
         page.getByText(index % 2 === 0 ? "experiment: Completed" : "signal: Completed", {
           exact: true,

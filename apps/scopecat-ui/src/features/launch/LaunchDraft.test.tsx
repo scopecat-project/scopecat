@@ -44,6 +44,8 @@ let rejectSubmission: boolean;
 let submissions: Record<string, unknown>[];
 let previewResponse: ((response: Response) => void) | undefined;
 let deferPreview: boolean;
+let configurationResponse: ((response: Response) => void) | undefined;
+let deferConfiguration: boolean;
 let client: QueryClient;
 let lookupMatch: "none" | "original" | "ambiguous" | "unverified" | "different-config";
 function preview() {
@@ -101,6 +103,8 @@ beforeEach(() => {
   submissions = [];
   previewResponse = undefined;
   deferPreview = false;
+  deferConfiguration = false;
+  configurationResponse = undefined;
   client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   vi.stubGlobal(
     "fetch",
@@ -143,6 +147,10 @@ beforeEach(() => {
       }
       if (path.endsWith("/experiment-launcher")) return Response.json({ entries: catalog });
       if (path.endsWith("/config-registry")) {
+        if (deferConfiguration)
+          return new Promise<Response>((resolve) => {
+            configurationResponse = resolve;
+          });
         if (configFails) throw new TypeError("temporarily offline");
         return Response.json({ entries: [], activation: { entry_id: "baseline", generation } });
       }
@@ -440,3 +448,51 @@ it("uses a new key after a fresh manual-state preview while preserving the origi
   expect(submissions[1]?.request_key).not.toBe(original?.request_key);
   expect(submissions[1]?.manual_state).not.toEqual(original?.manual_state);
 });
+
+async function refreshCheckedPreview() {
+  render(<Harness />);
+  await selectPrepared();
+  await previewReady();
+  const start = screen.getByRole("button", { name: "Start acquisition" });
+  await waitFor(() => expect(start).toBeEnabled());
+  deferConfiguration = true;
+  act(() => {
+    void client.invalidateQueries({ queryKey: ["config", "launch-context"] });
+  });
+  await waitFor(() => expect(configurationResponse).toBeDefined());
+  expect(screen.getByText("Preview ready", { exact: true })).toBeVisible();
+  expect(start).toBeEnabled();
+  return start;
+}
+
+it("submits a checked preview while configuration refresh is in flight", async () => {
+  const start = await refreshCheckedPreview();
+  fireEvent.click(start);
+  await waitFor(() => expect(submissions).toHaveLength(1));
+  expect(submissions[0]).toMatchObject({
+    experiment: "prepared",
+    config_source: { entry_id: "baseline", registry_generation: 1 },
+  });
+  await act(async () => {
+    configurationResponse!(
+      Response.json({ entries: [], activation: { entry_id: "baseline", generation: 1 } }),
+    );
+  });
+});
+
+it.each(["changed", "failed"])(
+  "blocks a checked preview when background configuration refresh resolves %s",
+  async (outcome) => {
+    const start = await refreshCheckedPreview();
+    await act(async () => {
+      configurationResponse!(
+        outcome === "failed"
+          ? Response.json({ detail: "offline" }, { status: 503 })
+          : Response.json({ entries: [], activation: { entry_id: "baseline", generation: 2 } }),
+      );
+    });
+    await waitFor(() => expect(start).toBeDisabled());
+    expect(screen.queryByText("Preview ready", { exact: true })).toBeNull();
+    expect(submissions).toHaveLength(0);
+  },
+);
