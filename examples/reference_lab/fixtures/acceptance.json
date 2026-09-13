@@ -393,6 +393,7 @@
     ],
     "definition_hash": "sha256:79c58884cbee217d1c7c4766f57b9a71eef7f01272418d838485a79e8bd98b2e",
     "experiment_id": "frequency-amplitude",
+    "inspection": null,
     "manual_state": {
       "binding": {
         "code_revision": {
@@ -583,6 +584,7 @@
     ],
     "definition_hash": "sha256:79c58884cbee217d1c7c4766f57b9a71eef7f01272418d838485a79e8bd98b2e",
     "experiment_id": "frequency-amplitude",
+    "inspection": null,
     "manual_state": {
       "binding": {
         "code_revision": {
@@ -1180,6 +1182,7 @@
     "controls": [],
     "definition_hash": "sha256:53999851b06af2bae8ccc071c6ed0b81bbb88180f58c12cdefd5e787f4ea46f9",
     "experiment_id": "temperature",
+    "inspection": null,
     "manual_state": {
       "binding": {
         "code_revision": {
