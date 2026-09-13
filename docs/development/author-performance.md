@@ -194,3 +194,27 @@ and narrow client imports by capability. Before changing this boundary, preserve
 source validation, declaration fingerprints, catalog completeness, explicit missing
 dependency errors and old revision restoration. Require full submit-to-data evidence;
 do not create an execution pool or skip checks merely to hide imports.
+
+## Instrument child startup evidence
+
+For pre-health failures, set `SCOPECAT_STARTUP_DIAGNOSTICS` to an output directory
+before one normal `start`. Windows CI already retains this directory. The
+`daemon-startup-<pid>.log` records spawn and readiness receipt; the matching
+`instrument-startup-<pid>.log` records entry, output capture, RPC imports, backend
+factory loading/construction, catalog description and readiness transmission.
+PID, parent PID, generation and same-host monotonic clock anchors correlate the
+files without exposing environment contents or Python locals. This opt-in probe
+samples one stack after five seconds; the child cancels it when readiness is sent.
+
+A parent blocked in `Connection.poll` does not identify a slow import or driver.
+Use the child's last phase and stack to locate the wait. A missing child entry
+limits visibility to process bootstrap, entry-module loading or diagnostic setup;
+it is not proof of an antivirus cause. The probe does not measure time before
+Python can run it. Retain failed starts alongside successful starts and distinguish
+fresh installations from repeated fixture runs.
+
+A controlled backend-construction stall verifies evidence and actual child
+termination at the existing endpoint startup timeout. This is diagnostic coverage,
+not a reproduction or fix of intermittent Windows startup. Neither the daemon's
+health deadline nor worker deadlines, retries, persistence or acquisition behavior
+are changed. Broader startup reliability remains tracked in issue #465.

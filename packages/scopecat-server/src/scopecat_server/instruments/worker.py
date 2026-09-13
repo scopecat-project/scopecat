@@ -45,6 +45,9 @@ from scopecat.sdk.instruments.contracts import InstrumentDescription
 from scopecat.sdk.instruments.provider import DriverFault, InstrumentProviderDescription
 from scopecat.sdk.payloads import PayloadCodecCatalog
 
+from scopecat_server._startup_diagnostics import finish as finish_startup_diagnostics
+from scopecat_server._startup_diagnostics import stage as startup_stage
+
 from .backend import (
     ConnectedInstrument,
     InstrumentBackendError,
@@ -305,6 +308,7 @@ class SubprocessInstrumentBackendEndpoint:
         )
         self._connection: _ByteConnection = parent
         self._process: BaseProcess = process
+        startup_stage("spawning instrument child")
         try:
             process.start()
         except BaseException:
@@ -312,13 +316,18 @@ class SubprocessInstrumentBackendEndpoint:
             child.close()
             raise
         child.close()
+        startup_stage(
+            f"instrument child spawned pid={process.pid} generation={self._endpoint_id}"
+        )
 
         try:
             if not parent.poll(startup_timeout):
                 raise InstrumentBackendUnavailable(
                     "instrument worker did not start in time"
                 )
+            startup_stage("instrument readiness bytes available")
             startup = _recv_model(parent, _StartupResponse)
+            startup_stage(f"instrument readiness decoded: {startup.status}")
             if startup.status != "ready":
                 assert startup.error is not None
                 raise InstrumentBackendUnavailable(
@@ -846,13 +855,16 @@ def _instrument_worker_main(
     shutdown_request: _RpcRequest | None = None
     try:
         try:
+            startup_stage("loading backend factory")
             create_backend = load_instrument_backend_factory(
                 instrument_backend_spec,
                 project_root,
             )
-            endpoint = LocalInstrumentBackendEndpoint(
-                create_backend(Path(project_root))
-            )
+            startup_stage("backend factory loaded; constructing backend")
+            backend = create_backend(Path(project_root))
+            startup_stage("backend constructed; describing catalogs")
+            endpoint = LocalInstrumentBackendEndpoint(backend)
+            startup_stage("catalogs ready; encoding and sending readiness")
             _send_model(
                 connection,
                 _StartupResponse(
@@ -864,7 +876,10 @@ def _instrument_worker_main(
                     payload_catalog=_model_to_body(endpoint.payload_catalog),
                 ),
             )
+            startup_stage("readiness sent")
+            finish_startup_diagnostics()
         except Exception as error:
+            startup_stage(f"startup failed: {type(error).__name__}")
             record_exception(error)
             with suppress(Exception):
                 _send_model(

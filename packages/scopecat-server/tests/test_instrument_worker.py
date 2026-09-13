@@ -9,6 +9,7 @@ from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
 from importlib.util import find_spec
+from multiprocessing.process import BaseProcess
 from pathlib import Path
 from threading import Thread
 from typing import Annotated, Protocol, cast
@@ -132,7 +133,11 @@ def _ragged_point_cloud(experiment: ExperimentContext) -> None:
     experiment.alias(capture, record_id="trace")
 
 
-def test_spawned_worker_executes_closed_driver_requests(tmp_path: Path) -> None:
+def test_spawned_worker_executes_closed_driver_requests(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    diagnostics = tmp_path / "startup"
+    monkeypatch.setenv("SCOPECAT_STARTUP_DIAGNOSTICS", str(diagnostics))
     project = _copy_project(tmp_path)
     assert "worker_fixture.backend" not in sys.modules
     endpoint = SubprocessInstrumentBackendEndpoint(project, _BACKEND)
@@ -266,6 +271,11 @@ def test_spawned_worker_executes_closed_driver_requests(tmp_path: Path) -> None:
     )
     assert not endpoint.healthy
     assert not worker_process.is_running()
+    [trace] = diagnostics.glob("instrument-startup-*.log")
+    evidence = trace.read_text(encoding="utf-8")
+    assert f"pid={endpoint.worker_pid}" in evidence
+    assert "backend constructed; describing catalogs" in evidence
+    assert "readiness sent" in evidence
 
 
 def test_ragged_point_cloud_run_survives_daemon_and_worker_boundaries(
@@ -892,3 +902,39 @@ def _wait_for_marker(path: Path) -> None:
         if time.monotonic() >= deadline:
             pytest.fail(f"fixture driver did not create {path.name}")
         time.sleep(0.01)
+
+
+def test_instrument_startup_timeout_retains_child_phase_and_reaps_process(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from scopecat_server.instruments import worker
+
+    project = _copy_project(tmp_path)
+    (project / "src/worker_fixture/backend.py").write_text(
+        "import time\ndef create_backend(project_root):\n"
+        "    while True:\n        time.sleep(1)\n",
+        encoding="utf-8",
+    )
+    diagnostics = tmp_path / "startup"
+    monkeypatch.setenv("SCOPECAT_STARTUP_DIAGNOSTICS", str(diagnostics))
+    stopped: list[tuple[int | None, int | None, bool]] = []
+    terminate = worker._terminate_process_until
+
+    def observe_termination(process: BaseProcess, deadline: float) -> None:
+        terminate(process, deadline)
+        stopped.append((process.pid, process.exitcode, process.is_alive()))
+
+    monkeypatch.setattr(worker, "_terminate_process_until", observe_termination)
+    with pytest.raises(InstrumentBackendUnavailable, match="did not start in time"):
+        SubprocessInstrumentBackendEndpoint(project, _BACKEND)
+    assert len(stopped) == 1
+    pid, exitcode, alive = stopped[0]
+    assert exitcode is not None and not alive
+    [trace] = diagnostics.glob("instrument-startup-*.log")
+    assert trace.name == f"instrument-startup-{pid}.log"
+    text = trace.read_text(encoding="utf-8")
+    assert "python entry; pid=" in text and "parent=" in text
+    assert "output capture ready; importing RPC runtime" in text
+    assert "backend factory loaded; constructing backend" in text
+    assert "Timeout (0:00:05)" in text
+    assert "readiness sent" not in text

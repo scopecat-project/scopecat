@@ -6,24 +6,28 @@ import faulthandler
 import os
 import time
 from pathlib import Path
-from typing import TextIO
+from typing import Literal, TextIO
 
 _stream: TextIO | None = None
 _started = time.monotonic()
 
 
-def begin() -> None:
+def begin(*, process: Literal["daemon", "instrument"] = "daemon") -> None:
     """Record early Python entry and one stack before the normal deadline."""
-    global _stream
+    global _stream, _started
     directory = os.environ.get("SCOPECAT_STARTUP_DIAGNOSTICS")
     if directory is None:
         return
+    _started = time.monotonic()
     target = Path(directory)
     target.mkdir(parents=True, exist_ok=True)
-    _stream = (target / f"daemon-startup-{os.getpid()}.log").open(
+    _stream = (target / f"{process}-startup-{os.getpid()}.log").open(
         "w", encoding="utf-8", buffering=1
     )
-    stage("python entry; importing CLI")
+    stage(
+        f"python entry; pid={os.getpid()} parent={os.getppid()} "
+        f"clock_ns={time.monotonic_ns()}"
+    )
     faulthandler.dump_traceback_later(5, file=_stream)
 
 
