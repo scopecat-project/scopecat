@@ -114,6 +114,15 @@ def test_slow_validation_retains_stack_and_reaps_worker(
         communicate_timeouts.append(timeout)
         if not launched:
             launched.append(process)
+            # Keep the normal startup budget, then inject a short real timeout
+            # only once the slow application has emitted its stack and identity.
+            assert timeout is not None
+            deadline = time.monotonic() + timeout
+            while not pid_file.exists():
+                assert process.poll() is None
+                assert time.monotonic() < deadline, "slow fixture never became ready"
+                time.sleep(0.01)
+            return communicate(process, input=input, timeout=0.1)
         return communicate(process, input=input, timeout=timeout)
 
     def observe_cleanup(
@@ -124,7 +133,9 @@ def test_slow_validation_retains_stack_and_reaps_worker(
         return result
 
     (tmp_path / "src/authors/slow.py").write_text(
-        "import json, os, time, psutil\ndef create_application(root):\n"
+        "import faulthandler, json, os, sys, time, psutil\n"
+        "def create_application(root):\n"
+        "    faulthandler.dump_traceback(file=sys.stderr)\n"
         f"    output = open({str(pid_file)!r}, 'w')\n"
         "    output.write(json.dumps({'pid': os.getpid(), "
         "'created': psutil.Process().create_time()}))\n"
