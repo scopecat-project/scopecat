@@ -25,7 +25,7 @@ project=sc.open_project(sys.argv[1])
 project.load_application()
 from reference_lab.workflows.frequency_amplitude import frequency_amplitude, FREQUENCY, AMPLITUDE
 with project.connect() as lab:
-    runs=[lab.run(frequency_amplitude().with_axis(sc.axis(FREQUENCY.ref, [sc.Quantity(v,"GHz") for v in (4.6,4.7,4.8,4.9,5.0)])).with_axis(sc.axis(AMPLITUDE.ref,[sc.Quantity(a,"V")]))) for a in (.1,.08)]
+    runs=[lab.run(frequency_amplitude.build().with_axis(sc.axis(FREQUENCY.ref, [sc.Quantity(v,"GHz") for v in (4.6,4.7,4.8,4.9,5.0)])).with_axis(sc.axis(AMPLITUDE.ref,[sc.Quantity(a,"V")]))) for a in (.1,.08)]
     print(json.dumps([r.id for r in runs]))
 `;
 test("compares retained signals, saves independent results and imports a reviewed suggestion without acquisition", async ({
