@@ -77,3 +77,8 @@ process, persistence and restart coverage in a few representative scenarios;
 move input combinations and policy branches into focused tests. Change-to-risk
 selection is deferred until that mapping is reviewed. Do not shorten normal
 startup budgets, relax assertions, or use retries to hide flaky failures.
+
+Slow journey phases are also product performance signals. Investigate repeated
+prepare, source loading, analysis and reads before replacing them with seeded
+fixtures. The [author performance baseline](author-performance.md) measures the
+actual notebook prepare boundary, which direct scan execution does not cover.

@@ -12,6 +12,7 @@ from unittest.mock import Mock, patch
 import pytest
 from fastapi.testclient import TestClient
 from scopecat.application.launch import LaunchPreview
+from scopecat.records.author_revision import AuthorRevisionState
 from scopecat.records.launch_request import LaunchRequest
 from scopecat.records.run import ConfigRegistryRunConfigSource
 
@@ -62,7 +63,11 @@ def client() -> TestClient:
                 cast(
                     "object",
                     SimpleNamespace(
-                        project_root=Path.cwd(), manual_previews=_manual_previews()
+                        project_root=Path.cwd(),
+                        manual_previews=_manual_previews(),
+                        author_revisions=SimpleNamespace(
+                            state=lambda: AuthorRevisionState()
+                        ),
                     ),
                 ),
             )
@@ -178,6 +183,9 @@ def test_admission_survives_dispatch_failure(tmp_path: Path) -> None:
                 SimpleNamespace(
                     project_root=tmp_path,
                     automation=automation,
+                    author_revisions=SimpleNamespace(
+                        state=lambda: AuthorRevisionState()
+                    ),
                     manual_previews=_manual_previews(),
                 ),
             ),
@@ -338,7 +346,11 @@ def test_http_lifespan_starts_and_stops_manager() -> None:
                     cast(
                         "object",
                         SimpleNamespace(
-                            project_root=Path.cwd(), manual_previews=_manual_previews()
+                            project_root=Path.cwd(),
+                            manual_previews=_manual_previews(),
+                            author_revisions=SimpleNamespace(
+                                state=lambda: AuthorRevisionState()
+                            ),
                         ),
                     ),
                 )

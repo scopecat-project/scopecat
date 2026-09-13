@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import contextlib
+import json
 import os
 import sys
+import time
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
@@ -36,6 +38,7 @@ if TYPE_CHECKING:
     from io import TextIOWrapper
 
     from scopecat.api.lab import LabClient
+    from scopecat.application import LabApplication
 
 
 def run_procedure(lab: LabClient, procedure_id: str) -> None:
@@ -50,6 +53,9 @@ def main() -> None:
     # inherited a user's endpoint override for a different interactive session.
     os.environ.pop(DAEMON_URL_ENV, None)
     root = Path(sys.argv[1]).resolve()
+    if len(sys.argv) == 4 and sys.argv[2] == "--serve":
+        serve(root, AuthorRevisionRef(content_hash=sys.argv[3]))
+        return
     if len(sys.argv) == 4 and sys.argv[2] == "--procedure":
         with DaemonClient(resolve_daemon_endpoint(root)) as client:
             stored = client.get_procedure(sys.argv[3])
@@ -104,66 +110,103 @@ def main() -> None:
     with contextlib.redirect_stdout(sys.stderr):
         report_stage("project application load")
         application = project.load_application()
-        result: LaunchResult
-        if application.launch_provider is None:
-            result = LaunchCatalog()
+        result = launch(application, root, ref, request)
+    print(result.model_dump_json())
+
+
+def launch(
+    application: LabApplication,
+    root: Path,
+    ref: AuthorRevisionRef | None,
+    request: LaunchRequest,
+) -> LaunchResult:
+    result: LaunchResult
+    if application.launch_provider is None:
+        result = LaunchCatalog()
+        if request.action != "list":
+            raise ValueError("project has no experiment preview provider")
+    else:
+        report_stage("launch provider")
+        with application.connect(
+            resolve_daemon_endpoint(root), operator=request.actor
+        ) as lab:
+            catalog = LaunchCatalog()
             if request.action != "list":
-                raise ValueError("project has no experiment preview provider")
-        else:
-            report_stage("launch provider")
-            with application.connect(
-                resolve_daemon_endpoint(root), operator=request.actor
-            ) as lab:
-                catalog = LaunchCatalog()
-                if request.action != "list":
-                    catalog = application.launch_provider(
-                        lab, LaunchRequest(action="list")
-                    )
-                    if not isinstance(catalog, LaunchCatalog):
-                        raise TypeError(
-                            "project list callback must return LaunchCatalog"
-                        )
-                    validate_launch_control_edits(catalog, request)
-                    if request.plan_ref is not None:
-                        plan = lab.plans.get(request.plan_ref)
-                        entry = next(
-                            (
-                                entry
-                                for entry in catalog.entries
-                                if entry.id == request.experiment
-                                and entry.version == request.version
-                            ),
-                            None,
-                        )
-                        if entry is None:
-                            raise ValueError(
-                                "saved plan experiment is "
-                                "unavailable in this author revision"
-                            )
-                        validate_plan_launch(plan, request, entry)
-                result = application.launch_provider(lab, request)
-                if isinstance(result, LaunchPreview):
+                catalog = application.launch_provider(lab, LaunchRequest(action="list"))
+                if not isinstance(catalog, LaunchCatalog):
+                    raise TypeError("project list callback must return LaunchCatalog")
+                validate_launch_control_edits(catalog, request)
+                if request.plan_ref is not None:
+                    plan = lab.plans.get(request.plan_ref)
                     entry = next(
                         (
-                            item
-                            for item in catalog.entries
-                            if item.id == request.experiment
-                            and item.version == request.version
+                            entry
+                            for entry in catalog.entries
+                            if entry.id == request.experiment
+                            and entry.version == request.version
                         ),
                         None,
                     )
-                    if entry is not None:
-                        result = result.model_copy(
-                            update={
-                                "plan_ref": request.plan_ref,
-                                "definition_hash": sha256_json_hash(
-                                    entry.model_dump(mode="json")
-                                ),
-                            }
+                    if entry is None:
+                        raise ValueError(
+                            "saved plan experiment is "
+                            "unavailable in this author revision"
                         )
+                    validate_plan_launch(plan, request, entry)
+            result = application.launch_provider(lab, request)
+            if isinstance(result, LaunchPreview):
+                entry = next(
+                    (
+                        item
+                        for item in catalog.entries
+                        if item.id == request.experiment
+                        and item.version == request.version
+                    ),
+                    None,
+                )
+                if entry is not None:
+                    result = result.model_copy(
+                        update={
+                            "plan_ref": request.plan_ref,
+                            "definition_hash": sha256_json_hash(
+                                entry.model_dump(mode="json")
+                            ),
+                        }
+                    )
     if isinstance(result, (LaunchCatalog, LaunchPreview)):
         result = result.model_copy(update={"code_revision": ref})
-    print(result.model_dump_json())
+    return result
+
+
+def serve(root: Path, ref: AuthorRevisionRef) -> None:
+    """One immutable import namespace, fresh connection and request per call."""
+    application = None
+    for line in sys.stdin:
+        started = time.perf_counter()
+        request = LaunchRequest.model_validate_json(line)
+        if request.code_revision != ref:
+            raise ValueError("worker requires its exact author revision")
+        phases: dict[str, float] = {}
+        with contextlib.redirect_stdout(sys.stderr):
+            if application is None:
+                report_stage("author revision initialization")
+                project = revision_project(root, ref)
+                now = time.perf_counter()
+                phases["revision"] = now - started
+                report_stage("project application load")
+                application = project.load_application()
+                phases["application"] = time.perf_counter() - now
+            provider_started = time.perf_counter()
+            result = launch(application, root, ref, request)
+            phases["provider"] = time.perf_counter() - provider_started
+            encoded = result.model_dump_json()
+            phases["worker"] = time.perf_counter() - started
+            print(
+                "Scopecat launch timing: " + json.dumps(phases),
+                file=sys.stderr,
+                flush=True,
+            )
+        print(encoded, flush=True)
 
 
 if __name__ == "__main__":

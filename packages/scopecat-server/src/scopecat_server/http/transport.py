@@ -5,9 +5,11 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import subprocess
 import sys
+import time
 from collections.abc import AsyncGenerator, AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from pathlib import Path, PurePosixPath
@@ -301,6 +303,7 @@ from scopecat_server.http.procedure_operator import (
     read_procedure_operator,
 )
 from scopecat_server.services.author_revisions import AuthorValidationTimeout
+from scopecat_server.services.launch_workers import LaunchWorkers
 from scopecat_server.services.project_workers import ProjectProcedureWorkers
 from scopecat_server.storage.sqlite.author_revision_repository import (
     AuthorRevisionConflict,
@@ -347,6 +350,8 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
         lambda procedure_id: application.automation.worker_state(procedure_id),
     )
 
+    launch_workers = LaunchWorkers()
+
     @asynccontextmanager
     async def lifespan(_app: FastAPI) -> AsyncGenerator[None]:
         project_workers.start()
@@ -354,6 +359,7 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
             yield
         finally:
             project_workers.stop()
+            launch_workers.close()
 
     app = FastAPI(title="Scopecat daemon", version="1", lifespan=lifespan)
     app.add_middleware(
@@ -444,21 +450,42 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
             )
         return AuthorAnalysisReceipt.model_validate_json(completed.stdout)
 
-    def launch_call(command: LaunchRequest) -> str:
+    def launch_call(command: LaunchRequest, response: Response) -> str:
+        started = time.perf_counter()
         try:
-            completed = subprocess.run(  # noqa: S603 - fixed project worker command
-                [
-                    sys.executable,
-                    "-m",
-                    "scopecat_server.launch_worker",
-                    str(application.project_root),
-                ],
-                input=command.model_dump_json(),
-                capture_output=True,
-                encoding="utf-8",
-                timeout=60,
-                check=False,
-                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+            # Active selection is cheap and remains fresh across other sessions.
+            state = application.author_revisions.state()
+            if (
+                state.enabled
+                and command.action == "submit"
+                and command.code_revision is None
+            ):
+                raise ValueError("submit requires the preview's author code revision")
+            ref = command.code_revision or state.active
+        except AuthorValidationTimeout as error:
+            raise HTTPException(504, str(error)) from error
+        except ValueError as error:
+            raise HTTPException(422, str(error)) from error
+        if ref is not None:
+            command = command.model_copy(update={"code_revision": ref})
+        try:
+            completed = (
+                launch_workers.call(application.project_root, command)
+                if ref is not None
+                else subprocess.run(  # noqa: S603 - fixed project worker command
+                    [
+                        sys.executable,
+                        "-m",
+                        "scopecat_server.launch_worker",
+                        str(application.project_root),
+                    ],
+                    input=command.model_dump_json(),
+                    capture_output=True,
+                    encoding="utf-8",
+                    timeout=60,
+                    check=False,
+                    creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+                )
             )
         except subprocess.TimeoutExpired as error:
             operation = {
@@ -484,6 +511,26 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
                 f"Experiment {operation} timed out after 60 seconds during {stage}. "
                 f"{recovery}",
             ) from error
+        timings = {"launch": (time.perf_counter() - started) * 1000}
+        for line in completed.stderr.splitlines():
+            if line.startswith("Scopecat launch timing: "):
+                phases = cast(
+                    "dict[str, float]",
+                    json.loads(line.removeprefix("Scopecat launch timing: ")),
+                )
+                timings.update(
+                    {name: seconds * 1000 for name, seconds in phases.items()}
+                )
+        response.headers["Server-Timing"] = ", ".join(
+            f"{name};dur={duration:.3f}" for name, duration in timings.items()
+        )
+        logging.getLogger(__name__).info(
+            "Author launch action=%s revision=%s total_seconds=%.6f diagnostics=%s",
+            command.action,
+            ref,
+            time.perf_counter() - started,
+            completed.stderr.strip(),
+        )
         if completed.returncode:
             detail = completed.stderr.strip().splitlines()
             if completed.returncode == AUTHOR_VALIDATION_TIMEOUT_EXIT:
@@ -527,7 +574,9 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
         return TypeAdapter(ComparisonResult).validate_json(completed.stdout)
 
     @app.get(f"{_API_PREFIX}/experiment-launcher")
-    def experiment_launch_catalog(code_revision: str | None = None) -> LaunchCatalog:
+    def experiment_launch_catalog(
+        response: Response, code_revision: str | None = None
+    ) -> LaunchCatalog:
         return LaunchCatalog.model_validate_json(
             launch_call(
                 LaunchRequest(
@@ -535,16 +584,19 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
                     code_revision=AuthorRevisionRef(content_hash=code_revision)
                     if code_revision
                     else None,
-                )
+                ),
+                response,
             )
         )
 
     @app.post(f"{_API_PREFIX}/experiment-launcher/preview")
-    def experiment_launch_preview(command: LaunchRequest) -> LaunchPreview:
+    def experiment_launch_preview(
+        command: LaunchRequest, response: Response
+    ) -> LaunchPreview:
         if command.action != "preview":
             raise HTTPException(422, "Expected preview action")
         cursor = application.manual_previews.cursor()
-        preview = LaunchPreview.model_validate_json(launch_call(command))
+        preview = LaunchPreview.model_validate_json(launch_call(command, response))
         selection = launch_sample_selection(command, preview.config_source)
         if selection is not None:
             selector = (
@@ -586,14 +638,16 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
         return LaunchSubmission(procedure_id=procedure_id)
 
     @app.post(f"{_API_PREFIX}/experiment-launcher/submit")
-    def experiment_launch_submit(command: LaunchRequest) -> LaunchSubmission:
+    def experiment_launch_submit(
+        command: LaunchRequest, response: Response
+    ) -> LaunchSubmission:
         if command.action != "submit" or not command.request_key.strip():
             raise HTTPException(422, "Submit requires a request key")
         try:
             application.manual_previews.require_binding(command)
         except ValueError as error:
             raise HTTPException(422, str(error)) from error
-        admitted = LaunchSubmission.model_validate_json(launch_call(command))
+        admitted = LaunchSubmission.model_validate_json(launch_call(command, response))
         return dispatch_procedure(admitted.procedure_id)
 
     @app.post(f"{_API_PREFIX}/procedures/{{procedure_run_id}}/dispatch")

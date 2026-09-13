@@ -1,4 +1,4 @@
-"""Revision-aware notebook entry point; fresh workers own all project imports."""
+"""Notebook entry point with project imports isolated by source revision."""
 
 from __future__ import annotations
 

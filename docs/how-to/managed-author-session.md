@@ -308,3 +308,11 @@ not add another record or change the scan.
 The helper also accepts coordinates returned by `context.scan(...)`. It rejects
 ordinary runtime inputs and computed expressions: those are values, not direct
 point coordinates. Return computed values as ordinary results instead.
+
+### Preparation latency
+
+The first prepare for a source revision loads its isolated author environment.
+Repeated prepares reuse that worker while still checking the current request
+and configuration. Refresh selects a separate version; old prepared experiments
+keep their original identity. Maintainers can reproduce and diagnose latency
+with the [author performance benchmark](../development/author-performance.md).
