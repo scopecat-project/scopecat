@@ -316,3 +316,63 @@ Repeated prepares reuse that worker while still checking the current request
 and configuration. Refresh selects a separate version; old prepared experiments
 keep their original identity. Maintainers can reproduce and diagnose latency
 with the [author performance benchmark](../development/author-performance.md).
+
+### Observe an experiment before it finishes
+
+Use the same retained job for read-only progress and bounded data previews:
+
+```python
+job = checked.run()
+progress = job.progress()
+print(progress.state)
+
+preview = job.preview(limit=10)
+child = preview.progress.current_child
+if child is not None:
+    print(child.step_key, child.run.run_id)
+    print(child.run.control.completed_point_count)
+    if preview.latest is not None:
+        print(preview.latest.point_index, preview.latest.observables)
+    if preview.live is not None:
+        print(preview.live.received_record_count, preview.live.durable_record_count)
+
+job.wait()
+run = job.result(step="experiment")
+```
+
+Each call performs bounded reads; it starts no polling thread and does not submit
+or resume anything. Reopen the receipt with `author.reopen(receipt)` in another
+Python session and call the same methods while the experiment is still running.
+
+`progress.state` distinguishes waiting for dispatch, starting, waiting for an
+acquisition/resources, acquiring, settling, running another step, paused dispatch,
+attention/input, cancellation in progress, and the final succeeded/failed/cancelled
+outcomes. The underlying procedure, dispatch and child run snapshots retain the
+exact reasons and identities. A missing admission still raises
+`AuthorSubmissionUncertain`, rather than guessing that it is queued.
+
+`preview()` selects the **current unsettled acquisition**, with its exact step key,
+attempt and admitted run ID. In multi-step procedures successive calls may name
+different steps; label plots by that identity. Retry attempts of one step retain
+its admitted effect identity. The active child does not depend on history paging;
+`progress.steps` contains at most 50 attempts and `steps.next_cursor` selects the
+next page via `job.progress(cursor=...)`.
+
+`latest` is the latest daemon-received record, possibly not yet persisted. It is
+absent before data arrives or after the live buffer closes. `live` carries the
+received/durable record counts and whether that buffer is active. Before dataset
+initialization it is None; the next explicit read can discover the schema.
+
+`durable` separately contains a bounded prefix of stored point records. The limit
+is 1–100 records; `truncated` indicates omitted records. With no current acquisition,
+including after the step completes, `durable` and `live` are None. This is a small
+preview, not a continuous stream or full dataset export. Reading never forces a
+flush. Completed-point coverage may remain zero while a live record is visible;
+received, durable and recoverable coverage are different facts.
+
+Every preview is explicitly `provisional`: partial coverage is not a sealed
+analysis dataset. Use the child's completed count and accepted point plan to
+interpret progress; an adaptive plan's accepted size need not be its final size.
+Progress and records are successive observations, not an atomic snapshot, and
+execution may finish between the reads. Even then use `job.result(step=...)` for
+the retained successful acquisition and normal analysis/provenance APIs.

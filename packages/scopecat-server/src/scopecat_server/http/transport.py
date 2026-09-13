@@ -94,6 +94,7 @@ from scopecat.automation.calibration_wire import (
     CalibrationStatusQuery,
     CalibrationStatusReceipt,
 )
+from scopecat.automation.views import ProcedureOperatorView
 from scopecat.automation.wire import (
     ProcedureStepResourceWaitCommand,
     ProcedureStepResourceWaitReceipt,
@@ -299,7 +300,6 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from scopecat_server.http.procedure_operator import (
-    ProcedureOperatorView,
     read_procedure_operator,
 )
 from scopecat_server.retained_request import AnalysisCall, ComparisonCall

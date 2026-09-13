@@ -31,6 +31,7 @@ from scopecat.application.launch import (
 )
 from scopecat.authoring.experiments import ExperimentRequest, Scan
 from scopecat.automation.models import ProcedureRun, RunOutputRef
+from scopecat.automation.views import ProcedureOperatorView
 from scopecat.automation.wire import (
     ProcedureCancelCommand,
     ProcedureRunListQuery,
@@ -38,6 +39,7 @@ from scopecat.automation.wire import (
 )
 from scopecat.config.candidates import CandidateConfig
 from scopecat.daemon.client import DaemonClient, DaemonUnavailableError
+from scopecat.daemon.views import MeasurementLivePreview, MeasurementPreview
 from scopecat.kernel.errors import SessionClosedError
 from scopecat.kernel.quantity import Quantity
 from scopecat.records.author_revision import (
@@ -50,6 +52,7 @@ from scopecat.records.config_context import ConfigContextRef
 from scopecat.records.control_edit import ControlEdit
 from scopecat.records.experiment_plan import ExperimentPlanRevision, ExperimentPlanSave
 from scopecat.records.launch_request import LaunchRequest
+from scopecat.records.measurement import MeasurementRecord
 from scopecat.records.parameter_update import ParameterUpdate
 from scopecat.records.plan_ref import ExperimentPlanRef, PlanAnalysisSource
 from scopecat.records.run import AnalysisCandidateRunConfigSource
@@ -482,6 +485,28 @@ class AuthorSubmissionUncertain(RuntimeError):
 
 
 @dataclass(frozen=True, slots=True)
+class AuthorLivePreview:
+    """Latest received record and bounded durable preview for an acquisition.
+
+    Progress and records are successive reads, not an atomic snapshot. This is
+    always a provisional preview, never a sealed dataset or analysis input.
+    """
+
+    progress: ProcedureOperatorView
+    durable: MeasurementPreview | None
+    live: MeasurementLivePreview | None
+
+    @property
+    def latest(self) -> MeasurementRecord | None:
+        """Latest received record, potentially not yet persisted."""
+        return None if self.live is None else self.live.latest
+
+    @property
+    def provisional(self) -> Literal[True]:
+        return True
+
+
+@dataclass(frozen=True, slots=True)
 class AuthorJob:
     """A locally retained request identity, connected to one session.
 
@@ -527,6 +552,43 @@ class AuthorJob:
     @property
     def id(self) -> str:
         return self.snapshot.procedure_run_id
+
+    def progress(self, *, cursor: int | None = None) -> ProcedureOperatorView:
+        """Observe dispatch, the exact current step/run and bounded history.
+
+        Reopening uses the original receipt, including for resumed procedures.
+        History has at most 50 attempts; pass steps.next_cursor for another page.
+        The current child is independent of that history cursor.
+        """
+        return self.client.procedure_progress(self.id, cursor=cursor)
+
+    def preview(self, *, limit: int = 100) -> AuthorLivePreview:
+        """Read the latest received record and up to 100 durable records.
+
+        No current child means durable/live are None (including after completion).
+        Before the dataset is initialized live is None; latest may be absent.
+        Every response names its procedure, step/attempt and run; calls may observe a
+        later step. Use result(step=...) for a retained successful acquisition.
+        """
+        if not 1 <= limit <= 100:
+            raise ValueError("preview limit must be between 1 and 100")
+        progress = self.progress()
+        child = progress.current_child
+        measurements = (
+            None
+            if child is None
+            else self.client.measurement_preview(child.run.run_id, limit=limit)
+        )
+        live = (
+            self.client.measurement_live_preview(
+                child.run.run_id, dataset_schema=measurements.dataset_schema
+            )
+            if child is not None
+            and measurements is not None
+            and measurements.dataset_schema is not None
+            else None
+        )
+        return AuthorLivePreview(progress, measurements, live)
 
     def wait(self, *, timeout: float = 60, interval: float = 0.2) -> AuthorJob:
         """Wait up to timeout seconds; attention and cancellation are distinct.

@@ -6,8 +6,10 @@ from types import SimpleNamespace
 from typing import cast
 from unittest.mock import Mock, patch
 
+import httpx2
 import pytest
 from fastapi.testclient import TestClient
+from scopecat.application.author_project import AuthorJob, AuthorProject
 from scopecat.automation import (
     ProcedureDefinitionRef,
     ProcedureRun,
@@ -19,6 +21,7 @@ from scopecat.automation import (
 from scopecat.daemon.views import RunDetail
 from scopecat.kernel.content_identity import sha256_json_hash
 from scopecat.records.author_revision import AuthorRevisionState
+from scopecat.records.launch_request import LaunchRequest
 from scopecat.records.manual_preview import ManualPreviewBinding, ManualPreviewFence
 
 from scopecat_server.http.procedure_operator import read_procedure_operator
@@ -32,7 +35,7 @@ NOW = datetime(2026, 9, 1, tzinfo=UTC)
 HASH = "sha256:" + "1" * 64
 
 
-def _application(root: Path) -> tuple[DaemonApplication, Mock]:
+def _application(root: Path, *, attempt: int = 1) -> tuple[DaemonApplication, Mock]:
     command = ProcedureSubmitCommand(
         request_key="retained",
         definition=ProcedureDefinitionRef(
@@ -56,7 +59,7 @@ def _application(root: Path) -> tuple[DaemonApplication, Mock]:
     step = ProcedureStepAttempt(
         procedure_run_id=procedure.procedure_run_id,
         step_key="acquire",
-        attempt=1,
+        attempt=attempt,
         operation="run",
         intent_hash=HASH,
         revision=1,
@@ -128,10 +131,12 @@ def _application(root: Path) -> tuple[DaemonApplication, Mock]:
     return application, lookup
 
 
+@pytest.mark.parametrize("attempt", [1, 2])
 def test_current_child_and_dispatch_gate_do_not_depend_on_history_page(
     tmp_path: Path,
+    attempt: int,
 ) -> None:
-    application, lookup = _application(tmp_path)
+    application, lookup = _application(tmp_path, attempt=attempt)
     manager = ProjectProcedureWorkers(lambda: tmp_path, lambda _: "ready")
     first = read_procedure_operator(application, manager, "procedure-1")
     older = read_procedure_operator(application, manager, "procedure-1", cursor=1)
@@ -225,3 +230,50 @@ def test_dispatch_snapshot_survives_restart_and_read_never_spawns(
         view = restarted.snapshot("procedure-1")
     assert view.management == "paused" and not view.worker_running
     spawn.assert_not_called()
+
+
+def test_author_preview_reads_exact_current_child_not_latest_history(
+    tmp_path: Path,
+) -> None:
+    application, lookup = _application(tmp_path)
+    manager = ProjectProcedureWorkers(lambda: tmp_path, lambda _: "ready")
+    view = read_procedure_operator(application, manager, "procedure-1", cursor=1)
+    calls: list[str] = []
+
+    def respond(request: httpx2.Request) -> httpx2.Response:
+        assert request.method == "GET"
+        calls.append(request.url.path)
+        if request.url.path.endswith("/operator"):
+            return httpx2.Response(200, json=view.model_dump(mode="json"))
+        if request.url.path.endswith("/measurements/preview"):
+            assert request.url.params["limit"] == "2"
+            assert request.url.path.endswith(
+                "/runs/admitted-child/measurements/preview"
+            )
+            return httpx2.Response(200, json={"items": [], "truncated": False})
+        assert request.url.params["request_key"] == "retained"
+        return httpx2.Response(
+            200, json={"items": [view.procedure.model_dump(mode="json")]}
+        )
+
+    with AuthorProject(
+        "http://test", transport=httpx2.MockTransport(respond)
+    ) as author:
+        job = AuthorJob.retain(
+            author,
+            tmp_path / "job.json",
+            LaunchRequest(
+                action="preview",
+                experiment="signal",
+                version="1",
+                request_key="retained",
+            ),
+        )
+        preview = job.preview(limit=2)
+        assert preview.progress.state == "attention_required"
+        assert preview.progress.current_step is not None
+        assert preview.progress.current_step.step_key == "acquire"
+        assert preview.durable is not None and not preview.durable.items
+        assert preview.provisional
+    lookup.assert_called_with(procedure_step_operation_id("procedure-1", "acquire"))
+    assert len(calls) == 3

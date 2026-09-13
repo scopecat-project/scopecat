@@ -114,6 +114,19 @@ def test_wait_distinguishes_operator_outcomes(
 
     def respond(request: httpx2.Request) -> httpx2.Response:
         calls.append(request.method)
+        if request.url.path.endswith("/operator"):
+            return httpx2.Response(
+                200,
+                json={
+                    "procedure": snapshot,
+                    "steps": {"procedure_run_id": "original", "items": []},
+                    "dispatch": {"management": "unmanaged", "worker_running": False},
+                    "current_step": None,
+                    "current_child": None,
+                    "child_runs": [],
+                    "dispatch_blocked_reason": None,
+                },
+            )
         return httpx2.Response(200, json={"items": [snapshot]})
 
     with AuthorProject(
@@ -128,7 +141,12 @@ def test_wait_distinguishes_operator_outcomes(
         )
         with pytest.raises(getattr(author_api, error)):
             job.wait(timeout=0)
-    assert calls == ["GET"]
+        expected = closure or ("waiting_for_dispatch" if state == "ready" else state)
+        assert job.progress().state == expected
+        assert job.preview().durable is None
+        with pytest.raises(ValueError, match="limit"):
+            job.preview(limit=101)
+    assert calls == ["GET"] * 5
 
 
 @pytest.mark.parametrize("status", [422, 500, 503])

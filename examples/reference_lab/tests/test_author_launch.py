@@ -74,6 +74,29 @@ def reference_lab_daemon(
         "-> sc.Input[float]:\n"
         "    return level\n"
     )
+    # Hold a later compute batch until the observer has read the first one.
+    source += f"""
+
+def preview_value(frequency: sc.Quantity) -> float:
+    from pathlib import Path
+    import time
+    if frequency.to("GHz").value > 4.75:
+        release = Path({str(root / "release-preview")!r})
+        deadline = time.monotonic() + 60
+        while not release.exists():
+            if time.monotonic() > deadline:
+                raise TimeoutError("Preview observer did not release virtual point")
+            time.sleep(0.02)
+    return float(frequency.to("GHz").value)
+
+@sc.experiment
+def preview_signal(
+    experiment: sc.ExperimentContext,
+    frequency: Annotated[sc.Input[sc.Quantity], sc.ControlSpec(scannable=True)]
+        = sc.Quantity(4.7, "GHz"),
+) -> sc.ValueRef[float]:
+    return experiment.compute(fn=preview_value, frequency=frequency)
+"""
     source_path.write_text(source, encoding="utf-8")
     project = load_project(root / "scopecat.toml")
     with isolated_project_imports():
@@ -495,3 +518,58 @@ def test_author_inspection_is_bounded_and_retained_without_a_live_client(
     assert prepared.inspection.selected_point.coordinates
     assert prepared.inspection.item_counts
     assert prepared.preview.model_dump_json() == retained
+
+
+def test_author_reads_ongoing_preview_after_reconnect(
+    reference_lab_daemon: AuthorDaemon,
+) -> None:
+    fixture = reference_lab_daemon
+    release = fixture.root / "release-preview"
+    try:
+        with AuthorProject(fixture.url, receipts=fixture.root / "receipts") as author:
+            job = author.prepare(
+                "preview_signal",
+                scans={"frequency": [*np.linspace(4.7, 4.74, 32), 4.8]},
+            ).run()
+            receipt = job.receipt
+        with AuthorProject(fixture.url) as observer:
+            reopened = observer.reopen(receipt)
+            deadline = time.monotonic() + 60
+            while True:
+                preview = reopened.preview(limit=1)
+                if preview.latest is not None:
+                    break
+                assert time.monotonic() < deadline, preview.progress
+                time.sleep(0.2)
+            assert preview.provisional
+            assert 0 <= preview.latest.point_index < 32
+            assert preview.live is not None
+            assert 1 <= preview.live.received_record_count <= 32
+            assert (
+                0
+                <= preview.live.durable_record_count
+                <= preview.live.received_record_count
+            )
+            assert preview.durable is not None
+            assert len(preview.durable.items) <= 1
+            assert preview.progress.procedure.closure is None
+            step = preview.progress.current_step
+            child = preview.progress.current_child
+            assert step is not None and child is not None
+            assert step.step_key == child.step_key == "experiment"
+            assert step.attempt == 1
+            assert child.run.snapshot.outcome is None
+            assert child.run.control.completed_point_count <= 32
+            with pytest.raises(RuntimeError, match="no retained acquisition"):
+                reopened.result()
+            release.touch()
+            reopened.wait(timeout=60)
+            assert reopened.result().id == child.run.run_id
+            assert (
+                len(reopened.result().measurements()["result"].require_values()) == 33
+            )
+            final = reopened.preview()
+            assert final.progress.state == "succeeded"
+            assert final.durable is None and final.live is None
+    finally:
+        release.touch()
