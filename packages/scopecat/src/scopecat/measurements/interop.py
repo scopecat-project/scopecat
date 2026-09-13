@@ -562,11 +562,18 @@ class MeasurementDataProjection:
             table.to_batches(max_chunksize=batch_size),
         )
 
-    def to_xarray(self) -> xr.Dataset:
-        """Project aliases and units while preserving Xarray dimension semantics."""
+    def to_xarray(
+        self, *, dims: Mapping[str, Sequence[str]] | None = None
+    ) -> xr.Dataset:
+        """Export data with optional field-owned names for dense acquisition axes.
+
+        ``dims={"iq": ("shot",)}`` names iq's non-point dimensions in order.
+        Shared source axes are renamed together; independent axes cannot merge.
+        Raw data and the retained projection schema keep their source identities.
+        """
 
         if self.schema.entity_selection is not None:
-            return self._selected_local().to_xarray()
+            return self._selected_local().to_xarray(dims=dims)
         source = self.dataset.to_xarray()
         point = source.coords["point"]
         coords: dict[str, object] = {
@@ -612,7 +619,7 @@ class MeasurementDataProjection:
                             "source_variable": field.name,
                         },
                     )
-        return xr.Dataset(
+        result = xr.Dataset(
             data_vars=data_vars,
             coords=coords,
             attrs={
@@ -620,6 +627,9 @@ class MeasurementDataProjection:
                 "scopecat_projection_json": _stable_json(asdict(self.schema)),
             },
         )
+        if dims:
+            result = _rename_acquisition_dims(result, self.schema.fields, dims)
+        return result
 
     def to_pandas(
         self,
@@ -665,6 +675,55 @@ class MeasurementDataProjection:
 
         module = cast("_PolarsModule", _optional_module("polars", extra="polars"))
         return cast("pl.DataFrame", module.from_arrow(self.to_arrow()))
+
+
+def _rename_acquisition_dims(
+    data: xr.Dataset,
+    fields: tuple[ProjectionField, ...],
+    requested: Mapping[str, Sequence[str]],
+) -> xr.Dataset:
+    """Resolve field-local names to a one-to-one map of durable axes."""
+    by_name = {field.name: field for field in fields}
+    renames: dict[str, str] = {}
+    for name, names in requested.items():
+        if name not in by_name:
+            raise KeyError(f"projection has no field {name!r}")
+        field = by_name[name]
+        if tuple(data[name].dims) != field.dims or field.dims[0] != "point":
+            raise ValueError(
+                f"{name}: dimension names require dense point-aligned data; "
+                "ragged observation dimensions keep their existing identities"
+            )
+        source_dims = field.dims[1:]
+        if isinstance(names, str) or len(names) != len(source_dims):
+            raise ValueError(
+                f"{name}: provide {len(source_dims)} acquisition dimension names "
+                "in order, excluding point"
+            )
+        for source, target in zip(source_dims, names, strict=True):
+            if not target:
+                raise ValueError(f"{name}: dimension names must be non-empty strings")
+            if source in renames and renames[source] != target:
+                raise ValueError(
+                    f"{name}: shared axis {source!r} has conflicting names "
+                    f"{renames[source]!r} and {target!r}"
+                )
+            renames[source] = target
+    owners: dict[str, str] = {}
+    for source in data.dims:
+        target = renames.get(str(source), str(source))
+        if target in owners:
+            raise ValueError(
+                f"dimension {target!r} would merge independent axes "
+                f"{owners[target]!r} and {source!r}; choose distinct names"
+            )
+        if target != source and (target in data.variables or target in data.dims):
+            raise ValueError(f"dimension name {target!r} is already in use")
+        owners[target] = str(source)
+    changed = {source: target for source, target in renames.items() if source != target}
+    result = data.rename_dims(changed)
+    result.attrs["scopecat_dimension_aliases_json"] = _stable_json(changed)
+    return result
 
 
 def bind_projection(
