@@ -11,7 +11,7 @@ from typing import Generic, ParamSpec, SupportsFloat, TypeVar, cast
 
 from scopecat.kernel.python_source import python_source_identity
 from scopecat.kernel.quantity import Quantity
-from scopecat.program.controls import ControlSet
+from scopecat.program.controls import Control, ControlSet
 from scopecat.program.definitions import ExperimentInvocation
 
 type ExperimentBuilder[ResultT] = Callable[
@@ -34,6 +34,7 @@ class ExperimentInput:
     annotation: object
     default: object
     runtime: bool
+    control: Control | None = None
 
     @property
     def required(self) -> bool:
@@ -116,7 +117,7 @@ class Experiment(Generic[_P, _ExperimentResultT_co]):
         bound.apply_defaults()
         values = dict(bound.arguments)
         for control in self.controls.fields:
-            if control.ownership == "editable":
+            if control.ownership == "editable" and control.default is not None:
                 values.setdefault(control.id, control.default)
         return ExperimentRequest(self, deepcopy(values))
 

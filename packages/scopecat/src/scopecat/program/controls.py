@@ -45,8 +45,6 @@ class Control:
             object.__setattr__(self, "unit", self.default.unit)
         if self.default is not None:
             object.__setattr__(self, "default", self.normalize(self.default))
-        if self.ownership == "editable" and self.default is None:
-            raise ValueError(f"editable control {self.id!r} needs a scalar default")
         if self.ownership != "editable" and (self.resolve is None or self.scannable):
             raise ValueError("owned controls need a resolver and cannot be scanned")
 
@@ -68,6 +66,8 @@ class Control:
         return coordinate(self.id, self.value_type)
 
     def normalize(self, value: object) -> ControlScalar:
+        if value is None:
+            raise ValueError(f"{self.id}: required control needs a value")
         normalized = coerce_literal(self.value_type, value, path=(self.id,))
         assert isinstance(normalized, float | Quantity)
         return normalized
@@ -117,7 +117,9 @@ class ControlSet:
 
     def default_axes(self) -> tuple[AxisSpec, ...]:
         return tuple(
-            field.fixed_axis(field.default) for field in self.fields if field.scannable
+            field.fixed_axis(field.default)
+            for field in self.fields
+            if field.scannable and field.default is not None
         )
 
     def validate(self, context: ControlValidationContext) -> None:

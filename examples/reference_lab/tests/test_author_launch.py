@@ -68,6 +68,11 @@ def reference_lab_daemon(
         "\n@sc.experiment\n"
         "def required_target(context: sc.ExperimentContext, qubit: str) -> None:\n"
         "    del context, qubit\n"
+        "\n@sc.experiment\n"
+        "def required_level(context: sc.ExperimentContext, "
+        "level: Annotated[sc.Input[float], sc.ControlSpec(scannable=True)]) "
+        "-> sc.Input[float]:\n"
+        "    return level\n"
     )
     source_path.write_text(source, encoding="utf-8")
     project = load_project(root / "scopecat.toml")
@@ -190,7 +195,11 @@ def test_copied_author_uses_shared_control_plan_and_real_retained_run(
             lab,
             edits={
                 "frequency": sc.axis(
-                    selected.controls.fields[0].ref,
+                    next(
+                        field.ref
+                        for field in selected.controls.fields
+                        if field.id == "frequency"
+                    ),
                     [Quantity(4.7, "GHz"), Quantity(4.8, "GHz"), Quantity(4.9, "GHz")],
                 )
             },
@@ -412,3 +421,21 @@ def test_imported_request_rejects_changed_declaration_but_can_select_old_revisio
         finally:
             path.write_text(fixture.source, encoding="utf-8")
             author.refresh()
+
+
+def test_required_control_uses_existing_catalog_preview_and_plan_paths(
+    reference_lab_daemon: AuthorDaemon,
+) -> None:
+    with AuthorProject(reference_lab_daemon.url) as author:
+        entry = next(
+            item for item in author.catalog().entries if item.id == "required_level"
+        )
+        assert entry.controls[0].default is None
+        with pytest.raises(httpx2.HTTPStatusError, match="level"):
+            author.prepare("required_level")
+        prepared = author.prepare("required_level", scans={"level": [0.1, 0.2]})
+        assert prepared.preview.point_count == 2
+        saved = prepared.save_plan("Required numeric control", saved_by="operator")
+        reopened = author.prepare_plan(saved.ref, actor="operator")
+        assert reopened.preview.point_count == 2
+        assert reopened.request.control_edits == prepared.request.control_edits
