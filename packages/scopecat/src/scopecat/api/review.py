@@ -6,16 +6,15 @@ import atexit
 from contextlib import suppress
 from datetime import UTC, datetime
 from threading import Event, Lock, Thread
-from typing import Self, cast
+from typing import Self
 
 from scopecat.authoring.experiments import ExperimentInvocation
-from scopecat.control.models import PointCoordinateSpec, PointCoordinateValue
+from scopecat.control.models import PointCoordinateSpec
 from scopecat.daemon.client import DaemonClient
+from scopecat.daemon.review_projection import inspection_domain, inspection_point
 from scopecat.daemon.reviews import (
     ReviewCompilationResult,
     ReviewCompletionCommand,
-    ReviewInspectionView,
-    ReviewPointView,
     ReviewSessionCreateCommand,
     ReviewSessionView,
     ReviewWorkItem,
@@ -23,7 +22,7 @@ from scopecat.daemon.reviews import (
 from scopecat.execution.program import RunProgram
 from scopecat.planning.point_selection import point_coordinate_contract
 from scopecat.planning.preview import build_run_program_preview
-from scopecat.planning.preview_models import ExperimentPreview, ExperimentPreviewPoint
+from scopecat.planning.preview_models import ExperimentPreview
 
 _WORKER_POLL_SECONDS = 0.2
 
@@ -161,7 +160,7 @@ def create_experiment_review(
         experiment_id=program.experiment_id,
         experiment_kind=program.points.experiment_kind,
         coordinates=_coordinate_specs(program),
-        planned_points=tuple(_review_point(point) for point in preview.points),
+        planned_points=tuple(inspection_point(point) for point in preview.points),
         planned_points_truncated=preview.points_truncated,
         initial_result=_review_result("initial", preview),
     )
@@ -190,28 +189,11 @@ def _review_result(
         point=(
             None
             if preview.selected_point is None
-            else _review_point(preview.selected_point)
+            else inspection_point(preview.selected_point)
         ),
         inspections=tuple(
-            ReviewInspectionView(
-                operation_id=inspection.operation_id,
-                point_index=inspection.point_index,
-                target_id=inspection.target_id,
-                artifact_id=inspection.artifact_id,
-                artifact_fingerprint=inspection.artifact_fingerprint,
-                content=inspection.content,
-            )
-            for inspection in preview.domain_inspections
+            inspection_domain(inspection) for inspection in preview.domain_inspections
         ),
-    )
-
-
-def _review_point(selected: ExperimentPreviewPoint) -> ReviewPointView:
-    return ReviewPointView(
-        point_index=selected.point_index,
-        coordinates=cast("dict[str, PointCoordinateValue]", selected.coordinates),
-        proposal_fingerprint=selected.proposal_fingerprint,
-        source=selected.source,
     )
 
 

@@ -3969,6 +3969,80 @@ export interface components {
             saved_by: string;
         };
         /**
+         * ExperimentPreviewBinding
+         * @description One user value classified by ownership rather than authoring syntax.
+         */
+        ExperimentPreviewBinding: {
+            /** Id */
+            id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "input" | "coordinate" | "parameter";
+            /** Origin */
+            origin: ("default" | "override" | "values" | "range" | "around") | null;
+            /**
+             * Owner
+             * @enum {string}
+             */
+            owner: "invocation" | "point-plan" | "configuration";
+        };
+        /**
+         * ExperimentPreviewBindingEdge
+         * @description One parameter relationship without delimiter-encoded provenance.
+         */
+        ExperimentPreviewBindingEdge: {
+            /**
+             * Relation
+             * @enum {string}
+             */
+            relation: "centers" | "overlays";
+            source: components["schemas"]["ExperimentPreviewBindingRef"];
+            target: components["schemas"]["ExperimentPreviewBindingRef"];
+        };
+        /**
+         * ExperimentPreviewBindingRef
+         * @description Typed identity of one value in the preview binding graph.
+         */
+        ExperimentPreviewBindingRef: {
+            /** Id */
+            id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "input" | "coordinate" | "parameter";
+        };
+        /**
+         * ExperimentPreviewCompute
+         * @description Why one live compute runs at its compiler-selected placement.
+         */
+        ExperimentPreviewCompute: {
+            /**
+             * Captures
+             * @default []
+             */
+            captures: string[];
+            /** Demanded By */
+            demanded_by: string[];
+            /** Deterministic */
+            deterministic: boolean;
+            /** Id */
+            id: string;
+            /** Implementation */
+            implementation: string;
+            /** Inputs */
+            inputs: string[];
+            /** Outputs */
+            outputs: string[];
+            /**
+             * Placement
+             * @enum {string}
+             */
+            placement: "host" | "observation";
+        };
+        /**
          * ExperimentPreviewDomainInspection
          * @description One target-owned, non-durable inspection for the selected point.
          */
@@ -3984,6 +4058,71 @@ export interface components {
             point_index: number | null;
             /** Target Id */
             target_id: string;
+        };
+        ExperimentPreviewParameter: components["schemas"]["ExperimentPreviewParameterValue"] | components["schemas"]["ExperimentPreviewParameterLookup"];
+        /**
+         * ExperimentPreviewParameterLookup
+         * @description A table-column dependency; key names are not resolved row identities.
+         */
+        ExperimentPreviewParameterLookup: {
+            /** Column Id */
+            column_id: string;
+            /** Key Columns */
+            key_columns: string[];
+            /**
+             * Kind
+             * @default lookup
+             * @constant
+             */
+            kind: "lookup";
+            /** Table Id */
+            table_id: string;
+        };
+        /**
+         * ExperimentPreviewParameterValue
+         * @description A scalar parameter dependency, without copying configuration values.
+         */
+        ExperimentPreviewParameterValue: {
+            /**
+             * Kind
+             * @default value
+             * @constant
+             */
+            kind: "value";
+            /** Parameter Id */
+            parameter_id: string;
+        };
+        /** ExperimentPreviewRecord */
+        ExperimentPreviewRecord: {
+            /** Dims */
+            dims: string[];
+            /** Dtype */
+            dtype: string;
+            /** Id */
+            id: string;
+            /** Recording Group Id */
+            recording_group_id: string | null;
+            role: components["schemas"]["MeasurementVariableRole"];
+            /** Shape */
+            shape: (number | null)[];
+            /** Unit */
+            unit: string | null;
+        };
+        /**
+         * ExperimentPreviewTransientProduct
+         * @description A demanded compute input whose product is not selected for retention.
+         */
+        ExperimentPreviewTransientProduct: {
+            /** Dims */
+            dims: string[];
+            /** Dtype */
+            dtype: string;
+            /** Id */
+            id: string;
+            /** Shape */
+            shape: (number | null)[];
+            /** Unit */
+            unit: string | null;
         };
         /**
          * ExternalLocation
@@ -4880,6 +5019,50 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * LaunchInspection
+         * @description A bounded section of the exact launch preview, never an editable program.
+         *
+         *     Keep the enclosing preview's request/configuration/source identity alongside
+         *     these facts. Parameter dependencies name fields, not resolved values or rows.
+         *     Domain inspection applies only to the selected point. Truncation is explicit
+         *     for each collection; target-owned waveform/program budgets remain in content.
+         */
+        LaunchInspection: {
+            /** Binding Edges */
+            binding_edges: components["schemas"]["ExperimentPreviewBindingEdge"][];
+            /** Bindings */
+            bindings: components["schemas"]["ExperimentPreviewBinding"][];
+            /** Computes */
+            computes: components["schemas"]["ExperimentPreviewCompute"][];
+            /** Domain Inspections */
+            domain_inspections: components["schemas"]["ReviewInspectionView-Output"][];
+            /** Item Counts */
+            item_counts: {
+                [key: string]: number;
+            };
+            /** Item Limit */
+            item_limit: number;
+            /** Parameters */
+            parameters: components["schemas"]["ExperimentPreviewParameter"][];
+            /** Point Limit */
+            point_limit: number;
+            /** Points */
+            points: components["schemas"]["ReviewPointView"][];
+            /** Points Truncated */
+            points_truncated: boolean;
+            /** Records */
+            records: components["schemas"]["ExperimentPreviewRecord"][];
+            /** Sampled Point Limit */
+            sampled_point_limit: number;
+            selected_point: components["schemas"]["ReviewPointView"] | null;
+            /** Total Point Count */
+            total_point_count: number | null;
+            /** Transient Products */
+            transient_products: components["schemas"]["ExperimentPreviewTransientProduct"][];
+            /** Truncated */
+            truncated: string[];
+        };
+        /**
          * LaunchPreview
          * @description Compile-only evidence for exactly one request and immutable configuration.
          */
@@ -4894,6 +5077,7 @@ export interface components {
             definition_hash?: components["schemas"]["Sha256ContentHash"] | null;
             /** Experiment Id */
             experiment_id: string;
+            inspection?: components["schemas"]["LaunchInspection"] | null;
             manual_state?: components["schemas"]["ManualPreviewFence"] | null;
             plan_ref?: components["schemas"]["ExperimentPlanRef"] | null;
             /**

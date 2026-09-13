@@ -425,6 +425,7 @@ def _compile_system_program(
         points=point_catalog,
         measurements=measurements,
         point_schedule=logical.point_schedule,
+        parameter_contracts=logical.parameter_contracts,
         point_groups=execution_plan.groups,
         measurement_computes=bound.bindings.measurement_computes,
         preview_compute_operations=(

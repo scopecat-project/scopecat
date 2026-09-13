@@ -22,6 +22,8 @@ from scopecat.planning.preview_models import (
     ExperimentPreviewBindingRef,
     ExperimentPreviewCompute,
     ExperimentPreviewDomainInspection,
+    ExperimentPreviewParameterLookup,
+    ExperimentPreviewParameterValue,
     ExperimentPreviewPoint,
     ExperimentPreviewPointGroup,
     ExperimentPreviewPointGrouping,
@@ -144,6 +146,18 @@ def build_run_program_preview(
             point_inspection is not None and point_inspection.planned_settings_truncated
         ),
         computes=_preview_computes(program),
+        parameters=tuple(
+            dict.fromkeys(
+                ExperimentPreviewParameterValue(parameter_id=contract.parameter_id)
+                if isinstance(contract, ParameterValueContract)
+                else ExperimentPreviewParameterLookup(
+                    table_id=contract.table_id,
+                    column_id=contract.column_id,
+                    key_columns=tuple(name for name, _ in contract.key_input_types),
+                )
+                for contract in program.parameter_contracts
+            )
+        ),
         bindings=bindings,
         binding_edges=binding_edges,
     )

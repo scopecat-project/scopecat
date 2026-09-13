@@ -455,3 +455,43 @@ def test_required_control_uses_existing_catalog_preview_and_plan_paths(
         reopened = author.prepare_plan(saved.ref, actor="operator")
         assert reopened.preview.point_count == 2
         assert reopened.request.control_edits == prepared.request.control_edits
+
+
+def test_author_inspection_is_bounded_and_retained_without_a_live_client(
+    reference_lab_daemon: AuthorDaemon,
+) -> None:
+    fixture = reference_lab_daemon
+    assert fixture.application.authors is not None
+    declaration = fixture.application.authors.get("copied_signal").declaration
+    request = declaration(gain=1.0)
+    request.values["frequency"] = sc.Scan(
+        sc.Quantity(float(value), "GHz") for value in np.linspace(4.7, 4.9, 70)
+    )
+    with AuthorProject(fixture.url) as author:
+        prepared = author.prepare(request)
+        facts = prepared.inspection
+        assert facts.total_point_count == 70
+        assert len(facts.points) == facts.sampled_point_limit == 64
+        assert facts.points_truncated
+        assert facts.selected_point is not None
+        assert facts.selected_point.point_index == 0
+        assert facts.records[0].id == "result"
+        assert any("response" in compute.implementation for compute in facts.computes)
+        assert any(
+            parameter.kind == "lookup"
+            and parameter.table_id == "qubits"
+            and parameter.column_id == "drive_carrier_frequency"
+            for parameter in facts.parameters
+        )
+        retained = prepared.preview.model_dump_json()
+        request.values["frequency"] = sc.Quantity(4.8, "GHz")
+        fixed = author.prepare(request)
+        assert fixed.inspection.total_point_count == 1
+        assert prepared.preview.model_dump_json() == retained
+        # Inspection edits are local copies, not another route to change a launch.
+        facts.selected_point.coordinates.clear()
+        facts.item_counts.clear()
+    assert prepared.inspection.selected_point is not None
+    assert prepared.inspection.selected_point.coordinates
+    assert prepared.inspection.item_counts
+    assert prepared.preview.model_dump_json() == retained
