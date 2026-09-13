@@ -16,6 +16,7 @@ from unittest.mock import Mock, patch
 import psutil
 import pytest
 from fastapi.testclient import TestClient
+from scopecat.daemon.endpoint import DAEMON_URL_ENV
 
 from scopecat_server.http.transport import create_app
 from scopecat_server.services.application import DaemonApplication
@@ -51,13 +52,19 @@ def test_helper_import_does_not_schedule_or_emit_validation_diagnostics(
     assert capsys.readouterr().err == ""
 
 
-def test_validation_cancels_timer_on_success_and_failure(tmp_path: Path) -> None:
+def test_validation_cancels_timer_on_success_and_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     from scopecat.project import load_project
 
     from scopecat_server import author_worker
 
     (tmp_path / "scopecat.toml").write_text("[lab]\n")
     project = load_project(tmp_path / "scopecat.toml")
+    # Validation runs in a child in production. In this direct unit call, own
+    # and restore its environment mutation so session-scoped lab fixtures keep
+    # their endpoint regardless of test order or shard assignment.
+    monkeypatch.setenv(DAEMON_URL_ENV, "http://validation-fixture.invalid")
     with (
         patch.object(faulthandler, "dump_traceback_later") as timer,
         patch.object(faulthandler, "cancel_dump_traceback_later") as cancel,
@@ -114,6 +121,15 @@ def test_slow_validation_retains_stack_and_reaps_worker(
         communicate_timeouts.append(timeout)
         if not launched:
             launched.append(process)
+            # Keep the normal startup budget, then inject a short real timeout
+            # only once the slow application has emitted its stack and identity.
+            assert timeout is not None
+            deadline = time.monotonic() + timeout
+            while not pid_file.exists():
+                assert process.poll() is None
+                assert time.monotonic() < deadline, "slow fixture never became ready"
+                time.sleep(0.01)
+            return communicate(process, input=input, timeout=0.1)
         return communicate(process, input=input, timeout=timeout)
 
     def observe_cleanup(
@@ -124,7 +140,9 @@ def test_slow_validation_retains_stack_and_reaps_worker(
         return result
 
     (tmp_path / "src/authors/slow.py").write_text(
-        "import json, os, time, psutil\ndef create_application(root):\n"
+        "import faulthandler, json, os, sys, time, psutil\n"
+        "def create_application(root):\n"
+        "    faulthandler.dump_traceback(file=sys.stderr)\n"
         f"    output = open({str(pid_file)!r}, 'w')\n"
         "    output.write(json.dumps({'pid': os.getpid(), "
         "'created': psutil.Process().create_time()}))\n"

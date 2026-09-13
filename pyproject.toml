@@ -401,6 +401,59 @@ max-complexity = 20
 # Immutable quantities are intentional declaration defaults, not mutable state.
 extend-immutable-calls = ["scopecat.Quantity", "scopecat.kernel.quantity.Quantity"]
 
+[tool.scopecat-tests]
+roots = ["examples/reference_lab/tests", "packages/scopecat/tests", "packages/scopecat-server/tests", "packages/scopecat-instruments/tests", "packages/scopecat-quantum/tests"]
+integration_paths = ["packages/scopecat-server/tests"]
+journey_paths = ["examples/reference_lab/tests", "packages/scopecat-server/tests/test_snapshot_integration.py", "packages/scopecat-server/tests/test_author_validation_diagnostics.py"]
+
+# Windows run 34757173348: summed setup/call/teardown seconds per file.
+[tool.scopecat-tests.weights]
+"examples/reference_lab/tests/test_acceptance.py" = 37.3
+"examples/reference_lab/tests/test_analysis_recovery.py" = 6.1
+"examples/reference_lab/tests/test_author_launch.py" = 232.3
+"examples/reference_lab/tests/test_author_refresh.py" = 161.5
+"examples/reference_lab/tests/test_awg_output_monitor.py" = 0.5
+"examples/reference_lab/tests/test_calibration_automation.py" = 29.7
+"examples/reference_lab/tests/test_comparison.py" = 78.8
+"examples/reference_lab/tests/test_controls.py" = 0.0
+"examples/reference_lab/tests/test_daemon_client.py" = 4.6
+"examples/reference_lab/tests/test_everyday_author.py" = 1.5
+"examples/reference_lab/tests/test_experiment_plans.py" = 145.2
+"examples/reference_lab/tests/test_exploration.py" = 3.3
+"examples/reference_lab/tests/test_flux_spectroscopy.py" = 9.9
+"examples/reference_lab/tests/test_gallery_notebooks.py" = 73.2
+"examples/reference_lab/tests/test_launch.py" = 111.5
+"examples/reference_lab/tests/test_managed_author_session.py" = 59.1
+"examples/reference_lab/tests/test_manual_launch.py" = 65.4
+"examples/reference_lab/tests/test_ordinary_analysis.py" = 80.2
+"examples/reference_lab/tests/test_parameter_contexts.py" = 10.0
+"examples/reference_lab/tests/test_parameter_structure.py" = 3.4
+"examples/reference_lab/tests/test_typed_candidates.py" = 115.3
+"examples/reference_lab/tests/test_unknown_parameter_authoring.py" = 2.0
+"examples/reference_lab/tests/test_xy_drive.py" = 0.2
+"examples/reference_lab/tests/unit/test_bench_devices.py" = 0.0
+"examples/reference_lab/tests/unit/test_compiler_parameters.py" = 0.0
+"examples/reference_lab/tests/unit/test_configuration.py" = 2.2
+"examples/reference_lab/tests/unit/test_drag_beta_automatic_publication.py" = 0.1
+"examples/reference_lab/tests/unit/test_drag_beta_durable_identities.py" = 0.0
+"examples/reference_lab/tests/unit/test_drag_beta_figure.py" = 0.0
+"examples/reference_lab/tests/unit/test_drag_beta_freshness.py" = 0.2
+"examples/reference_lab/tests/unit/test_drag_beta_procedure.py" = 0.2
+"examples/reference_lab/tests/unit/test_drag_beta_publication.py" = 6.3
+"examples/reference_lab/tests/unit/test_iq_semantics.py" = 0.0
+"examples/reference_lab/tests/unit/test_list_mode_cache_and_budget.py" = 1.5
+"examples/reference_lab/tests/unit/test_list_mode_device_runtime.py" = 0.8
+"examples/reference_lab/tests/unit/test_list_mode_inspection.py" = 0.2
+"examples/reference_lab/tests/unit/test_list_mode_placement.py" = 0.8
+"examples/reference_lab/tests/unit/test_list_mode_realtime.py" = 0.1
+"examples/reference_lab/tests/unit/test_list_mode_results.py" = 0.0
+"examples/reference_lab/tests/unit/test_list_mode_waveforms.py" = 1.6
+"examples/reference_lab/tests/unit/test_payloads.py" = 0.0
+"examples/reference_lab/tests/unit/test_provider.py" = 0.0
+"examples/reference_lab/tests/unit/test_quantum_runner.py" = 14.1
+"packages/scopecat-server/tests/test_author_validation_diagnostics.py" = 61.5
+"packages/scopecat-server/tests/test_snapshot_integration.py" = 44.7
+
 [tool.uv]
 exclude-newer = "3d"
 default-groups = ["dev"]

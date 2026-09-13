@@ -14,13 +14,18 @@ concurrency:
 
 jobs:
   python-tests:
-    name: Python tests (${{ matrix.os }})
+    name: Python ${{ matrix.group.label }} (${{ matrix.os }})
+    if: github.event_name != 'push'
     strategy:
       fail-fast: false
       matrix:
         os:
           - ubuntu-latest
           - windows-latest
+        group:
+          - { label: core, suite: core, shard: 1/1 }
+          - { label: journey-1, suite: journey, shard: 1/2 }
+          - { label: journey-2, suite: journey, shard: 2/2 }
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     steps:
@@ -37,28 +42,31 @@ jobs:
         with:
           enable-cache: true
 
-      - name: Run tests
-        if: runner.os != 'Windows'
-        run: uv run --locked pytest
-
-      - name: Run tests with Windows hang diagnostics
-        if: runner.os == 'Windows'
-        # Retained-run and source-refresh journeys share two Windows workers.
-        # Keep headroom for the full suite within the 20-minute job limit.
-        timeout-minutes: 18
+      - name: Run selected tests
         env:
           SCOPECAT_TEST_DIAGNOSTICS: test-diagnostics
-        run: uv run --locked python -m pytest -p scripts.pytest_windows_diagnostics
+        shell: bash
+        run: |
+          extra=()
+          if [[ "${{ runner.os }}" == "Windows" ]]; then
+            extra=(-p scripts.pytest_windows_diagnostics)
+          fi
+          uv run --locked python -m scopecat_testkit.check "${{ matrix.group.suite }}" \
+            --shard "${{ matrix.group.shard }}" -- --maxprocesses=2 "${extra[@]}"
 
-      - name: Retain Windows test diagnostics
-        if: always() && runner.os == 'Windows'
+      - name: Retain test timings and startup diagnostics
+        if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: windows-test-diagnostics
-          path: test-diagnostics/
+          name: tests-${{ matrix.os }}-${{ matrix.group.label }}
+          path: |
+            .test-results/
+            test-diagnostics/
+          include-hidden-files: true
           if-no-files-found: warn
 
       - name: Test data ecosystem adapters
+        if: matrix.group.label == 'core'
         run: >-
           uv run --locked --package scopecat --extra pandas pytest -q
           packages/scopecat/tests/measurements/test_dataset.py
@@ -197,6 +205,13 @@ jobs:
       - name: Build UI
         run: pnpm exec vite build
 
+      - name: Upload browser build
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: scopecat-ui-dist
+          path: apps/scopecat-ui/dist
+          retention-days: 7
+
       - name: Build pinned GUI pilot bundle
         run: uv run --project ../.. python ../../scripts/build_server_distribution.py
 
@@ -208,21 +223,55 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-      - name: Install Playwright Chromium
-        run: pnpm exec playwright install --with-deps chromium
-
-      - name: Run browser end-to-end test
-        run: pnpm exec playwright test
-
-      - name: Upload browser failure evidence
-        if: failure()
+  browser-tests:
+    name: Browser journey ${{ matrix.shard }}/2
+    if: github.event_name != 'push'
+    needs: ui
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: apps/scopecat-ui
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version-file: .python-version
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          enable-cache: true
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          package_json_file: apps/scopecat-ui/package.json
+          cache: true
+          cache_dependency_path: apps/scopecat-ui/pnpm-lock.yaml
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+      - run: pnpm install --frozen-lockfile
+      - run: uv sync --locked --project ../..
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: scopecat-ui-dist
+          path: apps/scopecat-ui/dist
+      - run: pnpm exec playwright install --with-deps chromium
+      - name: Run browser end-to-end shard
+        run: pnpm exec playwright test --project=journey-${{ matrix.shard }} --reporter=line,json
+        env:
+          PLAYWRIGHT_JSON_OUTPUT_FILE: test-results/timings.json
+      - name: Retain browser timings and failure evidence
+        if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: playwright-failure-${{ github.run_attempt }}
+          name: browser-${{ matrix.shard }}-${{ github.run_attempt }}
           path: |
             apps/scopecat-ui/playwright-report
             apps/scopecat-ui/test-results
-          if-no-files-found: ignore
+          if-no-files-found: warn
           retention-days: 7
 
   installed-pilot:
@@ -283,6 +332,7 @@ jobs:
     if: ${{ always() }}
     needs:
       - python-tests
+      - browser-tests
       - benchmark-smoke
       - installed-pilot
       - python-quality
@@ -294,6 +344,8 @@ jobs:
       - name: Require successful jobs
         env:
           INSTALLED_PILOT_RESULT: ${{ needs['installed-pilot'].result }}
+          EVENT_NAME: ${{ github.event_name }}
+          BROWSER_TESTS_RESULT: ${{ needs['browser-tests'].result }}
           PYTHON_TESTS_RESULT: ${{ needs['python-tests'].result }}
           BENCHMARK_SMOKE_RESULT: ${{ needs['benchmark-smoke'].result }}
           PYTHON_QUALITY_RESULT: ${{ needs['python-quality'].result }}
@@ -301,7 +353,13 @@ jobs:
           DOCS_RESULT: ${{ needs.docs.result }}
         run: |
           test "$INSTALLED_PILOT_RESULT" = success
-          test "$PYTHON_TESTS_RESULT" = success
+          if [ "$EVENT_NAME" = push ]; then
+            test "$PYTHON_TESTS_RESULT" = skipped
+            test "$BROWSER_TESTS_RESULT" = skipped
+          else
+            test "$PYTHON_TESTS_RESULT" = success
+            test "$BROWSER_TESTS_RESULT" = success
+          fi
           test "$BENCHMARK_SMOKE_RESULT" = success
           test "$PYTHON_QUALITY_RESULT" = success
           test "$UI_RESULT" = success

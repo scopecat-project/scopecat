@@ -11,3 +11,5 @@ node_modules/
 apps/scopecat-ui/dist/
 dist/scopecat-server/
 site/
+
+.test-results/

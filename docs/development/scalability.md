@@ -1,5 +1,8 @@
 # Scalability Benchmarks
 
+For development feedback, test tiers and CI qualification, see
+[test feedback](test-feedback.md).
+
 This document turns the scalability direction in the
 [project charter](project-charter.md) into representative workloads and
 measurements. It separates current implementation facts from target envelopes
