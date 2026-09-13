@@ -276,3 +276,24 @@ are released after completion or owner termination, so transient waveform
 transport does not become permanent run history. Execution commits at batch or
 checkpoint granularity; interactive reads use bounded pages and summaries. The
 [scalability benchmarks](../scalability.md) measure this boundary.
+
+### Current-store checks versus offline inspection
+
+`SQLiteProjectStore.bootstrap()` is an initialization operation for a quiescent
+store. The daemon owns its process lock before calling it. Its foreign-schema
+preflight uses `inspect_project_schema()` so rejecting an unsupported store does
+not create source sidecars, change journal mode or initialize object directories.
+That offline probe requires a quiescent source: copying a database and WAL is not
+a supported snapshot of a live writer.
+
+Known current stores use `SQLiteProjectStore.schema_version()` instead. It reads
+schema presence and version inside one SQLite read transaction, so concurrent WAL
+commits/checkpoints cannot make those queries observe different snapshots. This
+path participates in ordinary SQLite locking and may create sidecars; it is not
+an alternative nonmutating probe for foreign stores. Test service compositions
+reopening their own initialized databases use this path rather than re-running
+bootstrap while another composition is still alive. No global version cache or
+implicit migration is involved.
+
+See SQLite's [live-copy warning](https://www.sqlite.org/howtocorrupt.html) and
+[WAL read-only constraints](https://www.sqlite.org/wal.html#read_only_databases).

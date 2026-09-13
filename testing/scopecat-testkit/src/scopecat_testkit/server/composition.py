@@ -430,7 +430,13 @@ def sqlite_run_repository(project: str | Path) -> SQLiteTestRunRepository:
 
     database, objects = _sqlite_paths(project)
     sqlite = SQLiteDatabase(database)
-    SQLiteProjectStore(sqlite, objects).bootstrap()
+    store = SQLiteProjectStore(sqlite, objects)
+    if database.exists():
+        # These are test-owned current stores, often still open in another
+        # service composition. Read their live schema through SQLite.
+        store.schema_version()
+    else:
+        store.bootstrap()
     repository = SQLiteTestRunRepository(sqlite, objects)
     return repository
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
@@ -474,3 +475,76 @@ def test_bootstrap_retains_wal_until_database_shutdown(tmp_path: Path) -> None:
             reopened.execute("SELECT value FROM startup_probe").fetchone()[0]
             == "retained"
         )
+
+
+def test_current_schema_read_keeps_one_snapshot_during_checkpoint(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from scopecat_server.storage.sqlite import project_store
+
+    database = SQLiteDatabase(tmp_path / "control.sqlite3")
+    store = SQLiteProjectStore(database, tmp_path / "objects")
+    store.bootstrap()
+    has_schema = project_store._has_project_schema
+    changed = False
+
+    def change_version() -> None:
+        # Another connection commits and checkpoints between the two schema reads.
+        with sqlite3.connect(database.path) as writer:
+            writer.execute("UPDATE project_schema SET version = 99")
+            writer.commit()
+            writer.execute("PRAGMA wal_checkpoint(PASSIVE)").fetchone()
+
+    def checkpoint_after_schema_read(connection: sqlite3.Connection) -> bool:
+        nonlocal changed
+        found = has_schema(connection)
+        if not changed:
+            changed = True
+            with ThreadPoolExecutor(max_workers=1) as pool:
+                pool.submit(change_version).result(timeout=5)
+        return found
+
+    monkeypatch.setattr(
+        project_store, "_has_project_schema", checkpoint_after_schema_read
+    )
+    try:
+        assert store.schema_version() == 65
+        with pytest.raises(SchemaVersionError, match="version: 99"):
+            store.schema_version()
+    finally:
+        store.close()
+
+
+def test_reopening_current_test_store_does_not_copy_disappearing_wal(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from scopecat_testkit.server.runtime import sqlite_run_repository
+
+    from scopecat_server.storage.sqlite import project_store
+
+    first = sqlite_run_repository(tmp_path)
+    copy = project_store.shutil.copyfile
+    copies: list[Path] = []
+
+    def close_before_copy(source: Path, destination: Path) -> str:
+        copies.append(source)
+        first.sqlite.close()
+        return str(copy(source, destination))
+
+    # Old bootstrap enumerates WAL, then last-connection close removes it before
+    # copy. Current-store access must use SQLite, never this offline-copy path.
+    monkeypatch.setattr(project_store.shutil, "copyfile", close_before_copy)
+    try:
+        second = sqlite_run_repository(tmp_path)
+        try:
+            assert (
+                SQLiteProjectStore(second.sqlite, tmp_path / "objects").schema_version()
+                == 65
+            )
+            assert copies == []
+        finally:
+            second.sqlite.close()
+    finally:
+        first.sqlite.close()

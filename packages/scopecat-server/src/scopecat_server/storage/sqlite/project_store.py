@@ -38,7 +38,12 @@ class SQLiteProjectStore:
         self.objects = ImmutableObjectStore(objects)
 
     def bootstrap(self) -> None:
-        """Create the current store, refusing implicit schema migration."""
+        """Initialize a quiescent store, refusing implicit schema migration.
+
+        The daemon calls this while holding its process ownership lock. Known
+        current stores that may be active must use schema_version() instead of
+        repeating this offline preflight.
+        """
 
         try:
             # Reject old stores before creating directories or changing their
@@ -65,10 +70,14 @@ class SQLiteProjectStore:
             raise ProjectStoreError("failed to bootstrap project store") from error
 
     def schema_version(self) -> int:
-        """Return the supported project-store version or reject the database."""
+        """Check an existing current store in one SQLite snapshot, including WAL.
+
+        Unlike offline inspection this participates in SQLite locking and may
+        create sidecars. It is not the nonmutating probe for foreign stores.
+        """
 
         try:
-            with self.sqlite.read_connection() as connection:
+            with self.sqlite.read_transaction() as connection:
                 return self._require_current_version(connection)
         except SchemaVersionError:
             raise
@@ -132,6 +141,8 @@ def _check_existing_schema(connection: sqlite3.Connection) -> int | None:
 def inspect_project_schema(database: Path) -> int | None:
     """Reject unsupported data without creating SQLite sidecars in the source.
 
+    The caller must keep the source quiescent throughout this offline probe.
+    Active current stores use SQLiteProjectStore.schema_version(), not copies.
     Immutable reads cannot see WAL commits. Inspect a private copy when a WAL
     or rollback journal remains; SQLite may recover only that copy. Normally a
     stopped database has neither and requires no file copy.
