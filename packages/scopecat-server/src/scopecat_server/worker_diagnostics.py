@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
+import json
 import sys
+from typing import TYPE_CHECKING, cast
+
+if TYPE_CHECKING:
+    from pydantic import ValidationError
 
 DIAGNOSTIC_LIMIT = 8192
 AUTHOR_VALIDATION_TIMEOUT_EXIT = 75
@@ -16,6 +21,8 @@ _STAGES = frozenset(
         "author revision initialization",
         "project application load",
         "launch provider",
+        "retained analysis",
+        "retained comparison",
     }
 )
 
@@ -41,3 +48,25 @@ def diagnostic_excerpt(stderr: str | bytes | None) -> tuple[str, str]:
     if len(raw) > DIAGNOSTIC_LIMIT:
         tail = "[earlier stderr omitted; retaining last 8 KiB]\n" + tail
     return stage, tail
+
+
+def worker_server_timing(stderr: str, *, total_seconds: float) -> str:
+    """Nested milliseconds for the developer HTTP timing surface."""
+    timings = {"launch": total_seconds * 1000}
+    for line in stderr.splitlines():
+        if line.startswith("Scopecat launch timing: "):
+            phases = cast(
+                "dict[str, float]",
+                json.loads(line.removeprefix("Scopecat launch timing: ")),
+            )
+            timings.update({name: seconds * 1000 for name, seconds in phases.items()})
+    return ", ".join(f"{name};dur={duration:.3f}" for name, duration in timings.items())
+
+
+def report_validation_error(error: ValidationError) -> None:
+    """Keep field locations in the final diagnostic line consumed by HTTP."""
+    details = "; ".join(
+        f"{'.'.join(str(part) for part in item['loc']) or 'value'}: {item['msg']}"
+        for item in error.errors(include_url=False, include_input=False)
+    )
+    print(" ".join(f"{error.title}: {details}".splitlines()), file=sys.stderr)

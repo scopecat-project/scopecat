@@ -13,7 +13,7 @@ import pytest
 from scopecat.records.author_revision import AuthorRevisionRef
 from scopecat.records.launch_request import LaunchRequest
 
-from scopecat_server.services.launch_workers import LaunchWorkers
+from scopecat_server.services.revision_workers import RevisionWorkers
 
 _CODE = """
 import json, os, sys, time
@@ -61,10 +61,10 @@ def test_reuse_isolation_eviction_and_failure(tmp_path: Path) -> None:
         children.append(child)
         return child
 
-    pool = LaunchWorkers()
+    pool = RevisionWorkers()
     try:
         with patch(
-            "scopecat_server.services.launch_workers.subprocess.Popen",
+            "scopecat_server.services.revision_workers.subprocess.Popen",
             side_effect=spawn,
         ):
             a = pool.call(tmp_path, request())

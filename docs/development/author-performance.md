@@ -53,3 +53,41 @@ work. Native kernels are justified by CPU/allocation profiles of bounded IR or
 array workloads, not by time spent launching interpreters, importing modules or
 waiting for I/O. Keep a Python reference and compare semantic output when a
 kernel moves across a language boundary.
+
+## Retained analysis and comparison
+
+```console
+uv run --locked python -m benchmarks run author-analysis --repetitions 2
+```
+
+This copies the virtual reference project and records three virtual input runs
+outside the measured operations. It then measures the ordinary typed analysis
+API, repeated and edited arguments, comparison inspection and repeated/edited
+fits. Every request executes its function and uses normal publication; an
+identical publication may retain its existing receipt, but calculation results
+are not cached. Setup time is reported separately and no physical devices are
+used. Comparison follows analysis in this workload, so its first invocation may
+already have a warm retained-data worker.
+
+Retained-data work has a separate two-revision pool from launch work: a slow fit
+does not occupy the prepare queue. Together the pools retain at most four
+revision workers, in addition to existing execution workers. Within each pool
+calls are serialized and process/queue waits are bounded by the existing call
+budget. This trades bounded retained memory for interactive latency; it does
+not make CPU-heavy fitting fast or provide unrestricted analysis concurrency.
+
+Each request opens a fresh lab connection and reads the requested retained data.
+Ordinary analysis still validates its module against the selected source tree.
+Comparison candidate, rejection and handoff first reopen the exact saved
+run/analysis/hash and select that source's worker; editing the caller's current
+model, source or arguments cannot replace the retained selection. Unversioned
+comparison catalogs continue to use their fresh-process path.
+
+`Server-Timing` uses `launch` for total server operation time, `revision` and
+`application` for worker initialization, `operation` for the actual retained-data
+callback and `worker` for the enclosing worker call. These nested phases must
+not be added together. Both author and comparison HTTP timings are retained in
+the benchmark record. Errors discard the affected worker; the next explicit
+request reloads it. Timeout responses warn that publication may already have
+occurred and never automatically replay an operation. Input validation errors
+keep their field locations rather than returning only a Pydantic help URL.

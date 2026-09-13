@@ -6,6 +6,12 @@ from .model import BenchmarkCase
 
 BENCHMARK_CASES = (
     BenchmarkCase(
+        id="author-analysis",
+        kind="e2e",
+        module="benchmarks.e2e.author_analysis",
+        summary="Retained analysis and comparison through real author HTTP APIs",
+    ),
+    BenchmarkCase(
         id="author-prepare",
         kind="e2e",
         module="benchmarks.e2e.author_prepare",

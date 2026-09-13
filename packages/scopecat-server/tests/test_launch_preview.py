@@ -535,7 +535,7 @@ def test_inner_validation_timeout_survives_worker_and_http_boundary(
 
 def test_pinned_catalog_uses_pool_and_exposes_nested_timing() -> None:
     ref = AuthorRevisionRef(content_hash="sha256:" + "a" * 64)
-    with patch("scopecat_server.http.transport.LaunchWorkers.call") as call:
+    with patch("scopecat_server.http.transport.RevisionWorkers.call") as call:
         call.return_value = subprocess.CompletedProcess(
             "worker",
             0,

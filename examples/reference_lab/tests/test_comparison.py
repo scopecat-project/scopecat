@@ -16,6 +16,7 @@ from scopecat.application.launch import LaunchPreview, LaunchSubmission
 from scopecat.automation import RunOutputRef
 from scopecat.daemon.client import DaemonClient
 from scopecat.records.analysis import MeasurementAnalysisRecordInput
+from scopecat.records.author_revision import AuthorRevisionRef
 from scopecat.records.comparison import (
     ComparisonInspection,
     ComparisonPublication,
@@ -175,6 +176,7 @@ def test_two_retained_runs_fit_candidate_rejection_and_handoff() -> None:
         action = base.model_copy(
             update={
                 "action": "candidate",
+                "code_revision": AuthorRevisionRef(content_hash="sha256:" + "f" * 64),
                 "model_id": "changed-after-fit",
                 "model_version": "different",
                 "secondary_run": "changed-after-fit",
@@ -188,6 +190,7 @@ def test_two_retained_runs_fit_candidate_rejection_and_handoff() -> None:
         retained_request = candidate.fact_as(
             "comparison-request", COMPARISON_REQUEST_SCHEMA
         )
+        assert retained_request.code_revision == command.code_revision
         assert retained_request.primary == command.primary
         assert retained_request.secondary == command.secondary
         assert retained_request.parameters == command.parameters
