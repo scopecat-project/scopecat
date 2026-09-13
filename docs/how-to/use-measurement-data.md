@@ -483,3 +483,30 @@ reports, and parameter proposals become durable only through an explicit
 analysis publication attached to that run. See
 [Analysis publication](../concepts/analysis-publication.md) for its output ontology,
 lossless native-library boundary, revisions, and optional execution evidence.
+
+
+## Name acquisition dimensions for analysis
+
+A quantum program may retain a shot axis such as `shared/rabi-program/shot`.
+Name its exported dimension through the selected field instead of depending on
+that internal path:
+
+```python
+view = run.measurements().project({"amplitude": "amplitude", "iq": "iq"})
+data = view.to_xarray(dims={"iq": ("shot",)})
+mean_iq = data["iq"].mean(dim="shot").values
+```
+
+Names describe the field's dense non-point axes in order. The `point` dimension
+is retained even for one fixed point. Other selected fields sharing the same
+source axis receive the same name. Conflicting names for a shared axis, names
+that merge independent axes, and collisions with existing variables are errors.
+Two independent acquisitions can use `shot_a` and `shot_b` explicitly.
+
+This is an Xarray export option. Raw dimensions, Arrow/frame exports and the
+projection schema remain unchanged. The exported Dataset retains the source
+projection in `scopecat_projection_json` and the source-to-export dimension map
+in `scopecat_dimension_aliases_json`, both JSON strings suitable for NetCDF.
+Ragged observation layouts retain their existing identities and currently reject
+this dense-axis naming option. No namespace stripping or implicit alignment is
+performed.

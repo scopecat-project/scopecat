@@ -47,7 +47,7 @@ class SQLiteProjectStore:
                 inspect_project_schema(self.database)
             self.database.parent.mkdir(parents=True, exist_ok=True)
             self.objects.bootstrap()
-            with closing(self._connect()) as connection:
+            with self.sqlite.initialization_connection() as connection:
                 connection.execute("PRAGMA journal_mode = WAL")
                 if _has_project_schema(connection):
                     self._require_current_version(connection)
@@ -82,9 +82,6 @@ class SQLiteProjectStore:
 
     def _require_current_version(self, connection: sqlite3.Connection) -> int:
         return require_current_schema(connection)
-
-    def _connect(self) -> sqlite3.Connection:
-        return self.sqlite.connect()
 
 
 def _has_project_schema(connection: sqlite3.Connection) -> bool:

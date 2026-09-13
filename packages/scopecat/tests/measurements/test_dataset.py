@@ -2329,3 +2329,70 @@ def test_explicit_materialization_detaches_ragged_and_missing_values() -> None:
     np.testing.assert_array_equal(
         lazy["frequency"].observations.values, source["frequency"].observations.values
     )
+
+
+@pytest.mark.parametrize("single_point", [False, True])
+def test_xarray_field_dimension_names_preserve_shared_axes(single_point: bool) -> None:
+    dataset = _dataset()
+    if single_point:
+        dataset = dataset.isel(point=slice(0, 1))
+    projection = dataset.project({"iq": "signal", "frequency": "frequency"})
+    result = projection.to_xarray(dims={"iq": ("shot",)})
+    assert result["iq"].dims == ("point", "shot")
+    assert result["frequency"].dims == ("point", "shot")
+    assert result.sizes["point"] == (1 if single_point else 3)
+    np.testing.assert_array_equal(
+        result["iq"].mean(dim="shot").values,
+        projection.to_xarray()["iq"].mean(dim="sample").values,
+    )
+    assert json.loads(result.attrs["scopecat_dimension_aliases_json"]) == {
+        "sample": "shot"
+    }
+    source_schema = json.loads(result.attrs["scopecat_projection_json"])
+    assert source_schema["fields"][0]["dims"] == ["point", "sample"]
+    assert projection.schema.fields[0].dims == ("point", "sample")
+    assert projection.to_xarray()["iq"].dims == ("point", "sample")
+
+
+def test_xarray_dimension_names_reject_ambiguous_axis_merges() -> None:
+    dataset = _dataset()
+    snapshot = _snapshot(dataset)
+    schema = dataset.schema.model_copy(
+        update={
+            "dimensions": (
+                *dataset.schema.dimensions,
+                MeasurementDimension(id="other/sample", kind="sample", size=2),
+            ),
+            "variables": tuple(
+                variable.model_copy(update={"dims": ("point", "other/sample")})
+                if variable.id == "frequency"
+                else variable
+                for variable in dataset.schema.variables
+            ),
+        }
+    )
+    independent = Dataset(
+        snapshot.model_copy(update={"dataset_schema": schema}), dataset.entry
+    )
+    projection = independent.project({"iq": "signal", "frequency": "frequency"})
+    with pytest.raises(ValueError, match="independent axes"):
+        projection.to_xarray(dims={"iq": ("shot",), "frequency": ("shot",)})
+    result = projection.to_xarray(
+        dims={"iq": ("shot",), "frequency": ("frequency_bin",)}
+    )
+    assert result["iq"].dims == ("point", "shot")
+    assert result["frequency"].dims == ("point", "frequency_bin")
+
+
+def test_xarray_dimension_names_explain_shared_and_ragged_inputs() -> None:
+    projection = _dataset().project({"iq": "signal", "frequency": "frequency"})
+    with pytest.raises(ValueError, match="shared axis"):
+        projection.to_xarray(dims={"iq": ("shot",), "frequency": ("bin",)})
+    with pytest.raises(ValueError, match="excluding point"):
+        projection.to_xarray(dims={"iq": ("point", "shot")})
+    with pytest.raises(KeyError, match="no field"):
+        projection.to_xarray(dims={"missing": ("shot",)})
+    with pytest.raises(ValueError, match="already in use"):
+        projection.to_xarray(dims={"iq": ("frequency",)})
+    with pytest.raises(ValueError, match="ragged"):
+        _ragged_dataset().project({"iq": "signal"}).to_xarray(dims={"iq": ("shot",)})

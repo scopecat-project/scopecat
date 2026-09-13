@@ -42,6 +42,21 @@ class SQLiteDatabase:
         )
 
     @contextmanager
+    def initialization_connection(self) -> Generator[sqlite3.Connection]:
+        """Initialize on the retained writer, before serving concurrent work.
+
+        Journal setup and schema scripts manage their own transactions. Keep
+        this connection alive so bootstrap does not close the last WAL client
+        and force a checkpoint before the daemon can become healthy.
+        """
+        with self._writer_lock:
+            connection = self._writer_connection()
+            try:
+                yield connection
+            finally:
+                connection.rollback()
+
+    @contextmanager
     def read_connection(self) -> Generator[sqlite3.Connection]:
         """Borrow one reusable autocommit connection for a bounded read."""
 

@@ -22,7 +22,8 @@ def _record(message: str) -> None:
 
 def pytest_sessionstart() -> None:
     global _stream
-    directory = Path(os.environ["SCOPECAT_TEST_DIAGNOSTICS"])
+    directory = Path(os.environ["SCOPECAT_TEST_DIAGNOSTICS"]).resolve()
+    os.environ["SCOPECAT_STARTUP_DIAGNOSTICS"] = str(directory)
     directory.mkdir(parents=True, exist_ok=True)
     worker = os.environ.get("PYTEST_XDIST_WORKER", "controller")
     _stream = (directory / f"{worker}-{os.getpid()}.log").open(
