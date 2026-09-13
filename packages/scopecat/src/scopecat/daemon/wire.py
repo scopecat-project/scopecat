@@ -106,6 +106,8 @@ _CONFIG_PUBLISH_SOURCE_INTENT_CODEC = "scopecat.config-publish-source-intent.v1"
 
 class _WireModel(BaseModel):
     model_config = ConfigDict(
+        # A short-lived client uses only a subset of these communication models.
+        defer_build=True,
         extra="forbid",
         frozen=True,
         allow_inf_nan=False,
