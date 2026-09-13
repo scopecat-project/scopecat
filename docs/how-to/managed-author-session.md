@@ -298,7 +298,7 @@ analysis-function convenience belongs to the next implementation slice.
 
 ### Return a typed point coordinate
 
-A signature input annotated with `Input[T]` and `ControlSpec(...)` already has
+A signature input annotated with `Input[T]` and `ControlSpec(scannable=True)` already has
 an automatic point coordinate, including when its value is fixed. Use
 `context.coordinate(amplitude)` in the experiment body to obtain a
 `CoordinateRef[T]` for a typed result dataclass without a cast. Returning that

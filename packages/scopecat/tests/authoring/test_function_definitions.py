@@ -835,3 +835,15 @@ def test_coordinate_view_explains_non_coordinate_input() -> None:
 
     with pytest.raises(TypeError, match="ControlSpec"):
         probe.build(0.1)
+
+
+def test_non_scannable_control_remains_an_ordinary_value() -> None:
+    @sc.experiment
+    def probe(
+        ctx: sc.ExperimentContext,
+        gain: Annotated[sc.Input[float], sc.ControlSpec(minimum=0)] = 1.0,
+    ) -> None:
+        ctx.coordinate(gain)
+
+    with pytest.raises(TypeError, match=r"ControlSpec\(scannable=True\)"):
+        probe.build()
