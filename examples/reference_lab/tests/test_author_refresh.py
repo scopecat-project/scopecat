@@ -67,9 +67,8 @@ def run_admitted(root: Path, procedure_id: str) -> None:
         [
             sys.executable,
             "-m",
-            "scopecat_server.launch_worker",
+            "scopecat_server.procedure_worker",
             str(root),
-            "--procedure",
             procedure_id,
         ],
         capture_output=True,
