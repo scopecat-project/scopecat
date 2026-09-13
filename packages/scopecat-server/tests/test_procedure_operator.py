@@ -18,6 +18,7 @@ from scopecat.automation import (
 )
 from scopecat.daemon.views import RunDetail
 from scopecat.kernel.content_identity import sha256_json_hash
+from scopecat.records.author_revision import AuthorRevisionState
 from scopecat.records.manual_preview import ManualPreviewBinding, ManualPreviewFence
 
 from scopecat_server.http.procedure_operator import read_procedure_operator
@@ -109,6 +110,7 @@ def _application(root: Path) -> tuple[DaemonApplication, Mock]:
                 manual_previews=ManualPreviewService(
                     SQLiteDatabase(root / "store.sqlite3"), Mock(), Mock()
                 ),
+                author_revisions=SimpleNamespace(state=lambda: AuthorRevisionState()),
                 automation=SimpleNamespace(
                     get=Mock(return_value=procedure),
                     running_step=Mock(return_value=step),
