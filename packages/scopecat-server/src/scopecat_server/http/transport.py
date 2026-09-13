@@ -469,8 +469,13 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
         if ref is not None:
             command = command.model_copy(update={"code_revision": ref})
         try:
+            remaining = 60 - (time.perf_counter() - started)
+            if ref is not None and remaining <= 0:
+                raise subprocess.TimeoutExpired("author revision initialization", 60)
             completed = (
-                launch_workers.call(application.project_root, command)
+                launch_workers.call(
+                    application.project_root, command, timeout=remaining
+                )
                 if ref is not None
                 else subprocess.run(  # noqa: S603 - fixed project worker command
                     [
