@@ -352,7 +352,6 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
         lambda procedure_id: application.automation.worker_state(procedure_id),
     )
 
-    launch_workers = RevisionWorkers()
     retained_workers = RevisionWorkers("scopecat_server.retained_worker")
 
     @asynccontextmanager
@@ -362,7 +361,7 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
             yield
         finally:
             project_workers.stop()
-            launch_workers.close()
+            application.author_revisions.close()
             retained_workers.close()
 
     app = FastAPI(title="Scopecat daemon", version="1", lifespan=lifespan)
@@ -497,7 +496,7 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
             if ref is not None and remaining <= 0:
                 raise subprocess.TimeoutExpired("author revision initialization", 60)
             completed = (
-                launch_workers.call(
+                application.author_revisions.workers.call(
                     application.project_root, command, timeout=remaining
                 )
                 if ref is not None

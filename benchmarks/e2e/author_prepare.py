@@ -105,10 +105,52 @@ def measure(root: Path, *, repetitions: int) -> dict[str, object]:
                         "points": prepared.preview.point_count,
                     }
                 )
+            started = time.perf_counter()
+            author.refresh()
+            samples.append(
+                {
+                    "operation": "unchanged_refresh",
+                    "seconds": time.perf_counter() - started,
+                }
+            )
+            started = time.perf_counter()
+            author.prepare("signal")
+            samples.append(
+                {
+                    "operation": "after_unchanged_refresh",
+                    "seconds": time.perf_counter() - started,
+                }
+            )
+            valid_source = source_file.read_text(encoding="utf-8")
+            source_file.write_text(valid_source + "\ndef invalid(:\n", encoding="utf-8")
+            started = time.perf_counter()
+            try:
+                author.refresh()
+            except httpx2.HTTPStatusError as error:
+                if error.response.status_code != 422:
+                    raise
+                samples.append(
+                    {
+                        "operation": "failed_refresh",
+                        "seconds": time.perf_counter() - started,
+                    }
+                )
+            else:
+                raise AssertionError("invalid source refresh unexpectedly succeeded")
+            finally:
+                source_file.write_text(valid_source, encoding="utf-8")
+            started = time.perf_counter()
+            author.prepare("signal")
+            samples.append(
+                {
+                    "operation": "after_failed_refresh",
+                    "seconds": time.perf_counter() - started,
+                }
+            )
     finally:
         stop_project(project)
     return {
-        **benchmark_record_header(case_id="author-prepare", case_version=1, kind="e2e"),
+        **benchmark_record_header(case_id="author-prepare", case_version=2, kind="e2e"),
         "host": platform.platform(),
         "python": platform.python_version(),
         "daemon_start_seconds": startup,

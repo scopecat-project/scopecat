@@ -24,6 +24,7 @@ from scopecat_server.services.author_revisions import (
     AuthorRevisionService,
     AuthorValidationTimeout,
 )
+from scopecat_server.services.revision_workers import _Worker
 from scopecat_server.storage.sqlite.connection import SQLiteDatabase
 from scopecat_server.storage.sqlite.project_store import SQLiteProjectStore
 from scopecat_server.validation_process import terminate_validation_process_tree
@@ -110,27 +111,20 @@ def test_slow_validation_retains_stack_and_reaps_worker(
     pid_file = tmp_path / "worker.pid"
     owned: list[psutil.Process] = []
     launched: list[subprocess.Popen[str]] = []
-    communicate_timeouts: list[float | None] = []
-    communicate = subprocess.Popen.communicate
+    receive_timeouts: list[float] = []
+    receive = _Worker.receive
 
-    def observe_communicate(
-        process: subprocess.Popen[str],
-        input: str | None = None,
-        timeout: float | None = None,
-    ) -> tuple[str, str]:
-        communicate_timeouts.append(timeout)
-        if not launched:
-            launched.append(process)
-            # Keep the normal startup budget, then inject a short real timeout
-            # only once the slow application has emitted its stack and identity.
-            assert timeout is not None
-            deadline = time.monotonic() + timeout
-            while not pid_file.exists():
-                assert process.poll() is None
-                assert time.monotonic() < deadline, "slow fixture never became ready"
-                time.sleep(0.01)
-            return communicate(process, input=input, timeout=0.1)
-        return communicate(process, input=input, timeout=timeout)
+    def observe_receive(
+        worker: _Worker, timeout: float
+    ) -> subprocess.CompletedProcess[str]:
+        receive_timeouts.append(timeout)
+        launched.append(worker.process)
+        deadline = time.monotonic() + timeout
+        while not pid_file.exists():
+            assert worker.process.poll() is None
+            assert time.monotonic() < deadline, "slow fixture never became ready"
+            time.sleep(0.01)
+        return receive(worker, 0.1)
 
     def observe_cleanup(
         process: subprocess.Popen[str], *, owner: psutil.Process | None
@@ -156,13 +150,13 @@ def test_slow_validation_retains_stack_and_reaps_worker(
     try:
         service = AuthorRevisionService(tmp_path, store)
         with (
-            patch.object(subprocess.Popen, "communicate", observe_communicate),
+            patch.object(_Worker, "receive", observe_receive),
             patch(
-                "scopecat_server.services.author_revisions.subprocess.Popen",
+                "scopecat_server.services.revision_workers.subprocess.Popen",
                 wraps=subprocess.Popen,
             ) as launch,
             patch(
-                "scopecat_server.services.author_revisions.terminate_validation_process_tree",
+                "scopecat_server.services.revision_workers.terminate_validation_process_tree",
                 side_effect=observe_cleanup,
             ),
             pytest.raises(
@@ -171,7 +165,8 @@ def test_slow_validation_retains_stack_and_reaps_worker(
         ):
             service.refresh(expected_generation=0)
         launch.assert_called_once()
-        assert communicate_timeouts == [60, 5]
+        assert len(receive_timeouts) == 1
+        assert 0 < receive_timeouts[0] <= 60
         assert "did not publish" in str(caught.value)
         assert service.repository.state().active is None
         worker = json.loads(pid_file.read_text())
@@ -256,34 +251,21 @@ def test_interrupted_validation_cleans_up_and_preserves_interrupt(
         SQLiteDatabase(tmp_path / "control.sqlite3"), tmp_path / "objects"
     )
     store.bootstrap()
-    process = Mock(spec=subprocess.Popen)
-    process.pid = 123
-    owner = Mock(spec=psutil.Process)
+    worker = Mock(spec=_Worker)
     interruption = KeyboardInterrupt()
-    process.communicate.side_effect = [interruption, ("", "")]
+    worker.receive.side_effect = interruption
     try:
         service = AuthorRevisionService(tmp_path, store)
         with (
             patch(
-                "scopecat_server.services.author_revisions.subprocess.Popen",
-                return_value=process,
+                "scopecat_server.services.revision_workers._Worker", return_value=worker
             ) as launch,
-            patch(
-                "scopecat_server.services.author_revisions.psutil.Process",
-                return_value=owner,
-            ),
-            patch(
-                "scopecat_server.services.author_revisions.terminate_validation_process_tree",
-                return_value=(),
-            ) as cleanup,
             pytest.raises(KeyboardInterrupt) as caught,
         ):
             service.refresh(expected_generation=0)
         assert caught.value is interruption
         launch.assert_called_once()
-        cleanup.assert_called_once_with(process, owner=owner)
-        assert process.communicate.call_count == 2
-        assert process.communicate.call_args.kwargs["timeout"] == 5
+        worker.close.assert_called_once()
         assert service.repository.state().active is None
     finally:
         store.close()

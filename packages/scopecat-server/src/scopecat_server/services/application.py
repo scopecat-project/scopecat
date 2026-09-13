@@ -95,6 +95,7 @@ class DaemonApplication:
         self._lease_supervisor.start()
 
     def close(self) -> None:
+        self.author_revisions.close()
         self._lease_supervisor.request_stop()
         try:
             self.instruments.shutdown()
