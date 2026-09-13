@@ -3,6 +3,7 @@ from __future__ import annotations
 import shutil
 import sqlite3
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import closing
 from pathlib import Path
 
 import pytest
@@ -492,7 +493,7 @@ def test_current_schema_read_keeps_one_snapshot_during_checkpoint(
 
     def change_version() -> None:
         # Another connection commits and checkpoints between the two schema reads.
-        with sqlite3.connect(database.path) as writer:
+        with closing(sqlite3.connect(database.path)) as writer:
             writer.execute("UPDATE project_schema SET version = 99")
             writer.commit()
             writer.execute("PRAGMA wal_checkpoint(PASSIVE)").fetchone()
