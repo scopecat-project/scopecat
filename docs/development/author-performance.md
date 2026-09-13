@@ -160,10 +160,15 @@ measurements entered the daemon around 1.37s after submission; the ordinary
 retained-result observer read them around 1.56s. These are observations, not
 thresholds or a claimed runtime speedup. A short virtual computation does not
 justify removing execution isolation, sharing a live hardware worker, shortening
-polling intervals, or porting startup work to a native kernel. Next work should
-profile required versus unrelated import/model construction and separately design
-ordinary-author access to live progress/results, retaining admission and recovery
-semantics.
+polling intervals, or porting startup work to a native kernel.
+
+Ordinary authors can now use `job.progress()` and `job.preview()` to observe the
+exact unsettled acquisition, including its latest received record before a flush.
+See the [managed author workflow](../how-to/managed-author-session.md#observe-an-experiment-before-it-finishes).
+This benchmark deliberately retains its original `job.result()` boundary. Live
+preview availability is verified with an intentionally paused virtual acquisition,
+not represented as a faster execution or silently substituted timing series.
+Broader import/capability loading and GUI rendering costs remain separate work.
 
 ## Startup model construction
 
