@@ -171,3 +171,11 @@ chunk and interpreter remain a material memory floor. These are measured local
 facts, not performance guarantees. The value-byte figure excludes validity masks,
 metadata/evidence, Arrow buffers and Python objects; it is not total working set.
 Only `signal` is requested, so unselected `time` coordinate arrays are not copied.
+
+## Author interaction latency
+
+`uv run --locked python -m benchmarks run author-prepare --repetitions 3`
+measures the actual notebook prepare path on a copied virtual reference project,
+including repeated calls, input/scan edits and source refresh, without acquisition.
+See [author interaction performance](../docs/development/author-performance.md)
+for measurement boundaries, worker lifecycle and Windows usage.

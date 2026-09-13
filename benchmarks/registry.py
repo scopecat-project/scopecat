@@ -6,6 +6,12 @@ from .model import BenchmarkCase
 
 BENCHMARK_CASES = (
     BenchmarkCase(
+        id="author-prepare",
+        kind="e2e",
+        module="benchmarks.e2e.author_prepare",
+        summary="Cold and repeated notebook prepare with isolated source revisions",
+    ),
+    BenchmarkCase(
         id="entity-reads",
         kind="component",
         module="benchmarks.component.entity_reads",

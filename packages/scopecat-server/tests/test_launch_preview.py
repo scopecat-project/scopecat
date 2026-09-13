@@ -12,6 +12,7 @@ from unittest.mock import Mock, patch
 import pytest
 from fastapi.testclient import TestClient
 from scopecat.application.launch import LaunchPreview
+from scopecat.records.author_revision import AuthorRevisionRef, AuthorRevisionState
 from scopecat.records.launch_request import LaunchRequest
 from scopecat.records.run import ConfigRegistryRunConfigSource
 
@@ -54,7 +55,7 @@ def _manual_previews() -> Mock:
     return service
 
 
-def client() -> TestClient:
+def client(state: AuthorRevisionState | None = None) -> TestClient:
     return TestClient(
         create_app(
             cast(
@@ -62,7 +63,11 @@ def client() -> TestClient:
                 cast(
                     "object",
                     SimpleNamespace(
-                        project_root=Path.cwd(), manual_previews=_manual_previews()
+                        project_root=Path.cwd(),
+                        manual_previews=_manual_previews(),
+                        author_revisions=SimpleNamespace(
+                            state=lambda: state or AuthorRevisionState()
+                        ),
                     ),
                 ),
             )
@@ -178,6 +183,9 @@ def test_admission_survives_dispatch_failure(tmp_path: Path) -> None:
                 SimpleNamespace(
                     project_root=tmp_path,
                     automation=automation,
+                    author_revisions=SimpleNamespace(
+                        state=lambda: AuthorRevisionState()
+                    ),
                     manual_previews=_manual_previews(),
                 ),
             ),
@@ -338,7 +346,11 @@ def test_http_lifespan_starts_and_stops_manager() -> None:
                     cast(
                         "object",
                         SimpleNamespace(
-                            project_root=Path.cwd(), manual_previews=_manual_previews()
+                            project_root=Path.cwd(),
+                            manual_previews=_manual_previews(),
+                            author_revisions=SimpleNamespace(
+                                state=lambda: AuthorRevisionState()
+                            ),
                         ),
                     ),
                 )
@@ -519,3 +531,22 @@ def test_inner_validation_timeout_survives_worker_and_http_boundary(
     assert outer.status_code == 504
     assert outer.json()["detail"] == detail[:2048]
     run.assert_called_once()
+
+
+def test_pinned_catalog_uses_pool_and_exposes_nested_timing() -> None:
+    ref = AuthorRevisionRef(content_hash="sha256:" + "a" * 64)
+    with patch("scopecat_server.http.transport.LaunchWorkers.call") as call:
+        call.return_value = subprocess.CompletedProcess(
+            "worker",
+            0,
+            '{"entries": []}',
+            'Scopecat launch timing: {"provider": 0.002, "worker": 0.003}\n',
+        )
+        response = client(AuthorRevisionState(enabled=True, active=ref)).get(
+            "/api/v1/experiment-launcher"
+        )
+        assert response.status_code == 200
+        assert call.call_args.args[1].code_revision == ref
+        assert 0 < call.call_args.kwargs["timeout"] <= 60
+        assert "provider;dur=2.000" in response.headers["server-timing"]
+        assert "worker;dur=3.000" in response.headers["server-timing"]
