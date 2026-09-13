@@ -397,6 +397,10 @@ select = [
 [tool.ruff.lint.mccabe]
 max-complexity = 20
 
+[tool.ruff.lint.flake8-bugbear]
+# Immutable quantities are intentional declaration defaults, not mutable state.
+extend-immutable-calls = ["scopecat.Quantity", "scopecat.kernel.quantity.Quantity"]
+
 [tool.uv]
 exclude-newer = "3d"
 default-groups = ["dev"]

@@ -148,7 +148,10 @@ export function ControlFields({
               };
               return (
                 <div key={control.id} className="space-y-2">
-                  <strong>{control.title}</strong>
+                  <strong>
+                    {control.title}
+                    {control.default == null ? " (required)" : ""}
+                  </strong>
                   <p className="text-sm">
                     {control.provenance}
                     {control.minimum != null || control.maximum != null
@@ -169,7 +172,7 @@ export function ControlFields({
                       className="border rounded p-2"
                     >
                       <option value="fixed">Fixed value</option>
-                      <option value="default">Declared default</option>
+                      {control.default != null && <option value="default">Declared default</option>}
                       {control.scannable && (
                         <>
                           <option value="values">Scan values</option>

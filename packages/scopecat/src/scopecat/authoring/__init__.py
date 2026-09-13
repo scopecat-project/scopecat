@@ -16,6 +16,7 @@ from scopecat.authoring.capability_resources import (
     capability_resource,
     ensure_state_targets,
 )
+from scopecat.authoring.control_metadata import ControlSpec
 from scopecat.authoring.definitions import (
     Experiment,
     ExperimentContext,
@@ -145,6 +146,7 @@ __all__ = [
     "ConcreteEntityInput",
     "Control",
     "ControlSet",
+    "ControlSpec",
     "ControlValidationContext",
     "CoordinateRef",
     "DataRef",
