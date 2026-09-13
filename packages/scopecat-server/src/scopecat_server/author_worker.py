@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import faulthandler
+import json
 import os
 import sys
+import time
 from dataclasses import replace
 from importlib import import_module
 from pathlib import Path
@@ -60,7 +62,9 @@ def author_module_path(project: Project, module_name: str) -> Path:
     raise ValueError("module must belong to a configured author refresh root")
 
 
-def validate(root: Path, code_root: Path) -> None:
+def validate(
+    root: Path, code_root: Path, ref: AuthorRevisionRef | None = None
+) -> LabApplication:
     # Start before framework imports so a slow import is observable too. One
     # stack dump fits inside the unchanged parent deadline; no retry is implied.
     faulthandler.dump_traceback_later(30, file=sys.stderr)
@@ -71,14 +75,20 @@ def validate(root: Path, code_root: Path) -> None:
 
         os.environ.pop(DAEMON_URL_ENV, None)
         project = replace(
-            load_project(code_root / "scopecat.toml"), root=root, code_root=code_root
+            load_project(code_root / "scopecat.toml"),
+            root=root,
+            code_root=code_root,
+            code_revision=ref,
         )
+        started = time.perf_counter()
         report_stage("source compilation")
         for source in project.source_roots:
             for path in (code_root / source).rglob("*.py"):
                 compile(path.read_bytes(), str(path.relative_to(code_root)), "exec")
+        compiled = time.perf_counter()
         report_stage("application import")
         application = project.load_application()
+        loaded = time.perf_counter()
         report_stage("source identity validation")
         if application.authors is not None:
             for experiment in application.authors.experiments:
@@ -88,6 +98,19 @@ def validate(root: Path, code_root: Path) -> None:
                     raise ValueError(
                         f"author module resolved outside its source snapshot: {name}"
                     )
+        print(
+            "Scopecat validation timing: "
+            + json.dumps(
+                {
+                    "compilation": compiled - started,
+                    "application": loaded - compiled,
+                    "identity": time.perf_counter() - loaded,
+                }
+            ),
+            file=sys.stderr,
+            flush=True,
+        )
+        return application
     finally:
         faulthandler.cancel_dump_traceback_later()
 
@@ -137,13 +160,3 @@ def analyze(
             code_revision=request.code_revision, analysis_id=published.id
         )
     return receipt
-
-
-def main() -> None:
-    if sys.argv[2] != "--validate":
-        raise ValueError("source worker only accepts --validate")
-    validate(Path(sys.argv[1]).resolve(), Path(sys.argv[3]))
-
-
-if __name__ == "__main__":
-    main()

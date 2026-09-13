@@ -2,18 +2,21 @@
 
 from __future__ import annotations
 
+import logging
 import subprocess
 import sys
 import tempfile
 import threading
 import time
 from collections import OrderedDict
+from collections.abc import Callable
 from contextlib import suppress
 from pathlib import Path
 from queue import Empty, Queue
 from typing import Literal, TextIO, cast
 
 import psutil
+from scopecat.records.author_revision import AuthorRevisionRef, AuthorRevisionState
 from scopecat.records.launch_request import LaunchRequest
 
 from scopecat_server.retained_request import AnalysisCall, ComparisonCall
@@ -21,7 +24,9 @@ from scopecat_server.validation_process import terminate_validation_process_tree
 
 
 class _Worker:
-    def __init__(self, root: Path, revision: str, module: str) -> None:
+    def __init__(
+        self, root: Path, revision: str, module: str, *, code_root: Path | None = None
+    ) -> None:
         self.stderr: TextIO = tempfile.TemporaryFile(mode="w+", encoding="utf-8")  # noqa: SIM115 - worker owns lifetime
         self.process: subprocess.Popen[str] = subprocess.Popen(  # noqa: S603 - fixed internal worker, no shell
             [
@@ -29,8 +34,11 @@ class _Worker:
                 "-m",
                 module,
                 str(root),
-                "--serve",
-                revision,
+                *(
+                    ["--serve", revision]
+                    if code_root is None
+                    else ["--validate-serve", str(code_root), revision]
+                ),
             ],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
@@ -70,6 +78,9 @@ class _Worker:
             return subprocess.CompletedProcess(
                 self.process.args, self.process.returncode or 1, "", self.diagnostics()
             )
+        return self.receive(timeout)
+
+    def receive(self, timeout: float) -> subprocess.CompletedProcess[str]:
         try:
             response = self.responses.get(timeout=timeout)
         except Empty:
@@ -115,6 +126,78 @@ class RevisionWorkers:
         self._module = module
         self._workers: OrderedDict[str, _Worker] = OrderedDict()
         self._lock = threading.Lock()
+        self._validation_lock = threading.Lock()
+
+    def publish_validated(
+        self,
+        root: Path,
+        code_root: Path,
+        ref: AuthorRevisionRef,
+        publish: Callable[[], AuthorRevisionState],
+        *,
+        timeout: float = 60,
+    ) -> AuthorRevisionState:
+        """Own one unpublished candidate; transfer only after successful CAS.
+
+        Validation does not hold the request lock. Publication and adoption do,
+        so a first caller cannot race us into loading the published source again.
+        An equivalent warm worker wins over the freshly validated candidate.
+        """
+        started = time.monotonic()
+        if not self._validation_lock.acquire(timeout=timeout):
+            raise subprocess.TimeoutExpired("author validation queue", timeout)
+        candidate = None
+        try:
+            candidate = _Worker(
+                root,
+                ref.content_hash,
+                "scopecat_server.validation_worker",
+                code_root=code_root,
+            )
+            result = candidate.receive(
+                max(0.001, timeout - (time.monotonic() - started))
+            )
+            if result.returncode:
+                raise ValueError(result.stderr.strip() or "author validation failed")
+            logging.getLogger(__name__).info(
+                "Validated author candidate revision=%s seconds=%.3f diagnostics=%s",
+                ref.content_hash,
+                time.monotonic() - started,
+                result.stderr.strip(),
+            )
+            if AuthorRevisionRef.model_validate_json(result.stdout) != ref:
+                raise ValueError(
+                    "validated worker returned a different source revision"
+                )
+            if not self._lock.acquire(
+                timeout=max(0, timeout - (time.monotonic() - started))
+            ):
+                raise subprocess.TimeoutExpired(
+                    "author publication queue", timeout, stderr=result.stderr
+                )
+            try:
+                state = publish()
+                key = ref.content_hash
+                if key not in self._workers:
+                    if len(self._workers) == 2:
+                        _, evicted = self._workers.popitem(last=False)
+                        evicted.close()
+                    self._workers[key] = candidate
+                    candidate = None
+                self._workers.move_to_end(key)
+                return state
+            finally:
+                self._lock.release()
+        finally:
+            try:
+                if candidate is not None:
+                    candidate.close()
+            except RuntimeError as error:
+                logging.getLogger(__name__).error(  # noqa: TRY400 - bounded cleanup evidence
+                    "Candidate cleanup failed: %s", str(error)[:4096]
+                )
+            finally:
+                self._validation_lock.release()
 
     def call(
         self,
@@ -151,7 +234,7 @@ class RevisionWorkers:
             self._lock.release()
 
     def close(self) -> None:
-        with self._lock:
+        with self._validation_lock, self._lock:
             for worker in self._workers.values():
                 worker.close()
             self._workers.clear()

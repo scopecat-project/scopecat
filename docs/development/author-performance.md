@@ -9,7 +9,8 @@ uv run --locked python -m benchmarks run author-prepare --repetitions 3
 Run from the public workspace (the `scopecat` submodule in a private checkout).
 The command copies the virtual reference project into a temporary directory,
 starts its daemon, and measures first prepare, repeated prepare, input and scan
-edits, source refresh, and the next two prepares. It does not submit acquisition
+edits, source refresh, and the next two prepares, then unchanged and failed
+refreshes followed by prepare. It does not submit acquisition
 or connect to lab devices. The first call includes initial author validation;
 this is a new-daemon baseline, not an OS filesystem-cache cold-start claim.
 Record results under ignored `.benchmarks/` and compare the same host, Python,
@@ -32,9 +33,29 @@ per process, evicting the least recently used revision. Short launch calls are
 serialized within the pool with bounded waiting; acquisition procedure workers
 remain separate. Each call creates a fresh lab connection, obtains its catalog
 and resolves current configuration. Source and application loading repeat when
-a revision is first used or evicted, but not on every prepare. Refresh selects
+an uncached retained revision is first used or evicted, but not on every prepare. Refresh selects
 the new version without changing already prepared requests. Old revisions can
 be loaded independently. Unversioned projects retain their fresh-process path.
+
+Refresh keeps its validated application in the same process. Candidate compilation,
+application loading and source-identity checks still run before CAS publication.
+Publication and adoption share the launch pool lock, preventing a first caller
+from restoring the just-published revision again. Validation runs outside that
+lock, so existing versions can still prepare. The author revision service owns
+this lifecycle; HTTP does not hold a separate launch pool.
+
+At most one candidate validates alongside the two retained launch workers. The
+60-second budget includes validation queueing, startup and waiting to publish;
+failure, interruption or a generation conflict closes the unpublished candidate.
+An unchanged refresh still validates, but keeps an equivalent warm worker and
+closes the candidate. Adoption uses the same two-slot LRU, so a third revision
+may evict an idle old worker; its retained source remains available for reopening.
+The analysis pool is independent, giving a transient total of five revision
+processes during validation, plus the existing execution processes. Successful
+validation diagnostics record compilation, application and identity durations.
+A prepare served by the adopted worker has provider timings without another
+revision/application initialization phase. No machine-independent latency limit
+is asserted by the benchmark.
 
 Author callbacks must use their request and lab connection for operation state;
 module globals and the application factory are not per-request initialization

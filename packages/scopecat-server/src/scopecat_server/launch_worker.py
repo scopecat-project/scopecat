@@ -179,9 +179,10 @@ def launch(
     return result
 
 
-def serve(root: Path, ref: AuthorRevisionRef) -> None:
+def serve(
+    root: Path, ref: AuthorRevisionRef, *, application: LabApplication | None = None
+) -> None:
     """One immutable import namespace, fresh connection and request per call."""
-    application = None
     for line in sys.stdin:
         started = time.perf_counter()
         request = LaunchRequest.model_validate_json(line)

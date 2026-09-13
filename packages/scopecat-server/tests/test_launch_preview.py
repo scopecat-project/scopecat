@@ -17,6 +17,7 @@ from scopecat.records.launch_request import LaunchRequest
 from scopecat.records.run import ConfigRegistryRunConfigSource
 
 from scopecat_server.http.transport import create_app
+from scopecat_server.services.revision_workers import RevisionWorkers
 
 
 def _submission_request() -> dict[str, object]:
@@ -66,7 +67,9 @@ def client(state: AuthorRevisionState | None = None) -> TestClient:
                         project_root=Path.cwd(),
                         manual_previews=_manual_previews(),
                         author_revisions=SimpleNamespace(
-                            state=lambda: state or AuthorRevisionState()
+                            state=lambda: state or AuthorRevisionState(),
+                            workers=RevisionWorkers(),
+                            close=Mock(),
                         ),
                     ),
                 ),
@@ -184,7 +187,7 @@ def test_admission_survives_dispatch_failure(tmp_path: Path) -> None:
                     project_root=tmp_path,
                     automation=automation,
                     author_revisions=SimpleNamespace(
-                        state=lambda: AuthorRevisionState()
+                        state=lambda: AuthorRevisionState(), close=Mock()
                     ),
                     manual_previews=_manual_previews(),
                 ),
@@ -349,7 +352,7 @@ def test_http_lifespan_starts_and_stops_manager() -> None:
                             project_root=Path.cwd(),
                             manual_previews=_manual_previews(),
                             author_revisions=SimpleNamespace(
-                                state=lambda: AuthorRevisionState()
+                                state=lambda: AuthorRevisionState(), close=Mock()
                             ),
                         ),
                     ),
