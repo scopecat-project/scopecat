@@ -1028,3 +1028,74 @@ def test_http_validation_message_includes_actionable_parameter_detail() -> None:
     assert failure.value.response.status_code == 422
     assert failure.value.request is requests[0]
     assert failure.value.response.request is requests[0]
+
+
+@pytest.mark.parametrize("response_kind", ["received", "empty", "wrong_run"])
+def test_live_preview_preserves_unflushed_counts_and_exact_identity(
+    response_kind: str,
+) -> None:
+    from scopecat.measurements.recording_arrow import encode_measurement_append
+    from scopecat.records.measurement import (
+        MeasurementDatasetSchema,
+        MeasurementDimension,
+        MeasurementPointCloudPointDomain,
+        MeasurementRecord,
+        MeasurementScalar,
+        MeasurementVariable,
+    )
+    from scopecat.records.measurement_recording import MeasurementDatasetAppend
+
+    schema = MeasurementDatasetSchema(
+        dataset_id="live",
+        point_domain=MeasurementPointCloudPointDomain(columns=()),
+        dimensions=(MeasurementDimension(id="point", kind="point", size=2),),
+        variables=(
+            MeasurementVariable(
+                id="signal", role="observable", dtype="float64", dims=("point",)
+            ),
+        ),
+    )
+    run_id = "another-run" if response_kind == "wrong_run" else "run-1"
+    record = MeasurementRecord(
+        run_id=run_id,
+        point_index=0,
+        coordinates={},
+        observables={"signal": MeasurementScalar.create(value=2.0, dtype="float64")},
+    )
+    content = (
+        b""
+        if response_kind == "empty"
+        else encode_measurement_append(
+            MeasurementDatasetAppend(
+                run_id=run_id,
+                header_content_hash="sha256:" + "a" * 64,
+                acquisition_start=0,
+                records=(record,),
+            ),
+            schema,
+        )
+    )
+
+    def respond(request: httpx2.Request) -> httpx2.Response:
+        assert request.method == "GET"
+        assert request.url.path == "/api/v1/runs/run-1/measurements/live"
+        return httpx2.Response(
+            200,
+            content=content,
+            headers={
+                "X-Scopecat-Measurement-Active": "true",
+                "X-Scopecat-Received-Record-Count": "1",
+                "X-Scopecat-Durable-Record-Count": "0",
+            },
+        )
+
+    with DaemonClient("http://test", transport=httpx2.MockTransport(respond)) as client:
+        if response_kind == "wrong_run":
+            with pytest.raises(ValueError, match="one record for its run"):
+                client.measurement_live_preview("run-1", dataset_schema=schema)
+        else:
+            preview = client.measurement_live_preview("run-1", dataset_schema=schema)
+            assert preview.active
+            assert preview.received_record_count == 1
+            assert preview.durable_record_count == 0
+            assert preview.latest == (None if response_kind == "empty" else record)

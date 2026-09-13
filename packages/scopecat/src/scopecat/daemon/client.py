@@ -108,6 +108,7 @@ from scopecat.daemon.points import (
     RunPointPlanCloseCommand,
     RunPointPlanView,
 )
+from scopecat.daemon.procedure_views import ProcedureOperatorView
 from scopecat.daemon.reviews import (
     ReviewCompileCommand,
     ReviewCompileReceipt,
@@ -131,6 +132,7 @@ from scopecat.daemon.views import (
     InstrumentListView,
     InstrumentView,
     MeasurementArrowQuery,
+    MeasurementLivePreview,
     MeasurementPreview,
     MeasurementTracePreview,
     MeasurementTracePreviewQuery,
@@ -647,6 +649,16 @@ class DaemonClient:
             ProcedureRunPage,
             params=params,
             timeout=timeout,
+        )
+
+    def procedure_progress(
+        self, procedure_run_id: str, *, cursor: int | None = None
+    ) -> ProcedureOperatorView:
+        """Read exact active effects plus one bounded history page."""
+        return self._get_model(
+            self._procedure_path(procedure_run_id, "operator"),
+            ProcedureOperatorView,
+            params={} if cursor is None else {"cursor": cursor},
         )
 
     def get_procedure(self, procedure_run_id: str) -> ProcedureRun:
@@ -1787,6 +1799,32 @@ class DaemonClient:
         if encoded_snapshot_size is None:
             raise ValueError("measurement Arrow response has no snapshot size")
         return table, next_offset, int(encoded_snapshot_size)
+
+    def measurement_live_preview(
+        self, run_id: str, *, dataset_schema: MeasurementDatasetSchema
+    ) -> MeasurementLivePreview:
+        """Read the latest received record, without forcing it to storage."""
+        from scopecat.measurements.recording_arrow import decode_measurement_append
+
+        response = self._request(
+            "GET", f"{_API_PREFIX}/runs/{quote(run_id, safe='')}/measurements/live"
+        )
+        latest = None
+        if response.content:
+            append = decode_measurement_append(response.content, dataset_schema)
+            if append.run_id != run_id or len(append.records) != 1:
+                raise ValueError("live preview must contain one record for its run")
+            latest = append.records[0]
+        return MeasurementLivePreview(
+            active=response.headers["X-Scopecat-Measurement-Active"] == "true",
+            received_record_count=int(
+                response.headers["X-Scopecat-Received-Record-Count"]
+            ),
+            durable_record_count=int(
+                response.headers["X-Scopecat-Durable-Record-Count"]
+            ),
+            latest=latest,
+        )
 
     def measurement_preview(
         self,

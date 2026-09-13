@@ -15,18 +15,10 @@ from pathlib import Path
 from threading import Event, Lock, Thread
 from typing import Literal, cast
 
-from pydantic import BaseModel, ConfigDict
+from scopecat.daemon.procedure_views import ProcedureDispatchView
 from scopecat.kernel.interaction_timing import record_timing
 
 _LOG = logging.getLogger(__name__)
-
-
-class ProcedureDispatchView(BaseModel):
-    """Observation of existing process management, not execution authority."""
-
-    model_config = ConfigDict(frozen=True, extra="forbid")
-    management: Literal["unmanaged", "active", "paused"]
-    worker_running: bool
 
 
 class ProjectProcedureWorkers:

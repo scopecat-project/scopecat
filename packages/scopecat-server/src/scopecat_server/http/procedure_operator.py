@@ -4,38 +4,15 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from pydantic import BaseModel, ConfigDict
 from scopecat.automation import (
-    ProcedureRun,
-    ProcedureStepAttempt,
     ProcedureStepAttemptListQuery,
-    ProcedureStepAttemptPage,
     procedure_step_operation_id,
 )
-from scopecat.daemon.views import RunDetail
-
-from scopecat_server.services.project_workers import ProcedureDispatchView
+from scopecat.daemon.procedure_views import ProcedureChildRunView, ProcedureOperatorView
 
 if TYPE_CHECKING:
     from scopecat_server.services.application import DaemonApplication
     from scopecat_server.services.project_workers import ProjectProcedureWorkers
-
-
-class ProcedureChildRunView(BaseModel):
-    model_config = ConfigDict(frozen=True, extra="forbid")
-    step_key: str
-    run: RunDetail
-
-
-class ProcedureOperatorView(BaseModel):
-    model_config = ConfigDict(frozen=True, extra="forbid")
-    procedure: ProcedureRun
-    steps: ProcedureStepAttemptPage
-    dispatch: ProcedureDispatchView
-    current_step: ProcedureStepAttempt | None
-    current_child: ProcedureChildRunView | None
-    child_runs: tuple[ProcedureChildRunView, ...]
-    dispatch_blocked_reason: str | None
 
 
 def read_procedure_operator(
