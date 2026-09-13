@@ -5,7 +5,7 @@ from __future__ import annotations
 import inspect
 from collections.abc import Callable, Iterable, Mapping
 from copy import deepcopy
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields, is_dataclass
 from types import MappingProxyType
 from typing import Generic, ParamSpec, SupportsFloat, TypeVar, cast
 
@@ -19,6 +19,7 @@ type ExperimentBuilder[ResultT] = Callable[
 ]
 
 _P = ParamSpec("_P")
+_ValuesT = TypeVar("_ValuesT", covariant=True, default=dict[str, object])
 _ExperimentResultT_co = TypeVar(
     "_ExperimentResultT_co",
     covariant=True,
@@ -144,7 +145,7 @@ class Scan:
 
 
 @dataclass(frozen=True, slots=True)
-class ExperimentRequest(Generic[_ExperimentResultT_co]):
+class ExperimentRequest(Generic[_ExperimentResultT_co, _ValuesT]):
     """Editable values tied to a declaration; contains no cached program or output.
 
     Mutate ``values`` or make an isolated ``copy()`` before exploring alternatives.
@@ -153,10 +154,43 @@ class ExperimentRequest(Generic[_ExperimentResultT_co]):
     """
 
     declaration: Experiment[..., _ExperimentResultT_co]
-    values: dict[str, object]
+    values: _ValuesT
 
-    def copy(self) -> ExperimentRequest[_ExperimentResultT_co]:
+    def copy(self) -> ExperimentRequest[_ExperimentResultT_co, _ValuesT]:
         return ExperimentRequest(self.declaration, deepcopy(self.values))
+
+    def snapshot(self) -> dict[str, object]:
+        """Capture plain input values, preserving Quantity and Scan objects."""
+        if is_dataclass(self.values) and not isinstance(self.values, type):
+            values = {
+                item.name: getattr(self.values, item.name)
+                for item in fields(self.values)
+            }
+        else:
+            values = cast("dict[str, object]", self.values)
+        return deepcopy(values)
+
+    def typed[ValuesT](
+        self, values_type: type[ValuesT]
+    ) -> ExperimentRequest[_ExperimentResultT_co, ValuesT]:
+        """Copy into an explicit dataclass for statically checked field editing.
+
+        The dataclass names must cover the current values exactly. Its defaults
+        never replace the declaration's selected values. Preparation still uses
+        the original experiment contract, including controls and source identity.
+        """
+        if not is_dataclass(values_type):
+            raise TypeError("typed request values require a dataclass type")
+        values = self.snapshot()
+        names = {item.name for item in fields(values_type)}
+        if names != values.keys():
+            missing = sorted(values.keys() - names)
+            extra = sorted(names - values.keys())
+            raise ValueError(
+                "typed request fields must match values: "
+                f"missing={missing}, extra={extra}"
+            )
+        return ExperimentRequest(self.declaration, values_type(**values))
 
 
 __all__ = [
