@@ -569,14 +569,10 @@ def test_large_collect_response_uses_binary_frames_without_fencing_worker(
 
 def test_operation_timeout_fences_generation_and_wakes_pending_calls(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     project = _copy_project(tmp_path)
-    endpoint = SubprocessInstrumentBackendEndpoint(
-        project,
-        _BACKEND,
-        operation_timeout=1.0,
-        shutdown_timeout=0.2,
-    )
+    endpoint = SubprocessInstrumentBackendEndpoint(project, _BACKEND)
     config = _two_instrument_config()
     bindings = instrument_bindings(config)
     expected = {
@@ -613,6 +609,9 @@ def test_operation_timeout_fences_generation_and_wakes_pending_calls(
         project / f"driver-release-source-{index}" for index in range(2)
     )
     try:
+        # Inject the timeout only for the blocking operations under test. Worker
+        # setup and OS process cleanup use normal budgets, including on Windows.
+        monkeypatch.setattr(endpoint, "_operation_timeout", 1.0)
         first_invocation.start()
         _wait_for_marker(project / "driver-blocked-source-0")
         with pytest.raises(InstrumentBackendUnavailable, match="timed out"):
