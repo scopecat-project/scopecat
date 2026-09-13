@@ -31,6 +31,7 @@ from scopecat.daemon.wire import (
     RunSubmission,
 )
 from scopecat.kernel.errors import NotFound, ProblemFailure
+from scopecat.kernel.interaction_timing import record_timing
 from scopecat.kernel.problems import (
     ProblemPhase,
     problem,
@@ -200,6 +201,13 @@ class AdmissionService:
                     )
         except ControlPlaneConflict as error:
             raise BackendConflict(str(error)) from error
+        record_timing(
+            "run_admitted",
+            run_id=run.run_id,
+            procedure_id=submission.procedure_child.procedure_run_id
+            if submission.procedure_child
+            else None,
+        )
         return self._wire_admission(run)
 
     def _require_plan_child(

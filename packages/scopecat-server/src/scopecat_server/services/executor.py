@@ -47,6 +47,7 @@ from scopecat.daemon.wire import (
     TerminalRunCommitCommand,
 )
 from scopecat.kernel.errors import NotFound
+from scopecat.kernel.interaction_timing import record_timing
 from scopecat.kernel.problems import ProblemPhase, problem
 from scopecat.kernel.run_outcome import RunOutcome
 from scopecat.records.content import ModelWrite
@@ -414,6 +415,8 @@ class ExecutorService:
                     "measurement ingest run id does not match its route"
                 )
             self._active_measurements.ingest(append)
+            if append.acquisition_start == 0:
+                record_timing("first_measurement_ingested", run_id=run_id)
             receipts = self._flush_measurements(
                 run_id,
                 token=lease_id,
@@ -683,6 +686,7 @@ class ExecutorService:
         self._instruments.release_run(run_id)
         self._measurement_repositories.pop(run_id, None)
         self._active_measurements.clear(run_id)
+        record_timing("run_terminal_committed", run_id=run_id)
         return snapshot
 
     def reconcile_volatile_state(self) -> None:

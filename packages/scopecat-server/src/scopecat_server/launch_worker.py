@@ -24,6 +24,7 @@ from scopecat.daemon.client import DaemonClient
 from scopecat.daemon.endpoint import DAEMON_URL_ENV, resolve_daemon_endpoint
 from scopecat.kernel.content_identity import sha256_json_hash
 from scopecat.kernel.frozen import thaw_json_value
+from scopecat.kernel.interaction_timing import record_timing
 from scopecat.project import load_project
 from scopecat.records.author_revision import AuthorRevisionRef
 from scopecat.records.launch_request import LaunchRequest
@@ -56,27 +57,6 @@ def main() -> None:
     root = Path(sys.argv[1]).resolve()
     if len(sys.argv) == 4 and sys.argv[2] == "--serve":
         serve(root, AuthorRevisionRef(content_hash=sys.argv[3]))
-        return
-    if len(sys.argv) == 4 and sys.argv[2] == "--procedure":
-        with DaemonClient(resolve_daemon_endpoint(root)) as client:
-            stored = client.get_procedure(sys.argv[3])
-            plan_code = (
-                client.experiment_plan(stored.plan_ref).definition.code_revision
-                if stored.plan_ref is not None
-                else None
-            )
-        identity = stored.intent.get("code_revision")
-        if plan_code is not None:
-            identity = plan_code.model_dump(mode="json")
-        project = (
-            revision_project(
-                root, AuthorRevisionRef.model_validate(thaw_json_value(identity))
-            )
-            if identity is not None
-            else sc.open_project(root)
-        )
-        with project.connect(operator="console-worker") as lab:
-            run_procedure(lab, sys.argv[3])
         return
     request = LaunchRequest.model_validate_json(sys.stdin.read())
     project = load_project(root / "scopecat.toml")
@@ -113,6 +93,36 @@ def main() -> None:
         application = project.load_application()
         result = launch(application, root, ref, request)
     print(result.model_dump_json())
+
+
+def run_project_procedure(root: Path, procedure_id: str) -> None:
+    record_timing("procedure_identity_start", procedure_id=procedure_id)
+    with DaemonClient(resolve_daemon_endpoint(root)) as client:
+        stored = client.get_procedure(procedure_id)
+        plan_code = (
+            client.experiment_plan(stored.plan_ref).definition.code_revision
+            if stored.plan_ref is not None
+            else None
+        )
+    identity = stored.intent.get("code_revision")
+    if plan_code is not None:
+        identity = plan_code.model_dump(mode="json")
+    record_timing("source_restore_start", procedure_id=procedure_id)
+    project = (
+        revision_project(
+            root, AuthorRevisionRef.model_validate(thaw_json_value(identity))
+        )
+        if identity is not None
+        else sc.open_project(root)
+    )
+    record_timing("application_load_start", procedure_id=procedure_id)
+    application = project.load_application()
+    record_timing("application_ready", procedure_id=procedure_id)
+    with application.connect(
+        resolve_daemon_endpoint(root), operator="console-worker"
+    ) as lab:
+        run_procedure(lab, procedure_id)
+    record_timing("procedure_return", procedure_id=procedure_id)
 
 
 def launch(

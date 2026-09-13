@@ -112,3 +112,55 @@ the benchmark record. Errors discard the affected worker; the next explicit
 request reloads it. Timeout responses warn that publication may already have
 occurred and never automatically replay an operation. Input validation errors
 keep their field locations rather than returning only a Pydantic help URL.
+
+## Submission to first visible data
+
+```console
+uv run --locked python -m benchmarks run author-first-data --repetitions 2
+```
+
+This benchmark uses the ordinary `prepare().run()` / `job.wait()` APIs on a
+copied virtual signal experiment with three computed points. It measures initial
+and repeated runs, changed input and a run after source refresh. Preparation is
+reported separately; all event offsets share the same submission origin.
+It is a software-path baseline, not a physical trigger/ADC latency measurement.
+The existing scan-execution benchmark remains the lower-level acquisition probe.
+
+Sparse, opt-in diagnostic events distinguish:
+
+- Dispatch, child entry, framework imports, source restoration and application
+  loading. The gap before child entry includes interpreter startup; framework
+  imports begin after the lightweight timing helper is available.
+- Run admission, the first completed measurement batch offered to transport,
+  the first batch accepted into the daemon's live measurement store, and the
+  terminal run commit. Batch readiness is not the first hardware trigger.
+- The normal wait return and the first materialized result read by an independent
+  ordinary client. The observer uses `job.result()` and a 0.2-second read-only
+  polling interval; trace files are never used to discover its run identity.
+
+`job.result()` currently exposes a retained step output, so this observation is
+later than live data entering the daemon. It does not measure the live-preview
+endpoint or GUI rendering. The observer adds HTTP traffic and up to one polling
+interval of visibility delay; its read can finish before or after `job.wait()`.
+These event offsets overlap and must not be summed. The benchmark retains the
+run, procedure and source identities needed to interpret each sample.
+
+The timing files use per-process JSONL and the same host's monotonic clock. The
+benchmark creates and reads them automatically and embeds the selected events in
+its normal result record. For a developer investigation, create a directory and
+set `SCOPECAT_TIMING_DIRECTORY` before starting the daemon and clients. Unset it
+when finished. Disabled timing does not write files; unavailable diagnostic
+storage emits a warning and does not change an execution or publication outcome.
+Do not merge timestamps from different machines. Store evidence under ignored
+benchmark output, not in source control.
+
+A local Mac sample found immediate dispatch and roughly 40ms acknowledgement,
+but about 1.1s of fresh framework/application loading per execution. First
+measurements entered the daemon around 1.37s after submission; the ordinary
+retained-result observer read them around 1.56s. These are observations, not
+thresholds or a claimed runtime speedup. A short virtual computation does not
+justify removing execution isolation, sharing a live hardware worker, shortening
+polling intervals, or porting startup work to a native kernel. Next work should
+profile required versus unrelated import/model construction and separately design
+ordinary-author access to live progress/results, retaining admission and recovery
+semantics.
