@@ -94,7 +94,6 @@ from scopecat.automation.calibration_wire import (
     CalibrationStatusQuery,
     CalibrationStatusReceipt,
 )
-from scopecat.automation.views import ProcedureOperatorView
 from scopecat.automation.wire import (
     ProcedureStepResourceWaitCommand,
     ProcedureStepResourceWaitReceipt,
@@ -129,6 +128,7 @@ from scopecat.daemon.points import (
     RunPointPlanCloseCommand,
     RunPointPlanView,
 )
+from scopecat.daemon.procedure_views import ProcedureOperatorView
 from scopecat.daemon.reviews import (
     ReviewCompileCommand,
     ReviewCompileReceipt,

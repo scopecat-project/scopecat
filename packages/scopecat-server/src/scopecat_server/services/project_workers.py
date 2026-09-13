@@ -15,7 +15,7 @@ from pathlib import Path
 from threading import Event, Lock, Thread
 from typing import Literal, cast
 
-from scopecat.automation.views import ProcedureDispatchView
+from scopecat.daemon.procedure_views import ProcedureDispatchView
 from scopecat.kernel.interaction_timing import record_timing
 
 _LOG = logging.getLogger(__name__)

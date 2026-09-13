@@ -8,7 +8,7 @@ from scopecat.automation import (
     ProcedureStepAttemptListQuery,
     procedure_step_operation_id,
 )
-from scopecat.automation.views import ProcedureChildRunView, ProcedureOperatorView
+from scopecat.daemon.procedure_views import ProcedureChildRunView, ProcedureOperatorView
 
 if TYPE_CHECKING:
     from scopecat_server.services.application import DaemonApplication

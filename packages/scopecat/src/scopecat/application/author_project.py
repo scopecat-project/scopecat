@@ -31,7 +31,6 @@ from scopecat.application.launch import (
 )
 from scopecat.authoring.experiments import ExperimentRequest, Scan
 from scopecat.automation.models import ProcedureRun, RunOutputRef
-from scopecat.automation.views import ProcedureOperatorView
 from scopecat.automation.wire import (
     ProcedureCancelCommand,
     ProcedureRunListQuery,
@@ -39,6 +38,7 @@ from scopecat.automation.wire import (
 )
 from scopecat.config.candidates import CandidateConfig
 from scopecat.daemon.client import DaemonClient, DaemonUnavailableError
+from scopecat.daemon.procedure_views import ProcedureOperatorView
 from scopecat.daemon.views import MeasurementLivePreview, MeasurementPreview
 from scopecat.kernel.errors import SessionClosedError
 from scopecat.kernel.quantity import Quantity
