@@ -66,6 +66,8 @@ from scopecat.sdk.instruments.contracts import InstrumentDescription
 
 class _ViewModel(BaseModel):
     model_config = ConfigDict(
+        # A short-lived client uses only a subset of these communication models.
+        defer_build=True,
         extra="forbid",
         frozen=True,
     )

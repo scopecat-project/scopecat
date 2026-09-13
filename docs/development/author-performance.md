@@ -164,3 +164,28 @@ polling intervals, or porting startup work to a native kernel. Next work should
 profile required versus unrelated import/model construction and separately design
 ordinary-author access to live progress/results, retaining admission and recovery
 semantics.
+
+## Startup model construction
+
+The daemon command/view families defer Pydantic validator and serializer building
+until a model is used. A short-lived execution client does not need to build every
+GUI, configuration and analysis response model when it imports the client module.
+Field definitions, validation rules, frozen commands and JSON schemas remain the
+same; first use still performs normal schema construction and validation. This
+uses Pydantic's model lifecycle, without an additional application-level cache.
+
+Measure the complete first-data workload when evaluating this change: moving
+construction into the first request is not itself a gain. A same-worktree on/off
+control observed a modest reduction of roughly 30–50ms in repeated submission to
+first measurement, and about 6 MiB less RSS after loading the reference application.
+That RSS observation is for one loaded process, not peak execution memory or the
+sum of physical memory consumed by all workers. Earlier measurements under higher
+host load overstated the time difference and are not the improvement claim.
+
+The remaining startup cost includes broad client/model imports and application
+registration of capabilities unrelated to the selected experiment. Further work
+should separate capability discovery/metadata from loading an executable callback,
+and narrow client imports by capability. Before changing this boundary, preserve
+source validation, declaration fingerprints, catalog completeness, explicit missing
+dependency errors and old revision restoration. Require full submit-to-data evidence;
+do not create an execution pool or skip checks merely to hide imports.
