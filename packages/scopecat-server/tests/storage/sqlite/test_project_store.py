@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import shutil
 import sqlite3
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -522,10 +523,8 @@ def test_reopening_current_test_store_does_not_copy_disappearing_wal(
 ) -> None:
     from scopecat_testkit.server.runtime import sqlite_run_repository
 
-    from scopecat_server.storage.sqlite import project_store
-
     first = sqlite_run_repository(tmp_path)
-    copy = project_store.shutil.copyfile
+    copy = shutil.copyfile
     copies: list[Path] = []
 
     def close_before_copy(source: Path, destination: Path) -> str:
@@ -535,7 +534,7 @@ def test_reopening_current_test_store_does_not_copy_disappearing_wal(
 
     # Old bootstrap enumerates WAL, then last-connection close removes it before
     # copy. Current-store access must use SQLite, never this offline-copy path.
-    monkeypatch.setattr(project_store.shutil, "copyfile", close_before_copy)
+    monkeypatch.setattr(shutil, "copyfile", close_before_copy)
     try:
         second = sqlite_run_repository(tmp_path)
         try:
