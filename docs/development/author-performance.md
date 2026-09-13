@@ -212,8 +212,11 @@ deadline. A stack sample alone does not mean startup failed.
 A parent blocked in `Connection.poll` does not identify a slow import or driver.
 Use the child's last phase and stack to locate the wait. A missing child entry
 limits visibility to process bootstrap, entry-module loading or diagnostic setup;
-it is not proof of an antivirus cause. The probe does not measure time before
-Python can run it. Retain failed starts alongside successful starts and distinguish
+it is not proof of an antivirus cause. The supported start launcher passes a monotonic anchor so the daemon also
+records elapsed time from the launch request to its Python entry. This includes
+process creation and early module setup; it does not identify their individual
+costs. The health deadline starts after process creation returns, so this anchor
+is not an exact deadline timestamp. Direct entry-module invocation has no anchor. Retain failed starts alongside successful starts and distinguish
 fresh installations from repeated fixture runs.
 
 A controlled backend-construction stall verifies evidence and actual child

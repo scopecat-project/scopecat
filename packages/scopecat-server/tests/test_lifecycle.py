@@ -347,6 +347,7 @@ def test_cli_daemon_first_use_loop_uses_dynamic_port_and_cleans_record(
             in evidence
         )
         assert "instrument child spawned pid=" in evidence
+        assert "launch request to Python entry:" in evidence
         assert "instrument readiness decoded: ready" in evidence
         assert "instrument endpoint ready" in evidence
         assert "project schema ready" in evidence
@@ -448,6 +449,7 @@ def test_startup_trace_locates_config_stall_after_instrument_readiness(
         start_project(open_project(tmp_path))
     [trace] = diagnostics.glob("daemon-startup-*.log")
     evidence = trace.read_text()
+    assert "launch request to Python entry:" in evidence
     assert "instrument endpoint ready" in evidence
     assert "project schema ready" in evidence
     assert "daemon application ready; bootstrapping config registry" in evidence
