@@ -13,6 +13,7 @@ from scopecat.inspection import (
     CompiledProgramInspectionQuery,
     PlannedInstrumentSetting,
 )
+from scopecat.program.parameters import ParameterContract
 from scopecat.records.costs import RunCompilationCost
 from scopecat.sdk.payloads import PayloadCodecRegistry
 
@@ -303,6 +304,8 @@ class RunProgram:
         repr=False,
         compare=False,
     )
+
+    parameter_contracts: tuple[ParameterContract, ...] = field(default=(), repr=False)
 
     compilation_cost: RunCompilationCost | None = field(default=None, compare=False)
 

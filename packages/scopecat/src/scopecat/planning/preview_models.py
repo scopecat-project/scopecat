@@ -132,6 +132,29 @@ class ExperimentPreviewDomainInspection:
 
 
 @dataclass(frozen=True)
+class ExperimentPreviewParameterValue:
+    """A scalar parameter dependency, without copying configuration values."""
+
+    parameter_id: str
+    kind: Literal["value"] = "value"
+
+
+@dataclass(frozen=True)
+class ExperimentPreviewParameterLookup:
+    """A table-column dependency; key names are not resolved row identities."""
+
+    table_id: str
+    column_id: str
+    key_columns: tuple[str, ...]
+    kind: Literal["lookup"] = "lookup"
+
+
+type ExperimentPreviewParameter = (
+    ExperimentPreviewParameterValue | ExperimentPreviewParameterLookup
+)
+
+
+@dataclass(frozen=True)
 class ExperimentPreview:
     """Stable experiment shape that a user can review before execution."""
 
@@ -156,6 +179,7 @@ class ExperimentPreview:
     planned_setting_limit: int = PLANNED_INSTRUMENT_SETTING_LIMIT
     planned_settings_truncated: bool = False
     computes: tuple[ExperimentPreviewCompute, ...] = ()
+    parameters: tuple[ExperimentPreviewParameter, ...] = ()
     bindings: tuple[ExperimentPreviewBinding, ...] = ()
     binding_edges: tuple[ExperimentPreviewBindingEdge, ...] = ()
 

@@ -123,6 +123,50 @@ No controls, defaults, source registry or program are generated from this class.
 Changing the experiment's input names requires updating this optional editing type.
 Saved plans retain the prepared values, not the notebook's Python dataclass type.
 
+### Inspect the prepared experiment
+
+```python
+checked = author.prepare(request, parameters=parameters)
+facts = checked.inspection
+print(facts.total_point_count, facts.points_truncated)
+print([(record.id, record.dims) for record in facts.records])
+print([(step.implementation, step.placement) for step in facts.computes])
+for parameter in facts.parameters:
+    if parameter.kind == "lookup":
+        print(parameter.table_id, parameter.column_id, parameter.key_columns)
+    else:
+        print(parameter.parameter_id)
+print(checked.preview.code_revision, checked.preview.config_source)
+```
+
+`inspection` reads an isolated copy of facts captured by that successful prepare.
+It performs no I/O, compilation or acquisition, and remains readable after the
+session closes. Later request, parameter or source edits cannot update these
+facts. Prepare again to inspect a changed experiment; keep the enclosing preview
+with its exact request hash, source revision and configuration identity when
+sharing evidence. Saved plans are revalidated by the existing prepare-plan path.
+
+`parameters` lists compiler-declared scalar or table-column dependencies. Table
+and column identifiers remain separate; `key_columns` names lookup keys, not
+resolved row values. This is not a per-point parameter-value trace or a new
+parameter store. `bindings` and `binding_edges` explain invocation inputs and scan
+center/overlay relationships; they are not a complete operation dependency graph.
+Missing parameters still fail preparation with the existing field diagnostics.
+
+`points` contains at most the compiler's sampled point limit (currently 64),
+with `points_truncated` indicating omitted points. `total_point_count=None` means
+an adaptive total is unknown; `point_limit` remains the upper bound.
+`domain_inspections` describes only `selected_point`, initially the first point.
+Its target-owned `content` retains waveform/program limits and truncation metadata.
+These sampled facts do not prove every point or establish scientific validity.
+
+Summary collections are capped at `item_limit` (currently 256) each. Inspect
+`item_counts` and `truncated` before treating a list as complete. No full scan or
+configuration table is copied into this section. Existing maintained launch
+providers may omit inspection; `checked.inspection` then reports that capability
+is unavailable. This release adds read-only Python/HTTP facts, not a graphical
+editor or point-selection UI.
+
 An imported declaration retains its source identity from load time. Preparation
 compares that contract with the selected revision and rejects a mismatch. After
 editing a declaration, explicitly refresh the session and reload the notebook's

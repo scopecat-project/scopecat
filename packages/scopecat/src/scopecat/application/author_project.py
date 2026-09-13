@@ -22,6 +22,7 @@ from scopecat.api.published_analysis import AnalysisResult
 from scopecat.api.run import RunHandle
 from scopecat.application.authoring import AuthorExperiment
 from scopecat.application.experiment_plans import plan_definition, plan_launch_request
+from scopecat.application.inspection import LaunchInspection
 from scopecat.application.launch import (
     LaunchCatalog,
     LaunchField,
@@ -370,6 +371,19 @@ class AuthorPreparedLaunch:
     client: AuthorProject
     request: LaunchRequest
     preview: LaunchPreview
+
+    @property
+    def inspection(self) -> LaunchInspection:
+        """Read an isolated copy of captured facts without I/O or recompilation.
+
+        The containing preview retains the exact source/config/request identity.
+        Maintained providers must opt in to supplying inspection facts.
+        """
+        if self.preview.inspection is None:
+            raise ValueError(
+                "This experiment provider does not expose inspection facts"
+            )
+        return self.preview.inspection.model_copy(deep=True)
 
     def save_plan(
         self,

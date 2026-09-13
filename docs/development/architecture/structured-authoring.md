@@ -269,6 +269,14 @@ See [the notebook workflow](../../how-to/managed-author-session.md#edit-a-reques
 for its delivered typing and version-selection boundaries.
 Do not choose a public syntax solely to resemble future GUI internals.
 
+Managed author preparation now exposes a bounded read-only `inspection` section
+alongside its request/source/configuration identity. It projects existing compiler
+facts, including compiler-declared parameter dependencies and selected-point domain
+inspection, and reuses the live review point/inspection wire types. It does not
+create a persisted graph or a live notebook worker. Reading the prepared object's
+inspection makes an isolated copy without rebuilding. Missing parameter diagnostics
+still belong to preparation; dependency field names are not resolved row traces.
+
 Regardless of syntax:
 
 1. A request references one definition contract and an explicit version-selection

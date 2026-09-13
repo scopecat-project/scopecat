@@ -22,6 +22,7 @@ from scopecat.api.procedures import LabProcedureContext
 from scopecat.api.run import RunHandle
 from scopecat.application.author_inputs import author_input_model
 from scopecat.application.controls import control_catalog, control_values, edit_controls
+from scopecat.application.inspection import LaunchInspection
 from scopecat.application.launch import (
     LaunchCatalog,
     LaunchCatalogEntry,
@@ -404,6 +405,7 @@ class AuthorExperiments:
                 resources=preview.instrument_ids,
                 controls=control_values(selected.controls, invocation, config=config),
                 summary=selected.description,
+                inspection=LaunchInspection.from_preview(preview),
                 preflight=PreflightSummary(
                     stages=(
                         summarize_preflight(

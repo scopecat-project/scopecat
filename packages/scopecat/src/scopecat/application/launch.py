@@ -15,6 +15,7 @@ from pydantic import (
 )
 
 from scopecat.application.controls import LaunchControl, LaunchControlValue
+from scopecat.application.inspection import LaunchInspection
 from scopecat.automation.interpretations import InterpretationRequest
 from scopecat.planning.preflight import PreflightSummary
 from scopecat.records.author_revision import AuthorRevisionRef
@@ -101,6 +102,7 @@ class LaunchPreview(BaseModel):
             "not a procedure total."
         ),
     )
+    inspection: LaunchInspection | None = None
     preflight: PreflightSummary | None = None
     manual_state: ManualPreviewFence | None = None
     resources: tuple[str, ...] = ()
