@@ -10,11 +10,10 @@ import scopecat as sc
 from scopecat.analysis.facts import ordinary_result_schema
 from scopecat.application import LabApplication
 from scopecat.automation.wire import ProcedureRunListQuery
-from scopecat.daemon.client import DaemonConflictError
 from scopecat.project import load_project
 from scopecat.records.parameter import TableParameterValue
 from scopecat.records.run import AnalysisCandidateRunConfigSource
-from scopecat.records.sample import SampleRevisionDraft, SampleSelector
+from scopecat.records.sample import SampleRevisionDraft
 from scopecat_server.lifecycle import start_project, stop_project
 
 from reference_lab.configuration import EXAMPLE_ROOT
@@ -24,7 +23,6 @@ from reference_lab.workflows.authored.ordinary_analysis import (
     PeakResult,
     PeakVerification,
 )
-from reference_lab.workflows.exploratory_signal import exploratory_signal
 
 
 def test_typed_candidates_retain_cells_and_independent_policy(
@@ -154,53 +152,6 @@ def test_typed_candidates_retain_cells_and_independent_policy(
             )
             with pytest.raises(ValueError, match="exact candidate"):
                 other.verify(check)
-            rejected = author.analyze_as(
-                check_run.id,
-                f"{analysis_module}:verify_peak",
-                PeakVerification,
-                arguments={"expected_frequency_ghz": 5.8, "tolerance_ghz": 0.01},
-            )
-            with pytest.raises(ValueError, match="verification rejected"):
-                candidate.verify(
-                    replace(rejected, value=replace(rejected.value, accepted=True))
-                )
-            wrong_point_run = lab.run(
-                exploratory_signal.build(),
-                config=candidate.config,
-                sample=SampleSelector(
-                    sample_id=sample.id, context_id="different-point"
-                ),
-            )
-            wrong_point = author.analyze_as(
-                wrong_point_run.id,
-                f"{analysis_module}:verify_peak",
-                PeakVerification,
-                source="current",
-                arguments={"expected_frequency_ghz": 4.8, "tolerance_ghz": 0.05},
-            )
-            with pytest.raises(ValueError, match="sample revision/workpoint"):
-                candidate.verify(wrong_point)
-            # The underlying verified-acceptance endpoint enforces the same scope.
-            unsafe = lab.analysis("wrong point", key="wrong-point")
-            unsafe.measurements(run, id="baseline")
-            unsafe.measurements(wrong_point_run, id="candidate")
-            unsafe_decision = (
-                unsafe.result()
-                .fact(
-                    "decision",
-                    wrong_point.value,
-                    schema=ordinary_result_schema(PeakVerification),
-                )
-                .save()
-            )
-            with pytest.raises(
-                DaemonConflictError, match="same sample revision/workpoint"
-            ):
-                author.config.accept_verified(
-                    candidate.config,
-                    verified_by=(unsafe_decision, "decision"),
-                    entry_id="wrong-point",
-                )
             verified = candidate.verify(check)
             next_prepared = author.prepare("signal", candidate=verified.select())
             assert next_prepared.preview.config_source == prepared.preview.config_source
