@@ -32,6 +32,7 @@ from scopecat_server.author_worker import revision_project
 from scopecat_server.worker_diagnostics import (
     AUTHOR_VALIDATION_TIMEOUT_EXIT,
     report_stage,
+    report_validation_error,
 )
 
 if TYPE_CHECKING:
@@ -218,9 +219,5 @@ if __name__ == "__main__":
     except ValidationError as error:
         # The parent reports the last diagnostic line. Preserve field locations
         # there instead of leaving only Pydantic's trailing documentation URL.
-        details = "; ".join(
-            f"{'.'.join(str(part) for part in item['loc']) or 'value'}: {item['msg']}"
-            for item in error.errors(include_url=False, include_input=False)
-        )
-        print(" ".join(f"{error.title}: {details}".splitlines()), file=sys.stderr)
+        report_validation_error(error)
         raise SystemExit(1) from None

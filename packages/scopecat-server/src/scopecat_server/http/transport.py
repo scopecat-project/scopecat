@@ -5,7 +5,6 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 import subprocess
 import sys
@@ -19,6 +18,7 @@ from fastapi import FastAPI, Header, HTTPException, Query, Request
 from fastapi import Path as ApiPath
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
+from scopecat.api.comparison import reopen_comparison
 from scopecat.application.comparison import ComparisonResult
 from scopecat.application.launch import LaunchCatalog, LaunchPreview, LaunchSubmission
 from scopecat.application.launch_config import launch_sample_selection
@@ -302,9 +302,10 @@ from scopecat_server.http.procedure_operator import (
     ProcedureOperatorView,
     read_procedure_operator,
 )
+from scopecat_server.retained_request import AnalysisCall, ComparisonCall
 from scopecat_server.services.author_revisions import AuthorValidationTimeout
-from scopecat_server.services.launch_workers import LaunchWorkers
 from scopecat_server.services.project_workers import ProjectProcedureWorkers
+from scopecat_server.services.revision_workers import RevisionWorkers
 from scopecat_server.storage.sqlite.author_revision_repository import (
     AuthorRevisionConflict,
 )
@@ -312,6 +313,7 @@ from scopecat_server.storage.sqlite.connection import SQLiteBusyError
 from scopecat_server.worker_diagnostics import (
     AUTHOR_VALIDATION_TIMEOUT_EXIT,
     diagnostic_excerpt,
+    worker_server_timing,
 )
 
 from ..command_payloads import (
@@ -350,7 +352,8 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
         lambda procedure_id: application.automation.worker_state(procedure_id),
     )
 
-    launch_workers = LaunchWorkers()
+    launch_workers = RevisionWorkers()
+    retained_workers = RevisionWorkers("scopecat_server.retained_worker")
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI) -> AsyncGenerator[None]:
@@ -360,6 +363,7 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
         finally:
             project_workers.stop()
             launch_workers.close()
+            retained_workers.close()
 
     app = FastAPI(title="Scopecat daemon", version="1", lifespan=lifespan)
     app.add_middleware(
@@ -425,30 +429,47 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
         except ValueError as error:
             raise HTTPException(422, str(error)) from error
 
-    @app.post(f"{_API_PREFIX}/author-revisions/analyze")
-    def analyze_author_revision(
-        command: AuthorAnalysisRequest,
-    ) -> AuthorAnalysisReceipt:
-        completed = subprocess.run(  # noqa: S603 - internal revision-pinned analysis worker
-            [
-                sys.executable,
-                "-m",
-                "scopecat_server.author_worker",
-                str(application.project_root),
-                "--analyze",
-            ],
-            input=command.model_dump_json(),
-            capture_output=True,
-            encoding="utf-8",
-            timeout=60,
-            check=False,
-            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+    def retained_call(
+        command: AnalysisCall | ComparisonCall, response: Response, *, started: float
+    ) -> str:
+        operation = command.kind
+        try:
+            remaining = 60 - (time.perf_counter() - started)
+            if remaining <= 0:
+                raise subprocess.TimeoutExpired("retained source resolution", 60)
+            completed = retained_workers.call(
+                application.project_root, command, timeout=remaining
+            )
+        except subprocess.TimeoutExpired as error:
+            stage, evidence = diagnostic_excerpt(error.stderr)
+            logging.getLogger(__name__).error(  # noqa: TRY400 - bounded worker evidence
+                "Retained %s timed out: stage=%s\n%s", operation, stage, evidence
+            )
+            raise HTTPException(
+                504,
+                f"{operation.capitalize()} timed out during {stage}; "
+                "inspect retained analyses before repeating. "
+                "Publication outcome may be unknown.",
+            ) from error
+        response.headers["Server-Timing"] = worker_server_timing(
+            completed.stderr, total_seconds=time.perf_counter() - started
         )
         if completed.returncode:
+            lines = completed.stderr.strip().splitlines()
             raise HTTPException(
-                422, completed.stderr.strip() or "Author analysis failed"
+                422, lines[-1] if lines else f"Retained {operation} failed"
             )
-        return AuthorAnalysisReceipt.model_validate_json(completed.stdout)
+        return completed.stdout
+
+    @app.post(f"{_API_PREFIX}/author-revisions/analyze")
+    def analyze_author_revision(
+        command: AuthorAnalysisRequest, response: Response
+    ) -> AuthorAnalysisReceipt:
+        return AuthorAnalysisReceipt.model_validate_json(
+            retained_call(
+                AnalysisCall(request=command), response, started=time.perf_counter()
+            )
+        )
 
     def launch_call(command: LaunchRequest, response: Response) -> str:
         started = time.perf_counter()
@@ -516,18 +537,8 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
                 f"Experiment {operation} timed out after 60 seconds during {stage}. "
                 f"{recovery}",
             ) from error
-        timings = {"launch": (time.perf_counter() - started) * 1000}
-        for line in completed.stderr.splitlines():
-            if line.startswith("Scopecat launch timing: "):
-                phases = cast(
-                    "dict[str, float]",
-                    json.loads(line.removeprefix("Scopecat launch timing: ")),
-                )
-                timings.update(
-                    {name: seconds * 1000 for name, seconds in phases.items()}
-                )
-        response.headers["Server-Timing"] = ", ".join(
-            f"{name};dur={duration:.3f}" for name, duration in timings.items()
+        response.headers["Server-Timing"] = worker_server_timing(
+            completed.stderr, total_seconds=time.perf_counter() - started
         )
         logging.getLogger(__name__).info(
             "Author launch action=%s revision=%s total_seconds=%.6f diagnostics=%s",
@@ -551,32 +562,62 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
         return completed.stdout
 
     @app.post(f"{_API_PREFIX}/run-comparison")
-    def run_comparison(command: ComparisonRequest) -> ComparisonResult:
+    def run_comparison(
+        command: ComparisonRequest, response: Response
+    ) -> ComparisonResult:
         from pydantic import TypeAdapter
 
+        started = time.perf_counter()
         try:
-            completed = subprocess.run(  # noqa: S603 - fixed project worker command
-                [
-                    sys.executable,
-                    "-m",
-                    "scopecat_server.comparison_worker",
-                    str(application.project_root),
-                ],
-                input=command.model_dump_json(),
-                capture_output=True,
-                encoding="utf-8",
-                timeout=60,
-                check=False,
-                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
-            )
+            if command.action in ("candidate", "reject", "handoff"):
+                command = reopen_comparison(
+                    command,
+                    application.runs.get_run_analysis(
+                        command.primary_run, command.analysis_id
+                    ),
+                )
+            elif command.action == "list" or (
+                command.action == "inspect" and command.code_revision is None
+            ):
+                command = command.model_copy(
+                    update={"code_revision": author_revision_state().active}
+                )
+            if command.code_revision is None:
+                if command.action != "list":
+                    raise ValueError(
+                        "Comparison requires a retained author revision; "
+                        "configure author refresh roots"
+                    )
+                # Unversioned catalogs have no immutable application to retain.
+                completed = subprocess.run(  # noqa: S603 - fixed legacy worker
+                    [
+                        sys.executable,
+                        "-m",
+                        "scopecat_server.comparison_worker",
+                        str(application.project_root),
+                    ],
+                    input=command.model_dump_json(),
+                    capture_output=True,
+                    encoding="utf-8",
+                    timeout=60,
+                    check=False,
+                    creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+                )
+                if completed.returncode:
+                    lines = completed.stderr.strip().splitlines()
+                    raise ValueError(lines[-1] if lines else "Comparison failed")
+                payload = completed.stdout
+            else:
+                payload = retained_call(
+                    ComparisonCall(request=command), response, started=started
+                )
         except subprocess.TimeoutExpired as error:
             raise HTTPException(
                 504, "Comparison timed out; inspect history before retrying"
             ) from error
-        if completed.returncode:
-            lines = completed.stderr.strip().splitlines()
-            raise HTTPException(422, lines[-1] if lines else "Comparison failed")
-        return TypeAdapter(ComparisonResult).validate_json(completed.stdout)
+        except ValueError as error:
+            raise HTTPException(422, str(error)) from error
+        return TypeAdapter(ComparisonResult).validate_json(payload)
 
     @app.get(f"{_API_PREFIX}/experiment-launcher")
     def experiment_launch_catalog(

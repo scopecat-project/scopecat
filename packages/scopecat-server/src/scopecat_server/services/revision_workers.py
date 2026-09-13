@@ -11,22 +11,23 @@ from collections import OrderedDict
 from contextlib import suppress
 from pathlib import Path
 from queue import Empty, Queue
-from typing import TextIO, cast
+from typing import Literal, TextIO, cast
 
 import psutil
 from scopecat.records.launch_request import LaunchRequest
 
+from scopecat_server.retained_request import AnalysisCall, ComparisonCall
 from scopecat_server.validation_process import terminate_validation_process_tree
 
 
 class _Worker:
-    def __init__(self, root: Path, revision: str) -> None:
+    def __init__(self, root: Path, revision: str, module: str) -> None:
         self.stderr: TextIO = tempfile.TemporaryFile(mode="w+", encoding="utf-8")  # noqa: SIM115 - worker owns lifetime
         self.process: subprocess.Popen[str] = subprocess.Popen(  # noqa: S603 - fixed internal worker, no shell
             [
                 sys.executable,
                 "-m",
-                "scopecat_server.launch_worker",
+                module,
                 str(root),
                 "--serve",
                 revision,
@@ -56,7 +57,7 @@ class _Worker:
         return self.stderr.read()[-8192:]
 
     def call(
-        self, command: LaunchRequest, timeout: float
+        self, command: LaunchRequest | AnalysisCall | ComparisonCall, timeout: float
     ) -> subprocess.CompletedProcess[str]:
         assert self.process.stdin is not None
         self.stderr.seek(0)
@@ -98,19 +99,29 @@ class _Worker:
         self.stderr.close()
 
 
-class LaunchWorkers:
+class RevisionWorkers:
     """Serialize short author calls and retain at most two isolated revisions.
 
     Each invocation opens its own lab connection. A failed process is discarded;
     the caller receives the original failure, including ambiguous submissions.
     """
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        module: Literal[
+            "scopecat_server.launch_worker", "scopecat_server.retained_worker"
+        ] = "scopecat_server.launch_worker",
+    ) -> None:
+        self._module = module
         self._workers: OrderedDict[str, _Worker] = OrderedDict()
         self._lock = threading.Lock()
 
     def call(
-        self, root: Path, command: LaunchRequest, *, timeout: float = 60
+        self,
+        root: Path,
+        command: LaunchRequest | AnalysisCall | ComparisonCall,
+        *,
+        timeout: float = 60,
     ) -> subprocess.CompletedProcess[str]:
         assert command.code_revision is not None
         key = command.code_revision.content_hash
@@ -123,7 +134,7 @@ class LaunchWorkers:
                 if len(self._workers) == 2:
                     _, evicted = self._workers.popitem(last=False)
                     evicted.close()
-                worker = _Worker(root, key)
+                worker = _Worker(root, key, self._module)
                 self._workers[key] = worker
             self._workers.move_to_end(key)
             try:

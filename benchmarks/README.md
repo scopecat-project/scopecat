@@ -179,3 +179,9 @@ measures the actual notebook prepare path on a copied virtual reference project,
 including repeated calls, input/scan edits and source refresh, without acquisition.
 See [author interaction performance](../docs/development/author-performance.md)
 for measurement boundaries, worker lifecycle and Windows usage.
+
+`uv run --locked python -m benchmarks run author-analysis --repetitions 2`
+records virtual inputs outside measurement, then times ordinary analysis and
+comparison inspect/fit with repeated and edited arguments. It includes separate
+HTTP phase evidence for both surfaces and performs normal publication on every
+operation. See the same author performance guide for pool and source semantics.
