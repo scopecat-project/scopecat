@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import subprocess
+import sys
 import tomllib
 from pathlib import Path
 from typing import Literal
@@ -88,3 +90,39 @@ def test_repository_tiers_cover_pytest_roots() -> None:
     assert set(config["tool"]["scopecat-tests"]["roots"]) == set(
         config["tool"]["pytest"]["testpaths"]
     )
+
+
+def test_runner_keeps_workspace_config_for_a_nested_only_tier(tmp_path: Path) -> None:
+    (tmp_path / "pyproject.toml").write_text("""
+[tool.pytest.ini_options]
+addopts = ["--import-mode=importlib"]
+[tool.scopecat-tests]
+roots = ["nested/tests"]
+""")
+    tests = tmp_path / "nested/tests"
+    tests.mkdir(parents=True)
+    (tests.parent / "pyproject.toml").write_text("""
+[tool.pytest.ini_options]
+addopts = ["-k", "this_would_deselect_everything"]
+""")
+    (tests / "test_one.py").write_text("def test_one(): pass\n")
+    result = subprocess.run(  # noqa: S603 - controlled test runner and fixture
+        [
+            sys.executable,
+            "-m",
+            "scopecat_testkit.check",
+            "fast",
+            "--root",
+            str(tmp_path),
+            "--report-dir",
+            str(tmp_path / "reports"),
+            "--",
+            "-q",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    timing = json.loads((tmp_path / "reports/fast-1-of-1.json").read_text())
+    assert timing["tests"][0]["nodeid"] == "nested/tests/test_one.py::test_one"

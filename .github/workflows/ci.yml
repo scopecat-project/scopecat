@@ -260,7 +260,7 @@ jobs:
           path: apps/scopecat-ui/dist
       - run: pnpm exec playwright install --with-deps chromium
       - name: Run browser end-to-end shard
-        run: pnpm exec playwright test --shard=${{ matrix.shard }}/2 --reporter=line,json
+        run: pnpm exec playwright test --project=journey-${{ matrix.shard }} --reporter=line,json
         env:
           PLAYWRIGHT_JSON_OUTPUT_FILE: test-results/timings.json
       - name: Retain browser timings and failure evidence

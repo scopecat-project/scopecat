@@ -95,6 +95,10 @@ def main() -> int:
     report.mkdir(parents=True, exist_ok=True)
     prefix = f"{args.suite}-{index}-of-{count}"
     command = [
+        "-c",
+        str(root / "pyproject.toml"),
+        "--rootdir",
+        str(root),
         "-p",
         "scopecat_testkit.pytest_timing",
         "--durations=20",

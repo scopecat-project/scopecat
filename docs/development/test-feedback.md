@@ -13,7 +13,8 @@ uv run --locked python -m scopecat_testkit.check full
 `fast` covers core/library tests. `integration` covers server tests except the
 explicit journey files. `journey` covers reference-lab workflows, fresh-process
 snapshots and validation-process diagnostics. `core` combines fast and integration
-for CI. These are file-level cost boundaries, not promises that every fast test
+for CI. The runner pins the workspace pytest configuration and root even when
+a tier contains only a nested project. These are file-level cost boundaries, not promises that every fast test
 is pure or that every integration test starts a process.
 
 Pass pytest options after `--`, for example `fast -- -n 0 -q`. Run affected test
@@ -39,7 +40,7 @@ interpret a timing sample as a benchmark or a successful run as hardware evidenc
 
 Every PR, merge-group and explicit workflow dispatch runs all Python tests on
 Linux and Windows: one core job and two journey shards per platform. It also
-runs both browser E2E shards, static checks, benchmark smoke, documentation and
+runs both measured, file-level browser E2E projects, static checks, benchmark smoke, documentation and
 installed-wheel checks. The gate rejects failed or unexpectedly skipped shards.
 This first step changes execution topology, not PR coverage.
 
@@ -49,6 +50,9 @@ verification no longer waits for the entire browser journey suite. Each browser
 runner keeps one worker; Python jobs cap at two workers. More independent runners
 reduce wall time but add setup/runner-minute cost; inspect both before increasing
 shard counts. Browser JSON reports retain timings and any retry information.
+The first browser project lists its files explicitly; the second includes all
+remaining files so new tests are never silently omitted. Run one with
+`pnpm exec playwright test --project=journey-1`; ordinary Playwright runs both.
 
 A squash push to main builds and validates the formal revision's artifacts,
 including static checks, UI unit checks, benchmark smoke, docs and installed
