@@ -78,3 +78,29 @@ it("retries an ambiguous submission with the identical request", async () => {
   expect(submitted).toHaveLength(2);
   expect(submitted[1]).toEqual(submitted[0]);
 });
+
+it("announces readiness only after the consumer catalog has updated", async () => {
+  let release!: () => void;
+  const updated = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (request: Request) => {
+      const path = new URL(request.url).pathname;
+      if (path.endsWith("author-revisions")) return Response.json(state);
+      const completed = { ...running, status: "succeeded", phase: "published", result: state };
+      return Response.json(path.endsWith("author-preparations") ? [completed] : completed);
+    }),
+  );
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(
+    <QueryClientProvider client={client}>
+      <AuthorRefresh projectId="lab" onRefreshed={() => updated} />
+    </QueryClientProvider>,
+  );
+  await screen.findByText(/Updating catalog/);
+  expect(screen.queryByText(/Author code refreshed/)).not.toBeInTheDocument();
+  release();
+  await screen.findByText(/Author code refreshed/);
+});

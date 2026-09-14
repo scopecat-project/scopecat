@@ -83,7 +83,7 @@ test("compares retained signals, saves independent results and imports a reviewe
     await page.getByRole("button", { name: "Refresh author code", exact: true }).click();
     expect((await refreshed).status()).toBe(200);
     await expect(
-      page.getByRole("status").filter({ hasText: "succeeded: published" }),
+      page.getByRole("status").filter({ hasText: "Author code refreshed" }),
     ).toBeVisible();
     await action("Inspect compatible data");
     await page.getByLabel("Primary selected positions").fill("4,1,2,3");

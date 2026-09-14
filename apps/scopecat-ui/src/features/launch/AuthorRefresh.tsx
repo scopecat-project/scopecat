@@ -19,6 +19,7 @@ export function AuthorRefresh(props: Props) {
 function AuthorRefreshPanel({ projectId, onRefreshed }: Props) {
   const queryClient = useQueryClient();
   const [request, setRequest] = useState<Request>();
+  const [synchronized, setSynchronized] = useState<string>();
   const notified = useRef<string | undefined>(undefined);
   const state = useQuery({
     queryKey: ["author-revisions", projectId],
@@ -79,9 +80,12 @@ function AuthorRefreshPanel({ projectId, onRefreshed }: Props) {
     const next = operation.data;
     if (next?.status !== "succeeded" || notified.current === next.operation_id) return;
     notified.current = next.operation_id;
-    void queryClient.invalidateQueries({ queryKey: ["author-revisions", projectId] });
-    void queryClient.invalidateQueries({ queryKey: ["experiment-launcher"] });
-    void onRefreshed?.();
+    void (async () => {
+      await queryClient.invalidateQueries({ queryKey: ["author-revisions", projectId] });
+      await queryClient.invalidateQueries({ queryKey: ["experiment-launcher"] });
+      await onRefreshed?.();
+      setSynchronized(next.operation_id);
+    })();
   }, [operation.data, projectId, queryClient, onRefreshed]);
   if (state.data && !state.data.enabled) return null;
   const busy = identity && (!operation.data || !terminal(operation.data.status));
@@ -108,8 +112,12 @@ function AuthorRefreshPanel({ projectId, onRefreshed }: Props) {
           {!terminal(operation.data.status) &&
             ` · ${Math.max(0, Math.floor((operation.dataUpdatedAt - Date.parse(operation.data.created_at)) / 1000))}s elapsed`}
           {operation.data.status === "succeeded" &&
-            " · Preview the updated experiment before starting."}
+            synchronized !== operation.data.operation_id &&
+            " · Updating catalog…"}
         </p>
+      )}
+      {identity && synchronized === identity && (
+        <p role="status">Author code refreshed. Preview the updated experiment before starting.</p>
       )}
       {identity && <p className="text-xs break-all">Preparation: {identity}</p>}
       {busy && (

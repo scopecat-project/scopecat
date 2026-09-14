@@ -447,11 +447,8 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
     ) -> str:
         operation = command.kind
         try:
-            remaining = 60 - (time.perf_counter() - started)
-            if remaining <= 0:
-                raise subprocess.TimeoutExpired("retained source resolution", 60)
             completed = retained_workers.call(
-                application.project_root, command, timeout=remaining
+                application.project_root, command, timeout=60
             )
         except subprocess.TimeoutExpired as error:
             stage, evidence = diagnostic_excerpt(error.stderr)
@@ -597,7 +594,9 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
                 command.action == "inspect" and command.code_revision is None
             ):
                 command = command.model_copy(
-                    update={"code_revision": author_revision_state().active}
+                    update={
+                        "code_revision": application.author_revisions.state().active
+                    }
                 )
             if command.code_revision is None:
                 if command.action != "list":
