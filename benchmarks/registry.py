@@ -24,6 +24,12 @@ BENCHMARK_CASES = (
         summary="Cold and repeated notebook prepare with isolated source revisions",
     ),
     BenchmarkCase(
+        id="author-residency",
+        kind="e2e",
+        module="benchmarks.e2e.author_residency",
+        summary="Author worker residency, revision churn and shutdown checkpoints",
+    ),
+    BenchmarkCase(
         id="entity-reads",
         kind="component",
         module="benchmarks.component.entity_reads",

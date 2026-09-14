@@ -195,3 +195,20 @@ uv run --locked python -m benchmarks run author-first-data --repetitions 2
 This virtual signal case records process startup, measurement transport and an
 independent ordinary result reader. See [timing boundaries](../docs/development/author-performance.md#submission-to-first-visible-data)
 for observer overhead and the distinction from hardware acquisition and GUI rendering.
+
+
+Measure retained author workers across source revisions:
+
+```console
+uv run --locked python -m benchmarks run author-residency --revisions 3
+```
+
+This copies the virtual reference project, prepares and publishes analyses using
+normal APIs, rotates through at least three revisions and revisits the original.
+It records operation latencies and checkpoint PID/creation-time/revision/role/RSS,
+asserts same-revision reuse and the two-worker limit per pool, and checks observed
+process identities after normal shutdown. Per-process RSS includes shared pages;
+its sum is not unique physical memory. Checkpoints do not capture transient
+validation candidates, process peaks, long-session leaks or active-request shutdown.
+See [worker residency](../docs/development/author-performance.md#worker-residency-and-revision-churn)
+for interpretation and current measurements. Raw results belong outside Git.
