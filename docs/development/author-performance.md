@@ -191,7 +191,9 @@ The remaining startup cost includes broad client/model imports and application
 registration of capabilities unrelated to the selected experiment. The
 [loading-boundary investigation](capability-loading.md) records the execution
 path, the concrete measurement-view boundary and alternatives. Keep the existing
-registration API while measuring narrower dependency edges; do not introduce a
+registration API: a per-method client-import control only moved loading into
+application construction and was discarded. Further work follows measured worker
+resource and provider budgets; do not introduce a
 second declaration source, execution pool or weaker source/admission checks.
 
 ## Instrument child startup evidence

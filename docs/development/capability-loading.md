@@ -54,7 +54,7 @@ memory. A smaller import timer without a better user boundary is not sufficient.
 | Option | Benefit | Cost and decision |
 | --- | --- | --- |
 | Local imports at data-view or solver entry | Removes a demonstrated unrelated dependency from ordinary acquisition | First use still pays. Use where complete workloads show a benefit; preserve the public API. |
-| Narrow client operation modules | Could avoid unrelated command/view definitions in short-lived execution | `LabClient` and application composition also import broad families. Next measure the transitive graph through application-ready and first data, not only `import DaemonClient`. |
+| Narrow client operation modules | Could avoid unrelated command/view definitions in short-lived execution | `LabClient` and application composition also import broad families. A per-method import prototype shortened client import but did not improve application-ready or first-data latency; do not retain that churn. |
 | Separate capability metadata from callback loading | Could avoid entire unrelated project modules | Requires a revision-bound generated descriptor, exact callback identity, registry validation and a closure policy. Defer until simpler edges are measured and insufficient. |
 | Separate hand-maintained GUI manifests | Cheap discovery | Rejected: creates a second declaration source and synchronization work for experiment authors. |
 | Persistent execution workers | Amortizes imports | Outside this work: changes process isolation, lifetime and resource ownership. |
@@ -114,3 +114,46 @@ its independent 0.2-second observer and completion boundary can conceal the earl
 first measurement. These local software observations are not Windows lab promises.
 Initial cross-worktree/noisier trials did not establish a latency gain; the table
 uses the serial same-worktree control rather than those exploratory timings.
+
+
+### Client import control and stopping point
+
+A second same-worktree control against `5699411b4` moved 231 Scopecat imports
+from `DaemonClient` module scope into the 164 methods/helpers that actually used
+them, retaining type-checking imports. It added 607 lines and removed 268. This
+was an exploratory prototype, not an API change to retain.
+
+| Boundary | Existing client | Per-method import prototype |
+| --- | --- | --- |
+| Client import, warm filesystem / fresh process | 0.411–0.418 s | 0.110–0.122 s |
+| Worker imports after client | 0.044–0.047 s | 0.252–0.266 s |
+| Application construction after worker | 0.400–0.425 s | 0.484–0.510 s |
+| Total through application-ready | 0.855–0.891 s | 0.865–0.872 s |
+| Submit to first measurement, five ordinary operations | 1.143–1.171 s | 1.117–1.213 s |
+
+The prototype loaded 388 modules at the client boundary instead of 535, but
+application-ready still loaded 1,033 instead of 1,039. Settled RSS observations
+were about 164 versus 166 MiB, far smaller than the earlier dataframe-view gain.
+The same ten procedures remained available. Both variants completed ordinary
+first/repeated submissions, input edits and refresh with normal retained results.
+The prototype's median submit-to-first-measurement was about 1.175 s versus
+1.152 s; the small spread does not establish a regression or an improvement.
+
+The first existing-client process had an 11.75-second outlier through application
+construction, followed by 0.85–0.89 seconds in fresh processes. Keep that observation
+separate: the table labels the subsequent warm-filesystem observations and does not
+infer antivirus, a cold-start guarantee or a fix for #465. No retries or increased
+deadlines were used to make a failed benchmark pass.
+
+Decision: discard the per-method import prototype. Application declarations and
+execution dependencies bring nearly all of the same graph back before useful work.
+An import-only speedup is not a reason to expand transport code. Keep the existing
+client and capability registration APIs, retain the demonstrated dataframe-view
+boundary, and finish this design investigation without introducing a descriptor
+registry. Reopen a larger split only with a workload showing substantial unrelated
+callback/dependency cost after simpler boundaries are exhausted.
+
+The next performance work belongs to the existing #523 resource and provider
+budgets: measure retained worker memory/revision churn and configuration/planning
+CPU or allocations. Native kernels need a bounded computation bottleneck; this
+import redistribution supplies no justification for one.
