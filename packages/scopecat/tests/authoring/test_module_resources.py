@@ -59,7 +59,7 @@ def test_module_construction_rejects_duplicate_resource_ids() -> None:
     with pytest.raises(ValueError, match="duplicate module resource ids"):
 
         @sc.module(id="test.resources.duplicate")
-        def duplicate_resources(  # pyright: ignore[reportUnusedFunction]
+        def duplicate_resources(
             context: sc.ModuleContext,
         ) -> None:
             context._resource("source", requires=(_SET_FREQUENCY,))

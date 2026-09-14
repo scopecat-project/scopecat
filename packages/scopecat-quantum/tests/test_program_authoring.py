@@ -790,7 +790,7 @@ def test_pulse_template_rejects_results_and_invalid_typed_values() -> None:
     with pytest.raises(ValueError, match="cannot capture acquisition results"):
 
         @authoring.pulse_template(id="invalid-readout")
-        def invalid_readout(  # pyright: ignore[reportUnusedFunction]
+        def invalid_readout(
             qubit: authoring.Qubit,
         ) -> authoring.QuantumFragment:
             return authoring.acquire(
