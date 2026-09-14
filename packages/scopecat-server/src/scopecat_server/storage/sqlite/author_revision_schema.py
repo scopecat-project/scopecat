@@ -10,4 +10,8 @@ CREATE TABLE IF NOT EXISTS author_revision_active (
     generation INTEGER NOT NULL,
     content_hash TEXT NOT NULL REFERENCES author_revisions(content_hash)
 );
+CREATE TABLE IF NOT EXISTS author_preparations (
+    operation_id TEXT PRIMARY KEY,
+    record_json TEXT NOT NULL
+);
 """

@@ -21,13 +21,17 @@ from scopecat.records.launch_request import LaunchRequest
 
 from scopecat_server.retained_request import AnalysisCall, ComparisonCall
 from scopecat_server.validation_process import terminate_validation_process_tree
+from scopecat_server.worker_diagnostics import diagnostic_excerpt
 
 
 class _Worker:
     def __init__(
         self, root: Path, revision: str, module: str, *, code_root: Path | None = None
     ) -> None:
-        self.stderr: TextIO = tempfile.TemporaryFile(mode="w+", encoding="utf-8")  # noqa: SIM115 - worker owns lifetime
+        self._diagnostics = tempfile.TemporaryDirectory(prefix="scopecat-author-")
+        self.stderr: TextIO = (Path(self._diagnostics.name) / "stderr.log").open(
+            "w+", encoding="utf-8"
+        )
         self.process: subprocess.Popen[str] = subprocess.Popen(  # noqa: S603 - fixed internal worker, no shell
             [
                 sys.executable,
@@ -61,8 +65,11 @@ class _Worker:
             self.responses.put("")
 
     def diagnostics(self) -> str:
-        self.stderr.seek(0)
-        return self.stderr.read()[-8192:]
+        # Polling must not move the child writer's file offset.
+        path = Path(self._diagnostics.name) / "stderr.log"
+        with path.open("rb") as stream:
+            stream.seek(max(0, path.stat().st_size - 8192))
+            return stream.read().decode("utf-8", errors="replace")
 
     def call(
         self, command: LaunchRequest | AnalysisCall | ComparisonCall, timeout: float
@@ -108,6 +115,41 @@ class _Worker:
         if self.process.stdout is not None:
             self.process.stdout.close()
         self.stderr.close()
+        self._diagnostics.cleanup()
+
+
+class AuthorValidationCancelled(Exception):
+    """The owner cancelled validation before publication."""
+
+
+class _ValidationWait:
+    def __init__(
+        self,
+        timeout: float | None,
+        cancelled: threading.Event | None,
+        progress: Callable[[str], None] | None,
+    ) -> None:
+        self.started = time.monotonic()
+        self.timeout = timeout
+        self.cancelled = cancelled
+        self.progress = progress
+        self.phase = ""
+
+    def check(self, phase: str, evidence: str = "") -> None:
+        if self.cancelled is not None and self.cancelled.is_set():
+            raise AuthorValidationCancelled("Author preparation cancelled")
+        if self.timeout is not None and time.monotonic() - self.started >= self.timeout:
+            raise subprocess.TimeoutExpired(phase, self.timeout, stderr=evidence)
+        if phase != self.phase:
+            self.phase = phase
+            if self.progress is not None:
+                self.progress(phase)
+
+    def acquire(self, acquire: Callable[[float], bool], phase: str) -> None:
+        while True:
+            self.check(phase)
+            if acquire(0.1):
+                return
 
 
 class RevisionWorkers:
@@ -136,55 +178,62 @@ class RevisionWorkers:
         ref: AuthorRevisionRef,
         publish: Callable[[], AuthorRevisionState],
         *,
-        timeout: float = 60,
+        timeout: float | None = None,
+        cancelled: threading.Event | None = None,
+        on_progress: Callable[[str], None] | None = None,
     ) -> AuthorRevisionState:
-        """Own one unpublished candidate; transfer only after successful CAS.
+        """Validate one candidate; cancellation ends before atomic publication.
 
-        Validation does not hold the pool lock. Publication and adoption do,
-        so a first caller cannot race us into loading the published source again.
-        An equivalent warm worker wins over the freshly validated candidate.
+        The owner, not a waiting HTTP request, supplies cancellation or an optional
+        automation deadline. An adopted worker belongs to the pool after publish.
         """
-        started = time.monotonic()
-        if not self._validation_lock.acquire(timeout=timeout):
-            raise subprocess.TimeoutExpired("author validation queue", timeout)
+        wait = _ValidationWait(timeout, cancelled, on_progress)
+        wait.acquire(
+            lambda seconds: self._validation_lock.acquire(timeout=seconds),
+            "validation queue",
+        )
         candidate = None
         try:
+            wait.check("starting validation worker")
             candidate = _Worker(
                 root,
                 ref.content_hash,
                 "scopecat_server.validation_worker",
                 code_root=code_root,
             )
-            result = candidate.receive(
-                max(0.001, timeout - (time.monotonic() - started))
-            )
+            stage = "worker startup (no stage received)"
+            while True:
+                evidence = candidate.diagnostics()
+                if "Scopecat worker stage:" in evidence:
+                    stage, _ = diagnostic_excerpt(evidence)
+                wait.check(stage, evidence)
+                try:
+                    result = candidate.receive(0.1)
+                    break
+                except subprocess.TimeoutExpired:
+                    continue
             if result.returncode:
                 raise ValueError(result.stderr.strip() or "author validation failed")
             logging.getLogger(__name__).info(
                 "Validated author candidate revision=%s seconds=%.3f diagnostics=%s",
                 ref.content_hash,
-                time.monotonic() - started,
+                time.monotonic() - wait.started,
                 result.stderr.strip(),
             )
             if AuthorRevisionRef.model_validate_json(result.stdout) != ref:
                 raise ValueError(
                     "validated worker returned a different source revision"
                 )
-            if not self._condition.acquire(
-                timeout=max(0, timeout - (time.monotonic() - started))
-            ):
-                raise subprocess.TimeoutExpired(
-                    "author publication queue", timeout, stderr=result.stderr
-                )
+            wait.acquire(
+                lambda seconds: self._condition.acquire(timeout=seconds),
+                "publication queue",
+            )
             try:
                 key = ref.content_hash
-                if not self._condition.wait_for(
-                    lambda: self._has_capacity(key),
-                    timeout=max(0, timeout - (time.monotonic() - started)),
-                ):
-                    raise subprocess.TimeoutExpired(
-                        "author publication queue", timeout, stderr=result.stderr
-                    )
+                while not self._has_capacity(key):
+                    wait.check("publication queue", result.stderr)
+                    self._condition.wait(0.1)
+                wait.check("publishing", result.stderr)
                 state = publish()
                 if key not in self._workers:
                     self._evict_idle()
@@ -198,10 +247,6 @@ class RevisionWorkers:
             try:
                 if candidate is not None:
                     candidate.close()
-            except RuntimeError as error:
-                logging.getLogger(__name__).error(  # noqa: TRY400 - bounded cleanup evidence
-                    "Candidate cleanup failed: %s", str(error)[:4096]
-                )
             finally:
                 self._validation_lock.release()
 

@@ -17,7 +17,7 @@ from contextlib import suppress
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Literal, cast
+from typing import Literal, cast, override
 
 import httpx2
 import psutil
@@ -180,7 +180,19 @@ def serve_project(
             server.should_exit = True
             return True
 
-        server = uvicorn.Server(
+        preparations = runtime.application.author_revisions
+
+        class PreparationServer(uvicorn.Server):
+            @override
+            async def shutdown(
+                self, sockets: list[socket.socket] | None = None
+            ) -> None:
+                # Uvicorn drains HTTP before runtime.close(). Initial catalog
+                # requests may be waiting on preparation, so release them first.
+                preparations.request_stop()
+                await super().shutdown(sockets=sockets)
+
+        server = PreparationServer(
             uvicorn.Config(
                 runtime.app(
                     static_dir=static_dir,

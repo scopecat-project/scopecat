@@ -37,7 +37,12 @@ from scopecat.automation.wire import (
     ProcedureStepAttemptListQuery,
 )
 from scopecat.config.candidates import CandidateConfig
-from scopecat.daemon.client import DaemonClient, DaemonUnavailableError
+from scopecat.daemon.client import (
+    DaemonClient,
+    DaemonNotFoundError,
+    DaemonUnavailableError,
+)
+from scopecat.daemon.preparation import AuthorPreparationOperation
 from scopecat.daemon.procedure_views import ProcedureOperatorView
 from scopecat.daemon.views import MeasurementLivePreview, MeasurementPreview
 from scopecat.kernel.errors import SessionClosedError
@@ -45,6 +50,7 @@ from scopecat.kernel.quantity import Quantity
 from scopecat.records.author_revision import (
     AuthorAnalysisReceipt,
     AuthorAnalysisRequest,
+    AuthorPreparationRequest,
     AuthorRevisionRef,
     AuthorRevisionState,
 )
@@ -272,22 +278,59 @@ class AuthorProject(DaemonClient):
     def state(self) -> AuthorRevisionState:
         return self.author_revision_state()
 
-    def refresh(self, *, expected_generation: int | None = None) -> AuthorRevisionState:
-        """Explicitly validate current source and select it for future prepares.
+    def preparation(self, operation_id: str) -> AuthorPreparationOperation:
+        """Reconnect by identity without capturing or publishing new source."""
+        return AuthorPreparationOperation(self, operation_id)
 
-        Existing prepared requests keep their original code. A concurrent refresh
-        still conflicts; the managed call does not silently retry that decision.
-        """
-        generation = (
-            self.state().generation
-            if expected_generation is None
-            else expected_generation
+    def begin_refresh(
+        self, *, expected_generation: int | None = None, operation_id: str | None = None
+    ) -> AuthorPreparationOperation:
+        """Capture once; reuse operation_id after uncertain submission."""
+        from uuid import uuid4
+
+        if operation_id is not None:
+            try:
+                operation = self.author_preparation(operation_id)
+            except DaemonNotFoundError:
+                pass
+            else:
+                if (
+                    expected_generation is not None
+                    and operation.expected_generation != expected_generation
+                ):
+                    raise ValueError(
+                        "operation identity already has another generation"
+                    )
+                return self.preparation(operation_id)
+        state = self._get_model("/api/v1/author-revisions", AuthorRevisionState)
+        identity = operation_id or uuid4().hex
+        self.start_author_preparation(
+            AuthorPreparationRequest(
+                operation_id=identity,
+                expected_generation=state.generation
+                if expected_generation is None
+                else expected_generation,
+            )
         )
-        return self.refresh_authors(expected_generation=generation)
+        return self.preparation(identity)
+
+    def refresh(
+        self, *, expected_generation: int | None = None, timeout: float | None = None
+    ) -> AuthorRevisionState:
+        """Wait for explicit source refresh; wait expiry never cancels publication.
+
+        Existing prepared requests keep their original code. The timeout exception
+        carries its operation handle; it is safe to wait again or reconnect.
+        """
+        return self.begin_refresh(expected_generation=expected_generation).wait(
+            timeout=timeout
+        )
 
     def catalog(
         self, *, code_revision: AuthorRevisionRef | None = None
     ) -> LaunchCatalog:
+        if code_revision is None:
+            code_revision = self.state().active
         return self._get_model(
             "/api/v1/experiment-launcher",
             LaunchCatalog,

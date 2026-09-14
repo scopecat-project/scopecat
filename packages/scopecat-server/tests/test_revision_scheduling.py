@@ -44,6 +44,9 @@ class Worker:
         ref = AuthorRevisionRef(content_hash=self.revision)
         return subprocess.CompletedProcess([], 0, ref.model_dump_json(), "")
 
+    def diagnostics(self) -> str:
+        return ""
+
     def close(self) -> None:
         assert not self.entered.is_set() or self.release.is_set()
         self.closed = True
@@ -144,7 +147,7 @@ def test_publication_waits_for_capacity_and_cleans_timed_out_candidate(
             try:
                 assert a.entered.wait(2) and b.entered.wait(2)
                 with pytest.raises(
-                    subprocess.TimeoutExpired, match="author publication queue"
+                    subprocess.TimeoutExpired, match="publication queue"
                 ):
                     pool.publish_validated(
                         tmp_path, tmp_path, ref, publish, timeout=0.01

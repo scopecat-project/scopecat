@@ -67,7 +67,7 @@ test("discovers an ordinary author experiment and edits controls before submitti
     await writeFile(sourcePath, originalSource.replace("return gain /", "return 2 * gain /"));
     await page.getByRole("button", { name: "Refresh author code", exact: true }).click();
     await expect(
-      page.getByText("Author code refreshed. Preview the updated experiment before starting."),
+      page.getByRole("status").filter({ hasText: "Author code refreshed" }),
     ).toBeVisible();
     await expect(
       page.getByRole("button", { name: "Start acquisition", exact: true }),

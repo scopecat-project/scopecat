@@ -240,7 +240,8 @@ from scopecat.planning.catalog import InstrumentContractCatalog
 from scopecat.records.author_revision import (
     AuthorAnalysisReceipt,
     AuthorAnalysisRequest,
-    AuthorRefreshRequest,
+    AuthorPreparation,
+    AuthorPreparationRequest,
     AuthorRevisionBundle,
     AuthorRevisionRef,
     AuthorRevisionState,
@@ -303,7 +304,6 @@ from scopecat_server.http.procedure_operator import (
     read_procedure_operator,
 )
 from scopecat_server.retained_request import AnalysisCall, ComparisonCall
-from scopecat_server.services.author_revisions import AuthorValidationTimeout
 from scopecat_server.services.project_workers import ProjectProcedureWorkers
 from scopecat_server.services.revision_workers import RevisionWorkers
 from scopecat_server.storage.sqlite.author_revision_repository import (
@@ -398,9 +398,7 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
     @app.get(f"{_API_PREFIX}/author-revisions")
     def author_revision_state() -> AuthorRevisionState:
         try:
-            return application.author_revisions.state()
-        except AuthorValidationTimeout as error:
-            raise HTTPException(504, str(error)) from error
+            return application.author_revisions.state(initialize=False)
         except ValueError as error:
             raise HTTPException(422, str(error)) from error
 
@@ -415,29 +413,42 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
         except ValueError as error:
             raise HTTPException(422, str(error)) from error
 
-    @app.post(f"{_API_PREFIX}/author-revisions/refresh")
-    def refresh_author_revision(command: AuthorRefreshRequest) -> AuthorRevisionState:
+    @app.post(f"{_API_PREFIX}/author-preparations")
+    def start_author_preparation(
+        command: AuthorPreparationRequest,
+    ) -> AuthorPreparation:
         try:
-            return application.author_revisions.refresh(
-                expected_generation=command.expected_generation
-            )
-        except AuthorValidationTimeout as error:
-            raise HTTPException(504, str(error)) from error
+            return application.author_revisions.start(command)
         except AuthorRevisionConflict as error:
             raise HTTPException(409, str(error)) from error
         except ValueError as error:
             raise HTTPException(422, str(error)) from error
+
+    @app.get(f"{_API_PREFIX}/author-preparations")
+    def author_preparations() -> tuple[AuthorPreparation, ...]:
+        return application.author_revisions.repository.preparations()
+
+    @app.get(f"{_API_PREFIX}/author-preparations/{{operation_id}}")
+    def author_preparation(operation_id: str) -> AuthorPreparation:
+        try:
+            return application.author_revisions.repository.preparation(operation_id)
+        except KeyError as error:
+            raise HTTPException(404, "Author preparation not found") from error
+
+    @app.post(f"{_API_PREFIX}/author-preparations/{{operation_id}}/cancel")
+    def cancel_author_preparation(operation_id: str) -> AuthorPreparation:
+        try:
+            return application.author_revisions.cancel(operation_id)
+        except KeyError as error:
+            raise HTTPException(404, "Author preparation not found") from error
 
     def retained_call(
         command: AnalysisCall | ComparisonCall, response: Response, *, started: float
     ) -> str:
         operation = command.kind
         try:
-            remaining = 60 - (time.perf_counter() - started)
-            if remaining <= 0:
-                raise subprocess.TimeoutExpired("retained source resolution", 60)
             completed = retained_workers.call(
-                application.project_root, command, timeout=remaining
+                application.project_root, command, timeout=60
             )
         except subprocess.TimeoutExpired as error:
             stage, evidence = diagnostic_excerpt(error.stderr)
@@ -485,14 +496,15 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
             ):
                 raise ValueError("submit requires the preview's author code revision")
             ref = command.code_revision or state.active
-        except AuthorValidationTimeout as error:
-            raise HTTPException(504, str(error)) from error
         except ValueError as error:
             raise HTTPException(422, str(error)) from error
         if ref is not None:
             command = command.model_copy(update={"code_revision": ref})
+        # Initialization is a separately owned preparation; its lifetime is not
+        # charged against an individual warm launch worker request.
+        worker_started = time.perf_counter()
         try:
-            remaining = 60 - (time.perf_counter() - started)
+            remaining = 60 - (time.perf_counter() - worker_started)
             if ref is not None and remaining <= 0:
                 raise subprocess.TimeoutExpired("author revision initialization", 60)
             completed = (
@@ -582,7 +594,9 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
                 command.action == "inspect" and command.code_revision is None
             ):
                 command = command.model_copy(
-                    update={"code_revision": author_revision_state().active}
+                    update={
+                        "code_revision": application.author_revisions.state().active
+                    }
                 )
             if command.code_revision is None:
                 if command.action != "list":

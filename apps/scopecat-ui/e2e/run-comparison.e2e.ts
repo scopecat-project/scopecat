@@ -76,8 +76,9 @@ test("compares retained signals, saves independent results and imports a reviewe
           "center = -coefficients[1] / (2 * coefficients[2]) + offset_ghz + 0.02",
         ),
     );
-    const refreshed = page.waitForResponse((value) =>
-      value.url().endsWith("/author-revisions/refresh"),
+    const refreshed = page.waitForResponse(
+      (value) =>
+        value.request().method() === "POST" && value.url().endsWith("/author-preparations"),
     );
     await page.getByRole("button", { name: "Refresh author code", exact: true }).click();
     expect((await refreshed).status()).toBe(200);

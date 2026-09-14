@@ -15,6 +15,7 @@ import httpx2
 
 from benchmarks.record import BENCHMARK_RESULT_PREFIX, benchmark_record_header
 from scopecat.application.author_project import AuthorProject
+from scopecat.daemon.preparation import AuthorPreparationFailed
 from scopecat.project import load_project
 from scopecat_server.lifecycle import (  # noqa: TID251 - deployed benchmark
     start_project,
@@ -126,8 +127,8 @@ def measure(root: Path, *, repetitions: int) -> dict[str, object]:
             started = time.perf_counter()
             try:
                 author.refresh()
-            except httpx2.HTTPStatusError as error:
-                if error.response.status_code != 422:
+            except AuthorPreparationFailed as error:
+                if error.operation.status != "failed":
                     raise
                 samples.append(
                     {

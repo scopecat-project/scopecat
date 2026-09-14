@@ -17,7 +17,7 @@ Record results under ignored `.benchmarks/` and compare the same host, Python,
 project and workload. Windows CI correctness does not measure the lab PC.
 
 Each record includes client operation wall times and HTTP `Server-Timing`
-headers. `launch` includes active revision selection/initial validation, queue
+headers. `launch` includes server-side active revision selection/initial validation, queue
 wait, process startup and worker communication. `revision` measures restoring
 and checking a pinned source/environment; `application` measures application
 loading; `provider` includes the fresh connection, catalog and actual preview or
@@ -26,7 +26,9 @@ These are nested measurements and must not be added together. Interpreter and
 framework imports precede `worker`; the residual between launch and worker is
 not an import-only measurement. Initial validation and phase breakdown are also
 visible in daemon diagnostics. HTTP timing ends at response headers; operation
-wall time includes decoding and the complete client prepare call.
+wall time includes decoding and the complete client prepare call. Python authoring
+now observes initial preparation separately through its operation handle, so that
+wait is included in wall time but not a subsequent launcher HTTP timing.
 
 The daemon retains at most two author workers, one immutable source revision
 per process, evicting the least recently used revision. Short launch calls are
@@ -44,9 +46,10 @@ from restoring the just-published revision again. Validation runs outside that
 lock, so existing versions can still prepare. The author revision service owns
 this lifecycle; HTTP does not hold a separate launch pool.
 
-At most one candidate validates alongside the two retained launch workers. The
-60-second budget includes validation queueing, startup and waiting to publish;
-failure, interruption or a generation conflict closes the unpublished candidate.
+At most one candidate validates alongside the two retained launch workers. Source
+preparation is a durable queued operation without an implicit 60-second deadline.
+A caller wait budget does not terminate validation. Explicit cancellation, failure
+or a generation conflict closes the unpublished candidate.
 An unchanged refresh still validates, but keeps an equivalent warm worker and
 closes the candidate. Adoption uses the same two-slot LRU, so a third revision
 may evict an idle old worker; its retained source remains available for reopening.
