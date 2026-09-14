@@ -91,7 +91,7 @@ def test_program_decorator_preserves_signature_order_and_rejects_unused_ports() 
     with pytest.raises(ValueError, match="unused scalar ports: 'unused'"):
 
         @authoring.program
-        def invalid(  # pyright: ignore[reportUnusedFunction]
+        def invalid(
             qubit: authoring.Qubit,
             unused: int,
         ) -> authoring.QuantumFragment:
@@ -108,7 +108,7 @@ def test_definition_signatures_own_every_live_port() -> None:
     with pytest.raises(ValueError, match="captures undeclared scalar ports"):
 
         @authoring.program
-        def captured_input(  # pyright: ignore[reportUnusedFunction]
+        def captured_input(
             qubit: authoring.Qubit,
         ) -> authoring.QuantumFragment:
             return authoring.sequence(
@@ -120,7 +120,7 @@ def test_definition_signatures_own_every_live_port() -> None:
     with pytest.raises(ValueError, match="captures undeclared formal elements"):
 
         @authoring.program
-        def captured_element(  # pyright: ignore[reportUnusedFunction]
+        def captured_element(
             qubit: authoring.Qubit,
         ) -> authoring.QuantumFragment:
             return authoring.sequence(
@@ -136,7 +136,7 @@ def test_definition_signatures_own_every_live_port() -> None:
     with pytest.raises(ValueError, match="captures undeclared scalar ports"):
 
         @authoring.pulse_template
-        def captured_pulse_input(  # pyright: ignore[reportUnusedFunction]
+        def captured_pulse_input(
             qubit: authoring.Qubit,
         ) -> authoring.QuantumFragment:
             return authoring.play(
@@ -290,7 +290,7 @@ def test_program_family_gate_catalog_participates_in_static_program_closure() ->
     with pytest.raises(ValueError, match="conflicting definitions"):
 
         @authoring.program
-        def invalid_catalog(  # pyright: ignore[reportUnusedFunction]
+        def invalid_catalog(
             first: authoring.Qubit,
             second: authoring.Qubit,
         ) -> authoring.QuantumFragment:
@@ -349,7 +349,7 @@ def test_program_decorator_rejects_mismatched_ports() -> None:
     with pytest.raises(TypeError, match="Python annotation is incompatible"):
 
         @authoring.program
-        def mismatched(  # pyright: ignore[reportUnusedFunction]
+        def mismatched(
             qubit: authoring.Qubit,
             count: Annotated[str, GateParameterKind.INTEGER],
         ) -> authoring.QuantumFragment:

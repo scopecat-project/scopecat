@@ -260,9 +260,7 @@ def test_driver_declaration_requires_complete_member_io_bindings() -> None:
             "1",
             interfaces=(MissingBindings,),
         )
-        class MissingBindingsDriver(  # pyright: ignore[reportUnusedClass]
-            ObjectInstrumentDriver
-        ):
+        class MissingBindingsDriver(ObjectInstrumentDriver):
             pass
 
 
@@ -279,9 +277,7 @@ def test_driver_declaration_requires_explicit_operation_implementations() -> Non
             "1",
             interfaces=(MissingOperation,),
         )
-        class MissingOperationDriver(  # pyright: ignore[reportUnusedClass]
-            ObjectInstrumentDriver
-        ):
+        class MissingOperationDriver(ObjectInstrumentDriver):
             pass
 
 
@@ -433,9 +429,7 @@ def test_object_driver_rejects_member_constraint_widening() -> None:
                 member_constraint(InvalidConstraint.count, minimum=-1),
             ),
         )
-        class InvalidConstraintDriver(  # pyright: ignore[reportUnusedClass]
-            ObjectInstrumentDriver
-        ):
+        class InvalidConstraintDriver(ObjectInstrumentDriver):
             @read(InvalidConstraint.count)
             def read_count(self) -> int:
                 return 1
@@ -517,9 +511,7 @@ def test_object_driver_rejects_policy_made_redundant_by_io_bindings() -> None:
             interfaces=(RedundantPolicy,),
             member_policies=(member_policy(RedundantPolicy.fixed, restore=False),),
         )
-        class RedundantPolicyDriver(  # pyright: ignore[reportUnusedClass]
-            ObjectInstrumentDriver
-        ):
+        class RedundantPolicyDriver(ObjectInstrumentDriver):
             @read(RedundantPolicy.fixed)
             def read_fixed(self) -> int:
                 return 1
