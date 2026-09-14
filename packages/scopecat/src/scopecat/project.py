@@ -53,6 +53,7 @@ class Project:
     source_roots: tuple[str, ...] = ()
     refresh_roots: tuple[str, ...] = ()
     installed_packages: tuple[tuple[str, str], ...] = ()
+    dependencies: tuple[str, ...] | None = None
 
     def load_bootstrap(self) -> LabBootstrap:
         """Load the lightweight composition used by the daemon and config CLI."""
@@ -166,10 +167,22 @@ def load_project(manifest: str | Path) -> Project:
         "source_roots",
         "refresh_roots",
         "packages",
+        "dependencies",
     }:
         raise ProjectManifestError(
-            "[authors] accepts source_roots, refresh_roots and packages"
+            "[authors] accepts source_roots, refresh_roots, packages and dependencies"
         )
+    dependencies_value = authors.get("dependencies")
+    dependencies: tuple[str, ...] | None = None
+    if "dependencies" in authors:
+        if not isinstance(dependencies_value, list) or not all(
+            isinstance(item, str) and item.strip()
+            for item in cast("list[object]", dependencies_value)
+        ):
+            raise ProjectManifestError(
+                "authors.dependencies must be a list of requirements"
+            )
+        dependencies = tuple(cast("list[str]", dependencies_value))
     packages = authors.get("packages", {})
     if not isinstance(packages, dict):
         raise ProjectManifestError(
@@ -207,6 +220,7 @@ def load_project(manifest: str | Path) -> Project:
         source_roots=source_roots,
         refresh_roots=refresh_roots,
         installed_packages=tuple(sorted(installed)),
+        dependencies=dependencies,
     )
 
 

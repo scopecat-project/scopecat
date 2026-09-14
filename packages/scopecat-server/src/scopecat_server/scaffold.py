@@ -12,6 +12,7 @@ application = "scopecat_lab.application:create_application"
 instrument_backend = "scopecat_lab.backend:create_backend"
 
 [authors]
+dependencies = ["scopecat-instruments"]
 source_roots = ["src"]
 refresh_roots = ["src/scopecat_lab/authored"]
 """,
