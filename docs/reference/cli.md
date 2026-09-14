@@ -18,6 +18,17 @@ path to `scopecat.toml`; the current directory is the default.
 Only loopback hosts are accepted. Port `0`, the default, selects an available
 port.
 
+`start` waits for readiness without a default hard deadline and prints elapsed
+startup time and the latest observed phase. Slow first imports are not treated as
+proof of a deadlock. Ctrl+C cancels this launch and cleans up its process tree.
+Automation can set an explicit hard budget, for example
+`scopecat start PROJECT --api-only --startup-timeout 120`.
+This budget concerns startup only; it does not alter device operation limits or
+experiment wait timeouts. The Python `start_project` helper similarly accepts
+`timeout=None` (default) and an `on_progress(elapsed_seconds, phase)` callback.
+This is a synchronous wait; it does not yet provide a durable startup task handle
+for disconnecting and resuming from another client.
+
 ## Snapshots
 
 | Command | Purpose |

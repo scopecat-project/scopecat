@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import math
 import os
 import secrets
@@ -11,6 +12,8 @@ import sys
 import tempfile
 import time
 import webbrowser
+from collections.abc import Callable
+from contextlib import suppress
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -204,11 +207,19 @@ def start_project(
     *,
     host: str = "127.0.0.1",
     port: int = 0,
-    timeout: float = 10.0,
+    timeout: float | None = None,
+    on_progress: Callable[[float, str], None] | None = None,
     static_dir: str | Path | None = None,
     lease_ttl: timedelta | None = None,
 ) -> DaemonEndpointRecord:
-    """Start a detached daemon with the current Python interpreter."""
+    """Wait for readiness, without a machine-dependent default deadline.
+
+    ``timeout`` is an explicit hard startup budget for automation. On expiry or
+    interruption only this launch's process tree is stopped. Progress reports
+    elapsed time and the latest observed stage; silence is not proof of a hang.
+    """
+    if timeout is not None and (not math.isfinite(timeout) or timeout <= 0):
+        raise ValueError("startup timeout must be finite and positive")
 
     status = inspect_daemon(project)
     if status.state == "running" and status.record is not None:
@@ -224,15 +235,12 @@ def start_project(
     state_dir.mkdir(parents=True, exist_ok=True)
     state_dir.chmod(0o700)
     log_path = state_dir / "daemon.log"
+    log_start = log_path.stat().st_size if log_path.exists() else 0
     log_fd = os.open(log_path, os.O_APPEND | os.O_CREAT | os.O_WRONLY, 0o600)
     command = [
         sys.executable,
         "-m",
-        (
-            "scopecat_server._daemon_entry"
-            if "SCOPECAT_STARTUP_DIAGNOSTICS" in os.environ
-            else "scopecat_server.cli"
-        ),
+        "scopecat_server._daemon_entry",
         "serve",
         str(project.root),
         "--host",
@@ -259,44 +267,82 @@ def start_project(
             stdout=log,
             stderr=subprocess.STDOUT,
             start_new_session=sys.platform != "win32",
-            env=(
-                {**os.environ, "SCOPECAT_STARTUP_LAUNCH_NS": str(time.monotonic_ns())}
-                if "SCOPECAT_STARTUP_DIAGNOSTICS" in os.environ
-                else None
-            ),
+            env={
+                **os.environ,
+                "SCOPECAT_STARTUP_LAUNCH_NS": str(time.monotonic_ns()),
+                "SCOPECAT_STARTUP_PROGRESS": "1",
+            },
             creationflags=(
                 subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
             ),
         )
 
     _daemon_diagnostics.observe_spawn(project.root, process)
-    deadline = time.monotonic() + timeout
-    while time.monotonic() < deadline:
-        if process.poll() is not None:
-            _daemon_diagnostics.capture("startup_exit", root=project.root)
-            raise DaemonLifecycleError(
-                _startup_failure_message(project, process.returncode)
-            )
-        observed = inspect_daemon(project)
-        if (
-            observed.state == "running"
-            and observed.record is not None
-            and _spawned_process_owns_record(process, observed.record)
-        ):
-            _daemon_diagnostics.capture("healthy", root=project.root)
-            return observed.record
-        time.sleep(0.05)
-
-    process.terminate()
+    started = time.monotonic()
+    next_report = started
+    owner: psutil.Process | None = None
+    with suppress(psutil.NoSuchProcess):
+        owner = psutil.Process(process.pid)
     try:
-        process.wait(timeout=2)
-    except subprocess.TimeoutExpired:
-        process.kill()
-        process.wait(timeout=2)
-    _daemon_diagnostics.capture("startup_timeout", root=project.root)
-    _remove_record_if_stale(project)
-    raise DaemonLifecycleError(
-        f"daemon did not become healthy within {timeout:g} seconds; see {log_path}"
+        while True:
+            if process.poll() is not None:
+                _daemon_diagnostics.capture("startup_exit", root=project.root)
+                raise DaemonLifecycleError(
+                    _startup_failure_message(project, process.returncode)
+                )
+            observed = inspect_daemon(project)
+            if (
+                observed.state == "running"
+                and observed.record is not None
+                and _spawned_process_owns_record(process, observed.record)
+            ):
+                _daemon_diagnostics.capture("healthy", root=project.root)
+                return observed.record
+            now = time.monotonic()
+            if timeout is not None and now - started >= timeout:
+                raise DaemonLifecycleError(
+                    f"daemon did not become healthy within {timeout:g} seconds; "
+                    f"see {log_path}"
+                )
+            if now >= next_report:
+                stage = _latest_startup_stage(log_path, log_start)
+                if on_progress is not None:
+                    on_progress(now - started, stage)
+                elif now - started >= 10:
+                    logging.getLogger(__name__).warning(
+                        "Still starting daemon (%.0fs): %s; "
+                        "interrupt to cancel; log: %s",
+                        now - started,
+                        stage,
+                        log_path,
+                    )
+                next_report = now + 5
+            time.sleep(0.05)
+    except BaseException:
+        # A parent-side deadline/cancel must not leave the Windows shim's child
+        # or the instrument worker behind. Preserve evidence before cleanup.
+        from .validation_process import terminate_validation_process_tree
+
+        _daemon_diagnostics.capture("startup_interrupted", root=project.root)
+        terminate_validation_process_tree(
+            cast("subprocess.Popen[str]", process), owner=owner
+        )
+        _daemon_diagnostics.capture("startup_timeout_or_cancelled", root=project.root)
+        _remove_record_if_stale(project)
+        raise
+
+
+def _latest_startup_stage(log_path: Path, offset: int) -> str:
+    with log_path.open("rb") as stream:
+        stream.seek(max(offset, log_path.stat().st_size - 16384))
+        lines = stream.read().decode("utf-8", errors="replace").splitlines()
+    return next(
+        (
+            line.removeprefix("[startup] ")
+            for line in reversed(lines)
+            if line.startswith("[startup] ")
+        ),
+        "waiting for Python entry",
     )
 
 
