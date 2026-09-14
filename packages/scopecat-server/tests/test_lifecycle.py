@@ -10,6 +10,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import httpx2
+import psutil
 import pytest
 from scopecat.config.resolution import validate_config_profile
 from scopecat.daemon.client import DaemonClient
@@ -319,6 +320,40 @@ def test_cli_daemon_first_use_loop_uses_dynamic_port_and_cleans_record(
         assert scan_summary["points"] == 3
         assert scan_summary["mean"] == pytest.approx(2 / 3)
         scan_run_id = scan_summary["run_id"]
+
+        def author_workers() -> set[int]:
+            identities: set[int] = set()
+            for child in psutil.Process(record.pid).children(recursive=True):
+                try:
+                    command = child.cmdline()
+                except psutil.NoSuchProcess:
+                    continue
+                if any(
+                    module in command
+                    for module in (
+                        "scopecat_server.validation_worker",
+                        "scopecat_server.launch_worker",
+                    )
+                ):
+                    identities.add(child.pid)
+            return identities
+
+        # Generic request rejection belongs to this starter, not the quantum lab.
+        with project.authoring() as author:
+            before = author_workers()
+            assert before
+            source = author.state()
+            with pytest.raises(
+                httpx2.HTTPStatusError, match="available controls: position"
+            ):
+                author.prepare("signal", scans={"positions": [0.0, 1.0]})
+            assert author_workers() == before
+            author.prepare("signal")
+            with pytest.raises(httpx2.HTTPStatusError, match="centers"):
+                author.prepare("signal", inputs={"centers": 0.0})
+            author.prepare("signal")
+            assert author_workers() == before
+            assert author.state() == source
 
         status = runner.invoke(app, ["status", str(tmp_path)])
         assert status.exit_code == 0, status.output

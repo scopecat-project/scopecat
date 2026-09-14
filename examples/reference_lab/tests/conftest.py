@@ -18,7 +18,6 @@ EXAMPLE_ROOT = Path(__file__).parents[1]
 @dataclass(frozen=True, slots=True)
 class ReferenceLabDaemon:
     url: str
-    pid: int
 
 
 @pytest.fixture(autouse=True)
@@ -51,7 +50,7 @@ def reference_lab_daemon(
     previous_url = os.environ.get(DAEMON_URL_ENV)
     os.environ[DAEMON_URL_ENV] = record.base_url
     try:
-        yield ReferenceLabDaemon(url=record.base_url, pid=record.pid)
+        yield ReferenceLabDaemon(url=record.base_url)
     finally:
         if previous_url is None:
             os.environ.pop(DAEMON_URL_ENV, None)
