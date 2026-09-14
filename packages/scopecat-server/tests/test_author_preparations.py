@@ -237,3 +237,49 @@ def test_observation_disconnect_retains_handle() -> None:
         with pytest.raises(AuthorPreparationDisconnected) as error:
             operation.wait()
         assert error.value.operation is operation
+
+
+def test_shutdown_releases_initial_catalog_waiter(
+    preparation_project: PreparationProject,
+) -> None:
+    from concurrent.futures import ThreadPoolExecutor
+
+    root, service, _ = preparation_project
+    with ThreadPoolExecutor(max_workers=1) as requests:
+        waiting = requests.submit(service.state)
+        loaded(root)
+        service.request_stop()
+        with pytest.raises(ValueError, match="cancelled"):
+            waiting.result(timeout=15)
+    assert service.repository.state().active is None
+
+
+def test_daemon_shutdown_drains_http_waiting_for_cold_catalog(
+    preparation_project: PreparationProject,
+) -> None:
+    from concurrent.futures import ThreadPoolExecutor
+
+    from scopecat.project import open_project
+
+    from scopecat_server.lifecycle import start_project, stop_project
+
+    root, _, _ = preparation_project
+    project = open_project(root)
+    endpoint = start_project(project)
+    try:
+        with ThreadPoolExecutor(max_workers=1) as requests:
+            waiting = requests.submit(
+                httpx2.get,
+                endpoint.base_url + "/api/v1/experiment-launcher",
+                timeout=30,
+                trust_env=False,
+            )
+            try:
+                loaded(root)
+            finally:
+                stop_project(project)
+            response = waiting.result(timeout=5)
+            assert response.status_code == 422
+            assert "cancelled" in response.text
+    finally:
+        stop_project(project)

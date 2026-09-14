@@ -262,12 +262,16 @@ class AuthorRevisionService:
         )
         return self.wait(operation.operation_id)
 
-    def close(self) -> None:
+    def request_stop(self) -> None:
+        """Release preparation waiters before HTTP graceful shutdown waits for them."""
         with self._operation_lock:
             self._closing = True
             threads = tuple(self._operations.values())
             for cancelled, _ in threads:
                 cancelled.set()
+
+    def close(self) -> None:
+        self.request_stop()
         self._executor.shutdown(wait=True)
         self.workers.close()
 
