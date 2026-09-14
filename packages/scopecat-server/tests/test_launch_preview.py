@@ -553,3 +553,22 @@ def test_pinned_catalog_uses_pool_and_exposes_nested_timing() -> None:
         assert 0 < call.call_args.kwargs["timeout"] <= 60
         assert "provider;dur=2.000" in response.headers["server-timing"]
         assert "worker;dur=3.000" in response.headers["server-timing"]
+
+
+def test_request_rejection_is_reported_as_422() -> None:
+    from scopecat_server.launch_response import LaunchRejection
+
+    with patch("scopecat_server.http.transport.subprocess.run") as run:
+        run.return_value = SimpleNamespace(
+            returncode=0,
+            stdout=LaunchRejection(
+                detail="unknown control 'amplitudes'"
+            ).model_dump_json(),
+            stderr="",
+        )
+        response = client().post(
+            "/api/v1/experiment-launcher/preview",
+            json={"action": "preview", "experiment": "diagnostic", "version": "1"},
+        )
+        assert response.status_code == 422
+        assert response.json()["detail"] == "unknown control 'amplitudes'"

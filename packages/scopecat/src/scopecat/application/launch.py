@@ -123,6 +123,10 @@ type LaunchResult = LaunchCatalog | LaunchPreview | LaunchSubmission
 type LaunchProvider = Callable[[LabClient, LaunchRequest], LaunchResult]
 
 
+class LaunchRequestRejected(ValueError):
+    """Invalid request rejected before executing author experiment code."""
+
+
 def validate_launch_control_edits(
     catalog: LaunchCatalog, request: LaunchRequest
 ) -> None:
@@ -138,13 +142,18 @@ def validate_launch_control_edits(
         None,
     )
     if entry is None:
-        raise ValueError("unknown experiment or changed control catalog version")
+        raise LaunchRequestRejected(
+            "unknown experiment or changed control catalog version"
+        )
     fields = {field.id: field for field in entry.controls}
     for name, edit in request.control_edits.items():
         if name not in fields:
-            raise ValueError(f"unknown control {name!r} for {entry.id}")
+            raise LaunchRequestRejected(
+                f"unknown control {name!r} for {entry.id}; "
+                f"available controls: {', '.join(fields)}"
+            )
         field = fields[name]
         if field.ownership != "editable":
-            raise ValueError(f"{name} is {field.ownership}-owned")
+            raise LaunchRequestRejected(f"{name} is {field.ownership}-owned")
         if edit.mode == "scan" and not field.scannable:
-            raise ValueError(f"{name} is not scannable")
+            raise LaunchRequestRejected(f"{name} is not scannable")
