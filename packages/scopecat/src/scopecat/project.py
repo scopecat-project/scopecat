@@ -52,6 +52,7 @@ class Project:
     code_revision: AuthorRevisionRef | None = None
     source_roots: tuple[str, ...] = ()
     refresh_roots: tuple[str, ...] = ()
+    installed_packages: tuple[tuple[str, str], ...] = ()
 
     def load_bootstrap(self) -> LabBootstrap:
         """Load the lightweight composition used by the daemon and config CLI."""
@@ -164,8 +165,28 @@ def load_project(manifest: str | Path) -> Project:
     if set(authors) - {
         "source_roots",
         "refresh_roots",
+        "packages",
     }:
-        raise ProjectManifestError("[authors] accepts source_roots and refresh_roots")
+        raise ProjectManifestError(
+            "[authors] accepts source_roots, refresh_roots and packages"
+        )
+    packages = authors.get("packages", {})
+    if not isinstance(packages, dict):
+        raise ProjectManifestError(
+            "[authors.packages] must map modules to distributions"
+        )
+    installed: list[tuple[str, str]] = []
+    for module, distribution in cast("dict[str, object]", packages).items():
+        if (
+            not module.isidentifier()
+            or not isinstance(distribution, str)
+            or not distribution.strip()
+        ):
+            raise ProjectManifestError(
+                "authors.packages requires top-level module names "
+                "and distribution names"
+            )
+        installed.append((module, distribution))
     source_roots = _local_roots(authors.get("source_roots", []))
     refresh_roots = _local_roots(authors.get("refresh_roots", []))
     if bool(source_roots) != bool(refresh_roots):
@@ -185,6 +206,7 @@ def load_project(manifest: str | Path) -> Project:
         instrument_backend_spec=instrument_backend,
         source_roots=source_roots,
         refresh_roots=refresh_roots,
+        installed_packages=tuple(sorted(installed)),
     )
 
 

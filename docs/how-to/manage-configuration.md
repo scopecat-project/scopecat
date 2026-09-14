@@ -212,7 +212,7 @@ conservatively validate all rows of the imported column; use a concrete key for
 a single-sample probe. This slice adds no domain-aware lazy dependency discovery.
 Ordinary Python/dataclass consumers must check Optional values themselves.
 
-For maintainers: storage remains project schema 66 with absent cells representing
+For maintainers: storage remains project schema 67 with absent cells representing
 unknowns. The wire adds `add_table` structure edits and permits `null` in keyed
 row **updates**, meaning clear that cell; snapshots do not store null atoms.
 New readers still read old snapshots and runs. Client and daemon must use the
