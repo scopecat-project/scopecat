@@ -11,6 +11,7 @@ from dataclasses import is_dataclass
 from datetime import date, datetime, time
 from decimal import Decimal
 from enum import Enum
+from functools import lru_cache
 from typing import cast
 
 from pydantic import BaseModel
@@ -121,17 +122,7 @@ def content_fingerprint(value: object) -> object:
             ],
         }
     if isinstance(value, Mapping):
-        mapping = cast("Mapping[object, object]", value)
-        entries: list[list[object]] = [
-            [content_fingerprint(key), content_fingerprint(item)]
-            for key, item in mapping.items()
-        ]
-        entries.sort(key=lambda item: canonical_json(item[0]))
-        return {
-            "kind": "mapping",
-            "type": _type_name(cast("object", value)),
-            "entries": entries,
-        }
+        return _mapping_fingerprint(cast("Mapping[object, object]", value))
     if isinstance(value, set | frozenset):
         selected_set = cast("set[object] | frozenset[object]", value)
         items: list[object] = [content_fingerprint(item) for item in selected_set]
@@ -246,6 +237,30 @@ def canonical_json(value: object) -> str:
         ensure_ascii=False,
         allow_nan=False,
     )
+
+
+def _mapping_fingerprint(value: Mapping[object, object]) -> dict[str, object]:
+    ordered: list[tuple[str, list[object]]] = []
+    for key, item in value.items():
+        key_fingerprint = content_fingerprint(key)
+        order = (
+            _string_key_order(key)
+            if type(key) is str
+            else canonical_json(key_fingerprint)
+        )
+        ordered.append((order, [key_fingerprint, content_fingerprint(item)]))
+    ordered.sort(key=lambda item: item[0])
+    return {
+        "kind": "mapping",
+        "type": _type_name(cast("object", value)),
+        "entries": [entry for _, entry in ordered],
+    }
+
+
+@lru_cache(maxsize=1024)
+def _string_key_order(key: str) -> str:
+    # Cache only immutable key encodings, never model/config values or digests.
+    return canonical_json({"kind": "str", "value": key})
 
 
 def _contiguous_buffer_identity(value: Buffer) -> tuple[int, str] | None:

@@ -314,3 +314,27 @@ It adds no full laboratory journey or CI performance threshold. This targets
 multiple sessions or versions in flight; it does not accelerate slow author code
 or concurrent requests pinned to the same revision. Long-session resource bounds,
 strict scheduling fairness and Windows laboratory timings remain separate work.
+
+
+## Contract identity cost during prepare
+
+On the virtual signal workload, warm provider profiling points first to instrument
+contract resolution, including the instrument process round trip and repeated
+contract validation. Structural fingerprinting repeatedly encodes the same string
+field names as canonical JSON mapping-order keys. A bounded 1024-entry cache now
+reuses only those immutable built-in string key encodings. Values, fingerprints,
+model snapshots and resolved instrument catalogs remain fresh on every call.
+The representation and ordering of structural identities are unchanged, including
+non-string keys, escaped/Unicode field names and nonfinite values.
+
+An unprofiled same-Mac trial of five ordinary warm prepares moved from a median
+89.6 ms to 77.8 ms (about 12 ms); input/scan edits showed a similar reduction.
+First prepare remained about 1.1 seconds. These are small virtual-path savings,
+not Windows laboratory timings. Temporary cProfile instrumentation was removed;
+the ordinary `author-prepare` benchmark remains the end-to-end measurement.
+
+Do not infer that planning arithmetic dominates from total provider time: the
+provider also waits on instrument contract IPC/HTTP and validates the reply.
+Before choosing a native kernel, separate binding/contract transport, pure
+planning CPU and allocations on a representative larger experiment. Do not cache
+resolved catalogs or mutable configuration merely to remove boundary validation.
