@@ -287,3 +287,30 @@ The measurements support keeping the current bounded pools while gathering
 concurrent/longer-session evidence. They do not justify shrinking capacity or
 adding idle eviction merely to reduce an RSS sum. Next separate queue contention,
 eviction/reload cost and provider CPU/allocation work before changing ownership.
+
+
+## Concurrent revision requests
+
+Each prepare/launch or retained-analysis pool keeps at most two revision workers.
+A worker handles one request at a time; different resident revisions can execute
+independently. A busy worker keeps its slot through failure cleanup. A third
+revision waits when both slots are busy and otherwise evicts the least recently
+used idle worker. Queue waiting consumes the existing request deadline; a queue
+timeout does not retire a healthy worker or retry the operation.
+
+Validated publication follows the same capacity rule before publishing. An
+already retained equivalent worker wins even when busy, and the unused candidate
+is closed. Shutdown drains active calls before closing retained workers. There is
+no strict FIFO guarantee or active-call cancellation. Process creation and idle
+worker eviction still hold the short pool metadata lock; this change removes
+execution-length blocking, not every possible lifecycle wait.
+
+A controlled real-pipe probe injected a 600 ms call into a warm revision. Before
+independent scheduling, another warm revision waited about 604 ms despite having
+its own process; a request in the separate analysis pool returned immediately.
+The regression uses events to hold active calls while checking independent
+progress, same-revision queue deadlines, capacity, publication and shutdown.
+It adds no full laboratory journey or CI performance threshold. This targets
+multiple sessions or versions in flight; it does not accelerate slow author code
+or concurrent requests pinned to the same revision. Long-session resource bounds,
+strict scheduling fairness and Windows laboratory timings remain separate work.

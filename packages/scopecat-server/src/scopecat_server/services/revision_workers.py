@@ -111,7 +111,7 @@ class _Worker:
 
 
 class RevisionWorkers:
-    """Serialize short author calls and retain at most two isolated revisions.
+    """Serialize calls per revision and retain at most two isolated revisions.
 
     Each invocation opens its own lab connection. A failed process is discarded;
     the caller receives the original failure, including ambiguous submissions.
@@ -125,7 +125,8 @@ class RevisionWorkers:
     ) -> None:
         self._module = module
         self._workers: OrderedDict[str, _Worker] = OrderedDict()
-        self._lock = threading.Lock()
+        self._condition = threading.Condition(threading.Lock())
+        self._busy: set[str] = set()
         self._validation_lock = threading.Lock()
 
     def publish_validated(
@@ -139,7 +140,7 @@ class RevisionWorkers:
     ) -> AuthorRevisionState:
         """Own one unpublished candidate; transfer only after successful CAS.
 
-        Validation does not hold the request lock. Publication and adoption do,
+        Validation does not hold the pool lock. Publication and adoption do,
         so a first caller cannot race us into loading the published source again.
         An equivalent warm worker wins over the freshly validated candidate.
         """
@@ -169,25 +170,30 @@ class RevisionWorkers:
                 raise ValueError(
                     "validated worker returned a different source revision"
                 )
-            if not self._lock.acquire(
+            if not self._condition.acquire(
                 timeout=max(0, timeout - (time.monotonic() - started))
             ):
                 raise subprocess.TimeoutExpired(
                     "author publication queue", timeout, stderr=result.stderr
                 )
             try:
-                state = publish()
                 key = ref.content_hash
+                if not self._condition.wait_for(
+                    lambda: self._has_capacity(key),
+                    timeout=max(0, timeout - (time.monotonic() - started)),
+                ):
+                    raise subprocess.TimeoutExpired(
+                        "author publication queue", timeout, stderr=result.stderr
+                    )
+                state = publish()
                 if key not in self._workers:
-                    if len(self._workers) == 2:
-                        _, evicted = self._workers.popitem(last=False)
-                        evicted.close()
+                    self._evict_idle()
                     self._workers[key] = candidate
                     candidate = None
                 self._workers.move_to_end(key)
                 return state
             finally:
-                self._lock.release()
+                self._condition.release()
         finally:
             try:
                 if candidate is not None:
@@ -209,32 +215,59 @@ class RevisionWorkers:
         assert command.code_revision is not None
         key = command.code_revision.content_hash
         started = time.monotonic()
-        if not self._lock.acquire(timeout=timeout):
+        if not self._condition.acquire(timeout=timeout):
             raise subprocess.TimeoutExpired("author worker queue", timeout)
         try:
+            if not self._condition.wait_for(
+                lambda: key not in self._busy and self._has_capacity(key),
+                timeout=max(0, timeout - (time.monotonic() - started)),
+            ):
+                raise subprocess.TimeoutExpired("author worker queue", timeout)
             worker = self._workers.get(key)
             if worker is None:
-                if len(self._workers) == 2:
-                    _, evicted = self._workers.popitem(last=False)
-                    evicted.close()
+                self._evict_idle()
                 worker = _Worker(root, key, self._module)
                 self._workers[key] = worker
             self._workers.move_to_end(key)
-            try:
-                result = worker.call(
-                    command, max(0.001, timeout - (time.monotonic() - started))
-                )
-            except BaseException:
-                self._workers.pop(key).close()
-                raise
-            if result.returncode:
-                self._workers.pop(key).close()
+            self._busy.add(key)
+        finally:
+            self._condition.release()
+
+        discard = True
+        try:
+            result = worker.call(
+                command, max(0.001, timeout - (time.monotonic() - started))
+            )
+            discard = result.returncode != 0
             return result
         finally:
-            self._lock.release()
+            try:
+                if discard:
+                    worker.close()
+            finally:
+                with self._condition:
+                    if discard:
+                        del self._workers[key]
+                    self._busy.remove(key)
+                    self._condition.notify_all()
+
+    def _has_capacity(self, key: str) -> bool:
+        # Called with the pool lock held; busy slots remain owned through cleanup.
+        return (
+            key in self._workers
+            or len(self._workers) < 2
+            or any(revision not in self._busy for revision in self._workers)
+        )
+
+    def _evict_idle(self) -> None:
+        # The caller has waited for capacity. Never close an active pipe.
+        if len(self._workers) == 2:
+            key = next(key for key in self._workers if key not in self._busy)
+            self._workers.pop(key).close()
 
     def close(self) -> None:
-        with self._validation_lock, self._lock:
+        with self._validation_lock, self._condition:
+            self._condition.wait_for(lambda: not self._busy)
             for worker in self._workers.values():
                 worker.close()
             self._workers.clear()
