@@ -236,3 +236,54 @@ locate code still running within it. A controlled configuration-factory stall
 checks this post-readiness evidence using the normal start deadline. It does not
 reproduce the intermittent Windows failure. Retain the phase log even if Python
 entry was too late for the sample to occur before the parent's health deadline.
+
+
+## Worker residency and revision churn
+
+```console
+uv run --locked python -m benchmarks run author-residency --revisions 3
+```
+
+Run from the public source checkout on the target machine; this benchmark is not
+an installed-wheel command. It uses a copied virtual reference project and makes
+no physical device calls. One real retained signal run supplies analysis input.
+Preparing and analyzing the same revision should reuse its worker; three or more
+source revisions exercise LRU eviction in both pools. Returning to the original
+revision must reconstruct its exact source in a new process. Normal shutdown is
+followed by up to five seconds of observation of previously seen process identities;
+this does not change production shutdown deadlines or retry shutdown.
+
+The result records operation times and per-process PID, creation time, module,
+revision and RSS at completed-operation checkpoints. Validation workers adopted
+by the prepare pool count as prepare workers. Other descendants and the daemon
+are recorded separately; processes that disappear during a sample are listed.
+Both pools retain at most two workers. Transient validation candidates are not
+captured by these settled checkpoints. RSS includes shared pages, so adding four
+worker RSS values does not measure four independent physical allocations.
+
+Use this evidence before changing pool capacity or adding idle eviction. It does
+not establish a memory threshold, absence of long-session leaks, fair concurrent
+scheduling or shutdown correctness during an active request. Those require bounded
+workloads of their own. The current benchmark intentionally leaves scheduling,
+retained-process policy, execution isolation and retry behavior unchanged.
+
+
+On one Mac/Python 3.14.7, serial three- and five-revision trials kept both pools
+within two workers and found no surviving observed processes after shutdown.
+The five-revision trial settled near 172 MiB RSS per prepared worker and 218 MiB
+per analysis worker; the three-revision trial's first workers were higher
+(about 181 and 232 MiB). These are checkpoint observations, not a leak threshold.
+Repeated prepare/analysis took about 0.092/0.013 seconds in the five-revision trial;
+restoring the evicted original took 1.265/1.706 seconds. Shutdown took 1.8–2.0 seconds.
+
+The initial three-revision trial spent 26.7 seconds in the virtual run operation
+(`run().wait().result()`), versus 1.54 seconds in the later five-revision trial.
+The first prepare was also 4.23 versus 1.24 seconds. This benchmark does not split
+that run operation into startup/measurement/result phases, so it cannot attribute
+or explain the outlier. Preserve it separately and use the first-data trace for
+any recurrence; a later successful trial is not a startup reliability fix.
+
+The measurements support keeping the current bounded pools while gathering
+concurrent/longer-session evidence. They do not justify shrinking capacity or
+adding idle eviction merely to reduce an RSS sum. Next separate queue contention,
+eviction/reload cost and provider CPU/allocation work before changing ownership.

@@ -20,6 +20,7 @@ def test_registry_lists_every_classified_case() -> None:
         ("author-analysis", "e2e"),
         ("author-first-data", "e2e"),
         ("author-prepare", "e2e"),
+        ("author-residency", "e2e"),
         ("entity-reads", "component"),
         ("scan-execution", "e2e"),
         ("scale-suite", "e2e"),
