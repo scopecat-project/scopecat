@@ -28,7 +28,7 @@ def test_failure_snapshot_keeps_identity_exit_code_and_bounded_log(
     )
     try:
         observe_spawn(root, child)
-        capture("failed call test_endpoint")
+        capture("failed call test_endpoint", root=root)
         [record] = directory.glob("*.jsonl")
         rows = [json.loads(line) for line in record.read_text().splitlines()]
         failed = rows[-1]
@@ -51,7 +51,7 @@ def test_failure_snapshot_keeps_identity_exit_code_and_bounded_log(
         assert (directory / exited["log_tail"]).read_bytes() == b"after exit\n"
         assert failed_log.read_bytes().endswith(b"before failure\n")
         previous = record.read_bytes()
-        capture("session_finish")
+        capture("session_finish", root=root)
         assert record.read_bytes() == previous  # Exited handle has been retired.
     finally:
         if child.poll() is None:
