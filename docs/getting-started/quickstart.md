@@ -126,7 +126,7 @@ environment outside the checkout, serves bundled assets, reads the generated
 measurement, and checks it again after restart. CI also exercises installation on
 Windows without a Node setup in the installation job.
 
-Next, use the [reference lab tutorial](../tutorials/reference-lab.md) for further
-virtual-instrument experiments, analysis and quantum calibration, or read the
-[project layout reference](../reference/project-layout.md) before adapting the
-application.
+Next, [edit and analyze a starter experiment](../tutorials/starter-authoring.md)
+in this same project. See the [project layout reference](../reference/project-layout.md)
+for file ownership. The [reference integration lab](../tutorials/reference-lab.md)
+is optional advanced material, not a template to copy for ordinary exploration.

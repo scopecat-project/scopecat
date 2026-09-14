@@ -1,6 +1,6 @@
-# Tour the reference lab
+# Explore the reference integration lab
 
-The reference lab is Scopecat's runnable gallery: a deterministic four-qubit
+This optional maintainer reference exercises integrated framework capabilities: a deterministic four-qubit
 project with virtual RF and DC sources, temperature monitor, VNA, shared LOs,
 AWGs, digitizer, timing controller, and oscilloscope.
 
@@ -8,6 +8,11 @@ The [pilot quickstart](../getting-started/quickstart.md) covers the installed
 starter project. This gallery uses the source workspace: run `uv sync --locked`
 and build its GUI with `pnpm --dir apps/scopecat-ui install --frozen-lockfile`
 and `pnpm --dir apps/scopecat-ui run build` first.
+
+For ordinary authoring, use the [small starter](starter-authoring.md). This
+laboratory is not a deployment template; do not copy its complete configuration,
+source tree or calibration policies into a user project. Its responsibilities
+are described in the [reference fixture map](../development/reference-fixtures.md).
 
 ## Start the lab
 

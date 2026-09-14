@@ -10,6 +10,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import httpx2
+import psutil
 import pytest
 from scopecat.config.resolution import validate_config_profile
 from scopecat.daemon.client import DaemonClient
@@ -59,6 +60,8 @@ def test_init_creates_runnable_python_project_and_does_not_overwrite(
         'bootstrap = "scopecat_lab.application:create_bootstrap"\n'
         'application = "scopecat_lab.application:create_application"\n'
         'instrument_backend = "scopecat_lab.backend:create_backend"\n'
+        '\n[authors]\nsource_roots = ["src"]\n'
+        'refresh_roots = ["src/scopecat_lab/authored"]\n'
     )
     assert (tmp_path / ".gitignore").read_text(encoding="utf-8") == (
         "results/\n.scopecat/\n"
@@ -304,6 +307,54 @@ def test_cli_daemon_first_use_loop_uses_dynamic_port_and_cleans_record(
         assert temperature.value == 0.02 and temperature.unit == "K"
         assert measurement.acquisition_evidence.events[0].instrument_id == "thermometer"
 
+        authored = subprocess.run(  # noqa: S603 - generated starter notebook
+            [sys.executable, str(tmp_path / "notebooks/02_edit_scan.py")],
+            cwd=tmp_path,
+            check=False,
+            capture_output=True,
+            text=True,
+            env=_project_subprocess_environment(),
+        )
+        assert authored.returncode == 0, authored.stderr
+        scan_summary = ast.literal_eval(authored.stdout.strip().splitlines()[0])
+        assert scan_summary["points"] == 3
+        assert scan_summary["mean"] == pytest.approx(2 / 3)
+        scan_run_id = scan_summary["run_id"]
+
+        def author_workers() -> set[int]:
+            identities: set[int] = set()
+            for child in psutil.Process(record.pid).children(recursive=True):
+                try:
+                    command = child.cmdline()
+                except psutil.NoSuchProcess:
+                    continue
+                if any(
+                    module in command
+                    for module in (
+                        "scopecat_server.validation_worker",
+                        "scopecat_server.launch_worker",
+                    )
+                ):
+                    identities.add(child.pid)
+            return identities
+
+        # Generic request rejection belongs to this starter, not the quantum lab.
+        with project.authoring() as author:
+            before = author_workers()
+            assert before
+            source = author.state()
+            with pytest.raises(
+                httpx2.HTTPStatusError, match="available controls: position"
+            ):
+                author.prepare("signal", scans={"positions": [0.0, 1.0]})
+            assert author_workers() == before
+            author.prepare("signal")
+            with pytest.raises(httpx2.HTTPStatusError, match="centers"):
+                author.prepare("signal", inputs={"centers": 0.0})
+            author.prepare("signal")
+            assert author_workers() == before
+            assert author.state() == source
+
         status = runner.invoke(app, ["status", str(tmp_path)])
         assert status.exit_code == 0, status.output
         assert "running" in status.output
@@ -333,6 +384,15 @@ def test_cli_daemon_first_use_loop_uses_dynamic_port_and_cleans_record(
         assert restored_record is not None
         with DaemonClient(restored_record.base_url) as client:
             assert client.measurement_preview(run_id) == preview
+        with project.authoring() as author:
+            retained = author.run(scan_run_id)
+            assert retained.measurements()["result"].require_values() == (0.5, 1.0, 0.5)
+            assert (
+                retained.published_analysis(scan_summary["analysis_id"])
+                .fact("result")
+                .value
+                is not None
+            )
     finally:
         if daemon_record_path(tmp_path).exists():
             stop_project(project)

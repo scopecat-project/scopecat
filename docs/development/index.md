@@ -50,3 +50,6 @@ package READMEs and docstrings beside the code that owns them.
 Use the workflow evaluations when changing a cross-surface user journey. They
 define the observable outcomes and conceptual burden under review without
 freezing the current UI.
+
+See the [reference fixture ownership map](reference-fixtures.md) before adding
+another full-laboratory example or journey.

@@ -167,12 +167,29 @@ def _installed_journey(bundle: Path) -> None:
         assert isinstance(temperature, MeasurementScalar)
         assert temperature.value == 0.02 and temperature.unit == "K"
         assert record.acquisition_evidence.events[0].instrument_id == "thermometer"
+        scan_output = _run(
+            [sys.executable, str(project_root / "notebooks/02_edit_scan.py")],
+            cwd=project_root,
+        )
+        scan = cast(
+            "dict[str, object]", ast.literal_eval(scan_output.strip().splitlines()[0])
+        )
+        assert scan["points"] == 3 and scan["mean"] == 2 / 3
         _run([*cli, "stop", str(project_root)], cwd=project_root)
         _run([*cli, "start", str(project_root)], cwd=project_root)
         restarted = read_daemon_endpoint_record(project_root)
         assert restarted is not None
         with DaemonClient(restarted.base_url) as client:
             assert client.measurement_preview(run_id) == preview
+        with project.authoring() as author:
+            retained = author.run(str(scan["run_id"]))
+            assert retained.measurements()["result"].require_values() == (0.5, 1.0, 0.5)
+            assert (
+                retained.published_analysis(str(scan["analysis_id"]))
+                .fact("result")
+                .value
+                is not None
+            )
         assert "running" in _run([*cli, "status", str(project_root)], cwd=project_root)
         print(f"installed GUI, virtual measurement {run_id}, and restart verified")
     except Exception:
