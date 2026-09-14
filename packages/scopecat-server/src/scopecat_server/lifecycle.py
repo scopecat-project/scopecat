@@ -30,7 +30,7 @@ from scopecat.daemon.endpoint import (
 from scopecat.daemon.health import DaemonHealth
 from scopecat.project import Project, open_project
 
-from . import _startup_diagnostics
+from . import _daemon_diagnostics, _startup_diagnostics
 from .scaffold import scaffold_paths, write_project_scaffold
 
 type DaemonState = Literal["running", "stopped", "stale", "degraded"]
@@ -269,9 +269,11 @@ def start_project(
             ),
         )
 
+    _daemon_diagnostics.observe_spawn(project.root, process)
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         if process.poll() is not None:
+            _daemon_diagnostics.capture("startup_exit", root=project.root)
             raise DaemonLifecycleError(
                 _startup_failure_message(project, process.returncode)
             )
@@ -281,6 +283,7 @@ def start_project(
             and observed.record is not None
             and _spawned_process_owns_record(process, observed.record)
         ):
+            _daemon_diagnostics.capture("healthy", root=project.root)
             return observed.record
         time.sleep(0.05)
 
@@ -290,6 +293,7 @@ def start_project(
     except subprocess.TimeoutExpired:
         process.kill()
         process.wait(timeout=2)
+    _daemon_diagnostics.capture("startup_timeout", root=project.root)
     _remove_record_if_stale(project)
     raise DaemonLifecycleError(
         f"daemon did not become healthy within {timeout:g} seconds; see {log_path}"
@@ -299,6 +303,7 @@ def start_project(
 def stop_project(project: Project, *, timeout: float = 10.0) -> DaemonStatus:
     """Stop only the process whose PID and creation time match the record."""
 
+    _daemon_diagnostics.capture("before_stop", root=project.root)
     status = inspect_daemon(project)
     if status.state == "stopped":
         return status
@@ -322,6 +327,7 @@ def stop_project(project: Project, *, timeout: float = 10.0) -> DaemonStatus:
     except psutil.TimeoutExpired:
         process.kill()
         process.wait(timeout=2)
+    _daemon_diagnostics.capture("after_stop", root=project.root)
     _remove_owned_record(status.record)
     return status
 

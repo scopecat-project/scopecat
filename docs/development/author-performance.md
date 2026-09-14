@@ -338,3 +338,33 @@ provider also waits on instrument contract IPC/HTTP and validates the reply.
 Before choosing a native kernel, separate binding/contract transport, pure
 planning CPU and allocations on a representative larger experiment. Do not cache
 resolved catalogs or mutable configuration merely to remove boundary validation.
+
+
+## Daemon evidence after readiness
+
+With `SCOPECAT_STARTUP_DIAGNOSTICS` explicitly set, the launching process retains
+its original daemon process handle for lifecycle observations. `daemon-lifetime-*.jsonl`
+records UTC/monotonic time, observer/xdist worker, project path, daemon PID and
+creation time, phase and observed return code. A null return code means the
+process had not exited at that observation; it does not prove HTTP health.
+Each observation links its own tail of `daemon.log` (at most 64 KiB), so teardown
+cannot overwrite a failed-call snapshot. No endpoint record,
+environment dump or Python locals are collected. Log excerpts retain the existing
+application output.
+
+The opt-in Windows pytest diagnostics plugin captures all daemons launched by its
+worker when a setup/call/teardown report fails and at session finish. Lifecycle
+code also captures spawn, healthy readiness, startup failure/timeout, and before
+and after explicit stop. Exited handles are retired after capture. On Windows,
+retaining the original `Popen` handle lets the parent observe the process exit
+code even after endpoint records disappear. These are parent observations, not
+an explanation of who terminated the process. The parent must still be alive to
+capture them; this is not a crash-reporting service.
+
+Inspect the failed-phase row before the stop rows: connection refusal with a
+still-live process and an already-exited daemon require different investigations.
+Correlate the PID/create-time identity and worker/phase with teardown in other
+fixtures. An observed exit code or later successful rerun alone does not establish
+a cause. Issue #553 tracks post-readiness endpoint loss independently from #465's
+pre-health timeout. This instrumentation adds no health polling, retries,
+restarts or shutdown deadline changes and is inactive without the opt-in variable.

@@ -20,6 +20,12 @@ def _record(message: str) -> None:
         _stream.flush()
 
 
+def _capture_daemons(phase: str) -> None:
+    from scopecat_server import _daemon_diagnostics  # noqa: TID251
+
+    _daemon_diagnostics.capture(phase)
+
+
 def pytest_sessionstart() -> None:
     global _stream
     directory = Path(os.environ["SCOPECAT_TEST_DIAGNOSTICS"]).resolve()
@@ -60,8 +66,19 @@ def pytest_runtest_teardown(item: pytest.Item) -> Generator[None]:
         _record(f"teardown end {item.nodeid}")
 
 
+@pytest.hookimpl(wrapper=True)
+def pytest_runtest_makereport(
+    item: pytest.Item,
+) -> Generator[None, pytest.TestReport, pytest.TestReport]:
+    report = yield
+    if report.failed:
+        _capture_daemons(f"failed {report.when} {item.nodeid}")
+    return report
+
+
 def pytest_sessionfinish(exitstatus: int) -> None:
     global _stream
+    _capture_daemons("session_finish")
     faulthandler.cancel_dump_traceback_later()
     _record(f"session finish {exitstatus}")
     if _stream is not None:
