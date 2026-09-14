@@ -178,6 +178,8 @@ def test_hidden_executor_lease_ttl_option_reaches_start_and_serve(
     start_ttls: list[timedelta | None] = []
     serve_ttls: list[timedelta | None] = []
 
+    start_budgets: list[float | None] = []
+
     def start_selected(
         project: Project,
         *,
@@ -185,9 +187,13 @@ def test_hidden_executor_lease_ttl_option_reaches_start_and_serve(
         port: int,
         static_dir: Path | None,
         lease_ttl: timedelta | None,
+        timeout: float | None,
+        on_progress: Callable[[float, str], None],
     ) -> DaemonEndpointRecord:
         del host, port, static_dir
         start_ttls.append(lease_ttl)
+        start_budgets.append(timeout)
+        on_progress(12, "loading dependencies")
         return DaemonEndpointRecord(
             project_root=project.root,
             pid=123,
@@ -221,6 +227,8 @@ def test_hidden_executor_lease_ttl_option_reaches_start_and_serve(
             "--api-only",
             "--executor-lease-ttl-seconds",
             "1.25",
+            "--startup-timeout",
+            "120",
         ],
     )
     explicit_serve = runner.invoke(
@@ -239,6 +247,8 @@ def test_hidden_executor_lease_ttl_option_reaches_start_and_serve(
     assert explicit_start.exit_code == 0, explicit_start.output
     assert explicit_serve.exit_code == 0, explicit_serve.output
     assert start_ttls == [None, timedelta(seconds=1.25)]
+    assert start_budgets == [None, 120]
+    assert "Starting (12s): loading dependencies" in default_start.output
     assert serve_ttls == [timedelta(seconds=1.25)]
     assert "--executor-lease-ttl-seconds" not in help_result.output
 
