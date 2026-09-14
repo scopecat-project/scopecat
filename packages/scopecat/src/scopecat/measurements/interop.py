@@ -15,7 +15,6 @@ from warnings import warn
 
 import numpy as np
 import pyarrow as pa
-import xarray as xr
 
 from scopecat.kernel.entity import EntityRef
 from scopecat.kernel.frozen import thaw_json_value
@@ -40,6 +39,7 @@ from scopecat.records.measurement import (
 if TYPE_CHECKING:
     import pandas as pd
     import polars as pl
+    import xarray as xr
 
 type ProjectionDiagnostics = Literal["none", "reason", "full"]
 type ProjectionLayout = Literal["points", "observations"]
@@ -571,6 +571,8 @@ class MeasurementDataProjection:
         Shared source axes are renamed together; independent axes cannot merge.
         Raw data and the retained projection schema keep their source identities.
         """
+
+        import xarray as xr
 
         if self.schema.entity_selection is not None:
             return self._selected_local().to_xarray(dims=dims)

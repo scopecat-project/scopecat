@@ -18,7 +18,6 @@ from typing import TYPE_CHECKING, Literal, Self, cast, overload, override
 
 import numpy as np
 import pyarrow as pa
-import xarray as xr
 from numpy.typing import NDArray
 from pydantic import JsonValue
 
@@ -73,6 +72,8 @@ from scopecat.records.measurement import (
 )
 
 if TYPE_CHECKING:
+    import xarray as xr
+
     from scopecat.measurements.interop import (
         MeasurementDataProjection,
         ProjectionDiagnostics,
@@ -133,6 +134,8 @@ class PointMask(Sequence[bool]):
         dataset: Dataset,
         values: xr.DataArray | Sequence[bool],
     ) -> None:
+        import xarray as xr
+
         self._dataset = dataset
         data = (
             values
@@ -1526,6 +1529,8 @@ class Dataset:
     ) -> Self:
         """Keep point rows selected by an Xarray-aligned boolean condition."""
 
+        import xarray as xr
+
         if callable(condition):
             source = self.to_xarray()
             selected = condition(source)
@@ -1636,6 +1641,8 @@ class Dataset:
         raise ValueError("Xarray layout must be 'points' or 'grid'")
 
     def _product_grid_xarray(self) -> xr.Dataset:
+        import xarray as xr
+
         domain = self._schema.point_domain
         if not isinstance(domain, MeasurementProductGridPointDomain):
             raise ValueError("grid Xarray layout requires a product-grid point domain")
@@ -1738,6 +1745,8 @@ class Dataset:
 
     def _build_xarray(self) -> xr.Dataset:
         """Materialize the private canonical Xarray snapshot once."""
+
+        import xarray as xr
 
         coords: dict[str, object] = {
             "point": (
@@ -3706,6 +3715,8 @@ def _variable_is_ragged(variable: Variable[object]) -> bool:
 
 
 def _labeled_measurement_array(variable: Variable[object]) -> LabeledMeasurementArray:
+    import xarray as xr
+
     dataset = variable._dataset._loaded_xarray
     data = dataset[variable.id].copy(deep=True)
     layout: MeasurementArrayLayout = variable.layout

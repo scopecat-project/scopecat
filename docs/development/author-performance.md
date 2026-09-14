@@ -188,12 +188,11 @@ sum of physical memory consumed by all workers. Earlier measurements under highe
 host load overstated the time difference and are not the improvement claim.
 
 The remaining startup cost includes broad client/model imports and application
-registration of capabilities unrelated to the selected experiment. Further work
-should separate capability discovery/metadata from loading an executable callback,
-and narrow client imports by capability. Before changing this boundary, preserve
-source validation, declaration fingerprints, catalog completeness, explicit missing
-dependency errors and old revision restoration. Require full submit-to-data evidence;
-do not create an execution pool or skip checks merely to hide imports.
+registration of capabilities unrelated to the selected experiment. The
+[loading-boundary investigation](capability-loading.md) records the execution
+path, the concrete measurement-view boundary and alternatives. Keep the existing
+registration API while measuring narrower dependency edges; do not introduce a
+second declaration source, execution pool or weaker source/admission checks.
 
 ## Instrument child startup evidence
 

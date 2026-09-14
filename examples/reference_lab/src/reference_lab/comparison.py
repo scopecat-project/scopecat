@@ -9,7 +9,6 @@ from dataclasses import dataclass
 from typing import TypedDict
 
 import numpy as np
-import pandas as pd
 import scopecat as sc
 from scopecat.analysis.facts import AnalysisFactSchema
 from scopecat.api.comparison import comparison_inputs, save_comparison
@@ -106,6 +105,8 @@ def comparison_provider(lab: LabClient, request: ComparisonRequest) -> Compariso
                 "offset_ghz": offset,
             },
         )
+        import pandas as pd
+
         rows: list[_Observation] = [
             {
                 "frequency": Quantity(x, curve.coordinate_unit).to("GHz").value,
