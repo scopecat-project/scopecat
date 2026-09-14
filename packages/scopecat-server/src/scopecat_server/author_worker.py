@@ -47,6 +47,12 @@ def author_module_path(project: Project, module_name: str) -> Path:
     """Resolve the HTTP-selected module inside configured roots before importing it."""
     if not all(part.isidentifier() for part in module_name.split(".")):
         raise ValueError("analysis module must be a qualified Python module name")
+    from scopecat.installed_authors import installed_module_path
+
+    top_level = module_name.split(".")[0]
+    for module, distribution in project.installed_packages:
+        if module == top_level:
+            return installed_module_path(module, distribution, module_name)
     code_root = project.code_root or project.root
     relative = Path(*module_name.split("."))
     for prefix in (code_root / "src", code_root):

@@ -17,6 +17,15 @@ class AuthorRevisionRef(BaseModel):
     content_hash: Sha256ContentHash
 
 
+class InstalledAuthorPackage(BaseModel):
+    """Installed module tree identity; deployment must preserve these exact bytes."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    distribution: str
+    version: str
+    content_hash: Sha256ContentHash
+
+
 class AuthorRevisionManifest(BaseModel):
     """Local source closure plus the external environment required for recovery.
 
@@ -30,6 +39,7 @@ class AuthorRevisionManifest(BaseModel):
     refresh_roots: tuple[str, ...]
     python: str
     packages: dict[str, str]
+    installed_authors: dict[str, InstalledAuthorPackage] = Field(default_factory=dict)
     maintenance_hash: Sha256ContentHash
 
     @field_validator("files")

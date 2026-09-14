@@ -46,6 +46,8 @@ class SourceProject(Protocol):
     def source_roots(self) -> tuple[str, ...]: ...
     @property
     def refresh_roots(self) -> tuple[str, ...]: ...
+    @property
+    def installed_packages(self) -> tuple[tuple[str, str], ...]: ...
 
 
 def capture_sources(project: SourceProject) -> AuthorRevisionBundle:
@@ -84,13 +86,25 @@ def capture_sources(project: SourceProject) -> AuthorRevisionBundle:
         for name, digest in digests.items()
         if not any(Path(name).is_relative_to(root) for root in project.refresh_roots)
     }
+    from scopecat.installed_authors import capture_installed_authors
+
+    installed = capture_installed_authors(project.installed_packages)
     manifest = AuthorRevisionManifest(
         files=digests,
         source_roots=project.source_roots,
         refresh_roots=project.refresh_roots,
         python=platform.python_version(),
         packages=environment_packages(),
-        maintenance_hash=sha256_json_hash(maintenance),
+        installed_authors=installed,
+        maintenance_hash=sha256_json_hash(
+            {
+                "files": maintenance,
+                "installed_authors": {
+                    name: item.model_dump(mode="json")
+                    for name, item in installed.items()
+                },
+            }
+        ),
     )
     return AuthorRevisionBundle(
         manifest=manifest,
@@ -106,6 +120,19 @@ def environment_packages() -> dict[str, str]:
 
 
 def require_environment(manifest: AuthorRevisionManifest) -> None:
+    from scopecat.installed_authors import capture_installed_authors
+
+    actual = capture_installed_authors(
+        tuple(
+            (name, item.distribution)
+            for name, item in manifest.installed_authors.items()
+        )
+    )
+    if actual != manifest.installed_authors:
+        raise ValueError(
+            "installed author package content changed; restore the recorded "
+            "installed artifacts before recovery"
+        )
     if (
         manifest.python != platform.python_version()
         or manifest.packages != environment_packages()

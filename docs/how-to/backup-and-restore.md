@@ -90,13 +90,13 @@ external dependencies are still available.
 
 ## Current store version
 
-The current runtime uses project store **66**, including immutable author source
-revisions, experiment plans and durable preparation operations. Version 65 and
+The current runtime uses project store **67**, including immutable author source
+revisions, experiment plans and durable preparation operations. Version 66 and
 older stores and snapshots are rejected before modification. Keep the matching
-reader to inspect or export their scientific data. Start a separate version 66
+reader to inspect or export their scientific data. Start a separate version 67
 project for new work. No implicit migration is supplied.
 
-Within version 66, snapshots retain author source bundles, active revision,
+Within version 67, snapshots retain author source bundles, active revision,
 preparation receipts and experiment plans. Pending preparations are marked
 interrupted when the restored daemon starts; they are not resubmitted. External
 Python environments and device SDKs still need their separately retained artifacts.
