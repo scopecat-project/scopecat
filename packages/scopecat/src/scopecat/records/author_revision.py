@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from pathlib import PurePosixPath, PureWindowsPath
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, field_validator
 
@@ -64,11 +66,41 @@ class AuthorRevisionState(BaseModel):
     enabled: bool = False
     generation: int = Field(default=0, ge=0)
     active: AuthorRevisionRef | None = None
+    preparation_id: str | None = None
 
 
-class AuthorRefreshRequest(BaseModel):
+class AuthorPreparationRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
+    operation_id: str = Field(min_length=1, max_length=128, pattern=r"^[a-zA-Z0-9_-]+$")
     expected_generation: int = Field(ge=0)
+
+
+class AuthorPreparation(BaseModel):
+    """Persisted validation outcome; observing it never captures new source."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    operation_id: str
+    expected_generation: int
+    code_revision: AuthorRevisionRef
+    status: Literal[
+        "queued",
+        "running",
+        "cancelling",
+        "succeeded",
+        "failed",
+        "cancelled",
+        "interrupted",
+    ]
+    phase: str
+    created_at: datetime
+    updated_at: datetime
+    result: AuthorRevisionState | None = None
+    error: str | None = None
+    error_type: str | None = None
+
+    @property
+    def terminal(self) -> bool:
+        return self.status in {"succeeded", "failed", "cancelled", "interrupted"}
 
 
 class AuthorAnalysisRequest(BaseModel):

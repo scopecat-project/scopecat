@@ -55,6 +55,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/author-preparations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Author Preparations */
+        get: operations["author_preparations_api_v1_author_preparations_get"];
+        put?: never;
+        /** Start Author Preparation */
+        post: operations["start_author_preparation_api_v1_author_preparations_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/author-preparations/{operation_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Author Preparation */
+        get: operations["author_preparation_api_v1_author_preparations__operation_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/author-preparations/{operation_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel Author Preparation */
+        post: operations["cancel_author_preparation_api_v1_author_preparations__operation_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/author-revisions": {
         parameters: {
             query?: never;
@@ -66,23 +118,6 @@ export interface paths {
         get: operations["author_revision_state_api_v1_author_revisions_get"];
         put?: never;
         post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/author-revisions/refresh": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Refresh Author Revision */
-        post: operations["refresh_author_revision_api_v1_author_revisions_refresh_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2252,10 +2287,45 @@ export interface components {
              */
             state: "queued" | "closed";
         };
-        /** AuthorRefreshRequest */
-        AuthorRefreshRequest: {
+        /**
+         * AuthorPreparation
+         * @description Persisted validation outcome; observing it never captures new source.
+         */
+        AuthorPreparation: {
+            code_revision: components["schemas"]["AuthorRevisionRef"];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Error */
+            error?: string | null;
+            /** Error Type */
+            error_type?: string | null;
             /** Expected Generation */
             expected_generation: number;
+            /** Operation Id */
+            operation_id: string;
+            /** Phase */
+            phase: string;
+            result?: components["schemas"]["AuthorRevisionState"] | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "queued" | "running" | "cancelling" | "succeeded" | "failed" | "cancelled" | "interrupted";
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** AuthorPreparationRequest */
+        AuthorPreparationRequest: {
+            /** Expected Generation */
+            expected_generation: number;
+            /** Operation Id */
+            operation_id: string;
         };
         /** AuthorRevisionRef */
         AuthorRevisionRef: {
@@ -2274,6 +2344,8 @@ export interface components {
              * @default 0
              */
             generation: number;
+            /** Preparation Id */
+            preparation_id?: string | null;
         };
         /**
          * AxisAroundSourceRecord
@@ -9011,6 +9083,121 @@ export interface operations {
             };
         };
     };
+    author_preparations_api_v1_author_preparations_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthorPreparation"][];
+                };
+            };
+        };
+    };
+    start_author_preparation_api_v1_author_preparations_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AuthorPreparationRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthorPreparation"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    author_preparation_api_v1_author_preparations__operation_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                operation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthorPreparation"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_author_preparation_api_v1_author_preparations__operation_id__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                operation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthorPreparation"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     author_revision_state_api_v1_author_revisions_get: {
         parameters: {
             query?: never;
@@ -9027,39 +9214,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AuthorRevisionState"];
-                };
-            };
-        };
-    };
-    refresh_author_revision_api_v1_author_revisions_refresh_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["AuthorRefreshRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AuthorRevisionState"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

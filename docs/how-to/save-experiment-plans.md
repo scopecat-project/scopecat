@@ -69,9 +69,9 @@ original procedure before current admission fences are evaluated.
 
 ## Storage and supported source boundary
 
-Plans use project schema **65**, immutable owned objects and small revision/head
-tables. A schema 64 or older project is rejected before modification; retain its
-matching runtime to read/export it and use a separate schema 65 project. No
+Plans use project schema **66**, immutable owned objects and small revision/head
+tables. A schema 65 or older project is rejected before modification; retain its
+matching runtime to read/export it and use a separate schema 66 project. No
 implicit migration is supplied. Snapshot/restore includes all plan revisions,
 including hidden heads, and preserves referenced author bundles and sample content.
 

@@ -108,6 +108,10 @@ from scopecat.daemon.points import (
     RunPointPlanCloseCommand,
     RunPointPlanView,
 )
+from scopecat.daemon.preparation import (
+    AuthorPreparationOperation,
+    AuthorPreparationSubmissionUncertain,
+)
 from scopecat.daemon.procedure_views import ProcedureOperatorView
 from scopecat.daemon.reviews import (
     ReviewCompileCommand,
@@ -225,7 +229,8 @@ from scopecat.planning.catalog import InstrumentContractCatalog
 from scopecat.records.author_revision import (
     AuthorAnalysisReceipt,
     AuthorAnalysisRequest,
-    AuthorRefreshRequest,
+    AuthorPreparation,
+    AuthorPreparationRequest,
     AuthorRevisionBundle,
     AuthorRevisionRef,
     AuthorRevisionState,
@@ -375,7 +380,58 @@ class DaemonClient:
         )
 
     def author_revision_state(self) -> AuthorRevisionState:
-        return self._get_model(f"{_API_PREFIX}/author-revisions", AuthorRevisionState)
+        state = self._get_model(f"{_API_PREFIX}/author-revisions", AuthorRevisionState)
+        if state.enabled and state.active is None:
+            from uuid import uuid4
+
+            identity = state.preparation_id
+            if identity is None:
+                operation = self.start_author_preparation(
+                    AuthorPreparationRequest(
+                        operation_id=uuid4().hex,
+                        expected_generation=state.generation,
+                    )
+                )
+                identity = operation.operation_id
+            try:
+                return AuthorPreparationOperation(self, identity).wait()
+            except ValueError:
+                current = self._get_model(
+                    f"{_API_PREFIX}/author-revisions", AuthorRevisionState
+                )
+                if current.active is None:
+                    raise
+                return current
+        return state
+
+    def start_author_preparation(
+        self, request: AuthorPreparationRequest
+    ) -> AuthorPreparation:
+        try:
+            return self._post_model(
+                f"{_API_PREFIX}/author-preparations", request, AuthorPreparation
+            )
+        except httpx2.TransportError as error:
+            raise AuthorPreparationSubmissionUncertain(
+                AuthorPreparationOperation(self, request.operation_id),
+                request,
+            ) from error
+
+    def author_preparation(
+        self, operation_id: str, *, timeout: float | None = None
+    ) -> AuthorPreparation:
+        return self._get_model(
+            f"{_API_PREFIX}/author-preparations/{quote(operation_id, safe='')}",
+            AuthorPreparation,
+            timeout=timeout,
+        )
+
+    def cancel_author_preparation(self, operation_id: str) -> AuthorPreparation:
+        response = self._request(
+            "POST",
+            f"{_API_PREFIX}/author-preparations/{quote(operation_id, safe='')}/cancel",
+        )
+        return AuthorPreparation.model_validate_json(response.content)
 
     def author_revision(self, ref: AuthorRevisionRef) -> AuthorRevisionBundle:
         return self._get_model(
@@ -383,11 +439,15 @@ class DaemonClient:
         )
 
     def refresh_authors(self, *, expected_generation: int) -> AuthorRevisionState:
-        return self._post_model(
-            f"{_API_PREFIX}/author-revisions/refresh",
-            AuthorRefreshRequest(expected_generation=expected_generation),
-            AuthorRevisionState,
+        from uuid import uuid4
+
+        operation = self.start_author_preparation(
+            AuthorPreparationRequest(
+                operation_id=uuid4().hex,
+                expected_generation=expected_generation,
+            )
         )
+        return AuthorPreparationOperation(self, operation.operation_id).wait()
 
     def analyze_author_revision(
         self, request: AuthorAnalysisRequest

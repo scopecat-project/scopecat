@@ -8,11 +8,11 @@ import subprocess
 import sys
 from pathlib import Path
 
-import httpx2
 import pytest
 from scopecat.application import LabApplication
 from scopecat.application.launch import LaunchPreview, LaunchSubmission
 from scopecat.daemon.client import DaemonClient
+from scopecat.daemon.preparation import AuthorPreparationFailed
 from scopecat.project import load_project
 from scopecat.records.launch_request import LaunchRequest
 from scopecat_server.lifecycle import start_project, stop_project
@@ -151,17 +151,17 @@ def test_refresh_freezes_admission_and_analysis_across_restore(
             assert fourth.active is not None and fourth.active != third.active
             good = analysis_path.read_text()
             analysis_path.write_text(good + "\ndef broken(:\n")
-            with pytest.raises(httpx2.HTTPStatusError) as syntax:
+            with pytest.raises(AuthorPreparationFailed) as syntax:
                 authors.refresh(expected_generation=fourth.generation)
-            assert "SyntaxError" in syntax.value.response.text
-            assert "analysis.py" in syntax.value.response.text
-            assert "line" in syntax.value.response.text
+            assert "SyntaxError" in str(syntax.value)
+            assert "analysis.py" in str(syntax.value)
+            assert "line" in str(syntax.value)
             assert authors.state() == fourth
             assert authors.catalog().code_revision == fourth.active
             analysis_path.write_text(good + "\nimport missing_author_dependency\n")
-            with pytest.raises(httpx2.HTTPStatusError) as missing:
+            with pytest.raises(AuthorPreparationFailed) as missing:
                 authors.refresh(expected_generation=fourth.generation)
-            assert "missing_author_dependency" in missing.value.response.text
+            assert "missing_author_dependency" in str(missing.value)
             assert authors.state() == fourth
             analysis_path.write_text(good)
             fifth = authors.refresh(expected_generation=fourth.generation)

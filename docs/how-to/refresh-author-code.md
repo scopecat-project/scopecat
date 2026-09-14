@@ -137,50 +137,78 @@ No automatic migration of arbitrary failed procedures is provided.
 
 ## Store and backup boundary
 
-Author revisions require **project schema 65**. Opening a schema 63 store with
-this runtime is rejected before modification. Keep the original store and its
-pinned schema 63 Scopecat reader; start a separate schema 65 project for this
-phase. There is no supplied 64-to-65 migration and no claim that version 65 can
-read version 63 history directly. Consumers must preserve their existing project
-and snapshot when upgrading the package.
+This runtime requires **project schema 66**, which stores preparation operations
+alongside immutable revisions and experiment plans. Schema 65 and older projects
+are rejected before modification. Preserve their original stores, snapshots and
+matching pinned readers; start a separate schema 66 project. No implicit migration
+is supplied.
 
-Within schema 65, [backup and restore](backup-and-restore.md) retains the source
-bundles, manifest identities, active generation and original admitted procedure
-intents. Restored workers materialize the old code from the object store instead
-of importing the currently edited helper. Restore the recorded external
-environment and matching maintained source before resuming supported work.
+Within schema 66, [backup and restore](backup-and-restore.md) retains source
+bundles, manifest identities, active generation, preparation results and original
+admitted procedure intents. Unfinished preparation records become `interrupted`
+after daemon restart or restore; they do not silently rerun against today's files.
+Restore the recorded external environment and matching maintained source before
+resuming supported work.
 
-## Catalog readiness and timeout evidence
+## Long preparation and reconnecting
 
-A successful `scopecat start` or a running daemon status confirms API liveness,
-not readiness of the author catalog. The first catalog request may validate the
-source revision in a fresh process before discovering experiments. Launch calls
-and source validation retain their existing 60-second deadlines. Because initial
-validation is nested inside catalog loading, the outer catalog deadline can expire
-first; validation may still be finishing when that response arrives.
+Source preparation has no implicit wall-clock deadline. A cold native-library
+import can take longer on a new environment or slower computer. `authors.state()`,
+`authors.prepare()` and synchronous `authors.refresh()` wait for initial source
+preparation as needed. Waiting reports the last observed stage and operation ID;
+GUI refresh displays its state and elapsed time and offers cancellation.
 
-Catalog, preview and submission timeouts identify the operation and the last
-reported worker stage. A source-validation timeout reports whether the worker was
-importing the framework, compiling source, importing the application or checking
-source identity. If the worker did not reach its first marker, the stage remains
-explicitly unknown. This attempt does not publish a revision. Existing retained
-revisions are not replaced by a timed-out validation.
+Use a handle when you want to control how long the notebook waits:
 
-Inspect `.scopecat/daemon.log` before trying again. Timeout entries retain the
-last reported stage and at most the last 8 KiB of worker stderr, marked when
-truncated. Validation schedules one thread-stack dump after 30 seconds, without
-locals, and cancels it on normal exit. The stack describes that earlier instant;
-it is evidence for diagnosis, not proof of the final blocking cause. Ask the
-project maintainer to check the indicated imports and matching environment.
-After resolving the problem, explicitly refresh the author revision and request
-a new preview. There is no automatic retry or fallback to different source.
+```python
+from scopecat.daemon.preparation import AuthorPreparationTimeout
 
-A **submission timeout has an unknown outcome**: it may have been admitted before
-the response was lost. Keep the original request key and use the existing
-submission recovery to find that admission. Do not create a new submission to
-resolve the timeout. Catalog loading and preview do not themselves submit an
-acquisition.
+operation = authors.begin_refresh()
+print(operation.id)  # Keep this ID to reconnect from another session.
+try:
+    refreshed = operation.wait(timeout=20)
+except AuthorPreparationTimeout:
+    print(operation.status())  # Preparation continues in the daemon.
 
-These diagnostics do not establish why a particular cold import was slow or fix
-cold-start latency. A later successful warm request is not evidence of reliable
-cold startup; retain failed-attempt logs when evaluating a fresh installation.
+# Later, including from a new authoring connection:
+operation = authors.preparation(saved_operation_id)
+refreshed = operation.wait()  # Same captured source; no resubmission.
+```
+
+`wait(timeout=...)` limits only the caller's wait. Ctrl+C also ends that wait
+without cancelling preparation. A broken observation connection raises
+`AuthorPreparationDisconnected`, retaining the same `.operation` handle; reconnect
+to discover whether the daemon completed or restarted. Use `operation.cancel()` to request cancellation,
+then inspect `status()` until it becomes terminal. `cancelling` means candidate
+process cleanup is still pending. Cancellation before publication leaves the active
+revision unchanged; cancellation after publication returns the existing success.
+Publication and its success receipt commit in one transaction. The receipt means
+source publication succeeded, even if subsequent worker adoption fails.
+
+A submission transport error raises `AuthorPreparationSubmissionUncertain`, with
+`.operation` and `.request`. Inspect the original operation ID first. If it is not
+found, `authors.begin_refresh(operation_id=..., expected_generation=...)` can
+resubmit that same request; an accepted ID always returns its original captured
+revision and outcome. Do not create a new ID to resolve an unknown outcome.
+Failed, cancelled and interrupted operations remain inspectable. After fixing the
+cause, explicitly start a new refresh to capture the edited files.
+
+A daemon health response confirms API liveness, not author catalog readiness.
+The first GUI catalog request can still outlast its HTTP caller; inspect the
+preparation shown in the refresh panel instead of assuming it failed. Short
+launcher calls (catalog, preview and submission) retain their explicit 60-second
+worker budget, starting after initial preparation. Historical worker restoration,
+preview execution and acquisition/device deadlines are separate from source
+preparation; they have not become unbounded by this change.
+
+Inspect `.scopecat/daemon.log` for native-import diagnostics. Validation schedules
+one thread-stack dump after 30 seconds, without locals, and cancels it on normal
+exit. Failure evidence retains a bounded stderr tail. A reported stage or stack
+is evidence of where the worker was observed, not proof of a deadlock or an
+antivirus cause. No automatic retry or fallback to different source is performed.
+
+An **experiment submission timeout has an unknown outcome**: it may have been
+admitted before the response was lost. Keep its original request key and use
+submission recovery to find that admission. Source preparation IDs and experiment
+submission keys identify different operations. Catalog loading and preview do not
+themselves submit an acquisition.
