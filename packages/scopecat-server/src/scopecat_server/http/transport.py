@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import subprocess
 import sys
@@ -573,6 +574,12 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
             raise HTTPException(
                 422, detail[-1] if detail else "Experiment preview failed"
             )
+        from scopecat_server.launch_response import LaunchRejection
+
+        payload = cast("dict[str, object]", json.loads(completed.stdout))
+        if payload.get("kind") == "launch_rejection":
+            rejection = LaunchRejection.model_validate(payload)
+            raise HTTPException(422, rejection.detail)
         return completed.stdout
 
     @app.post(f"{_API_PREFIX}/run-comparison")

@@ -6,7 +6,7 @@ import json
 import subprocess
 import sys
 from pathlib import Path
-from typing import TextIO
+from typing import TYPE_CHECKING, TextIO, cast
 from unittest.mock import patch
 
 import pytest
@@ -14,6 +14,10 @@ from scopecat.records.author_revision import AuthorRevisionRef
 from scopecat.records.launch_request import LaunchRequest
 
 from scopecat_server.services.revision_workers import RevisionWorkers
+
+if TYPE_CHECKING:
+    from scopecat.application import LabApplication
+
 
 _CODE = """
 import json, os, sys, time
@@ -89,3 +93,61 @@ def test_reuse_isolation_eviction_and_failure(tmp_path: Path) -> None:
     finally:
         pool.close()
     assert all(child.poll() is not None for child in children)
+
+
+def test_serve_rejects_request_without_reloading_application() -> None:
+    import io
+
+    from scopecat.application.launch import LaunchCatalog, LaunchRequestRejected
+
+    from scopecat_server.launch_worker import serve
+
+    command = request()
+    assert command.code_revision is not None
+    application = cast("LabApplication", object())
+    output = io.StringIO()
+    with (
+        patch(
+            "sys.stdin",
+            io.StringIO(
+                command.model_dump_json() + "\n" + command.model_dump_json() + "\n"
+            ),
+        ),
+        patch("sys.stdout", output),
+        patch(
+            "scopecat_server.launch_worker.launch",
+            side_effect=[
+                LaunchRequestRejected("unknown control 'amplitudes'"),
+                LaunchCatalog(),
+            ],
+        ) as launch,
+    ):
+        serve(Path.cwd(), command.code_revision, application=application)
+    replies = [json.loads(line) for line in output.getvalue().splitlines()]
+    assert replies[0] == {
+        "kind": "launch_rejection",
+        "detail": "unknown control 'amplitudes'",
+    }
+    assert replies[1]["entries"] == []
+    assert all(call.args[0] is application for call in launch.call_args_list)
+
+
+def test_serve_does_not_hide_author_code_failure() -> None:
+    import io
+
+    from scopecat_server.launch_worker import serve
+
+    command = request()
+    assert command.code_revision is not None
+    with (
+        patch("sys.stdin", io.StringIO(command.model_dump_json() + "\n")),
+        patch(
+            "scopecat_server.launch_worker.launch", side_effect=ValueError("author bug")
+        ),
+        pytest.raises(ValueError, match="author bug"),
+    ):
+        serve(
+            Path.cwd(),
+            command.code_revision,
+            application=cast("LabApplication", object()),
+        )

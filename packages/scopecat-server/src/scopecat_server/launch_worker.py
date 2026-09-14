@@ -17,6 +17,7 @@ from scopecat.application.experiment_plans import validate_plan_launch
 from scopecat.application.launch import (
     LaunchCatalog,
     LaunchPreview,
+    LaunchRequestRejected,
     LaunchResult,
     validate_launch_control_edits,
 )
@@ -30,6 +31,7 @@ from scopecat.records.author_revision import AuthorRevisionRef
 from scopecat.records.launch_request import LaunchRequest
 
 from scopecat_server.author_worker import revision_project
+from scopecat_server.launch_response import LaunchRejection
 from scopecat_server.worker_diagnostics import (
     AUTHOR_VALIDATION_TIMEOUT_EXIT,
     report_stage,
@@ -209,9 +211,13 @@ def serve(
                 application = project.load_application()
                 phases["application"] = time.perf_counter() - now
             provider_started = time.perf_counter()
-            result = launch(application, root, ref, request)
+            try:
+                result = launch(application, root, ref, request)
+            except LaunchRequestRejected as error:
+                encoded = LaunchRejection(detail=str(error)).model_dump_json()
+            else:
+                encoded = result.model_dump_json()
             phases["provider"] = time.perf_counter() - provider_started
-            encoded = result.model_dump_json()
             phases["worker"] = time.perf_counter() - started
             print(
                 "Scopecat launch timing: " + json.dumps(phases),

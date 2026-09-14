@@ -15,7 +15,7 @@ from importlib import import_module
 from types import MappingProxyType
 from typing import cast
 
-from pydantic import BaseModel, ConfigDict, Field, JsonValue
+from pydantic import BaseModel, ConfigDict, Field, JsonValue, ValidationError
 
 from scopecat.api.lab import LabClient, PreparedLabExperiment
 from scopecat.api.procedures import LabProcedureContext
@@ -29,6 +29,7 @@ from scopecat.application.launch import (
     LaunchInputSchema,
     LaunchPreview,
     LaunchProvider,
+    LaunchRequestRejected,
     LaunchResult,
     LaunchSubmission,
 )
@@ -383,11 +384,16 @@ class AuthorExperiments:
             raise ValueError(
                 "author declaration changed; reload the catalog and preview again"
             )
+        try:
+            validated_inputs = selected.input_model.model_validate(request.inputs)
+        except ValidationError as error:
+            details = "; ".join(
+                f"{'.'.join(str(part) for part in item['loc'])}: {item['msg']}"
+                for item in error.errors(include_url=False, include_input=False)
+            )
+            raise LaunchRequestRejected(f"{selected.entry.id}: {details}") from error
+        inputs = cast("dict[str, JsonValue]", validated_inputs.model_dump(mode="json"))
         config, source = resolve_launch_config(lab, request)
-        inputs = cast(
-            "dict[str, JsonValue]",
-            selected.input_model.model_validate(request.inputs).model_dump(mode="json"),
-        )
         invocation = selected.edit(
             config=config, edits=request.control_edits, inputs=inputs
         )
