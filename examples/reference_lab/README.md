@@ -1,6 +1,6 @@
-# Scopecat Reference Lab
+# Scopecat Reference Integration Lab
 
-The reference lab is Scopecat's single runnable gallery: one four-qubit project
+The reference lab is a maintainer-owned integration fixture and advanced gallery: one four-qubit project
 with virtual RF and DC sources, temperature monitor, VNA, three shared LOs, two
 bare AWGs, a bare digitizer, timing controller, and oscilloscope. Its fourteen
 devices and six reviewed parameter tables exercise direct control, experiments,
@@ -12,6 +12,19 @@ I/Q buffers and digitizer programs. Its runtime submits typed batches through
 the same worker-owned bare instruments used by direct diagnostic workflows, so
 both paths share physical claims and evidence. The deterministic virtual plant
 feeds responses into this normal device path.
+
+## Audience and boundary
+
+First-time authors should use `scopecat init` and its two starter scripts; see
+[starter authoring](../../docs/tutorials/starter-authoring.md). This application
+is not a user workspace template or a production laboratory distribution.
+Private laboratory training should consume shared framework capabilities, not
+copy this application or reproduce every generic lesson.
+
+Keep specialized examples here when they demonstrate a named integration
+contract. Framework fault injection and recovery fixtures are maintainer work;
+adding them does not add another required beginner lesson. See the
+[fixture ownership map](../../docs/development/reference-fixtures.md).
 
 ## Start the lab
 

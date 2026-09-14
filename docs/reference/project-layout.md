@@ -4,14 +4,19 @@
 
 ```text
 my-lab/
+├── README.md
 ├── scopecat.toml
 ├── notebooks/
-│   └── 01_first_run.py
+│   ├── 01_first_run.py
+│   └── 02_edit_scan.py
 └── src/scopecat_lab/
     ├── __init__.py
     ├── application.py
     ├── backend.py
-    └── configuration.py
+    ├── configuration.py
+    └── authored/
+        ├── __init__.py
+        └── signal.py
 ```
 
 Projects may add a `config/` directory for external, version-controlled
@@ -36,9 +41,13 @@ backend factories:
 bootstrap = "scopecat_lab.application:create_bootstrap"
 application = "scopecat_lab.application:create_application"
 instrument_backend = "scopecat_lab.backend:create_backend"
+
+[authors]
+source_roots = ["src"]
+refresh_roots = ["src/scopecat_lab/authored"]
 ```
 
-Both values use `MODULE:CALLABLE` syntax. Project discovery searches at or above
+The three factory values use `MODULE:CALLABLE` syntax. Project discovery searches at or above
 the supplied path and makes the project's `src` directory importable.
 
 ## Source ownership
@@ -48,6 +57,8 @@ the supplied path and makes the project's `src` directory importable.
 - `backend.py` composes worker-only instrument providers and drivers.
 - `configuration.py` builds the bootstrap configuration used only while the
   daemon registry is empty.
+- `authored/` contains locally editable experiment and analysis declarations. Source
+  refresh captures these edits; it does not upgrade installed shared packages.
 - `notebooks/` contains user-owned interactive workflows and scripts.
 
 After initialization, these are application source files: edit, test, and

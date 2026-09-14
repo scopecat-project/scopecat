@@ -4,7 +4,11 @@ Use this path when composing existing laboratory operations. You edit controls,
 scientific helpers, timing and analysis; the lab maintainer configures discovery
 once. There is no per-experiment catalog, service or procedure to write.
 
-## Start with the reference author folder
+For your first request/scan/analysis, use the [starter authoring lesson](../tutorials/starter-authoring.md).
+The examples below are advanced compositions using the reference lab's existing
+quantum capabilities; they are not required to start a new project.
+
+## Compose reference laboratory operations
 
 The reference application discovers `reference_lab.workflows.authored`. Its
 `signal.py` contains two experiments: an analytic resonance and a Ramsey sequence
