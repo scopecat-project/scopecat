@@ -526,6 +526,16 @@ def start(
         bool,
         typer.Option(help="Start the daemon without the project GUI."),
     ] = False,
+    startup_timeout: Annotated[
+        float | None,
+        typer.Option(
+            help=(
+                "Explicit hard startup budget in seconds; "
+                "default waits until ready or cancelled."
+            ),
+            min=0.001,
+        ),
+    ] = None,
     executor_lease_ttl_seconds: Annotated[
         float | None,
         typer.Option(
@@ -554,6 +564,10 @@ def start(
             port=port,
             static_dir=selected_static_dir,
             lease_ttl=_lease_ttl(executor_lease_ttl_seconds),
+            timeout=startup_timeout,
+            on_progress=lambda elapsed, stage: console.print(
+                f"Starting ({elapsed:.0f}s): {stage}", markup=False
+            ),
         )
     except (DaemonLifecycleError, ProjectManifestError, OSError, ValueError) as error:
         _fail(error)

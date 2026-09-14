@@ -926,7 +926,7 @@ def test_instrument_startup_timeout_retains_child_phase_and_reaps_process(
 
     monkeypatch.setattr(worker, "_terminate_process_until", observe_termination)
     with pytest.raises(InstrumentBackendUnavailable, match="did not start in time"):
-        SubprocessInstrumentBackendEndpoint(project, _BACKEND)
+        SubprocessInstrumentBackendEndpoint(project, _BACKEND, startup_timeout=10)
     assert len(stopped) == 1
     pid, exitcode, alive = stopped[0]
     assert exitcode is not None and not alive

@@ -42,7 +42,14 @@ def terminate_validation_process_tree(
                     child.wait(timeout=_STOP_TIMEOUT)
                 except psutil.TimeoutExpired:
                     child.kill()
-                    child.wait(timeout=_STOP_TIMEOUT)
+                    try:
+                        child.wait(timeout=_STOP_TIMEOUT)
+                    except psutil.TimeoutExpired:
+                        # A blocked parent cannot reap its terminated child yet.
+                        # Stop the parent below; a zombie cannot execute or own
+                        # devices and must not be reported as a live survivor.
+                        if child.status() != psutil.STATUS_ZOMBIE:
+                            raise
             except psutil.NoSuchProcess:
                 pass
             except (psutil.Error, OSError) as error:

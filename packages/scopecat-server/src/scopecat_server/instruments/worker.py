@@ -271,11 +271,15 @@ class SubprocessInstrumentBackendEndpoint:
         project_root: str | Path,
         instrument_backend_spec: str,
         *,
-        startup_timeout: float = 10.0,
+        startup_timeout: float | None = None,
         operation_timeout: float = 30.0,
         shutdown_timeout: float = 2.0,
     ) -> None:
-        if startup_timeout <= 0 or operation_timeout <= 0 or shutdown_timeout <= 0:
+        if (
+            (startup_timeout is not None and startup_timeout <= 0)
+            or operation_timeout <= 0
+            or shutdown_timeout <= 0
+        ):
             raise ValueError("instrument worker timeouts must be positive")
         self._project_root = Path(project_root).resolve()
         self._operation_timeout = operation_timeout

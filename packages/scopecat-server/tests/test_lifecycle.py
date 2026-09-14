@@ -446,7 +446,7 @@ def test_startup_trace_locates_config_stall_after_instrument_readiness(
         )
     )
     with pytest.raises(DaemonLifecycleError, match="healthy within 10 seconds"):
-        start_project(open_project(tmp_path))
+        start_project(open_project(tmp_path), timeout=10)
     [trace] = diagnostics.glob("daemon-startup-*.log")
     evidence = trace.read_text()
     assert "launch request to Python entry:" in evidence
@@ -457,3 +457,82 @@ def test_startup_trace_locates_config_stall_after_instrument_readiness(
     assert "in bootstrap_config" in evidence
     assert "config registry ready; starting application services" not in evidence
     assert not daemon_record_path(tmp_path).exists()
+
+
+def test_default_start_waits_past_old_budget_with_progress(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project = initialize_project(tmp_path)
+    record = _record(tmp_path, pid=99999999, process_create_time=10)
+    observations = iter(
+        (
+            DaemonStatus(state="stopped"),
+            DaemonStatus(state="stopped"),
+            DaemonStatus(state="running", record=record),
+        )
+    )
+    clock = iter((0.0, 11.0))
+    progress: list[tuple[float, str]] = []
+
+    class StartedProcess:
+        pid = record.pid
+
+        @staticmethod
+        def poll() -> None:
+            return None
+
+    def spawn(*_args: object, **_kwargs: object) -> StartedProcess:
+        return StartedProcess()
+
+    def inspect(_project: Project) -> DaemonStatus:
+        return next(observations)
+
+    def sleep(_seconds: float) -> None:
+        pass
+
+    monkeypatch.setattr("scopecat_server.lifecycle.subprocess.Popen", spawn)
+    monkeypatch.setattr("scopecat_server.lifecycle.inspect_daemon", inspect)
+    monkeypatch.setattr("scopecat_server.lifecycle.time.monotonic", lambda: next(clock))
+    monkeypatch.setattr("scopecat_server.lifecycle.time.sleep", sleep)
+    assert (
+        start_project(
+            project,
+            on_progress=lambda elapsed, stage: progress.append((elapsed, stage)),
+        )
+        == record
+    )
+    assert progress == [(11.0, "waiting for Python entry")]
+
+
+def test_startup_progress_ignores_previous_launch(tmp_path: Path) -> None:
+    from scopecat_server.lifecycle import _latest_startup_stage
+
+    log = tmp_path / "daemon.log"
+    log.write_text("[startup] stale ready\n")
+    offset = log.stat().st_size
+    assert _latest_startup_stage(log, offset) == "waiting for Python entry"
+    with log.open("a") as stream:
+        stream.write("[startup] importing runtime\n")
+    assert _latest_startup_stage(log, offset) == "importing runtime"
+
+
+def test_cancelling_start_reaps_its_launch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    project = initialize_project(tmp_path)
+    spawned: list[subprocess.Popen[bytes]] = []
+
+    def observe(_root: Path, process: subprocess.Popen[bytes]) -> None:
+        spawned.append(process)
+
+    def cancel(_elapsed: float, _stage: str) -> None:
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(
+        "scopecat_server.lifecycle._daemon_diagnostics.observe_spawn", observe
+    )
+    with pytest.raises(KeyboardInterrupt):
+        start_project(project, on_progress=cancel)
+    assert len(spawned) == 1
+    assert spawned[0].poll() is not None

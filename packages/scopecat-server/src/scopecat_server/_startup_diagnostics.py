@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import faulthandler
 import os
+import sys
 import time
 from pathlib import Path
 from typing import Literal, TextIO
@@ -17,6 +18,7 @@ def begin(*, process: Literal["daemon", "instrument"] = "daemon") -> None:
     global _stream, _started
     directory = os.environ.get("SCOPECAT_STARTUP_DIAGNOSTICS")
     if directory is None:
+        stage(f"python entry; pid={os.getpid()}")
         return
     _started = time.monotonic()
     entered_ns = time.monotonic_ns()
@@ -38,6 +40,8 @@ def begin(*, process: Literal["daemon", "instrument"] = "daemon") -> None:
 
 
 def stage(message: str) -> None:
+    if os.environ.get("SCOPECAT_STARTUP_PROGRESS") == "1":
+        print(f"[startup] {message}", file=sys.stderr, flush=True)
     if _stream is not None:
         _stream.write(f"{time.monotonic() - _started:.3f}s {message}\n")
         _stream.flush()

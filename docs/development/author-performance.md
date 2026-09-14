@@ -207,8 +207,7 @@ PID, parent PID, generation and same-host monotonic clock anchors correlate the
 files without exposing environment contents or Python locals. This opt-in probe
 samples one daemon stack after eight seconds and one instrument stack after five
 seconds; the child cancels its sample when readiness is sent. These offsets start
-at Python entry, not process launch, and do not alter the ten-second health
-deadline. A stack sample alone does not mean startup failed.
+at Python entry, not process launch, and do not set a termination deadline. A stack sample alone does not mean startup failed.
 
 A parent blocked in `Connection.poll` does not identify a slow import or driver.
 Use the child's last phase and stack to locate the wait. A missing child entry
