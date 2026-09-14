@@ -55,14 +55,12 @@ def test_init_creates_runnable_python_project_and_does_not_overwrite(
 
     project = initialize_project(tmp_path)
 
-    assert project.manifest.read_text(encoding="utf-8") == (
-        "[lab]\n"
-        'bootstrap = "scopecat_lab.application:create_bootstrap"\n'
-        'application = "scopecat_lab.application:create_application"\n'
-        'instrument_backend = "scopecat_lab.backend:create_backend"\n'
-        '\n[authors]\nsource_roots = ["src"]\n'
-        'refresh_roots = ["src/scopecat_lab/authored"]\n'
-    )
+    assert project.bootstrap_spec == "scopecat_lab.application:create_bootstrap"
+    assert project.application_spec == "scopecat_lab.application:create_application"
+    assert project.instrument_backend_spec == "scopecat_lab.backend:create_backend"
+    assert project.source_roots == ("src",)
+    assert project.refresh_roots == ("src/scopecat_lab/authored",)
+    assert project.dependencies == ("scopecat-instruments",)
     assert (tmp_path / ".gitignore").read_text(encoding="utf-8") == (
         "results/\n.scopecat/\n"
     )
