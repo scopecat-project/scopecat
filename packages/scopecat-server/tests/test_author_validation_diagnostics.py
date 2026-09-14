@@ -112,7 +112,13 @@ def test_timeout_cleanup_includes_launcher_descendants(tmp_path: Path) -> None:
             item.pid == child["pid"] and item.create_time() == child["created"]
             for item in owned
         )
-        assert all(not item.is_running() for item in owned)
+        # Popen.wait observes the Windows exit handle; its PID may remain
+        # visible briefly. psutil.wait also waits for PID disappearance (as
+        # cleanup already does for descendants), before is_running is sampled.
+        owner.wait(timeout=5)
+        assert all(not item.is_running() for item in owned), [
+            (item.pid, item.is_running()) for item in owned
+        ]
         assert process.returncode is not None
         assert "slow descendant evidence" in stderr
     finally:

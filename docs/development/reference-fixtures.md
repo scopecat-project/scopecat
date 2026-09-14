@@ -28,3 +28,13 @@ would remove the evidence the tests exist to provide.
 No private package may become a prerequisite for public CI or the installed
 starter. Shared test helpers belong in testkit only when independently reused;
 reference_lab is not a production library to install on physical benches.
+
+## Installed author package boundary
+
+`fixtures/installed_author_lab` is a tiny wheel-only consumer fixture, not another
+user workspace template. `scripts/verify_pilot_bundle.py` builds and installs it
+outside the checkout in the clean pilot environment, on both CI platforms. The
+same daemon exercises installed discovery, a local wrapper, original/current
+analysis after refresh, retained analysis after restart, and rejection/restoration
+of changed installed bytes. This extends the installed pilot instead of adding a
+second full runtime job or a dependency on private laboratory code.

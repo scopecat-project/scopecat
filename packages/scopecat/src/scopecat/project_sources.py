@@ -7,7 +7,7 @@ import platform
 import shutil
 import tempfile
 from contextvars import ContextVar
-from importlib.metadata import distributions
+from importlib.metadata import PackageNotFoundError, distributions, version
 from pathlib import Path
 from typing import Protocol
 
@@ -48,12 +48,18 @@ class SourceProject(Protocol):
     def refresh_roots(self) -> tuple[str, ...]: ...
     @property
     def installed_packages(self) -> tuple[tuple[str, str], ...]: ...
+    @property
+    def dependencies(self) -> tuple[str, ...] | None: ...
 
 
 def capture_sources(project: SourceProject) -> AuthorRevisionBundle:
     """Snapshot all declared roots, including helpers, analysis and local resources."""
     files: dict[str, bytes] = {"scopecat.toml": project.manifest.read_bytes()}
-    for name in ("pyproject.toml", "uv.lock", "requirements.txt"):
+    for name in (
+        ()
+        if project.dependencies is not None
+        else ("pyproject.toml", "uv.lock", "requirements.txt")
+    ):
         path = project.root / name
         if path.is_file():
             files[name] = path.read_bytes()
@@ -86,18 +92,31 @@ def capture_sources(project: SourceProject) -> AuthorRevisionBundle:
         for name, digest in digests.items()
         if not any(Path(name).is_relative_to(root) for root in project.refresh_roots)
     }
+    from scopecat.execution_environment import execution_packages
     from scopecat.installed_authors import capture_installed_authors
 
     installed = capture_installed_authors(project.installed_packages)
+
+    packages = (
+        environment_packages()
+        if project.dependencies is None
+        else execution_packages(
+            (*project.dependencies, *(name for _, name in project.installed_packages))
+        )
+    )
+    maintained_environment = (
+        {} if project.dependencies is None else {"packages": packages}
+    )
     manifest = AuthorRevisionManifest(
         files=digests,
         source_roots=project.source_roots,
         refresh_roots=project.refresh_roots,
         python=platform.python_version(),
-        packages=environment_packages(),
+        packages=packages,
         installed_authors=installed,
         maintenance_hash=sha256_json_hash(
             {
+                **maintained_environment,
                 "files": maintenance,
                 "installed_authors": {
                     name: item.model_dump(mode="json")
@@ -133,14 +152,18 @@ def require_environment(manifest: AuthorRevisionManifest) -> None:
             "installed author package content changed; restore the recorded "
             "installed artifacts before recovery"
         )
-    if (
-        manifest.python != platform.python_version()
-        or manifest.packages != environment_packages()
-    ):
-        raise ValueError(
-            "author revision requires its recorded Python and installed package "
-            "versions; restore that environment before recovery"
-        )
+    if manifest.python != platform.python_version():
+        raise ValueError("author revision requires its recorded Python version")
+    for name, expected in manifest.packages.items():
+        try:
+            actual_version = version(name)
+        except PackageNotFoundError:
+            actual_version = "not installed"
+        if actual_version != expected:
+            raise ValueError(
+                f"author revision requires installed package {name}=={expected}; "
+                f"found {actual_version}. Restore the recorded execution environment"
+            )
 
 
 def materialize_sources(bundle: AuthorRevisionBundle, directory: Path) -> Path:

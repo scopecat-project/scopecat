@@ -250,7 +250,48 @@ environment operation requiring a restart and matching revision/deployment;
 original analysis must restore the original installed package bytes. Existing
 workers are not live filesystem integrity monitors.
 
-The current environment check still includes all installed distribution versions,
-including notebook tools. Selecting a smaller execution dependency closure remains
-separate work; installing unrelated tools can therefore require restoring the
-recorded environment before opening historical revisions.
+## Execution dependency scope
+
+Maintainers can select execution dependencies separately from notebook tooling:
+
+```toml
+[authors]
+source_roots = ["src"]
+refresh_roots = ["src/user_experiments"]
+dependencies = ["scopecat-instruments", "scipy", "my-analysis[fit]"]
+
+[authors.packages]
+lab_methods = "scopecat-lab-methods"
+```
+
+Scopecat and its server are always included, as are declared installed author
+packages. Scopecat follows their installed `Requires-Dist` metadata transitively,
+evaluating platform/Python markers and requested extras. It checks requirements
+against installed versions; it does not install or resolve a new environment.
+Distribution names are normalized. Missing or incompatible dependencies fail
+preparation with the dependency name. This does not inspect Python imports:
+maintainers must declare dependencies used by local code, optional execution
+paths and analyses, including extras. Package declarations still determine source
+ownership; listing a dependency alone does not authorize importing its analyses.
+
+The retained manifest records exact selected versions. Upgrading an unrelated
+notebook-only package does not change the revision or block historical analysis.
+Changing a selected package requires restarting the matching deployment, not
+refreshing local author code. Root `pyproject.toml`, `uv.lock` and `requirements.txt`
+are not automatically copied into scoped source revisions: they may describe
+unrelated tooling. Keep deployment installation files and wheel artifacts
+separately. Files explicitly inside source roots are still captured.
+
+Omitting `dependencies` keeps the conservative full-environment inventory and
+root installation files for exploratory projects whose dependency boundary is
+not yet declared. An empty list explicitly selects just the framework, declared
+author packages and their dependencies. New CLI starter projects select their
+instrument dependency automatically. Additional installed packages are permitted
+when recovering a revision, but every recorded version must still match. Older
+schema 67 manifests keep their recorded full inventory; this change neither
+rewrites their identity nor migrates an older store.
+
+This remains an environment compatibility check, not a hermetic archive or an
+import sandbox. Python must match; native libraries, drivers and external system
+dependencies still belong to deployment qualification. Laboratory-owned imported
+helpers need explicit package declarations to retain their content hashes.
