@@ -13,6 +13,7 @@ from scopecat.kernel.python_source import python_source_identity
 from scopecat.kernel.quantity import Quantity
 from scopecat.program.controls import Control, ControlSet
 from scopecat.program.definitions import ExperimentInvocation
+from scopecat.records.author_revision import AuthorRevisionRef
 
 type ExperimentBuilder[ResultT] = Callable[
     [Mapping[str, object]], ExperimentInvocation[ResultT]
@@ -60,6 +61,7 @@ class Experiment(Generic[_P, _ExperimentResultT_co]):
     metadata: Mapping[str, object] = field(repr=False)
     inputs: tuple[ExperimentInput, ...]
     controls: ControlSet
+    code_revision: AuthorRevisionRef | None = field(default=None, repr=False)
     _source: Mapping[str, str] | None = field(init=False, repr=False, compare=False)
 
     def __post_init__(self) -> None:

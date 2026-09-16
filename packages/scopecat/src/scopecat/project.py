@@ -98,6 +98,7 @@ class Project:
         return AuthorProject(
             resolve_daemon_endpoint(self.root, explicit=daemon),
             receipts=self.runtime_binding.data_root / "author-jobs",
+            project_root=self.root,
             timeout=120,
         )
 

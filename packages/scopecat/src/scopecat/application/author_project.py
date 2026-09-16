@@ -7,7 +7,7 @@ import time
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal, SupportsFloat, override
+from typing import Literal, SupportsFloat, overload, override
 from uuid import uuid4
 
 import httpx2
@@ -29,7 +29,7 @@ from scopecat.application.launch import (
     LaunchPreview,
     LaunchSubmission,
 )
-from scopecat.authoring.experiments import ExperimentRequest, Scan
+from scopecat.authoring.experiments import Experiment, ExperimentRequest, Scan
 from scopecat.automation.models import ProcedureRun, RunOutputRef
 from scopecat.automation.wire import (
     ProcedureCancelCommand,
@@ -66,7 +66,7 @@ from scopecat.records.run_request import AxisValuesSourceRecord
 
 
 class AuthorProject(DaemonClient):
-    """Refresh and execute author code without mutating notebook module state.
+    """Refresh author code and explicitly rebind typed notebook declarations.
 
     Prepared requests retain their source revision. Typed analysis uses the run's
     original source by default; explicitly refresh and select current to reanalyze.
@@ -77,11 +77,13 @@ class AuthorProject(DaemonClient):
         base_url: str,
         *,
         receipts: Path | None = None,
+        project_root: Path | None = None,
         timeout: float | httpx2.Timeout | None = 120,
         transport: httpx2.BaseTransport | None = None,
     ) -> None:
         super().__init__(base_url, timeout=timeout, transport=transport)
         self.receipts = receipts.resolve() if receipts is not None else None
+        self.project_root = project_root.resolve() if project_root is not None else None
 
     @property
     def run_operations(self) -> RemoteRunOperations:
@@ -150,6 +152,16 @@ class AuthorProject(DaemonClient):
         """Select the current declaration and retain a preview's exact submission."""
         draft = experiment.copy() if isinstance(experiment, ExperimentRequest) else None
         if draft is not None:
+            retained_revision = draft.declaration.code_revision
+            if (
+                retained_revision is not None
+                and code_revision is not None
+                and code_revision != retained_revision
+            ):
+                raise ValueError(
+                    "request declaration belongs to another source revision"
+                )
+            code_revision = retained_revision or code_revision
             if any(
                 value is not None for value in (inputs, control_edits, fixed, scans)
             ):
@@ -314,17 +326,89 @@ class AuthorProject(DaemonClient):
         )
         return self.preparation(identity)
 
+    @overload
+    def refresh[**P, ResultT](
+        self,
+        experiment: Experiment[P, ResultT],
+        *,
+        expected_generation: int | None = None,
+        timeout: float | None = None,
+    ) -> Experiment[P, ResultT]: ...
+
+    @overload
     def refresh(
-        self, *, expected_generation: int | None = None, timeout: float | None = None
-    ) -> AuthorRevisionState:
+        self,
+        experiment: None = None,
+        *,
+        expected_generation: int | None = None,
+        timeout: float | None = None,
+    ) -> AuthorRevisionState: ...
+
+    def refresh[**P, ResultT](
+        self,
+        experiment: Experiment[P, ResultT] | None = None,
+        *,
+        expected_generation: int | None = None,
+        timeout: float | None = None,
+    ) -> AuthorRevisionState | Experiment[P, ResultT]:
         """Wait for explicit source refresh; wait expiry never cancels publication.
 
         Existing prepared requests keep their original code. The timeout exception
         carries its operation handle; it is safe to wait again or reconnect.
         """
-        return self.begin_refresh(expected_generation=expected_generation).wait(
+        if experiment is not None:
+            self._require_local_authoring()
+        state = self.begin_refresh(expected_generation=expected_generation).wait(
             timeout=timeout
         )
+        if experiment is None:
+            return state
+        return self.load_experiment(experiment, code_revision=state.active)
+
+    def _require_local_authoring(self) -> tuple[Path, Path]:
+        if self.project_root is None or self.receipts is None:
+            raise ValueError("typed refresh requires open_project(...).authoring()")
+        return self.project_root, self.receipts.parent / "author-sources"
+
+    def load_experiment[**P, ResultT](
+        self,
+        experiment: Experiment[P, ResultT],
+        *,
+        code_revision: AuthorRevisionRef | None = None,
+    ) -> Experiment[P, ResultT]:
+        """Bind a declaration to admitted source without publishing another revision.
+
+        Use after reconnecting to a timed-out refresh operation. Reassign the
+        returned declaration explicitly; existing notebook aliases stay unchanged.
+        """
+        from scopecat.application.author_imports import load_revision_experiment
+
+        root, cache = self._require_local_authoring()
+        catalog = self.catalog(code_revision=code_revision)
+        if catalog.code_revision is None:
+            raise ValueError("project has no admitted author revision")
+        entry = next(
+            (item for item in catalog.entries if item.id == experiment.id), None
+        )
+        if entry is None:
+            raise ValueError(
+                f"{experiment.id} is absent from the selected author catalog"
+            )
+        try:
+            return load_revision_experiment(
+                experiment,
+                self.author_revision(catalog.code_revision),
+                project_root=root,
+                cache=cache,
+                expected_fingerprint=entry.version,
+            )
+        except Exception as error:
+            error.add_note(
+                f"Notebook binding failed for {catalog.code_revision.content_hash}. "
+                "Server publication is unchanged; fix the local import environment "
+                "and retry load_experiment with this code_revision."
+            )
+            raise
 
     def catalog(
         self, *, code_revision: AuthorRevisionRef | None = None

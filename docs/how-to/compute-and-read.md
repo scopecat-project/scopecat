@@ -110,4 +110,5 @@ and assume its output describes an older run. See
 
 Follow [author refresh](refresh-author-code.md) after editing calculation code.
 Refreshing server source does not replace declarations already imported into a
-Notebook. Unified Notebook import refresh is not yet part of this guide's available API.
+Notebook. Use `experiment = authors.refresh(experiment)` to explicitly rebind a
+typed declaration and its local helpers to the newly admitted revision.
