@@ -39,6 +39,7 @@ from scopecat.authoring._module_results import (
     RecordedProducts,
     module_result_value_exports,
 )
+from scopecat.authoring.compute_functions import compute_context_internal
 from scopecat.authoring.control_metadata import ControlSpec
 from scopecat.authoring.entity_selection import PerEntity
 from scopecat.authoring.experiments import (
@@ -1287,7 +1288,8 @@ def _module_from_function[ResultT, **P](
         values: dict[str, object] = dict(runtime_values)
         for name, value in structural_values.items():
             values[name] = context.capture_structural_value_internal(value)
-        result = context.capture_result_internal(source(context, **values))
+        with compute_context_internal(context):
+            result = context.capture_result_internal(source(context, **values))
         module_def = context.close_definition_internal(
             id=selected_id,
             input_ports=tuple(
@@ -1454,7 +1456,8 @@ def _experiment_from_function[ResultT, **P](
             context = ExperimentContext()
             if controls.fields:
                 context.grid(*controls.default_axes())
-            output = cast("ResultT", source(context, **values))
+            with compute_context_internal(context):
+                output = cast("ResultT", source(context, **values))
             recorded_tree = _record_experiment_output(
                 context, output, result_types=contract.result_types
             )

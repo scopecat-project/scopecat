@@ -16,6 +16,7 @@ from scopecat.authoring.capability_resources import (
     capability_resource,
     ensure_state_targets,
 )
+from scopecat.authoring.compute_functions import compute
 from scopecat.authoring.control_metadata import ControlSpec
 from scopecat.authoring.definitions import (
     Experiment,
@@ -202,6 +203,7 @@ __all__ = [
     "ValueValidationError",
     "axis",
     "capability_resource",
+    "compute",
     "constant",
     "coordinate",
     "dataclass_table_schema",

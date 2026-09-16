@@ -13,6 +13,7 @@ from reference_lab.quantum_runner import prepare_quantum_hardware
 from reference_lab.workflows.ramsey import ramsey_program
 
 
+@sc.compute
 def _iq_mean(
     values: object,
 ) -> Annotated[complex, sc.ScalarType(sc.ComplexType(unit="ratio"))]:
@@ -38,5 +39,5 @@ def coherent_ramsey(experiment: sc.ExperimentContext) -> CoherentRamseyDataset:
         .with_shots(16)
         .with_compiler_inputs(qubits=sc.parameter_table_ref(QubitParameters))
     )
-    mean = experiment.compute("iq_mean", fn=_iq_mean, values=capture.iq_shots)
+    mean = _iq_mean(capture.iq_shots)
     return CoherentRamseyDataset(delay=delay, phase=phase, iq_mean=mean)
