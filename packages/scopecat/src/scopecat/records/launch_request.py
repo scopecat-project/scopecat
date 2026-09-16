@@ -14,6 +14,7 @@ from scopecat.records.control_edit import ControlEdit
 from scopecat.records.manual_preview import ManualPreviewFence
 from scopecat.records.parameter_update import ParameterUpdate
 from scopecat.records.plan_ref import ExperimentPlanRef, PlanConfigRef
+from scopecat.records.request_sweep import ParameterSweep
 from scopecat.records.run import (
     AnalysisCandidateRunConfigSource,
     ConfigRegistryRunConfigSource,
@@ -38,6 +39,8 @@ class LaunchRequest(BaseModel):
     actor: str = "operator"
     inputs: dict[str, JsonValue] = Field(default_factory=dict)
     control_edits: dict[str, ControlEdit] = Field(default_factory=dict)
+    scan_mode: Literal["cartesian", "paired"] = "cartesian"
+    parameter_sweeps: tuple[ParameterSweep, ...] = ()
     manual_state: ManualPreviewFence | None = None
     expected_request_hash: Sha256ContentHash | None = None
     context: ConfigContextRef | None = None
@@ -91,6 +94,20 @@ class LaunchRequest(BaseModel):
                 "experiment": self.experiment,
                 "version": self.version,
                 "inputs": self.inputs,
+                **(
+                    {"scan_mode": self.scan_mode}
+                    if self.scan_mode != "cartesian"
+                    else {}
+                ),
+                **(
+                    {
+                        "parameter_sweeps": [
+                            s.model_dump(mode="json") for s in self.parameter_sweeps
+                        ]
+                    }
+                    if self.parameter_sweeps
+                    else {}
+                ),
                 "sample": self.sample,
                 "actor": self.actor,
                 **(

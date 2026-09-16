@@ -149,6 +149,8 @@ it("previews a typed request and clears results after edits", async () => {
   await screen.findByText("Preview ready");
   const request = fetcher.mock.calls[1]?.[0] as Request;
   expect(await request.json()).toEqual({
+    scan_mode: "cartesian",
+    parameter_sweeps: [],
     action: "preview",
     actor: "operator",
     request_key: "",

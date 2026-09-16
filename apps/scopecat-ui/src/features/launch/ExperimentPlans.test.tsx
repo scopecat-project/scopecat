@@ -28,6 +28,8 @@ function plan(id: string, name: string): PlanRevision {
     saved_by: "alice",
     saved_at: "2026-09-09T00:00:00Z",
     definition: {
+      scan_mode: "cartesian",
+      parameter_sweeps: [],
       experiment: "signal",
       version: "1",
       definition_hash: `sha256:${"c".repeat(64)}`,
@@ -72,6 +74,8 @@ function Harness({
         onClick={() =>
           void context.submit(
             {
+              scan_mode: "cartesian",
+              parameter_sweeps: [],
               action: "submit",
               experiment: "signal",
               version: "1",
@@ -190,7 +194,10 @@ it("a slow older open cannot overwrite a later plan or a new edit", async () => 
 it("comparison identifies changed inputs without placing hashes in the ordinary summary", () => {
   const different = {
     ...second,
-    definition: { ...second.definition, definition_hash: `sha256:${"e".repeat(64)}` },
+    definition: {
+      ...second.definition,
+      definition_hash: `sha256:${"e".repeat(64)}`,
+    },
   };
   const changes = planDifferences(first, different);
   expect(changes.some((line) => line.includes("inputs:"))).toBe(true);

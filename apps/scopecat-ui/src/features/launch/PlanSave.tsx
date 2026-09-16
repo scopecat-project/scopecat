@@ -40,6 +40,8 @@ export function PlanSave({
               definition_hash: preview.definition_hash,
               code_revision: preview.code_revision,
               inputs: request.inputs ?? {},
+              scan_mode: request.scan_mode,
+              parameter_sweeps: request.parameter_sweeps,
               control_edits: request.control_edits ?? {},
               configuration:
                 source.kind === "parameter_context"

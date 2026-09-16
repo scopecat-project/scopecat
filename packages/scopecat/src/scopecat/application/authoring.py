@@ -13,7 +13,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
 from importlib import import_module
 from types import MappingProxyType
-from typing import cast
+from typing import Literal, cast
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, ValidationError
 
@@ -64,6 +64,7 @@ from scopecat.records.content import Sha256ContentHash
 from scopecat.records.control_edit import ControlEdit
 from scopecat.records.launch_request import LaunchConfigSource, LaunchRequest
 from scopecat.records.manual_preview import ManualPreviewFence
+from scopecat.records.request_sweep import ParameterSweep
 from scopecat.records.sample import SampleSelector
 
 
@@ -76,6 +77,8 @@ class AuthorLaunchIntent(BaseModel):
     config: ConfigProfileSnapshot
     config_source: LaunchConfigSource
     edits: dict[str, ControlEdit]
+    scan_mode: Literal["cartesian", "paired"] = "cartesian"
+    parameter_sweeps: tuple[ParameterSweep, ...] = ()
     inputs: dict[str, JsonValue] = Field(default_factory=dict)
     actor: str
     request_hash: Sha256ContentHash
@@ -166,6 +169,8 @@ class AuthorExperiment:
         *,
         config: ConfigProfileSnapshot,
         edits: dict[str, ControlEdit] | None = None,
+        scan_mode: Literal["cartesian", "paired"] = "cartesian",
+        parameter_sweeps: tuple[ParameterSweep, ...] = (),
         inputs: Mapping[str, JsonValue] | None = None,
     ) -> ExperimentInvocation:
         return edit_controls(
@@ -178,6 +183,8 @@ class AuthorExperiment:
             ),
             config=config,
             edits=edits or {},
+            scan_mode=scan_mode,
+            parameter_sweeps=parameter_sweeps,
         )
 
     @property
@@ -287,7 +294,11 @@ class _AuthorProcedure:
         context.run(
             "experiment",
             self.experiment.edit(
-                config=selected.config, edits=selected.edits, inputs=selected.inputs
+                config=selected.config,
+                edits=selected.edits,
+                inputs=selected.inputs,
+                scan_mode=selected.scan_mode,
+                parameter_sweeps=selected.parameter_sweeps,
             ),
             config=selected.config,
             config_source=selected.config_source,
@@ -395,7 +406,11 @@ class AuthorExperiments:
         inputs = cast("dict[str, JsonValue]", validated_inputs.model_dump(mode="json"))
         config, source = resolve_launch_config(lab, request)
         invocation = selected.edit(
-            config=config, edits=request.control_edits, inputs=inputs
+            config=config,
+            edits=request.control_edits,
+            inputs=inputs,
+            scan_mode=request.scan_mode,
+            parameter_sweeps=request.parameter_sweeps,
         )
         if request.action == "preview":
             preview = lab.preview_invocation(
@@ -437,6 +452,8 @@ class AuthorExperiments:
                 config=config,
                 config_source=source,
                 edits=request.control_edits,
+                scan_mode=request.scan_mode,
+                parameter_sweeps=request.parameter_sweeps,
                 inputs=inputs,
                 actor=request.actor,
                 manual_state=request.manual_state,

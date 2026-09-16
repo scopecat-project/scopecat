@@ -2396,3 +2396,53 @@ def test_xarray_dimension_names_explain_shared_and_ragged_inputs() -> None:
         projection.to_xarray(dims={"iq": ("frequency",)})
     with pytest.raises(ValueError, match="ragged"):
         _ragged_dataset().project({"iq": "signal"}).to_xarray(dims={"iq": ("shot",)})
+
+
+def test_offline_grouping_keeps_local_axes_and_explicit_repeats() -> None:
+    from scopecat.analysis.grouping import partition_groups
+    from scopecat.records.analysis_grouping import AnalysisGrouping
+
+    original = _dataset()
+    schema = original.schema.model_copy(
+        update={
+            "variables": (
+                *original.schema.variables,
+                MeasurementVariable(
+                    id="repeat", role="coordinate", dtype="int64", dims=["point"]
+                ),
+            ),
+        }
+    )
+    records = tuple(
+        record.model_copy(
+            update={
+                "coordinates": {
+                    **record.coordinates,
+                    "repeat": MeasurementScalar.create(value=i % 2, dtype="int64"),
+                },
+            }
+        )
+        for i, record in enumerate(original.records)
+    )
+    data = Dataset(
+        MeasurementDataset(dataset_schema=schema, records=records), original.entry
+    )
+    separate = partition_groups(data, AnalysisGrouping(by=(), fitting="frequency"))
+    assert [group.positions for group in separate] == [(0, 2), (1,)]
+    assert [group.coordinates for group in separate] == [{"repeat": 0}, {"repeat": 1}]
+    combined = partition_groups(
+        data, AnalysisGrouping(by=(), fitting="frequency", repeats="combine")
+    )
+    assert combined[0].positions == (0, 1, 2)
+    selected = data.isel(point=list(separate[0].positions))
+    assert selected["frequency"].shape == (2, 2)
+    assert selected["signal"].shape == (2, 2)
+    np.testing.assert_array_equal(
+        selected["signal"].values[1], original["signal"].values[2]
+    )
+    grouped = partition_groups(
+        data, AnalysisGrouping(by=("bias",), fitting="frequency", repeats="combine")
+    )
+    assert grouped[1].coordinates == {"bias": Quantity(1, "V")}
+    with pytest.raises(ValueError, match="point predicates require a scalar"):
+        partition_groups(data, AnalysisGrouping(by=("frequency",), fitting="bias"))

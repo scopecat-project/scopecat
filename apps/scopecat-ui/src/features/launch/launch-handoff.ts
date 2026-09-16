@@ -42,6 +42,10 @@ export function importLaunchRequest(
     throw new Error(
       "Suggested inputs require a fresh preview in the selected configuration; a submitted or frozen request cannot be imported as a draft.",
     );
+  if (request.scan_mode === "paired" || request.parameter_sweeps.length)
+    throw new Error(
+      "This plan uses paired scans or parameter overlays. Open it with the Python author API; the console editor supports Cartesian controls only.",
+    );
   const unknown = Object.keys(request.inputs ?? {}).filter(
     (name) => !(name in (entry.request.properties ?? {})),
   );

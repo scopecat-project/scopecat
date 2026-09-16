@@ -309,6 +309,8 @@ function ProjectDraft({
             next,
             entry,
             {
+              scan_mode: d.scan_mode,
+              parameter_sweeps: d.parameter_sweeps,
               action: "preview",
               request_key: "",
               experiment: d.experiment,

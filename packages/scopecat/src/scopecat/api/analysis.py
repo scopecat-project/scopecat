@@ -659,6 +659,8 @@ class AnalysisContext:
     default_title: str = "analysis"
     default_key: str | None = None
     step_id: str | None = None
+    point_selection: tuple[int, ...] | None = None
+    measurement_data: Dataset | None = None
     _executions: list[AnalysisExecution] = field(
         default_factory=list,
         repr=False,
@@ -725,7 +727,9 @@ class AnalysisContext:
         """Load one run's measurements and freeze them as a named input."""
 
         selected_run = run or self._required_run()
-        dataset = selected_run._measurements_for_analysis()  # pyright: ignore[reportPrivateUsage]
+        dataset = self.measurement_data if run is None else None
+        if dataset is None:
+            dataset = selected_run._measurements_for_analysis()  # pyright: ignore[reportPrivateUsage]
         input_id = artifact_slug(id or dataset.entry.id, fallback="data")
         input_ref = MeasurementAnalysisInput(
             id=input_id,
@@ -1409,7 +1413,10 @@ class AnalysisFunctionDefinition[**P, ResultT]:
         data_name = next(iter(inspect.signature(definition).parameters))
 
         def execute(context: AnalysisContext, **arguments: object) -> Analysis:
-            inputs = {data_name: context.measurements(), **arguments}
+            data = context.measurements()
+            if context.point_selection is not None:
+                data = data.isel(point=list(context.point_selection))
+            inputs = {data_name: data, **arguments}
             value = context.trace(fn=definition, inputs=inputs)
             result = context.result(title=self.id)
             if isinstance(value, AnalysisProducts):

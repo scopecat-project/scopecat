@@ -417,28 +417,37 @@ def parameter_update(
 ) -> UpdateParameterRows:
     """Build an explicit proposed edit using the same field as experiment inputs."""
     model = field.owner
+    selected = next(f for f in parameter_fields(model) if f.name == field.name)
+    return update_parameter_rows(
+        parameter_table_name(model),
+        key=parameter_cell_key(field, key),
+        values={
+            field.name: stored_parameter_value(
+                value, selected, label=f"{parameter_table_name(model)}.{field.name}"
+            )
+        },
+    )
+
+
+def parameter_cell_key(
+    field: ParameterFieldIdentity,
+    key: ParameterAtomValue | tuple[ParameterAtomValue, ...],
+) -> dict[str, ParameterAtomValue]:
+    """Normalize the shared typed key used by edits and request overlays."""
+    model = field.owner
     name = parameter_table_name(model)
     schema = parameter_table_schema(model, primary_key=parameter_key(model))
     keys = key if isinstance(key, tuple) else (key,)
     if len(keys) != len(schema.primary_key):
         raise ValueError(f"{name}.{field.name}: expected keys {schema.primary_key}")
     columns = {column.id: column.value_type for column in schema.columns}
-    selected = next(f for f in parameter_fields(model) if f.name == field.name)
-    return update_parameter_rows(
-        name,
-        key={
-            column: cast(
-                "ParameterAtomValue",
-                coerce_literal(columns[column], item, path=(name, column)),
-            )
-            for column, item in zip(schema.primary_key, keys, strict=True)
-        },
-        values={
-            field.name: stored_parameter_value(
-                value, selected, label=f"{name}.{field.name}"
-            )
-        },
-    )
+    return {
+        column: cast(
+            "ParameterAtomValue",
+            coerce_literal(columns[column], item, path=(name, column)),
+        )
+        for column, item in zip(schema.primary_key, keys, strict=True)
+    }
 
 
 def parameter_catalog(

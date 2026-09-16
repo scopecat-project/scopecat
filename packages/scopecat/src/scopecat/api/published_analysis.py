@@ -34,6 +34,7 @@ from scopecat.records.analysis import (
     AnalysisTableRecordOutput,
     AnalysisTableView,
 )
+from scopecat.records.author_revision import AuthorAnalysisGroupReceipt
 from scopecat.records.content import ContentEntry
 from scopecat.records.parameter_change import ParameterChangeProposal
 from scopecat.runs.data import (
@@ -305,4 +306,17 @@ class AnalysisResult[ResultT]:
     """
 
     value: ResultT
+    publication: PublishedAnalysis
+
+
+@dataclass(frozen=True, slots=True)
+class AnalysisGroupResult[ResultT]:
+    receipt: AuthorAnalysisGroupReceipt
+    value: ResultT | None
+    publication: PublishedAnalysis
+
+
+@dataclass(frozen=True, slots=True)
+class GroupedAnalysisResult[ResultT]:
+    groups: tuple[AnalysisGroupResult[ResultT], ...]
     publication: PublishedAnalysis

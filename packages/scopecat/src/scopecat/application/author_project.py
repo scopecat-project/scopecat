@@ -11,7 +11,7 @@ from typing import Literal, SupportsFloat, overload, override
 from uuid import uuid4
 
 import httpx2
-from pydantic import JsonValue
+from pydantic import JsonValue, TypeAdapter
 
 from scopecat.analysis.arguments import AnalysisArgument, encode_arguments
 from scopecat.analysis.facts import ordinary_result_schema
@@ -19,7 +19,11 @@ from scopecat.api._config import LabConfigOperations
 from scopecat.api._remote import RemoteRunOperations
 from scopecat.api.parameter_candidates import ParameterCandidate
 from scopecat.api.parameters import ParameterWorkspace
-from scopecat.api.published_analysis import AnalysisResult
+from scopecat.api.published_analysis import (
+    AnalysisGroupResult,
+    AnalysisResult,
+    GroupedAnalysisResult,
+)
 from scopecat.api.run import RunHandle
 from scopecat.application.authoring import AuthorExperiment
 from scopecat.application.experiment_plans import plan_definition, plan_launch_request
@@ -48,7 +52,9 @@ from scopecat.daemon.procedure_views import ProcedureOperatorView
 from scopecat.daemon.views import MeasurementLivePreview, MeasurementPreview
 from scopecat.kernel.errors import SessionClosedError
 from scopecat.kernel.quantity import Quantity
+from scopecat.records.analysis_grouping import AnalysisGrouping
 from scopecat.records.author_revision import (
+    AuthorAnalysisGroupReceipt,
     AuthorAnalysisReceipt,
     AuthorAnalysisRequest,
     AuthorPreparationRequest,
@@ -270,6 +276,8 @@ class AuthorProject(DaemonClient):
             experiment=entry.id,
             version=entry.version,
             control_edits=edits,
+            scan_mode=draft.scan_mode if draft else "cartesian",
+            parameter_sweeps=draft.parameter_sweeps if draft else (),
             inputs=declared_inputs | (inputs or {}),
             config_source=candidate_source,
             sample_binding=sample_binding,
@@ -442,6 +450,7 @@ class AuthorProject(DaemonClient):
         code_revision: AuthorRevisionRef,
         key: str | None = None,
         arguments: Mapping[str, AnalysisArgument] | None = None,
+        grouping: AnalysisGrouping | None = None,
     ) -> AuthorAnalysisReceipt:
         return self.analyze_author_revision(
             AuthorAnalysisRequest(
@@ -449,6 +458,7 @@ class AuthorProject(DaemonClient):
                 analysis=analysis,
                 code_revision=code_revision,
                 key=key,
+                grouping=grouping,
                 arguments=encode_arguments(analysis, arguments),
             )
         )
@@ -472,6 +482,21 @@ class AuthorProject(DaemonClient):
         """
         schema = ordinary_result_schema(result_type)
         run = self.run(run_id)
+        revision = self._analysis_revision(run_id, source)
+        try:
+            receipt = self.analyze(
+                run_id, analysis, code_revision=revision, arguments=arguments, key=key
+            )
+        except httpx2.HTTPStatusError as error:
+            error.add_note(error.response.text)
+            raise
+        publication = run.published_analysis(receipt.analysis_id)
+        return AnalysisResult(publication.fact_as("result", schema), publication)
+
+    def _analysis_revision(
+        self, run_id: str, source: Literal["original", "current"]
+    ) -> AuthorRevisionRef:
+        run = self.run(run_id)
         if source == "original":
             revision_hash = run.request.metadata.get("author_code_revision")
             if not isinstance(revision_hash, str):
@@ -486,15 +511,65 @@ class AuthorProject(DaemonClient):
                 raise ValueError("Refresh author source before analysis")
         else:
             raise ValueError("analysis source must be original or current")
+        return revision
+
+    def analyze_groups_as[ResultT](
+        self,
+        run_id: str,
+        analysis: str,
+        result_type: type[ResultT],
+        *,
+        by: tuple[str, ...],
+        fitting: str,
+        repeats: Literal["separate", "combine"] = "separate",
+        source: Literal["original", "current"] = "original",
+        arguments: Mapping[str, AnalysisArgument] | None = None,
+        key: str | None = None,
+    ) -> GroupedAnalysisResult[ResultT]:
+        """Apply one ordinary function to explicit complete offline groups.
+
+        Each success or failure and its exact point selection is retained. No
+        averaging is implicit; combine passes repeats to the scientific function.
+        """
+        ordinary_result_schema(result_type)
         try:
             receipt = self.analyze(
-                run_id, analysis, code_revision=revision, arguments=arguments, key=key
+                run_id,
+                analysis,
+                code_revision=self._analysis_revision(run_id, source),
+                arguments=arguments,
+                key=key,
+                grouping=AnalysisGrouping(by=by, fitting=fitting, repeats=repeats),
             )
         except httpx2.HTTPStatusError as error:
             error.add_note(error.response.text)
             raise
-        publication = run.published_analysis(receipt.analysis_id)
-        return AnalysisResult(publication.fact_as("result", schema), publication)
+        return self.read_groups_as(run_id, receipt.analysis_id, result_type)
+
+    def read_groups_as[ResultT](
+        self,
+        run_id: str,
+        publication_id: str,
+        result_type: type[ResultT],
+    ) -> GroupedAnalysisResult[ResultT]:
+        """Read an existing group manifest and native results without executing code."""
+        schema = ordinary_result_schema(result_type)
+        run = self.run(run_id)
+        publication = run.published_analysis(publication_id)
+        receipts = TypeAdapter(tuple[AuthorAnalysisGroupReceipt, ...]).validate_json(
+            publication.artifact("groups").text()
+        )
+        groups: list[AnalysisGroupResult[ResultT]] = []
+        for receipt in receipts:
+            child = run.published_analysis(receipt.analysis_id)
+            groups.append(
+                AnalysisGroupResult(
+                    receipt,
+                    child.fact_as("result", schema) if receipt.error is None else None,
+                    child,
+                )
+            )
+        return GroupedAnalysisResult(tuple(groups), publication)
 
 
 @dataclass(frozen=True, slots=True)

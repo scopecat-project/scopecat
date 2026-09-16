@@ -26,6 +26,8 @@ def plan_launch_request(plan: ExperimentPlanRevision, *, actor: str) -> LaunchRe
         actor=actor,
         inputs=cast("dict[str, JsonValue]", thaw_json_value(definition.inputs)),
         control_edits=dict(definition.control_edits),
+        scan_mode=definition.scan_mode,
+        parameter_sweeps=definition.parameter_sweeps,
         configuration=definition.configuration,
         context=definition.context,
         overrides=definition.overrides,
@@ -82,6 +84,8 @@ def plan_definition(
         code_revision=preview.code_revision,
         inputs=request.inputs,
         control_edits=request.control_edits,
+        scan_mode=request.scan_mode,
+        parameter_sweeps=request.parameter_sweeps,
         configuration=PlanConfigRef(
             entry_id=config.entry_id, content_hash=config.content_hash
         )

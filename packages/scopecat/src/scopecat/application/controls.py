@@ -6,6 +6,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, StrictFloat
 
+from scopecat.application.request_sweeps import compose_request_sweeps
 from scopecat.authoring.scans import axis
 from scopecat.compiler.frontend.scan_lowering import project_axis_record
 from scopecat.kernel.quantity import Quantity
@@ -15,6 +16,7 @@ from scopecat.program.definitions import ExperimentInvocation
 from scopecat.program.scans import AxisSpec
 from scopecat.records.config import ConfigProfileSnapshot
 from scopecat.records.control_edit import ControlEdit
+from scopecat.records.request_sweep import ParameterSweep
 from scopecat.records.run_request import AxisRecord
 
 
@@ -67,6 +69,8 @@ def edit_controls[ResultT](
     *,
     config: ConfigProfileSnapshot,
     edits: dict[str, ControlEdit],
+    scan_mode: Literal["cartesian", "paired"] = "cartesian",
+    parameter_sweeps: tuple[ParameterSweep, ...] = (),
 ) -> ExperimentInvocation[ResultT]:
     fields = {field.id: field for field in controls.fields}
     values: dict[str, ControlScalar | AxisSpec] = {}
@@ -97,7 +101,8 @@ def edit_controls[ResultT](
                 )
             else:
                 raise ValueError("control forms support explicit values or range axes")
-    return controls.apply(invocation, config=config, edits=values, reset=tuple(reset))
+    edited = controls.apply(invocation, config=config, edits=values, reset=tuple(reset))
+    return compose_request_sweeps(edited, mode=scan_mode, parameters=parameter_sweeps)
 
 
 def control_values(

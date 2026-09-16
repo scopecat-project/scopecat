@@ -3989,7 +3989,18 @@ export interface components {
              * @default []
              */
             overrides: components["schemas"]["ParameterUpdate-Input"][];
+            /**
+             * Parameter Sweeps
+             * @default []
+             */
+            parameter_sweeps: components["schemas"]["ParameterSweep-Input"][];
             sample?: components["schemas"]["SampleBinding"] | null;
+            /**
+             * Scan Mode
+             * @default cartesian
+             * @enum {string}
+             */
+            scan_mode: "cartesian" | "paired";
             source?: components["schemas"]["PlanAnalysisSource"] | null;
             /** Version */
             version: string;
@@ -4009,7 +4020,18 @@ export interface components {
              * @default []
              */
             overrides: components["schemas"]["ParameterUpdate-Output"][];
+            /**
+             * Parameter Sweeps
+             * @default []
+             */
+            parameter_sweeps: components["schemas"]["ParameterSweep-Output"][];
             sample?: components["schemas"]["SampleBinding"] | null;
+            /**
+             * Scan Mode
+             * @default cartesian
+             * @enum {string}
+             */
+            scan_mode: "cartesian" | "paired";
             source?: components["schemas"]["PlanAnalysisSource"] | null;
             /** Version */
             version: string;
@@ -5221,6 +5243,11 @@ export interface components {
              * @default []
              */
             overrides: components["schemas"]["ParameterUpdate-Input"][];
+            /**
+             * Parameter Sweeps
+             * @default []
+             */
+            parameter_sweeps: components["schemas"]["ParameterSweep-Input"][];
             plan_ref?: components["schemas"]["ExperimentPlanRef"] | null;
             /**
              * Request Key
@@ -5230,6 +5257,12 @@ export interface components {
             /** Sample */
             sample?: string | null;
             sample_binding?: components["schemas"]["SampleBinding"] | null;
+            /**
+             * Scan Mode
+             * @default cartesian
+             * @enum {string}
+             */
+            scan_mode: "cartesian" | "paired";
             /**
              * Version
              * @default
@@ -5272,6 +5305,11 @@ export interface components {
              * @default []
              */
             overrides: components["schemas"]["ParameterUpdate-Output"][];
+            /**
+             * Parameter Sweeps
+             * @default []
+             */
+            parameter_sweeps: components["schemas"]["ParameterSweep-Output"][];
             plan_ref?: components["schemas"]["ExperimentPlanRef"] | null;
             /**
              * Request Key
@@ -5281,6 +5319,12 @@ export interface components {
             /** Sample */
             sample?: string | null;
             sample_binding?: components["schemas"]["SampleBinding"] | null;
+            /**
+             * Scan Mode
+             * @default cartesian
+             * @enum {string}
+             */
+            scan_mode: "cartesian" | "paired";
             /**
              * Version
              * @default
@@ -6344,6 +6388,38 @@ export interface components {
             /** Missing Values */
             missing_values: string[];
             origin: components["schemas"]["ParameterStructureOrigin"];
+        };
+        /** ParameterSweep */
+        "ParameterSweep-Input": {
+            /** Column */
+            column: string;
+            /** Key */
+            key: {
+                [key: string]: components["schemas"]["ParameterAtomValue"];
+            };
+            /** Name */
+            name: string;
+            /** Table */
+            table: string;
+            value_type: components["schemas"]["Scalar"];
+            /** Values */
+            values: (number | components["schemas"]["scopecat__kernel__quantity__Quantity"])[];
+        };
+        /** ParameterSweep */
+        "ParameterSweep-Output": {
+            /** Column */
+            column: string;
+            /** Key */
+            key: {
+                [key: string]: components["schemas"]["ParameterAtomValue"];
+            };
+            /** Name */
+            name: string;
+            /** Table */
+            table: string;
+            value_type: components["schemas"]["Scalar"];
+            /** Values */
+            values: (number | components["schemas"]["scopecat__kernel__quantity__Quantity"])[];
         };
         "ParameterUpdate-Input": components["schemas"]["ReplaceParameter"] | components["schemas"]["UpdateParameterRows-Input"] | components["schemas"]["InsertParameterRows-Input"] | components["schemas"]["DeleteParameterRows-Input"];
         "ParameterUpdate-Output": components["schemas"]["ReplaceParameter"] | components["schemas"]["UpdateParameterRows-Output"] | components["schemas"]["InsertParameterRows-Output"] | components["schemas"]["DeleteParameterRows-Output"];
