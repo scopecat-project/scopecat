@@ -50,7 +50,9 @@ if TYPE_CHECKING:
     from scopecat.api.procedure_planner import ProcedurePlanningContext
     from scopecat.api.procedures import LabProcedureContext
     from scopecat.api.published_analysis import (
+        AnalysisGroupResult,
         AnalysisResult,
+        GroupedAnalysisResult,
         PublishedAnalysis,
         PublishedAnalysisArtifact,
     )
@@ -462,6 +464,11 @@ _EXPORTS: dict[str, tuple[str, str]] = {
         "DomainProposalSummary",
     ),
     "open_project": ("scopecat.project", "open_project"),
+    "AnalysisGroupResult": ("scopecat.api.published_analysis", "AnalysisGroupResult"),
+    "GroupedAnalysisResult": (
+        "scopecat.api.published_analysis",
+        "GroupedAnalysisResult",
+    ),
     "AnalysisResult": ("scopecat.api.published_analysis", "AnalysisResult"),
     "AnalysisProducts": ("scopecat.api.analysis", "AnalysisProducts"),
     "AnalysisPlot": ("scopecat.api.analysis", "AnalysisPlot"),

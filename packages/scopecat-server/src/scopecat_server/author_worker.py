@@ -158,6 +158,19 @@ def analyze(
             arguments = bind_arguments(definition.function, request.arguments)
         else:
             arguments = request.arguments
+        if request.grouping is not None:
+            if not isinstance(definition, AnalysisFunctionDefinition):
+                raise TypeError(
+                    "grouped analysis requires an ordinary analysis_function"
+                )
+            from scopecat_server.grouped_analysis import analyze_groups
+
+            return analyze_groups(
+                lab.get_run(request.run_id),
+                cast("AnalysisFunctionDefinition[..., object]", definition),
+                arguments,
+                request,
+            )
         step = definition(**arguments)
         run = lab.get_run(request.run_id)
         result = step.run(

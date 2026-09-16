@@ -2,7 +2,7 @@
 
 from collections.abc import Mapping
 from datetime import datetime
-from typing import Annotated, cast
+from typing import Annotated, Literal, cast
 
 from pydantic import (
     AfterValidator,
@@ -25,6 +25,7 @@ from scopecat.records.plan_ref import (
     PlanAnalysisSource,
     PlanConfigRef,
 )
+from scopecat.records.request_sweep import ParameterSweep
 from scopecat.records.sample import SampleBinding
 
 
@@ -64,6 +65,8 @@ class ExperimentPlanDefinition(BaseModel):
     code_revision: AuthorRevisionRef | None = None
     inputs: PlanInputs = Field(default_factory=dict)
     control_edits: PlanControlEdits = Field(default_factory=dict)
+    scan_mode: Literal["cartesian", "paired"] = "cartesian"
+    parameter_sweeps: tuple[ParameterSweep, ...] = ()
     configuration: PlanConfigRef | None = None
     context: ConfigContextRef | None = None
     overrides: tuple[ParameterUpdate, ...] = Field(default=(), max_length=256)

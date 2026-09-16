@@ -9,6 +9,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, field_validator
 
 from scopecat.kernel.content_identity import sha256_json_hash
+from scopecat.records.analysis_grouping import AnalysisGrouping
 from scopecat.records.content import Sha256ContentHash
 
 
@@ -122,9 +123,19 @@ class AuthorAnalysisRequest(BaseModel):
     )
     key: str | None = None
     arguments: dict[str, JsonValue] = Field(default_factory=dict)
+    grouping: AnalysisGrouping | None = None
+
+
+class AuthorAnalysisGroupReceipt(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    coordinates: dict[str, JsonValue]
+    point_indices: tuple[int, ...]
+    analysis_id: str
+    error: str | None = None
 
 
 class AuthorAnalysisReceipt(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     code_revision: AuthorRevisionRef
     analysis_id: str
+    groups: tuple[AuthorAnalysisGroupReceipt, ...] = ()

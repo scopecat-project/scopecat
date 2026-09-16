@@ -5,15 +5,25 @@ from __future__ import annotations
 import inspect
 from collections.abc import Callable, Iterable, Mapping
 from copy import deepcopy
-from dataclasses import dataclass, field, fields, is_dataclass
+from dataclasses import dataclass, field, fields, is_dataclass, replace
 from types import MappingProxyType
-from typing import Generic, ParamSpec, SupportsFloat, TypeVar, cast
+from typing import Generic, Literal, ParamSpec, SupportsFloat, TypeVar, cast
 
+from scopecat.authoring.parameter_models import (
+    ParameterFieldIdentity,
+    parameter_cell_key,
+    parameter_definition,
+    parameter_table_name,
+)
 from scopecat.kernel.python_source import python_source_identity
 from scopecat.kernel.quantity import Quantity
+from scopecat.kernel.value_types import Scalar
+from scopecat.kernel.value_validation import coerce_literal
 from scopecat.program.controls import Control, ControlSet
 from scopecat.program.definitions import ExperimentInvocation
 from scopecat.records.author_revision import AuthorRevisionRef
+from scopecat.records.parameter import ParameterAtomValue
+from scopecat.records.request_sweep import ParameterSweep
 
 type ExperimentBuilder[ResultT] = Callable[
     [Mapping[str, object]], ExperimentInvocation[ResultT]
@@ -157,9 +167,67 @@ class ExperimentRequest(Generic[_ExperimentResultT_co, _ValuesT]):
 
     declaration: Experiment[..., _ExperimentResultT_co]
     values: _ValuesT
+    scan_mode: Literal["cartesian", "paired"] = "cartesian"
+    parameter_sweeps: tuple[ParameterSweep, ...] = ()
 
     def copy(self) -> ExperimentRequest[_ExperimentResultT_co, _ValuesT]:
-        return ExperimentRequest(self.declaration, deepcopy(self.values))
+        return replace(
+            self,
+            values=deepcopy(self.values),
+            parameter_sweeps=tuple(
+                s.model_copy(deep=True) for s in self.parameter_sweeps
+            ),
+        )
+
+    def sweep(
+        self,
+        *,
+        mode: Literal["cartesian", "paired"] = "cartesian",
+        **axes: Iterable[SupportsFloat | Quantity],
+    ) -> ExperimentRequest[_ExperimentResultT_co, dict[str, object]]:
+        """Copy with explicit outer scans; local device arrays stay arrays."""
+        values = self.snapshot()
+        controls = {control.id: control for control in self.declaration.controls.fields}
+        for name, items in axes.items():
+            if name not in controls or not controls[name].scannable:
+                raise ValueError(f"{name!r} is not a scannable experiment input")
+            values[name] = Scan(items)
+        return ExperimentRequest(self.declaration, values, mode, self.parameter_sweeps)
+
+    def sweep_parameter(
+        self,
+        field: ParameterFieldIdentity,
+        key: ParameterAtomValue | tuple[ParameterAtomValue, ...],
+        values: Iterable[SupportsFloat | Quantity],
+        *,
+        name: str,
+    ) -> ExperimentRequest[_ExperimentResultT_co, _ValuesT]:
+        """Overlay one typed cell per point without editing saved parameters."""
+        value_type = parameter_definition(field).value_type
+        if not isinstance(value_type, Scalar):
+            raise TypeError("parameter sweep requires a scalar column")
+        selected = tuple(
+            cast("float | Quantity", coerce_literal(value_type, value, path=(name,)))
+            for value in Scan(values).values
+        )
+        if not selected:
+            raise ValueError("parameter sweep requires at least one value")
+        sweep = ParameterSweep(
+            name=name,
+            table=parameter_table_name(field.owner),
+            column=field.name,
+            key=parameter_cell_key(field, key),
+            value_type=value_type,
+            values=selected,
+        )
+        if any(
+            item.name == name
+            or (item.table, item.column, item.key)
+            == (sweep.table, sweep.column, sweep.key)
+            for item in self.parameter_sweeps
+        ):
+            raise ValueError("parameter sweep name or target already selected")
+        return replace(self.copy(), parameter_sweeps=(*self.parameter_sweeps, sweep))
 
     def snapshot(self) -> dict[str, object]:
         """Capture plain input values, preserving Quantity and Scan objects."""
@@ -192,7 +260,12 @@ class ExperimentRequest(Generic[_ExperimentResultT_co, _ValuesT]):
                 "typed request fields must match values: "
                 f"missing={missing}, extra={extra}"
             )
-        return ExperimentRequest(self.declaration, values_type(**values))
+        return ExperimentRequest(
+            self.declaration,
+            values_type(**values),
+            self.scan_mode,
+            self.parameter_sweeps,
+        )
 
 
 __all__ = [

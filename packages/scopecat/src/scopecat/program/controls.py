@@ -11,7 +11,11 @@ from scopecat.kernel.value_types import Float, Scalar
 from scopecat.kernel.value_types import Quantity as QuantityType
 from scopecat.kernel.value_validation import coerce_literal
 from scopecat.program.control_contract import ControlValidationContext
-from scopecat.program.scans import AxisSpec, GridSpec, RangeScanSource, ValuesScanSource
+from scopecat.program.scans import (
+    AxisSpec,
+    RangeScanSource,
+    ValuesScanSource,
+)
 from scopecat.program.value_refs import CoordinateRef
 from scopecat.program.values import coordinate
 
@@ -98,9 +102,10 @@ class Control:
         if not values:
             raise ValueError(f"{self.id} axis cannot be empty")
         if axis.mode == "fixed" and (
-            not isinstance(axis.source, ValuesScanSource) or len(values) != 1
+            not isinstance(axis.source, ValuesScanSource)
+            or any(value != values[0] for value in values)
         ):
-            raise ValueError("a fixed control must have exactly one scalar source")
+            raise ValueError("a fixed control must have one constant scalar source")
         return values
 
 
@@ -126,10 +131,6 @@ class ControlSet:
         if not self.fields and self.validator is None:
             return
         invocation = context.invocation
-        if not isinstance(invocation.point_plan.domain, GridSpec):
-            raise ValueError(
-                "declared controls require an existing Cartesian grid plan"
-            )
         axes = {axis.id: axis for axis in context.axes}
         for field in self.fields:
             if field.ownership != "editable":

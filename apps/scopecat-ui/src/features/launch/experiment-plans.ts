@@ -12,7 +12,15 @@ function sampleLabel(plan: PlanRevision): string {
 export function planDifferences(before: PlanRevision, after: PlanRevision): string[] {
   const result: string[] = [];
   if (before.name !== after.name) result.push(`Name: ${before.name} → ${after.name}`);
-  for (const field of ["experiment", "version", "inputs", "control_edits", "overrides"] as const) {
+  for (const field of [
+    "experiment",
+    "version",
+    "inputs",
+    "control_edits",
+    "scan_mode",
+    "parameter_sweeps",
+    "overrides",
+  ] as const) {
     const left = before.definition[field];
     const right = after.definition[field];
     if (JSON.stringify(left) !== JSON.stringify(right))

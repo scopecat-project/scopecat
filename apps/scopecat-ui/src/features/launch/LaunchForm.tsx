@@ -118,6 +118,8 @@ export function LaunchForm({
       const next = await apiData(
         apiClient.POST("/api/v1/experiment-launcher/preview", {
           body: {
+            scan_mode: "cartesian",
+            parameter_sweeps: [],
             action: "preview",
             experiment: entry.id,
             version: entry.version,
@@ -168,6 +170,8 @@ export function LaunchForm({
     try {
       const procedureId = await submit(
         {
+          scan_mode: "cartesian",
+          parameter_sweeps: [],
           action: "submit",
           experiment: entry.id,
           version: entry.version,
@@ -215,6 +219,8 @@ export function LaunchForm({
         key={`${draft.plan?.ref.plan_id ?? "new"}:${draft.plan?.ref.revision ?? 0}`}
         preview={result}
         request={() => ({
+          scan_mode: "cartesian",
+          parameter_sweeps: [],
           action: "preview",
           request_key: "",
           overrides: [],

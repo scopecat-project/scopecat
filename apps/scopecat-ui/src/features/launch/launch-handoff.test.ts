@@ -49,6 +49,8 @@ const handoff: ComparisonHandoff = {
   source_analysis: "fit-r1",
   source_hash: "sha256:original",
   request: {
+    scan_mode: "cartesian",
+    parameter_sweeps: [],
     action: "preview",
     experiment: "signal",
     version: "1",
