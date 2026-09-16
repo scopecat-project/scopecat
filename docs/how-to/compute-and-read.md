@@ -145,3 +145,12 @@ Follow [author refresh](refresh-author-code.md) after editing calculation code.
 Refreshing server source does not replace declarations already imported into a
 Notebook. Use `experiment = authors.refresh(experiment)` to explicitly rebind a
 typed declaration and its local helpers to the newly admitted revision.
+
+## Fixing a failed computation
+
+Exceptions from an author computation identify the compute operation, exception
+type and message in the run failure shown by the Notebook. The full traceback
+remains in the worker log. Fix the function, call
+`experiment = session.refresh(experiment)`, and prepare a new request. The failed
+job and earlier successful results retain their original identities; refreshing
+does not resubmit a failed acquisition or rewrite its data.
