@@ -5,10 +5,10 @@ from __future__ import annotations
 from collections.abc import Callable
 from contextlib import suppress
 from datetime import timedelta
-from hashlib import sha256
 from pathlib import Path
 from threading import Lock
 from typing import Self
+from uuid import UUID, uuid4
 
 from fastapi import FastAPI
 from filelock import FileLock, Timeout
@@ -21,6 +21,7 @@ from scopecat.daemon.wire import (
 from scopecat.project import load_bootstrap_factory
 from scopecat.project_state import ProjectStateServices
 from scopecat.records.config import ConfigProfileSnapshot, config_content_hash
+from scopecat.runtime_binding import load_runtime_binding
 
 from scopecat_server._startup_diagnostics import stage as startup_stage
 from scopecat_server.command_payloads import CommandPayloadService
@@ -92,17 +93,25 @@ class LocalDaemonRuntime:
             )
         self.project_root = Path(project_root).resolve()
         self.project_root.mkdir(parents=True, exist_ok=True)
-        self.state_dir = self.project_root / ".scopecat"
+        self.binding = load_runtime_binding(self.project_root)
+        self.state_dir = self.binding.data_root
         self.state_dir.mkdir(parents=True, exist_ok=True)
         self.state_dir.chmod(0o700)
+        self.binding.deployment_root.mkdir(parents=True, exist_ok=True)
+        self._deployment_lock = FileLock(
+            self.binding.deployment_root / "deployment.lock"
+        )
         self._owner_lock = FileLock(self.state_dir / "daemon.lock")
         try:
             # This lock establishes one process owner; SQLite remains the only
             # concurrency mechanism inside that process boundary.
+            self._deployment_lock.acquire(timeout=0)
             self._owner_lock.acquire(timeout=0)
         except Timeout as error:
+            self._deployment_lock.release()
             raise RuntimeError(
-                f"project already has a running daemon: {self.project_root}"
+                "project already has a running daemon or deployment owner: "
+                f"{self.project_root}"
             ) from error
         database = self.state_dir / "control.sqlite3"
         objects = self.state_dir / "objects"
@@ -110,6 +119,19 @@ class LocalDaemonRuntime:
         sqlite: SQLiteDatabase | None = None
 
         try:
+            startup_stage("initializing project store")
+            sqlite = SQLiteDatabase(database)
+            project_store = SQLiteProjectStore(sqlite, objects)
+            project_store.bootstrap()
+            deployment_file = self.binding.deployment_root / "deployment-id"
+            if deployment_file.exists():
+                deployment_id = str(
+                    UUID(deployment_file.read_text(encoding="utf-8").strip())
+                )
+            else:
+                deployment_id = str(uuid4())
+                deployment_file.write_text(deployment_id + "\n", encoding="utf-8")
+
             if bootstrap_spec is not None:
                 bootstrap = load_bootstrap_factory(
                     bootstrap_spec,
@@ -121,11 +143,6 @@ class LocalDaemonRuntime:
                     self.project_root,
                     instrument_backend_spec,
                 )
-
-            startup_stage("initializing project store")
-            sqlite = SQLiteDatabase(database)
-            project_store = SQLiteProjectStore(sqlite, objects)
-            project_store.bootstrap()
 
             startup_stage("project store ready; composing services")
             control = SQLiteControlPlane(sqlite)
@@ -222,7 +239,7 @@ class LocalDaemonRuntime:
                 point_plans=point_plans,
                 lease_ttl=lease_ttl,
             )
-            project_id = _project_id(self.project_root)
+            project_id = project_store.identity()
             lease_supervisor = OwnershipLeaseSupervisor(
                 instruments=instruments,
                 executor=executor,
@@ -232,6 +249,7 @@ class LocalDaemonRuntime:
             application = DaemonApplication(
                 project_root=self.project_root,
                 project_id=project_id,
+                deployment_id=deployment_id,
                 project_store=project_store,
                 config=config_service,
                 analyses=analysis_service,
@@ -276,6 +294,7 @@ class LocalDaemonRuntime:
                 with suppress(Exception):
                     sqlite.close()
             self._owner_lock.release()
+            self._deployment_lock.release()
             raise
 
     def app(
@@ -296,6 +315,7 @@ class LocalDaemonRuntime:
                 return
             self.application.close()
             self._owner_lock.release()
+            self._deployment_lock.release()
             self._closed = True
 
     def __enter__(self) -> Self:
@@ -332,11 +352,6 @@ def _bootstrap_config_registry(
             note="imported while bootstrapping a new lab instance",
         )
     )
-
-
-def _project_id(project_root: Path) -> str:
-    identity = sha256(str(project_root).encode()).hexdigest()[:16]
-    return f"local:{identity}"
 
 
 __all__ = ["LocalDaemonRuntime"]

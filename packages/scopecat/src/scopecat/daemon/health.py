@@ -14,8 +14,11 @@ class DaemonHealth(BaseModel):
 
     status: Literal["ok", "degraded"]
     project_id: str
+    deployment_id: str
     project_name: str
     project_root: str
+    data_root: str
+    deployment_root: str
 
 
 __all__ = ["DaemonHealth"]

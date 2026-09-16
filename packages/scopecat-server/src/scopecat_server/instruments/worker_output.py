@@ -21,6 +21,7 @@ from threading import Lock, Thread
 from typing import BinaryIO, TextIO, cast, override
 
 from filelock import FileLock, Timeout
+from scopecat.runtime_binding import load_runtime_binding
 
 MAX_GENERATIONS = 8
 MAX_LOG_BYTES = 256 * 1024
@@ -34,7 +35,11 @@ _capture: WorkerOutput | None = None
 def diagnostic_path(project: Path, generation: str) -> Path:
     if re.fullmatch(r"[0-9a-f]{32}", generation) is None:
         raise ValueError("invalid worker generation")
-    return project / ".scopecat" / "worker-diagnostics" / f"{generation}.jsonl"
+    return (
+        load_runtime_binding(project).data_root
+        / "worker-diagnostics"
+        / f"{generation}.jsonl"
+    )
 
 
 class WorkerOutput:

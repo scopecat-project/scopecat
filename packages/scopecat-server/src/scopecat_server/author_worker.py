@@ -12,6 +12,8 @@ from importlib import import_module
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
+from scopecat.runtime_binding import load_runtime_binding
+
 from scopecat_server.worker_diagnostics import report_stage
 
 if TYPE_CHECKING:
@@ -34,7 +36,9 @@ def revision_project(root: Path, ref: AuthorRevisionRef) -> Project:
     with DaemonClient(resolve_daemon_endpoint(root)) as client:
         bundle = client.author_revision(ref)
     require_environment(bundle.manifest)
-    code_root = materialize_sources(bundle, root / ".scopecat" / "code")
+    code_root = materialize_sources(
+        bundle, load_runtime_binding(root).data_root / "code"
+    )
     return replace(
         load_project(code_root / "scopecat.toml"),
         root=root,

@@ -92,6 +92,17 @@ class SQLiteProjectStore:
         except sqlite3.Error as error:
             raise ProjectStoreError("failed to inspect project store") from error
 
+    def identity(self) -> str:
+        """Return the durable identity initialized under exclusive store ownership."""
+        with self.sqlite.read_transaction() as connection:
+            row = cast(
+                "sqlite3.Row",
+                connection.execute(
+                    "SELECT identity FROM project_identity WHERE singleton = 1"
+                ).fetchone(),
+            )
+            return cast("str", row["identity"])
+
     def close(self) -> None:
         """Checkpoint and close the shared SQLite database."""
 

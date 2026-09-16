@@ -196,6 +196,8 @@ def test_hidden_executor_lease_ttl_option_reaches_start_and_serve(
         on_progress(12, "loading dependencies")
         return DaemonEndpointRecord(
             project_root=project.root,
+            data_root=project.root / ".scopecat",
+            deployment_root=project.root / ".scopecat",
             pid=123,
             process_create_time=1,
             base_url="http://127.0.0.1:4321",

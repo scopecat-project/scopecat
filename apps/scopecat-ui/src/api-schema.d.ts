@@ -3714,6 +3714,12 @@ export interface components {
          * @description Daemon readiness and the one project owned by this process.
          */
         DaemonHealth: {
+            /** Data Root */
+            data_root: string;
+            /** Deployment Id */
+            deployment_id: string;
+            /** Deployment Root */
+            deployment_root: string;
             /** Project Id */
             project_id: string;
             /** Project Name */

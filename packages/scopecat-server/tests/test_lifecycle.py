@@ -468,6 +468,8 @@ def _record(
 ) -> DaemonEndpointRecord:
     return DaemonEndpointRecord(
         project_root=project_root,
+        data_root=project_root / ".scopecat",
+        deployment_root=project_root / ".scopecat",
         pid=pid,
         process_create_time=process_create_time,
         base_url="http://127.0.0.1:1",

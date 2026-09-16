@@ -160,6 +160,8 @@ def test_diff_uses_selected_project_record_instead_of_environment_override(
     write_daemon_endpoint_record(
         DaemonEndpointRecord(
             project_root=project.root,
+            data_root=project.root / ".scopecat",
+            deployment_root=project.root / ".scopecat",
             pid=1,
             process_create_time=1,
             base_url="http://project-daemon.local",

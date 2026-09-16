@@ -5,6 +5,7 @@ from collections.abc import Iterator
 from datetime import UTC, datetime
 from pathlib import Path
 from types import ModuleType
+from unittest.mock import Mock
 
 import pytest
 from scopecat_testkit.project_loading import isolated_project_imports
@@ -32,7 +33,8 @@ from scopecat.records.config import ConfigProfileSnapshot
 
 
 @pytest.fixture(autouse=True)
-def isolate_project_loader() -> Iterator[None]:
+def isolate_project_loader(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    monkeypatch.setattr("scopecat.daemon.endpoint.verify_daemon_binding", Mock())
     with isolated_project_imports():
         yield
 
@@ -126,6 +128,8 @@ def test_project_connect_prioritizes_explicit_then_environment_then_record(
     project = open_project(tmp_path)
     record = DaemonEndpointRecord(
         project_root=tmp_path,
+        data_root=tmp_path / ".scopecat",
+        deployment_root=tmp_path / ".scopecat",
         pid=123,
         process_create_time=1,
         base_url="http://record.local:3000",

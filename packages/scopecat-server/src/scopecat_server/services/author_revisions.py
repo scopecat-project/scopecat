@@ -23,6 +23,7 @@ from scopecat.records.author_revision import (
     AuthorRevisionRef,
     AuthorRevisionState,
 )
+from scopecat.runtime_binding import load_runtime_binding
 
 from scopecat_server.services.revision_workers import (
     AuthorValidationCancelled,
@@ -182,7 +183,9 @@ class AuthorRevisionService:
             if cancelled.is_set():
                 raise AuthorValidationCancelled("Author preparation cancelled")
             progress("materializing captured source")
-            code_root = materialize_sources(bundle, self.root / ".scopecat" / "code")
+            code_root = materialize_sources(
+                bundle, load_runtime_binding(self.root).data_root / "code"
+            )
             self.workers.publish_validated(
                 self.root,
                 code_root,

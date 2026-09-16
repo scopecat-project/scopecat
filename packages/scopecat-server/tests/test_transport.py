@@ -93,8 +93,11 @@ class FakeApplication:
         return DaemonHealth(
             status="ok",
             project_id="test-project",
+            deployment_id="test-deployment",
             project_name="test-lab",
             project_root="/projects/test-lab",
+            data_root="/projects/test-lab/.scopecat",
+            deployment_root="/projects/test-lab/.scopecat",
         )
 
     def submit_run(self, submission: RunSubmission) -> RunAdmission:

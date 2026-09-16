@@ -90,13 +90,25 @@ external dependencies are still available.
 
 ## Current store version
 
-The current runtime uses project store **67**, including immutable author source
-revisions, experiment plans and durable preparation operations. Version 66 and
+The current runtime uses project store **68**, including immutable author source
+revisions, experiment plans, durable preparation operations and a path-independent
+data-space identity. Version 67 and
 older stores and snapshots are rejected before modification. Keep the matching
-reader to inspect or export their scientific data. Start a separate version 67
+reader to inspect or export their scientific data. Start a separate version 68
 project for new work. No implicit migration is supplied.
 
-Within version 67, snapshots retain author source bundles, active revision,
-preparation receipts and experiment plans. Pending preparations are marked
+Within version 68, snapshots retain author source bundles, active revision,
+preparation receipts, author-job receipts and experiment plans. Pending preparations are marked
 interrupted when the restored daemon starts; they are not resubmitted. External
 Python environments and device SDKs still need their separately retained artifacts.
+
+## Separately located data
+
+A workspace can select local storage and one execution deployment with
+`scopecat.runtime.toml` (see [project layout](../reference/project-layout.md)).
+Snapshot locks and reads that data root, includes author-job receipts and restores
+into a fresh colocated `.scopecat/` directory. It does not copy the local runtime
+binding, endpoint, deployment ownership or automatic procedure dispatch intent.
+The data-space identity and scientific references survive restoration. Stop the
+original service before adopting a recovery copy; portable merging of independent
+writable copies is not implemented.

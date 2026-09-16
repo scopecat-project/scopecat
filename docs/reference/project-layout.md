@@ -69,3 +69,42 @@ configuration changes explicitly.
 Keep procedure, schedule, calibration, publication, and system-builder imports
 inside the full application factory. Importing the bootstrap factory must not
 load those user execution callbacks into the daemon process.
+
+## Bind a workspace to persistent local data
+
+A local deployment binding is optional and separate from captured scientific
+source. Without it, data and runtime state remain in `<workspace>/.scopecat/`.
+To replace code directories while retaining one data space, put this file beside
+`scopecat.toml` in each selected workspace:
+
+```toml title="scopecat.runtime.toml"
+[runtime]
+data_root = "../laboratory-data"
+deployment_root = "../bench-owner"
+```
+
+Both paths are required and resolve relative to the workspace; absolute paths
+are also accepted. `data_root` directly owns `control.sqlite3`, immutable objects,
+source materializations, author-job receipts and diagnostics. `deployment_root`
+holds the local deployment identity and exclusive ownership lock. Use one
+maintained deployment location for every launch path to the same bench. Separate
+invented locations cannot detect that their SDKs address the same physical device.
+Do not put either directory inside an authored source root.
+
+Only one service owns a data space, and only one data space at a time owns a
+configured deployment. Another workspace cannot implicitly take over the mutable
+source or stop its service. Stop the selected workspace explicitly, then start the
+replacement. Do not edit bindings while its service or clients are running.
+Notebook endpoint overrides must match workspace, data and deployment paths.
+Opening a project does not install dependencies or start acquisition.
+
+The store identity persists independently of paths; old runs, parameters and
+source hashes are retained. Refresh applies to the selected workspace. Original
+code execution still requires its recorded environment and maintained composition;
+retaining data does not promise execution of arbitrary old code in a new runtime.
+This is local execution, not an independent remote client/server environment.
+
+The current schema is 68. Existing schema 67 data needs its matching reader;
+opening it performs no migration. Keep old evidence and environments. An explicit
+supported-baseline migration policy is tracked separately from this binding.
+See [backup and restore](../how-to/backup-and-restore.md) for relocation and receipts.

@@ -17,6 +17,7 @@ from typing import Literal, cast
 
 from scopecat.daemon.procedure_views import ProcedureDispatchView
 from scopecat.kernel.interaction_timing import record_timing
+from scopecat.runtime_binding import load_runtime_binding
 
 _LOG = logging.getLogger(__name__)
 
@@ -39,7 +40,7 @@ class ProjectProcedureWorkers:
         self._thread: Thread | None = None
 
     def _path(self) -> Path:
-        return self.root() / ".scopecat" / "console-procedures.json"
+        return load_runtime_binding(self.root()).data_root / "console-procedures.json"
 
     def _load(self) -> dict[str, str]:
         if self._managed is None:
@@ -133,7 +134,7 @@ class ProjectProcedureWorkers:
 
     def _spawn(self, procedure_id: str) -> None:
         root = self.root()
-        log_path = root / ".scopecat" / "console-worker.log"
+        log_path = load_runtime_binding(root).data_root / "console-worker.log"
         log_path.parent.mkdir(parents=True, exist_ok=True)
         record_timing("procedure_dispatch", procedure_id=procedure_id)
         with log_path.open("ab") as log:
