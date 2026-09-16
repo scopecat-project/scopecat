@@ -189,11 +189,10 @@ No automatic migration of arbitrary failed procedures is provided.
 
 ## Store and backup boundary
 
-This runtime requires **project schema 70**, which stores preparation operations
-alongside immutable revisions and experiment plans. Schema 66 and older projects
-are rejected before modification. Preserve their original stores, snapshots and
-matching pinned readers; start a separate schema 70 project. No implicit migration
-is supplied.
+Preparation operations live alongside immutable revisions and experiment plans.
+See [data migration](migrate-data.md) for the current storage boundary and tested
+copy upgrades. Preserve original stores and pinned readers; opening a project
+never implicitly migrates it.
 
 Within schema 70, [backup and restore](backup-and-restore.md) retains source
 bundles, manifest identities, active generation, preparation results and original
