@@ -12,6 +12,7 @@ import sys
 import time
 from collections.abc import AsyncGenerator, AsyncIterator, Callable
 from contextlib import asynccontextmanager
+from datetime import datetime
 from pathlib import Path, PurePosixPath
 from typing import Annotated, Literal, cast, override
 
@@ -265,6 +266,14 @@ from scopecat.records.launch_request import LaunchRequest
 from scopecat.records.manual_preview import ManualPreviewFence, ManualPreviewValidity
 from scopecat.records.measurement_recording import MeasurementDatasetReceipt
 from scopecat.records.plan_ref import ExperimentPlanRef
+from scopecat.records.research_project import (
+    ResearchMember,
+    ResearchMemberPage,
+    ResearchProject,
+    ResearchProjectEdit,
+    ResearchProjectPage,
+    RunHistoryFilter,
+)
 from scopecat.records.run import RunSnapshot
 from scopecat.records.sample import (
     SampleArtifactRef,
@@ -872,6 +881,50 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
         command: ConfigEntryActivationCommand,
     ) -> ConfigActivationReceipt:
         return application.config.activate_config_entry(command)
+
+    @app.get(f"{_API_PREFIX}/research-projects")
+    def list_research_projects(
+        limit: Annotated[int, Query(ge=1, le=500)] = 100,
+        before: Annotated[int | None, Query(ge=1)] = None,
+    ) -> ResearchProjectPage:
+        return application.research.list(limit=limit, before=before)
+
+    @app.put(f"{_API_PREFIX}/research-projects/{{project_id}}")
+    def save_research_project(
+        project_id: str, command: ResearchProjectEdit
+    ) -> ResearchProject:
+        return application.research.save(project_id, command)
+
+    @app.get(f"{_API_PREFIX}/research-projects/{{project_id}}/members/{{kind}}")
+    def research_members(
+        project_id: str,
+        kind: Literal["samples", "runs"],
+        limit: Annotated[int, Query(ge=1, le=500)] = 100,
+        after: str | None = None,
+    ) -> ResearchMemberPage:
+        return application.research.members(project_id, kind, limit=limit, after=after)
+
+    @app.put(
+        f"{_API_PREFIX}/research-projects/{{project_id}}/members/{{kind}}/{{identity}}",
+    )
+    def add_research_member(
+        project_id: str, kind: Literal["samples", "runs"], identity: str
+    ) -> ResearchMember:
+        application.research.associate(project_id, kind, identity, present=True)
+        return ResearchMember(
+            project_id=project_id, kind=kind, identity=identity, present=True
+        )
+
+    @app.delete(
+        f"{_API_PREFIX}/research-projects/{{project_id}}/members/{{kind}}/{{identity}}",
+    )
+    def remove_research_member(
+        project_id: str, kind: Literal["samples", "runs"], identity: str
+    ) -> ResearchMember:
+        application.research.associate(project_id, kind, identity, present=False)
+        return ResearchMember(
+            project_id=project_id, kind=kind, identity=identity, present=False
+        )
 
     @app.get(f"{_API_PREFIX}/samples")
     def list_samples(
@@ -1658,12 +1711,24 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
         before: Annotated[int | None, Query(ge=1)] = None,
         state: ControlRunState | None = None,
         sample_id: SampleId | None = None,
+        research_project: str | None = None,
+        working_point: str | None = None,
+        deployment_id: str | None = None,
+        created_after: datetime | None = None,
+        created_before: datetime | None = None,
     ) -> RunSummaryPage:
         return application.runs.list_runs(
             limit=limit,
             before=before,
             state=state,
             sample_id=sample_id,
+            history=RunHistoryFilter(
+                research_project=research_project,
+                working_point=working_point,
+                deployment_id=deployment_id,
+                created_after=created_after,
+                created_before=created_before,
+            ),
         )
 
     @app.post(f"{_API_PREFIX}/runs", status_code=201)

@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from collections.abc import Buffer, Callable, Iterable, Iterator
 from types import TracebackType
-from typing import Literal, Self
+from typing import Literal, Self, cast
 from urllib.parse import quote
 
 import httpx2
@@ -261,6 +261,13 @@ from scopecat.records.measurement_recording import (
     MeasurementDatasetReceipt,
 )
 from scopecat.records.plan_ref import ExperimentPlanRef
+from scopecat.records.research_project import (
+    ResearchMemberPage,
+    ResearchProject,
+    ResearchProjectEdit,
+    ResearchProjectPage,
+    RunHistoryFilter,
+)
 from scopecat.records.run import RunSnapshot
 from scopecat.records.sample import SampleArtifactRef, SampleRevision
 from scopecat.records.sample_artifact import SampleArtifactPage
@@ -1497,6 +1504,58 @@ class DaemonClient:
         )
         return InstrumentSessionEndReceipt.model_validate_json(response.content)
 
+    def research_projects(
+        self, *, limit: int = 100, before: int | None = None
+    ) -> ResearchProjectPage:
+        params: dict[str, str | int] = {"limit": limit}
+        if before is not None:
+            params["before"] = before
+        return self._get_model(
+            f"{_API_PREFIX}/research-projects", ResearchProjectPage, params=params
+        )
+
+    def save_research_project(
+        self, project_id: str, command: ResearchProjectEdit
+    ) -> ResearchProject:
+        response = self._request(
+            "PUT",
+            f"{_API_PREFIX}/research-projects/{quote(project_id, safe='')}",
+            json=command.model_dump(mode="json"),
+        )
+        return ResearchProject.model_validate_json(response.content)
+
+    def research_members(
+        self,
+        project_id: str,
+        kind: Literal["samples", "runs"],
+        *,
+        limit: int = 100,
+        after: str | None = None,
+    ) -> ResearchMemberPage:
+        params: dict[str, str | int] = {"limit": limit}
+        if after is not None:
+            params["after"] = after
+        return self._get_model(
+            f"{_API_PREFIX}/research-projects/{quote(project_id, safe='')}"
+            f"/members/{kind}",
+            ResearchMemberPage,
+            params=params,
+        )
+
+    def associate_research_member(
+        self,
+        project_id: str,
+        kind: Literal["samples", "runs"],
+        identity: str,
+        *,
+        present: bool = True,
+    ) -> None:
+        self._request(
+            "PUT" if present else "DELETE",
+            f"{_API_PREFIX}/research-projects/{quote(project_id, safe='')}"
+            f"/members/{kind}/{quote(identity, safe='')}",
+        )
+
     def list_runs(
         self,
         *,
@@ -1504,6 +1563,7 @@ class DaemonClient:
         before: int | None = None,
         state: ControlRunState | None = None,
         sample_id: str | None = None,
+        history: RunHistoryFilter | None = None,
     ) -> RunSummaryPage:
         params: dict[str, str | int] = {"limit": limit}
         if before is not None:
@@ -1512,6 +1572,16 @@ class DaemonClient:
             params["state"] = state
         if sample_id is not None:
             params["sample_id"] = sample_id
+        if history is not None:
+            params.update(
+                {
+                    key: str(value)
+                    for key, value in cast(
+                        "dict[str, str]",
+                        history.model_dump(mode="json", exclude_none=True),
+                    ).items()
+                }
+            )
         return self._get_model(f"{_API_PREFIX}/runs", RunSummaryPage, params=params)
 
     def get_run(self, run_id: str) -> RunDetail:

@@ -26,6 +26,8 @@ nav = [
     { "Write an experiment" = "how-to/write-an-experiment.md" },
     { "Refresh author code" = "how-to/refresh-author-code.md" },
     { "Scans and grouped analysis" = "how-to/grouped-analysis.md" },
+||||||| parent of aa6bcc125 (Organize retained history by research project and bench)
+    { "Organize research history" = "how-to/research-history.md" },
     { "Control instruments" = "how-to/control-instruments.md" },
     { "Use measurement data" = "how-to/use-measurement-data.md" },
     { "Compare retained runs" = "how-to/retained-run-comparison.md" },

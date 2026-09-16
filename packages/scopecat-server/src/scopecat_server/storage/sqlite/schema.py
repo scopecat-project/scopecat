@@ -16,10 +16,11 @@ from scopecat_server.storage.sqlite.experiment_plan_schema import (
 from scopecat_server.storage.sqlite.procedure_schedule_schema import (
     PROCEDURE_SCHEDULE_TABLES_SQL,
 )
+from scopecat_server.storage.sqlite.research_schema import RESEARCH_TABLES_SQL
 from scopecat_server.storage.sqlite.run_schema import RUN_TABLES_SQL
 from scopecat_server.storage.sqlite.sample_schema import SAMPLE_TABLES_SQL
 
-PROJECT_SCHEMA_VERSION = 69
+PROJECT_SCHEMA_VERSION = 70
 
 _CONTROL_TABLES_SQL = f"""
 CREATE TABLE IF NOT EXISTS project_schema (
@@ -199,6 +200,7 @@ PROJECT_SCHEMA_SQL = "\n".join(
         _CONTROL_TABLES_SQL,
         RUN_TABLES_SQL,
         SAMPLE_TABLES_SQL,
+        RESEARCH_TABLES_SQL,
         ANALYSIS_TABLES_SQL,
         AUTOMATION_TABLES_SQL,
         CALIBRATION_COHORT_TABLES_SQL,

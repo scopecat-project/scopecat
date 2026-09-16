@@ -25,6 +25,7 @@ type ProjectView =
   | "launch"
   | "runs"
   | "samples"
+  | "history"
   | "analyses"
   | "decisions"
   | "reviews"
@@ -39,6 +40,11 @@ const LaunchWorkspace = lazy(async () => {
 const AnalysesWorkspace = lazy(async () => {
   const module = await import("./features/analyses/AnalysesWorkspace");
   return { default: module.AnalysesWorkspace };
+});
+
+const ResearchHistory = lazy(async () => {
+  const module = await import("./features/history/ResearchHistory");
+  return { default: module.ResearchHistory };
 });
 
 const SamplesWorkspace = lazy(async () => {
@@ -264,6 +270,14 @@ export default function App() {
           </button>
           <button
             type="button"
+            className={navigationClass(view === "history")}
+            aria-current={view === "history" ? "page" : undefined}
+            onClick={() => selectView("history")}
+          >
+            <Boxes size={15} aria-hidden="true" /> History
+          </button>
+          <button
+            type="button"
             className={navigationClass(view === "samples")}
             aria-current={view === "samples" ? "page" : undefined}
             onClick={() => selectView("samples")}
@@ -428,6 +442,13 @@ export default function App() {
             daemonUnavailable={daemonUnavailable}
             onOpenSample={openRunSample}
           />
+        ) : view === "history" ? (
+          <Suspense fallback={<p>Loading research history…</p>}>
+            <ResearchHistory
+              daemonUnavailable={daemonUnavailable}
+              onOpenRun={openConfigSourceRun}
+            />
+          </Suspense>
         ) : view === "samples" ? (
           <Suspense
             fallback={
@@ -594,6 +615,7 @@ function projectViewFromLocation(): ProjectView {
   if (window.location.hash === "#configuration") return "configuration";
   if (window.location.hash === "#instruments") return "instruments";
   if (window.location.hash === "#analyses") return "analyses";
+  if (window.location.hash === "#history") return "history";
   if (window.location.hash === "#samples") return "samples";
   if (window.location.hash === "#decisions") return "decisions";
   if (window.location.hash.startsWith("#reviews")) return "reviews";

@@ -19,6 +19,7 @@ from scopecat_server.storage.sqlite.experiment_plan_repository import (
     ExperimentPlanRepository,
 )
 from scopecat_server.storage.sqlite.project_store import SQLiteProjectStore
+from scopecat_server.storage.sqlite.research_projects import ResearchProjectStore
 
 from ..command_payloads import CommandPayloadService
 from .admission import AdmissionService
@@ -93,6 +94,7 @@ class DaemonApplication:
         self.procedure_schedules = procedure_schedules
         self.point_plans = point_plans
         self.samples = samples
+        self.research = ResearchProjectStore(project_store.sqlite)
         self._lease_supervisor = lease_supervisor
 
     def start(self) -> None:

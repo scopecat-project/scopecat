@@ -97,6 +97,7 @@ from scopecat.records.measurement import (
     MeasurementRecord,
 )
 from scopecat.records.measurement_recording import MeasurementDatasetAppend
+from scopecat.records.research_project import RunHistoryFilter
 from scopecat.runs.attachments import attach_run_artifact
 from scopecat.runs.data import (
     RunArtifactJsonResult,
@@ -322,6 +323,7 @@ class RunService:
         before: int | None,
         state: ControlRunState | None,
         sample_id: str | None = None,
+        history: RunHistoryFilter | None = None,
     ) -> RunSummaryPage:
         with self._control.read_transaction() as connection:
             page = self._control.list_runs_in_transaction(
@@ -330,10 +332,14 @@ class RunService:
                 before=before,
                 state=state,
                 sample_id=sample_id,
+                history=history,
             )
             return RunSummaryPage(
                 items=tuple(
                     RunSummary(
+                        deployment_id=self._runs.deployment_in_transaction(
+                            connection, control.run_id
+                        ),
                         control=_run_control_view(
                             control,
                             completed_point_count=SQLiteRunCoverage(
@@ -365,6 +371,7 @@ class RunService:
             with self._control.read_transaction() as connection:
                 control = self._control.get_run_in_transaction(connection, run_id)
                 snapshot = self._runs.read_snapshot_in_transaction(connection, run_id)
+                deployment_id = self._runs.deployment_in_transaction(connection, run_id)
                 claims = {
                     (claim.resource.kind, claim.resource.id): claim
                     for claim in self._control.list_resource_claims_in_transaction(
@@ -430,6 +437,7 @@ class RunService:
                 )
             )
         return RunDetail(
+            deployment_id=deployment_id,
             control=_run_control_view(
                 control,
                 completed_point_count=completed_point_count,

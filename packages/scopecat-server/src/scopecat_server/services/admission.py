@@ -89,6 +89,7 @@ class AdmissionService:
         point_plans: RunPointPlanService,
         samples: SampleService,
         sample_store: SQLiteSampleStore,
+        deployment_id: str | None = None,
     ) -> None:
         self._control = control
         self._runs = runs
@@ -96,6 +97,7 @@ class AdmissionService:
         self._point_plans = point_plans
         self._samples = samples
         self._sample_store = sample_store
+        self._deployment_id = deployment_id
 
     def submit_run(self, submission: RunSubmission) -> RunAdmission:
         retry = self._replay_admission(submission)
@@ -195,6 +197,12 @@ class AdmissionService:
                         connection,
                         prepared,
                     )
+                    if self._deployment_id is not None:
+                        connection.execute(
+                            "INSERT INTO run_deployments(run_id,deployment_id) "
+                            "VALUES (?,?)",
+                            (run.run_id, self._deployment_id),
+                        )
                     self._sample_store.bind_run_in_transaction(
                         connection,
                         skeleton.snapshot,

@@ -291,6 +291,7 @@ class RunSummary(_ViewModel):
 
     control: RunControlView
     snapshot: RunSnapshot
+    deployment_id: str | None = None
 
     @property
     def run_id(self) -> str:

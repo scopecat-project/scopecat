@@ -115,6 +115,18 @@ class PreparedRunAnalysisPublication:
 class SQLiteRunRepository:
     """Relational run metadata with payloads in a SHA-256 object directory."""
 
+    @staticmethod
+    def deployment_in_transaction(
+        connection: sqlite3.Connection, run_id: str
+    ) -> str | None:
+        row = cast(
+            "sqlite3.Row | None",
+            connection.execute(
+                "SELECT deployment_id FROM run_deployments WHERE run_id=?", (run_id,)
+            ).fetchone(),
+        )
+        return cast("str", row[0]) if row is not None else None
+
     def __init__(
         self,
         database: SQLiteDatabase,

@@ -215,6 +215,7 @@ class LocalDaemonRuntime:
                 point_plans=point_plans,
                 samples=samples,
                 sample_store=sample_store,
+                deployment_id=deployment_id,
             )
 
             def retain_measurements_before_fence(run_id: str, token: str) -> None:

@@ -189,13 +189,13 @@ No automatic migration of arbitrary failed procedures is provided.
 
 ## Store and backup boundary
 
-This runtime requires **project schema 69**, which stores preparation operations
+This runtime requires **project schema 70**, which stores preparation operations
 alongside immutable revisions and experiment plans. Schema 66 and older projects
 are rejected before modification. Preserve their original stores, snapshots and
-matching pinned readers; start a separate schema 69 project. No implicit migration
+matching pinned readers; start a separate schema 70 project. No implicit migration
 is supplied.
 
-Within schema 69, [backup and restore](backup-and-restore.md) retains source
+Within schema 70, [backup and restore](backup-and-restore.md) retains source
 bundles, manifest identities, active generation, preparation results and original
 admitted procedure intents. Unfinished preparation records become `interrupted`
 after daemon restart or restore; they do not silently rerun against today's files.
