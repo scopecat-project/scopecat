@@ -2,12 +2,17 @@
 
 from __future__ import annotations
 
+import importlib
 import os
+import sys
 import tempfile
 from pathlib import Path
+from typing import cast
 
 from scopecat.application.author_project import AuthorJobFailed
+from scopecat.authoring.experiments import Experiment
 from scopecat.daemon.endpoint import DAEMON_URL_ENV
+from scopecat.daemon.preparation import AuthorPreparationFailed
 from scopecat_server.lifecycle import (  # noqa: TID251 - installed integration journey
     initialize_project,
     start_project,
@@ -35,14 +40,18 @@ def shot_iq() -> Annotated[NDArray[np.complex128], sc.ArrayType(
 
 
 @sc.compute
-def mean_iq(samples) -> Annotated[complex, sc.ScalarType(sc.ComplexType(unit="V"))]:
-    return complex(np.mean(samples))
+def mean_iq(samples, gain) -> Annotated[
+    complex, sc.ScalarType(sc.ComplexType(unit="V"))
+]:
+    return complex(np.mean(samples)) * gain
 
 
 @sc.experiment(id="mean-iq")
-def mean_iq_experiment(experiment: sc.ExperimentContext) -> MeanData:
+def mean_iq_experiment(
+    experiment: sc.ExperimentContext, *, gain: float = 1.0
+) -> MeanData:
     samples = shot_iq()
-    mean = mean_iq(samples)
+    mean = mean_iq(samples, gain)
     return MeanData(mean)
 """
 
@@ -56,7 +65,16 @@ def check() -> None:
         start_project(project, timeout=90)
         try:
             with project.authoring() as session:
-                run = session.prepare("mean-iq").run().wait(timeout=90).result()
+                sys.path.insert(0, str(project.root / "src"))
+                imported = cast(
+                    "Experiment[..., object]",
+                    importlib.import_module(
+                        "scopecat_lab.authored.signal"
+                    ).mean_iq_experiment,
+                )
+                definition = session.load_experiment(imported)
+                old_request = definition()
+                run = session.prepare(old_request).run().wait(timeout=90).result()
                 old_id = run.id
                 variable = run.measurements()["iq"]
                 assert variable.dtype == "complex128"
@@ -64,36 +82,69 @@ def check() -> None:
                 assert list(variable.require_values()) == [2 + 3j]
                 source.write_text(
                     SOURCE.replace(
-                        "return complex(np.mean(samples))",
-                        "return complex(np.mean(samples)) + 1j",
-                    ),
+                        "return complex(np.mean(samples)) * gain",
+                        "return complex(np.mean(samples)) * gain + 1j",
+                    )
+                    .replace("gain: float = 1.0", "gain: float = 2.0")
+                    .replace("iq: sc.DataRef[complex]", "average: sc.DataRef[complex]"),
                     encoding="utf-8",
                 )
-                session.refresh()
-                changed = session.prepare("mean-iq").run().wait(timeout=90).result()
+                definition = session.refresh(definition)
+                assert definition().snapshot()["gain"] == 2.0
+                assert old_request.snapshot()["gain"] == 1.0
+                assert (
+                    session.prepare(old_request).preview.code_revision
+                    == old_request.declaration.code_revision
+                )
+                changed = session.prepare(definition()).run().wait(timeout=90).result()
                 new_id = changed.id
-                assert list(changed.measurements()["iq"].require_values()) == [2 + 4j]
+                assert list(changed.measurements()["average"].require_values()) == [
+                    4 + 7j
+                ]
                 assert list(run.measurements()["iq"].require_values()) == [2 + 3j]
+                admitted = session.state()
+                good_source = source.read_text(encoding="utf-8")
+                source.write_text(good_source + "\ndef broken(:\n", encoding="utf-8")
+                try:
+                    session.refresh(definition)
+                except AuthorPreparationFailed:
+                    pass
+                else:
+                    raise AssertionError("invalid source was accepted")
+                assert session.state() == admitted
+                assert definition().snapshot()["gain"] == 2.0
+                source.write_text(good_source, encoding="utf-8")
+                # Reconnect to a completed refresh; binding must not publish again.
+                operation = session.begin_refresh()
+                selected = operation.wait(timeout=90)
+                rebound = session.load_experiment(
+                    definition, code_revision=selected.active
+                )
+                assert rebound.code_revision == definition.code_revision
+                assert session.state() == selected
         finally:
             stop_project(project)
         start_project(project, timeout=90)
         try:
             with project.authoring() as session:
-                for run_id, expected in ((old_id, 2 + 3j), (new_id, 2 + 4j)):
-                    variable = session.run(run_id).measurements()["iq"]
+                for run_id, field, expected in (
+                    (old_id, "iq", 2 + 3j),
+                    (new_id, "average", 4 + 7j),
+                ):
+                    variable = session.run(run_id).measurements()[field]
                     assert variable.unit == "V"
                     assert list(variable.require_values()) == [expected]
                 # Inject the reported assembly failure inside an isolated run
                 # worker: the notebook exception must carry its actual cause.
                 source.write_text(
                     SOURCE.replace(
-                        "return complex(np.mean(samples))",
+                        "return complex(np.mean(samples)) * gain",
                         "from scopecat.execution import interpreter\n"
                         "    def fail(*args, **kwargs):\n"
                         "        raise TypeError(\n"
                         "            'unsupported persisted scalar: complex')\n"
                         "    interpreter.project_measurement_records = fail\n"
-                        "    return complex(np.mean(samples))",
+                        "    return complex(np.mean(samples)) * gain",
                     ),
                     encoding="utf-8",
                 )

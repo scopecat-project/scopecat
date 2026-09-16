@@ -34,6 +34,59 @@ with project.authoring() as authors:
     submission = launch.submit(request_key="sample-a-signal-001")
 ```
 
+For a typed Python request, rebind the experiment explicitly after editing:
+
+```python
+from reference_lab.workflows.authored.signal import signal
+
+with project.authoring() as authors:
+    signal = authors.load_experiment(signal)  # bind the admitted revision
+    old_request = signal()
+    # Save edits to the experiment or its adjacent helpers.
+    signal = authors.refresh(signal)
+    request = signal()  # new defaults and signature
+    launch = authors.prepare(request)
+```
+
+`refresh(signal)` publishes through the same validation operation as `refresh()`,
+then loads the admitted snapshot's experiment and local helper modules. It returns
+a callable with the experiment's Python parameter and result types; it does not
+execute a measurement. Request construction checks the current signature, so a
+removed keyword fails immediately. Update calling cells and editor type errors
+when changing the signature or result dataclass.
+
+The assignment matters. Other `from … import …` aliases, existing requests,
+Notebook variables, and instances of old dataclasses are not rewritten. A request
+created from `load_experiment` or typed `refresh` retains that revision, including
+its defaults, even if it is prepared after another refresh. To use the new code,
+construct a new request from the returned declaration. Explicitly selecting a
+different revision for an already bound request is rejected.
+
+Only project-local modules under `refresh_roots` are replaced. Imports use
+checksum-verified archived bytes, including adjacent helpers and resources;
+subsequent unsaved or saved workspace edits cannot leak into that import. Installed
+packages, maintained composition and arbitrary Notebook state are not reloaded.
+Restart the Notebook after updating these dependencies. Do not run concurrent
+project imports while rebinding. Local Python calls that dynamically import a
+module follow Python's current import table; use `authors.prepare(request)` for
+revision-owned execution, rather than treating old Notebook objects as isolated
+historical interpreters.
+
+Syntax and server validation failures keep the previous active revision. If server
+publication succeeds but the Notebook cannot import it, the exception identifies
+the revision, local module bindings roll back, and no request is prepared. Correct
+the local environment and call `load_experiment` for that revision; do not assume
+server publication rolled back with the local import.
+
+If waiting times out or the connection drops, the exception's `operation` retains
+the preparation identity. Complete that operation and bind its exact result without
+publishing again:
+
+```python
+state = interrupted.operation.reconnect(authors).wait(timeout=120)
+signal = authors.load_experiment(signal, code_revision=state.active)
+```
+
 Keep a request key for retries of the same submission. A preview retains the code
 revision and configuration used to check it. Refreshing another revision cannot
 replace the implementation inside that submission. The ordinary author still
@@ -75,10 +128,9 @@ existing analysis declarations with default arguments; parameterized analysis
 continues to use the ordinary Python analysis API in a deliberately selected
 process.
 
-`project.connect()` and directly imported Python functions keep the existing
-single-code-root process contract. They do not hot-reload notebook modules.
-Use `project.authoring()` for refreshes and new revision execution; use a fresh
-process for direct imports of a different frozen code root. Ordinary direct
+`project.connect()` keeps the existing single-code-root process contract.
+Use `project.authoring()` and explicit typed rebinding for author edits; use a fresh
+process for direct application loading from a different frozen code root. Ordinary direct
 Python execution without a selected revision still records declaration identity,
 not a claim of complete helper provenance.
 
