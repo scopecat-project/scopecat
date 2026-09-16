@@ -26,11 +26,12 @@ def mean_iq(
 
 
 @dataclass(frozen=True)
-class MeanResult:
-    iq: sc.DataRef[complex]
+class MeanResult[T]:
+    iq: T
 ```
 
-Inside an experiment, after obtaining `shots`:
+Declare the experiment's return type as `MeanResult[sc.DataRef[complex]]`.
+Inside its body, after obtaining `shots`:
 
 ```python
 mean = mean_iq(shots)
@@ -89,22 +90,54 @@ view = run.result(output)
 means = view.rows(lambda point: point.value(view.output.iq))
 ```
 
-Here `output` is the invocation's `.output`, a `MeanResult`, and `means` has type
+Here `output` is the invocation's `.output`, a `MeanResult[sc.DataRef[complex]]`, and `means` has type
 `tuple[complex, ...]`. Binding checks the references against the saved dataset.
 Unavailable values raise a diagnostic; use `where_available` when deliberately
 selecting usable points. A complex value cannot be assigned to a `float` without a
 type-checking error.
 
-A dataclass containing references is a result schema, not a dataclass containing
-already materialized values. Explicit row construction is still needed when you
-want a native dataclass for every point. Fully automatic dataclass materialization
-is not provided by this interface.
+A dataclass containing references describes values that will be produced. For
+native rows, including after a restart, select the reading type explicitly:
 
-After a restart, `session.run(run_id).result()` reads the persisted return paths
-without importing the old experiment. That source-independent view is not given a
-static Python dataclass type automatically. Do not rebuild a changed experiment
-and assume its output describes an older run. See
-[measurement data](use-measurement-data.md) for historical reading and projections.
+```python
+rows = session.run(run_id).result().rows_as(MeanResult[complex])
+print(rows[0].iq.real, rows[0].iq.imag)
+```
+
+`rows` has type `tuple[MeanResult[complex], ...]`. The same generic dataclass gives
+the symbolic and native versions their field names without pretending a reference
+is already a complex number. An independent native dataclass also works; there is
+no requirement to import the experiment's original Python module. The reader
+validates the complete persisted field paths and dtype, including nested dataclasses,
+before constructing rows. A renamed field, missing field or scalar/array mismatch
+raises instead of filling defaults or silently discarding data.
+
+Plain `complex` reads the recorded magnitude in its stored unit. To assert the
+unit as well, reuse an annotated type:
+
+```python
+type MeanIQ = Annotated[complex, sc.ScalarType(sc.ComplexType(unit="ratio"))]
+rows = session.run(run_id).result().rows_as(MeanResult[MeanIQ])
+```
+
+For arrays, use `NDArray[np.complex128]` (or another supported concrete dtype).
+`Annotated[..., sc.ArrayType(...)]` additionally checks the exact stored unit,
+local axis names, rank and requested extents. Array axis names may be full persisted
+dimension IDs or their local names. An omitted dimension kind or extent is
+unconstrained. `Quantity` reads a real numeric scalar together with its stored unit.
+This API does not convert units or narrow numeric types; request a compatible
+reader or explicitly transform values afterwards.
+
+`rows_as` materializes the selected rows. Arrays remain read-only; missing values,
+partial array masks and segmented arrays cannot become apparently complete native
+rows. Use `result.where_available().rows_as(...)` when deliberately selecting
+complete points, or the labeled dataset interface when you need masks and ragged
+segment diagnostics. Supported readers use ordinary init fields, nested/parameterized
+dataclasses and supported native leaf types; arbitrary unions, object fields and
+recursive dataclasses are not inferred.
+
+Do not rebuild a changed experiment and assume its output describes an older run.
+See [measurement data](use-measurement-data.md) for historical reading and projections.
 
 ## Edit and diagnose
 

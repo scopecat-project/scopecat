@@ -207,6 +207,10 @@ use `invocation.entity_result_ref(path)` for direct dataset access or
 experiment. All variants expose the same dataset as `.dataset`; use
 `run.measurements()` directly when work starts from
 dataset variables instead of the experiment's return tree.
+For native dataclass rows, `run.result().rows_as(MyResult)` validates the persisted
+field paths and types without reconstructing author code. See
+[compute and typed reads](compute-and-read.md#keep-the-type-when-reading) for
+nested/generic dataclasses, units, arrays and availability boundaries.
 
 Analysis receives this same facade through `context.measurements()`. Accessing
 it records the exact measurement snapshot dependency. Run artifacts and JSON
