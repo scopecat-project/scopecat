@@ -28,6 +28,7 @@ from scopecat.authoring._module_results import (
     product_bundle_kernel_type_internal,
     product_bundle_schema_internal,
 )
+from scopecat.kernel.annotations import unit_scalar_type, value_annotation_metadata
 from scopecat.kernel.entity import EntityRef
 from scopecat.kernel.frozen import freeze_json_mapping
 from scopecat.kernel.instrument_members import (
@@ -184,12 +185,14 @@ def _infer_compute_output_type(
             "tuple[object, ...]",
             get_args(annotation),
         )
-        declared = tuple(
-            item for item in metadata if isinstance(item, ScalarType | ArrayType)
-        )
-        if len(declared) == 1:
-            _validate_inferred_compute_annotation(native_type, declared[0])
-            return declared[0]
+        declared, unit = value_annotation_metadata(metadata)
+        while isinstance(native_type, TypeAliasType):
+            native_type = cast("object", native_type.__value__)
+        if unit is not None:
+            return unit_scalar_type(native_type, unit)
+        if declared is not None:
+            _validate_inferred_compute_annotation(native_type, declared)
+            return declared
     if annotation is bool:
         return ScalarType(Bool())
     if annotation is int:
@@ -269,19 +272,14 @@ def _compute_parameter_contracts(fn: ComputeFunction) -> dict[str, DataType]:
                 annotation = cast("object", annotation.__value__)
             if get_origin(annotation) is not Annotated:
                 continue
-        _native_type, *metadata = cast(
-            "tuple[object, ...]",
-            get_args(annotation),
-        )
-        declared = tuple(
-            item for item in metadata if isinstance(item, ScalarType | ArrayType)
-        )
-        if len(declared) > 1:
-            raise TypeError(
-                f"compute parameter {name!r} has multiple value type annotations"
-            )
-        if declared:
-            contracts[name] = declared[0]
+        native_type, *metadata = cast("tuple[object, ...]", get_args(annotation))
+        declared, unit = value_annotation_metadata(metadata)
+        if unit is not None:
+            while isinstance(native_type, TypeAliasType):
+                native_type = cast("object", native_type.__value__)
+            declared = unit_scalar_type(native_type, unit)
+        if declared is not None:
+            contracts[name] = declared
     return contracts
 
 

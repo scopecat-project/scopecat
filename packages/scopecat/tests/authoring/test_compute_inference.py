@@ -109,3 +109,39 @@ def test_opaque_payload_compute_keeps_its_existing_codec_boundary() -> None:
     output = sc.ModuleContext().compute(fn=waveform)
     assert isinstance(output, sc.ValueRef)
     assert output.value_type == sc.ScalarType(sc.PayloadType("sampled_waveform"))
+
+
+type ShortIQ = Annotated[complex, sc.Unit("ratio")]
+
+
+@sc.compute
+def short_mean(iq: NDArray[np.complex128]) -> ShortIQ:
+    return complex(iq.mean())
+
+
+def test_unit_annotation_keeps_compute_native_type_and_metadata() -> None:
+    @sc.experiment(id="unit-mean")
+    def experiment(ctx: sc.ExperimentContext) -> MeanResult:
+        iq = ctx.compute(fn=shots)
+        result = assert_type(short_mean(iq), sc.DataRef[complex])
+        return MeanResult(result)
+
+    result = experiment.build().output.iq
+    assert isinstance(result, sc.ValueRef)
+    assert result.value_type == sc.ScalarType(sc.ComplexType(unit="ratio"))
+    assert short_mean.eager(np.array([1 + 2j, 3 + 4j])) == 2 + 3j
+
+
+def test_unit_annotations_reject_ambiguous_or_inapplicable_contracts() -> None:
+    import pytest
+
+    def duplicate() -> Annotated[complex, sc.Unit("V"), sc.Unit("mV")]:
+        return 1j
+
+    def wrong_native() -> Annotated[float, sc.Unit("V")]:
+        return 1.0
+
+    with pytest.raises(TypeError, match="multiple contracts"):
+        sc.ModuleContext().compute(fn=duplicate)
+    with pytest.raises(TypeError, match="use Quantity"):
+        sc.ModuleContext().compute(fn=wrong_native)

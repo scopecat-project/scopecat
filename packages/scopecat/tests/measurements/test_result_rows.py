@@ -39,7 +39,7 @@ class Reading[T]:
     data: Signal[T]
 
 
-type IQ = Annotated[complex, sc.ScalarType(sc.ComplexType(unit="V"))]
+type IQ = Annotated[complex, sc.Unit("V")]
 type Shots = Annotated[
     NDArray[np.complex128],
     sc.ArrayType(
@@ -148,7 +148,7 @@ def test_scalar_cannot_be_read_as_another_native_type(row_type: type[object]) ->
         retained().result.rows_as(row_type)
 
 
-type WrongUnit = Annotated[complex, sc.ScalarType(sc.ComplexType(unit="mV"))]
+type WrongUnit = Annotated[complex, sc.Unit("mV")]
 type WrongSize = Annotated[
     NDArray[np.complex128],
     sc.ArrayType(
@@ -164,7 +164,7 @@ type WrongAxis = Annotated[
 
 
 def test_units_axes_and_extents_are_checked_before_reading() -> None:
-    with pytest.raises(TypeError, match="dtype/unit"):
+    with pytest.raises(TypeError, match="unit disagrees"):
         retained().result.rows_as(Reading[WrongUnit])
     with pytest.raises(TypeError, match="extent"):
         retained(array=True).result.rows_as(Reading[WrongSize])
@@ -221,3 +221,11 @@ def test_partial_array_mask_cannot_be_lost_in_a_native_row() -> None:
     with pytest.raises(ValueError, match="unavailable"):
         dataset.result.rows_as(Reading[Shots])
     assert dataset.result.where_available().rows_as(Reading[Shots]) == ()
+
+
+def test_unit_only_array_reader_preserves_local_samples() -> None:
+    rows = retained(array=True).result.rows_as(
+        Reading[Annotated[NDArray[np.complex128], sc.Unit("V")]]
+    )
+    assert isinstance(rows[0].data.iq, np.ndarray)
+    assert rows[0].data.iq.shape == (2,)

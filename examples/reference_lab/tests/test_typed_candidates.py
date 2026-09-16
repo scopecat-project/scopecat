@@ -24,6 +24,8 @@ from reference_lab.workflows.authored.ordinary_analysis import (
     PeakVerification,
 )
 
+pytestmark = pytest.mark.usefixtures("reference_lab_author_imports")
+
 
 def test_typed_candidates_retain_cells_and_independent_policy(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch

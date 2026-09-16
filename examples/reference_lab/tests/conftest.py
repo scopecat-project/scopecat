@@ -85,3 +85,36 @@ def reference_lab_notebooks(
             if name == "reference_lab" or name.startswith("reference_lab."):
                 del sys.modules[name]
         sys.modules.update(retained)
+
+
+@pytest.fixture
+def reference_lab_author_imports() -> Generator[None]:
+    """Cloned author workspaces must not reuse collection-time repository imports."""
+    prefix = "reference_lab.workflows.authored"
+    parent = sys.modules.get("reference_lab.workflows")
+    missing = object()
+    original_attribute = getattr(parent, "authored", missing)
+    original_modules = {
+        name: module
+        for name, module in tuple(sys.modules.items())
+        if name == prefix or name.startswith(prefix + ".")
+    }
+    original_finders = list(sys.meta_path)
+    for name in original_modules:
+        del sys.modules[name]
+    if parent is not None and hasattr(parent, "authored"):
+        delattr(parent, "authored")
+    try:
+        yield
+    finally:
+        sys.meta_path[:] = original_finders
+        for name in tuple(sys.modules):
+            if name == prefix or name.startswith(prefix + "."):
+                del sys.modules[name]
+        sys.modules.update(original_modules)
+        if parent is not None:
+            if original_attribute is missing:
+                if hasattr(parent, "authored"):
+                    delattr(parent, "authored")
+            else:
+                parent.authored = original_attribute

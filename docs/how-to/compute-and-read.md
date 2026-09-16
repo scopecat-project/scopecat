@@ -21,7 +21,7 @@ import scopecat as sc
 @sc.compute
 def mean_iq(
     iq: NDArray[np.complex128],
-) -> Annotated[complex, sc.ScalarType(sc.ComplexType(unit="ratio"))]:
+) -> Annotated[complex, sc.Unit("ratio")]:
     return complex(iq.mean())
 
 
@@ -49,6 +49,16 @@ Calling `mean_iq(...)` outside a definition raises an error directing you to
 does not silently switch to immediate execution. A native function body receives
 real values and can use ordinary NumPy/SciPy code. Calls to other decorated
 helpers inside that body should use their `.eager(...)` entry too.
+
+`sc.Unit("ratio")` supplements the native `complex` type; scalar shape and dtype
+are inferred. A shared alias such as `type IQ = Annotated[complex, sc.Unit("ratio")]`
+can be used both for the compute return and a native dataclass reader's field.
+Unit contracts check the exact retained unit; they do not silently convert data.
+For real scalar computations with units, use `Annotated[sc.Quantity, sc.Unit("V")]`
+and return a `sc.Quantity`. A plain `float` still denotes a unitless computation.
+Array computations still need explicit `ArrayType` dimensions; a unit alone cannot
+specify their local axes. Native array readers may use `Annotated[NDArray[...],
+sc.Unit("V")]` when only dtype and unit, rather than exact axes/extents, are required.
 
 There is no separate `output_type` or author-side `cast`. Without a unit, the
 return annotation can simply be `-> complex`. The same inference supports `bool`,
@@ -116,7 +126,7 @@ Plain `complex` reads the recorded magnitude in its stored unit. To assert the
 unit as well, reuse an annotated type:
 
 ```python
-type MeanIQ = Annotated[complex, sc.ScalarType(sc.ComplexType(unit="ratio"))]
+type MeanIQ = Annotated[complex, sc.Unit("ratio")]
 rows = session.run(run_id).result().rows_as(MeanResult[MeanIQ])
 ```
 

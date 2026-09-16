@@ -19,6 +19,7 @@ from typing import (
 import numpy as np
 from numpy.typing import NDArray
 
+from scopecat.kernel.annotations import value_annotation_metadata
 from scopecat.kernel.qualified_name import parse_qualified_name
 from scopecat.kernel.quantity import Quantity
 from scopecat.kernel.value_types import Array, Scalar
@@ -138,11 +139,12 @@ def _reader(
     if origin is Annotated:
         native, *metadata = cast("tuple[object, ...]", get_args(annotation))
         annotation = _resolve(native, substitutions)
-        contracts = [item for item in metadata if isinstance(item, Array | Scalar)]
-        if len(contracts) > 1:
-            raise TypeError(f"multiple result schemas at {path!r}")
-        if contracts:
-            declared = contracts[0]
+        declared, unit = value_annotation_metadata(metadata)
+        if unit is not None and view.variable(path).unit != unit.name:
+            raise TypeError(
+                f"result unit disagrees at {path!r}: "
+                f"expected {unit.name}, got {view.variable(path).unit}"
+            )
     return _leaf_reader(annotation, declared, view, path, substitutions)
 
 
