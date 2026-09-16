@@ -47,10 +47,7 @@ def _encode(value: object, label: str) -> JsonValue:
             for key, item in selected.items()
         }
     if isinstance(value, Sequence) and not isinstance(value, bytes | bytearray):
-        return [
-            _encode(item, f"{label}[{index}]")
-            for index, item in enumerate(cast("Sequence[object]", value))
-        ]
+        return [_encode(item, f"{label}[{index}]") for index, item in enumerate(value)]
     raise TypeError(
         f"{label}: unsupported {type(value).__qualname__}; use JSON values or Quantity"
     )
