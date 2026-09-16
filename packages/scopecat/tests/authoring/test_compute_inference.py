@@ -98,3 +98,14 @@ def test_inferred_compute_rejects_conflicting_native_and_storage_annotations() -
     for fn in (wrong_scalar, wrong_array, wrong_quantity):
         with pytest.raises(TypeError, match="return annotation disagrees"):
             sc.ModuleContext().compute(fn=fn)
+
+
+def test_opaque_payload_compute_keeps_its_existing_codec_boundary() -> None:
+    def waveform() -> Annotated[
+        dict[str, object], sc.ScalarType(sc.PayloadType("sampled_waveform"))
+    ]:
+        return {"samples": [0.0, 1.0]}
+
+    output = sc.ModuleContext().compute(fn=waveform)
+    assert isinstance(output, sc.ValueRef)
+    assert output.value_type == sc.ScalarType(sc.PayloadType("sampled_waveform"))

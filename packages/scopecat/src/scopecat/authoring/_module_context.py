@@ -212,7 +212,15 @@ def _validate_inferred_compute_annotation(
     declared: DataType,
 ) -> None:
     """Keep inferred native read types consistent with the declared wire schema."""
+    while isinstance(native_type, TypeAliasType):
+        native_type = cast("object", native_type.__value__)
     if isinstance(declared, ScalarType):
+        if isinstance(declared.atom, Payload) and (
+            native_type is object or get_origin(native_type) in (dict, Mapping)
+        ):
+            # Opaque command payloads use their own codec contract and do not
+            # participate in native measurement-result inference.
+            return
         expected: dict[type[object], object] = {
             Bool: bool,
             Int: int,
