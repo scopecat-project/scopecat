@@ -134,6 +134,15 @@ _VERSION_GUIDANCE = (
 
 
 def require_current_schema(connection: sqlite3.Connection) -> int:
+    """Runtime business logic accepts exactly the current schema."""
+    return require_schema_version(connection)
+
+
+def require_schema_version(
+    connection: sqlite3.Connection,
+    *,
+    supported_versions: tuple[int, ...] = (PROJECT_SCHEMA_VERSION,),
+) -> int:
     """Inspect an existing store without writing or applying a migration."""
     if not _has_project_schema(connection):
         raise SchemaVersionError(
@@ -143,21 +152,26 @@ def require_current_schema(connection: sqlite3.Connection) -> int:
         connection.execute("SELECT version FROM project_schema WHERE singleton = 1")
     )
     version = None if row is None else cast("int", row["version"])
-    if version != PROJECT_SCHEMA_VERSION:
+    if version not in supported_versions:
         raise SchemaVersionError(
             "unsupported project-store schema version: "
-            f"{version}; expected {PROJECT_SCHEMA_VERSION}. " + _VERSION_GUIDANCE
+            f"{version}; expected {', '.join(map(str, supported_versions))}. "
+            + _VERSION_GUIDANCE
         )
     return version
 
 
-def _check_existing_schema(connection: sqlite3.Connection) -> int | None:
+def _check_existing_schema(
+    connection: sqlite3.Connection, supported_versions: tuple[int, ...]
+) -> int | None:
     if _has_project_schema(connection) or _has_application_tables(connection):
-        return require_current_schema(connection)
+        return require_schema_version(connection, supported_versions=supported_versions)
     return None
 
 
-def inspect_project_schema(database: Path) -> int | None:
+def inspect_project_schema(
+    database: Path, *, supported_versions: tuple[int, ...] = (PROJECT_SCHEMA_VERSION,)
+) -> int | None:
     """Reject unsupported data without creating SQLite sidecars in the source.
 
     The caller must keep the source quiescent throughout this offline probe.
@@ -179,12 +193,12 @@ def inspect_project_schema(database: Path) -> int | None:
                 shutil.copyfile(path, copied.with_name(path.name))
             with closing(sqlite3.connect(copied)) as connection:
                 connection.row_factory = sqlite3.Row
-                return _check_existing_schema(connection)
+                return _check_existing_schema(connection, supported_versions)
     with closing(
         sqlite3.connect(f"{database.resolve().as_uri()}?immutable=1", uri=True)
     ) as connection:
         connection.row_factory = sqlite3.Row
-        return _check_existing_schema(connection)
+        return _check_existing_schema(connection, supported_versions)
 
 
 def _has_application_tables(connection: sqlite3.Connection) -> bool:

@@ -182,11 +182,11 @@ whole-blob storage read: record batches are counted without building a full
 table, and only selected columns and bounded rows enter the preview table.
 This is not storage predicate pushdown or a bound on a single decoded batch.
 
-The layered figure format was introduced in project store version **63**. The
-current runtime uses version **64**, adding immutable author revisions. Older
-projects and snapshots require their pinned matching reader; this runtime rejects
-them before modification. Preserve originals when starting a separate version 70
-project. See [backup and restore](../how-to/backup-and-restore.md).
+The layered figure format was introduced in project store version **63**.
+The current storage boundary and tested copy upgrades are described in
+[backup and restore](../how-to/backup-and-restore.md) and
+[data migration](../how-to/migrate-data.md). Preserve original stores and their
+pinned readers; opening a project never performs implicit migration.
 
 ## Compare completed runs
 

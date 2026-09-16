@@ -33,6 +33,10 @@ snapshot_app = typer.Typer(
     no_args_is_help=True,
 )
 app.add_typer(snapshot_app, name="snapshot")
+migration_app = typer.Typer(
+    help="Plan and verify isolated data upgrades.", no_args_is_help=True
+)
+app.add_typer(migration_app, name="migration")
 console = Console()
 error_console = Console(stderr=True)
 
@@ -99,6 +103,57 @@ def snapshot_restore(
     console.print(
         "Reinstall the recorded dependencies before starting the project. "
         "Procedures require explicit dispatch."
+    )
+
+
+@migration_app.command("plan")
+def migration_plan(
+    project: Annotated[Path, typer.Argument(help="Stopped source project directory.")],
+) -> None:
+    """Show tested upgrade edges without running project code or changing data."""
+    from scopecat.project import open_project
+
+    from .migrations import plan_migration
+    from .snapshots import SnapshotError
+    from .storage.sqlite.project_store import ProjectStoreError
+
+    try:
+        plan = plan_migration(open_project(project))
+    except (SnapshotError, ProjectStoreError) as error:
+        _fail(error)
+    console.print(plan.model_dump_json(indent=2))
+
+
+@migration_app.command("copy")
+def migration_copy(
+    project: Annotated[Path, typer.Argument(help="Stopped source project directory.")],
+    destination: Annotated[
+        Path,
+        typer.Argument(
+            help="Fresh directory for original snapshot and upgraded project."
+        ),
+    ],
+) -> None:
+    """Create and verify backup plus migrated copy; never start acquisition."""
+    from scopecat.project import open_project
+
+    from .migrations import migrate_copy
+    from .snapshots import SnapshotError
+    from .storage.sqlite.project_store import ProjectStoreError
+
+    try:
+        receipt = migrate_copy(open_project(project), destination)
+    except (SnapshotError, ProjectStoreError) as error:
+        _fail(error)
+    console.print(
+        f"[green]verified migration[/green] {receipt.plan.source_schema} "
+        f"→ {receipt.plan.target_schema}"
+    )
+    console.print(f"Original snapshot: {(destination / 'original').resolve()}")
+    console.print(f"Upgraded workspace: {(destination / 'project').resolve()}")
+    console.print(
+        "Review the upgraded workspace before starting it. "
+        "It shares the original bench lock. Original data remains intact."
     )
 
 

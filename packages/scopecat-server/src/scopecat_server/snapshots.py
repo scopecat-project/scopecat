@@ -24,8 +24,10 @@ from scopecat.runtime_binding import RUNTIME_BINDING_NAME
 from scopecat_server.storage.sqlite.object_store import ImmutableObjectStore
 from scopecat_server.storage.sqlite.project_store import (
     inspect_project_schema,
-    require_current_schema,
+    require_schema_version,
 )
+
+SUPPORTED_SNAPSHOT_SCHEMAS = (68, 69, 70)
 
 _DATABASE = Path(".scopecat/control.sqlite3")
 _OBJECTS = Path(".scopecat/objects")
@@ -67,7 +69,7 @@ class SnapshotManifest(BaseModel):
 
 def create_snapshot(project: Project, destination: Path) -> SnapshotManifest:
     """Capture a stopped project under its existing process and SQLite locks."""
-    destination = _fresh_destination(destination)
+    destination = fresh_destination(destination)
     if (
         destination.is_relative_to(project.root)
         or destination.is_relative_to(project.runtime_binding.data_root)
@@ -81,7 +83,10 @@ def create_snapshot(project: Project, destination: Path) -> SnapshotManifest:
     if not database.is_file():
         raise SnapshotError(f"project has no database: {database}")
     try:
-        with _stopped_store(data_root) as source, _stage(destination) as staged:
+        with (
+            stopped_store(data_root) as source,
+            staged_directory(destination) as staged,
+        ):
             captured = staged / "project"
             captured.mkdir()
             for relative in _files(project.root, source=True):
@@ -102,20 +107,21 @@ def create_snapshot(project: Project, destination: Path) -> SnapshotManifest:
                 if relative.name.endswith(".tmp") and relative.name.startswith("."):
                     continue
                 _copy(data_root / "objects" / relative, objects / relative)
-            receipts = data_root / "author-jobs"
-            if receipts.exists():
-                for relative in _files(receipts):
-                    _copy(
-                        receipts / relative,
-                        captured / ".scopecat/author-jobs" / relative,
-                    )
+            for folder in ("author-jobs", "migrations"):
+                receipts = data_root / folder
+                if receipts.exists():
+                    for relative in _files(receipts):
+                        _copy(
+                            receipts / relative,
+                            captured / ".scopecat" / folder / relative,
+                        )
             # SQLite's copy primitive is used only after stopped-project ownership
             # is acquired. It folds a retained WAL into a standalone destination
             # database without checkpointing or changing the source database.
             with closing(sqlite3.connect(captured / _DATABASE)) as target:
                 source.backup(target)
                 target.execute("PRAGMA journal_mode = DELETE")
-            schema = _verify_store(captured)
+            schema = verify_store_files(captured)
             manifest = SnapshotManifest(
                 format_version=1,
                 created_at=datetime.now(UTC).isoformat(),
@@ -126,7 +132,7 @@ def create_snapshot(project: Project, destination: Path) -> SnapshotManifest:
                     for distribution in distributions()
                 },
                 files={
-                    relative.as_posix(): _digest(captured / relative)
+                    relative.as_posix(): file_digest(captured / relative)
                     for relative in _files(captured)
                 },
             )
@@ -159,10 +165,10 @@ def verify_snapshot(snapshot: Path) -> SnapshotManifest:
                 or not _allowed_path(relative)
             ):
                 raise SnapshotError(f"unsupported snapshot path: {name}")
-            if _digest(project / name) != digest:
+            if file_digest(project / name) != digest:
                 raise SnapshotError(f"snapshot checksum mismatch: {name}")
         load_project(project / "scopecat.toml")
-        schema = _verify_store(project)
+        schema = verify_store_files(project)
         if schema != manifest.schema_version:
             raise SnapshotError("snapshot schema does not match manifest")
         return manifest
@@ -172,13 +178,13 @@ def verify_snapshot(snapshot: Path) -> SnapshotManifest:
 
 def restore_snapshot(snapshot: Path, destination: Path) -> SnapshotManifest:
     """Restore verified files into a fresh project without running its code."""
-    destination = _fresh_destination(destination)
+    destination = fresh_destination(destination)
     manifest = verify_snapshot(snapshot)
     try:
-        with _stage(destination) as staged:
+        with staged_directory(destination) as staged:
             for name in manifest.files:
                 _copy(snapshot / "project" / name, staged / name)
-                if _digest(staged / name) != manifest.files[name]:
+                if file_digest(staged / name) != manifest.files[name]:
                     raise SnapshotError(f"snapshot changed during restore: {name}")
             (staged / _OBJECTS).mkdir(parents=True, exist_ok=True)
             # Preserve the version record with the restored project. Runtime
@@ -193,11 +199,14 @@ def restore_snapshot(snapshot: Path, destination: Path) -> SnapshotManifest:
 
 
 @contextmanager
-def _stopped_store(root: Path) -> Generator[sqlite3.Connection]:
+def stopped_store(root: Path) -> Generator[sqlite3.Connection]:
     database = root / "control.sqlite3"
     # Inspect before acquiring a lock file or opening any write connection so an
     # unsupported schema never enters the bootstrap/migration path.
-    if inspect_project_schema(database) is None:
+    if (
+        inspect_project_schema(database, supported_versions=SUPPORTED_SNAPSHOT_SCHEMAS)
+        is None
+    ):
         raise SnapshotError("project database has not been initialized")
     retained_wal = database.with_name(database.name + "-wal").exists()
     try:
@@ -217,7 +226,7 @@ def _stopped_store(root: Path) -> Generator[sqlite3.Connection]:
                     "project has an active SQLite writer; stop it first"
                 ) from error
             try:
-                with closing(_read_database(database)) as reader:
+                with closing(read_snapshot_database(database)) as reader:
                     yield reader
             finally:
                 guard.rollback()
@@ -227,16 +236,22 @@ def _stopped_store(root: Path) -> Generator[sqlite3.Connection]:
         ) from error
 
 
-def _read_database(path: Path, *, immutable: bool = False) -> sqlite3.Connection:
+def read_snapshot_database(
+    path: Path, *, immutable: bool = False
+) -> sqlite3.Connection:
     option = "immutable=1" if immutable else "mode=ro"
     connection = sqlite3.connect(f"{path.resolve().as_uri()}?{option}", uri=True)
     connection.row_factory = sqlite3.Row
     return connection
 
 
-def _verify_store(project: Path) -> int:
-    with closing(_read_database(project / _DATABASE, immutable=True)) as connection:
-        version = require_current_schema(connection)
+def verify_store_files(project: Path) -> int:
+    with closing(
+        read_snapshot_database(project / _DATABASE, immutable=True)
+    ) as connection:
+        version = require_schema_version(
+            connection, supported_versions=SUPPORTED_SNAPSHOT_SCHEMAS
+        )
         integrity = cast(
             "list[sqlite3.Row]", connection.execute("PRAGMA integrity_check").fetchall()
         )
@@ -282,6 +297,7 @@ def _allowed_path(path: PurePosixPath) -> bool:
         return True
     return (
         path.is_relative_to(PurePosixPath(".scopecat/author-jobs"))
+        or path.is_relative_to(PurePosixPath(".scopecat/migrations"))
         or path == PurePosixPath(_DATABASE)
         or (path.is_relative_to(PurePosixPath(_OBJECTS)) and len(path.parts) == 4)
     )
@@ -312,7 +328,7 @@ def _walk_error(error: OSError) -> None:
     raise error
 
 
-def _digest(path: Path) -> str:
+def file_digest(path: Path) -> str:
     with path.open("rb") as source:
         return hashlib.file_digest(source, "sha256").hexdigest()
 
@@ -322,7 +338,7 @@ def _copy(source: Path, destination: Path) -> None:
     shutil.copy2(source, destination)
 
 
-def _fresh_destination(destination: Path) -> Path:
+def fresh_destination(destination: Path) -> Path:
     destination = destination.resolve()
     if destination.exists():
         raise SnapshotError(f"destination must be a fresh path: {destination}")
@@ -332,7 +348,7 @@ def _fresh_destination(destination: Path) -> Path:
 
 
 @contextmanager
-def _stage(destination: Path) -> Generator[Path]:
+def staged_directory(destination: Path) -> Generator[Path]:
     with tempfile.TemporaryDirectory(
         prefix=f".{destination.name}-", dir=destination.parent
     ) as temporary:

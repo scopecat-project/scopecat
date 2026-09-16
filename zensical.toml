@@ -27,6 +27,7 @@ nav = [
     { "Refresh author code" = "how-to/refresh-author-code.md" },
     { "Scans and grouped analysis" = "how-to/grouped-analysis.md" },
     { "Organize research history" = "how-to/research-history.md" },
+    { "Migrate a data copy" = "how-to/migrate-data.md" },
     { "Control instruments" = "how-to/control-instruments.md" },
     { "Use measurement data" = "how-to/use-measurement-data.md" },
     { "Compare retained runs" = "how-to/retained-run-comparison.md" },
