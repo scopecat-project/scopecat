@@ -109,6 +109,7 @@ export function ConfigStructureEditor({
       if (!metadata || !preview.data || !preview.variables)
         throw new Error("Preview this saved working point first.");
       return saveConfigContext({
+        advance: false,
         entry_id: entryId,
         base,
         sample: {

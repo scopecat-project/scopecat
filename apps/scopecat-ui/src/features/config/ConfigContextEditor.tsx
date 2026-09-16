@@ -52,6 +52,7 @@ export function ConfigContextEditor({
     mutationFn: () => {
       if (!selectedSample) throw new Error("Select a physical sample revision.");
       return saveConfigContext({
+        advance: false,
         entry_id: entryId,
         base: { entry_id: entry.id, content_hash: entry.content_hash },
         sample: {
