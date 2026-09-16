@@ -251,6 +251,15 @@ def _installed_journey(bundle: Path) -> None:
         stop_project(project)
     assert read_daemon_endpoint_record(project_root) is None
     _verify_changed_artifact(project)
+    print(
+        _run(
+            [
+                sys.executable,
+                str(Path(__file__).with_name("verify_workspace_binding.py")),
+            ],
+            cwd=project_root.parent,
+        ).strip()
+    )
 
 
 def _shared_author_journey(project: Project, local_run_id: str) -> str:

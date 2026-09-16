@@ -19,7 +19,7 @@ from scopecat_server.storage.sqlite.procedure_schedule_schema import (
 from scopecat_server.storage.sqlite.run_schema import RUN_TABLES_SQL
 from scopecat_server.storage.sqlite.sample_schema import SAMPLE_TABLES_SQL
 
-PROJECT_SCHEMA_VERSION = 67
+PROJECT_SCHEMA_VERSION = 68
 
 _CONTROL_TABLES_SQL = f"""
 CREATE TABLE IF NOT EXISTS project_schema (
@@ -29,6 +29,14 @@ CREATE TABLE IF NOT EXISTS project_schema (
 
 INSERT OR IGNORE INTO project_schema(singleton, version)
 VALUES (1, {PROJECT_SCHEMA_VERSION});
+
+CREATE TABLE IF NOT EXISTS project_identity (
+    singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
+    identity TEXT NOT NULL UNIQUE
+);
+
+INSERT OR IGNORE INTO project_identity(singleton, identity)
+VALUES (1, 'local:' || lower(hex(randomblob(16))));
 
 CREATE TABLE IF NOT EXISTS scheduler_runs (
     sequence INTEGER PRIMARY KEY AUTOINCREMENT,

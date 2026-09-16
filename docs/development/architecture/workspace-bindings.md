@@ -1,12 +1,15 @@
 # Workspace, data space and execution binding
 
-Status: design and code audit for [#572](https://github.com/scopecat-project/scopecat/issues/572),
-reviewed against `a12fe550a` on 2026-09-16. The contract below is an implementation
-target, not a supported manifest syntax or a completed migration. The first
-implementation is local, with one writer per data space and one service per
-configured execution deployment.
+Status: the first local binding implementation uses `scopecat.runtime.toml`,
+store schema 68 and separate deployment/data locks. See the supported
+[project layout](../../reference/project-layout.md#bind-a-workspace-to-persistent-local-data)
+and [restore behavior](../../how-to/backup-and-restore.md#separately-located-data).
+This page retains the pre-implementation audit against `a12fe550a` and explains
+the design boundaries. No historical-store migration or remote execution is
+included. [#572](https://github.com/scopecat-project/scopecat/issues/572) tracks
+integration acceptance.
 
-## Existing contracts and actual gaps
+## Pre-implementation contracts and gaps
 
 Paths below are repository-relative implementation locations.
 
@@ -49,9 +52,10 @@ format migration and supported baselines belong to
    mutable source, install dependencies, refresh revisions or acquire instruments.
 
 The resolved internal binding carries workspace root, data root and identity,
-deployment identity and ownership location. Manifest parsing must distinguish
-these locations explicitly; the field spelling is finalized with typed producer
-and consumer fixtures, before templates adopt it. Local synthetic projects may
+deployment identity and ownership location. The separate runtime file requires
+`[runtime].data_root` and `deployment_root`; it is excluded from source capture
+and snapshots. Runtime consumers resolve it from the live workspace, never the
+retained code directory. Local synthetic projects may
 use a colocated default. Hardware consumers select their deployment explicitly.
 No general remote execution or independent client/server dependency matrix is
 introduced by this contract.
@@ -102,6 +106,8 @@ synthetic A-to-B journey covering actual processes, receipts and restart. Keep
 run-like checks serial locally. Linux/Windows CI and self-review precede public
 merge; hardware admission is a separate consumer qualification.
 
-This audit does not pass those acceptance gates. #572 stays open until the
-integrated journey succeeds. Do not publish consumer configuration examples
-that imply the proposed binding is already accepted by `scopecat.toml`.
+The installed acceptance fixture is `scripts/verify_workspace_binding.py`, also
+run by `verify_pilot_bundle.py` and the runtime-binding journey tests. It checks
+competing author/service bindings, A-to-B history and config, original/current
+analysis, receipts and restoration after removing the original directories.
+Scientific and physical-device qualification remains external to that fixture.

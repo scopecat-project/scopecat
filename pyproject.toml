@@ -404,7 +404,7 @@ extend-immutable-calls = ["scopecat.Quantity", "scopecat.kernel.quantity.Quantit
 [tool.scopecat-tests]
 roots = ["examples/reference_lab/tests", "packages/scopecat/tests", "packages/scopecat-server/tests", "packages/scopecat-instruments/tests", "packages/scopecat-quantum/tests"]
 integration_paths = ["packages/scopecat-server/tests"]
-journey_paths = ["examples/reference_lab/tests", "packages/scopecat-server/tests/test_snapshot_integration.py", "packages/scopecat-server/tests/test_author_validation_diagnostics.py"]
+journey_paths = ["packages/scopecat-server/tests/test_runtime_binding.py", "examples/reference_lab/tests", "packages/scopecat-server/tests/test_snapshot_integration.py", "packages/scopecat-server/tests/test_author_validation_diagnostics.py"]
 
 # Windows run 34757173348: summed setup/call/teardown seconds per file.
 [tool.scopecat-tests.weights]

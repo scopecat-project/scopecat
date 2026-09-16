@@ -19,6 +19,7 @@ from pydantic import BaseModel, ConfigDict
 from scopecat.project import Project, load_project
 from scopecat.records.sample import SampleRevision
 from scopecat.records.sample_artifact import is_owned_sample_artifact_uri
+from scopecat.runtime_binding import RUNTIME_BINDING_NAME
 
 from scopecat_server.storage.sqlite.object_store import ImmutableObjectStore
 from scopecat_server.storage.sqlite.project_store import (
@@ -67,26 +68,47 @@ class SnapshotManifest(BaseModel):
 def create_snapshot(project: Project, destination: Path) -> SnapshotManifest:
     """Capture a stopped project under its existing process and SQLite locks."""
     destination = _fresh_destination(destination)
-    if destination.is_relative_to(project.root):
+    if (
+        destination.is_relative_to(project.root)
+        or destination.is_relative_to(project.runtime_binding.data_root)
+        or destination.is_relative_to(project.runtime_binding.deployment_root)
+    ):
         raise SnapshotError("snapshot destination must be outside the source project")
-    database = project.root / _DATABASE
+    data_root = project.runtime_binding.data_root
+    database = data_root / "control.sqlite3"
     if database.parent.is_symlink() or database.is_symlink():
         raise SnapshotError("snapshot requires project-local database state")
     if not database.is_file():
         raise SnapshotError(f"project has no database: {database}")
     try:
-        with _stopped_store(project.root) as source, _stage(destination) as staged:
+        with _stopped_store(data_root) as source, _stage(destination) as staged:
             captured = staged / "project"
             captured.mkdir()
             for relative in _files(project.root, source=True):
-                _copy(project.root / relative, captured / relative)
+                source_path = project.root / relative
+                if (
+                    relative == Path(RUNTIME_BINDING_NAME)
+                    or source_path.is_relative_to(data_root)
+                    or source_path.is_relative_to(
+                        project.runtime_binding.deployment_root
+                    )
+                ):
+                    continue
+                _copy(source_path, captured / relative)
             objects = captured / _OBJECTS
             objects.mkdir(parents=True)
-            for relative in _files(project.root / _OBJECTS):
+            for relative in _files(data_root / "objects"):
                 # Unpublished object-store temporary files are not immutable content.
                 if relative.name.endswith(".tmp") and relative.name.startswith("."):
                     continue
-                _copy(project.root / _OBJECTS / relative, objects / relative)
+                _copy(data_root / "objects" / relative, objects / relative)
+            receipts = data_root / "author-jobs"
+            if receipts.exists():
+                for relative in _files(receipts):
+                    _copy(
+                        receipts / relative,
+                        captured / ".scopecat/author-jobs" / relative,
+                    )
             # SQLite's copy primitive is used only after stopped-project ownership
             # is acquired. It folds a retained WAL into a standalone destination
             # database without checkpointing or changing the source database.
@@ -172,7 +194,7 @@ def restore_snapshot(snapshot: Path, destination: Path) -> SnapshotManifest:
 
 @contextmanager
 def _stopped_store(root: Path) -> Generator[sqlite3.Connection]:
-    database = root / _DATABASE
+    database = root / "control.sqlite3"
     # Inspect before acquiring a lock file or opening any write connection so an
     # unsupported schema never enters the bootstrap/migration path.
     if inspect_project_schema(database) is None:
@@ -180,7 +202,7 @@ def _stopped_store(root: Path) -> Generator[sqlite3.Connection]:
     retained_wal = database.with_name(database.name + "-wal").exists()
     try:
         with (
-            FileLock(root / ".scopecat/daemon.lock", timeout=0),
+            FileLock(root / "daemon.lock", timeout=0),
             closing(
                 sqlite3.connect(database, timeout=0, isolation_level=None)
             ) as guard,
@@ -258,8 +280,10 @@ def _allowed_path(path: PurePosixPath) -> bool:
         return False
     if path.parts[0] != ".scopecat":
         return True
-    return path == PurePosixPath(_DATABASE) or (
-        path.is_relative_to(PurePosixPath(_OBJECTS)) and len(path.parts) == 4
+    return (
+        path.is_relative_to(PurePosixPath(".scopecat/author-jobs"))
+        or path == PurePosixPath(_DATABASE)
+        or (path.is_relative_to(PurePosixPath(_OBJECTS)) and len(path.parts) == 4)
     )
 
 

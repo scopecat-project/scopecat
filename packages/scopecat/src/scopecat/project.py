@@ -11,6 +11,8 @@ from pathlib import Path, PureWindowsPath
 from threading import RLock
 from typing import TYPE_CHECKING, cast
 
+from scopecat.runtime_binding import RuntimeBinding, load_runtime_binding
+
 if TYPE_CHECKING:
     from scopecat.api.lab import LabClient
     from scopecat.application.author_project import AuthorProject
@@ -55,6 +57,11 @@ class Project:
     installed_packages: tuple[tuple[str, str], ...] = ()
     dependencies: tuple[str, ...] | None = None
 
+    @property
+    def runtime_binding(self) -> RuntimeBinding:
+        """Local deployment locations; never resolved from captured code."""
+        return load_runtime_binding(self.root)
+
     def load_bootstrap(self) -> LabBootstrap:
         """Load the lightweight composition used by the daemon and config CLI."""
 
@@ -90,7 +97,7 @@ class Project:
 
         return AuthorProject(
             resolve_daemon_endpoint(self.root, explicit=daemon),
-            receipts=self.root / ".scopecat" / "author-jobs",
+            receipts=self.runtime_binding.data_root / "author-jobs",
             timeout=120,
         )
 

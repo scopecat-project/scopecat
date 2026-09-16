@@ -90,13 +90,6 @@ def inspect_daemon(project: Project, *, health_timeout: float = 0.5) -> DaemonSt
         return DaemonStatus(state="stale", detail=str(error))
     if record is None:
         return DaemonStatus(state="stopped")
-    if record.project_root.resolve() != project.root:
-        return DaemonStatus(
-            state="stale",
-            record=record,
-            detail=f"record belongs to {record.project_root}",
-        )
-
     try:
         process = _matching_process(record)
     except DaemonLifecycleError as error:
@@ -108,6 +101,17 @@ def inspect_daemon(project: Project, *, health_timeout: float = 0.5) -> DaemonSt
             detail="recorded process no longer matches its identity",
         )
 
+    if (
+        record.project_root.resolve() != project.root
+        or record.data_root.resolve() != project.runtime_binding.data_root
+        or record.deployment_root.resolve() != project.runtime_binding.deployment_root
+    ):
+        return DaemonStatus(
+            state="degraded",
+            record=record,
+            detail=f"data space is bound to workspace {record.project_root}",
+        )
+
     try:
         health = _read_health(record.base_url, timeout=health_timeout)
     except (httpx2.HTTPError, ValueError, ValidationError) as error:
@@ -115,6 +119,14 @@ def inspect_daemon(project: Project, *, health_timeout: float = 0.5) -> DaemonSt
             state="degraded",
             record=record,
             detail=f"health check failed: {error}",
+        )
+    if (
+        health.project_root != str(record.project_root)
+        or health.data_root != str(record.data_root)
+        or health.deployment_root != str(record.deployment_root)
+    ):
+        return DaemonStatus(
+            state="degraded", record=record, detail="health binding mismatch"
         )
     if health.status == "degraded":
         return DaemonStatus(
@@ -165,6 +177,8 @@ def serve_project(
         shutdown_token = secrets.token_urlsafe(32)
         record = DaemonEndpointRecord(
             project_root=project.root,
+            data_root=runtime.binding.data_root,
+            deployment_root=runtime.binding.deployment_root,
             pid=os.getpid(),
             process_create_time=psutil.Process().create_time(),
             base_url=_base_url(host, actual_port),
@@ -243,7 +257,7 @@ def start_project(
     if status.state == "stale":
         _remove_record_if_stale(project)
 
-    state_dir = project.root / ".scopecat"
+    state_dir = project.runtime_binding.data_root
     state_dir.mkdir(parents=True, exist_ok=True)
     state_dir.chmod(0o700)
     log_path = state_dir / "daemon.log"
@@ -371,6 +385,8 @@ def stop_project(project: Project, *, timeout: float = 10.0) -> DaemonStatus:
     if status.record is None:
         raise DaemonLifecycleError("daemon status has no process identity")
 
+    _require_selected_binding(project, status.record)
+
     process = _matching_process(status.record)
     if process is None:
         _remove_record_if_stale(project)
@@ -398,18 +414,29 @@ def open_project_gui(project: Project) -> str:
         raise DaemonLifecycleError(
             f"project daemon is {status.state}; start it before opening the GUI"
         )
+    _require_selected_binding(project, status.record)
     if not webbrowser.open(status.record.base_url):
         raise DaemonLifecycleError("the system browser could not be opened")
     return status.record.base_url
 
 
+def _require_selected_binding(project: Project, record: DaemonEndpointRecord) -> None:
+    binding = project.runtime_binding
+    if (
+        record.project_root.resolve() != project.root
+        or record.data_root.resolve() != binding.data_root
+        or record.deployment_root.resolve() != binding.deployment_root
+    ):
+        raise DaemonLifecycleError("service belongs to another workspace binding")
+
+
 def write_daemon_endpoint_record(record: DaemonEndpointRecord) -> Path:
     """Atomically publish one private endpoint record."""
 
-    state_dir = record.project_root.resolve() / ".scopecat"
+    state_dir = record.data_root
     state_dir.mkdir(parents=True, exist_ok=True)
     state_dir.chmod(0o700)
-    destination = daemon_record_path(record.project_root)
+    destination = record.data_root / "daemon.json"
     descriptor, temporary_name = tempfile.mkstemp(
         dir=state_dir,
         prefix=".daemon-",
@@ -515,9 +542,6 @@ def _remove_record_if_stale(project: Project) -> None:
         return
     if current is None:
         return
-    if current.project_root.resolve() != project.root:
-        daemon_record_path(project.root).unlink(missing_ok=True)
-        return
     try:
         process = _matching_process(current)
     except DaemonLifecycleError:
@@ -528,12 +552,13 @@ def _remove_record_if_stale(project: Project) -> None:
 
 def _remove_owned_record(owner: DaemonEndpointRecord) -> None:
     try:
-        current = read_daemon_endpoint_record(owner.project_root)
-    except DaemonEndpointError:
+        current = DaemonEndpointRecord.model_validate_json(
+            (owner.data_root / "daemon.json").read_text(encoding="utf-8")
+        )
+    except OSError, ValidationError:
         return
     if (
-        current is not None
-        and current.pid == owner.pid
+        current.pid == owner.pid
         and math.isclose(
             current.process_create_time,
             owner.process_create_time,
@@ -542,11 +567,11 @@ def _remove_owned_record(owner: DaemonEndpointRecord) -> None:
         )
         and current.project_root.resolve() == owner.project_root.resolve()
     ):
-        daemon_record_path(owner.project_root).unlink(missing_ok=True)
+        (owner.data_root / "daemon.json").unlink(missing_ok=True)
 
 
 def _startup_failure_message(project: Project, return_code: int | None) -> str:
-    log_path = project.root / ".scopecat" / "daemon.log"
+    log_path = project.runtime_binding.data_root / "daemon.log"
     try:
         tail = "\n".join(log_path.read_text(encoding="utf-8").splitlines()[-10:])
     except OSError:

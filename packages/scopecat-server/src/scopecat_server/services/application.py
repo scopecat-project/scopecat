@@ -13,6 +13,7 @@ from scopecat.daemon.wire import (
     RunCancellationReceipt,
     RunSubmission,
 )
+from scopecat.runtime_binding import load_runtime_binding
 
 from scopecat_server.storage.sqlite.experiment_plan_repository import (
     ExperimentPlanRepository,
@@ -48,6 +49,7 @@ class DaemonApplication:
         *,
         project_root: str | Path,
         project_id: str,
+        deployment_id: str,
         project_store: SQLiteProjectStore,
         config: ConfigService,
         analyses: AnalysisService,
@@ -65,7 +67,9 @@ class DaemonApplication:
         samples: SampleService,
     ) -> None:
         self.project_root = Path(project_root).resolve()
+        self.binding = load_runtime_binding(self.project_root)
         self.project_id = project_id
+        self.deployment_id = deployment_id
         self._project_store = project_store
         self.author_revisions = AuthorRevisionService(self.project_root, project_store)
         self.plans = ExperimentPlanService(
@@ -125,8 +129,11 @@ class DaemonApplication:
         return DaemonHealth(
             status=status,
             project_id=self.project_id,
+            deployment_id=self.deployment_id,
             project_name=self.project_root.name,
             project_root=str(self.project_root),
+            data_root=str(self.binding.data_root),
+            deployment_root=str(self.binding.deployment_root),
         )
 
     def submit_run(self, submission: RunSubmission) -> RunAdmission:

@@ -13,6 +13,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import psutil
+from scopecat.runtime_binding import load_runtime_binding
 
 
 @dataclass
@@ -77,7 +78,7 @@ def capture(phase: str, *, root: Path | None = None) -> None:
                     "a", encoding="utf-8"
                 ) as stream:
                     stream.write(json.dumps(row) + "\n")
-                log = observed.root / ".scopecat" / "daemon.log"
+                log = load_runtime_binding(observed.root).data_root / "daemon.log"
                 if log.is_file():
                     with log.open("rb") as stream:
                         stream.seek(0, os.SEEK_END)
