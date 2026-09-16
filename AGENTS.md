@@ -1,13 +1,16 @@
-# Development Context
+# Development context
 
-This project is currently developed by one person in a self-review-only
-workflow. Large and breaking changes are acceptable when they improve the
-codebase direction; update affected code in the same pass instead of adding
-compatibility layers. This describes the development process, not expected
-deployment scale or data volume.
+This project has one maintainer and uses self-review rather than independent
+review approval. Public changes require CI and self-review, then squash merging.
+This workflow does not imply small deployment scale or data volume.
 
-This is an early, closed implementation. For trusted internal code, rely on
-static checks, typed APIs, and normal Python conventions. Add runtime guards,
-fallback paths, duplicate invariant checks, or exhaustive edge-case tests only
-at untrusted boundaries or in response to concrete failures. Review primarily
+The implementation is pre-stable. Breaking API and internal design changes are
+acceptable; update affected consumers instead of adding speculative compatibility
+layers. Persistent scientific data has a separate compatibility policy: promises
+begin at explicitly designated supported baselines, not every development store.
+Do not treat retained experimental evidence as disposable during a code refactor.
+
+For trusted internal code, prefer static checks, typed APIs and normal Python
+conventions. Add runtime guards, fallbacks, duplicate invariant checks or exhaustive
+edge-case tests at untrusted boundaries or for concrete failures. Review primarily
 for intended-path correctness and clear types.
