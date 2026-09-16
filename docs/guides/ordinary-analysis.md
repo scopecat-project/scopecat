@@ -40,13 +40,20 @@ with project.authoring() as author:
     publication_id = fitted.publication.id
 ```
 
-`arguments` currently accepts JSON-compatible values. For unit-bearing inputs,
-use an explicit scalar convention in the function signature, such as
-`expected_frequency_ghz: float`, and pass
-`fitted.value.frequency.to("GHz").value`. A `Quantity` returned in a conclusion
-cannot yet be passed directly as a managed argument. Supported typed argument
-conversion and clearer diagnostics are tracked in
-[#486](https://github.com/scopecat-project/scopecat/issues/486).
+`arguments` accepts JSON values and `Quantity` (also inside lists and string-keyed
+mappings). A declared `expected_frequency: sc.Quantity` can receive
+`arguments={"expected_frequency": fitted.value.frequency}` directly. The client
+encodes values and units as JSON; the worker validates and restores them using the
+**selected source version's** annotations and defaults. No arbitrary objects are
+pickled. Supported annotations are scalar/optional/literal values, `Quantity`,
+and typed lists/string-keyed dictionaries of those values. Unannotated arguments
+remain JSON values; annotate quantity inputs to receive native quantities.
+
+Invalid types identify the function and argument instead of failing at the raw
+JSON request boundary. Numeric strings are not silently converted. Requested
+units are retained as supplied; the analysis can explicitly convert with `.to(...)`.
+Equivalent magnitudes supplied in different units remain distinct requested
+arguments and do not silently share a publication identity.
 
 After changing a function or its helpers, explicitly call `author.refresh()` and
 choose `source="current"` in `analyze_as`. This selects the refreshed source;

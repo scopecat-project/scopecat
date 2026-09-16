@@ -13,6 +13,7 @@ from uuid import uuid4
 import httpx2
 from pydantic import JsonValue
 
+from scopecat.analysis.arguments import AnalysisArgument, encode_arguments
 from scopecat.analysis.facts import ordinary_result_schema
 from scopecat.api._config import LabConfigOperations
 from scopecat.api._remote import RemoteRunOperations
@@ -440,7 +441,7 @@ class AuthorProject(DaemonClient):
         *,
         code_revision: AuthorRevisionRef,
         key: str | None = None,
-        arguments: Mapping[str, JsonValue] | None = None,
+        arguments: Mapping[str, AnalysisArgument] | None = None,
     ) -> AuthorAnalysisReceipt:
         return self.analyze_author_revision(
             AuthorAnalysisRequest(
@@ -448,7 +449,7 @@ class AuthorProject(DaemonClient):
                 analysis=analysis,
                 code_revision=code_revision,
                 key=key,
-                arguments=dict(arguments or {}),
+                arguments=encode_arguments(analysis, arguments),
             )
         )
 
@@ -459,7 +460,7 @@ class AuthorProject(DaemonClient):
         result_type: type[ResultT],
         *,
         source: Literal["original", "current"] = "original",
-        arguments: Mapping[str, JsonValue] | None = None,
+        arguments: Mapping[str, AnalysisArgument] | None = None,
         key: str | None = None,
     ) -> AnalysisResult[ResultT]:
         """Publish registered analysis and reconstruct a materialized conclusion.

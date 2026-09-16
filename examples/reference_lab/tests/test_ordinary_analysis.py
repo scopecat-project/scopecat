@@ -3,6 +3,7 @@
 import shutil
 from pathlib import Path
 
+import httpx2
 import pytest
 import scopecat as sc
 from scopecat.application import LabApplication
@@ -11,7 +12,11 @@ from scopecat_server.lifecycle import start_project, stop_project
 
 from reference_lab.configuration import EXAMPLE_ROOT
 from reference_lab.everyday_author import acquire_everyday_author_inputs
-from reference_lab.workflows.authored.ordinary_analysis import PeakResult, estimate_peak
+from reference_lab.workflows.authored.ordinary_analysis import (
+    PeakResult,
+    PeakVerification,
+    estimate_peak,
+)
 
 
 def test_ordinary_analysis_retained_source_arguments_and_restart(
@@ -65,17 +70,80 @@ def test_ordinary_analysis_retained_source_arguments_and_restart(
             assert changed.value.frequency is None
             assert changed.publication.id != first.publication.id
             assert changed.publication.executions[0].input_bindings[1].value == 2.0
+            verify_name = name.replace("estimate_peak", "verify_peak")
+            verified = authors.analyze_as(
+                acquired.peaked,
+                verify_name,
+                PeakVerification,
+                source="current",
+                arguments={
+                    "expected_frequency": first.value.frequency,
+                    "tolerance": sc.Quantity(50, "MHz"),
+                },
+            )
+            assert verified.value.accepted
+            assert verified.value.tolerance == sc.Quantity(50, "MHz")
+            assert (
+                authors.analyze_as(
+                    acquired.peaked,
+                    verify_name,
+                    PeakVerification,
+                    source="current",
+                    arguments={
+                        "expected_frequency": first.value.frequency,
+                        "tolerance": sc.Quantity(50, "MHz"),
+                    },
+                ).publication.id
+                == verified.publication.id
+            )
+            other_units = authors.analyze_as(
+                acquired.peaked,
+                verify_name,
+                PeakVerification,
+                source="current",
+                arguments={
+                    "expected_frequency": first.value.frequency,
+                    "tolerance": sc.Quantity(0.05, "GHz"),
+                },
+            )
+            assert other_units.publication.id != verified.publication.id
+            with pytest.raises(httpx2.HTTPStatusError) as invalid:
+                authors.analyze_as(
+                    acquired.peaked,
+                    verify_name,
+                    PeakVerification,
+                    source="current",
+                    arguments={"expected_frequency": "bad", "tolerance": 0.05},
+                )
+            assert "expected_frequency" in str(invalid.value.__notes__)
             original_revision = authors.state().active
             assert original_revision is not None
             source_path = (
                 root / "src/reference_lab/workflows/authored/ordinary_analysis.py"
             )
             source_path.write_text(
-                source_path.read_text().replace(
+                source_path.read_text()
+                .replace(
                     "minimum_contrast: float = 0.2", "minimum_contrast: float = 2.0"
                 )
+                .replace('sc.Quantity(50, "MHz")', 'sc.Quantity(25, "MHz")')
             )
             authors.refresh()
+            original_typed = authors.analyze_as(
+                managed.id,
+                verify_name,
+                PeakVerification,
+                arguments={"expected_frequency": sc.Quantity(4.8, "GHz")},
+            )
+            current_typed = authors.analyze_as(
+                managed.id,
+                verify_name,
+                PeakVerification,
+                source="current",
+                arguments={"expected_frequency": sc.Quantity(4.8, "GHz")},
+            )
+            assert original_typed.value.tolerance == sc.Quantity(50, "MHz")
+            assert current_typed.value.tolerance == sc.Quantity(25, "MHz")
             edited = authors.analyze_as(
                 acquired.peaked, name, PeakResult, source="current"
             )
@@ -121,5 +189,11 @@ def test_ordinary_analysis_retained_source_arguments_and_restart(
             assert publication.fact("result") == first.publication.fact("result")
             assert publication.result_as(PeakResult).value == first.value
             assert publication.dataset("curve").schema == curve_schema
+            restored = (
+                lab.get_run(acquired.peaked)
+                .published_analysis(verified.publication.id)
+                .result_as(PeakVerification)
+            )
+            assert restored.value == verified.value
     finally:
         stop_project(project)
