@@ -117,4 +117,4 @@ def reference_lab_author_imports() -> Generator[None]:
                 if hasattr(parent, "authored"):
                     delattr(parent, "authored")
             else:
-                parent.authored = original_attribute
+                vars(parent)["authored"] = original_attribute
