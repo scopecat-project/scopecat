@@ -19,14 +19,12 @@ class _ReferenceLabDaemon(Protocol):
     url: str
 
 
-NOTEBOOKS = Path(__file__).parents[1] / "notebooks"
-
-
 def test_lab_tour_shows_one_inventory_and_parameter_catalog(
     reference_lab_daemon: _ReferenceLabDaemon,
+    reference_lab_notebooks: Path,
 ) -> None:
     assert reference_lab_daemon.url.startswith("http://127.0.0.1:")
-    namespace = run_path(str(NOTEBOOKS / "00_lab_tour.py"))
+    namespace = run_path(str(reference_lab_notebooks / "00_lab_tour.py"))
     summary = cast("dict[str, object]", namespace["lab_tour_summary"])
 
     assert set(cast("list[str]", summary["instruments"])) == {
@@ -58,9 +56,10 @@ def test_lab_tour_shows_one_inventory_and_parameter_catalog(
 
 def test_sample_workflow_binds_exact_revision_and_analysis_subject(
     reference_lab_daemon: _ReferenceLabDaemon,
+    reference_lab_notebooks: Path,
 ) -> None:
     assert reference_lab_daemon.url.startswith("http://127.0.0.1:")
-    namespace = run_path(str(NOTEBOOKS / "05_sample_workflow.py"))
+    namespace = run_path(str(reference_lab_notebooks / "05_sample_workflow.py"))
     summary = cast("dict[str, object]", namespace["sample_workflow_summary"])
 
     assert summary == {
@@ -77,9 +76,10 @@ def test_sample_workflow_binds_exact_revision_and_analysis_subject(
 
 def test_scan_shapes_run_as_real_lab_experiments(
     reference_lab_daemon: _ReferenceLabDaemon,
+    reference_lab_notebooks: Path,
 ) -> None:
     assert reference_lab_daemon.url.startswith("http://127.0.0.1:")
-    namespace = run_path(str(NOTEBOOKS / "21_scan_shapes.py"))
+    namespace = run_path(str(reference_lab_notebooks / "21_scan_shapes.py"))
     summary = cast("dict[str, object]", namespace["scan_shapes_summary"])
 
     assert summary == {
@@ -94,9 +94,10 @@ def test_scan_shapes_run_as_real_lab_experiments(
 
 def test_channel_map_exposes_independent_drive_and_demod_routes(
     reference_lab_daemon: _ReferenceLabDaemon,
+    reference_lab_notebooks: Path,
 ) -> None:
     assert reference_lab_daemon.url.startswith("http://127.0.0.1:")
-    namespace = run_path(str(NOTEBOOKS / "22_channel_map.py"))
+    namespace = run_path(str(reference_lab_notebooks / "22_channel_map.py"))
     summary = cast("dict[str, object]", namespace["channel_map_summary"])
 
     assert summary == {
@@ -141,9 +142,10 @@ def test_channel_map_exposes_independent_drive_and_demod_routes(
 
 def test_multichannel_dc_bias_spans_two_devices_and_four_routes(
     reference_lab_daemon: _ReferenceLabDaemon,
+    reference_lab_notebooks: Path,
 ) -> None:
     assert reference_lab_daemon.url.startswith("http://127.0.0.1:")
-    namespace = run_path(str(NOTEBOOKS / "33_multichannel_dc_bias.py"))
+    namespace = run_path(str(reference_lab_notebooks / "33_multichannel_dc_bias.py"))
     summary = cast("dict[str, object]", namespace["multichannel_dc_bias_summary"])
 
     assert summary == {
@@ -175,9 +177,10 @@ def test_multichannel_dc_bias_spans_two_devices_and_four_routes(
 
 def test_xy_lo_sweep_records_carriers_from_signed_if(
     reference_lab_daemon: _ReferenceLabDaemon,
+    reference_lab_notebooks: Path,
 ) -> None:
     assert reference_lab_daemon.url.startswith("http://127.0.0.1:")
-    namespace = run_path(str(NOTEBOOKS / "34_xy_lo_sweep.py"))
+    namespace = run_path(str(reference_lab_notebooks / "34_xy_lo_sweep.py"))
     summary = cast("dict[str, object]", namespace["xy_lo_sweep_summary"])
 
     assert summary == {
@@ -193,9 +196,10 @@ def test_xy_lo_sweep_records_carriers_from_signed_if(
 
 def test_awg_output_monitor_records_entityless_bench_capture(
     reference_lab_daemon: _ReferenceLabDaemon,
+    reference_lab_notebooks: Path,
 ) -> None:
     assert reference_lab_daemon.url.startswith("http://127.0.0.1:")
-    namespace = run_path(str(NOTEBOOKS / "35_awg_output_monitor.py"))
+    namespace = run_path(str(reference_lab_notebooks / "35_awg_output_monitor.py"))
     summary = cast("dict[str, object]", namespace["awg_output_monitor_summary"])
 
     assert summary == {
@@ -212,9 +216,10 @@ def test_awg_output_monitor_records_entityless_bench_capture(
 
 def test_q0_ramsey_runs_on_the_reference_channels(
     reference_lab_daemon: _ReferenceLabDaemon,
+    reference_lab_notebooks: Path,
 ) -> None:
     assert reference_lab_daemon.url.startswith("http://127.0.0.1:")
-    namespace = run_path(str(NOTEBOOKS / "23_q0_ramsey.py"))
+    namespace = run_path(str(reference_lab_notebooks / "23_q0_ramsey.py"))
     summary = cast("dict[str, object]", namespace["q0_ramsey_summary"])
 
     assert summary == {
@@ -227,9 +232,10 @@ def test_q0_ramsey_runs_on_the_reference_channels(
 
 def test_flux_ramsey_composes_local_bias_and_quantum_channels(
     reference_lab_daemon: _ReferenceLabDaemon,
+    reference_lab_notebooks: Path,
 ) -> None:
     assert reference_lab_daemon.url.startswith("http://127.0.0.1:")
-    namespace = run_path(str(NOTEBOOKS / "24_flux_ramsey.py"))
+    namespace = run_path(str(reference_lab_notebooks / "24_flux_ramsey.py"))
     summary = cast("dict[str, object]", namespace["flux_ramsey_summary"])
 
     assert summary["points"] == 15
@@ -240,9 +246,10 @@ def test_flux_ramsey_composes_local_bias_and_quantum_channels(
 
 def test_entity_routed_ramsey_switches_channel_sets_by_point(
     reference_lab_daemon: _ReferenceLabDaemon,
+    reference_lab_notebooks: Path,
 ) -> None:
     assert reference_lab_daemon.url.startswith("http://127.0.0.1:")
-    namespace = run_path(str(NOTEBOOKS / "25_entity_routed_ramsey.py"))
+    namespace = run_path(str(reference_lab_notebooks / "25_entity_routed_ramsey.py"))
     summary = cast("dict[str, object]", namespace["entity_ramsey_summary"])
 
     assert summary == {
@@ -255,9 +262,12 @@ def test_entity_routed_ramsey_switches_channel_sets_by_point(
 
 def test_parallel_ramsey_uses_two_drive_and_demod_channels(
     reference_lab_daemon: _ReferenceLabDaemon,
+    reference_lab_notebooks: Path,
 ) -> None:
     assert reference_lab_daemon.url.startswith("http://127.0.0.1:")
-    namespace = run_path(str(NOTEBOOKS / "26_parallel_multiplexed_ramsey.py"))
+    namespace = run_path(
+        str(reference_lab_notebooks / "26_parallel_multiplexed_ramsey.py")
+    )
     summary = cast("dict[str, object]", namespace["parallel_ramsey_summary"])
 
     assert summary == {
@@ -271,9 +281,10 @@ def test_parallel_ramsey_uses_two_drive_and_demod_channels(
 
 def test_fixed_if_lo_sweep_keeps_lo_outside_the_quantum_target(
     reference_lab_daemon: _ReferenceLabDaemon,
+    reference_lab_notebooks: Path,
 ) -> None:
     assert reference_lab_daemon.url.startswith("http://127.0.0.1:")
-    namespace = run_path(str(NOTEBOOKS / "36_q0_fixed_if_lo_sweep.py"))
+    namespace = run_path(str(reference_lab_notebooks / "36_q0_fixed_if_lo_sweep.py"))
     summary = cast("dict[str, object]", namespace["q0_fixed_if_lo_sweep_summary"])
 
     assert summary == {
@@ -286,9 +297,12 @@ def test_fixed_if_lo_sweep_keeps_lo_outside_the_quantum_target(
 
 def test_channel_timing_candidate_preserves_analysis_provenance(
     reference_lab_daemon: _ReferenceLabDaemon,
+    reference_lab_notebooks: Path,
 ) -> None:
     assert reference_lab_daemon.url.startswith("http://127.0.0.1:")
-    namespace = run_path(str(NOTEBOOKS / "27_channel_timing_candidate.py"))
+    namespace = run_path(
+        str(reference_lab_notebooks / "27_channel_timing_candidate.py")
+    )
     summary = cast("dict[str, object]", namespace["channel_candidate_summary"])
 
     assert summary["proposal_id"] == "q1-channel-delay"
@@ -298,9 +312,12 @@ def test_channel_timing_candidate_preserves_analysis_provenance(
 
 def test_channel_conflict_names_the_logical_drive_route(
     reference_lab_daemon: _ReferenceLabDaemon,
+    reference_lab_notebooks: Path,
 ) -> None:
     assert reference_lab_daemon.url.startswith("http://127.0.0.1:")
-    namespace = run_path(str(NOTEBOOKS / "28_channel_conflict_diagnostic.py"))
+    namespace = run_path(
+        str(reference_lab_notebooks / "28_channel_conflict_diagnostic.py")
+    )
     summary = cast("dict[str, object]", namespace["channel_conflict_summary"])
 
     assert "pulse_signal_overlap" in cast("list[str]", summary["codes"])
@@ -309,9 +326,10 @@ def test_channel_conflict_names_the_logical_drive_route(
 
 def test_entity_axis_preserves_the_available_demod_channel(
     reference_lab_daemon: _ReferenceLabDaemon,
+    reference_lab_notebooks: Path,
 ) -> None:
     assert reference_lab_daemon.url.startswith("http://127.0.0.1:")
-    namespace = run_path(str(NOTEBOOKS / "29_channel_unavailable.py"))
+    namespace = run_path(str(reference_lab_notebooks / "29_channel_unavailable.py"))
     summary = cast("dict[str, object]", namespace["channel_unavailable_summary"])
 
     assert isinstance(summary["run_id"], str)
@@ -352,9 +370,10 @@ def test_entity_axis_preserves_the_available_demod_channel(
 
 def test_topology_scaled_ramsey_resolves_one_connected_qubit_set(
     reference_lab_daemon: _ReferenceLabDaemon,
+    reference_lab_notebooks: Path,
 ) -> None:
     assert reference_lab_daemon.url.startswith("http://127.0.0.1:")
-    namespace = run_path(str(NOTEBOOKS / "31_topology_scaled_ramsey.py"))
+    namespace = run_path(str(reference_lab_notebooks / "31_topology_scaled_ramsey.py"))
     summary = cast("dict[str, object]", namespace["topology_scaled_summary"])
 
     assert summary == {
@@ -375,9 +394,12 @@ def test_topology_scaled_ramsey_resolves_one_connected_qubit_set(
 
 def test_quantum_program_exposes_compiled_inspection_layers(
     reference_lab_daemon: _ReferenceLabDaemon,
+    reference_lab_notebooks: Path,
 ) -> None:
     assert reference_lab_daemon.url.startswith("http://127.0.0.1:")
-    namespace = run_path(str(NOTEBOOKS / "32_quantum_program_inspection.py"))
+    namespace = run_path(
+        str(reference_lab_notebooks / "32_quantum_program_inspection.py")
+    )
     summary = cast("dict[str, object]", namespace["program_inspection_summary"])
 
     assert summary["program_id"] == "reference-lab.topology-scaled-ramsey"
@@ -391,9 +413,10 @@ def test_quantum_program_exposes_compiled_inspection_layers(
 
 def test_drag_calibration_closes_the_reviewed_config_loop(
     reference_lab_daemon: _ReferenceLabDaemon,
+    reference_lab_notebooks: Path,
 ) -> None:
     assert reference_lab_daemon.url.startswith("http://127.0.0.1:")
-    namespace = run_path(str(NOTEBOOKS / "30_drag_calibration.py"))
+    namespace = run_path(str(reference_lab_notebooks / "30_drag_calibration.py"))
     summary = cast("dict[str, object]", namespace["drag_beta_summary"])
 
     assert cast("str", summary["procedure"]).startswith("procedure-")
@@ -460,9 +483,10 @@ def test_drag_calibration_closes_the_reviewed_config_loop(
 
 def test_measurement_workbench_uses_real_durable_data(
     reference_lab_daemon: _ReferenceLabDaemon,
+    reference_lab_notebooks: Path,
 ) -> None:
     assert reference_lab_daemon.url.startswith("http://127.0.0.1:")
-    namespace = run_path(str(NOTEBOOKS / "40_measurement_workbench.py"))
+    namespace = run_path(str(reference_lab_notebooks / "40_measurement_workbench.py"))
     summary = cast("dict[str, object]", namespace["measurement_summary"])
 
     assert summary["points"] == 3
@@ -476,9 +500,10 @@ def test_measurement_workbench_uses_real_durable_data(
 
 def test_ragged_scope_data_survives_daemon_boundaries(
     reference_lab_daemon: _ReferenceLabDaemon,
+    reference_lab_notebooks: Path,
 ) -> None:
     assert reference_lab_daemon.url.startswith("http://127.0.0.1:")
-    namespace = run_path(str(NOTEBOOKS / "50_ragged_scope_capture.py"))
+    namespace = run_path(str(reference_lab_notebooks / "50_ragged_scope_capture.py"))
     summary = cast("dict[str, object]", namespace["ragged_scope_summary"])
 
     assert summary == {
@@ -491,10 +516,11 @@ def test_ragged_scope_data_survives_daemon_boundaries(
 
 def test_session_lifetime_captures_and_reattaches_without_reacquisition(
     reference_lab_daemon: _ReferenceLabDaemon,
+    reference_lab_notebooks: Path,
 ) -> None:
     with DaemonClient(reference_lab_daemon.url) as client:
         before = {run.run_id for run in client.list_runs(limit=100).items}
-        namespace = run_path(str(NOTEBOOKS / "02_session_lifetime.py"))
+        namespace = run_path(str(reference_lab_notebooks / "02_session_lifetime.py"))
         after = {run.run_id for run in client.list_runs(limit=100).items}
     snapshot = cast("RunSnapshot", namespace["snapshot"])
     assert after - before == {snapshot.run_id}

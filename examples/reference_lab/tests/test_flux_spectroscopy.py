@@ -346,11 +346,10 @@ def test_flux_spectroscopy_runs_fits_saves_and_proposes(tmp_path: Path) -> None:
 
 def test_direct_control_notebook_completes_through_the_project_daemon(
     reference_lab_daemon: _ReferenceLabDaemon,
+    reference_lab_notebooks: Path,
 ) -> None:
     assert reference_lab_daemon.url.startswith("http://127.0.0.1:")
-    result = run_path(
-        str(Path(__file__).parents[1] / "notebooks" / "10_direct_control.py")
-    )
+    result = run_path(str(reference_lab_notebooks / "10_direct_control.py"))
 
     inventory = cast("list[tuple[str, str]]", result["inventory"])
     trace_results = cast("dict[str, dict[str, object]]", result["trace_results"])
@@ -365,11 +364,10 @@ def test_direct_control_notebook_completes_through_the_project_daemon(
 
 def test_flux_spectroscopy_notebook_completes_through_the_project_daemon(
     reference_lab_daemon: _ReferenceLabDaemon,
+    reference_lab_notebooks: Path,
 ) -> None:
     assert reference_lab_daemon.url.startswith("http://127.0.0.1:")
-    result = run_path(
-        str(Path(__file__).parents[1] / "notebooks" / "20_flux_spectroscopy.py")
-    )
+    result = run_path(str(reference_lab_notebooks / "20_flux_spectroscopy.py"))
 
     summary = cast("_FluxNotebookSummary", result["summary"])
     assert summary["status"] == "completed"

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import shutil
+import sys
 from collections.abc import Generator
 from dataclasses import dataclass
 from pathlib import Path
@@ -18,6 +19,7 @@ EXAMPLE_ROOT = Path(__file__).parents[1]
 @dataclass(frozen=True, slots=True)
 class ReferenceLabDaemon:
     url: str
+    root: Path
 
 
 @pytest.fixture(autouse=True)
@@ -33,6 +35,7 @@ def reference_lab_daemon(
     """Run every notebook against one real HTTP daemon instance."""
 
     project_root = tmp_path_factory.mktemp("reference-lab-project")
+    shutil.copytree(EXAMPLE_ROOT / "notebooks", project_root / "notebooks")
     shutil.copytree(EXAMPLE_ROOT / "config", project_root / "config")
     shutil.copytree(EXAMPLE_ROOT / "src", project_root / "src")
     shutil.copy2(EXAMPLE_ROOT / "scopecat.toml", project_root / "scopecat.toml")
@@ -50,10 +53,35 @@ def reference_lab_daemon(
     previous_url = os.environ.get(DAEMON_URL_ENV)
     os.environ[DAEMON_URL_ENV] = record.base_url
     try:
-        yield ReferenceLabDaemon(url=record.base_url)
+        yield ReferenceLabDaemon(url=record.base_url, root=project_root)
     finally:
         if previous_url is None:
             os.environ.pop(DAEMON_URL_ENV, None)
         else:
             os.environ[DAEMON_URL_ENV] = previous_url
         stop_project(project)
+
+
+@pytest.fixture
+def reference_lab_notebooks(
+    reference_lab_daemon: ReferenceLabDaemon,
+    monkeypatch: pytest.MonkeyPatch,
+) -> Generator[Path]:
+    """Load gallery code from the same workspace that owns the test service."""
+    retained = {
+        name: module
+        for name, module in tuple(sys.modules.items())
+        if name == "reference_lab" or name.startswith("reference_lab.")
+    }
+    for name in retained:
+        del sys.modules[name]
+    monkeypatch.setattr(
+        sys, "path", [str(reference_lab_daemon.root / "src"), *sys.path]
+    )
+    try:
+        yield reference_lab_daemon.root / "notebooks"
+    finally:
+        for name in tuple(sys.modules):
+            if name == "reference_lab" or name.startswith("reference_lab."):
+                del sys.modules[name]
+        sys.modules.update(retained)
