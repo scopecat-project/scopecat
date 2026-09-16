@@ -1,11 +1,35 @@
 # Supervised laboratory pilot roadmap
 
-Reviewed against public `f2a278e2` on 2026-09-08. The first target is one laboratory,
+Historical planning baseline: reviewed against public `f2a278e2` on 2026-09-08. The first target is one laboratory,
 a supervised operator and a small maintained workflow catalog. Long-running
 unattended calibration is a later qualification step. This roadmap supplements
 the [project charter](project-charter.md), not a change to its single-user scope.
 
-## Readiness assessment
+## Current planning entry point
+
+The readiness table and P01–P16 sequencing below describe that historical
+baseline, not the remaining implementation backlog. Consult the linked issues
+for delivery status; completed framework work does not imply independent human
+or hardware acceptance.
+
+Current follow-through is organized around:
+
+- workspace/data/deployment binding [#572](https://github.com/scopecat-project/scopecat/issues/572),
+  with the [code audit and minimal contract](architecture/workspace-bindings.md);
+- persistent research/sample history [#573](https://github.com/scopecat-project/scopecat/issues/573)
+  and explicit compatibility/restore [#574](https://github.com/scopecat-project/scopecat/issues/574),
+  followed by portable evidence [#575](https://github.com/scopecat-project/scopecat/issues/575);
+- daily parameter saving [#560](https://github.com/scopecat-project/scopecat/issues/560),
+  typed analysis arguments [#486](https://github.com/scopecat-project/scopecat/issues/486)
+  and scan/grouped-analysis workflows [#561](https://github.com/scopecat-project/scopecat/issues/561);
+- startup reliability [#465](https://github.com/scopecat-project/scopecat/issues/465)/[#553](https://github.com/scopecat-project/scopecat/issues/553),
+  measured feedback cost [#523](https://github.com/scopecat-project/scopecat/issues/523),
+  and targeted fixture decomposition [#520](https://github.com/scopecat-project/scopecat/issues/520)/[#565](https://github.com/scopecat-project/scopecat/issues/565).
+
+Issues own live status. This document retains pilot rationale and acceptance
+boundaries; it is not a second checklist to reopen already-delivered work.
+
+## Historical readiness assessment
 
 The execution/data foundations can support developer-assisted trials now. A
 routine operator pilot needs a reproducible deployment, data recovery, an
