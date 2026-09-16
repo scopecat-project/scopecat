@@ -12,14 +12,17 @@ nav = [
   { "Home" = "index.md" },
   { "Getting started" = [
     "getting-started/index.md",
-    { "Source preview quickstart" = "getting-started/quickstart.md" },
+    { "Learning paths" = "getting-started/learning-path.md" },
+    { "Pilot bundle quickstart" = "getting-started/quickstart.md" },
   ] },
   { "Tutorials" = [
     "tutorials/index.md",
+    { "Edit a starter experiment" = "tutorials/starter-authoring.md" },
     { "Tour the reference lab" = "tutorials/reference-lab.md" },
   ] },
   { "How-to guides" = [
     "how-to/index.md",
+    { "Compute and typed reads" = "how-to/compute-and-read.md" },
     { "Write an experiment" = "how-to/write-an-experiment.md" },
     { "Refresh author code" = "how-to/refresh-author-code.md" },
     { "Control instruments" = "how-to/control-instruments.md" },

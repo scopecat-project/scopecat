@@ -18,6 +18,7 @@ SOURCE = """from dataclasses import dataclass
 from typing import Annotated
 
 import numpy as np
+from numpy.typing import NDArray
 import scopecat as sc
 
 
@@ -26,7 +27,7 @@ class MeanData:
     iq: sc.DataRef[complex]
 
 
-def shot_iq() -> Annotated[np.ndarray, sc.ArrayType(
+def shot_iq() -> Annotated[NDArray[np.complex128], sc.ArrayType(
     dtype="complex128", unit="V", dimensions=(sc.ArrayDimension("shot", 2),)
 )]:
     return np.asarray([1 + 2j, 3 + 4j])

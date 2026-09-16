@@ -33,6 +33,7 @@ from scopecat.authoring._module_invocation import (
     domain_use_call,
 )
 from scopecat.authoring._module_results import (
+    DataRef,
     ProductBundle,
     ProductBundleKernel,
     RecordedProducts,
@@ -95,6 +96,7 @@ from scopecat.program.products import (
     EntityRecordMemberSelection,
     EntityRecordSelection,
     ProductAxis,
+    ProductNativeValue,
     ProductRecording,
     ProductRef,
     ProductRefs,
@@ -512,6 +514,18 @@ class ExperimentContext:
         """Convert a unit-bearing reference at its inferred compute placement."""
 
         return self._program.convert(value, unit, id=id)
+
+    @overload
+    def compute[T: ProductNativeValue](
+        self,
+        id: str | None = None,
+        *,
+        fn: Callable[..., T],
+        inputs: Mapping[str, ComputeInput | ProductRef] | None = None,
+        output_type: None = None,
+        axes_from: ProductRef | None = None,
+        **input_bindings: ComputeInput | ProductRef,
+    ) -> DataRef[T]: ...
 
     @overload
     def compute(

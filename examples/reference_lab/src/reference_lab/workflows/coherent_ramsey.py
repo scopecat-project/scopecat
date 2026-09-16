@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Annotated, cast
+from typing import Annotated
 
 import numpy as np
 import scopecat as sc
@@ -24,7 +24,7 @@ def _iq_mean(
 class CoherentRamseyDataset:
     delay: sc.CoordinateRef[sc.Quantity]
     phase: sc.CoordinateRef[sc.Quantity]
-    iq_mean: sc.ProductRef[complex]
+    iq_mean: sc.DataRef[complex]
 
 
 @sc.experiment(id="reference_lab.coherent_ramsey")
@@ -38,8 +38,5 @@ def coherent_ramsey(experiment: sc.ExperimentContext) -> CoherentRamseyDataset:
         .with_shots(16)
         .with_compiler_inputs(qubits=sc.parameter_table_ref(QubitParameters))
     )
-    mean = cast(
-        "sc.ProductRef[complex]",
-        experiment.compute("iq_mean", fn=_iq_mean, inputs={"values": capture.iq_shots}),
-    )
+    mean = experiment.compute("iq_mean", fn=_iq_mean, values=capture.iq_shots)
     return CoherentRamseyDataset(delay=delay, phase=phase, iq_mean=mean)

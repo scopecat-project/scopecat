@@ -188,6 +188,9 @@ def capture_acceptance_fixtures(
         for variable in coherent_data.schema.variables
         if variable.id == mean_id
     ).dims == ("point",)
+    typed_values = coherent_run.result(coherent.output).rows(
+        lambda point: point.value(coherent.output.iq_mean)
+    )
     expected_values: list[dict[str, float]] = []
     for record in coherent_data.records:
         value = record.observables[mean_id]
@@ -198,6 +201,9 @@ def capture_acceptance_fixtures(
         assert measurement_record_content_hash(
             restored
         ) == measurement_record_content_hash(record)
+    assert typed_values == tuple(
+        complex(value["real"], value["imag"]) for value in expected_values
+    )
     assert any(value["imag"] != 0 for value in expected_values)
     assert len({(value["real"], value["imag"]) for value in expected_values}) > 1
     # Keep this source lazy: the previously inspected dataset has loaded records.
