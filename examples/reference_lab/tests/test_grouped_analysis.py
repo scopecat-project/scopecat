@@ -14,6 +14,8 @@ from reference_lab.parameters import QubitParameters
 from reference_lab.workflows.authored.ordinary_analysis import PeakResult
 from reference_lab.workflows.authored.signal import signal as signal_declaration
 
+pytestmark = pytest.mark.usefixtures("reference_lab_author_imports")
+
 
 def test_grouped_analysis_recovery_and_restart(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch

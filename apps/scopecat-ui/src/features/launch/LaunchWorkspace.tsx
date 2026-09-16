@@ -137,15 +137,12 @@ export function LaunchWorkspace({
               key={draft.definition}
               entry={entry}
               onAdmitted={admitted}
-              catalogReady={catalog.isSuccess && !catalog.isFetching}
+              catalogReady={catalog.isSuccess}
             />
           )}
         </>
       )}
-      <OriginalSubmission
-        onOpen={admitted}
-        catalogReady={Boolean(entry) && catalog.isSuccess && !catalog.isFetching}
-      />
+      <OriginalSubmission onOpen={admitted} catalogReady={Boolean(entry) && catalog.isSuccess} />
       <ProcedureHistory selectedId={procedureId} onSelect={admitted} />
       {procedureId && <ProcedureProgress key={procedureId} procedureId={procedureId} />}
     </section>

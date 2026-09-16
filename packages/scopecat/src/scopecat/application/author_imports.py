@@ -10,9 +10,10 @@ import importlib
 import importlib.abc
 import importlib.util
 import sys
-from collections.abc import Sequence
+from collections.abc import Generator, Mapping, Sequence
+from contextlib import contextmanager
 from dataclasses import replace
-from importlib.machinery import ModuleSpec
+from importlib.machinery import ModuleSpec, SourceFileLoader
 from pathlib import Path
 from threading import RLock
 from types import ModuleType
@@ -21,13 +22,22 @@ from typing import cast, override
 from scopecat.application.authoring import AuthorExperiment
 from scopecat.authoring.experiments import Experiment
 from scopecat.project_sources import materialize_sources, require_environment
-from scopecat.records.author_revision import AuthorRevisionBundle
+from scopecat.records.author_revision import AuthorRevisionBundle, AuthorRevisionRef
 
 _import_lock = RLock()
 
 
 class _RevisionImports(importlib.abc.MetaPathFinder):
-    def __init__(self, project_root: Path, archive: Path, roots: tuple[str, ...]):
+    def __init__(
+        self,
+        project_root: Path,
+        archive: Path,
+        roots: tuple[str, ...],
+        revision: AuthorRevisionRef,
+        fingerprints: Mapping[str, str],
+    ):
+        self.revision = revision
+        self.fingerprints = fingerprints
         self.project_root = project_root
         self.archive = archive
         self.roots = roots
@@ -71,11 +81,19 @@ class _RevisionImports(importlib.abc.MetaPathFinder):
             location = self.archive / relative
             if location.with_suffix(".py").is_file():
                 return importlib.util.spec_from_file_location(
-                    fullname, location.with_suffix(".py")
+                    fullname,
+                    location.with_suffix(".py"),
+                    loader=_RevisionLoader(
+                        fullname, str(location.with_suffix(".py")), self
+                    ),
                 )
             if (location / "__init__.py").is_file():
                 return importlib.util.spec_from_file_location(
-                    fullname, location / "__init__.py"
+                    fullname,
+                    location / "__init__.py",
+                    loader=_RevisionLoader(
+                        fullname, str(location / "__init__.py"), self
+                    ),
                 )
             if location.is_dir():
                 spec = ModuleSpec(fullname, loader=None, is_package=True)
@@ -87,6 +105,46 @@ class _RevisionImports(importlib.abc.MetaPathFinder):
         )
 
 
+class _RevisionLoader(SourceFileLoader):
+    def __init__(self, name: str, path: str, finder: _RevisionImports):
+        super().__init__(name, path)
+        self.finder = finder
+
+    @override
+    def exec_module(self, module: ModuleType) -> None:
+        super().exec_module(module)
+        for name, value in tuple(cast("dict[str, object]", vars(module)).items()):
+            if (
+                not isinstance(value, Experiment)
+                or value.id not in self.finder.fingerprints
+            ):
+                continue
+            if value.source["module"] != module.__name__:
+                continue
+            setattr(
+                module,
+                name,
+                _bind_declaration(
+                    value,
+                    self.finder.revision,
+                    self.finder.fingerprints[value.id],
+                ),
+            )
+
+
+def _bind_declaration[**P, ResultT](
+    experiment: Experiment[P, ResultT],
+    revision: AuthorRevisionRef,
+    fingerprint: str,
+) -> Experiment[P, ResultT]:
+    declaration = AuthorExperiment.from_declaration(experiment, code_revision=revision)
+    if declaration.fingerprint != fingerprint:
+        raise ValueError(
+            "notebook declaration does not match the admitted source revision"
+        )
+    return replace(experiment, code_revision=revision)
+
+
 def load_revision_experiment[**P, ResultT](
     experiment: Experiment[P, ResultT],
     bundle: AuthorRevisionBundle,
@@ -94,16 +152,69 @@ def load_revision_experiment[**P, ResultT](
     project_root: Path,
     cache: Path,
     expected_fingerprint: str,
+    fingerprints: Mapping[str, str] | None = None,
 ) -> Experiment[P, ResultT]:
-    """Replace the refresh closure transactionally, then validate the declaration."""
+    """Bind one exact declaration; ordinary refresh also supports normal imports."""
     module_name = experiment.source["module"]
     qualname = experiment.source["qualname"]
-    archive = materialize_sources(bundle, cache)
-    finder = _RevisionImports(project_root, archive, bundle.manifest.refresh_roots)
-    if not finder.owns(module_name) or "<locals>" in qualname:
-        raise ValueError(
-            "typed refresh requires an importable experiment inside refresh_roots"
+    with _revision_imports(
+        bundle,
+        project_root=project_root,
+        cache=cache,
+        fingerprints=(
+            {experiment.id: expected_fingerprint}
+            if fingerprints is None
+            else fingerprints
+        ),
+    ) as finder:
+        if not finder.owns(module_name) or "<locals>" in qualname:
+            raise ValueError(
+                "typed refresh requires an importable experiment inside refresh_roots"
+            )
+        value: object = importlib.import_module(module_name)
+        for part in qualname.split("."):
+            value = cast("object", getattr(value, part))
+        if not isinstance(value, Experiment) or value.id != experiment.id:
+            raise ValueError(
+                f"{module_name}:{qualname} no longer declares {experiment.id}"
+            )
+        return _bind_declaration(
+            cast("Experiment[P, ResultT]", value),
+            bundle.manifest.ref,
+            expected_fingerprint,
         )
+
+
+def refresh_revision_imports(
+    bundle: AuthorRevisionBundle,
+    *,
+    project_root: Path,
+    cache: Path,
+    fingerprints: Mapping[str, str],
+) -> None:
+    """Activate admitted imports, including modules added since the last refresh."""
+    with _revision_imports(
+        bundle, project_root=project_root, cache=cache, fingerprints=fingerprints
+    ):
+        pass
+
+
+@contextmanager
+def _revision_imports(
+    bundle: AuthorRevisionBundle,
+    *,
+    project_root: Path,
+    cache: Path,
+    fingerprints: Mapping[str, str],
+) -> Generator[_RevisionImports]:
+    archive = materialize_sources(bundle, cache)
+    finder = _RevisionImports(
+        project_root,
+        archive,
+        bundle.manifest.refresh_roots,
+        bundle.manifest.ref,
+        fingerprints,
+    )
     require_environment(bundle.manifest)
     with _import_lock:
         previous_finders = [
@@ -155,22 +266,15 @@ def load_revision_experiment[**P, ResultT](
             sys.meta_path.remove(item)
         sys.meta_path.insert(0, finder)
         try:
-            value: object = importlib.import_module(module_name)
-            for part in qualname.split("."):
-                value = cast("object", getattr(value, part))
-            if not isinstance(value, Experiment) or value.id != experiment.id:
-                raise ValueError(
-                    f"{module_name}:{qualname} no longer declares {experiment.id}"
-                )
-            selected = cast("Experiment[P, ResultT]", value)
-            declaration = AuthorExperiment.from_declaration(
-                selected, code_revision=bundle.manifest.ref
-            )
-            if declaration.fingerprint != expected_fingerprint:
-                raise ValueError(
-                    "notebook declaration does not match the admitted source revision"
-                )
-            return replace(selected, code_revision=bundle.manifest.ref)
+            importlib.invalidate_caches()
+            for name in sorted(previous, key=lambda name: (name.count("."), name)):
+                try:
+                    finder.find_spec(name, None)
+                except ModuleNotFoundError:
+                    # Deleted modules remain absent; imports cannot fall back to disk.
+                    continue
+                importlib.import_module(name)
+            yield finder
         except BaseException:
             for name in tuple(sys.modules):
                 if finder.owns(name):

@@ -42,7 +42,7 @@ def shot_iq() -> Annotated[NDArray[np.complex128], sc.ArrayType(
 
 @sc.compute
 def mean_iq(samples, gain) -> Annotated[
-    complex, sc.ScalarType(sc.ComplexType(unit="V"))
+    complex, sc.Unit("V")
 ]:
     return complex(np.mean(samples)) * gain
 
@@ -62,7 +62,7 @@ from dataclasses import dataclass
 from typing import Annotated
 import scopecat as sc
 
-type IQ = Annotated[complex, sc.ScalarType(sc.ComplexType(unit="V"))]
+type IQ = Annotated[complex, sc.Unit("V")]
 @dataclass
 class Original[T]:
     iq: T
@@ -95,13 +95,15 @@ def check() -> None:
         try:
             with project.authoring() as session:
                 sys.path.insert(0, str(project.root / "src"))
+                initial = session.refresh()
                 imported = cast(
                     "Experiment[..., object]",
                     importlib.import_module(
                         "scopecat_lab.authored.signal"
                     ).mean_iq_experiment,
                 )
-                definition = session.load_experiment(imported)
+                definition = imported
+                assert definition.code_revision == initial.active
                 old_request = definition()
                 run = session.prepare(old_request).run().wait(timeout=90).result()
                 old_id = run.id
@@ -118,7 +120,13 @@ def check() -> None:
                     .replace("iq: sc.DataRef[complex]", "average: sc.DataRef[complex]"),
                     encoding="utf-8",
                 )
-                definition = session.refresh(definition)
+                session.refresh()
+                definition = cast(
+                    "Experiment[..., object]",
+                    importlib.import_module(
+                        "scopecat_lab.authored.signal"
+                    ).mean_iq_experiment,
+                )
                 assert definition().snapshot()["gain"] == 2.0
                 assert old_request.snapshot()["gain"] == 1.0
                 assert (
@@ -131,11 +139,46 @@ def check() -> None:
                     4 + 7j
                 ]
                 assert list(run.measurements()["iq"].require_values()) == [2 + 3j]
+                # New files become ordinary admitted imports after the same refresh.
+                added = source.with_name("added.py")
+                added_source = SOURCE.replace('id="mean-iq"', 'id="added-iq"').replace(
+                    "def mean_iq_experiment(", "def added_experiment("
+                )
+                added.write_text(added_source, encoding="utf-8")
+                try:
+                    importlib.import_module("scopecat_lab.authored.added")
+                except ModuleNotFoundError:
+                    pass
+                else:
+                    raise AssertionError(
+                        "unrefreshed file leaked into admitted imports"
+                    )
+                refreshed = session.refresh()
+                # A later disk edit cannot change the version just published.
+                added.write_text(
+                    added_source.replace("gain: float = 1.0", "gain: float = 9.0"),
+                    encoding="utf-8",
+                )
+                new_definition = cast(
+                    "Experiment[..., object]",
+                    importlib.import_module(
+                        "scopecat_lab.authored.added"
+                    ).added_experiment,
+                )
+                assert new_definition.code_revision == refreshed.active
+                assert new_definition().snapshot()["gain"] == 1.0
+                added_run = (
+                    session.prepare(new_definition()).run().wait(timeout=90).result()
+                )
+                assert list(added_run.measurements()["iq"].require_values()) == [2 + 3j]
+                added.write_text(added_source, encoding="utf-8")
+                # Repeating the connection/import cell needs no first-load branch.
+                session.refresh()
                 admitted = session.state()
                 good_source = source.read_text(encoding="utf-8")
                 source.write_text(good_source + "\ndef broken(:\n", encoding="utf-8")
                 try:
-                    session.refresh(definition)
+                    session.refresh()
                 except AuthorPreparationFailed:
                     pass
                 else:
@@ -149,7 +192,7 @@ def check() -> None:
                 rebound = session.load_experiment(
                     definition, code_revision=selected.active
                 )
-                assert rebound.code_revision == definition.code_revision
+                assert rebound.code_revision == selected.active
                 assert session.state() == selected
         finally:
             stop_project(project)

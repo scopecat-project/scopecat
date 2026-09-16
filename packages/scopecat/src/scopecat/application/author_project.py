@@ -371,6 +371,31 @@ class AuthorProject(DaemonClient):
             timeout=timeout
         )
         if experiment is None:
+            if (
+                state.active is not None
+                and self.project_root is not None
+                and self.receipts is not None
+            ):
+                from scopecat.application.author_imports import refresh_revision_imports
+
+                root, cache = self._require_local_authoring()
+                catalog = self.catalog(code_revision=state.active)
+                try:
+                    refresh_revision_imports(
+                        self.author_revision(state.active),
+                        project_root=root,
+                        cache=cache,
+                        fingerprints={
+                            entry.id: entry.version for entry in catalog.entries
+                        },
+                    )
+                except Exception as error:
+                    error.add_note(
+                        f"Notebook imports failed for {state.active.content_hash}. "
+                        "Server publication is unchanged; fix the local environment "
+                        "and refresh again."
+                    )
+                    raise
             return state
         return self.load_experiment(experiment, code_revision=state.active)
 
@@ -410,6 +435,7 @@ class AuthorProject(DaemonClient):
                 project_root=root,
                 cache=cache,
                 expected_fingerprint=entry.version,
+                fingerprints={item.id: item.version for item in catalog.entries},
             )
         except Exception as error:
             error.add_note(

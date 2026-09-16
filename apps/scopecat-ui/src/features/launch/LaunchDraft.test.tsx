@@ -37,6 +37,8 @@ const prepared: LaunchCatalogEntry = {
   ],
 };
 let catalog: LaunchCatalogEntry[];
+let deferCatalog: boolean;
+let catalogResponse: ((response: Response) => void) | undefined;
 let generation: number;
 let manualEventId: number;
 let configFails: boolean;
@@ -95,6 +97,8 @@ function Harness({ projectId = "project-a" }: { projectId?: string }) {
 }
 beforeEach(() => {
   catalog = [{ ...prepared, id: "first", title: "Default experiment" }, prepared];
+  deferCatalog = false;
+  catalogResponse = undefined;
   lookupMatch = "none";
   generation = 1;
   manualEventId = 0;
@@ -145,7 +149,12 @@ beforeEach(() => {
           next_cursor: null,
         });
       }
-      if (path.endsWith("/experiment-launcher")) return Response.json({ entries: catalog });
+      if (path.endsWith("/experiment-launcher"))
+        return deferCatalog
+          ? new Promise<Response>((resolve) => {
+              catalogResponse = resolve;
+            })
+          : Response.json({ entries: catalog });
       if (path.endsWith("/config-registry")) {
         if (deferConfiguration)
           return new Promise<Response>((resolve) => {
@@ -496,3 +505,22 @@ it.each(["changed", "failed"])(
     expect(submissions).toHaveLength(0);
   },
 );
+
+it("keeps preview clickable during a background catalog read and blocks a failed read", async () => {
+  render(<Harness />);
+  await selectPrepared();
+  deferCatalog = true;
+  act(() => {
+    void client.invalidateQueries({ queryKey: ["experiment-launcher"] });
+  });
+  await waitFor(() => expect(catalogResponse).toBeDefined());
+  const button = screen.getByRole("button", { name: "Preview" });
+  expect(button).toBeEnabled();
+  fireEvent.click(button);
+  await screen.findByText("Preview ready", { exact: true });
+  await act(async () => {
+    catalogResponse!(Response.json({ detail: "offline" }, { status: 503 }));
+  });
+  await waitFor(() => expect(button).toBeDisabled());
+  expect(screen.queryByText("Preview ready", { exact: true })).toBeNull();
+});

@@ -18,6 +18,8 @@ from reference_lab.workflows.authored.ordinary_analysis import (
     estimate_peak,
 )
 
+pytestmark = pytest.mark.usefixtures("reference_lab_author_imports")
+
 
 def test_ordinary_analysis_retained_source_arguments_and_restart(
     tmp_path: Path,

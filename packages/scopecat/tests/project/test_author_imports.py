@@ -176,3 +176,24 @@ def check_typed_refresh(
         assert_type(loaded(1), ExperimentRequest[str])
         refreshed("invalid")  # pyright: ignore[reportArgumentType]
         loaded()  # pyright: ignore[reportCallIssue]
+
+
+def test_rebinding_rejects_another_projects_author_modules(
+    project_files: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    original = imported_experiment()
+    module = sys.modules["rebind_lab.authored.signal"]
+    monkeypatch.setattr(
+        module, "__file__", str(project_files.parent / "other/signal.py")
+    )
+    bundle = capture_sources(load_project(project_files / "scopecat.toml"))
+    with pytest.raises(ValueError, match="shadowed by another project"):
+        load_revision_experiment(
+            original,
+            bundle,
+            project_root=project_files,
+            cache=project_files / "cache",
+            expected_fingerprint="unused",
+        )
+    assert imported_experiment() is original

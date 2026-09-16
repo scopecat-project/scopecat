@@ -161,6 +161,7 @@ if TYPE_CHECKING:
         replace_table_parameter,
         update_parameter_rows,
     )
+    from scopecat.kernel.annotations import Unit
     from scopecat.kernel.entity import (
         EntityRef,
         entity_ref,
@@ -199,6 +200,7 @@ if TYPE_CHECKING:
     )
 
 _EXPORTS: dict[str, tuple[str, str]] = {
+    "Unit": ("scopecat.kernel.annotations", "Unit"),
     "ANY_RESOURCE_ROLE": ("scopecat.authoring", "ANY_RESOURCE_ROLE"),
     "ArrayDimension": ("scopecat.authoring", "ArrayDimension"),
     "ArrayType": ("scopecat.authoring", "ArrayType"),

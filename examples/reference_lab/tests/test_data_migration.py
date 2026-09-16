@@ -15,6 +15,8 @@ from scopecat_server.snapshots import restore_snapshot
 from reference_lab.configuration import EXAMPLE_ROOT
 from reference_lab.workflows.authored.ordinary_analysis import PeakResult
 
+pytestmark = pytest.mark.usefixtures("reference_lab_author_imports")
+
 
 def _seed_retained_schema(database: Path) -> None:
     """Place synthetic compatible records into the independently retained old DDL.

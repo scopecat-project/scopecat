@@ -43,10 +43,17 @@ opens the retained run again through its receipt. Inspect the same run in the GU
 ## Edit code and retain evidence
 
 Request value changes need another prepare, not a source refresh. After editing
-`authored/signal.py`, call `author.refresh()`. In an interactive notebook, restart
-its Python kernel and re-run setup before importing the changed declaration;
-source refresh does not mutate objects already imported into your kernel. Keep
-the original run ID or receipt and reopen it instead of rerunning acquisition.
+`authored/signal.py`, refresh and repeat the normal import:
+
+```python
+author.refresh()
+from scopecat_lab.authored.signal import signal
+```
+
+Use the same steps for newly added author modules. There is no kernel restart or
+manual reload step. Previously imported aliases and existing requests retain their
+original definitions; create a new request from the newly imported declaration.
+Keep the original run ID or receipt and reopen it instead of rerunning acquisition.
 
 `analyze_as(run.id, "scopecat_lab.authored.signal:summarize", Summary)` selects the
 run's original source by default. After refresh, `source="current"` explicitly

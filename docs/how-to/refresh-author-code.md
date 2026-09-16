@@ -34,33 +34,34 @@ with project.authoring() as authors:
     submission = launch.submit(request_key="sample-a-signal-001")
 ```
 
-For a typed Python request, rebind the experiment explicitly after editing:
+Use the same connection/import cell on the first visit and after saving edits:
 
 ```python
+session = project.authoring()
+session.refresh()
 from reference_lab.workflows.authored.signal import signal
 
-with project.authoring() as authors:
-    signal = authors.load_experiment(signal)  # bind the admitted revision
-    old_request = signal()
-    # Save edits to the experiment or its adjacent helpers.
-    signal = authors.refresh(signal)
-    request = signal()  # new defaults and signature
-    launch = authors.prepare(request)
+request = signal()
+launch = session.prepare(request)
 ```
 
-`refresh(signal)` publishes through the same validation operation as `refresh()`,
-then loads the admitted snapshot's experiment and local helper modules. It returns
-a callable with the experiment's Python parameter and result types; it does not
-execute a measurement. Request construction checks the current signature, so a
-removed keyword fails immediately. Update calling cells and editor type errors
-when changing the signature or result dataclass.
+`refresh()` publishes validated source and synchronizes the local author import
+cache. Normal imports of module-level experiments then carry that admitted
+revision. This also covers new experiment functions and new modules: save the file,
+run `session.refresh()`, and import it normally. No `load_experiment` or manual
+`importlib.reload` step is needed in this daily workflow.
 
-The assignment matters. Other `from … import …` aliases, existing requests,
-Notebook variables, and instances of old dataclasses are not rewritten. A request
-created from `load_experiment` or typed `refresh` retains that revision, including
-its defaults, even if it is prepared after another refresh. To use the new code,
-construct a new request from the returned declaration. Explicitly selecting a
-different revision for an already bound request is rejected.
+Rerun the import line after a refresh to update its Python variable. Previously
+bound aliases, requests and result instances keep their original definitions. A
+request made before editing keeps its defaults and source even if prepared later.
+To use the new definition, import it again and create a new request. An import
+before refreshing cannot see a newly added file in the retained source snapshot.
+
+For an existing experiment variable, `signal = session.refresh(signal)` remains
+a single-expression alternative. `load_experiment` is an advanced exact-version
+binding operation for recovery; it is not a required first-load step. Removed
+keywords fail when constructing a new request, so update calling cells and editor
+type errors when changing the signature or result dataclass.
 
 Only project-local modules under `refresh_roots` are replaced. Imports use
 checksum-verified archived bytes, including adjacent helpers and resources;
@@ -75,7 +76,8 @@ historical interpreters.
 Syntax and server validation failures keep the previous active revision. If server
 publication succeeds but the Notebook cannot import it, the exception identifies
 the revision, local module bindings roll back, and no request is prepared. Correct
-the local environment and call `load_experiment` for that revision; do not assume
+the local environment and refresh again (or use `load_experiment` for the exact
+revision during advanced recovery); do not assume
 server publication rolled back with the local import.
 
 If waiting times out or the connection drops, the exception's `operation` retains
