@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field, fields, is_dataclass, replace
 from typing import (
     Annotated,
@@ -21,6 +21,7 @@ from scopecat.authoring._module_invocation import (
     module_instance,
 )
 from scopecat.authoring._module_results import (
+    DataRef,
     ProductBundle,
     ProductBundleKernel,
     create_product_bundle_internal,
@@ -99,6 +100,7 @@ from scopecat.program.operations import ModuleInputPort, ModuleOperationDecl
 from scopecat.program.products import (
     ModuleProductDecl,
     ProductAxis,
+    ProductNativeValue,
     ProductRecording,
     ProductRef,
     ProductRefs,
@@ -178,7 +180,7 @@ def _infer_compute_output_type(
     while isinstance(annotation, TypeAliasType):
         annotation = cast("object", annotation.__value__)
     if get_origin(annotation) is Annotated:
-        _native_type, *metadata = cast(
+        native_type, *metadata = cast(
             "tuple[object, ...]",
             get_args(annotation),
         )
@@ -186,6 +188,7 @@ def _infer_compute_output_type(
             item for item in metadata if isinstance(item, ScalarType | ArrayType)
         )
         if len(declared) == 1:
+            _validate_inferred_compute_annotation(native_type, declared[0])
             return declared[0]
     if annotation is bool:
         return ScalarType(Bool())
@@ -201,6 +204,57 @@ def _infer_compute_output_type(
         "compute output_type is required unless the function return annotation "
         "is bool, int, float, complex, str, or Annotated with ScalarType/ArrayType, or "
         "the function is decorated with ProductBundle.kernel"
+    )
+
+
+def _validate_inferred_compute_annotation(
+    native_type: object,
+    declared: DataType,
+) -> None:
+    """Keep inferred native read types consistent with the declared wire schema."""
+    while isinstance(native_type, TypeAliasType):
+        native_type = cast("object", native_type.__value__)
+    if isinstance(declared, ScalarType):
+        if isinstance(declared.atom, Payload) and (
+            native_type is object or get_origin(native_type) in (dict, Mapping)
+        ):
+            # Opaque command payloads use their own codec contract and do not
+            # participate in native measurement-result inference.
+            return
+        expected: dict[type[object], object] = {
+            Bool: bool,
+            Int: int,
+            Float: float,
+            Complex: complex,
+            String: str,
+            QuantityType: Quantity,
+            EntityType: EntityRef,
+        }
+        if native_type is expected.get(type(declared.atom)):
+            return
+    else:
+        import numpy as np
+        from numpy.typing import NDArray
+
+        arguments = get_args(native_type)
+        scalar_types: dict[str, object] = {
+            "bool": np.bool_,
+            "int64": np.int64,
+            "float64": np.float64,
+            "complex128": np.complex128,
+            "string": np.str_,
+        }
+        if get_origin(native_type) is NDArray:
+            dtype_arguments = arguments
+        elif get_origin(native_type) is np.ndarray and len(arguments) == 2:
+            dtype_arguments = get_args(arguments[1])
+        else:
+            dtype_arguments = ()
+        if dtype_arguments == (scalar_types[declared.dtype],):
+            return
+    raise TypeError(
+        "compute return annotation disagrees with its declared ScalarType/ArrayType: "
+        f"{native_type!r} with {describe_value_type(declared)}"
     )
 
 
@@ -1145,6 +1199,18 @@ class ModuleContext:
                 output_type=output_type,
             ),
         )
+
+    @overload
+    def compute[T: ProductNativeValue](
+        self,
+        id: str | None = None,
+        *,
+        fn: Callable[..., T],
+        inputs: Mapping[str, ComputeInput | ProductRef] | None = None,
+        output_type: None = None,
+        axes_from: ProductRef | None = None,
+        **input_bindings: ComputeInput | ProductRef,
+    ) -> DataRef[T]: ...
 
     @overload
     def compute(

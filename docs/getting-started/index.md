@@ -4,6 +4,7 @@ The shortest path into Scopecat is a hardware-free project created by the CLI.
 It uses the same daemon, project discovery, configuration history, and GUI that
 a real lab uses later.
 
+- [Learning paths](learning-path.md) separates author, maintainer and extension tasks.
 - [Pilot bundle quickstart](quickstart.md) closes the complete first-run loop.
 - [Project layout](../reference/project-layout.md) explains the files generated
   by `scopecat init`.

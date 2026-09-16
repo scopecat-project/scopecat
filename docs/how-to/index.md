@@ -3,6 +3,7 @@
 These guides start from a working Scopecat project and help complete a specific
 task:
 
+- [Compute a value and read its typed result](compute-and-read.md)
 - [Copy and edit a Python experiment](write-an-experiment.md)
 - [Run a managed notebook experiment](managed-author-session.md)
 - [Refresh author code and retained analysis](refresh-author-code.md)

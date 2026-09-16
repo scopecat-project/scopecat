@@ -13,11 +13,12 @@ design contract under evaluation.
 
 ## Start here
 
-New users should follow the [source preview quickstart](getting-started/quickstart.md).
-It creates a hardware-free project, starts its daemon and project console, and
+New users should follow the [pilot bundle quickstart](getting-started/quickstart.md).
+It installs a supplied bundle, creates a hardware-free project and starts its console, then
 runs the smallest experiment through the complete durable workflow.
 
-Continue according to what you want to accomplish:
+Use the [learning paths](getting-started/learning-path.md) to choose an author,
+maintainer or extension route. Continue according to what you want to accomplish:
 
 - [Tour the reference lab](tutorials/reference-lab.md) for a runnable gallery of
   instrument, experiment, data, and quantum workflows.
