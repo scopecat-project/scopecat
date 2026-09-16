@@ -32,6 +32,22 @@ Every runner invocation writes ignored `.test-results/` artifacts:
   and outcomes. xdist reports are aggregated by the controller.
 - JUnit XML plus the slowest twenty tests in terminal output.
 
+CI enables `scripts.pytest_diagnostics` on both Linux and Windows. Each pytest
+worker and the controller write a separate, flushed log under `test-diagnostics/`:
+test setup/call/teardown boundaries and a thread-stack dump every 120 seconds.
+Daemon startup and lifetime evidence is retained in the same artifact. These
+files survive an interrupted pytest run; timing JSON and JUnit may not be complete.
+A stack dump is diagnostic evidence, not a test deadline or proof of deadlock.
+Use the last unmatched phase start in each worker log to identify stalled tests;
+parallel console percentages do not identify the active test. Keep two workers
+in CI, then reproduce a suspect test with `-n 0` and in parallel as needed.
+
+To collect the same evidence locally:
+
+```sh
+SCOPECAT_TEST_DIAGNOSTICS=test-diagnostics uv run --locked python -m scopecat_testkit.check core -- -p scripts.pytest_diagnostics --maxprocesses=2
+```
+
 Compare phase totals separately from wall time: parallel worker times add up,
 and shared-fixture setup is charged to the first test that owns it. Do not
 interpret a timing sample as a benchmark or a successful run as hardware evidence.

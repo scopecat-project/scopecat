@@ -47,12 +47,8 @@ jobs:
           SCOPECAT_TEST_DIAGNOSTICS: test-diagnostics
         shell: bash
         run: |
-          extra=()
-          if [[ "${{ runner.os }}" == "Windows" ]]; then
-            extra=(-p scripts.pytest_windows_diagnostics)
-          fi
           uv run --locked python -m scopecat_testkit.check "${{ matrix.group.suite }}" \
-            --shard "${{ matrix.group.shard }}" -- --maxprocesses=2 "${extra[@]}"
+            --shard "${{ matrix.group.shard }}" -- --maxprocesses=2 -p scripts.pytest_diagnostics
 
       - name: Retain test timings and startup diagnostics
         if: always()
