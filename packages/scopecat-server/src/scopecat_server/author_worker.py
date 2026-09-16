@@ -152,7 +152,13 @@ def analyze(
         definition = cast("object", getattr(module, name))
         if not isinstance(definition, AnalysisDefinition | AnalysisFunctionDefinition):
             raise ValueError("author analysis must use the existing analysis decorator")
-        step = definition(**request.arguments)
+        if isinstance(definition, AnalysisFunctionDefinition):
+            from scopecat.analysis.arguments import bind_arguments
+
+            arguments = bind_arguments(definition.function, request.arguments)
+        else:
+            arguments = request.arguments
+        step = definition(**arguments)
         run = lab.get_run(request.run_id)
         result = step.run(
             AnalysisContext(

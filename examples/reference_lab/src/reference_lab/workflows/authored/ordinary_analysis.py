@@ -66,19 +66,24 @@ def estimate_peak(
 class PeakVerification:
     accepted: bool
     frequency: sc.Quantity | None
-    expected_frequency_ghz: float
-    tolerance_ghz: float
+    expected_frequency: sc.Quantity
+    tolerance: sc.Quantity
+
+
+DEFAULT_TOLERANCE = sc.Quantity(50, "MHz")
 
 
 @sc.analysis_function
 def verify_peak(
-    data: Dataset, *, expected_frequency_ghz: float, tolerance_ghz: float
+    data: Dataset,
+    *,
+    expected_frequency: sc.Quantity,
+    tolerance: sc.Quantity = DEFAULT_TOLERANCE,
 ) -> PeakVerification:
     """Example lab-owned policy; thresholds are explicit scientific inputs."""
     fit = estimate_peak.function(data).result
     accepted = fit.frequency is not None and (
-        abs(fit.frequency.value - expected_frequency_ghz) <= tolerance_ghz
+        abs(fit.frequency.to("GHz").value - expected_frequency.to("GHz").value)
+        <= tolerance.to("GHz").value
     )
-    return PeakVerification(
-        accepted, fit.frequency, expected_frequency_ghz, tolerance_ghz
-    )
+    return PeakVerification(accepted, fit.frequency, expected_frequency, tolerance)

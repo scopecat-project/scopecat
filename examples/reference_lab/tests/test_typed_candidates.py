@@ -141,7 +141,10 @@ def test_typed_candidates_retain_cells_and_independent_policy(
                 check_run.id,
                 f"{analysis_module}:verify_peak",
                 PeakVerification,
-                arguments={"expected_frequency_ghz": 4.8, "tolerance_ghz": 0.05},
+                arguments={
+                    "expected_frequency": sc.Quantity(4.8, "GHz"),
+                    "tolerance": sc.Quantity(0.05, "GHz"),
+                },
             )
             other = author.config.stage(
                 fit,
