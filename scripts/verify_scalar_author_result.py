@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib
 import os
+import subprocess
 import sys
 import tempfile
 from pathlib import Path
@@ -53,6 +54,34 @@ def mean_iq_experiment(
     samples = shot_iq()
     mean = mean_iq(samples, gain)
     return MeanData(mean)
+"""
+
+
+REOPEN_TYPED = """import sys
+from dataclasses import dataclass
+from typing import Annotated
+import scopecat as sc
+
+type IQ = Annotated[complex, sc.ScalarType(sc.ComplexType(unit="V"))]
+@dataclass
+class Original[T]:
+    iq: T
+@dataclass
+class Changed:
+    average: IQ
+
+with sc.open_project(sys.argv[1]).authoring() as session:
+    old = session.run(sys.argv[2]).result().rows_as(Original[IQ])
+    new = session.run(sys.argv[3]).result().rows_as(Changed)
+    assert old[0].iq == 2 + 3j
+    assert new[0].average == 4 + 7j
+    try:
+        session.run(sys.argv[2]).result().rows_as(Changed)
+    except TypeError:
+        pass
+    else:
+        raise AssertionError("old data accepted a changed result field")
+assert "scopecat_lab.authored.signal" not in sys.modules
 """
 
 
@@ -134,6 +163,18 @@ def check() -> None:
                     variable = session.run(run_id).measurements()[field]
                     assert variable.unit == "V"
                     assert list(variable.require_values()) == [expected]
+                subprocess.run(  # noqa: S603 - fixed fresh-notebook acceptance
+                    [
+                        sys.executable,
+                        "-c",
+                        REOPEN_TYPED,
+                        str(project.root),
+                        old_id,
+                        new_id,
+                    ],
+                    check=True,
+                    timeout=90,
+                )
                 # Inject the reported assembly failure inside an isolated run
                 # worker: the notebook exception must carry its actual cause.
                 source.write_text(

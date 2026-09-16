@@ -2495,6 +2495,18 @@ class StoredExperimentResultView(Sequence[StoredExperimentResultPoint]):
     ) -> tuple[RowT, ...]:
         return tuple(build(point) for point in self)
 
+    def rows_as[RowT](self, row_type: type[RowT], /) -> tuple[RowT, ...]:
+        """Read complete native dataclass rows after checking the retained schema.
+
+        Supports nested and parameterized dataclasses, native scalar/Quantity
+        fields, and typed NumPy arrays. Annotated ScalarType/ArrayType metadata
+        checks units and local shape. Missing values raise; filter explicitly
+        with where_available before reading. This materializes the selected rows.
+        """
+        from scopecat.measurements.result_rows import result_rows_as
+
+        return result_rows_as(self, row_type)
+
     def project(
         self,
         columns: Mapping[str, ResultPath] | None = None,
