@@ -17,6 +17,11 @@ CREATE TABLE IF NOT EXISTS config_registry_activations (
         REFERENCES config_registry_entries(entry_id)
 );
 
+CREATE TABLE IF NOT EXISTS parameter_workspace_heads (
+    workspace_id TEXT PRIMARY KEY REFERENCES config_registry_entries(entry_id),
+    entry_id TEXT NOT NULL REFERENCES config_registry_entries(entry_id)
+);
+
 CREATE TABLE IF NOT EXISTS config_operations (
     operation_id TEXT PRIMARY KEY,
     kind TEXT NOT NULL CHECK (

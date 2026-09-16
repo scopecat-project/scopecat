@@ -101,7 +101,7 @@ from scopecat.records.analysis import (
     ProjectAnalysisSubject,
 )
 from scopecat.records.config import config_content_hash
-from scopecat.records.config_context import ContextRunConfigSource
+from scopecat.records.config_context import ConfigContextRef, ContextRunConfigSource
 from scopecat.records.parameter_structure import (
     AddParameterColumn,
     ChangeParameterColumn,
@@ -181,6 +181,16 @@ class ConfigService:
         self._calibration_cohorts = calibration_cohorts
         self._mutation_lock = Lock()
 
+    def latest_context(self, context: ConfigContextRef) -> ConfigEntryView:
+        with self._config_errors():
+            try:
+                saved = config_registry_service.latest_parameter_context(
+                    context, unit_of_work=self._config_registry.read_unit_of_work
+                )
+                return ConfigEntryView(entry=saved.entry, config=saved.config)
+            except ValueError as error:
+                raise BackendConflict(str(error)) from error
+
     def save_context(self, command: ConfigContextSaveCommand) -> ConfigEntryView:
         with self._mutation_lock, self._config_errors():
             try:
@@ -199,6 +209,7 @@ class ConfigService:
                     structure_plan=command.structure_plan,
                     actor=command.actor,
                     note=command.note,
+                    advance=command.advance,
                     unit_of_work=self._config_registry.write_unit_of_work,
                 )
                 return ConfigEntryView(entry=snapshot.entry, config=snapshot.config)

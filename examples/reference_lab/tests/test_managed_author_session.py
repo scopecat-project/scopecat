@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import cast
 
 import numpy as np
+import pytest
 import scopecat as sc
 from scopecat.api.lab import LabClient
 from scopecat.application.author_project import AuthorProject
@@ -44,6 +45,7 @@ def test_workspace_run_reopens_in_fresh_python(
             parameters=active.config.parameter_snapshot,
         )
         parameters = author.config.workspace(context="managed-start")
+        stale = parameters.copy()
         parameters["qubits"]["q0"]["drive_carrier_frequency"] = sc.Quantity(5.1, "GHz")
         prepared = author.prepare(
             "signal",
@@ -59,6 +61,15 @@ def test_workspace_run_reopens_in_fresh_python(
             == 3
         )
         parameters["qubits"]["q0"]["drive_carrier_frequency"] = sc.Quantity(4.8, "GHz")
+        saved = parameters.save(note="Notebook edit")
+        assert parameters.save() == saved
+        stale["qubits"]["q0"]["drive_carrier_frequency"] = sc.Quantity(4.9, "GHz")
+        with pytest.raises(ValueError, match="Workspace changed"):
+            stale.save()
+        assert (
+            author.config.workspace(context="managed-start", latest=True).version
+            == saved
+        )
         job = prepared.run().wait(timeout=60)
         run = job.result()
         values = cast(
@@ -77,10 +88,14 @@ with AuthorProject(sys.argv[1]) as author:
     job = author.reopen(sys.argv[2])
     run = job.wait(timeout=5).result()
     values = list(run.measurements()["result"].require_values())
+    latest = author.config.workspace(context="managed-start", latest=True)
+    assert latest.version.name == sys.argv[3]
+    exact = author.config.workspace(context="managed-start")
+    assert exact.version != latest.version
     print(json.dumps({"run": run.id, "values": values}))
 """
     completed = subprocess.run(  # noqa: S603 - fixed notebook restart scenario
-        [sys.executable, "-c", source, endpoint, str(receipt)],
+        [sys.executable, "-c", source, endpoint, str(receipt), saved.name],
         check=True,
         capture_output=True,
         text=True,

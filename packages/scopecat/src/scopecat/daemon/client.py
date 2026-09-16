@@ -236,6 +236,7 @@ from scopecat.records.author_revision import (
     AuthorRevisionState,
 )
 from scopecat.records.config import ConfigProfileSnapshot
+from scopecat.records.config_context import ConfigContextRef
 from scopecat.records.content import (
     BlobPayloadBody,
     CommandPayload,
@@ -1001,6 +1002,11 @@ class DaemonClient:
         return self._get_model(
             f"{_API_PREFIX}/config-registry/entries/{quote(entry_id, safe='')}",
             ConfigEntryView,
+        )
+
+    def latest_context(self, context: ConfigContextRef) -> ConfigEntryView:
+        return self._post_model(
+            f"{_API_PREFIX}/config-registry/contexts/latest", context, ConfigEntryView
         )
 
     def save_context(self, command: ConfigContextSaveCommand) -> ConfigEntryView:

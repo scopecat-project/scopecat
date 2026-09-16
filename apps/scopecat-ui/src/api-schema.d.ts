@@ -3270,6 +3270,8 @@ export interface components {
             value_origins: components["schemas"]["ConfigValueOrigin"][];
             /** Working Point Id */
             working_point_id: string;
+            /** Workspace Id */
+            workspace_id?: string | null;
         };
         /**
          * ConfigContextRef
@@ -3314,6 +3316,11 @@ export interface components {
         ConfigContextSaveCommand: {
             /** Actor */
             actor: string;
+            /**
+             * Advance
+             * @default false
+             */
+            advance: boolean;
             base: components["schemas"]["ConfigContextRef"];
             /** Entry Id */
             entry_id: string;

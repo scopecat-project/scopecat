@@ -7,6 +7,7 @@ from dataclasses import dataclass, replace
 from html import escape
 from itertools import islice
 from typing import TYPE_CHECKING, Protocol, Self, cast, overload, override
+from uuid import uuid4
 
 if TYPE_CHECKING:
     import pandas as pd
@@ -96,6 +97,8 @@ class ParameterWorkspaceOperations(Protocol):
 
     def entry(self, entry_id: str) -> ConfigEntryView: ...
 
+    def latest_context(self, context: ConfigContextRef) -> ConfigEntryView: ...
+
     def resolve_context(
         self,
         context: ConfigContextRef,
@@ -114,6 +117,7 @@ class ParameterWorkspaceOperations(Protocol):
         parameters: ParameterSnapshot | None = None,
         structure_plan: ParameterStructurePlan | None = None,
         note: str = "",
+        advance: bool = False,
     ) -> ConfigEntryView: ...
 
 
@@ -150,9 +154,19 @@ class ParameterWorkspace(Mapping[str, "ParameterTable"]):
         operations: ParameterWorkspaceOperations,
         *,
         context: str | ParameterVersion,
+        latest: bool = False,
     ) -> None:
         self._operations = operations
         self._base = self._resolve(context)
+        if latest:
+            saved = operations.latest_context(self._base.config_source.context)
+            self._base = self._resolve(
+                ParameterVersion(
+                    ConfigContextRef(
+                        entry_id=saved.entry.id, content_hash=saved.entry.content_hash
+                    )
+                )
+            )
         self._structure: list[ParameterStructureEdit] = []
         self._tables: dict[str, ParameterTable] = {}
         self._data: dict[str, _TableData] = {}
@@ -595,26 +609,28 @@ class ParameterWorkspace(Mapping[str, "ParameterTable"]):
         if self._structure:
             raise ValueError(
                 "Parameter structure has unsaved changes: review structure_diff() "
-                "and save a named version before running."
+                "and save a version before running."
             )
         return self._operations.resolve_context(
             self._base.config_source.context, overrides=self._updates()
         )
 
-    def save(self, name: str, *, note: str = "") -> ParameterVersion:
-        """Save a new immutable named branch, including an unchanged named copy.
+    def save(self, name: str | None = None, *, note: str = "") -> ParameterVersion:
+        """Save immutable history; optional name explicitly starts a named branch.
 
-        There is no mutable latest version. Use ``rebase(current=...)`` explicitly
-        to incorporate another editor's version before saving. Existing names are
-        never overwritten; choose a new name when the registry reports a conflict.
+        Unnamed saves advance this workspace with a stale-editor check. An unchanged
+        unnamed save returns the existing version. Saving never activates calibration.
         """
+        if name is None and not self.diff() and not self._structure:
+            return self.version
+        entry_id = name if name is not None else f"params-{uuid4().hex}"
         parameters = apply_context_overrides(
             self._baseline, self._updates()
         ).parameter_snapshot
         sample = self._base.config_source.sample
         try:
             saved = self._operations.save_context(
-                entry_id=name,
+                entry_id=entry_id,
                 base=self._base.config_source.context,
                 sample=SampleSelector(
                     role=sample.role,
@@ -623,14 +639,16 @@ class ParameterWorkspace(Mapping[str, "ParameterTable"]):
                     context_id=sample.context_id,
                 ),
                 working_point_id=self.working_point,
-                label=name,
+                label=name or self.working_point,
                 parameters=parameters,
                 structure_plan=self._structure_plan(),
                 note=note,
+                advance=name is None,
             )
         except (DaemonConflictError, Conflict) as error:
             raise ValueError(
-                f"Could not save {name!r}: {error}. Existing versions are immutable; "
+                f"Could not save {entry_id!r}: {error}. "
+                "Existing versions are immutable; "
                 "choose a new name, or reopen/rebase the desired version."
             ) from error
         self._base = self._operations.resolve_context(

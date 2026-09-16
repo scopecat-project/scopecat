@@ -187,6 +187,23 @@ class SQLiteConfigRegistryRepository:
             code="config_registry.config_invalid",
         )
 
+    def context_head(self, workspace_id: str) -> str:
+        row = _one(
+            self._connection.execute(
+                "SELECT entry_id FROM parameter_workspace_heads WHERE workspace_id = ?",
+                (workspace_id,),
+            )
+        )
+        return workspace_id if row is None else _text(row, "entry_id")
+
+    def set_context_head(self, workspace_id: str, entry_id: str) -> None:
+        _ = self._connection.execute(
+            "INSERT INTO parameter_workspace_heads(workspace_id, entry_id) "
+            "VALUES (?, ?) "
+            "ON CONFLICT(workspace_id) DO UPDATE SET entry_id=excluded.entry_id",
+            (workspace_id, entry_id),
+        )
+
     def current_generation(self) -> int:
         try:
             return _current_generation(self._connection)
