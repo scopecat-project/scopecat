@@ -74,6 +74,7 @@ class EffectBoundary:
         point_index: int | None = None,
         instrument_id: str | None = None,
         phase: ProblemPhase = ProblemPhase.EXECUTION,
+        include_exception_message: bool = False,
     ) -> Problem:
         return problem_from_exception(
             code,
@@ -84,6 +85,7 @@ class EffectBoundary:
             point_index=point_index,
             instrument_id=instrument_id,
             phase=phase,
+            include_exception_message=include_exception_message,
         )
 
 

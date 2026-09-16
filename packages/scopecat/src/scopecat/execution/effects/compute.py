@@ -92,6 +92,7 @@ class ComputeEffectExecutor:
                     "compute_operation_failed",
                     f"compute operation {operation.operation_id} failed",
                     error,
+                    include_exception_message=True,
                     operation_id=operation.operation_id,
                     point_index=(
                         frame.point_index

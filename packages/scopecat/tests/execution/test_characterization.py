@@ -414,6 +414,7 @@ def test_compute_failure_wins_over_a_concurrent_cancellation_request() -> None:
 
     assert not result.cancelled
     assert [item.code for item in result.problems] == ["compute_operation_failed"]
+    assert result.problems[0].message.endswith("(RuntimeError: compute failed)")
 
 
 class _BlockingStateDriver(SignalInstrumentDriver):
