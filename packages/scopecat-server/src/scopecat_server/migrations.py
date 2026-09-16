@@ -207,9 +207,12 @@ def migrate_copy(project: Project, destination: Path) -> MigrationReceipt:
             )
             history = staged / "project/.scopecat/migrations"
             history.mkdir(exist_ok=True)
-            (history / f"{plan.source_schema}-to-{plan.target_schema}.json").write_text(
-                receipt.model_dump_json(indent=2) + "\n", encoding="utf-8"
+            receipt_json = receipt.model_dump_json(indent=2) + "\n"
+            receipt_digest = hashlib.sha256(receipt_json.encode("utf-8")).hexdigest()
+            receipt_name = (
+                f"{plan.source_schema}-to-{plan.target_schema}-{receipt_digest}.json"
             )
+            (history / receipt_name).write_text(receipt_json, encoding="utf-8")
             # JSON quoted strings are also valid TOML basic strings. Use absolute
             # final paths, not staging paths, and preserve attended-bench ownership.
             data_path = json.dumps(

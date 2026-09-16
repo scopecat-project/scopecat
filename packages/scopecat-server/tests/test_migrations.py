@@ -169,3 +169,19 @@ def test_legacy_wal_commits_enter_the_verified_upgrade(tmp_path: Path) -> None:
             assert reader.execute(
                 "SELECT run_id FROM runs WHERE run_id='last-wal'"
             ).fetchone() == ("last-wal",)
+
+
+def test_repeated_current_version_copies_retain_every_migration_receipt(
+    tmp_path: Path,
+) -> None:
+    project = _legacy(tmp_path / "source")
+    previous: dict[str, bytes] = {}
+    for index in range(3):
+        destination = tmp_path / f"copy-{index}"
+        migrate_copy(project, destination)
+        project = load_project(destination / "project/scopecat.toml")
+        history = project.runtime_binding.data_root / "migrations"
+        retained = {path.name: path.read_bytes() for path in history.glob("*.json")}
+        assert len(retained) == index + 1
+        assert all(retained[name] == content for name, content in previous.items())
+        previous = retained
