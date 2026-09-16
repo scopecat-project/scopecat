@@ -164,6 +164,21 @@ def test_unexpected_exception_is_logged_but_problem_is_sanitized(
     ]
 
 
+def test_local_assembly_failure_can_expose_its_cause() -> None:
+    problem = problem_from_exception(
+        "execution_plan_measurement_assembly_failed",
+        "execution plan measurement assembly failed",
+        run_id="run-contract",
+        operation_id="execution-plan.measurements",
+        error=TypeError("unsupported persisted scalar: complex"),
+        include_exception_message=True,
+    )
+    assert problem.message.endswith(
+        "(TypeError: unsupported persisted scalar: complex)"
+    )
+    assert problem.details["exception_type"] == "builtins.TypeError"
+
+
 def test_run_failure_subtypes_require_matching_outcomes() -> None:
     problem = _runtime_problem()
     failed = RunOutcome(

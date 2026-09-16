@@ -868,6 +868,8 @@ def measurement_scalar(value: CellValue) -> MeasurementScalar:
         return MeasurementScalar.create(dtype="int64", value=value)
     if isinstance(value, float):
         return MeasurementScalar.create(dtype="float64", value=value)
+    if isinstance(value, complex):
+        return MeasurementScalar.create(dtype="complex128", value=value)
     if isinstance(value, str):
         return MeasurementScalar.create(dtype="string", value=value)
     raise TypeError(f"unsupported persisted scalar: {type(value).__name__}")

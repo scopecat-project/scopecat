@@ -345,6 +345,7 @@ def _execute_run(
                 run_id=run_id,
                 operation_id="execution-plan.measurements",
                 error=error,
+                include_exception_message=True,
             )
         )
     except BaseException as error:
