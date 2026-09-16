@@ -94,10 +94,10 @@ The current runtime uses project store **68**, including immutable author source
 revisions, experiment plans, durable preparation operations and a path-independent
 data-space identity. Version 67 and
 older stores and snapshots are rejected before modification. Keep the matching
-reader to inspect or export their scientific data. Start a separate version 69
+reader to inspect or export their scientific data. Start a separate version 70
 project for new work. No implicit migration is supplied.
 
-Within version 69, snapshots retain author source bundles, active revision,
+Within version 70, snapshots retain author source bundles, active revision,
 preparation receipts, author-job receipts and experiment plans. Pending preparations are marked
 interrupted when the restored daemon starts; they are not resubmitted. External
 Python environments and device SDKs still need their separately retained artifacts.

@@ -873,6 +873,75 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/research-projects": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Research Projects */
+        get: operations["list_research_projects_api_v1_research_projects_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/research-projects/{project_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Save Research Project */
+        put: operations["save_research_project_api_v1_research_projects__project_id__put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/research-projects/{project_id}/members/{kind}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Research Members */
+        get: operations["research_members_api_v1_research_projects__project_id__members__kind__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/research-projects/{project_id}/members/{kind}/{identity}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Add Research Member */
+        put: operations["add_research_member_api_v1_research_projects__project_id__members__kind___identity__put"];
+        post?: never;
+        /** Remove Research Member */
+        delete: operations["remove_research_member_api_v1_research_projects__project_id__members__kind___identity__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/reviews": {
         parameters: {
             query?: never;
@@ -7096,6 +7165,76 @@ export interface components {
             kind: "replace_parameter";
             value: components["schemas"]["StoredParameterValue"];
         };
+        /** ResearchMember */
+        ResearchMember: {
+            /** Identity */
+            identity: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "samples" | "runs";
+            /** Present */
+            present: boolean;
+            /** Project Id */
+            project_id: string;
+        };
+        /** ResearchMemberPage */
+        ResearchMemberPage: {
+            /**
+             * Ids
+             * @default []
+             */
+            ids: string[];
+            /** Next Cursor */
+            next_cursor?: string | null;
+        };
+        /** ResearchProject */
+        ResearchProject: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Description */
+            description: string;
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Revision */
+            revision: number;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** ResearchProjectEdit */
+        ResearchProjectEdit: {
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /**
+             * Expected Revision
+             * @default 0
+             */
+            expected_revision: number;
+            /** Name */
+            name: string;
+        };
+        /** ResearchProjectPage */
+        ResearchProjectPage: {
+            /**
+             * Items
+             * @default []
+             */
+            items: components["schemas"]["ResearchProject"][];
+            /** Next Cursor */
+            next_cursor?: number | null;
+        };
         /**
          * ResolvedCalibrationCohortMergeContribution
          * @description Server-resolved exact outputs behind one wire contribution.
@@ -7521,6 +7660,8 @@ export interface components {
          */
         RunDetail: {
             control: components["schemas"]["RunControlView"];
+            /** Deployment Id */
+            deployment_id?: string | null;
             /**
              * Resources
              * @default []
@@ -8243,6 +8384,8 @@ export interface components {
          */
         RunSummary: {
             control: components["schemas"]["RunControlView"];
+            /** Deployment Id */
+            deployment_id?: string | null;
             snapshot: components["schemas"]["RunSnapshot"];
         };
         /**
@@ -10740,6 +10883,174 @@ export interface operations {
             };
         };
     };
+    list_research_projects_api_v1_research_projects_get: {
+        parameters: {
+            query?: {
+                before?: number | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResearchProjectPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    save_research_project_api_v1_research_projects__project_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResearchProjectEdit"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResearchProject"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    research_members_api_v1_research_projects__project_id__members__kind__get: {
+        parameters: {
+            query?: {
+                after?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                kind: "samples" | "runs";
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResearchMemberPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_research_member_api_v1_research_projects__project_id__members__kind___identity__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                identity: string;
+                kind: "samples" | "runs";
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResearchMember"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_research_member_api_v1_research_projects__project_id__members__kind___identity__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                identity: string;
+                kind: "samples" | "runs";
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResearchMember"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_reviews_api_v1_reviews_get: {
         parameters: {
             query?: never;
@@ -10863,9 +11174,14 @@ export interface operations {
         parameters: {
             query?: {
                 before?: number | null;
+                created_after?: string | null;
+                created_before?: string | null;
+                deployment_id?: string | null;
                 limit?: number;
+                research_project?: string | null;
                 sample_id?: components["schemas"]["SampleId"] | null;
                 state?: components["schemas"]["ControlRunState"] | null;
+                working_point?: string | null;
             };
             header?: never;
             path?: never;

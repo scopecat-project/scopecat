@@ -29,6 +29,7 @@ from scopecat.control.models import (
     RunExecutionSegmentResult,
     RunPage,
 )
+from scopecat.records.research_project import RunHistoryFilter
 
 from scopecat_server.storage.sqlite.connection import SQLiteDatabase
 
@@ -205,6 +206,7 @@ class SQLiteControlPlane:
         before: int | None = None,
         state: ControlRunState | None = None,
         sample_id: str | None = None,
+        history: RunHistoryFilter | None = None,
     ) -> RunPage:
         """Read one newest-first page through an existing SQLite snapshot."""
 
@@ -226,6 +228,40 @@ class SQLiteControlPlane:
                 ")"
             )
             parameters.append(sample_id)
+        if history is not None:
+            if history.research_project is not None:
+                clauses.append(
+                    "EXISTS (SELECT 1 FROM research_runs rr "
+                    "WHERE rr.run_id=scheduler_runs.run_id AND rr.project_id=?)"
+                )
+                parameters.append(history.research_project)
+            if history.working_point is not None:
+                clauses.append(
+                    "EXISTS (SELECT 1 FROM run_sample_bindings sb "  # noqa: S608
+                    "WHERE sb.run_id=scheduler_runs.run_id AND sb.context_id=?"
+                    + (" AND sb.sample_id=?" if sample_id is not None else "")
+                    + ")"
+                )
+                parameters.append(history.working_point)
+                if sample_id is not None:
+                    parameters.append(sample_id)
+            if history.deployment_id is not None:
+                clauses.append(
+                    "EXISTS (SELECT 1 FROM run_deployments rd "
+                    "WHERE rd.run_id=scheduler_runs.run_id AND rd.deployment_id=?)"
+                )
+                parameters.append(history.deployment_id)
+            for boundary, comparison in (
+                (history.created_after, ">="),
+                (history.created_before, "<"),
+            ):
+                if boundary is not None:
+                    clauses.append(
+                        "EXISTS (SELECT 1 FROM runs r "  # noqa: S608
+                        "WHERE r.run_id=scheduler_runs.run_id "
+                        f"AND julianday(r.created_at) {comparison} julianday(?))"
+                    )
+                    parameters.append(boundary.isoformat())
         where = "" if not clauses else f"WHERE {' AND '.join(clauses)}"
         parameters.append(limit + 1)
         rows = _all(

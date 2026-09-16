@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 from scopecat.api.lab import LabClient
 from scopecat.config.documents import load_config_snapshot_document
 from scopecat.control.models import RunPlanSummary, RunResourceRequirement
-from scopecat.daemon.client import DaemonClient
+from scopecat.daemon.client import DaemonClient, DaemonConflictError
 from scopecat.daemon.wire import (
     RunSubmission,
     SampleCreateCommand,
@@ -289,3 +289,123 @@ def test_sample_mutation_rolls_back_when_its_event_cannot_commit(
             )
         with pytest.raises(BackendNotFound, match="unknown sample"):
             runtime.application.samples.get("atomic-chip")
+
+
+def test_research_history_associations_and_bench_survive_restart(
+    tmp_path: Path,
+) -> None:
+    from datetime import UTC, datetime, timedelta
+
+    from scopecat.records.research_project import ResearchProjectEdit, RunHistoryFilter
+
+    with (
+        LocalDaemonRuntime(tmp_path, bootstrap_config=_config()) as runtime,
+        TestClient(runtime.app()) as transport,
+        _daemon_client(transport) as client,
+    ):
+        for sample in ("a", "b"):
+            runtime.application.samples.create(
+                SampleCreateCommand(
+                    operation_id=f"create-{sample}",
+                    sample_id=sample,
+                    kind="chip",
+                    actor="operator",
+                    content=SampleRevisionDraft(display_name=sample),
+                )
+            )
+        first = runtime.application.submit_run(_submission("a"))
+        second = runtime.application.submit_run(
+            _submission("b").model_copy(update={"submission_id": "second"})
+        )
+        original = client.get_run(first.run_id)
+        lab = LabClient(client, operator="research-test")
+        retained = (
+            lab.get_run(first.run_id)
+            .analysis("Original")
+            .result()
+            .fact("value", 1)
+            .save()
+        )
+        assert original.deployment_id == runtime.application.deployment_id
+        alpha = client.save_research_project("alpha", ResearchProjectEdit(name="Alpha"))
+        client.save_research_project("beta", ResearchProjectEdit(name="Beta"))
+        for project in ("alpha", "beta"):
+            client.associate_research_member(project, "samples", "a")
+            client.associate_research_member(project, "runs", first.run_id)
+        client.associate_research_member("beta", "samples", "b")
+        client.associate_research_member("beta", "runs", second.run_id)
+        client.associate_research_member("beta", "runs", second.run_id)
+        page = client.research_members("beta", "runs", limit=1)
+        assert page.next_cursor is not None
+        other = client.research_members("beta", "runs", limit=1, after=page.next_cursor)
+        assert {*page.ids, *other.ids} == {first.run_id, second.run_id}
+        filtered = client.list_runs(
+            sample_id="a",
+            history=RunHistoryFilter(
+                research_project="beta",
+                working_point="cooldown-1",
+                deployment_id=original.deployment_id,
+                created_after=datetime.now(UTC) - timedelta(days=1),
+                created_before=datetime.now(UTC) + timedelta(days=1),
+            ),
+        )
+        assert [run.run_id for run in filtered.items] == [first.run_id]
+        assert not client.list_runs(
+            history=RunHistoryFilter(deployment_id="another-bench")
+        ).items
+        renamed = client.save_research_project(
+            "alpha",
+            ResearchProjectEdit(name="Renamed", expected_revision=alpha.revision),
+        )
+        assert renamed.id == alpha.id and renamed.revision == 2
+        with pytest.raises(DaemonConflictError) as stale:
+            client.save_research_project(
+                "alpha",
+                ResearchProjectEdit(name="Stale", expected_revision=alpha.revision),
+            )
+        assert "reload" in str(stale.value)
+        client.associate_research_member("alpha", "runs", first.run_id, present=False)
+        assert not client.list_runs(
+            history=RunHistoryFilter(research_project="alpha")
+        ).items
+        assert client.get_run(first.run_id) == original
+        assert (
+            lab.get_run(first.run_id)
+            .published_analysis(retained.id)
+            .fact("value")
+            .value
+            == 1
+        )
+    with (
+        LocalDaemonRuntime(tmp_path) as restarted,
+        TestClient(restarted.app()) as transport,
+        _daemon_client(transport) as client,
+    ):
+        lab = LabClient(client, operator="research-test")
+        later = (
+            lab.get_run(first.run_id).analysis("Later").result().fact("value", 2).save()
+        )
+        assert later.id != retained.id
+        assert (
+            lab.get_run(first.run_id)
+            .published_analysis(retained.id)
+            .fact("value")
+            .value
+            == 1
+        )
+        assert client.get_run(first.run_id).snapshot == original.snapshot
+        assert client.get_run(first.run_id).deployment_id == original.deployment_id
+        assert set(client.research_members("beta", "samples").ids) == {"a", "b"}
+        assert (
+            len(
+                client.list_runs(
+                    history=RunHistoryFilter(research_project="beta")
+                ).items
+            )
+            == 2
+        )
+        assert client.research_projects(limit=1).next_cursor is not None
+        assert {item.name for item in client.research_projects().items} == {
+            "Renamed",
+            "Beta",
+        }
