@@ -54,6 +54,18 @@ prove that every possible structural input builds a valid experiment.
 
 ## Run and analyze from Python
 
+Computed scalar measurements may be complex, for example the mean of per-shot
+IQ. They retain the declared dtype and unit through storage and reopening; an
+array is not required merely to store one complex value. `compute` can infer a
+unitless scalar from a helper's `-> complex` annotation. Declare units explicitly
+when they carry scientific meaning, just as for arrays.
+
+A measurement-assembly failure reports the underlying exception type and message
+to the waiting author job. Keep the failed job receipt and run evidence; reading
+the worker log is useful for a full traceback, but should not be necessary just
+to discover the cause. Unexpected device exceptions retain their separate
+sanitization policy.
+
 The reference project enables complete author revisions. Refresh after editing,
 then prepare and submit through the revision-aware notebook connection. No Git
 commit, manual hash or device-service restart is required.

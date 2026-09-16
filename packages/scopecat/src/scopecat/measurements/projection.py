@@ -9,12 +9,14 @@ from typing import Literal, cast
 import numpy as np
 
 from scopecat.kernel.content_identity import content_fingerprint, stable_content_hash
+from scopecat.kernel.entity import EntityRef
 from scopecat.kernel.errors import CheckFailed
 from scopecat.kernel.graph_identity import ValueId
 from scopecat.kernel.point_identity import LogicalPointId
 from scopecat.kernel.points import AcceptedRunPoint
 from scopecat.kernel.problems import Problem, ProblemPhase, model_location, problem
 from scopecat.kernel.product_identity import ProductId, ProductUse, ProductUseId
+from scopecat.kernel.quantity import Quantity
 from scopecat.kernel.value_data import CellValue
 from scopecat.measurements.products import ProductDef
 from scopecat.measurements.records import (
@@ -427,7 +429,13 @@ def _projected_values(
                 unit=record.unit,
             )
             if record.axes
-            else measurement_scalar(cast("CellValue", value))
+            else (
+                measurement_scalar(value)
+                if isinstance(value, Quantity | EntityRef)
+                else MeasurementScalar.create(
+                    value=value, dtype=record.dtype, unit=record.unit
+                )
+            )
         )
     return projected
 

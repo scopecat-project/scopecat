@@ -255,6 +255,15 @@ def _installed_journey(bundle: Path) -> None:
         _run(
             [
                 sys.executable,
+                str(Path(__file__).with_name("verify_scalar_author_result.py")),
+            ],
+            cwd=project_root.parent,
+        ).strip()
+    )
+    print(
+        _run(
+            [
+                sys.executable,
                 str(Path(__file__).with_name("verify_workspace_binding.py")),
             ],
             cwd=project_root.parent,

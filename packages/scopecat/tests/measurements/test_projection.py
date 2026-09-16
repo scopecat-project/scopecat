@@ -19,6 +19,7 @@ from scopecat.kernel.symbols import SymbolId
 from scopecat.kernel.value_types import (
     Array,
     ArrayDimension,
+    Complex,
     Float,
     Scalar,
     TableColumn,
@@ -131,6 +132,44 @@ def test_projection_records_symbolic_scalar_values_without_product_provenance() 
     variable = next(item for item in schema.variables if item.id == "score")
     assert variable.source_product_id is None
     assert variable.source_value_id == "analysis/score"
+
+
+@pytest.mark.parametrize("value", [1.25 - 2.5j, np.complex128(1.25 - 2.5j), 2.0])
+def test_projection_preserves_declared_complex_scalar_and_unit(
+    value: complex | np.complex128,
+) -> None:
+    scenario = measurement_assembly_scenario(point_values=(0.0,), use_count=0)
+    value_id = ValueId(SymbolId(local_id="mean-iq"))
+    projection = select_measurement_projection(
+        scenario.catalog,
+        (
+            ValueRecordUse(
+                id="iq",
+                value_id=value_id,
+                source_value_id="analysis/mean-iq",
+                value_type=Scalar(Complex(unit="V")),
+                requires_execution=True,
+            ),
+        ),
+    )
+    values = seal_measurement_values(scenario.catalog, (), points=scenario.points)
+    projected = project_measurement_records(
+        projection,
+        values,
+        run_id="complex-value-record-run",
+        points=scenario.points,
+        value_candidates=(
+            ValueRecordCandidate(
+                logical_point_id=scenario.points[0].logical_id,
+                value_id=value_id,
+                value=value,
+            ),
+        ),
+    )
+    actual = projected.records[0].observables["iq"]
+    expected = MeasurementScalar.create(dtype="complex128", unit="V", value=value)
+    assert actual == expected
+    assert MeasurementScalar.model_validate_json(expected.model_dump_json()) == expected
 
 
 def test_projection_records_symbolic_array_values_with_local_dimensions() -> None:

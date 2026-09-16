@@ -122,7 +122,9 @@ def problem_from_exception(
     point_index: int | None = None,
     instrument_id: str | None = None,
     phase: ProblemPhase = ProblemPhase.EXECUTION,
+    include_exception_message: bool = False,
 ) -> Problem:
+    """Log a boundary failure; expose text only for trusted local-code failures."""
     if isinstance(error, DriverFault):
         return contextualize_problem(
             error.problem,
@@ -141,9 +143,13 @@ def problem_from_exception(
         },
         exc_info=(type(error), error, error.__traceback__),
     )
+    exception_type = type(error).__name__
+    summary = (
+        f"{exception_type}: {error}" if include_exception_message else exception_type
+    )
     return runtime_problem(
         code,
-        f"{message} ({type(error).__name__})",
+        f"{message} ({summary})",
         run_id=run_id,
         operation_id=operation_id,
         point_index=point_index,
