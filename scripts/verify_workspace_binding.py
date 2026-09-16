@@ -45,9 +45,26 @@ def check() -> None:
         second = open_project(b)
         endpoint = start_project(first, timeout=90)
         try:
+            # A leftover local record can point at a port now serving another
+            # workspace. Check live ownership, not only the recorded paths.
+            stale_root = root / "stale"
+            stale = initialize_project(stale_root)
+            stale_data = stale_root / ".scopecat"
+            stale_data.mkdir(exist_ok=True)
+            stale_record = endpoint.model_copy(
+                update={
+                    "project_root": stale_root,
+                    "data_root": stale_data,
+                    "deployment_root": stale_data,
+                }
+            )
+            (stale_data / "daemon.json").write_text(
+                stale_record.model_dump_json(), encoding="utf-8"
+            )
             for connect in (
                 second.authoring,
                 lambda: second.authoring(endpoint.base_url),
+                stale.authoring,
             ):
                 try:
                     connect()

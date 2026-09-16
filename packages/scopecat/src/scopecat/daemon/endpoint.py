@@ -88,6 +88,7 @@ def resolve_daemon_endpoint(
         raise DaemonEndpointError(
             f"daemon record belongs to another project binding: {record.project_root}"
         )
+    verify_daemon_binding(record.base_url, root)
     return record.base_url
 
 
