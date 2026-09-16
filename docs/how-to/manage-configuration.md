@@ -23,17 +23,29 @@ params["qubits"]["q0"]["frequency"] = 5.2
 params.diff()  # detached before/after edits
 reviewed = params.preview()  # validate and freeze these edits
 params["qubits"]["q0"]["frequency"] = 5.3  # does not change reviewed
-version = params.save("sample-a-trial-1", note="manual trial")
+version = params.save(note="manual trial")
 reopened = lab.config.workspace(context=version)
-# A new process can use context="sample-a-trial-1" with a new lab connection.
+# To select this workspace's newest saved version in another process:
+latest = lab.config.workspace(context="sample-a-parked", latest=True)
 ```
 
-`save` creates an immutable named version and advances this workspace's baseline.
-Its diff is then empty, and `discard()` returns to that saved baseline. Saving
-never changes the laboratory's shared default. A name is a unique registry entry,
-not a mutable latest-version pointer; use a new name for another version. An
-unchanged workspace can also be saved under a new name. Opening another version
-is explicit and does not transfer this workspace's unsaved edits.
+`save()` creates an immutable revision with an automatic ID and advances this
+workspace's saved head and local baseline. An unchanged save returns the existing
+version, including for a stale but unchanged editor. `note` is an optional human
+message. Saving never changes the laboratory's shared default, sample selection
+or calibration approval. `workspace(context=version)` always selects that exact
+revision; `latest=True` explicitly selects the newest saved revision in its lineage.
+
+Use `save("memorable-name")` when you deliberately want a named branch/bookmark,
+even without changes. That name always identifies its original immutable revision;
+`latest=True` follows subsequent unnamed saves on that branch. Existing names are
+never overwritten. The previous branch's head is unchanged. Keep the returned
+`ParameterVersion` or its `.name` for exact historical reads.
+
+Concurrent unnamed saves check the expected baseline in the same transaction as
+recording the revision. A stale editor is rejected with the current version ID;
+its buffer stays intact. Reopen latest or explicitly rebase before saving. No
+background merge or last-writer-wins behavior is implied.
 
 `preview()` and `freeze()` return the existing resolved configuration accepted by
 run/config APIs. They retain exact sample identity, per-cell origins and only the
@@ -195,7 +207,7 @@ its fields. A removed table created in an unsaved draft disappears on discard.
 
 Save or discard pending **value** edits before staging a structural operation.
 After staging structure, you can add rows or edit values and save them together.
-Review `structure_diff()` and save a named version **before previewing/running an
+Review `structure_diff()` and save a version **before previewing/running an
 experiment** with the new schema. `freeze()` refuses pending structure changes;
 it never creates hidden saved versions. Ordinary value edits still freeze
 without saving. Reopen earlier versions and runs to read their original schema,
@@ -212,7 +224,7 @@ conservatively validate all rows of the imported column; use a concrete key for
 a single-sample probe. This slice adds no domain-aware lazy dependency discovery.
 Ordinary Python/dataclass consumers must check Optional values themselves.
 
-For maintainers: storage remains project schema 68 with absent cells representing
+For maintainers: storage remains project schema 69 with absent cells representing
 unknowns. The wire adds `add_table` structure edits and permits `null` in keyed
 row **updates**, meaning clear that cell; snapshots do not store null atoms.
 New readers still read old snapshots and runs. Client and daemon must use the

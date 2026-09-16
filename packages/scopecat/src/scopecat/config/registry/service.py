@@ -1591,6 +1591,7 @@ def save_config_context(
     label: str,
     parameters: ParameterSnapshot | None,
     structure_plan: ParameterStructurePlan | None = None,
+    advance: bool = False,
     actor: str,
     note: str,
     unit_of_work: ConfigRegistryUnitOfWorkFactory,
@@ -1602,6 +1603,30 @@ def save_config_context(
         loaded = _load_config_registry_entry_locked(entry_id=base.entry_id, work=work)
         if loaded.entry.content_hash != base.content_hash:
             raise ValueError("context base does not match the exact registry revision")
+        existing = work.registry.entry_exists(entry_id)
+        context = (
+            loaded.entry.source.context
+            if isinstance(loaded.entry.source, ContextConfigRegistrySource)
+            else None
+        )
+        if advance and (
+            context is None
+            or context.sample != sample
+            or context.working_point_id != working_point_id
+        ):
+            raise ValueError(
+                "saving a workspace cannot change its sample or working point"
+            )
+        workspace_id = (
+            (context.workspace_id or base.entry_id) if advance and context else entry_id
+        )
+        if advance and not existing:
+            head = work.registry.context_head(workspace_id)
+            if head != base.entry_id:
+                raise ValueError(
+                    f"Workspace changed: latest version is {head!r}; "
+                    "reopen latest or rebase before saving"
+                )
         if structure_plan is not None and structure_plan.base != base:
             raise ValueError("structure plan must match the exact base")
         structural = (
@@ -1631,6 +1656,7 @@ def save_config_context(
                 sample=sample,
                 working_point_id=working_point_id,
                 label=label,
+                workspace_id=workspace_id,
                 base=base,
                 structure=structural.origin
                 if structural
@@ -1673,4 +1699,24 @@ def save_config_context(
         committed = _commit_revision_locked(
             repository=work.registry, requested_entry=entry, config=config
         )
+        if not existing:
+            work.registry.set_context_head(workspace_id, entry_id)
         return ConfigRegistryEntrySnapshot(entry=committed.entry, config=config)
+
+
+def latest_parameter_context(
+    context: ConfigContextRef, *, unit_of_work: ConfigRegistryUnitOfWorkFactory
+) -> ConfigRegistryEntrySnapshot:
+    """Resolve an explicit workspace's latest saved version, never activate it."""
+    with unit_of_work() as work:
+        selected = _load_config_registry_entry_locked(
+            entry_id=context.entry_id, work=work
+        )
+        if selected.entry.content_hash != context.content_hash:
+            raise ValueError("context reference does not match saved version")
+        if not isinstance(selected.entry.source, ContextConfigRegistrySource):
+            raise ValueError("not a parameter workspace context")
+        workspace_id = selected.entry.source.context.workspace_id or context.entry_id
+        return _load_config_registry_entry_locked(
+            entry_id=work.registry.context_head(workspace_id), work=work
+        )

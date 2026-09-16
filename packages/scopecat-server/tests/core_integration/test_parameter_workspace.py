@@ -17,6 +17,7 @@ from scopecat.config.registry import (
 )
 from scopecat.config.registry.records import ContextConfigRegistrySource
 from scopecat.config.registry.service import (
+    latest_parameter_context,
     load_config_registry_entry_snapshot,
     save_config_context,
 )
@@ -96,6 +97,10 @@ class RegistryOperations:
             ),
         )
 
+    def latest_context(self, context: ConfigContextRef) -> ConfigEntryView:
+        saved = latest_parameter_context(context, unit_of_work=self.uow)
+        return ConfigEntryView(entry=saved.entry, config=saved.config)
+
     def save_context(
         self,
         *,
@@ -107,6 +112,7 @@ class RegistryOperations:
         parameters: ParameterSnapshot | None = None,
         structure_plan: ParameterStructurePlan | None = None,
         note: str = "",
+        advance: bool = False,
     ) -> ConfigEntryView:
         assert sample.revision == self.sample.revision
         saved = save_config_context(
@@ -118,6 +124,7 @@ class RegistryOperations:
             parameters=parameters,
             structure_plan=structure_plan,
             note=note,
+            advance=advance,
             actor="operator",
             unit_of_work=self.uow,
         )
@@ -444,7 +451,7 @@ def test_declare_complete_unknown_table_save_reopen_and_add_optional_column(
     structural = params.structure_diff()
     assert structural is not None
     assert structural.impacts[0].kind == "table_added"
-    with pytest.raises(ValueError, match="save a named version"):
+    with pytest.raises(ValueError, match="save a version"):
         params.freeze()
     detached = params.copy()
     assert dict(detached["probes"]["q0"]) == dict(params["probes"]["q0"])
@@ -771,3 +778,77 @@ def test_dynamic_references_keep_schema_without_reading_unknown_values(
     assert new[0].result_type.atom == sc.QuantityType(unit="us")
     assert locator[0].result_type.atom == sc.QuantityType(unit="ns")
     assert params["pairs"][("q0", "q1")]["duration"] is None
+
+
+def test_unnamed_history_conflicts_rebase_and_explicit_latest(
+    operations: RegistryOperations,
+) -> None:
+    first = ParameterWorkspace(operations, context="start")
+    second = first.copy()
+    baseline = first.version
+    assert first.save() == baseline
+    first["qubits"]["q0"]["frequency"] = 5.2
+    frozen = first.freeze()
+    saved = first.save(note="frequency fit")
+    assert saved != baseline and saved.name.startswith("params-")
+    assert first.save() == saved
+    second["qubits"]["q0"]["amplitude"] = 0.2
+    with pytest.raises(ValueError, match="Workspace changed"):
+        second.save()
+    assert second.version == baseline and second.diff()
+    latest = ParameterWorkspace(operations, context="start", latest=True)
+    assert latest.version == saved
+    second.rebase(current=latest.version)
+    merged = second.save()
+    assert merged != saved
+    exact = ParameterWorkspace(operations, context=saved)
+    assert exact["qubits"]["q0"]["amplitude"] == 0.1
+    reopened = ParameterWorkspace(operations, context=baseline, latest=True)
+    assert reopened.version == merged
+    assert reopened["qubits"]["q0"]["frequency"] == 5.2
+    assert reopened["qubits"]["q0"]["amplitude"] == 0.2
+    assert frozen.config_source.context == baseline.context
+    label = reopened.save("remembered")
+    reopened["qubits"]["q0"]["frequency"] = 5.4
+    branch = reopened.save()
+    assert (
+        ParameterWorkspace(operations, context="remembered", latest=True).version
+        == branch
+    )
+    assert (
+        ParameterWorkspace(operations, context="start", latest=True).version == merged
+    )
+    assert ParameterWorkspace(operations, context=label).version == label
+    assert (
+        load_active_config_registry_snapshot(unit_of_work=operations.uow).entry.id
+        == "lab"
+    )
+
+
+def test_save_retry_does_not_rewind_workspace_head(
+    operations: RegistryOperations,
+) -> None:
+    params = ParameterWorkspace(operations, context="start")
+    base = params.version.context
+    params["qubits"]["q0"]["frequency"] = 5.2
+    values = params.freeze().config.parameter_snapshot
+
+    def save() -> ConfigEntryView:
+        return operations.save_context(
+            entry_id="retry-version",
+            base=base,
+            sample=SampleSelector(sample_id="sample", revision=1),
+            working_point_id="parked",
+            label="parked",
+            parameters=values,
+            advance=True,
+        )
+
+    first = save()
+    current = ParameterWorkspace(operations, context="start", latest=True)
+    current["qubits"]["q0"]["frequency"] = 5.3
+    newest = current.save()
+    assert save() == first
+    assert (
+        ParameterWorkspace(operations, context="start", latest=True).version == newest
+    )

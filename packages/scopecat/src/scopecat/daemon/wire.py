@@ -1447,6 +1447,7 @@ class ConfigContextSaveCommand(_WireModel):
     structure_plan: ParameterStructurePlan | None = None
     actor: str = Field(min_length=1)
     note: str = ""
+    advance: bool = False
 
     @model_validator(mode="after")
     def require_exact_sample(self) -> ConfigContextSaveCommand:

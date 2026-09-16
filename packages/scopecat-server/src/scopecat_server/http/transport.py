@@ -248,6 +248,7 @@ from scopecat.records.author_revision import (
     AuthorRevisionState,
 )
 from scopecat.records.comparison import ComparisonRequest
+from scopecat.records.config_context import ConfigContextRef
 from scopecat.records.content import ContentEntry
 from scopecat.records.costs import RunMeasuredCosts
 from scopecat.records.experiment_plan import (
@@ -815,6 +816,10 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
     @app.post(f"{_API_PREFIX}/config-registry/contexts")
     def save_context(command: ConfigContextSaveCommand) -> ConfigEntryView:
         return application.config.save_context(command)
+
+    @app.post(f"{_API_PREFIX}/config-registry/contexts/latest")
+    def latest_context(context: ConfigContextRef) -> ConfigEntryView:
+        return application.config.latest_context(context)
 
     @app.post(f"{_API_PREFIX}/config-registry/contexts/structure/preview")
     def preview_structure(plan: ParameterStructurePlan) -> ParameterStructurePreview:

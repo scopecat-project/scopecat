@@ -110,9 +110,14 @@ class LabConfigOperations:
         self.resolve_with_source(selected)
         return ParameterCandidate(self, selected)
 
-    def workspace(self, *, context: str | ParameterVersion) -> ParameterWorkspace:
+    def workspace(
+        self, *, context: str | ParameterVersion, latest: bool = False
+    ) -> ParameterWorkspace:
         """Open an isolated dictionary editor for one saved sample/workpoint version."""
-        return ParameterWorkspace(self, context=context)
+        return ParameterWorkspace(self, context=context, latest=latest)
+
+    def latest_context(self, context: ConfigContextRef) -> ConfigEntryView:
+        return self.client.latest_context(context)
 
     def save_context(
         self,
@@ -126,6 +131,7 @@ class LabConfigOperations:
         structure_plan: ParameterStructurePlan | None = None,
         actor: str | None = None,
         note: str = "",
+        advance: bool = False,
     ) -> ConfigEntryView:
         if sample.revision is None:
             current = self.client.get_sample(sample.sample_id)
@@ -143,6 +149,7 @@ class LabConfigOperations:
                 structure_plan=structure_plan,
                 actor=actor or self.operator,
                 note=note,
+                advance=advance,
             )
         )
 
