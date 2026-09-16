@@ -20,6 +20,8 @@ from scopecat_server.snapshots import create_snapshot, restore_snapshot
 
 from reference_lab.configuration import EXAMPLE_ROOT
 
+pytestmark = pytest.mark.usefixtures("reference_lab_author_imports")
+
 
 def preview_request(project_root: Path) -> tuple[LaunchRequest, LaunchPreview]:
     with load_project(project_root / "scopecat.toml").authoring() as authors:
