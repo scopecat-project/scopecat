@@ -1,5 +1,8 @@
 # Scopecat documentation
 
+For a complete runnable Notebook and automatic environment setup, start with
+[tutorial sandboxes](tutorials/teaching-sandboxes.md). Each topic is independent and disposable.
+
 Scopecat is a local-first Python toolkit for laboratory experiment workflows.
 It connects notebooks, typed experiment authoring, instrument control, live
 visibility, and durable results. A lab can introduce it alongside existing
@@ -13,7 +16,8 @@ design contract under evaluation.
 
 ## Start here
 
-New users should follow the [pilot bundle quickstart](getting-started/quickstart.md).
+The [pilot bundle quickstart](getting-started/quickstart.md) also covers the
+small virtual-instrument application for integration work.
 It installs a supplied bundle, creates a hardware-free project and starts its console, then
 runs the smallest experiment through the complete durable workflow.
 

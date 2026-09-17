@@ -17,6 +17,7 @@ nav = [
   ] },
   { "Tutorials" = [
     "tutorials/index.md",
+    { "Runnable tutorial sandboxes" = "tutorials/teaching-sandboxes.md" },
     { "Edit a starter experiment" = "tutorials/starter-authoring.md" },
     { "Tour the reference lab" = "tutorials/reference-lab.md" },
   ] },

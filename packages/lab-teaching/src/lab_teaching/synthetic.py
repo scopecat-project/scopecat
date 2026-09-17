@@ -1,0 +1,33 @@
+"""Explicit teaching fixture, not a device or sample-physics simulation."""
+
+import math
+import struct
+
+import numpy as np
+from numpy.typing import NDArray
+
+import scopecat as sc
+
+
+def response(
+    frequency: sc.Quantity,
+    amplitude: sc.Quantity,
+    shots: int,
+    seed: int,
+    no_response: bool,
+) -> NDArray[np.complex128]:
+    # Preserve coordinate-stable noise and the first course's declared fixture.
+    frequency_ghz = frequency.to("GHz").value
+    amplitude_arb = amplitude.to("arb").value
+    bits = struct.unpack("!6I", struct.pack("!3d", frequency_ghz, amplitude_arb, 0.0))
+    rng = np.random.default_rng(np.random.SeedSequence((seed, *bits)))
+    gain = 1 / (1 + ((frequency_ghz - 5.145) / 0.002) ** 2)
+    population = math.sin(math.pi * amplitude_arb / (2 * 0.24)) ** 2
+    values = gain * population + 0.02 * (
+        rng.normal(size=shots) + 1j * rng.normal(size=shots)
+    )
+    return (
+        np.zeros(shots, dtype=np.complex128)
+        if no_response
+        else np.asarray(values, dtype=np.complex128)
+    )

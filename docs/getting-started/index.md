@@ -1,5 +1,8 @@
 # Getting started
 
+For a complete runnable Notebook and automatic environment setup, start with
+[tutorial sandboxes](../tutorials/teaching-sandboxes.md). Each topic is independent and disposable.
+
 The shortest path into Scopecat is a hardware-free project created by the CLI.
 It uses the same daemon, project discovery, configuration history, and GUI that
 a real lab uses later.

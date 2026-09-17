@@ -1,5 +1,8 @@
 # Pilot bundle quickstart
 
+For a complete runnable Notebook and automatic environment setup, start with
+[tutorial sandboxes](../tutorials/teaching-sandboxes.md). Each topic is independent and disposable.
+
 Install the locally supplied pilot bundle to create a project, retain one virtual
 thermometer measurement, and inspect it in the project console. No laboratory
 hardware, source checkout, Node.js, or GUI build is needed on the operator's

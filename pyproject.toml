@@ -8,6 +8,7 @@ dependencies = [
   "reference-lab",
   "scopecat",
   "scopecat-instruments",
+  "scopecat-lab-tools",
   "scopecat-quantum",
   "scopecat-server",
   "scopecat-testkit[server]",
@@ -22,7 +23,11 @@ dev = [
   "pytest>=9",
   "pytest-xdist>=3.8",
   "ruff>=0.16.0",
+  { include-group = "delivery" },
 ]
+delivery = ["scopecat-lab-tools[kernel]", "uv_build>=0.12.3,<0.13"]
+delivery-build = ["pip>=25"]
+delivery-notebook = ["scopecat-lab-tools[notebook]", { include-group = "delivery" }]
 docs = [
   "mkdocstrings-python>=2",
   "zensical>=0.0.43,<0.1",
@@ -35,6 +40,8 @@ notebook = [
 include = [
   "packages/scopecat/src",
   "packages/scopecat/tests",
+  "packages/lab-teaching/src",
+  "packages/lab-tools/src",
   "packages/scopecat-server/src",
   "packages/scopecat-server/tests",
   "packages/scopecat-instruments/src",
@@ -49,6 +56,7 @@ include = [
   "testing/scopecat-testkit/src",
 ]
 exclude = [
+  "packages/lab-teaching/src/lab_teaching/course_material",
   "**/__pycache__",
   ".pytest_cache",
   ".ruff_cache",
@@ -60,6 +68,8 @@ typeCheckingMode = "recommended"
 extraPaths = [
   "packages/scopecat",
   "packages/scopecat/src",
+  "packages/lab-teaching/src",
+  "packages/lab-tools/src",
   "packages/scopecat-server/src",
   "packages/scopecat-instruments",
   "packages/scopecat-instruments/src",
@@ -292,6 +302,7 @@ strict_config = true
 strict_markers = true
 testpaths = [
   "examples/reference_lab/tests",
+  "packages/lab-tools/tests",
   "packages/scopecat-instruments/tests",
   "packages/scopecat-quantum/tests",
   "packages/scopecat-server/tests",
@@ -303,6 +314,8 @@ target-version = "py314"
 line-length = 88
 src = [
   "packages/scopecat/src",
+  "packages/lab-teaching/src",
+  "packages/lab-tools/src",
   "packages/scopecat-server/src",
   "packages/scopecat-server/tests",
   "packages/scopecat-instruments/src",
@@ -369,6 +382,7 @@ select = [
 "scripts/generate_reference_lab_acceptance.py" = ["TID251"]
 "examples/reference_lab/tests/**/*.py" = ["TID251"]
 "packages/scopecat-server/**/*.py" = ["TID251"]
+"packages/lab-tools/**/*.py" = ["TID251"]
 "packages/scopecat/src/scopecat/program/point_domain.py" = [
   # PEP 695 has no explicit variance syntax; PointAxis[Never] needs covariance.
   "UP046",
@@ -402,9 +416,9 @@ max-complexity = 20
 extend-immutable-calls = ["scopecat.Quantity", "scopecat.kernel.quantity.Quantity"]
 
 [tool.scopecat-tests]
-roots = ["examples/reference_lab/tests", "packages/scopecat/tests", "packages/scopecat-server/tests", "packages/scopecat-instruments/tests", "packages/scopecat-quantum/tests"]
+roots = ["packages/lab-tools/tests", "examples/reference_lab/tests", "packages/scopecat/tests", "packages/scopecat-server/tests", "packages/scopecat-instruments/tests", "packages/scopecat-quantum/tests"]
 integration_paths = ["packages/scopecat-server/tests"]
-journey_paths = ["packages/scopecat-server/tests/test_runtime_binding.py", "examples/reference_lab/tests", "packages/scopecat-server/tests/test_snapshot_integration.py", "packages/scopecat-server/tests/test_author_validation_diagnostics.py"]
+journey_paths = ["packages/lab-tools/tests/test_unknown_parameter_authoring.py", "packages/lab-tools/tests/test_minimal_teaching_journey.py", "packages/lab-tools/tests/test_teaching_mean_iq_journey.py", "packages/lab-tools/tests/test_grouped_teaching_journey.py", "packages/scopecat-server/tests/test_runtime_binding.py", "examples/reference_lab/tests", "packages/scopecat-server/tests/test_snapshot_integration.py", "packages/scopecat-server/tests/test_author_validation_diagnostics.py"]
 
 # Windows run 34757173348: summed setup/call/teardown seconds per file.
 [tool.scopecat-tests.weights]
@@ -429,7 +443,6 @@ journey_paths = ["packages/scopecat-server/tests/test_runtime_binding.py", "exam
 "examples/reference_lab/tests/test_parameter_contexts.py" = 10.0
 "examples/reference_lab/tests/test_parameter_structure.py" = 3.4
 "examples/reference_lab/tests/test_typed_candidates.py" = 115.3
-"examples/reference_lab/tests/test_unknown_parameter_authoring.py" = 2.0
 "examples/reference_lab/tests/test_xy_drive.py" = 0.2
 "examples/reference_lab/tests/unit/test_bench_devices.py" = 0.0
 "examples/reference_lab/tests/unit/test_compiler_parameters.py" = 0.0
@@ -460,6 +473,8 @@ default-groups = ["dev"]
 package = false
 
 [tool.uv.sources]
+scopecat-lab-tools = { workspace = true }
+scopecat-lab-teaching = { workspace = true, editable = false }
 reference-lab = { workspace = true }
 scopecat = { workspace = true }
 scopecat-instruments = { workspace = true }
