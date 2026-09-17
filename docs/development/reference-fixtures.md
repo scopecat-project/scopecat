@@ -1,7 +1,7 @@
 # Reference fixture ownership
 
-The public project has three distinct consumers. The CLI starter is the public
-entry point. Targeted reference recipes demonstrate one advanced contract. The
+The public project has three distinct consumers. The public tutorial sandbox is the ordinary author learning entry; the CLI
+starter is the minimal virtual-instrument application. Targeted reference recipes demonstrate one advanced contract. The
 full reference laboratory validates integration, not beginner usability.
 
 | Current content | Responsibility | Direction |
@@ -12,7 +12,8 @@ full reference laboratory validates integration, not beginner usability.
 | `reference_lab/workflows/drag_beta_*` | Calibration, publication and recovery contracts | Preserve integrated evidence; do not teach these as the first acquisition |
 | `reference_lab/tests/unit` | Local scientific/compiler behavior | Prefer small fixtures without a daemon |
 | Managed author/restart tests | Real process and retained-source contracts | Move generic cases to starter fixtures when they do not require routing/compiler capabilities |
-| Private laboratory courses | Lab-specific methods and scientific workflows | Reuse public entry semantics; avoid a second generic framework curriculum |
+| `packages/lab-teaching`, `packages/lab-tools` | Runnable generic tutorials and installation/sandbox lifecycle | Public installed CI executes shipped Notebooks; private consumes these packages |
+| Private laboratory courses | Lab-specific methods and scientific workflows | Keep real methods and deployment policy; remove duplicated generic tooling |
 
 This is an ownership classification, not a claim that extraction is complete.
 Do not move every reference test into the core tier or remove integration
@@ -38,3 +39,24 @@ same daemon exercises installed discovery, a local wrapper, original/current
 analysis after refresh, retained analysis after restart, and rejection/restoration
 of changed installed bytes. This extends the installed pilot instead of adding a
 second full runtime job or a dependency on private laboratory code.
+
+## Retirement sequence
+
+The generic private teaching packages, sandbox manager, offline builder and
+verification now live in public. The author refresh, complex mean and grouped
+restart journeys move with their owner into `packages/lab-tools/tests`.
+Private code is not imported by public tests or deliveries.
+
+The reference lab's beginner/workspace-template role is retired. Its remaining
+four-qubit implementation is still an integration fixture, not replaced by the
+compute-only tutorials. Before deleting a reference module, identify replacement
+coverage for its channel routing, compiled buffers, shared physical claims or
+durable calibration/recovery contract. Keep a bounded set of full-system journeys
+while extracting generic cases into smaller fixtures; do not count moved folders
+or tutorial execution as replacement evidence for those device contracts.
+
+The unknown-parameter declaration/freeze/structural-history journey now uses a
+compute-only tutorial daemon (`packages/lab-tools/tests/test_unknown_parameter_authoring.py`).
+Its former reference-lab test and probe module are removed. The same assertions
+cover unknown consumption, frozen requests and retained old contexts without the
+four-qubit device/quantum setup.

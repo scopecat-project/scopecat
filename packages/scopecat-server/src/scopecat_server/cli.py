@@ -163,14 +163,44 @@ def _validate_host(value: str) -> str:
     return value
 
 
+@app.command(
+    "teach", context_settings={"allow_extra_args": True, "ignore_unknown_options": True}
+)
+def teach_command(context: typer.Context) -> None:
+    """Open, reset or verify a disposable tutorial sandbox (teaching install)."""
+    try:
+        from lab_tools.sandbox import main as teaching_main
+    except ImportError as error:
+        _fail(
+            RuntimeError(
+                "Install scopecat-lab-tools[kernel] or use the tutorial delivery."
+            )
+        )
+        raise AssertionError("unreachable") from error
+    teaching_main(context.args)
+
+
 @app.command("init")
 def init_command(
     project: Annotated[
         Path,
         typer.Argument(help="Directory to initialize."),
     ] = _CURRENT_DIRECTORY,
+    topic: Annotated[
+        str | None, typer.Option(help="Initialize one standalone tutorial topic.")
+    ] = None,
 ) -> None:
     """Initialize a runnable local lab project."""
+
+    if topic is not None:
+        try:
+            from lab_tools.project import create_project
+
+            created = create_project(project, topic=topic)
+        except (ImportError, ValueError, OSError) as error:
+            _fail(error)
+        console.print(f"[green]initialized tutorial[/green] {created.parent}")
+        return
 
     from .lifecycle import DaemonLifecycleError, initialize_project
 

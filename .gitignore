@@ -13,3 +13,6 @@ dist/scopecat-server/
 site/
 
 .test-results/
+
+results/
+dist/tutorial*/

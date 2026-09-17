@@ -1,0 +1,33 @@
+[project]
+name = "scopecat-lab-tools"
+version = "0.2.0"
+description = "Installed teaching workspace and Notebook lifecycle tools."
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = ["httpx2", "scopecat", "scopecat-lab-teaching", "scopecat-server"]
+
+[project.scripts]
+scopecat-lab = "lab_tools.cli:main"
+
+[project.optional-dependencies]
+kernel = ["ipykernel>=6.30", "nbclient>=0.10", "nbformat>=5.10"]
+notebook = ["scopecat-lab-tools[kernel]", "jupyterlab>=4.4"]
+
+[build-system]
+requires = ["uv_build>=0.12.3,<0.13"]
+build-backend = "uv_build"
+
+[tool.ruff]
+extend = "../../pyproject.toml"
+
+[tool.ruff.lint]
+# Chinese course resources are shipped alongside the English entry guide.
+ignore = ["RUF001", "RUF002", "RUF003"]
+
+[tool.uv.build-backend]
+module-name = "lab_tools"
+
+[tool.uv.sources]
+scopecat = { workspace = true }
+scopecat-server = { workspace = true }
+scopecat-lab-teaching = { workspace = true }

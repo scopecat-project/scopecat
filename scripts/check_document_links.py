@@ -16,6 +16,8 @@ _IGNORED_DIRECTORIES = frozenset(
         ".venv",
         "node_modules",
         "site",
+        "results",
+        "dist",
     }
 )
 _FENCE = re.compile(r"^\s*(```|~~~)")

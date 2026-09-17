@@ -211,6 +211,13 @@ jobs:
       - name: Build pinned GUI pilot bundle
         run: uv run --project ../.. python ../../scripts/build_server_distribution.py
 
+      - name: Upload matching tutorial GUI
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: scopecat-tutorial-gui
+          path: apps/scopecat-ui/dist
+          retention-days: 7
+
       - name: Upload pilot bundle
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -278,7 +285,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 10
+    timeout-minutes: 30
     steps:
       - name: Check out verifier
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -299,6 +306,32 @@ jobs:
 
       - name: Install and verify virtual measurement and restart
         run: python scripts/verify_pilot_bundle.py dist/scopecat-server
+
+      - name: Download matching tutorial GUI
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: scopecat-tutorial-gui
+          path: dist/tutorial-gui
+
+      - name: Build target-platform offline tutorial delivery
+        run: >-
+          uv run --locked --group delivery python -m lab_tools.delivery
+          dist/tutorial --source . --gui dist/tutorial-gui
+
+      - name: Verify offline notebooks, refresh, reset and installed launcher
+        run: uv run --locked --group delivery python scripts/verify_teaching_delivery.py dist/tutorial dist/tutorial-evidence
+
+      - name: Retain tutorial delivery and executed notebooks
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: scopecat-tutorial-${{ matrix.os }}
+          path: |
+            dist/tutorial/
+            dist/tutorial-evidence/**/verified-*.ipynb
+            dist/tutorial-evidence/acceptance.json
+          retention-days: 7
+          if-no-files-found: warn
 
   docs:
     name: Documentation

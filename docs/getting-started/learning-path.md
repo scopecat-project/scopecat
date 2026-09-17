@@ -1,5 +1,8 @@
 # Choose a learning path
 
+For a complete runnable Notebook and automatic environment setup, start with
+[tutorial sandboxes](../tutorials/teaching-sandboxes.md). Each topic is independent and disposable.
+
 Learn one laboratory task at a time. Installation and a working project are the
 starting conditions for authoring lessons; instrument integration and framework
 internals are separate roles, not prerequisites for writing an experiment.
