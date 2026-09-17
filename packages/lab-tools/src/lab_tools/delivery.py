@@ -239,6 +239,9 @@ def build_delivery(
 
 
 def main() -> None:
+    from .bundle import configure_console
+
+    configure_console()
     parser = argparse.ArgumentParser(description=__doc__)
     _ = parser.add_argument("destination", type=Path)
     _ = parser.add_argument("--release", action="store_true")

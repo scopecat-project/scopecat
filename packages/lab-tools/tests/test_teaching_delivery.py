@@ -66,7 +66,7 @@ def test_corrupt_wheel_blocks_install_before_environment_creation(delivery, tmp_
 
 def test_installer_rejects_other_platform(delivery, tmp_path):
     path = delivery / bundle.MANIFEST
-    data = json.loads(path.read_text())
+    data = json.loads(path.read_text(encoding="utf-8"))
     data["target"]["machine"] = "other-architecture"
     path.write_text(json.dumps(data))
     with pytest.raises(ValueError, match="ABI"):
@@ -75,7 +75,7 @@ def test_installer_rejects_other_platform(delivery, tmp_path):
 
 def test_manifest_paths_stay_inside_delivery(delivery):
     path = delivery / bundle.MANIFEST
-    data = json.loads(path.read_text())
+    data = json.loads(path.read_text(encoding="utf-8"))
     data["files"]["../outside"] = "0" * 64
     path.write_text(json.dumps(data))
     with pytest.raises(ValueError, match="无效交付文件"):

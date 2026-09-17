@@ -7,6 +7,8 @@ import pytest
 
 @pytest.fixture
 def notebook_imports(monkeypatch):
+    # The reference fixture keeps its endpoint override for the whole test session.
+    monkeypatch.delenv("SCOPECAT_DAEMON_URL", raising=False)
     previous = {
         name: module
         for name, module in sys.modules.copy().items()

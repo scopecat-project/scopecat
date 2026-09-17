@@ -83,7 +83,9 @@ def test_course_rejects_wrong_kernel_before_author_import(tmp_path, monkeypatch)
     cli.create_project(root)
     monkeypatch.chdir(root / "notebooks")
     for name in ("start", "reopen"):
-        notebook = json.loads((root / f"notebooks/{name}.ipynb").read_text())
+        notebook = json.loads(
+            (root / f"notebooks/{name}.ipynb").read_text(encoding="utf-8")
+        )
         first_code = next(
             cell for cell in notebook["cells"] if cell["cell_type"] == "code"
         )

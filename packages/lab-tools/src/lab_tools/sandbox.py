@@ -199,6 +199,9 @@ def open_sandbox(root: Path, topic: str, *, source: bool, no_editor: bool) -> No
 
 
 def main(argv: Sequence[str] | None = None) -> None:
+    from .bundle import configure_console
+
+    configure_console()
     parser = argparse.ArgumentParser(description=__doc__)
     _ = parser.add_argument("topic", choices=TOPICS, nargs="?")
     _ = parser.add_argument("--home", type=Path, default=Path.home() / "Scopecat-Lab")

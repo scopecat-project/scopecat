@@ -30,6 +30,9 @@ class Notebook(TypedDict):
 
 
 def verify(bundle: Path, destination: Path) -> None:
+    from lab_tools.bundle import configure_console
+
+    configure_console()
     bundle, destination = bundle.resolve(), destination.resolve()
     destination.mkdir(parents=True, exist_ok=False)
     env = dict(os.environ)

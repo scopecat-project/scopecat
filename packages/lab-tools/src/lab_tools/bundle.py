@@ -8,7 +8,9 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import io
 import json
+import os
 import platform
 import shutil
 import subprocess
@@ -27,6 +29,14 @@ class Bundle(TypedDict):
     sources: dict[str, str]
     runtime: dict[str, object]
     files: dict[str, str]
+
+
+def configure_console() -> None:
+    """CLI output and subprocesses use UTF-8 even under redirected Windows output."""
+    for stream in (sys.stdout, sys.stderr):
+        if isinstance(stream, io.TextIOWrapper):
+            stream.reconfigure(encoding="utf-8")
+    os.environ["PYTHONUTF8"] = "1"
 
 
 def target_identity() -> dict[str, str]:
@@ -236,6 +246,7 @@ class InstallArguments(Protocol):
 
 
 def main() -> None:
+    configure_console()
     parser = argparse.ArgumentParser(description="从本地交付目录离线安装最小教学环境")
     _ = parser.add_argument("destination", type=Path, nargs="?")
     _ = parser.add_argument("--home", type=Path)

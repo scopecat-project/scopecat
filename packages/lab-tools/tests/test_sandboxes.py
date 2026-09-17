@@ -69,13 +69,17 @@ def test_each_lesson_is_self_contained_and_rejects_wrong_kernel(
     managed, monkeypatch, topic
 ):
     root = sandbox.select_project(managed, topic)
-    notebook = json.loads((root / f"notebooks/{topic}.ipynb").read_text())
+    notebook = json.loads(
+        (root / f"notebooks/{topic}.ipynb").read_text(encoding="utf-8")
+    )
     first = next(c for c in notebook["cells"] if c["cell_type"] == "code")
     monkeypatch.chdir(root / "notebooks")
     with pytest.raises(RuntimeError, match="Select Kernel"):
         exec("".join(first["source"]), {})  # noqa: S102 - execute the shipped notebook guard
     if topic == "compute":
-        assert "def mean_iq(" in (root / "src/my_experiment/teaching.py").read_text()
+        assert "def mean_iq(" in (root / "src/my_experiment/teaching.py").read_text(
+            encoding="utf-8"
+        )
     if topic == "refresh":
         assert (root / "examples/extra.py").is_file()
         assert not (root / "src/my_experiment/extra.py").exists()

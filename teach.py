@@ -1,6 +1,7 @@
 """维护者教学入口: 源码快速体验或构建固定交付。需要 Python 3.14 与 uv。"""
 
 import argparse
+import io
 import os
 import subprocess
 import sys
@@ -22,6 +23,10 @@ def run(command: list[str]) -> None:
 
 
 def main() -> None:
+    for stream in (sys.stdout, sys.stderr):
+        if isinstance(stream, io.TextIOWrapper):
+            stream.reconfigure(encoding="utf-8")
+    os.environ["PYTHONUTF8"] = "1"
     parser = argparse.ArgumentParser(description=__doc__)
     _ = parser.add_argument(
         "mode", choices=("source", "release"), nargs="?", default="source"

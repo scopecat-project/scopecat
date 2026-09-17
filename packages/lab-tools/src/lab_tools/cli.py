@@ -107,6 +107,9 @@ def selected_gui(args: Arguments) -> Path | None:
 
 
 def main() -> None:
+    from .bundle import configure_console
+
+    configure_console()
     parser = argparse.ArgumentParser(description=__doc__)
     _ = parser.add_argument(
         "--version", action="version", version=version("scopecat-lab-tools")
