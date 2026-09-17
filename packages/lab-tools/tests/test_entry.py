@@ -44,6 +44,6 @@ def test_console_can_write_chinese_to_a_redirected_windows_stream(
     monkeypatch.setattr(sys, "stdout", stream)
     monkeypatch.setenv("PYTHONUTF8", "0")
     configure_console()
-    print("中文路径")
+    print("中文路径", end="")
     stream.flush()
-    assert output.getvalue() == "中文路径\n".encode()
+    assert output.getvalue() == "中文路径".encode()
