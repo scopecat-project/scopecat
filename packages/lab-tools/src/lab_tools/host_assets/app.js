@@ -61,6 +61,7 @@ async function submit(command) {
 async function refresh() {
   if (stopped) return;
   const state = await api("/api/state");
+  if (stopped) return;
   const running = state.operations.some(op => ["starting", "running"].includes(op.status));
   const disabled = busy || running;
   const signature = JSON.stringify([state, disabled]);
@@ -126,6 +127,7 @@ document.getElementById("shutdown").addEventListener("click", async () => {
     const result = await api("/api/shutdown", {});
     stopped = true;
     clearInterval(polling);
+    document.querySelectorAll("button").forEach(button => { button.disabled = true; });
     message(result.detail + "。再次打开 Scopecat 安装入口可启动管理服务。");
   } catch (error) { message(error.message, true); }
 });
