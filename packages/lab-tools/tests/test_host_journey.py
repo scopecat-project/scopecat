@@ -9,8 +9,36 @@ from pathlib import Path
 import psutil
 import pytest
 
+from lab_tools import host_client
 from lab_tools.host_client import ensure_host
 from lab_tools.host_operations import Command, Operation, Operations
+
+
+def test_host_startup_through_interpreter_launcher(tmp_path: Path, monkeypatch) -> None:
+    original = subprocess.Popen
+    launchers = []
+
+    def redirect(args, **kwargs):
+        launcher = original(
+            [
+                sys.executable,
+                "-c",
+                "import subprocess, sys; sys.exit(subprocess.call(sys.argv[1:]))",
+                *args,
+            ],
+            **kwargs,
+        )
+        launchers.append(launcher)
+        return launcher
+
+    monkeypatch.setattr(host_client.subprocess, "Popen", redirect)
+    client = ensure_host(tmp_path, Path(__file__).resolve().parents[3])
+    try:
+        assert client.record.pid != launchers[0].pid
+        assert client.state().operations == []
+    finally:
+        client.shutdown()
+        launchers[0].wait(timeout=15)
 
 
 def test_host_reuse_restart_and_worker_reconnection(tmp_path: Path) -> None:

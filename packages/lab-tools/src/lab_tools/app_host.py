@@ -165,6 +165,7 @@ def application(
 class Arguments(Protocol):
     home: Path
     source: Path | None
+    instance: str
 
 
 def main() -> None:
@@ -172,6 +173,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--home", type=Path, required=True)
     parser.add_argument("--source", type=Path)
+    parser.add_argument("--instance", default=uuid4().hex)
     args = cast("Arguments", cast("object", parser.parse_args()))
     home = args.home.resolve()
     directory = home / "host"
@@ -179,7 +181,7 @@ def main() -> None:
     with FileLock(directory / "owner.lock", timeout=0), socket.socket() as listener:
         listener.bind(("127.0.0.1", 0))
         record = HostRecord(
-            instance=uuid4().hex,
+            instance=args.instance,
             pid=os.getpid(),
             process_time=psutil.Process().create_time(),
             url=f"http://127.0.0.1:{listener.getsockname()[1]}",

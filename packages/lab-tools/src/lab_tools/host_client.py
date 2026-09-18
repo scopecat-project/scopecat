@@ -11,6 +11,7 @@ from pathlib import Path
 from threading import Thread
 from typing import cast
 from urllib.parse import urlsplit
+from uuid import uuid4
 
 import httpx2
 import psutil
@@ -136,7 +137,18 @@ def ensure_host(home: Path, source: Path | None) -> HostClient:
                 if record.runtime == expected:
                     return client
                 client.shutdown()
-        args = [sys.executable, "-m", "lab_tools.app_host", "--home", str(home)]
+        # Windows venv Python may launch a separate interpreter process. Bind
+        # startup to a launch identity, not Popen's redirector PID.
+        instance = uuid4().hex
+        args = [
+            sys.executable,
+            "-m",
+            "lab_tools.app_host",
+            "--home",
+            str(home),
+            "--instance",
+            instance,
+        ]
         if source is not None:
             args.extend(("--source", str(source)))
         with (directory / "host.log").open("ab") as log:
@@ -162,7 +174,7 @@ def ensure_host(home: Path, source: Path | None) -> HostClient:
                 record = HostRecord.model_validate_json(
                     record_path.read_text(encoding="utf-8")
                 )
-                if record.pid == process.pid and record.runtime == expected:
+                if record.instance == instance and record.runtime == expected:
                     client = HostClient(record)
                     try:
                         if client.request("GET", "/api/identity") == {
