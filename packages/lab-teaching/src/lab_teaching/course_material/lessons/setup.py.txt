@@ -1,4 +1,5 @@
 """场景初始化，用普通公共 API 创建合成样品和可编辑参数表。"""
+
 from scopecat.api.parameters import ParameterWorkspace
 from scopecat.application.author_project import AuthorProject
 from scopecat.daemon.client import DaemonNotFoundError
@@ -6,6 +7,7 @@ from scopecat.daemon.wire import SampleCreateCommand
 from scopecat.records.config_context import ConfigContextRef
 from scopecat.records.sample import SampleRevisionDraft, SampleSelector
 from my_experiment.parameters import Drive
+
 
 def open_parameters(session: AuthorProject) -> ParameterWorkspace:
     """Initialize a teaching-only sample/context once, then reopen its baseline."""

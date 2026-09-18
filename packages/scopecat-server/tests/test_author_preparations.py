@@ -47,6 +47,7 @@ def preparation_project(
         "import os, time\nfrom scopecat.application import LabApplication\n"
         "def create_application(root):\n"
         "    with (root / 'loads').open('a') as f: f.write(str(os.getpid()) + '\\n')\n"
+        "    (root / 'loaded').touch()\n"
         "    while not (root / 'release').exists(): time.sleep(0.01)\n"
         "    return LabApplication()\n"
     )
@@ -81,7 +82,8 @@ def preparation_project(
 
 def loaded(root: Path) -> int:
     deadline = time.monotonic() + 30
-    while not (root / "loads").exists():
+    # Publish readiness after closing the PID log, not when open('a') creates it.
+    while not (root / "loaded").exists():
         assert time.monotonic() < deadline, (
             "fixture validation worker never entered application"
         )

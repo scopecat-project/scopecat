@@ -32,7 +32,6 @@ def teaching_rabi(
         shots=shots,
         seed=seed,
         no_response=no_response,
-
     )
     return {"amplitude": experiment.coordinate(amplitude), "iq": iq}
 
@@ -60,6 +59,5 @@ def mean_rabi(
         shots=shots,
         seed=seed,
         no_response=no_response,
-
     )
     return {"amplitude": experiment.coordinate(amplitude), "iq": mean_iq(iq)}

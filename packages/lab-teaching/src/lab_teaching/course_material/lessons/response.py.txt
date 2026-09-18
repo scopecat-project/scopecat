@@ -12,7 +12,8 @@ import scopecat as sc
 def shot_array(shots: int) -> sc.ArrayType:
     """每个实验点的 shot 轴长度由结构参数确定。"""
     return sc.ArrayType(
-        dtype="complex128", unit="ratio",
+        dtype="complex128",
+        unit="ratio",
         dimensions=(sc.ArrayDimension("shot", shots),),
     )
 

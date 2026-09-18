@@ -14,7 +14,6 @@ from scopecat.records.config import (
 )
 
 
-
 def bootstrap_config() -> ConfigProfileSnapshot:
     return snapshot_config_profile(
         profile_id="teaching",
