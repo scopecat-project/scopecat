@@ -2,6 +2,7 @@
 
 import argparse
 import io
+import json
 import os
 import subprocess
 import sys
@@ -45,6 +46,23 @@ def main() -> None:
         else str(ROOT / ".venv")
     )
     print("准备维护运行环境...", flush=True)
+    # Stop the management process before replacing its source-development runtime.
+    # Its request rejects an upgrade while a managed operation is still active.
+    endpoint = args.home.resolve() / "host/endpoint.json"
+    if args.mode == "source" and endpoint.exists():
+        record = cast(
+            "dict[str, str]", json.loads(endpoint.read_text(encoding="utf-8"))
+        )
+        run(
+            [
+                record["python"],
+                "-m",
+                "lab_tools.sandbox",
+                "--home",
+                str(args.home),
+                "--shutdown",
+            ]
+        )
     run(
         [
             "uv",

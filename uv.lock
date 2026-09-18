@@ -2466,11 +2466,15 @@ name = "scopecat-lab-tools"
 version = "0.2.0"
 source = { editable = "packages/lab-tools" }
 dependencies = [
+    { name = "fastapi" },
+    { name = "filelock" },
     { name = "httpx2" },
     { name = "psutil" },
+    { name = "pydantic" },
     { name = "scopecat" },
     { name = "scopecat-lab-teaching" },
     { name = "scopecat-server" },
+    { name = "uvicorn" },
 ]
 
 [package.optional-dependencies]
@@ -2488,16 +2492,20 @@ notebook = [
 
 [package.metadata]
 requires-dist = [
+    { name = "fastapi", specifier = ">=0.116" },
+    { name = "filelock", specifier = ">=3.18" },
     { name = "httpx2" },
     { name = "ipykernel", marker = "extra == 'kernel'", specifier = ">=6.30" },
     { name = "jupyterlab", marker = "extra == 'notebook'", specifier = ">=4.4" },
     { name = "nbclient", marker = "extra == 'kernel'", specifier = ">=0.10" },
     { name = "nbformat", marker = "extra == 'kernel'", specifier = ">=5.10" },
     { name = "psutil", specifier = ">=7" },
+    { name = "pydantic", specifier = ">=2" },
     { name = "scopecat", editable = "packages/scopecat" },
     { name = "scopecat-lab-teaching", directory = "packages/lab-teaching" },
     { name = "scopecat-lab-tools", extras = ["kernel"], marker = "extra == 'notebook'", editable = "packages/lab-tools" },
     { name = "scopecat-server", editable = "packages/scopecat-server" },
+    { name = "uvicorn", specifier = ">=0.35" },
 ]
 provides-extras = ["kernel", "notebook"]
 

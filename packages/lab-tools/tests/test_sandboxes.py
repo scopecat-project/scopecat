@@ -5,7 +5,8 @@ import json
 import pytest
 
 from lab_teaching.lessons import TOPICS
-from lab_tools import environment, project, sandbox
+from lab_tools import environment, project
+from lab_tools import sandboxes as sandbox
 
 
 @pytest.fixture

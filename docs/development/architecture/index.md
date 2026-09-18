@@ -5,6 +5,8 @@ directions to Scopecat contributors:
 
 - [Experiment execution semantics](execution.md) covers authoring ownership,
   specialization, domain lowering, effects, completion, and evidence.
+- [Local application host](application-host.md) covers the unified teaching entry,
+  managed operations and the boundaries retained for future deployment.
 - [Lab daemon](daemon.md) covers durable run ownership, instrument workers,
   cancellation, API events, configuration, and storage.
 - [Durable procedure automation](automation.md) covers replayable multi-run
