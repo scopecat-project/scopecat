@@ -74,6 +74,13 @@ The initial convenience flow may create one collection for a selected target and
 cooldown. Changing an operator, repository or working point keeps that collection
 unless the user explicitly chooses another. Renaming labels never changes IDs.
 
+Starting a new cooldown or changing mounting/wiring does not automatically qualify
+the previous working point or calibration for the new physical conditions. A
+working point's applicability includes the relevant batch/setup scope. Previous
+values may be explicitly copied as starting estimates with retained provenance;
+that copy is not evidence of fresh calibration. Batch selection and calibration
+freshness therefore need a shared validation rule, not just matching chip names.
+
 An assembly is a revisioned measurement target, not a string concatenation of chip
 names. It records members and their physical roles, qualified entity addresses,
 and relevant interconnections. Moving from A to A+B does not reuse A's working point
@@ -191,7 +198,7 @@ checks establish lifecycle behavior only.
 |---|---|
 | A, same cooldown, code repository X -> Y | New runs use Y's captured source; history, sample identity and collection numbering continue; X's old results remain readable |
 | Same code, target A -> B in one page | Compatible B context is selected or a specific incompatibility is shown; A's prepared/admitted work and another page remain unchanged |
-| A enters a new cooldown | Stable A identity; explicit new batch and default new collection at #1; previous cooldown remains searchable |
+| A enters a new cooldown | Stable A identity; explicit new batch and default new collection at #1; previous cooldown remains searchable; old calibration is not silently treated as valid in new conditions |
 | A+B joint measurement | Frozen assembly members/connections and joint parameter scope; results discoverable from both samples without duplicate acquisition or rewritten ownership |
 | Two kernels, same collection | Unique numbers, independent selections and preserved code revisions; resource conflict is visible when both need the same instrument |
 | Working point updated during preview | Explicit revision conflict or honored pinned-compatible request; no silent substitution; no relabeling of admitted work |
