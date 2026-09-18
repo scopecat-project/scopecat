@@ -5,10 +5,6 @@
 
 from typing import Annotated
 
-import numpy as np
-from numpy.typing import NDArray
-from my_experiment.result_types import IQ
-
 import scopecat as sc
 from my_experiment.parameters import Drive
 from my_experiment.response import response
@@ -35,31 +31,3 @@ def teaching_rabi(
 
     )
     return {"amplitude": experiment.coordinate(amplitude), "iq": iq}
-
-
-@sc.compute
-def mean_iq(iq: NDArray[np.complex128]) -> IQ:
-    return complex(iq.mean())
-
-
-@sc.experiment(id="teaching.mean")
-def mean_rabi(
-    experiment: sc.ExperimentContext,
-    shots: int = 64,
-    seed: int = 200,
-    no_response: bool = False,
-    *,
-    amplitude: Annotated[
-        sc.Input[sc.Quantity],
-        sc.ControlSpec(minimum=0, maximum=0.9, title="Drive amplitude", scannable=True),
-    ] = sc.Quantity(0.1, "arb"),
-) -> dict[str, object]:
-    iq = response(
-        frequency=sc.parameter_ref(Drive.frequency, "q0"),
-        amplitude=amplitude,
-        shots=shots,
-        seed=seed,
-        no_response=no_response,
-
-    )
-    return {"amplitude": experiment.coordinate(amplitude), "iq": mean_iq(iq)}

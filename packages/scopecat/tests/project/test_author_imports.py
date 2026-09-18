@@ -174,6 +174,10 @@ def check_typed_refresh(
         )
         assert_type(refreshed(1), ExperimentRequest[str])
         assert_type(loaded(1), ExperimentRequest[str])
+        live = session.live(experiment)
+        assert_type(live(1), ExperimentRequest[str])
+        live("invalid")  # pyright: ignore[reportArgumentType]
+        live()  # pyright: ignore[reportCallIssue]
         refreshed("invalid")  # pyright: ignore[reportArgumentType]
         loaded()  # pyright: ignore[reportCallIssue]
 

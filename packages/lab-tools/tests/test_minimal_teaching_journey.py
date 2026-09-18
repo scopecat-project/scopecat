@@ -96,3 +96,70 @@ def test_minimal_teaching_refresh_and_restart(tmp_path: Path, notebook_imports) 
             )
     finally:
         stop_project(project)
+
+
+def test_live_requests_history_and_failed_refresh(
+    tmp_path: Path, notebook_imports
+) -> None:
+    import importlib
+
+    import pytest
+
+    from scopecat.daemon.preparation import AuthorPreparationFailed
+
+    root = tmp_path / "live"
+    create_project(root)
+    project = sc.open_project(root)
+    start_project(project, timeout=120)
+    try:
+        with project.authoring() as session:
+            session.refresh()
+            declaration = importlib.import_module(
+                "my_experiment.teaching"
+            ).teaching_rabi
+            live = session.live(declaration)
+            first = live()
+            generation = session.state().generation
+            unchanged = live()
+            assert session.state().generation == generation
+            assert (
+                unchanged.declaration.code_revision == first.declaration.code_revision
+            )
+            params = open_parameters(session)
+            prepared = session.prepare(first, parameters=params)
+            source = root / "src/my_experiment/teaching.py"
+            original = source.read_text(encoding="utf-8")
+            updated = original.replace("seed: int = 200", "seed: int = 401")
+            source.write_text(updated, encoding="utf-8")
+            second = live()
+            assert second.snapshot()["seed"] == 401
+            assert first.snapshot()["seed"] == 200
+            assert second.declaration.code_revision != first.declaration.code_revision
+            # A failed automatic refresh must never silently execute the last good code.
+            source.write_text(
+                updated + "\nthis is invalid Python !\n", encoding="utf-8"
+            )
+            with pytest.raises(AuthorPreparationFailed):
+                live()
+            source.write_text(updated, encoding="utf-8")
+            assert live().declaration.code_revision == second.declaration.code_revision
+            # The old preview still executes its admitted revision after the edit.
+            run = prepared.run().wait(timeout=120).result()
+            number = session.run_number(run)
+            assert session.run(number).id == run.id
+            assert str(number) in repr(session.history())
+            assert "<table>" in session.history()._repr_html_()
+            later = (
+                session.prepare(second, parameters=params)
+                .run()
+                .wait(timeout=120)
+                .result()
+            )
+            assert session.run_number(later) != number
+            assert session.run(number).id == run.id
+            with pytest.raises(KeyError):
+                session.run(1000000)
+        with project.authoring() as reader:
+            assert reader.run(number).id == run.id
+    finally:
+        stop_project(project)

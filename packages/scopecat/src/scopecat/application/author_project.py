@@ -7,7 +7,7 @@ import time
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal, SupportsFloat, overload, override
+from typing import TYPE_CHECKING, Literal, SupportsFloat, overload, override
 from uuid import uuid4
 
 import httpx2
@@ -52,6 +52,7 @@ from scopecat.daemon.procedure_views import ProcedureOperatorView
 from scopecat.daemon.views import MeasurementLivePreview, MeasurementPreview
 from scopecat.kernel.errors import SessionClosedError
 from scopecat.kernel.quantity import Quantity
+from scopecat.project_sources import SourceProject, capture_sources
 from scopecat.records.analysis_grouping import AnalysisGrouping
 from scopecat.records.author_revision import (
     AuthorAnalysisGroupReceipt,
@@ -71,6 +72,10 @@ from scopecat.records.plan_ref import ExperimentPlanRef, PlanAnalysisSource
 from scopecat.records.run import AnalysisCandidateRunConfigSource
 from scopecat.records.run_request import AxisValuesSourceRecord
 
+if TYPE_CHECKING:
+    from scopecat.application.live_experiment import LiveExperiment
+    from scopecat.application.run_history import RunHistory
+
 
 class AuthorProject(DaemonClient):
     """Refresh author code and explicitly rebind typed notebook declarations.
@@ -85,12 +90,14 @@ class AuthorProject(DaemonClient):
         *,
         receipts: Path | None = None,
         project_root: Path | None = None,
+        source_project: SourceProject | None = None,
         timeout: float | httpx2.Timeout | None = 120,
         transport: httpx2.BaseTransport | None = None,
     ) -> None:
         super().__init__(base_url, timeout=timeout, transport=transport)
         self.receipts = receipts.resolve() if receipts is not None else None
         self.project_root = project_root.resolve() if project_root is not None else None
+        self._source_project = source_project
 
     @property
     def run_operations(self) -> RemoteRunOperations:
@@ -100,8 +107,48 @@ class AuthorProject(DaemonClient):
     def config(self) -> LabConfigOperations:
         return LabConfigOperations(self, self.run_operations, None, "operator")
 
-    def run(self, run_id: str) -> RunHandle:
+    def live[**P, ResultT](
+        self, experiment: Experiment[P, ResultT]
+    ) -> LiveExperiment[P, ResultT]:
+        """Use saved source for each new request; existing requests stay frozen."""
+        from scopecat.application.live_experiment import LiveExperiment
+
+        self._require_local_authoring()
+        if self._source_project is None:
+            raise ValueError("Live experiments require project.authoring().")
+        return LiveExperiment(self._live_revision, lambda: self.refresh(experiment))
+
+    def _live_revision(self) -> AuthorRevisionRef:
+        if self.is_closed:
+            raise SessionClosedError(
+                "Author session is closed; create a new live experiment."
+            )
+        assert self._source_project is not None
+        return capture_sources(self._source_project).manifest.ref
+
+    def history(self, *, limit: int = 20, before: int | None = None) -> RunHistory:
+        """Display a bounded history page with project-local run numbers."""
+        from scopecat.application.run_history import RunHistory
+
+        return RunHistory(self.list_runs(limit=limit, before=before))
+
+    def run_number(self, run: RunHandle | str) -> int:
+        """Return this project's short number; it is not a portable data identity."""
+        if isinstance(run, RunHandle) and run.session is not self:
+            raise ValueError("Use a run from this session or an explicit run id")
+        return self.get_run(
+            run.id if isinstance(run, RunHandle) else run
+        ).control.sequence
+
+    def run(self, run_id: str | int) -> RunHandle:
         """Reconnect a retained run without importing its original author module."""
+        if isinstance(run_id, int):
+            if isinstance(run_id, bool) or run_id < 1:
+                raise ValueError("run number must be a positive integer")
+            page = self.list_runs(limit=1, before=run_id + 1)
+            if not page.items or page.items[0].control.sequence != run_id:
+                raise KeyError(f"No run #{run_id} in this project")
+            run_id = page.items[0].run_id
         return RunHandle(self, run_id)
 
     def reopen(self, receipt: str | Path) -> AuthorJob:

@@ -29,6 +29,7 @@ class Arguments(Protocol):
     stop: bool
     no_editor: bool
     verify: bool
+    clean: bool
 
 
 class EditorTask(TypedDict):
@@ -151,6 +152,10 @@ def select_project(
                 "--reinstall-package",
                 "scopecat-lab-tools",
                 "--reinstall-package",
+                "scopecat",
+                "--reinstall-package",
+                "scopecat-server",
+                "--reinstall-package",
                 "scopecat-lab-teaching",
             ],
             cwd=source,
@@ -210,12 +215,32 @@ def main(argv: Sequence[str] | None = None) -> None:
     _ = parser.add_argument("--stop", action="store_true")
     _ = parser.add_argument("--no-editor", action="store_true")
     _ = parser.add_argument("--verify", action="store_true")
+    _ = parser.add_argument("--clean", action="store_true", help="选择并清理旧练习")
     args = cast("Arguments", cast("object", parser.parse_args(argv)))
+    if args.clean:
+        from .cleanup import cleanup_menu
+
+        try:
+            cleanup_menu(args.home, sandbox_key(args.source))
+        except (ValueError, OSError) as error:
+            parser.exit(2, f"清理失败: {error}\n")
+        return
     if args.topic is None:
+        print("0. 清理旧练习")
         for number, (name, title) in enumerate(TOPICS.items(), 1):
             print(f"{number}. {title} ({name})")
         answer = input("选择专题编号 (直接回车退出): ").strip()
         if not answer:
+            return
+        if answer == "0":
+            main(
+                [
+                    "--clean",
+                    "--home",
+                    str(args.home),
+                    *(["--source", str(args.source)] if args.source else []),
+                ]
+            )
             return
         if answer not in {str(i) for i in range(1, len(TOPICS) + 1)}:
             parser.exit(2, "无效专题编号\n")

@@ -77,3 +77,30 @@ def test_variadic_functions_fail_before_building() -> None:
 
     with pytest.raises(TypeError, match="parameter 'values'"):
         sc.compute(variadic)
+
+
+def test_dictionary_outputs_compose_and_keep_named_paths() -> None:
+    @sc.module(id="dict.module")
+    def inner(ctx: sc.ModuleContext) -> dict[str, sc.DataRef[complex]]:
+        return {"signal": offset(2j)}
+
+    @sc.experiment(id="dict.experiment")
+    def experiment(ctx: sc.ExperimentContext) -> dict[str, object]:
+        return {"nested": ctx.use(inner()), "other": offset(1j)}
+
+    built = experiment.build()
+    assert {field.path for field in built.definition.result_fields} == {
+        ("nested", "signal"),
+        ("other",),
+    }
+    assert compile_invocation(built) is not None
+
+
+@pytest.mark.parametrize("key", ["", "nested/signal", 1])
+def test_dictionary_output_rejects_ambiguous_field_names(key: object) -> None:
+    @sc.experiment(id="dict.invalid")
+    def experiment(ctx: sc.ExperimentContext) -> dict[object, object]:
+        return {key: offset(1j)}
+
+    with pytest.raises(TypeError, match="string keys"):
+        experiment.build()

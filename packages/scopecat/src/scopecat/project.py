@@ -99,6 +99,7 @@ class Project:
             resolve_daemon_endpoint(self.root, explicit=daemon),
             receipts=self.runtime_binding.data_root / "author-jobs",
             project_root=self.root,
+            source_project=self,
             timeout=120,
         )
 

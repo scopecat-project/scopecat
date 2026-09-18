@@ -1,0 +1,10 @@
+"""本项目的参数声明；可以添加自己的 ParameterModel。"""
+
+import scopecat as sc
+
+
+class Drive(sc.ParameterModel, table="teaching_drive"):
+    """Frequency is expressed in GHz; this input is not a measured result."""
+
+    id: sc.Param[str] = sc.param(key=True)
+    frequency: sc.Magnitude[float] = sc.quantity(unit="GHz", minimum=4, maximum=8)
