@@ -241,6 +241,15 @@ def _relocate_result_value(
                 value_replacements=value_replacements,
             )
         )
+    if isinstance(value, dict):
+        return {
+            name: _relocate_result_value(
+                item,
+                product_replacements=product_replacements,
+                value_replacements=value_replacements,
+            )
+            for name, item in cast("dict[str, object]", value).items()
+        }
     if isinstance(value, tuple):
         return tuple(
             _relocate_result_value(
@@ -267,7 +276,7 @@ def _relocate_result_value(
         )
     raise TypeError(
         "module functions must return None, ValueRef, ProductRef, or a "
-        "tuple/dataclass/PerEntity tree of references"
+        "dict/tuple/dataclass/PerEntity tree of references"
     )
 
 
@@ -280,6 +289,12 @@ def _append_result_values(selected: list[ValueRef], value: object) -> None:
         return
     if isinstance(value, PerEntity):
         for item in value.values():
+            _append_result_values(selected, item)
+        return
+    if isinstance(value, dict):
+        for _name, item in result_mapping_items_internal(
+            cast("dict[object, object]", value)
+        ):
             _append_result_values(selected, item)
         return
     if isinstance(value, tuple):
@@ -298,9 +313,19 @@ def _append_result_values(selected: list[ValueRef], value: object) -> None:
         return
     raise TypeError(
         "module functions must return None, ValueRef, ProductRef, or a "
-        "tuple/dataclass/PerEntity tree of references"
+        "dict/tuple/dataclass/PerEntity tree of references"
     )
 
 
 def _product_key(product: ProductRef) -> _ProductKey:
     return product.product_id, product.origin
+
+
+def result_mapping_items_internal(
+    value: dict[object, object],
+) -> tuple[tuple[str, object], ...]:
+    if not value or any(
+        not isinstance(key, str) or not key or "/" in key for key in value
+    ):
+        raise TypeError("result dictionaries require non-empty string keys without '/'")
+    return tuple(cast("dict[str, object]", value).items())

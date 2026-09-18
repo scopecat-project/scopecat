@@ -89,3 +89,43 @@ def test_unknown_topic_never_creates_target(tmp_path):
     with pytest.raises(ValueError, match="未知专题"):
         project.create_project(tmp_path / "missing", topic="not-a-topic")
     assert not (tmp_path / "missing").exists()
+
+
+def test_cleanup_preserves_current_live_and_unmanaged_paths(managed, monkeypatch):
+    from lab_tools import cleanup
+
+    first = sandbox.select_project(managed, "compute")
+    second = sandbox.select_project(managed, "compute", reset=True)
+    assert first in {
+        item.root for item in cleanup.old_sandboxes(managed, "release-test")
+    }
+    with pytest.raises(ValueError, match="当前练习"):
+        cleanup.remove_old_sandbox(managed, "release-test", second)
+    monkeypatch.setattr(cleanup, "in_use", lambda _root: True)
+    with pytest.raises(ValueError, match="内核"):
+        cleanup.remove_old_sandbox(managed, "release-test", first)
+    assert first.exists()
+    monkeypatch.setattr(cleanup, "in_use", lambda _root: False)
+    cleanup.remove_old_sandbox(managed, "release-test", first)
+    assert not first.exists()
+    assert second.exists()
+    with pytest.raises(ValueError, match="旧教学副本"):
+        cleanup.remove_old_sandbox(managed, "release-test", managed)
+
+
+def test_cleanup_detects_a_real_process(managed):
+    import subprocess
+    import sys
+
+    from lab_tools import cleanup
+
+    root = sandbox.select_project(managed, "compute")
+    child = subprocess.Popen(
+        [sys.executable, "-c", "import time; time.sleep(60)"], cwd=root
+    )
+    try:
+        assert cleanup.in_use(root)
+    finally:
+        child.terminate()
+        child.wait(timeout=10)
+    assert not cleanup.in_use(root)

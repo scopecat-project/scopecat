@@ -2467,6 +2467,7 @@ version = "0.2.0"
 source = { editable = "packages/lab-tools" }
 dependencies = [
     { name = "httpx2" },
+    { name = "psutil" },
     { name = "scopecat" },
     { name = "scopecat-lab-teaching" },
     { name = "scopecat-server" },
@@ -2492,6 +2493,7 @@ requires-dist = [
     { name = "jupyterlab", marker = "extra == 'notebook'", specifier = ">=4.4" },
     { name = "nbclient", marker = "extra == 'kernel'", specifier = ">=0.10" },
     { name = "nbformat", marker = "extra == 'kernel'", specifier = ">=5.10" },
+    { name = "psutil", specifier = ">=7" },
     { name = "scopecat", editable = "packages/scopecat" },
     { name = "scopecat-lab-teaching", directory = "packages/lab-teaching" },
     { name = "scopecat-lab-tools", extras = ["kernel"], marker = "extra == 'notebook'", editable = "packages/lab-tools" },

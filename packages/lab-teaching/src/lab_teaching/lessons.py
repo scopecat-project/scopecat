@@ -16,6 +16,16 @@ def install_lesson(root: Path, topic: str) -> Path:
         raise ValueError(f"未知专题: {topic}; 可选 {', '.join(TOPICS)}")
     material = files("lab_teaching.course_material")
     lesson = material.joinpath("lessons")
+    for name in ("parameters", "setup", "response"):
+        _ = (root / f"src/my_experiment/{name}.py").write_bytes(
+            lesson.joinpath(f"{name}.py.txt").read_bytes()
+        )
+    _ = (root / "src/workspace_app.py").write_bytes(
+        lesson.joinpath("workspace_app.py.txt").read_bytes()
+    )
+    _ = (root / "src/my_experiment/teaching.py").write_bytes(
+        lesson.joinpath("experiment.py.txt").read_bytes()
+    )
     # create_project has just generated this directory; no user files exist yet.
     for previous in (root / "notebooks").iterdir():
         previous.unlink()
@@ -27,7 +37,7 @@ def install_lesson(root: Path, topic: str) -> Path:
         )
     if topic == "refresh":
         (root / "examples").mkdir()
-        extra = material.joinpath("experiment.py").read_text(encoding="utf-8")
+        extra = lesson.joinpath("experiment.py.txt").read_text(encoding="utf-8")
         _ = (root / "examples/extra.py").write_text(
             extra.replace('id="teaching.rabi"', 'id="teaching.extra"').replace(
                 "def teaching_rabi(", "def extra_rabi("

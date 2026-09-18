@@ -59,6 +59,10 @@ def main() -> None:
             "--reinstall-package",
             "scopecat-lab-tools",
             "--reinstall-package",
+            "scopecat",
+            "--reinstall-package",
+            "scopecat-server",
+            "--reinstall-package",
             "scopecat-lab-teaching",
         ]
     )

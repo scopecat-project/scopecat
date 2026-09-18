@@ -38,6 +38,7 @@ from scopecat.authoring._module_results import (
     ProductBundleKernel,
     RecordedProducts,
     module_result_value_exports,
+    result_mapping_items_internal,
 )
 from scopecat.authoring.compute_functions import compute_context_internal
 from scopecat.authoring.control_metadata import ControlSpec
@@ -1759,36 +1760,6 @@ def _record_experiment_output(
             metadata=selected_policy.metadata,
         )
         return value
-    if isinstance(value, ProductBundle):
-        _reject_structured_result_id(selected_policy)
-        if not is_dataclass(value):
-            raise TypeError("experiment output product bundles must be dataclasses")
-        members = fields(value)
-        if not members:
-            raise TypeError("experiment output product bundles must not be empty")
-        hints = cast(
-            "Mapping[str, object]",
-            result_types[type(value)]
-            if type(value) in result_types
-            else get_type_hints(type(value), include_extras=True),
-        )
-        return replace(
-            value,
-            **{
-                member.name: _record_experiment_output(
-                    context,
-                    cast("object", getattr(value, member.name)),
-                    result_types=result_types,
-                    path=(*path, member.name),
-                    policy=_merge_result_policy(
-                        selected_policy,
-                        _result_policy(hints.get(member.name)),
-                    ),
-                    explicit_sources=explicit_sources,
-                )
-                for member in members
-            },
-        )
     if isinstance(value, PerEntity):
         _reject_structured_result_id(selected_policy)
         items = tuple(value.items())
@@ -1858,6 +1829,21 @@ def _record_experiment_output(
             )
             for entity, item in value.items()
         )
+    if isinstance(value, dict):
+        _reject_structured_result_id(selected_policy)
+        return {
+            name: _record_experiment_output(
+                context,
+                item,
+                result_types=result_types,
+                path=(*path, name),
+                policy=selected_policy,
+                explicit_sources=explicit_sources,
+            )
+            for name, item in result_mapping_items_internal(
+                cast("dict[object, object]", value)
+            )
+        }
     if isinstance(value, tuple):
         _reject_structured_result_id(selected_policy)
         return tuple(
@@ -1900,7 +1886,7 @@ def _record_experiment_output(
             },
         )
     raise TypeError(
-        "experiment functions must return None or a tuple/dataclass/PerEntity "
+        "experiment functions must return None or a dict/tuple/dataclass/PerEntity "
         "tree of data references"
     )
 
@@ -1914,8 +1900,8 @@ def _recorded_result_ref_items(
         return
     if value is None:
         return
-    if isinstance(value, RecordedProducts):
-        for name, item in value.items():
+    if isinstance(value, RecordedProducts | dict):
+        for name, item in cast("Mapping[str, object]", value).items():
             yield from _recorded_result_ref_items(item, (*path, name))
         return
     if isinstance(value, PerEntity):
@@ -1937,7 +1923,7 @@ def _recorded_result_ref_items(
             )
         return
     raise TypeError(
-        "recorded result handles must form a tuple/dataclass/PerEntity tree"
+        "recorded result handles must form a dict/tuple/dataclass/PerEntity tree"
     )
 
 
