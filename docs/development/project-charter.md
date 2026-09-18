@@ -10,6 +10,13 @@ remains available for composition, analysis, and adaptive orchestration, while
 declarative experiment abstractions capture the structure needed for planning,
 compilation, reproducibility, and scalable execution.
 
+The selected application direction is a unified experiment workbench with
+[session-scoped experimental contexts](architecture/experiment-contexts.md):
+sample/assembly, batch, working point, code and operator choices have independent
+ownership. Teaching belongs under Help and uses protected simulated contexts.
+This is a product direction, not a claim that the current teaching host already
+implements shared experimental execution.
+
 ## Current Stage
 
 Scopecat is an early, single-user project. Its current goal is to make

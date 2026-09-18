@@ -9,6 +9,10 @@ the design boundaries. No historical-store migration or remote execution is
 included. [#572](https://github.com/scopecat-project/scopecat/issues/572) tracks
 integration acceptance.
 
+The [experiment-context direction](experiment-contexts.md) proposes replacing the
+one-active-workspace restriction with explicit session/source ownership. It does
+not relax this implemented binding contract before that replacement is delivered.
+
 ## Pre-implementation contracts and gaps
 
 Paths below are repository-relative implementation locations.
