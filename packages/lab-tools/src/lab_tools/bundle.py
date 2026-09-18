@@ -229,7 +229,7 @@ def install_home(root: Path, home: Path) -> Path:
     _ = (home / "lab.cmd").write_text(
         '@echo off\ncd /d "%~dp0"\n'
         f'"%~dp0{python.relative_to(home)}" "%~dp0lab.py" %*\n'
-        'if "%~1"=="" pause\n',
+        "if errorlevel 1 pause\n",
         encoding="utf-8",
     )
     print(

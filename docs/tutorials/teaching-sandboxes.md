@@ -12,9 +12,11 @@ received delivery directory run `python install.py`. The installer verifies and
 copies the complete offline delivery into `~/Scopecat-Lab`.
 
 On Windows, open `Scopecat-Lab/lab.cmd`; elsewhere run
-`python ~/Scopecat-Lab/lab.py`. Choose a topic, then open, reset, stop or verify.
-The installed command `scopecat teach` exposes the same menu. There is no need to
-activate a different environment or number project folders by hand.
+`python ~/Scopecat-Lab/lab.py`. This opens the local Scopecat management page.
+Choose a topic and **Open / continue**; the service prepares the exercise and opens
+its folder and Notebook in VS Code. The installed command `scopecat teach` opens
+the same page. There is no need to activate environments, choose ports or number
+project folders. Repeated launching connects to the same management service.
 
 Each topic has its own environment and one complete Notebook:
 
@@ -30,14 +32,22 @@ rejects the wrong interpreter. Run All before making one small change. The curre
 Notebook instructions are in Chinese; this page explains the common entry in English.
 Detailed API explanations follow the [learning path](../getting-started/learning-path.md).
 
-Repeated opening continues the same exercise. Before reset, close its old Notebook
-kernel. Reset stops its service and creates a fresh copy without merging edits.
-Old copies are never deleted automatically. Choose **0: clean old exercises** in
-the menu, or run `scopecat teach --clean`. It lists sizes and paths, lets you select
-one copy and asks for confirmation. The current version's active topic copies and
-copies with running processes are protected. Close kernels and services first;
-copy any source or Notebook you want to retain elsewhere. Cleanup does not delete
-release bundles or manage real projects.
+Repeated opening continues the same exercise. To reset, first close its Notebook
+kernel and use **Stop exercise service**, then **Reset exercise**. A fresh copy is
+created; the old copy and its edits remain in the list. **Delete old copy** requires
+confirmation and is unavailable for the current copy or a copy with running
+processes. Old copies are never deleted automatically. Copy any source or Notebook
+you want to retain elsewhere. Cleanup does not delete release bundles or manage
+real projects.
+
+The page shows operation progress, results and logs. Closing the browser does not
+interrupt preparation or verification. Reopen the launcher to reconnect. If an
+operation process exits unexpectedly, its status becomes interrupted; inspect its
+retained files and logs before retrying. It is never silently replayed. Exiting the
+management service leaves exercise services running; stop those explicitly from
+their cards when finished. Installing a newer release selects the new manager on
+next launch; active management work must finish first.
+
 Real scientific projects and retained experimental evidence do not belong in this
 resettable directory and continue to use explicit backup and migration policies.
 
@@ -45,7 +55,8 @@ resettable directory and continue to use explicit backup and migration policies.
 
 From a Scopecat checkout, run `uv run python teach.py source`, or double-click
 `teach.cmd` and choose 1 on Windows. The entry installs local wheels and locked
-teaching dependencies, starts an API-only service and opens the selected topic.
+teaching dependencies and opens the local management page. Exercise services use
+the API-only runtime.
 It does not build the GUI or require Node. Only the exercise's author package is
 editable; new framework/tutorial contents receive a new sandbox identity.
 
@@ -71,7 +82,7 @@ release bundles separately. Successful CI is software evidence, not human or
 physical-device acceptance.
 
 An explicit standalone tutorial workspace can also be generated with
-`scopecat init PATH --topic compute` in a teaching installation. The menu is the
+`scopecat init PATH --topic compute` in a teaching installation. The management page is the
 default for disposable exercises; `init` without a topic still creates the small
 virtual-instrument project used for integration and application development.
 
@@ -162,3 +173,18 @@ position and does not change when newer runs arrive. `session.run_number(run)`
 provides the number for a current handle. Complete run IDs remain the portable
 identity; short numbers only make sense within their original project. Pagination
 uses `session.history(before=page.next_cursor)`.
+
+## Development and automated acceptance
+
+The ordinary installation uses one host at `~/Scopecat-Lab`. Development and tests
+may select an isolated home with `--home PATH`; each gets its own lock, endpoint,
+operation database and logs. Topic arguments such as
+`scopecat teach parameters --verify --home PATH` call the same management API as
+the page. `--status` reports managed state; `--shutdown` closes only that host.
+Source development stops its manager before updating the source runtime, preserving
+exercise processes and rejecting the update while management work is still active.
+
+The first implementation manages synthetic teaching exercises only. It retains
+project-scoped execution services internally; it does not consolidate real device
+ownership, enable LAN access, install a tray icon or register system autostart.
+See the [application host architecture](../development/architecture/application-host.md).
