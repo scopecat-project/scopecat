@@ -14,6 +14,10 @@ or hardware acceptance.
 
 Current follow-through is organized around:
 
+- the [experiment workbench and session-context direction](architecture/experiment-contexts.md)
+  (2026-09-19): clarify scientific context and numbering ownership, then session
+  execution/resource coordination, workbench integration and application maintenance;
+  the shipped teaching host is lifecycle infrastructure, not the primary product;
 - workspace/data/deployment binding [#572](https://github.com/scopecat-project/scopecat/issues/572),
   with the [code audit and minimal contract](architecture/workspace-bindings.md);
 - persistent research/sample history [#573](https://github.com/scopecat-project/scopecat/issues/573)

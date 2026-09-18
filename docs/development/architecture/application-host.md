@@ -1,5 +1,11 @@
 # Local application host
 
+Status: shipped teaching lifecycle infrastructure. The selected product direction
+is the [experiment workbench with session contexts](experiment-contexts.md).
+The teaching page is transitional; it must move under Help rather than become the
+primary application. Its checks do not establish multi-workspace experimental
+contexts, collection numbering or shared physical-device ownership.
+
 The default teaching installation has one management service per installation home,
 with a browser page and CLI using the same authenticated API. The first delivered
 slice manages synthetic teaching exercises. Existing project daemons, kernels,
@@ -58,6 +64,11 @@ all four topics through the same host, runs the shipped Notebooks, resets a copy
 deletes the selected old copy and shuts down the host.
 
 ## Further deployment decisions
+
+Follow the context, session execution, workbench integration and maintenance order
+in the [implementation slices](experiment-contexts.md#ordered-implementation-slices).
+Lifecycle reuse is useful, but further teaching-launcher expansion and tray work
+are not the next architectural step.
 
 The existing workspace/data-space/deployment binding remains authoritative for
 project execution. Before generalizing this host to laboratories, define stable

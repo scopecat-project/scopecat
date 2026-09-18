@@ -73,6 +73,7 @@ nav = [
     { "Pilot work slices and acceptance fixtures" = "development/pilot-work-slices.md" },
     { "Architecture" = [
       "development/architecture/index.md",
+      { "Experiment workbench contexts" = "development/architecture/experiment-contexts.md" },
       { "Workspace and data binding contract" = "development/architecture/workspace-bindings.md" },
       { "Structured authoring direction" = "development/architecture/structured-authoring.md" },
       { "Experiment execution" = "development/architecture/execution.md" },
