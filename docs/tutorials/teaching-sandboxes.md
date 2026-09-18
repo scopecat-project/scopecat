@@ -114,9 +114,10 @@ field-specific recording policies. Neither form makes the deferred references
 into already-computed Python values. A reader may use `rows_as(...)` to validate a
 native row schema, including units. The output dataclass is not that native row.
 
-Both synthetic response and mean computations use `@sc.compute`. The response's
-array annotation names the `shot` dimension with variable length; actual lengths
-are retained with results. Call `.eager(...)` for an ordinary NumPy computation.
+Both synthetic response and mean computations use `@sc.compute`. The response uses
+`@sc.compute(output_type=shot_array)`: the schema factory receives the structural
+`shots` argument and declares a fixed shot axis for this request. Unknown-length
+arrays are a different contract and are not a substitute for a fixed dense axis. Call `.eager(...)` for an ordinary NumPy computation.
 Both this syntax and `experiment.compute(fn=...)` allocate node IDs automatically;
 explicit IDs are optional, and array/unit semantics remain explicit.
 

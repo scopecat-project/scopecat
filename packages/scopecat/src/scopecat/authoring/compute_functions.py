@@ -7,20 +7,25 @@ from collections.abc import Callable, Generator, Mapping
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass
-from typing import Protocol, cast
+from typing import Protocol, cast, overload
 
 from scopecat.authoring._module_results import DataRef
-from scopecat.program.products import ProductNativeValue, ProductRef
+from scopecat.program.products import ProductNativeValue, ProductRef, ProductRefs
+from scopecat.program.value_refs import ValueRef
+from scopecat.program.value_types import Array, Scalar
 from scopecat.program.values import ComputeInput
+
+type ComputeOutput = Scalar | Array | Callable[..., Scalar | Array]
 
 
 class _ComputeRecorder(Protocol):
-    def compute[T: ProductNativeValue](
+    def compute(
         self,
         *,
-        fn: Callable[..., T],
+        fn: Callable[..., ProductNativeValue],
         inputs: Mapping[str, ComputeInput | ProductRef],
-    ) -> DataRef[T]: ...
+        output_type: Scalar | Array | None = None,
+    ) -> ValueRef | ProductRef | ProductRefs: ...
 
 
 _current_context: ContextVar[_ComputeRecorder | None] = ContextVar(
@@ -49,6 +54,7 @@ class DeferredCompute[**P, T: ProductNativeValue]:
 
     eager: Callable[P, T]
     _signature: inspect.Signature
+    _output_type: ComputeOutput | None = None
 
     def __call__(
         self, *args: ComputeInput | ProductRef, **kwargs: ComputeInput | ProductRef
@@ -61,21 +67,55 @@ class DeferredCompute[**P, T: ProductNativeValue]:
             )
         bound = self._signature.bind(*args, **kwargs)
         bound.apply_defaults()
-        return context.compute(
-            fn=self.eager,
-            inputs=cast("Mapping[str, ComputeInput | ProductRef]", bound.arguments),
+        output_type = self._output_type
+        if callable(output_type):
+            schema_arguments = {
+                name: bound.arguments[name]
+                for name in inspect.signature(output_type).parameters
+            }
+            output_type = output_type(**schema_arguments)
+        return cast(
+            "DataRef[T]",
+            context.compute(
+                fn=self.eager,
+                output_type=output_type,
+                inputs=cast("Mapping[str, ComputeInput | ProductRef]", bound.arguments),
+            ),
         )
 
 
+@overload
 def compute[**P, T: ProductNativeValue](
     fn: Callable[P, T],
-) -> DeferredCompute[P, T]:
-    """Defer calls in experiment definitions; execute native code via ``.eager``.
+    *,
+    output_type: ComputeOutput | None = None,
+) -> DeferredCompute[P, T]: ...
 
-    Return annotations declare scalar or Annotated array/unit schemas. Positional
-    and keyword-only arguments are supported; variadic and positional-only native
-    signatures cannot be represented by the current named-input execution model.
+
+@overload
+def compute[**P, T: ProductNativeValue](
+    *,
+    output_type: ComputeOutput,
+) -> Callable[[Callable[P, T]], DeferredCompute[P, T]]: ...
+
+
+def compute[**P, T: ProductNativeValue](
+    fn: Callable[P, T] | None = None,
+    *,
+    output_type: ComputeOutput | None = None,
+) -> DeferredCompute[P, T] | Callable[[Callable[P, T]], DeferredCompute[P, T]]:
+    """Defer calls in definitions; use ``.eager`` for native execution.
+
+    Return annotations normally declare the output schema. ``output_type`` may
+    override it with a schema or a factory whose named arguments select structural
+    inputs from the native function (for example, an array's shot count).
     """
+    if fn is None:
+
+        def decorate(native: Callable[P, T]) -> DeferredCompute[P, T]:
+            return compute(native, output_type=output_type)
+
+        return decorate
     signature = inspect.signature(fn)
     for parameter in signature.parameters.values():
         if parameter.kind in (
@@ -87,4 +127,13 @@ def compute[**P, T: ProductNativeValue](
                 f"compute parameter {parameter.name!r} must be positional-or-keyword "
                 "or keyword-only"
             )
-    return DeferredCompute(fn, signature)
+    if callable(output_type):
+        for name, parameter in inspect.signature(output_type).parameters.items():
+            if name not in signature.parameters or parameter.kind not in (
+                inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                inspect.Parameter.KEYWORD_ONLY,
+            ):
+                raise TypeError(
+                    f"output schema argument {name!r} must name a compute input"
+                )
+    return DeferredCompute(fn, signature, output_type)

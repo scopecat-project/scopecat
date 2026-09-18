@@ -5,24 +5,26 @@ import struct
 
 import numpy as np
 from numpy.typing import NDArray
-from typing import Annotated
 
 import scopecat as sc
 
 
-type Shots = Annotated[
-    NDArray[np.complex128],
-    sc.ArrayType(dtype="complex128", unit="ratio", dimensions=(sc.ArrayDimension("shot", None),)),
-]
+def shot_array(shots: int) -> sc.ArrayType:
+    """每个实验点的 shot 轴长度由结构参数确定。"""
+    return sc.ArrayType(
+        dtype="complex128", unit="ratio",
+        dimensions=(sc.ArrayDimension("shot", shots),),
+    )
 
-@sc.compute
+
+@sc.compute(output_type=shot_array)
 def response(
     frequency: sc.Quantity,
     amplitude: sc.Quantity,
     shots: int,
     seed: int,
     no_response: bool,
-) -> Shots:
+) -> NDArray[np.complex128]:
     # Preserve coordinate-stable noise and the first course's declared fixture.
     frequency_ghz = frequency.to("GHz").value
     amplitude_arb = amplitude.to("arb").value

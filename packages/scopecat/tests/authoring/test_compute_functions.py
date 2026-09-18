@@ -104,3 +104,42 @@ def test_dictionary_output_rejects_ambiguous_field_names(key: object) -> None:
 
     with pytest.raises(TypeError, match="string keys"):
         experiment.build()
+
+
+def test_output_schema_factory_preserves_structural_shape_and_native_call() -> None:
+    import numpy as np
+    from numpy.typing import NDArray
+
+    def shape(shots: int) -> sc.ArrayType:
+        return sc.ArrayType(
+            dtype="complex128", dimensions=(sc.ArrayDimension("shot", shots),)
+        )
+
+    @sc.compute(output_type=shape)
+    def samples(shots: int = 2) -> NDArray[np.complex128]:
+        return np.ones(shots, dtype=np.complex128)
+
+    assert_type(samples.eager(3), NDArray[np.complex128])
+    assert samples.eager(3).shape == (3,)
+
+    @sc.experiment(id="schema.factory")
+    def experiment(
+        ctx: sc.ExperimentContext,
+    ) -> dict[str, sc.DataRef[NDArray[np.complex128]]]:
+        return {"two": samples(), "three": samples(3)}
+
+    built = experiment.build()
+    two, three = built.output["two"], built.output["three"]
+    assert isinstance(two, sc.ValueRef) and isinstance(three, sc.ValueRef)
+    assert isinstance(two.value_type, sc.ArrayType) and isinstance(
+        three.value_type, sc.ArrayType
+    )
+    assert two.value_type.dimensions[0].size == 2
+    assert three.value_type.dimensions[0].size == 3
+    assert compile_invocation(built) is not None
+
+    def invalid_shape(unknown: int) -> sc.ArrayType:
+        return shape(unknown)
+
+    with pytest.raises(TypeError, match="unknown"):
+        sc.compute(samples.eager, output_type=invalid_shape)
