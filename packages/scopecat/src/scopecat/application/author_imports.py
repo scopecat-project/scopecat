@@ -9,6 +9,7 @@ from __future__ import annotations
 import importlib
 import importlib.abc
 import importlib.util
+import inspect
 import sys
 from collections.abc import Generator, Mapping, Sequence
 from contextlib import contextmanager
@@ -197,6 +198,82 @@ def refresh_revision_imports(
         bundle, project_root=project_root, cache=cache, fingerprints=fingerprints
     ):
         pass
+
+
+def select_notebook_experiment[**P, T](
+    experiment: Experiment[P, T],
+    source: Mapping[str, str],
+    revision: AuthorRevisionRef,
+    *,
+    project_root: Path,
+    cache: Path,
+) -> Experiment[P, T]:
+    """Resolve an old alias in the active workspace without reloading modules."""
+    module = source["module"]
+    finder = next(
+        (
+            item
+            for item in sys.meta_path
+            if isinstance(item, _RevisionImports) and item.owns(module)
+        ),
+        None,
+    )
+    if finder is None:
+        return experiment
+    location = Path(inspect.getfile(experiment.__wrapped__)).resolve()
+    if not (location.is_relative_to(project_root) or location.is_relative_to(cache)):
+        raise ValueError(
+            "This experiment alias belongs to another workspace; "
+            "import it from the current project."
+        )
+    if finder.revision != revision:
+        raise ValueError(
+            "Notebook imports changed outside this workspace; "
+            "close and reopen sc.notebook()."
+        )
+    value: object = importlib.import_module(module)
+    for part in source["qualname"].split("."):
+        value = cast("object", getattr(value, part))
+    if not isinstance(value, Experiment) or value.id != experiment.id:
+        raise ValueError(
+            f"{module}:{source['qualname']} no longer declares {experiment.id}"
+        )
+    if value.code_revision != revision:
+        raise ValueError(f"{experiment.id} is absent from the admitted author catalog")
+    return cast("Experiment[P, T]", value)
+
+
+def notebook_imports_selected(root: Path, revision: AuthorRevisionRef) -> bool:
+    """Historical analysis may have temporarily selected another import revision."""
+    return any(
+        isinstance(item, _RevisionImports)
+        and item.project_root == root
+        and item.revision == revision
+        for item in sys.meta_path
+    )
+
+
+def release_notebook_imports(root: Path) -> None:
+    """Release import names on workspace close; retained Python objects survive."""
+    with _import_lock:
+        finders = [
+            item
+            for item in sys.meta_path
+            if isinstance(item, _RevisionImports) and item.project_root == root
+        ]
+        for name in tuple(sys.modules):
+            if any(finder.owns(name) for finder in finders):
+                module = sys.modules.pop(name)
+                parent_name, _, child = name.rpartition(".")
+                parent = sys.modules.get(parent_name)
+                if (
+                    parent is not None
+                    and not any(finder.owns(parent_name) for finder in finders)
+                    and getattr(parent, child, None) is module
+                ):
+                    delattr(parent, child)
+        for finder in finders:
+            sys.meta_path.remove(finder)
 
 
 @contextmanager

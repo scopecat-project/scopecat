@@ -7,7 +7,7 @@ from collections.abc import Callable, Iterable, Mapping
 from copy import deepcopy
 from dataclasses import dataclass, field, fields, is_dataclass, replace
 from types import MappingProxyType
-from typing import Generic, Literal, ParamSpec, SupportsFloat, TypeVar, cast
+from typing import Generic, Literal, ParamSpec, Protocol, SupportsFloat, TypeVar, cast
 
 from scopecat.authoring.parameter_models import (
     ParameterFieldIdentity,
@@ -126,6 +126,13 @@ class Experiment(Generic[_P, _ExperimentResultT_co]):
         Creation retains the function's argument types. Dictionary edits are
         validated against the selected declaration when the request is prepared.
         """
+        selected = self if request_selector is None else request_selector.select(self)
+        return selected._request(*args, **kwargs)
+
+    def _request(
+        self, *args: _P.args, **kwargs: _P.kwargs
+    ) -> ExperimentRequest[_ExperimentResultT_co]:
+        """Bind once to the selected definition; retained requests never reselect."""
         bound = self._signature.bind(*args, **kwargs)
         bound.apply_defaults()
         values = dict(bound.arguments)
@@ -274,3 +281,10 @@ __all__ = [
     "ExperimentRequest",
     "Scan",
 ]
+
+
+class RequestSelector(Protocol):
+    def select[**P, T](self, experiment: Experiment[P, T]) -> Experiment[P, T]: ...
+
+
+request_selector: RequestSelector | None = None

@@ -44,6 +44,45 @@ def execute(root: Path, topic: str, *, api_only: bool = False) -> None:
             kernel_name="scopecat-lab",
             resources={"metadata": {"path": str(root / "notebooks")}},
         ).execute()
+        if topic == "refresh":
+            # A genuinely new kernel must reopen retained runs without relying on
+            # any variable from the lesson or launching the experiments again.
+            with project.authoring() as reader:
+                expected = {
+                    item.control.sequence: item.run_id
+                    for item in reader.list_runs(limit=20).items
+                }
+            assert expected
+            reopen = nbformat.v4.new_notebook(
+                cells=[
+                    nbformat.v4.new_code_cell(
+                        "import scopecat as sc\n"
+                        "session = sc.notebook()\n"
+                        "assert sc.notebook() is session\n"
+                        "session.history()"
+                    ),
+                    nbformat.v4.new_code_cell(
+                        f"expected = {expected!r}\n"
+                        "for number, identity in expected.items():\n"
+                        "    restored = session.run(number)\n"
+                        "    assert restored.id == identity\n"
+                        "    assert len(restored.measurements()) == 2\n"
+                        "retained = session.list_runs(limit=20).items\n"
+                        "assert len(retained) == len(expected)\n"
+                        "session.close()"
+                    ),
+                ]
+            )
+            try:
+                NotebookClient(
+                    reopen,
+                    timeout=300,
+                    startup_timeout=300,
+                    kernel_name="scopecat-lab",
+                    resources={"metadata": {"path": str(root / "notebooks")}},
+                ).execute()
+            finally:
+                nbformat.write(reopen, root / "notebooks/verified-refresh-reopen.ipynb")
     finally:
         nbformat.write(notebook, root / "notebooks" / f"verified-{topic}.ipynb")
         try:
