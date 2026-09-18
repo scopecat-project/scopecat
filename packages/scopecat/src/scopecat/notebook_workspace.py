@@ -84,7 +84,9 @@ class NotebookSession(AuthorProject):
         project = open_project(start)
         environment = project.root / ".venv"
         if environment.is_dir() and Path(sys.prefix).resolve() != environment.resolve():
-            raise RuntimeError(f"Select the project's Notebook kernel: {environment}")
+            raise RuntimeError(
+                f"Select Kernel: choose the project's environment {environment}"
+            )
         if (
             _workspace is not None
             and not _workspace.is_closed

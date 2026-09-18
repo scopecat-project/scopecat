@@ -68,14 +68,19 @@ def test_stop_does_not_create_project(managed):
 def test_each_lesson_is_self_contained_and_rejects_wrong_kernel(
     managed, monkeypatch, topic
 ):
+    from IPython.core.interactiveshell import InteractiveShell
+
+    shell = InteractiveShell()
+    monkeypatch.setattr("IPython.get_ipython", lambda: shell)
     root = sandbox.select_project(managed, topic)
     notebook = json.loads(
         (root / f"notebooks/{topic}.ipynb").read_text(encoding="utf-8")
     )
     first = next(c for c in notebook["cells"] if c["cell_type"] == "code")
     monkeypatch.chdir(root / "notebooks")
-    with pytest.raises(RuntimeError, match="Select Kernel"):
-        exec("".join(first["source"]), {})  # noqa: S102 - execute the shipped notebook guard
+    result = shell.run_cell("".join(first["source"]))
+    assert isinstance(result.error_in_exec, RuntimeError)
+    assert "Select Kernel" in str(result.error_in_exec)
     if topic == "compute":
         assert "def mean_iq(" in (root / "src/my_experiment/teaching.py").read_text(
             encoding="utf-8"
