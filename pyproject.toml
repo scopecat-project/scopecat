@@ -418,7 +418,7 @@ extend-immutable-calls = ["scopecat.Quantity", "scopecat.kernel.quantity.Quantit
 [tool.scopecat-tests]
 roots = ["packages/lab-tools/tests", "examples/reference_lab/tests", "packages/scopecat/tests", "packages/scopecat-server/tests", "packages/scopecat-instruments/tests", "packages/scopecat-quantum/tests"]
 integration_paths = ["packages/scopecat-server/tests"]
-journey_paths = ["packages/lab-tools/tests/test_unknown_parameter_authoring.py", "packages/lab-tools/tests/test_minimal_teaching_journey.py", "packages/lab-tools/tests/test_teaching_mean_iq_journey.py", "packages/lab-tools/tests/test_grouped_teaching_journey.py", "packages/scopecat-server/tests/test_runtime_binding.py", "examples/reference_lab/tests", "packages/scopecat-server/tests/test_snapshot_integration.py", "packages/scopecat-server/tests/test_author_validation_diagnostics.py"]
+journey_paths = ["packages/lab-tools/tests/test_notebook_workspace_journey.py", "packages/lab-tools/tests/test_unknown_parameter_authoring.py", "packages/lab-tools/tests/test_minimal_teaching_journey.py", "packages/lab-tools/tests/test_teaching_mean_iq_journey.py", "packages/lab-tools/tests/test_grouped_teaching_journey.py", "packages/scopecat-server/tests/test_runtime_binding.py", "examples/reference_lab/tests", "packages/scopecat-server/tests/test_snapshot_integration.py", "packages/scopecat-server/tests/test_author_validation_diagnostics.py"]
 
 # Windows run 34757173348: summed setup/call/teardown seconds per file.
 [tool.scopecat-tests.weights]

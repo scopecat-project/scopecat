@@ -87,24 +87,59 @@ sample and parameter workspace using normal public APIs. The support package own
 the templates and environment tools, not the learner's scientific declarations.
 The parameter topic demonstrates adding a second table alongside `Drive`.
 
-## Saved edits and new requests
+## Notebook workspace and saved edits
 
-The first two topics use a live experiment callable:
+The topic Notebooks initialize one default workspace:
+
+```python
+import scopecat as sc
+
+session = sc.notebook()  # live=True by default
+session  # project, source revision, mode and refresh status
+```
+
+The entry checks the project kernel when a local `.venv` exists, connects to the
+service prepared by the launcher and admits author source. It never launches an
+experiment. Repeating initialization reuses the session and its one cell hook.
+A kernel has one default workspace; multiple documents sharing a kernel share it.
+Close `session` before switching projects. Scripts keep `project.authoring()` and
+explicit source selection; background threads do not inherit live request selection.
+
+Both ordinary import styles support saved edits:
 
 ```python
 from my_experiment.teaching import teaching_rabi
+import my_experiment.teaching as experiments
 
-rabi = session.live(teaching_rabi)
-request = rabi()  # checks saved source, refreshing only when it changed
-prepared = session.prepare(request, parameters=params)
+first = teaching_rabi()
+second = experiments.teaching_rabi()
 ```
 
-Save the source file, then call `rabi()` again. Helper changes are included in the
-source snapshot. Invalid code stops request creation; no old-code fallback occurs.
-An existing request or preview retains its exact source, even after another edit.
-The ordinary declaration remains a fixed-version callable. New modules still use
-`session.refresh()` before their first import. Live mode does not rewrite arbitrary
-Python variables, change existing parameter values, or update a running job.
+Save an edited source file and call the experiment again. Each new request selects
+the saved definition, including new default arguments and helper code. Existing
+requests, previews and running jobs retain their original source. The Notebook's
+module aliases update at cell boundaries; new modules and new experiment attributes
+are available in the next cell, without manual refresh or re-import. If a cell
+writes a new module itself, put its import in the following cell.
+
+Invalid source is reported in the current output. Repair and history cells remain
+usable, but new experiment requests retry the refresh and fail until it is fixed;
+there is no old-code fallback. Reading a historical revision does not change the
+source selected for subsequent live requests.
+
+Use `sc.notebook(live=False)` to hold the selected source, or
+`sc.notebook(live=True)` to resume saved edits. This is a source policy: parameter
+edits still need their ordinary save operation. Ordinary Python functions, class
+instances and aliases hidden inside containers are not rewritten. Static editor
+signatures may need the language server to notice a changed file.
+
+After a kernel restart, run only initialization and `session.history()` to find a
+retained run, then reopen its number with `session.run(number)`. Do not rerun the
+experiment just to restore a Python handle. `session.close()` removes the cell hook
+and default selection; it closes the client connection, not a running experiment.
+
+The lower-level `session.live(declaration)` remains useful for selectively live
+callables outside a Notebook workspace. It does not install a kernel default.
 
 ## Outputs and history
 

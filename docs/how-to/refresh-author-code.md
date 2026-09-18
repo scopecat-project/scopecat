@@ -1,5 +1,11 @@
 # Refresh experiments, helpers and analysis
 
+For Notebook/IPython work, use `session = sc.notebook()` once. Saved edits are
+selected for new experiment requests, both normal import styles work, and new
+modules become available at the next cell. See the
+[Notebook workspace guide](../tutorials/teaching-sandboxes.md#notebook-workspace-and-saved-edits).
+The explicit operations below remain useful for scripts and controlled source selection.
+
 The reference lab enables author revisions by default. Edit the small files in
 `src/reference_lab/workflows/authored`, then choose **Refresh author code** in
 **Experiments**. Scopecat validates a complete source snapshot in a new process

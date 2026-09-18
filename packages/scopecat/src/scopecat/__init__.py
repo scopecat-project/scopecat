@@ -167,6 +167,7 @@ if TYPE_CHECKING:
         entity_ref,
     )
     from scopecat.kernel.quantity import Quantity
+    from scopecat.notebook_workspace import notebook
     from scopecat.optimization import (
         AdaptiveDomainPlan,
         CompletedPointObservation,
@@ -466,6 +467,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
         "DomainProposalSummary",
     ),
     "open_project": ("scopecat.project", "open_project"),
+    "notebook": ("scopecat.notebook_workspace", "notebook"),
     "AnalysisGroupResult": ("scopecat.api.published_analysis", "AnalysisGroupResult"),
     "GroupedAnalysisResult": (
         "scopecat.api.published_analysis",

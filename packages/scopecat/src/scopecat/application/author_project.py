@@ -187,6 +187,10 @@ class AuthorProject(DaemonClient):
             timeout=timeout,
         )
 
+    def _default_request_revision(self) -> AuthorRevisionRef | None:
+        """Interactive sessions may select a source before creating a new preview."""
+        return None
+
     def prepare(
         self,
         experiment: str | ExperimentRequest[object, object],
@@ -253,7 +257,9 @@ class AuthorProject(DaemonClient):
                 )
             sample_binding = subjects[0]
             sample = sample_binding.sample_id
-        catalog = self.catalog(code_revision=code_revision)
+        catalog = self.catalog(
+            code_revision=code_revision or self._default_request_revision()
+        )
         edits = dict(control_edits or {})
         for name, value in (fixed or {}).items():
             if name in edits:
