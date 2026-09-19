@@ -1,6 +1,10 @@
 """Review fences are retained separately from immutable candidate identity."""
 
+from scopecat_testkit.workflow_fixtures import load_config
+
+from scopecat.config.scientific_binding import bind_scientific_evidence
 from scopecat.kernel.content_identity import sha256_json_hash
+from scopecat.records.config import config_content_hash
 from scopecat.records.launch_request import LaunchRequest
 from scopecat.records.run import AnalysisCandidateRunConfigSource, RunSnapshot
 
@@ -12,7 +16,7 @@ def test_old_candidate_source_round_trips_without_hash_change() -> None:
         "analysis_record_id": "analysis-fit-r1",
         "proposal_id": "carrier",
         "base_config_content_hash": "sha256:" + "a" * 64,
-        "content_hash": "sha256:" + "b" * 64,
+        "content_hash": config_content_hash(load_config()),
     }
     source = AnalysisCandidateRunConfigSource.model_validate(old)
     assert source.registry_generation is None
@@ -21,6 +25,12 @@ def test_old_candidate_source_round_trips_without_hash_change() -> None:
     run = RunSnapshot(
         run_id="candidate",
         config_content_hash=source.content_hash,
+        scientific_binding=bind_scientific_evidence(
+            catalog_id="test-store",
+            config=load_config(),
+            samples=(),
+            sample_revisions={},
+        ),
         config_source=source,
     )
     assert run.model_dump(mode="json")["config_source"] == old

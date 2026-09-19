@@ -8,6 +8,7 @@ from typing import cast
 import httpx2
 import pytest
 from pydantic import ValidationError
+from scopecat_testkit.workflow_fixtures import load_config
 
 from scopecat.api.calibration_publication import (
     CalibrationCohortPublicationPlan,
@@ -64,6 +65,7 @@ from scopecat.config.registry.records import (
     ResolvedVerifiedParameterProposalProofV1,
     VerifiedParameterProposalProofV1,
 )
+from scopecat.config.scientific_binding import bind_scientific_evidence
 from scopecat.daemon.client import (
     DaemonClient,
     DaemonConflictError,
@@ -83,6 +85,7 @@ from scopecat.records.analysis import (
     ProjectAnalysisSubject,
     RunAnalysisSubject,
 )
+from scopecat.records.config import config_content_hash
 from scopecat.records.parameter import ScalarParameterValue
 from scopecat.records.parameter_change import (
     ParameterChangeProposal,
@@ -95,8 +98,10 @@ from scopecat.records.run import (
 )
 
 _NOW = datetime(2026, 8, 18, 10, tzinfo=UTC)
-_BASE_HASH = f"sha256:{'a' * 64}"
-_RESULT_HASH = f"sha256:{'b' * 64}"
+_BASE_CONFIG = load_config()
+_RESULT_CONFIG = _BASE_CONFIG.model_copy(update={"id": "candidate"})
+_BASE_HASH = config_content_hash(_BASE_CONFIG)
+_RESULT_HASH = config_content_hash(_RESULT_CONFIG)
 _INPUT_HASH = f"sha256:{'c' * 64}"
 _POLICY_HASH = f"sha256:{'d' * 64}"
 _DECISION_HASH = f"sha256:{'e' * 64}"
@@ -830,6 +835,12 @@ def _evidence_fixture(
             finished_at=_NOW,
         ),
         config_content_hash=_BASE_HASH,
+        scientific_binding=bind_scientific_evidence(
+            catalog_id="test-store",
+            config=_BASE_CONFIG,
+            samples=(),
+            sample_revisions={},
+        ),
         config_source=ConfigRegistryRunConfigSource(
             selector=_BASE_SOURCE.selector,
             entry_id=_BASE_SOURCE.entry_id,
@@ -847,6 +858,12 @@ def _evidence_fixture(
             finished_at=_NOW,
         ),
         config_content_hash=_RESULT_HASH,
+        scientific_binding=bind_scientific_evidence(
+            catalog_id="test-store",
+            config=_RESULT_CONFIG,
+            samples=(),
+            sample_revisions={},
+        ),
         config_source=AnalysisCandidateRunConfigSource(
             source_run_id=baseline.run_id,
             analysis_record_id=fit.analysis_record_id,

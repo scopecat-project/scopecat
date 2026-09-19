@@ -10,6 +10,7 @@ from typing import cast
 
 from pydantic import BaseModel
 from scopecat.config.registry.ports import ConfigRegistryUnitOfWorkFactory
+from scopecat.config.scientific_binding import bind_scientific_evidence
 from scopecat.daemon.wire import (
     RunDomainJobTransitionBatchCommand,
     RunDomainJobTransitionItem,
@@ -36,7 +37,9 @@ from scopecat.records.measurement_recording import (
 )
 from scopecat.records.run import RunConfigSource, RunSnapshot
 from scopecat.records.run_request import RunRequest
+from scopecat.records.scientific_binding import ResolvedScientificBinding
 from scopecat.runs.admission import RunSkeleton, build_run_admission
+from scopecat.runs.refs import SCIENTIFIC_BINDING_REF
 from scopecat.runs.repository import RunRepository
 from scopecat.sdk.domain.invocation import DomainInvocationIntent
 from scopecat.sdk.instruments.execution import RunInstrumentHost
@@ -63,8 +66,12 @@ class SQLiteTestRunRepository(SQLiteRunRepository):
     """Fixture-only low-level writes excluded from the production port."""
 
     def write_snapshot(self, snapshot: RunSnapshot) -> None:
+        prepared = self._prepare_model(
+            snapshot.run_id, SCIENTIFIC_BINDING_REF, snapshot.scientific_binding
+        )
         with self._transaction() as connection:
             self._replace_run_snapshot(connection, snapshot)
+            self._publish_refs(connection, snapshot.run_id, (prepared,))
 
     def write_run_skeleton(self, skeleton: RunSkeleton) -> None:
         _persist_run_skeleton(self, skeleton)
@@ -382,11 +389,20 @@ def admit_test_run(
     request: RunRequest,
     repository: RunRepository,
     config_source: RunConfigSource | None = None,
+    scientific_binding: ResolvedScientificBinding | None = None,
 ) -> RunSnapshot:
-    """Persist one accepted run for an in-process test."""
+    """Persist a fixture run; samples require explicit catalog evidence."""
+
+    if scientific_binding is None:
+        if request.samples:
+            raise ValueError("sample test runs require explicit scientific binding")
+        scientific_binding = bind_scientific_evidence(
+            catalog_id="test-store", config=config, samples=(), sample_revisions={}
+        )
 
     skeleton = build_run_admission(
         config=config,
+        scientific_binding=scientific_binding,
         request=request,
         config_source=config_source,
     )

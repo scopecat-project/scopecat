@@ -1,6 +1,7 @@
 from datetime import UTC, datetime
 
 import pytest
+from scopecat_testkit.workflow_fixtures import load_config
 
 from scopecat.automation import (
     ProcedureClosure,
@@ -12,7 +13,9 @@ from scopecat.automation import (
 )
 from scopecat.automation.models import ProcedureRecoverySource, ProcedureRecoveryStep
 from scopecat.automation.recovery import validate_recovery_source
+from scopecat.config.scientific_binding import bind_scientific_evidence
 from scopecat.kernel.run_outcome import RunOutcome
+from scopecat.records.config import config_content_hash
 from scopecat.records.run import RunSnapshot
 
 NOW = datetime(2026, 1, 1, tzinfo=UTC)
@@ -85,7 +88,13 @@ def _facts() -> tuple[
     run = RunSnapshot(
         run_id=run_ref.run_id,
         created_at=NOW,
-        config_content_hash="sha256:" + "4" * 64,
+        config_content_hash=config_content_hash(load_config()),
+        scientific_binding=bind_scientific_evidence(
+            catalog_id="test-store",
+            config=load_config(),
+            samples=(),
+            sample_revisions={},
+        ),
         outcome=RunOutcome(
             run_id=run_ref.run_id,
             result="succeeded",
