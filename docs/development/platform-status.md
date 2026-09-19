@@ -39,7 +39,10 @@ See [configuration ownership](architecture/configuration-ownership.md),
    Stopped environment rechecks (#663) reuse registered paths and retain deployment
    identity without starting execution. Installation pairing, replacement-path
    registration and installed lifecycle qualification remain separate work; package
-   installation is not performed by the manager.
+   installation is not performed by the manager. Fixed delivery preparation (#665)
+   supports retry after interruption and atomic default-entry publication; actual
+   manager replacement still waits for idle management work. Registered service
+   runtimes remain independently selected.
    Record concrete replacement coverage before removing any reference fixture.
 2. **Qualify the resulting local application milestone** under
    [#616](https://github.com/scopecat-project/scopecat/issues/616).

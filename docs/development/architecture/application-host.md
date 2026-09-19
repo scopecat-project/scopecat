@@ -130,7 +130,13 @@ the current pointer only after its environment is ready.
 
 Graceful host shutdown and runtime replacement reject active management work.
 Replacing the manager does not stop an already running exercise. Fixed releases
-live in separate installed directories; source-development entry stops its manager
+live in separate installed directories. Per-home installation serializes preparation,
+stages and checks the copied bundle, and preserves incomplete runtime attempts before
+retrying. Virtual environments are built at their final path. Complete launchers are
+published atomically, with `lab.py` as the release-selection point; neither retained
+releases nor registered service paths are redirected by manager installation.
+Selecting a prepared release does not itself replace a running host: the next launch
+still requires management work to be idle. Source-development entry stops its manager
 before replacing the source runtime. UI and CLI both use the operation API, so
 there is one lifecycle owner rather than two competing filesystem implementations.
 

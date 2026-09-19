@@ -7,6 +7,7 @@ Checksums detect mismatched artifacts, not the authenticity of their publisher.
 from __future__ import annotations
 
 import argparse
+import errno
 import hashlib
 import io
 import json
@@ -16,6 +17,11 @@ import shutil
 import subprocess
 import sys
 import sysconfig
+import tempfile
+import time
+import uuid
+from collections.abc import Generator
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Protocol, TypedDict, cast
 
@@ -103,6 +109,8 @@ def read_bundle(root: Path) -> Bundle:
 
 def verify_bundle(root: Path, *, gui_only: bool = False) -> Bundle:
     root = root.resolve()
+    if (root / MANIFEST).is_symlink():
+        raise ValueError("交付清单不能是符号链接")
     bundle = read_bundle(root)
     if bundle["target"] != target_identity():
         raise ValueError("交付包的操作系统、CPU 或 Python ABI 与当前环境不同")
@@ -163,7 +171,8 @@ def install_bundle(root: Path, destination: Path) -> Path:
         ],
         check=True,
     )
-    _ = (destination / RECEIPT).write_text(
+    staged_receipt = destination / f".{RECEIPT}-{uuid.uuid4().hex}"
+    _ = staged_receipt.write_text(
         json.dumps(
             {
                 "bundle": str(root),
@@ -174,6 +183,7 @@ def install_bundle(root: Path, destination: Path) -> Path:
         + "\n",
         encoding="utf-8",
     )
+    _ = staged_receipt.replace(destination / RECEIPT)
     return destination
 
 
@@ -193,34 +203,110 @@ def gui_directory(bundle_root: Path | None, runtime: dict[str, object]) -> Path:
     return bundle_root.resolve() / "gui"
 
 
+def _managed_path(home: Path, path: Path) -> Path:
+    """Managed destinations must not redirect writes outside this installation."""
+    current = home
+    for part in path.relative_to(home).parts:
+        current /= part
+        if current.is_symlink():
+            raise ValueError(f"安装目标不能是符号链接: {current}")
+    return path
+
+
+@contextmanager
+def _installation_lock(home: Path) -> Generator[None]:
+    # OS locks are released on process exit, including interrupted installation.
+    path = _managed_path(home, home / ".install.lock")
+    with path.open("a+b") as stream:
+        if sys.platform == "win32":
+            import msvcrt
+
+            if path.stat().st_size == 0:
+                _ = stream.write(b"0")
+                stream.flush()
+            stream.seek(0)
+            while True:
+                try:
+                    msvcrt.locking(stream.fileno(), msvcrt.LK_NBLCK, 1)
+                    break
+                except OSError as error:
+                    if error.errno not in (errno.EACCES, errno.EAGAIN):
+                        raise
+                    time.sleep(0.1)
+            try:
+                yield
+            finally:
+                stream.seek(0)
+                msvcrt.locking(stream.fileno(), msvcrt.LK_UNLCK, 1)
+        else:
+            import fcntl
+
+            fcntl.flock(stream, fcntl.LOCK_EX)
+            try:
+                yield
+            finally:
+                fcntl.flock(stream, fcntl.LOCK_UN)
+
+
+def _check_receipt(environment: Path, bundle: Path) -> None:
+    expected = {
+        "bundle": str(bundle),
+        "manifest_sha256": file_hash(bundle / MANIFEST),
+    }
+    actual = cast(
+        "object", json.loads((environment / RECEIPT).read_text(encoding="utf-8"))
+    )
+    if actual != expected:
+        raise ValueError(f"运行环境的交付记录与当前产物不同: {environment}")
+
+
 def install_home(root: Path, home: Path) -> Path:
-    """复制固定产物后安装, 转移介质拔出后仍可打开和重置沙盒。"""
+    """Prepare a retained release, then atomically select it for the next launch."""
     root = root.resolve()
     home = home.resolve()
     if home.is_relative_to(root):
         raise ValueError("安装中心不能位于待复制的交付目录内")
     _ = verify_bundle(root)
-    key = file_hash(root / MANIFEST)[:16]
-    release = home / "releases" / key
-    bundle = release / "bundle"
+    home.mkdir(parents=True, exist_ok=True)
+    with _installation_lock(home):
+        return _install_home_locked(root, home)
+
+
+def _install_home_locked(root: Path, home: Path) -> Path:
+    manifest_hash = file_hash(root / MANIFEST)
+    key = manifest_hash[:16]
+    release = _managed_path(home, home / "releases" / key)
+    release.mkdir(parents=True, exist_ok=True)
+    bundle = _managed_path(home, release / "bundle")
     if not bundle.exists():
-        release.mkdir(parents=True, exist_ok=True)
-        _ = shutil.copytree(root, bundle)
+        staged = release / f"bundle-staging-{uuid.uuid4().hex}"
+        # Retain interrupted copies for diagnosis; retries use a new staging path.
+        _ = shutil.copytree(root, staged, symlinks=True)
+        _ = verify_bundle(staged)
+        if file_hash(staged / MANIFEST) != manifest_hash:
+            raise ValueError("复制后的交付清单与源目录不同")
+        staged.rename(bundle)
     _ = verify_bundle(bundle)
-    environment = release / "runtime"
+    if file_hash(bundle / MANIFEST) != manifest_hash:
+        raise ValueError("保留的交付清单与待安装版本不同")
+    environment = _managed_path(home, release / "runtime")
+    receipt = _managed_path(home, environment / RECEIPT)
+    if environment.exists() and not receipt.is_file():
+        # Only unfinished installer-owned runtime is moved. Completed venvs must
+        # stay at their creation path because their scripts contain absolute paths.
+        failed = environment.rename(release / f"runtime-failed-{uuid.uuid4().hex}")
+        print(f"已保留上次未完成的运行环境: {failed}")
     if not environment.exists():
         _ = install_bundle(bundle, environment)
-    elif not (environment / RECEIPT).is_file():
-        raise ValueError(f"上次安装未完成; 删除此不完整运行环境后重试: {environment}")
+    _check_receipt(environment, bundle)
     python = environment / (
         "Scripts/python.exe" if sys.platform == "win32" else "bin/python"
     )
-    # Validate the installed entry before changing the user's default release.
     _ = subprocess.run(  # noqa: S603 - explicit local tool and argument list
         [str(python), "-m", "lab_tools.application", "--help"], check=True
     )
     launcher = home / "lab.py"
-    _ = launcher.write_text(
+    launcher_text = (
         "import subprocess, sys\nfrom pathlib import Path\n"
         "home = Path(__file__).resolve().parent\n"
         f"python = home / {python.relative_to(home).as_posix()!r}\n"
@@ -229,18 +315,35 @@ def install_home(root: Path, home: Path) -> Path:
         "else 'lab_tools.application')\n"
         "if args[:1] == ['teach']: args = args[1:]\n"
         "command = [str(python), '-m', module, '--home', str(home)]\n"
-        "raise SystemExit(subprocess.call([*command, *args]))\n",
-        encoding="utf-8",
+        "raise SystemExit(subprocess.call([*command, *args]))\n"
     )
-    _ = (home / "lab.cmd").write_text(
+    command_text = (
         '@echo off\ncd /d "%~dp0"\n'
         f'"%~dp0{python.relative_to(home)}" "%~dp0lab.py" %*\n'
-        "if errorlevel 1 pause\n",
-        encoding="utf-8",
+        "if errorlevel 1 pause\n"
     )
+    # Both files are complete before replacement. Either retained interpreter can
+    # bootstrap lab.py; only lab.py chooses the selected application release.
+    pending: list[Path] = []
+    try:
+        for name, content in (("lab.cmd", command_text), ("lab.py", launcher_text)):
+            _ = _managed_path(home, home / name)
+            with tempfile.NamedTemporaryFile(
+                mode="w", encoding="utf-8", dir=home, prefix=f".{name}-", delete=False
+            ) as stream:
+                pending.append(Path(stream.name))
+                _ = stream.write(content)
+                stream.flush()
+                os.fsync(stream.fileno())
+        _ = pending[0].replace(home / "lab.cmd")
+        _ = pending[1].replace(launcher)
+    finally:
+        for path in pending:
+            path.unlink(missing_ok=True)
     print(
-        f"已安装固定版本 {key}。Windows 双击 {home / 'lab.cmd'}; "
-        f"其他系统运行 python {launcher}。"
+        f"已准备并选择默认版本 {key}。Windows 双击 {home / 'lab.cmd'}; "
+        f"其他系统运行 python {launcher}。\n"
+        "正在运行的管理器尚未更换；下次启动时尝试切换，存在进行中的管理操作时会拒绝切换。"
     )
     return launcher
 
