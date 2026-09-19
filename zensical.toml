@@ -80,6 +80,7 @@ nav = [
       "development/architecture/index.md",
       { "Experiment workbench contexts" = "development/architecture/experiment-contexts.md" },
       { "Apparatus history and configuration ownership" = "development/architecture/apparatus-history.md" },
+      { "Configuration ownership and fences" = "development/architecture/configuration-ownership.md" },
       { "Workspace and data binding contract" = "development/architecture/workspace-bindings.md" },
       { "Structured authoring direction" = "development/architecture/structured-authoring.md" },
       { "Experiment execution" = "development/architecture/execution.md" },

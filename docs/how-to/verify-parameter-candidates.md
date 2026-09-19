@@ -68,11 +68,13 @@ Reopen a candidate with `author.config.candidate(source_run_id, "rabi-carrier")`
 Names belong to a source run, not a lab-wide latest pointer. Reopen its independent
 analysis by run and publication ID and call `candidate.verify(result)` again.
 
-Preview captures the current lab generation even for an immutable candidate.
-A default change after preview requires a fresh `prepare(...)`; the old prepared
-launch cannot bypass review. Publication uses the existing verified-acceptance
-and generation fences. A stale
-base cannot become the default through this facade. Inspect the named table,
+Preview retains the exact candidate, scientific binding and executable setup
+content. A parameter-only default change does not invalidate that fixed candidate;
+a changed executable setup or a relevant manual instrument mutation still requires
+a fresh preview. Selecting the active default retains its activation-generation
+fence. Publication to the shared default still uses verified-acceptance and global
+generation fences: a stale base cannot become the default through this facade.
+Independent verified publication into a working point remains follow-on work. Inspect the named table,
 row and field, reopen/rebase the desired parameter workspace explicitly, and
 collect independent evidence for any changed proposal. Restoring a previous
 default does not renew calibration validity.
