@@ -52,37 +52,70 @@ Compare phase totals separately from wall time: parallel worker times add up,
 and shared-fixture setup is charged to the first test that owns it. Do not
 interpret a timing sample as a benchmark or a successful run as hardware evidence.
 
-## CI contract
+## CI contract during the architecture transition
 
-Every PR, merge-group and explicit workflow dispatch runs all Python tests on
-Linux and Windows: one core job and two journey shards per platform. It also
-runs both measured, file-level browser E2E projects, static checks, benchmark smoke, documentation and
-installed-wheel checks. The gate rejects failed or unexpectedly skipped shards.
-This first step changes execution topology, not PR coverage.
+[CI](https://github.com/scopecat-project/scopecat/blob/main/.github/workflows/ci.yml)
+is the required PR gate during the redesign tracked in
+[#610](https://github.com/scopecat-project/scopecat/issues/610), building on the
+feedback work in [#520](https://github.com/scopecat-project/scopecat/issues/520).
+Every PR, merge-group, main push and explicit CI dispatch runs:
 
-UI checks/build produce the browser distribution and pilot wheels. Browser
-shards and installed-wheel checks depend only on that build, so installation
-verification no longer waits for the entire browser journey suite. Each browser
-runner keeps one worker; Python jobs cap at two workers. More independent runners
-reduce wall time but add setup/runner-minute cost; inspect both before increasing
-shard counts. Browser JSON reports retain timings and any retry information.
-The first browser project lists its files explicitly; the second includes all
-remaining files so new tests are never silently omitted. Run one with
-`pnpm exec playwright test --project=journey-1`; ordinary Playwright runs both.
+- Linux Python `core` (all fast and integration files), with two pytest workers,
+  diagnostics and the pandas adapter check;
+- Python typing, import boundaries, lint, formatting and generated instruments;
+- UI API generation, formatting, lint, unit tests, typing and production build;
+- strict documentation/link checks.
 
-A squash push to main builds and validates the formal revision's artifacts,
-including static checks, UI unit checks, benchmark smoke, docs and installed
-pilots. It does not repeat the Python journey matrix or browser E2E that gated
-the PR. Direct unreviewed main pushes are outside the repository's PR workflow.
-Use workflow dispatch when an explicit full main qualification is required.
+The required check remains **CI gate**. Every listed job must succeed; failure,
+cancellation and unexpected skips fail the gate. There are no path filters,
+soft failures or retries that turn failures into success. New tests still follow
+the existing file-tier classification; plain pytest remains the full suite.
+
+The feedback target is **under five minutes from the first job starting until
+CI gate completes, excluding time waiting for a runner**. It is a measured target,
+not a five-minute timeout or a reason to cancel a slow valid test. Record the run
+URL, revision and slowest job before claiming the target is met. Cold dependency
+caches and runner variation may exceed it; tune the bottleneck rather than masking
+failures. Timing and startup artifacts remain available on failed runs.
+
+[Full acceptance](https://github.com/scopecat-project/scopecat/blob/main/.github/workflows/acceptance.yml)
+is a separate manual workflow. It retains the full Linux/Windows Python matrix,
+both browser shards, benchmark smoke, isolated wheel imports, offline installation and every shipped
+teaching Notebook, alongside static/UI/docs checks. Its **Full acceptance gate**
+requires all jobs to succeed. These checks were moved, not deleted or silently
+reported as passing by the fast gate. Successful fast CI does not qualify a release,
+Windows operation or installed/offline delivery.
+
+Run the full workflow at architecture milestones and before publishing a release
+or handing a new installed build to a participant. Select the intended branch/ref
+in Actions and record the resulting exact revision and run URL in the parent issue.
+The manual workflow executes that checkout, without changing a private repository's
+Actions settings. A later code change needs corresponding validation; an older
+successful run does not qualify the new revision.
+
+| Change or milestone | Required evidence beyond the common gate |
+| --- | --- |
+| Storage/identity/migration | Focused migration, retained-data and frozen-request checks; actual copy/restore journey before the storage milestone closes |
+| Worker/code loading/resource ownership | Relevant process, restart, cancellation and resource-exclusion journeys on the PR's revision |
+| Wire/UI consumer | Regenerate from the producer; focused component/payload checks and the affected browser journey |
+| Installation/tutorial changes | Affected installed/offline checks on the changed platform; full Linux/Windows acceptance before participant delivery |
+| Architecture milestone or release | Full acceptance on the integrated revision; link results and unresolved limitations |
+
+Scientific data identity, immutable requests, admission idempotency, batch
+applicability, resource exclusion and failure cleanup remain contracts throughout
+this transition. UI text, navigation and old deployment assumptions may be replaced
+with the new design, but name the replacement evidence in the issue/PR. Do not
+delete old integration scenarios merely because they are outside the common gate.
+The parent issue tracks when to reconsider this temporary gate after integration.
 
 ## Choosing work during development
 
 Start with affected tests and the appropriate tier, finish implementation and
-self-review, then submit the final candidate to the full PR gate. Do not wait for
-full CI after every intermediate edit. Re-run broader checks after a material
-change to storage, source isolation, process ownership or execution, not merely
-because a documentation line or final gitlink changed.
+self-review, then submit the candidate to the fast PR gate. Record the focused
+checks and any deferred milestone qualification in the PR. Do not run a full
+matrix after every intermediate edit. Re-run relevant broader checks after a
+material change to storage, source isolation, process ownership or execution,
+not merely because a documentation line changed.
 
 Private consumers use the same runner with their own classifications. A public
 pin update normally needs affected consumer tests and a no-acquisition reopen
