@@ -37,6 +37,10 @@ from scopecat.daemon.wire import (
 from scopecat.kernel.errors import Conflict, StorageError
 from scopecat.records.config import ConfigProfileSnapshot
 from scopecat.records.run import ConfigRegistryRunConfigSource, RunSnapshot
+from scopecat.records.scientific_binding import (
+    ResolvedScientificBinding,
+    UnboundSubject,
+)
 from scopecat_testkit.config_registry import load_config_registry_config
 from scopecat_testkit.paths import CORE_FIXTURE_DIR
 from scopecat_testkit.server.runtime import SQLiteTestRunRepository
@@ -295,6 +299,11 @@ def test_registry_and_run_reads_share_one_database(tmp_path: Path) -> None:
     runs = cast("SQLiteTestRunRepository", store.runs)
     runs.write_snapshot(
         RunSnapshot(
+            scientific_binding=ResolvedScientificBinding(
+                subject=UnboundSubject(),
+                config_content_hash=f"sha256:{'0' * 64}",
+                setup_content_hash="sha256:" + "0" * 64,
+            ),
             run_id="run-shared",
             config_content_hash=f"sha256:{'0' * 64}",
         )

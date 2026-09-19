@@ -30,6 +30,10 @@ from scopecat.records.measurement import (
     MeasurementPointCloudPointDomain,
 )
 from scopecat.records.run import RunSnapshot
+from scopecat.records.scientific_binding import (
+    ResolvedScientificBinding,
+    UnboundSubject,
+)
 from scopecat.runs.repository import (
     RunContentPublication,
     TerminalRunCommit,
@@ -42,6 +46,11 @@ _CONFIG_HASH = "sha256:" + "0" * 64
 
 def test_run_snapshot_is_immutable() -> None:
     snapshot = RunSnapshot(
+        scientific_binding=ResolvedScientificBinding(
+            subject=UnboundSubject(),
+            config_content_hash=_CONFIG_HASH,
+            setup_content_hash="sha256:" + "0" * 64,
+        ),
         run_id="run-immutable",
         config_content_hash=_CONFIG_HASH,
     )
@@ -72,6 +81,11 @@ def test_terminal_outcome_and_content_are_relational(tmp_path: Path) -> None:
     )
     storage = sqlite_run_repository(tmp_path)
     accepted = RunSnapshot(
+        scientific_binding=ResolvedScientificBinding(
+            subject=UnboundSubject(),
+            config_content_hash=_CONFIG_HASH,
+            setup_content_hash="sha256:" + "0" * 64,
+        ),
         run_id=run_id,
         config_content_hash=_CONFIG_HASH,
     )
@@ -122,6 +136,11 @@ def test_terminal_commit_preserves_existing_content(tmp_path: Path) -> None:
     storage = sqlite_run_repository(tmp_path)
     storage.write_snapshot(
         RunSnapshot(
+            scientific_binding=ResolvedScientificBinding(
+                subject=UnboundSubject(),
+                config_content_hash=_CONFIG_HASH,
+                setup_content_hash="sha256:" + "0" * 64,
+            ),
             run_id=run_id,
             config_content_hash=_CONFIG_HASH,
         )

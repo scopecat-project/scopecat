@@ -61,6 +61,7 @@ from scopecat.config.registry import (
     CrossRunCandidateAcceptance,
     VerifiedParameterProposalProofV1,
 )
+from scopecat.config.scientific_binding import bind_scientific_evidence
 from scopecat.control.models import (
     DurableEvent,
     DurableEventInput,
@@ -189,6 +190,9 @@ def _submission(
     point_count: int = 1,
 ) -> RunSubmission:
     return RunSubmission(
+        scientific_binding=bind_scientific_evidence(
+            catalog_id="test", config=_config(), samples=(), sample_revisions={}
+        ),
         submission_id=submission_id,
         config=_config(),
         request=RunRequest(experiment_id="scratch"),
@@ -235,7 +239,22 @@ def _complete_signal_run(
     entities: tuple[EntityRef, ...] | None = None,
     submission: RunSubmission | None = None,
 ) -> str:
-    admission = runtime.application.submit_run(submission or _submission(submission_id))
+    request = submission or _submission(submission_id)
+    binding = bind_scientific_evidence(
+        catalog_id=runtime.application.project_id,
+        config=request.config,
+        samples=runtime.application.samples.resolve_bindings(request.request.samples),
+        sample_revisions={},
+    )
+    request = request.model_copy(
+        update={
+            "scientific_binding": binding,
+            "request": request.request.model_copy(
+                update={"samples": binding.sample_selectors()}
+            ),
+        }
+    )
+    admission = runtime.application.submit_run(request)
     run_id = admission.run_id
     lease = runtime.application.executor.start_executor(
         run_id,
@@ -2327,6 +2346,17 @@ def test_typed_candidate_policy_uses_retained_decision_and_workpoint(
                     ),
                 }
             )
+            if context_id is not None:
+                with pytest.raises(
+                    BackendConflict, match="original scientific subject"
+                ):
+                    _complete_signal_run(
+                        runtime,
+                        submission_id=submission_id,
+                        signal=1.1,
+                        submission=submission,
+                    )
+                continue
             run_id = _complete_signal_run(
                 runtime, submission_id=submission_id, signal=1.1, submission=submission
             )
@@ -2350,21 +2380,4 @@ def test_typed_candidate_policy_uses_retained_decision_and_workpoint(
                     .fact_as("decision", schema)
                     .accepted
                 )
-            else:
-                with pytest.raises(ValueError, match="sample revision/workpoint"):
-                    candidate.verify(result)
-                unsafe = lab.analysis("Wrong point", key="wrong-point")
-                unsafe.measurements(baseline, id="baseline")
-                unsafe.measurements(run, id="candidate")
-                verification = (
-                    unsafe.result().fact("decision", result.value, schema=schema).save()
-                )
-                with pytest.raises(
-                    DaemonConflictError, match="same sample revision/workpoint"
-                ):
-                    lab.config.accept_verified(
-                        candidate.config,
-                        verified_by=(verification, "decision"),
-                        entry_id="wrong-point",
-                    )
         assert lab.config.active().entry.id != "wrong-point"

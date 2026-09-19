@@ -14,6 +14,7 @@ from scopecat.config.candidates import (
 )
 from scopecat.config.changes import parameter_change_proposal_from_updates
 from scopecat.config.parameters import replace_scalar_parameter
+from scopecat.config.scientific_binding import bind_scientific_evidence
 from scopecat.control.models import RunPlanSummary, RunResourceRequirement
 from scopecat.daemon.wire import (
     AnalysisParameterProposalOutputPayload,
@@ -2447,6 +2448,9 @@ def test_analysis_candidate_run_keeps_connection_until_shutdown(
         active = runtime.application.config.get_active_config()
         source_admission = runtime.application.submit_run(
             RunSubmission(
+                scientific_binding=bind_scientific_evidence(
+                    catalog_id="test", config=config, samples=(), sample_revisions={}
+                ),
                 submission_id="candidate-source",
                 config=config,
                 config_source=ConfigRegistryRunConfigSource(
@@ -2895,6 +2899,9 @@ def _start_run(
     )
     admission = runtime.application.submit_run(
         RunSubmission(
+            scientific_binding=bind_scientific_evidence(
+                catalog_id="test", config=config, samples=(), sample_revisions={}
+            ),
             submission_id=submission_id,
             config=config,
             config_source=selected_config_source,

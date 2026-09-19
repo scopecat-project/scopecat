@@ -7,6 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 from scopecat.api.lab import LabClient
 from scopecat.config.documents import load_config_snapshot_document
+from scopecat.config.scientific_binding import bind_scientific_evidence
 from scopecat.control.models import RunPlanSummary, RunResourceRequirement
 from scopecat.daemon.client import DaemonClient, DaemonConflictError
 from scopecat.daemon.wire import (
@@ -38,13 +39,37 @@ def _config() -> ConfigProfileSnapshot:
     return load_config_snapshot_document(_FIXTURE)
 
 
-def _submission(sample_id: str) -> RunSubmission:
+def _submission(
+    runtime: LocalDaemonRuntime,
+    sample_id: str | None = None,
+    *,
+    batch_id: str | None = None,
+) -> RunSubmission:
+    config = _config()
+    samples = (
+        runtime.application.samples.resolve_bindings(
+            (
+                SampleSelector(
+                    sample_id=sample_id, context_id="cooldown-1", batch_id=batch_id
+                ),
+            )
+        )
+        if sample_id is not None
+        else ()
+    )
+    binding = bind_scientific_evidence(
+        catalog_id=runtime.application.project_id,
+        config=config,
+        samples=samples,
+        sample_revisions={},
+    )
     return RunSubmission(
+        scientific_binding=binding,
         submission_id="sample-run-submission",
         config=_config(),
         request=RunRequest(
             experiment_id="sample-scan",
-            samples=(SampleSelector(sample_id=sample_id, context_id="cooldown-1"),),
+            samples=binding.sample_selectors(),
         ),
         plan=RunPlanSummary(
             experiment_id="sample-scan",
@@ -134,7 +159,7 @@ def test_sample_revision_and_run_binding_survive_restart(tmp_path: Path) -> None
         assert revise_response.status_code == 200
         assert revise_response.json()["revision"]["revision"] == 2
 
-        admission = runtime.application.submit_run(_submission("die-1"))
+        admission = runtime.application.submit_run(_submission(runtime, "die-1"))
         binding = admission.snapshot.samples[0]
         assert binding.sample_id == "die-1"
         assert binding.revision == 2
@@ -253,7 +278,7 @@ def test_lab_sample_facade_and_run_filter_use_stable_handles(tmp_path: Path) -> 
             SampleRevisionDraft(display_name="Chip 1 mounted", status="mounted"),
             note="ready for measurement",
         )
-        admission = runtime.application.submit_run(_submission(sample.id))
+        admission = runtime.application.submit_run(_submission(runtime, sample.id))
 
         page = lab.runs(sample=sample)
 
@@ -313,9 +338,9 @@ def test_research_history_associations_and_bench_survive_restart(
                     content=SampleRevisionDraft(display_name=sample),
                 )
             )
-        first = runtime.application.submit_run(_submission("a"))
+        first = runtime.application.submit_run(_submission(runtime, "a"))
         second = runtime.application.submit_run(
-            _submission("b").model_copy(update={"submission_id": "second"})
+            _submission(runtime, "b").model_copy(update={"submission_id": "second"})
         )
         original = client.get_run(first.run_id)
         lab = LabClient(client, operator="research-test")
@@ -419,7 +444,7 @@ def test_collection_addresses_are_atomic_scoped_and_retained(tmp_path: Path) -> 
     from scopecat.records.research_project import RunHistoryFilter
 
     def submission(key: str, collection: str | None) -> RunSubmission:
-        base = _submission("unused")
+        base = _submission(runtime)
         return base.model_copy(
             update={
                 "submission_id": key,
@@ -536,31 +561,28 @@ def test_batch_catalog_and_bound_runs_survive_restart(tmp_path: Path) -> None:
         page = client.experimental_batches(limit=1)
         assert page.next_cursor is not None
         assert client.experimental_batches(before=page.next_cursor).items == (batch,)
-        base = _submission("batch-chip")
-        requested = base.model_copy(
-            update={
-                "request": base.request.model_copy(
-                    update={
-                        "samples": (
-                            SampleSelector(sample_id="batch-chip", batch_id="missing"),
-                        ),
-                    }
-                )
-            }
+        requested = _submission(runtime, "batch-chip", batch_id=batch.id)
+        forged = bind_scientific_evidence(
+            catalog_id=runtime.application.project_id,
+            config=requested.config,
+            samples=(
+                requested.scientific_binding.samples[0].model_copy(
+                    update={"batch_id": "missing"}
+                ),
+            ),
+            sample_revisions={},
         )
         with pytest.raises(DaemonNotFoundError):
-            client.submit_run(requested)
-        requested = requested.model_copy(
-            update={
-                "request": requested.request.model_copy(
+            client.submit_run(
+                requested.model_copy(
                     update={
-                        "samples": (
-                            SampleSelector(sample_id="batch-chip", batch_id=batch.id),
+                        "scientific_binding": forged,
+                        "request": requested.request.model_copy(
+                            update={"samples": forged.sample_selectors()}
                         ),
                     }
                 )
-            }
-        )
+            )
         run = client.submit_run(requested)
         assert client.submit_run(requested) == run
         assert run.snapshot.samples[0].batch_id == batch.id
