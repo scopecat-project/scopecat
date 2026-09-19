@@ -7,7 +7,7 @@ import time
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal, SupportsFloat, overload, override
+from typing import TYPE_CHECKING, Literal, SupportsFloat, Unpack, overload, override
 from uuid import uuid4
 
 import httpx2
@@ -33,6 +33,12 @@ from scopecat.application.launch import (
     LaunchField,
     LaunchPreview,
     LaunchSubmission,
+)
+from scopecat.application.session_context import (
+    INHERIT,
+    SessionContext,
+    SessionContextUpdate,
+    SessionDefault,
 )
 from scopecat.authoring.experiments import Experiment, ExperimentRequest, Scan
 from scopecat.automation.models import ProcedureRun, RunOutputRef
@@ -98,6 +104,49 @@ class AuthorProject(DaemonClient):
         self.receipts = receipts.resolve() if receipts is not None else None
         self.project_root = project_root.resolve() if project_root is not None else None
         self._source_project = source_project
+        self._selection = SessionContext()
+
+    @property
+    def selection(self) -> SessionContext:
+        """Read this client's current defaults without refreshing code or state."""
+        return self._selection
+
+    def use(self, **changes: Unpack[SessionContextUpdate]) -> SessionContext:
+        """Validate and atomically update this client's defaults for future work.
+
+        Omitted fields stay selected; None clears an optional selection. An explicit
+        working point selects its sample unless a sample is supplied alongside it.
+        Selection never activates configuration or submits hardware operations.
+        """
+        if self.is_closed:
+            raise SessionClosedError("Cannot select context on a closed session")
+        selected = SessionContext.model_validate(
+            {**self._selection.model_dump(), **changes}
+        )
+        if selected.working_point is not None:
+            source = self.config.resolve_context(selected.working_point).config_source
+            if "working_point" in changes and "sample" not in changes:
+                selected = selected.model_copy(
+                    update={"sample": source.sample.sample_id}
+                )
+            elif (
+                selected.sample is not None
+                and selected.sample != source.sample.sample_id
+            ):
+                raise ValueError(
+                    "sample does not match the selected working point; "
+                    "select its working point or clear working_point=None"
+                )
+            else:
+                selected = selected.model_copy(
+                    update={"sample": source.sample.sample_id}
+                )
+        elif selected.sample is not None:
+            self.get_sample(selected.sample)
+        if selected.collection is not None:
+            self.record_collection(selected.collection)
+        self._selection = selected
+        return selected
 
     @property
     def run_operations(self) -> RemoteRunOperations:
@@ -105,7 +154,9 @@ class AuthorProject(DaemonClient):
 
     @property
     def config(self) -> LabConfigOperations:
-        return LabConfigOperations(self, self.run_operations, None, "operator")
+        return LabConfigOperations(
+            self, self.run_operations, None, self._selection.operator
+        )
 
     def live[**P, ResultT](
         self, experiment: Experiment[P, ResultT]
@@ -131,12 +182,14 @@ class AuthorProject(DaemonClient):
         *,
         limit: int = 20,
         before: int | None = None,
-        collection: str | None = None,
+        collection: str | SessionDefault | None = INHERIT,
     ) -> RunHistory:
         """Display a bounded page using collection or legacy store-local numbers."""
         from scopecat.application.run_history import RunHistory
         from scopecat.records.research_project import RunHistoryFilter
 
+        if isinstance(collection, SessionDefault):
+            collection = self._selection.collection
         return RunHistory(
             self.list_runs(
                 limit=limit,
@@ -146,32 +199,41 @@ class AuthorProject(DaemonClient):
             collection=collection,
         )
 
-    def run_number(self, run: RunHandle | str) -> int:
-        """Return this project's short number; it is not a portable data identity."""
+    def run_number(
+        self, run: RunHandle | str, *, collection: str | SessionDefault | None = INHERIT
+    ) -> int:
+        """Return a number in the selected collection, or the legacy store scope."""
         if isinstance(run, RunHandle) and run.session is not self:
             raise ValueError("Use a run from this session or an explicit run id")
-        return self.get_run(
-            run.id if isinstance(run, RunHandle) else run
-        ).control.sequence
+        if isinstance(collection, SessionDefault):
+            collection = self._selection.collection
+        detail = self.get_run(run.id if isinstance(run, RunHandle) else run)
+        if collection is None:
+            return detail.control.sequence
+        if detail.address is None or detail.address.collection_id != collection:
+            raise ValueError("run belongs to another record collection")
+        return detail.address.number
 
-    def run(self, run_id: str | int, *, collection: str | None = None) -> RunHandle:
-        """Reconnect a retained run without importing its original author module."""
-        if collection is not None and not isinstance(run_id, int):
-            raise ValueError(
-                "collection qualifies an integer run number; use a run id alone"
-            )
-        if isinstance(run_id, int):
-            if isinstance(run_id, bool) or run_id < 1:
-                raise ValueError("run number must be a positive integer")
-            if collection is not None:
-                return RunHandle(
-                    self, self.resolve_run_number(collection, run_id).run_id
+    def run(
+        self, run_id: str | int, *, collection: str | SessionDefault | None = INHERIT
+    ) -> RunHandle:
+        """Reconnect by durable id or by number in this client's selected scope."""
+        if not isinstance(run_id, int):
+            if collection is not None and not isinstance(collection, SessionDefault):
+                raise ValueError(
+                    "collection qualifies an integer run number; use a run id alone"
                 )
-            page = self.list_runs(limit=1, before=run_id + 1)
-            if not page.items or page.items[0].control.sequence != run_id:
-                raise KeyError(f"No run #{run_id} in this project")
-            run_id = page.items[0].run_id
-        return RunHandle(self, run_id)
+            return RunHandle(self, run_id)
+        if isinstance(run_id, bool) or run_id < 1:
+            raise ValueError("run number must be a positive integer")
+        if isinstance(collection, SessionDefault):
+            collection = self._selection.collection
+        if collection is not None:
+            return RunHandle(self, self.resolve_run_number(collection, run_id).run_id)
+        page = self.list_runs(limit=1, before=run_id + 1)
+        if not page.items or page.items[0].control.sequence != run_id:
+            raise KeyError(f"No run #{run_id} in this project")
+        return RunHandle(self, page.items[0].run_id)
 
     def reopen(self, receipt: str | Path) -> AuthorJob:
         """Read a saved job receipt; recovery is read-only and never resubmits."""
@@ -224,13 +286,25 @@ class AuthorProject(DaemonClient):
         candidate: ParameterCandidate | CandidateConfig | None = None,
         code_revision: AuthorRevisionRef | None = None,
         inputs: dict[str, JsonValue] | None = None,
-        context: ConfigContextRef | None = None,
+        context: ConfigContextRef | SessionDefault | None = INHERIT,
         overrides: tuple[ParameterUpdate, ...] = (),
-        sample: str | None = None,
-        actor: str = "operator",
-        record_collection: str | None = None,
+        sample: str | SessionDefault | None = INHERIT,
+        actor: str | SessionDefault = INHERIT,
+        record_collection: str | SessionDefault | None = INHERIT,
     ) -> AuthorPreparedLaunch:
         """Select the current declaration and retain a preview's exact submission."""
+        selection = self._selection
+        context, sample = selection.scientific_scope(
+            context=context,
+            sample=sample,
+            explicit_parameters=parameters is not None or candidate is not None,
+        )
+        actor = selection.operator if isinstance(actor, SessionDefault) else actor
+        record_collection = (
+            selection.collection
+            if isinstance(record_collection, SessionDefault)
+            else record_collection
+        )
         draft = experiment.copy() if isinstance(experiment, ExperimentRequest) else None
         if draft is not None:
             retained_revision = draft.declaration.code_revision
@@ -370,10 +444,16 @@ class AuthorProject(DaemonClient):
         self,
         ref: ExperimentPlanRef,
         *,
-        actor: str,
-        record_collection: str | None = None,
+        actor: str | SessionDefault = INHERIT,
+        record_collection: str | SessionDefault | None = INHERIT,
     ) -> AuthorPreparedLaunch:
         """Read an exact plan and obtain a new preview for this execution actor."""
+        actor = self._selection.operator if isinstance(actor, SessionDefault) else actor
+        record_collection = (
+            self._selection.collection
+            if isinstance(record_collection, SessionDefault)
+            else record_collection
+        )
         request = plan_launch_request(
             self.experiment_plan(ref), actor=actor, record_collection=record_collection
         )

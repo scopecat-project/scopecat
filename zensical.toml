@@ -27,6 +27,7 @@ nav = [
     { "Write an experiment" = "how-to/write-an-experiment.md" },
     { "Refresh author code" = "how-to/refresh-author-code.md" },
     { "Scans and grouped analysis" = "how-to/grouped-analysis.md" },
+    { "Select session context" = "how-to/select-session-context.md" },
     { "Number runs in collections" = "how-to/record-collections.md" },
     { "Organize research history" = "how-to/research-history.md" },
     { "Migrate a data copy" = "how-to/migrate-data.md" },

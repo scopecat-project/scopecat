@@ -47,8 +47,8 @@ provider instead of silently placing runs in the default collection.
 
 ## Existing notebooks and retained data
 
-Unqualified `session.run(number)`, `session.run_number(run)` and `session.history()`
-continue using the store's existing global scheduler numbers. New runs without a
+Without a selected session collection, unqualified `session.run(number)`,
+`session.run_number(run)` and `session.history()` continue using the store's existing global scheduler numbers. New runs without a
 collection selection belong to the default collection and keep those same numbers.
 The default collection can therefore have gaps when runs use other collections.
 New named collections start at 1 and allocate independently. Use the collection ID
@@ -63,6 +63,7 @@ store identity, so migrating/restoring the same evidence preserves its addresses
 
 This is the storage and Python/HTTP foundation for the
 [experiment workbench context](../development/architecture/experiment-contexts.md).
-There is not yet a page/kernel current-collection selector, cross-store catalog or
-collection-aware GUI number display. A collection alone neither isolates hardware
+[Notebook session selection](select-session-context.md) can remember a collection
+per client/kernel. There is not yet a page-local GUI selector, cross-store catalog
+or collection-aware GUI number display. A collection alone neither isolates hardware
 nor copies working-point parameters; teaching still uses its existing isolation.
