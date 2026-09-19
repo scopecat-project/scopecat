@@ -33,6 +33,7 @@ def bind_scientific_evidence(
     """
     if len({sample.role for sample in samples}) != len(samples):
         raise ValueError("scientific binding requires unique sample roles")
+    samples = tuple(sorted(samples, key=lambda sample: sample.role))
     subject: ResolvedSubject
     if target is not None:
         projection = project_single_member_target(

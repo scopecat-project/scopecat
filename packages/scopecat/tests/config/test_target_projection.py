@@ -3,7 +3,9 @@
 from datetime import UTC, datetime
 
 import pytest
+from scopecat_testkit.workflow_fixtures import load_config
 
+from scopecat.config.scientific_binding import bind_scientific_evidence
 from scopecat.config.target_projection import (
     project_single_member_target,
     validate_target_members,
@@ -11,6 +13,7 @@ from scopecat.config.target_projection import (
 from scopecat.kernel.entity import EntityRef
 from scopecat.records.config import Topology, TopologyConnection
 from scopecat.records.sample import (
+    SampleBinding,
     SampleRevision,
     SampleRevisionDraft,
     sample_revision_content_hash,
@@ -200,4 +203,44 @@ def test_catalog_can_retain_sample_without_topology_but_projection_cannot() -> N
             catalog_id=target.ref.catalog_id,
             samples=evidence,
             execution_topology=Topology(),
+        )
+
+
+def test_registered_binding_uses_projection_and_rejects_conflicting_sample() -> None:
+    sample = _sample()
+    target = _target(MeasurementTarget(members=(_member(sample),)))
+    config = load_config()
+    config = config.model_copy(
+        update={
+            "system": config.system.model_copy(
+                update={"topology": sample.content.topology}
+            )
+        }
+    )
+    exact = SampleBinding(
+        role="subject",
+        sample_id=sample.sample_id,
+        revision=sample.revision,
+        content_hash=sample.content_hash,
+        kind="chip",
+        display_name="Chip A",
+    )
+    binding = bind_scientific_evidence(
+        catalog_id="local:catalog",
+        config=config,
+        samples=(exact,),
+        target=target,
+        sample_revisions={(sample.sample_id, sample.revision): sample},
+    )
+    assert binding.subject.kind == "registered_target"
+    assert binding.subject.ref == target.ref
+    assert binding.subject.projection[0].target_entity.member_id == "A"
+    assert binding.sample_selectors()[0].role == "subject"
+    with pytest.raises(ValueError, match="sample evidence"):
+        bind_scientific_evidence(
+            catalog_id="local:catalog",
+            config=config,
+            samples=(exact.model_copy(update={"revision": 2}),),
+            target=target,
+            sample_revisions={(sample.sample_id, sample.revision): sample},
         )
