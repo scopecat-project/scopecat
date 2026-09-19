@@ -153,7 +153,7 @@ def test_active_writer_is_rejected(tmp_path: Path, owner: str) -> None:
     assert not (tmp_path / "snapshot").exists()
 
 
-@pytest.mark.parametrize("version", [62, 999])
+@pytest.mark.parametrize("version", [74, 999])
 @pytest.mark.parametrize("journal", ["DELETE", "WAL"])
 def test_unknown_schema_rejection_leaves_original_files_unchanged(
     tmp_path: Path, journal: str, version: int
@@ -293,7 +293,7 @@ def test_verify_checks_object_references_even_with_matching_inventory(
     assert "cannot verify snapshot" in result.output
 
 
-@pytest.mark.parametrize("version", [62, 999])
+@pytest.mark.parametrize("version", [74, 999])
 def test_unsupported_snapshot_is_not_modified_or_restored(
     tmp_path: Path, version: int
 ) -> None:

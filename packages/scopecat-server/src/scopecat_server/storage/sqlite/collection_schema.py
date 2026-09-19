@@ -26,9 +26,3 @@ CREATE TABLE IF NOT EXISTS run_addresses (
     UNIQUE(collection_id,number)
 );
 """
-
-RECORD_COLLECTION_BACKFILL_SQL = """
-INSERT INTO run_addresses(run_id,collection_id,number)
-SELECT r.run_id,c.collection_id,r.sequence FROM scheduler_runs r
-CROSS JOIN record_collections c WHERE c.is_default=1;
-"""

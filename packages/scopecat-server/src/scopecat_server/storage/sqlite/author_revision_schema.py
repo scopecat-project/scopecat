@@ -5,13 +5,4 @@ CREATE TABLE IF NOT EXISTS author_revisions (
     content_hash TEXT PRIMARY KEY,
     bundle_digest TEXT NOT NULL
 );
-CREATE TABLE IF NOT EXISTS author_revision_active (
-    singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
-    generation INTEGER NOT NULL,
-    content_hash TEXT NOT NULL REFERENCES author_revisions(content_hash)
-);
-CREATE TABLE IF NOT EXISTS author_preparations (
-    operation_id TEXT PRIMARY KEY,
-    record_json TEXT NOT NULL
-);
 """

@@ -1,4 +1,4 @@
-"""Workspace-owned mutable author state; legacy tables remain sealed evidence."""
+"""Workspace-owned mutable author state."""
 
 AUTHOR_WORKSPACE_TABLES_SQL = """
 CREATE TABLE IF NOT EXISTS author_workspaces (
@@ -22,13 +22,4 @@ CREATE TABLE IF NOT EXISTS author_workspace_preparations (
     record_json TEXT NOT NULL,
     PRIMARY KEY(workspace_id, operation_id)
 );
-"""
-
-AUTHOR_WORKSPACE_BACKFILL_SQL = """
-INSERT INTO author_workspace_heads
-SELECT 'legacy', generation, content_hash FROM author_revision_active;
-INSERT INTO author_workspace_revisions
-SELECT 'legacy', content_hash FROM author_revisions;
-INSERT INTO author_workspace_preparations
-SELECT 'legacy', operation_id, record_json FROM author_preparations;
 """
