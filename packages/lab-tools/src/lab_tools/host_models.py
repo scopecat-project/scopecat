@@ -12,7 +12,15 @@ from pydantic import BaseModel, ConfigDict, Field
 class Command(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     id: str = Field(default_factory=lambda: uuid4().hex, pattern=r"^[0-9a-f]{32}$")
-    action: Literal["open", "verify", "stop", "delete", "service_start"]
+    action: Literal[
+        "open",
+        "verify",
+        "stop",
+        "delete",
+        "service_start",
+        "service_stop",
+        "service_remove",
+    ]
     topic: str | None = None
     workspace: str | None = Field(default=None, pattern=r"^[0-9a-f]{32}$")
     reset: bool = False

@@ -52,7 +52,7 @@ async function submit(command) {
       operation = await api(`/api/operations/${command.id}`);
     }
     if (operation.status !== "succeeded") throw new Error(operation.detail);
-    message("已完成。");
+    message(operation.detail || "已完成。");
     if (command.action === "service_start") {
       const state = await api("/api/state");
       const service = state.services.find(item => item.service.id === command.service);
@@ -83,6 +83,14 @@ async function refresh() {
     row.append(element("strong", item.service.name), element("p", serviceStates[item.state]));
     if (item.detail) row.append(element("p", item.detail));
     row.append(button("打开工作台", () => submit({ action: "service_start", service: item.service.id }), "primary", disabled));
+    row.append(button("停止服务", () => {
+      if (confirm(`停止 ${item.service.name} 的后台服务？\n这可能中断当前任务及 Notebook 连接。项目和已有科学记录保留，不会自动重启或恢复测量。`))
+        return submit({ action: "service_stop", service: item.service.id });
+    }, "secondary", disabled || item.state === "stopped" || item.state === "unavailable"));
+    row.append(button("移除登记", () => {
+      if (confirm(`从列表移除 ${item.service.name}？\n只撤销登记，不删除项目目录、科学数据或操作日志。之后可用 scopecat app 重新登记。`))
+        return submit({ action: "service_remove", service: item.service.id });
+    }, "secondary", disabled || item.state !== "stopped"));
     const details = element("details");
     details.append(element("summary", "项目与环境"), element("p", item.service.root, "meta"), element("p", item.service.python, "meta"));
     row.append(details);
@@ -128,11 +136,11 @@ async function refresh() {
   const operations = document.getElementById("operations");
   operations.replaceChildren();
   const states = { starting: "准备中", running: "进行中", succeeded: "已完成", failed: "失败", interrupted: "已中断" };
-  const actions = { open: "打开练习", verify: "自动验收", stop: "停止服务", delete: "删除旧副本", service_start: "打开工作台" };
+  const actions = { open: "打开练习", verify: "自动验收", stop: "停止服务", delete: "删除旧副本", service_start: "打开工作台", service_stop: "停止实验服务", service_remove: "移除登记" };
   for (const operation of state.operations.slice(0, 12)) {
     const row = element("article", undefined, "row");
     const topic = operation.command.topic || state.workspaces.find(item => item.id === operation.command.workspace)?.topic;
-    const target = state.services.find(item => item.service.id === operation.command.service)?.service.name || state.topics[topic] || operation.command.workspace?.slice(0, 8) || "";
+    const target = state.services.find(item => item.service.id === operation.command.service)?.service.name || state.topics[topic] || operation.command.workspace?.slice(0, 8) || operation.command.service?.slice(0, 8) || "";
     row.append(element("strong", `${target} · ${actions[operation.command.action]} · ${states[operation.status]}`));
     row.append(element("p", operation.detail));
     row.append(button("查看日志", async () => {

@@ -35,7 +35,7 @@ class Operations:
             )
         return [Operation.model_validate_json(row[0]) for row in rows]
 
-    def get(self, identity: str) -> Operation:
+    def find(self, identity: str) -> Operation | None:
         with closing(sqlite3.connect(self.database)) as db:
             row = cast(
                 "tuple[str] | None",
@@ -43,9 +43,13 @@ class Operations:
                     "SELECT payload FROM operations WHERE id=?", (identity,)
                 ).fetchone(),
             )
-        if row is None:
+        return Operation.model_validate_json(row[0]) if row else None
+
+    def get(self, identity: str) -> Operation:
+        operation = self.find(identity)
+        if operation is None:
             raise ValueError("操作不存在")
-        return Operation.model_validate_json(row[0])
+        return operation
 
     def save(self, operation: Operation) -> None:
         with closing(sqlite3.connect(self.database)) as db, db:

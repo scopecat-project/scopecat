@@ -47,18 +47,33 @@ def _environment() -> dict[str, str]:
 def _run(python: str, request: dict[str, object]) -> dict[str, object]:
     with tempfile.TemporaryDirectory(prefix="scopecat-service-") as directory:
         output = Path(directory) / "result.json"
-        subprocess.run(  # noqa: S603 - trusted CLI interpreter and fixed source
-            [
-                python,
-                str(Path(__file__).with_name("service_runtime.py")),
-                json.dumps(request),
-                str(output),
-            ],
-            check=True,
-            env=_environment(),
-            # Service startup follows the existing progress/cancellation contract.
-            timeout=30 if request["action"] == "probe" else None,
-        )
+        try:
+            subprocess.run(  # noqa: S603 - trusted CLI interpreter and fixed source
+                [
+                    python,
+                    str(Path(__file__).with_name("service_runtime.py")),
+                    json.dumps(request),
+                    str(output),
+                ],
+                check=True,
+                env=_environment(),
+                # Service startup follows the existing progress/cancellation contract.
+                timeout=30 if request["action"] == "probe" else None,
+            )
+        except subprocess.CalledProcessError as error:
+            failure = (
+                cast(
+                    "dict[str, object]", json.loads(output.read_text(encoding="utf-8"))
+                )
+                if output.exists()
+                else {}
+            )
+            detail = failure.get("error")
+            raise ValueError(
+                detail
+                if isinstance(detail, str)
+                else f"实验服务操作失败（退出代码 {error.returncode}）；请查看操作日志"
+            ) from error
         return cast("dict[str, object]", json.loads(output.read_text(encoding="utf-8")))
 
 
@@ -191,3 +206,37 @@ class Services:
             raise ValueError(
                 "运行中的服务没有提供登记的 GUI；请先显式停止原服务，再重新打开"
             )
+
+    def stop(self, identity: str) -> None:
+        with self.lock:
+            service = self.get(identity)
+            _run(
+                service.python,
+                {
+                    "action": "stop",
+                    "root": service.root,
+                    "static_dir": None,
+                    "environment": service.environment,
+                },
+            )
+            if inspect_daemon(open_project(service.root)).state != "stopped":
+                raise ValueError("实验服务尚未停止；登记与数据保留，请查看操作日志")
+
+    def remove(self, identity: str, *, operation_id: str) -> None:
+        from .host_store import Operations
+
+        with self.lock, closing(sqlite3.connect(self.database)) as db, db:
+            db.execute("BEGIN IMMEDIATE")
+            service = self.get(identity)
+            operations = Operations(self.database.parent.parent)
+            operations.reconcile()
+            if any(
+                item.command.id != operation_id
+                and item.command.service == identity
+                and item.status in ("starting", "running")
+                for item in operations.list()
+            ):
+                raise ValueError("实验服务还有管理操作未完成，不能移除登记")
+            if inspect_daemon(open_project(service.root)).state != "stopped":
+                raise ValueError("请先停止实验服务，再移除登记；项目和数据不会删除")
+            db.execute("DELETE FROM services WHERE id=?", (identity,))

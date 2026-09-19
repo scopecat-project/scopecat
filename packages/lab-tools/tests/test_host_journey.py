@@ -1,5 +1,6 @@
 """One real host per home; durable work survives its HTTP owner's restart."""
 
+import hashlib
 import secrets
 import subprocess
 import sys
@@ -194,5 +195,46 @@ def test_registered_project_reuses_environment_and_real_workbench(
             response = client.get("/api/v1/runs")
             assert response.status_code == 200
             assert response.json()["items"] == []
+        from lab_tools.host_operations import launch
+
+        with pytest.raises(ValueError, match="先停止"):
+            store.remove(service.id, operation_id="not-admitted")
+
+        def finish(command: Command) -> Operation:
+            operation = launch(home, None, command)
+            deadline = time.monotonic() + 20
+            while (
+                operation.status in ("starting", "running")
+                and time.monotonic() < deadline
+            ):
+                time.sleep(0.05)
+                operation = Operations(home).get(command.id)
+            assert operation.status == "succeeded", operation.detail
+            return operation
+
+        stopped = finish(Command(action="service_stop", service=service.id))
+        assert "科学记录保留" in stopped.detail
+        assert inspect_daemon(project).state == "stopped"
+        retained = {
+            p.relative_to(root): hashlib.sha256(p.read_bytes()).hexdigest()
+            for p in root.rglob("*")
+            if p.is_file()
+        }
+        removal = Command(action="service_remove", service=service.id)
+        removed = finish(removal)
+        assert "没有删除" in removed.detail
+        assert store.list() == []
+        assert launch(home, None, removal) == removed
+        assert {
+            p.relative_to(root): hashlib.sha256(p.read_bytes()).hexdigest()
+            for p in root.rglob("*")
+            if p.is_file()
+        } == retained
+        replacement = store.register(
+            root, Path(sys.executable), name="实验台", static_dir=gui
+        )
+        assert replacement.id != service.id
+        assert inspect_daemon(project).state == "stopped"
+        assert Operations(home).get(removal.id) == removed
     finally:
         stop_project(project)
