@@ -123,6 +123,7 @@ from scopecat_server.storage.sqlite.execution import (
     SQLiteMeasurementDatasetRepository,
     SQLiteRunCoverage,
 )
+from scopecat_server.storage.sqlite.record_collections import address_in_transaction
 from scopecat_server.storage.sqlite.run_repository import SQLiteRunRepository
 
 from ..errors import BackendConflict, BackendNotFound
@@ -337,6 +338,7 @@ class RunService:
             return RunSummaryPage(
                 items=tuple(
                     RunSummary(
+                        address=address_in_transaction(connection, control.run_id),
                         deployment_id=self._runs.deployment_in_transaction(
                             connection, control.run_id
                         ),
@@ -372,6 +374,7 @@ class RunService:
                 control = self._control.get_run_in_transaction(connection, run_id)
                 snapshot = self._runs.read_snapshot_in_transaction(connection, run_id)
                 deployment_id = self._runs.deployment_in_transaction(connection, run_id)
+                address = address_in_transaction(connection, run_id)
                 claims = {
                     (claim.resource.kind, claim.resource.id): claim
                     for claim in self._control.list_resource_claims_in_transaction(
@@ -438,6 +441,7 @@ class RunService:
             )
         return RunDetail(
             deployment_id=deployment_id,
+            address=address,
             control=_run_control_view(
                 control,
                 completed_point_count=completed_point_count,

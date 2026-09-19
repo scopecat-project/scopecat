@@ -69,6 +69,7 @@ from scopecat_server.storage.sqlite.control_plane import (
     ControlPlaneNotFound,
     SQLiteControlPlane,
 )
+from scopecat_server.storage.sqlite.record_collections import allocate_address
 from scopecat_server.storage.sqlite.run_repository import SQLiteRunRepository
 from scopecat_server.storage.sqlite.samples import SQLiteSampleStore
 
@@ -193,6 +194,12 @@ class AdmissionService:
                 self._point_plans.initialize_admitted_in_transaction(connection, run)
                 if run.run_id == admission.run_id:
                     self._require_plan_child(connection, submission)
+                    allocate_address(
+                        connection,
+                        run_id=run.run_id,
+                        sequence=run.sequence,
+                        collection_id=submission.request.record_collection,
+                    )
                     self._runs.commit_run_skeleton_in_transaction(
                         connection,
                         prepared,

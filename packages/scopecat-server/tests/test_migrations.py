@@ -40,7 +40,7 @@ def _legacy(root: Path, version: int = 68):
             "VALUES ('retained','data',?)",
             (content.digest,),
         )
-        if version == 69:
+        if version >= 69:
             connection.execute(
                 "CREATE TABLE parameter_workspace_heads("
                 "workspace_id TEXT PRIMARY KEY "
@@ -48,6 +48,13 @@ def _legacy(root: Path, version: int = 68):
                 "entry_id TEXT NOT NULL REFERENCES config_registry_entries(entry_id))"
             )
             connection.execute("UPDATE project_schema SET version=69")
+        if version == 70:
+            from scopecat_server.storage.sqlite.research_schema import (
+                RESEARCH_TABLES_SQL,
+            )
+
+            connection.executescript(RESEARCH_TABLES_SQL)
+            connection.execute("UPDATE project_schema SET version=70")
         connection.commit()
     return load_project(root / "scopecat.toml")
 
@@ -60,7 +67,7 @@ def _hashes(root: Path) -> dict[str, str]:
     }
 
 
-@pytest.mark.parametrize("version", [68, 69])
+@pytest.mark.parametrize("version", [68, 69, 70])
 def test_upgrade_and_actual_restore_preserve_source_and_objects(
     tmp_path: Path, version: int
 ) -> None:
@@ -68,7 +75,7 @@ def test_upgrade_and_actual_restore_preserve_source_and_objects(
     original = _hashes(project.root)
     destination = tmp_path / "升级 副本"
     plan = plan_migration(project)
-    assert plan.steps == (("68->69", "69->70") if version == 68 else ("69->70",))
+    assert plan.steps == tuple(f"{v}->{v + 1}" for v in range(version, 71))
     receipt = migrate_copy(project, destination)
     assert receipt.plan == plan
     assert _hashes(project.root) == original
@@ -80,7 +87,7 @@ def test_upgrade_and_actual_restore_preserve_source_and_objects(
     assert upgraded.runtime_binding.data_root == destination / "project/.scopecat"
     assert (
         inspect_project_schema(upgraded.runtime_binding.data_root / "control.sqlite3")
-        == 70
+        == 71
     )
     assert verify_snapshot(destination / "original").schema_version == version
     restored = tmp_path / "restored"
@@ -94,7 +101,7 @@ def test_upgrade_and_actual_restore_preserve_source_and_objects(
         )
         assert connection.execute("SELECT run_id FROM runs").fetchone() == ("retained",)
     result = CliRunner().invoke(app, ["migration", "plan", str(project.root)])
-    assert result.exit_code == 0 and "70" in result.output
+    assert result.exit_code == 0 and "71" in result.output
 
 
 def test_failed_or_busy_migration_does_not_publish_or_modify_original(

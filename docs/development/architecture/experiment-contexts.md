@@ -234,3 +234,17 @@ binding checks while these slices are pending. No new human feedback is needed t
 write the contracts, inspect consumers and build synthetic acceptance fixtures.
 Prototype defaults, labels and navigation with the small scenarios above before
 committing to broad GUI polish. Real device behavior remains a separate evidence gate.
+
+## First implementation: record addresses
+
+Schema 71 implements record collections, atomic admission-time numbering and
+collection-qualified Python/HTTP history/lookup. The legacy store-wide sequence
+lookup is retained. Explicit copy migration from schema 70 assigns default
+collection addresses without rewriting old scientific records. See
+[record collections](../../how-to/record-collections.md) for the supported surface.
+
+Automated scenarios cover independent collections, concurrent allocation, retry
+conflicts, rename/restart stability, authored execution, saved-plan destinations
+and retained-data migration/restore. These cover the numbering portion of slice 1;
+they do not complete target/assembly and batch contracts, per-session selection,
+resource authority, or the application/workbench integration in later slices.

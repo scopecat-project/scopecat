@@ -64,8 +64,13 @@ from scopecat.records.content import Sha256ContentHash
 from scopecat.records.control_edit import ControlEdit
 from scopecat.records.launch_request import LaunchConfigSource, LaunchRequest
 from scopecat.records.manual_preview import ManualPreviewFence
+from scopecat.records.record_collection import RecordCollectionId
 from scopecat.records.request_sweep import ParameterSweep
 from scopecat.records.sample import SampleSelector
+
+
+def _absent_collection(value: object) -> bool:
+    return value is None
 
 
 class AuthorLaunchIntent(BaseModel):
@@ -81,6 +86,9 @@ class AuthorLaunchIntent(BaseModel):
     parameter_sweeps: tuple[ParameterSweep, ...] = ()
     inputs: dict[str, JsonValue] = Field(default_factory=dict)
     actor: str
+    record_collection: RecordCollectionId | None = Field(
+        default=None, exclude_if=_absent_collection
+    )
     request_hash: Sha256ContentHash
     code_revision: AuthorRevisionRef | None = None
 
@@ -303,6 +311,7 @@ class _AuthorProcedure:
             config=selected.config,
             config_source=selected.config_source,
             operator=selected.actor,
+            record_collection=selected.record_collection,
             metadata=self.experiment.provenance,
         )
 
@@ -388,6 +397,10 @@ class AuthorExperiments:
             None,
         )
         if selected is None:
+            if request.record_collection is not None:
+                raise LaunchRequestRejected(
+                    "record collection selection requires an authored experiment"
+                )
             if maintained is None:
                 raise ValueError(f"unknown author experiment {request.experiment!r}")
             return maintained(lab, request)
@@ -404,6 +417,8 @@ class AuthorExperiments:
             )
             raise LaunchRequestRejected(f"{selected.entry.id}: {details}") from error
         inputs = cast("dict[str, JsonValue]", validated_inputs.model_dump(mode="json"))
+        if request.record_collection is not None:
+            lab.record_collection(request.record_collection)
         config, source = resolve_launch_config(lab, request)
         invocation = selected.edit(
             config=config,
@@ -456,6 +471,7 @@ class AuthorExperiments:
                 parameter_sweeps=request.parameter_sweeps,
                 inputs=inputs,
                 actor=request.actor,
+                record_collection=request.record_collection,
                 manual_state=request.manual_state,
                 request_hash=request.request_hash,
                 code_revision=selected.code_revision,

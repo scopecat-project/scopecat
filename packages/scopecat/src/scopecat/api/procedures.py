@@ -371,6 +371,7 @@ class LabProcedureContext:
         operator: str | None = None,
         sample: str | SampleSelector | None = None,
         samples: tuple[SampleSelector, ...] = (),
+        record_collection: str | None = None,
     ) -> RunOutputRef:
         """Plan and execute one exactly identified child run."""
 
@@ -389,6 +390,7 @@ class LabProcedureContext:
         planned = self._runner._plan(  # pyright: ignore[reportPrivateUsage]
             invocation,
             plan_ref=self._durable.plan_ref,
+            record_collection=record_collection,
             config=selected_config,
             config_source=selected_source,
             name=name,

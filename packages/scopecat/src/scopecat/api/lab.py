@@ -44,6 +44,7 @@ from scopecat.program.values import MetadataValue
 from scopecat.records.analysis import SampleAnalysisSubject
 from scopecat.records.config import ConfigProfileSnapshot
 from scopecat.records.config_context import ConfigContextRef
+from scopecat.records.record_collection import RecordCollection
 from scopecat.records.run import RunConfigSource
 from scopecat.records.sample import SampleSelector
 from scopecat.runs.selectors import RunSelector
@@ -104,6 +105,7 @@ class PreparedLabExperiment:
         operator: str | None = None,
         sample: SampleSpec | None = None,
         samples: tuple[SampleSelector, ...] = (),
+        record_collection: str | None = None,
     ) -> RunHandle:
         return self.lab.execute_invocation(
             self.invocation,
@@ -116,6 +118,7 @@ class PreparedLabExperiment:
             operator=operator,
             sample=sample,
             samples=samples,
+            record_collection=record_collection,
         )
 
     def review(
@@ -274,6 +277,9 @@ class LabClient:
 
     def health(self) -> DaemonHealth:
         return self._control.health()
+
+    def record_collection(self, collection_id: str) -> RecordCollection:
+        return self._client.record_collection(collection_id)
 
     def runs(
         self,
@@ -486,6 +492,7 @@ class LabClient:
         operator: str | None = None,
         sample: SampleSpec | None = None,
         samples: tuple[SampleSelector, ...] = (),
+        record_collection: str | None = None,
     ) -> RunHandle:
         """Run an experiment directly; use ``prepare`` when reusing a config."""
 
@@ -497,6 +504,7 @@ class LabClient:
             operator=operator,
             sample=sample,
             samples=samples,
+            record_collection=record_collection,
         )
 
     def review(
@@ -577,6 +585,7 @@ class LabClient:
         submission_id: str | None = None,
         sample: SampleSpec | None = None,
         samples: tuple[SampleSelector, ...] = (),
+        record_collection: str | None = None,
     ) -> RunHandle:
         manifest = self._runner.run(
             invocation,
@@ -589,6 +598,7 @@ class LabClient:
             operator=operator,
             submission_id=submission_id,
             samples=_sample_selectors(sample, samples),
+            record_collection=record_collection,
         )
         return RunHandle(session=self, id=manifest.run_id)
 

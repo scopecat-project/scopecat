@@ -58,6 +58,7 @@ from scopecat.records.parameter_change import (
     ParameterValueDelta,
 )
 from scopecat.records.plan_ref import ExperimentPlanRef
+from scopecat.records.record_collection import RunAddress
 from scopecat.records.run import RunSnapshot
 from scopecat.records.run_request import RunRequest
 from scopecat.records.sample import SampleId, SampleRecord, SampleRevision
@@ -291,6 +292,7 @@ class RunSummary(_ViewModel):
 
     control: RunControlView
     snapshot: RunSnapshot
+    address: RunAddress | None = None
     deployment_id: str | None = None
 
     @property

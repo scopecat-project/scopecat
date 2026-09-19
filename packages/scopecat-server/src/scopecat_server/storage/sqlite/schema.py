@@ -8,6 +8,9 @@ from scopecat_server.storage.sqlite.automation_schema import AUTOMATION_TABLES_S
 from scopecat_server.storage.sqlite.calibration_schema import (
     CALIBRATION_COHORT_TABLES_SQL,
 )
+from scopecat_server.storage.sqlite.collection_schema import (
+    RECORD_COLLECTION_TABLES_SQL,
+)
 from scopecat_server.storage.sqlite.config_schema import CONFIG_REGISTRY_TABLES_SQL
 from scopecat_server.storage.sqlite.execution_schema import EXECUTION_TABLES_SQL
 from scopecat_server.storage.sqlite.experiment_plan_schema import (
@@ -20,7 +23,7 @@ from scopecat_server.storage.sqlite.research_schema import RESEARCH_TABLES_SQL
 from scopecat_server.storage.sqlite.run_schema import RUN_TABLES_SQL
 from scopecat_server.storage.sqlite.sample_schema import SAMPLE_TABLES_SQL
 
-PROJECT_SCHEMA_VERSION = 70
+PROJECT_SCHEMA_VERSION = 71
 
 _CONTROL_TABLES_SQL = f"""
 CREATE TABLE IF NOT EXISTS project_schema (
@@ -201,6 +204,7 @@ PROJECT_SCHEMA_SQL = "\n".join(
         RUN_TABLES_SQL,
         SAMPLE_TABLES_SQL,
         RESEARCH_TABLES_SQL,
+        RECORD_COLLECTION_TABLES_SQL,
         ANALYSIS_TABLES_SQL,
         AUTOMATION_TABLES_SQL,
         CALIBRATION_COHORT_TABLES_SQL,

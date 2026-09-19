@@ -5318,6 +5318,8 @@ export interface components {
              */
             parameter_sweeps: components["schemas"]["ParameterSweep-Input"][];
             plan_ref?: components["schemas"]["ExperimentPlanRef"] | null;
+            /** Record Collection */
+            record_collection?: string | null;
             /**
              * Request Key
              * @default
@@ -5380,6 +5382,8 @@ export interface components {
              */
             parameter_sweeps: components["schemas"]["ParameterSweep-Output"][];
             plan_ref?: components["schemas"]["ExperimentPlanRef"] | null;
+            /** Record Collection */
+            record_collection?: string | null;
             /**
              * Request Key
              * @default
@@ -7481,6 +7485,15 @@ export interface components {
             /** Routes */
             routes?: components["schemas"]["ResourceRoute"][];
         };
+        /** RunAddress */
+        RunAddress: {
+            /** Collection Id */
+            collection_id: string;
+            /** Number */
+            number: number;
+            /** Run Id */
+            run_id: string;
+        };
         /** RunAdmissionView */
         RunAdmissionView: {
             /**
@@ -7659,6 +7672,7 @@ export interface components {
          * @description Run summary with scheduler resource state.
          */
         RunDetail: {
+            address?: components["schemas"]["RunAddress"] | null;
             control: components["schemas"]["RunControlView"];
             /** Deployment Id */
             deployment_id?: string | null;
@@ -8383,6 +8397,7 @@ export interface components {
          * @description Scheduler state paired with the durable run snapshot.
          */
         RunSummary: {
+            address?: components["schemas"]["RunAddress"] | null;
             control: components["schemas"]["RunControlView"];
             /** Deployment Id */
             deployment_id?: string | null;
@@ -11178,6 +11193,7 @@ export interface operations {
                 created_before?: string | null;
                 deployment_id?: string | null;
                 limit?: number;
+                record_collection?: string | null;
                 research_project?: string | null;
                 sample_id?: components["schemas"]["SampleId"] | null;
                 state?: components["schemas"]["ControlRunState"] | null;

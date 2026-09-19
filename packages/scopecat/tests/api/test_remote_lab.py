@@ -455,7 +455,12 @@ def test_lab_preview_and_run_are_direct_prepare_shortcuts(
     lab = object.__new__(LabClient)
 
     assert lab.preview(invocation, config="active", name="preview") is preview_result
-    assert lab.run(invocation, config="candidate", name="run") is run_result
+    assert (
+        lab.run(
+            invocation, config="candidate", name="run", record_collection="cooldown-a"
+        )
+        is run_result
+    )
     assert prepared_calls == [(invocation, "active"), (invocation, "candidate")]
     assert forwarded == [
         (
@@ -484,6 +489,7 @@ def test_lab_preview_and_run_are_direct_prepare_shortcuts(
                 "operator": None,
                 "sample": None,
                 "samples": (),
+                "record_collection": "cooldown-a",
             },
         ),
     ]
@@ -643,10 +649,15 @@ def test_execute_replays_terminal_success_after_submission_response_loss(
     assert requests == ["/api/v1/runs", "/api/v1/runs"]
 
 
+@pytest.mark.parametrize("collection", [None, "cooldown-a"])
 def test_lab_resume_replans_and_authorizes_a_new_execution_segment(
     monkeypatch: pytest.MonkeyPatch,
+    collection: str | None,
 ) -> None:
-    planned = _planned()
+    base = _planned()
+    planned = replace(
+        base, request=base.request.model_copy(update={"record_collection": collection})
+    )
     submission, _ = runner_module._prepare_run_submission(
         planned,
         submission_id="original-submission",
