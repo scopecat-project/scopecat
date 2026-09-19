@@ -129,9 +129,17 @@ class SignalDataset:
     response: sc.ProductRef[float]
 
 
-@sc.experiment(id="reference_lab.frequency_amplitude", controls=CONTROLS)
+@sc.experiment(
+    id="reference_lab.frequency_amplitude",
+    controls=CONTROLS,
+    metadata={"title": "Frequency / amplitude model"},
+)
 def frequency_amplitude(context: sc.ExperimentContext) -> SignalDataset:
-    """Run a configured analytic signal model; this workflow needs no device calls."""
+    """Preview fixed or scanned signal controls against the reviewed q0 carrier.
+
+    Project limits: at most 64 points; amplitude at most 0.2 V when detuning
+    exceeds 0.25 GHz. This analytic model makes no device calls.
+    """
     response = cast(
         "sc.ProductRef[float]",
         context.compute(

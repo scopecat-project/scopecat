@@ -47,7 +47,7 @@ The author client uses the same launch, plan and preview records as the GUI:
 from scopecat.application.author_project import AuthorProject
 
 with AuthorProject(endpoint) as author:
-    prepared = author.prepare("frequency-amplitude", actor="alice")
+    prepared = author.prepare("reference_lab.frequency_amplitude", actor="alice")
     saved = prepared.save_plan("Frequency check", saved_by="alice")
 
     # A new preview selects the saved configuration and code, not today's default.

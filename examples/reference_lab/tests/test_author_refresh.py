@@ -48,9 +48,17 @@ def admit_without_dispatch(root: Path, key: str) -> str:
             "manual_state": preview.manual_state,
         }
     )
+    assert command.code_revision is not None
     completed = subprocess.run(  # noqa: S603 - fixed internal project worker
-        [sys.executable, "-m", "scopecat_server.launch_worker", str(root)],
-        input=command.model_dump_json(),
+        [
+            sys.executable,
+            "-m",
+            "scopecat_server.launch_worker",
+            str(root),
+            "--serve",
+            command.code_revision.content_hash,
+        ],
+        input=command.model_dump_json() + "\n",
         capture_output=True,
         encoding="utf-8",
         timeout=60,

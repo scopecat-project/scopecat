@@ -12,7 +12,7 @@ from scopecat.api.comparison import COMPARISON_REQUEST_SCHEMA
 from scopecat.api.lab import LabClient
 from scopecat.api.procedures import ProcedureHandle
 from scopecat.application.comparison import ComparisonHandoff
-from scopecat.application.launch import LaunchPreview, LaunchSubmission
+from scopecat.application.launch import LaunchCatalog, LaunchPreview, LaunchSubmission
 from scopecat.automation import RunOutputRef
 from scopecat.daemon.client import DaemonClient
 from scopecat.records.analysis import MeasurementAnalysisRecordInput
@@ -42,10 +42,18 @@ def test_two_retained_runs_fit_candidate_rejection_and_handoff() -> None:
         ) as http,
     ):
         frequencies = [sc.Quantity(value, "GHz") for value in (4.6, 4.7, 4.8, 4.9, 5.0)]
+        catalog = LaunchCatalog.model_validate(
+            http.get("/api/v1/experiment-launcher").json()
+        )
+        entry = next(
+            item
+            for item in catalog.entries
+            if item.id == "reference_lab.frequency_amplitude"
+        )
         launch = LaunchRequest(
             action="preview",
-            experiment="frequency-amplitude",
-            version="1",
+            experiment=entry.id,
+            version=entry.version,
             control_edits={
                 "frequency": ControlEdit(
                     mode="scan",
@@ -87,7 +95,7 @@ def test_two_retained_runs_fit_candidate_rejection_and_handoff() -> None:
 
         source_procedure = acquire(launch, "comparison-source")
         closed = source_procedure.snapshot
-        output = source_procedure.step("signal").output
+        output = source_procedure.step("experiment").output
         assert isinstance(output, RunOutputRef)
         primary = lab.get_run(output.run_id)
         secondary_procedure = acquire(
@@ -103,7 +111,7 @@ def test_two_retained_runs_fit_candidate_rejection_and_handoff() -> None:
             ),
             "comparison-secondary",
         )
-        secondary_output = secondary_procedure.step("signal").output
+        secondary_output = secondary_procedure.step("experiment").output
         assert isinstance(secondary_output, RunOutputRef)
         secondary = lab.get_run(secondary_output.run_id)
         runs = (primary, secondary)

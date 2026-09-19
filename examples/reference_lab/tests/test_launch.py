@@ -116,7 +116,9 @@ def assert_retained_shapes(stage: PreflightStage, run: RunHandle) -> None:
         assert product.unit == variable.unit
 
 
-@pytest.mark.parametrize("experiment", ["temperature", "channel-timing"])
+@pytest.mark.parametrize(
+    "experiment", ["reference_lab.temperature_diagnostic", "channel-timing"]
+)
 def test_real_http_preview_shares_catalog_and_never_admits_acquisition(
     reference_lab_daemon: _Daemon,
     launch_application: LabApplication,
@@ -137,18 +139,27 @@ def test_real_http_preview_shares_catalog_and_never_admits_acquisition(
         expected = provider(lab, LaunchRequest(action="list"))
         assert isinstance(expected, LaunchCatalog)
         assert catalog.code_revision is not None
+        assert {"temperature", "frequency-amplitude"}.isdisjoint(
+            item.id for item in catalog.entries
+        )
         assert [(item.id, item.title, item.controls) for item in catalog.entries] == [
             (item.id, item.title, item.controls) for item in expected.entries
         ]
         before = client.list_runs()
         active = lab.config.active()
-        request = LaunchRequest(action="preview", experiment=experiment, version="1")
+        selected_entry = next(item for item in catalog.entries if item.id == experiment)
+        request = LaunchRequest(
+            action="preview", experiment=experiment, version=selected_entry.version
+        )
         response = http.post(
             "/api/v1/experiment-launcher/preview", json=request.model_dump(mode="json")
         )
         assert response.is_success, response.text
         preview = LaunchPreview.model_validate(response.json())
-        repeated = provider(lab, request)
+        local_entry = next(item for item in expected.entries if item.id == experiment)
+        repeated = provider(
+            lab, request.model_copy(update={"version": local_entry.version})
+        )
         assert isinstance(repeated, LaunchPreview)
         # Target inspection includes per-compilation timing/cache diagnostics.
         assert preview.code_revision == catalog.code_revision
@@ -158,7 +169,14 @@ def test_real_http_preview_shares_catalog_and_never_admits_acquisition(
             selected_entry.model_dump(mode="json")
         )
         assert repeated.definition_hash is None  # worker-owned catalog projection
+        assert (
+            preview.request_hash
+            == request.model_copy(update={"reviewed": preview.reviewed}).request_hash
+        )
+        assert preview.manual_state is not None
+        assert preview.manual_state.binding.request_hash == preview.request_hash
         exclude = {
+            "request_hash": True,
             "code_revision": True,
             "manual_state": True,
             "definition_hash": True,
@@ -169,7 +187,7 @@ def test_real_http_preview_shares_catalog_and_never_admits_acquisition(
         )
         assert preview.preflight is not None
         assert len(preview.preflight.stages) == (
-            1 if experiment == "temperature" else 2
+            1 if experiment == "reference_lab.temperature_diagnostic" else 2
         )
         assert all(stage.selected_points <= 1 for stage in preview.preflight.stages)
         assert all(stage.sampled_points <= 64 for stage in preview.preflight.stages)
@@ -203,7 +221,9 @@ def test_real_http_preview_shares_catalog_and_never_admits_acquisition(
                 assert playback.artifact_fingerprint == (
                     stage.inspections[0].artifact_fingerprint
                 )
-        assert preview.point_count == (1 if experiment == "temperature" else 2)
+        assert preview.point_count == (
+            1 if experiment == "reference_lab.temperature_diagnostic" else 2
+        )
         assert isinstance(preview.reviewed.config_source, ConfigRegistryRunConfigSource)
         assert preview.reviewed.config_source.entry_id == active.entry.id
         assert client.list_runs() == before
@@ -217,7 +237,16 @@ def test_submission_fences_new_stale_work_but_replays_exact_admission(
     provider = launch_application.launch_provider
     assert provider is not None
     with launch_application.connect(reference_lab_daemon.url) as lab:
-        request = LaunchRequest(action="preview", experiment="temperature", version="1")
+        catalog = provider(lab, LaunchRequest(action="list"))
+        assert isinstance(catalog, LaunchCatalog)
+        entry = next(
+            item
+            for item in catalog.entries
+            if item.id == "reference_lab.temperature_diagnostic"
+        )
+        request = LaunchRequest(
+            action="preview", experiment=entry.id, version=entry.version
+        )
         preview = provider(lab, request)
         assert isinstance(preview, LaunchPreview)
         command = submit_request(request, preview, "launch-retry")
@@ -237,7 +266,7 @@ def test_submission_fences_new_stale_work_but_replays_exact_admission(
             provider(lab, submit_request(changed, new_preview, "launch-retry"))
         handle = lab.procedures.get(admitted.procedure_id).resume()
         assert handle.state == "closed"
-        output = handle.output("diagnostic")
+        output = handle.output("experiment")
         assert output.kind == "run"
         run = lab.get_run(output.run_id)
         assert run.status == "completed"
@@ -313,7 +342,17 @@ def test_http_submission_dispatches_the_same_durable_diagnostic(
             base_url=reference_lab_daemon.url, trust_env=False, timeout=30
         ) as http,
     ):
-        request = LaunchRequest(action="preview", experiment="temperature", version="1")
+        catalog = LaunchCatalog.model_validate(
+            http.get("/api/v1/experiment-launcher").json()
+        )
+        entry = next(
+            item
+            for item in catalog.entries
+            if item.id == "reference_lab.temperature_diagnostic"
+        )
+        request = LaunchRequest(
+            action="preview", experiment=entry.id, version=entry.version
+        )
         preview_response = http.post(
             "/api/v1/experiment-launcher/preview",
             json=request.model_dump(mode="json"),
@@ -336,7 +375,7 @@ def test_http_submission_dispatches_the_same_durable_diagnostic(
         ):
             time.sleep(0.05)
         assert handle.state == "closed"
-        assert handle.output("diagnostic").kind == "run"
+        assert handle.output("experiment").kind == "run"
         retry = http.post(
             "/api/v1/experiment-launcher/submit",
             json=command.model_dump(mode="json"),
@@ -417,6 +456,14 @@ def test_http_controls_persist_one_source_and_match_notebook_edits(
             base_url=reference_lab_daemon.url, trust_env=False, timeout=30
         ) as http,
     ):
+        catalog = LaunchCatalog.model_validate(
+            http.get("/api/v1/experiment-launcher").json()
+        )
+        entry = next(
+            item
+            for item in catalog.entries
+            if item.id == "reference_lab.frequency_amplitude"
+        )
         for mode in ("fixed", "scan"):
             frequency = {"value": 4900.0, "unit": "MHz"}
             edit = (
@@ -426,8 +473,8 @@ def test_http_controls_persist_one_source_and_match_notebook_edits(
             )
             request = LaunchRequest(
                 action="preview",
-                experiment="frequency-amplitude",
-                version="1",
+                experiment=entry.id,
+                version=entry.version,
                 control_edits={
                     "frequency": ControlEdit.model_validate(edit),
                     "amplitude": ControlEdit(mode="fixed", value=Quantity(100, "mV")),
@@ -466,7 +513,7 @@ def test_http_controls_persist_one_source_and_match_notebook_edits(
             ):
                 time.sleep(0.05)
             assert handle.state == "closed"
-            output = handle.output("signal")
+            output = handle.output("experiment")
             assert output.kind == "run"
             run = lab.get_run(output.run_id)
             assert run.request.point_plan == expected.point_plan
@@ -490,7 +537,14 @@ def test_http_controls_persist_one_source_and_match_notebook_edits(
             "/api/v1/experiment-launcher/preview", json=unsafe.model_dump(mode="json")
         )
         assert response.status_code == 422 and "Amplitude" in response.text
-        unknown = unsafe.model_copy(update={"experiment": "temperature"})
+        temperature = next(
+            item
+            for item in catalog.entries
+            if item.id == "reference_lab.temperature_diagnostic"
+        )
+        unknown = unsafe.model_copy(
+            update={"experiment": temperature.id, "version": temperature.version}
+        )
         response = http.post(
             "/api/v1/experiment-launcher/preview", json=unknown.model_dump(mode="json")
         )

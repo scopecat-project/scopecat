@@ -90,7 +90,9 @@ test("two workbench pages retain independent context and share collection number
     await other.getByLabel("Operator", { exact: true }).fill("Bob");
     const batchB = await createScope(other, "batch", "Cooldown B");
     await other.getByLabel("Record collection", { exact: true }).selectOption(collection);
-    await page.getByLabel("Experiment", { exact: true }).selectOption("frequency-amplitude");
+    await page
+      .getByLabel("Experiment", { exact: true })
+      .selectOption("reference_lab.frequency_amplitude");
     await page.getByLabel("Experiment", { exact: true }).selectOption("signal");
     await expect(page.getByLabel("Sample ID", { exact: true })).toHaveValue("chip-a");
     await expect(page.getByLabel("Operator", { exact: true })).toHaveValue("Alice");

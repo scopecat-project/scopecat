@@ -22,8 +22,7 @@ from scopecat.records.sample import SampleBinding
 
 from reference_lab.application import create_application
 from reference_lab.configuration import EXAMPLE_ROOT, bootstrap_config
-from reference_lab.control_launch import launch_frequency_amplitude
-from reference_lab.launch import launch_channel_timing, launch_temperature
+from reference_lab.launch import launch_channel_timing
 from reference_lab.workflows.analysis_recovery import (
     failed_temperature_analysis,
     recovered_temperature_analysis,
@@ -58,8 +57,6 @@ def test_application_registers_exact_drag_beta_procedure_source() -> None:
         drag_beta_verification_procedure.ref,
         failed_temperature_analysis.ref,
         launch_channel_timing.ref,
-        launch_frequency_amplitude.ref,
-        launch_temperature.ref,
         recovered_temperature_analysis.ref,
         temperature_diagnostic_procedure.ref,
         *(

@@ -31,7 +31,9 @@ test("saves, reopens, copies and submits an immutable plan without activating co
       await readFile(join(project, ".scopecat/daemon.json"), "utf8"),
     ) as { base_url: string };
     await page.goto(`${endpoint}/#launch`);
-    await page.getByLabel("Experiment", { exact: true }).selectOption("frequency-amplitude");
+    await page
+      .getByLabel("Experiment", { exact: true })
+      .selectOption("reference_lab.frequency_amplitude");
     await page.getByLabel("Operator", { exact: true }).fill("alice");
     async function preview() {
       const response = page.waitForResponse((r) =>

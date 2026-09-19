@@ -12,10 +12,14 @@ from scopecat.records.config import ConfigProfileSnapshot
 from scopecat_instruments import TemperatureSampleProducts, temperature_readout
 
 
-@sc.experiment(id="reference_lab.temperature_diagnostic")
+@sc.experiment(
+    id="reference_lab.temperature_diagnostic",
+    metadata={"title": "Temperature diagnostic"},
+)
 def temperature_diagnostic(
     experiment: sc.ExperimentContext,
 ) -> TemperatureSampleProducts:
+    """Retain one thermometer sample without changing device state or defaults."""
     thermometer = temperature_readout(
         experiment, for_=sc.one(EntityRef(id="cryostat", kind="cryostat"))
     )

@@ -67,17 +67,20 @@ They cannot be edited through the control interface.
 
 For an ordinary one-experiment author path, the [discovery adapter](write-an-experiment.md)
 automatically supplies these launch projections and single-run execution. The
-explicit provider below remains useful for maintained multi-stage workflows.
+reference frequency/amplitude experiment uses this path, including its custom
+control validator. Maintained multi-stage workflows can use the same helpers
+inside their explicit provider.
 
-## Use the declaration in a launch provider
+## How discovery uses the declaration
 
 `control_catalog(controls)` produces `LaunchCatalogEntry.controls`.
 `edit_controls(controls, invocation, config=..., edits=request.control_edits)`
 converts the typed `ControlEdit` source into the same immutable edit operations.
 `control_values(...)` supplies `LaunchPreview.controls` with explicit
-fixed/scanned/derived/configuration states and provenance. The reference
-`control_launch` provider uses all three with the normal configuration-generation
-fence and managed procedure admission.
+fixed/scanned/derived/configuration states and provenance. Authored discovery
+uses all three with the normal scientific binding and configuration fences,
+manual preview checks, and managed procedure admission; single-run experiments
+do not need a separate launch adapter.
 
 A `ControlEdit` chooses exactly one source: `fixed` plus `value`, `scan` plus an
 existing axis record, or `default` with neither. Unknown or owned fields are

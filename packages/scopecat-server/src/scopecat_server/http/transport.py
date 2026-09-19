@@ -361,7 +361,6 @@ from scopecat_server.storage.sqlite.author_revision_repository import (
 )
 from scopecat_server.storage.sqlite.connection import SQLiteBusyError
 from scopecat_server.worker_diagnostics import (
-    AUTHOR_VALIDATION_TIMEOUT_EXIT,
     diagnostic_excerpt,
     worker_server_timing,
 )
@@ -659,13 +658,6 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
         )
         if completed.returncode:
             detail = completed.stderr.strip().splitlines()
-            if completed.returncode == AUTHOR_VALIDATION_TIMEOUT_EXIT:
-                raise HTTPException(
-                    504,
-                    detail[-1][:2048]
-                    if detail
-                    else "Author source validation timed out",
-                )
             raise HTTPException(
                 422, detail[-1] if detail else "Experiment preview failed"
             )

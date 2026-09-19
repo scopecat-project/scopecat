@@ -396,21 +396,9 @@ class AuthorExperiments:
         """Retain this collection when an application is copied with replace()."""
         return AuthorLaunchProvider(authors=self, maintained=maintained)
 
-    def launch(
+    def dispatch(
         self, lab: LabClient, request: LaunchRequest, maintained: LaunchProvider | None
     ) -> LaunchResult:
-        existing = (
-            maintained(lab, LaunchRequest(action="list"))
-            if maintained is not None
-            else LaunchCatalog()
-        )
-        if not isinstance(existing, LaunchCatalog):
-            raise TypeError("maintained list callback must return LaunchCatalog")
-        entries = (*existing.entries, *(item.entry for item in self.experiments))
-        if len({entry.id for entry in entries}) != len(entries):
-            raise ValueError("author and maintained launch IDs overlap")
-        if request.action == "list":
-            return LaunchCatalog(entries=entries)
         selected = next(
             (item for item in self.experiments if item.entry.id == request.experiment),
             None,
@@ -522,4 +510,28 @@ class AuthorLaunchProvider:
     maintained: LaunchProvider | None
 
     def __call__(self, lab: LabClient, request: LaunchRequest) -> LaunchResult:
-        return self.authors.launch(lab, request, self.maintained)
+        return self.resolve(lab)(lab, request)
+
+    def resolve(self, lab: LabClient) -> LaunchProvider:
+        """Resolve composition once for one worker request, never across requests."""
+        existing = (
+            self.maintained(lab, LaunchRequest(action="list"))
+            if self.maintained is not None
+            else LaunchCatalog()
+        )
+        if not isinstance(existing, LaunchCatalog):
+            raise TypeError("maintained list callback must return LaunchCatalog")
+        entries = (
+            *existing.entries,
+            *(item.entry for item in self.authors.experiments),
+        )
+        if len({entry.id for entry in entries}) != len(entries):
+            raise ValueError("author and maintained launch IDs overlap")
+        catalog = LaunchCatalog(entries=entries)
+
+        def resolved(lab: LabClient, request: LaunchRequest) -> LaunchResult:
+            if request.action == "list":
+                return catalog
+            return self.authors.dispatch(lab, request, self.maintained)
+
+        return resolved

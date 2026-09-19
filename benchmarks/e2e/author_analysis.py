@@ -71,7 +71,7 @@ def measure(root: Path, *, repetitions: int) -> dict[str, object]:
             for amplitude in (0.05, 0.08):
                 runs.append(
                     author.prepare(
-                        "frequency-amplitude",
+                        "reference_lab.frequency_amplitude",
                         scans={
                             "frequency": [
                                 Quantity(value, "GHz")

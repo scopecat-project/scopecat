@@ -239,10 +239,13 @@ def test_context_launch_survives_unrelated_parameter_publication() -> None:
         lab.samples.revise(
             "context-replay", SampleRevisionDraft(display_name="Replay r2")
         )
+        assert application.authors is not None
         request = LaunchRequest(
             action="preview",
-            experiment="frequency-amplitude",
-            version="1",
+            experiment="reference_lab.frequency_amplitude",
+            version=application.authors.get(
+                "reference_lab.frequency_amplitude"
+            ).entry.version,
             selection=ScientificSelection(
                 subject=SampleSubjectChoice(sample_id="context-replay", revision=1),
                 configuration=WorkingPointConfiguration(ref=ref),
@@ -270,7 +273,7 @@ def test_context_launch_survives_unrelated_parameter_publication() -> None:
         procedure = lab.procedures.get(admitted.procedure_id)
         assert procedure.snapshot.samples[0].revision == 1
         procedure.resume()
-        output = procedure.output("signal")
+        output = procedure.output("experiment")
         assert output.kind == "run"
         assert lab.get_run(output.run_id).samples[0].revision == 1
         assert application.authors is not None
@@ -285,7 +288,7 @@ def test_context_launch_survives_unrelated_parameter_publication() -> None:
         assert isinstance(submitted, LaunchSubmission)
         next_procedure = lab.procedures.get(submitted.procedure_id)
         next_procedure.resume()
-        output = next_procedure.output("signal")
+        output = next_procedure.output("experiment")
         assert output.kind == "run"
         retained = lab.get_run(output.run_id)
         assert retained.snapshot.scientific_binding == preview.reviewed.binding
