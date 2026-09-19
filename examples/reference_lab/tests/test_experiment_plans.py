@@ -361,3 +361,44 @@ def test_authored_plan_freezes_default_structural_input_and_explicit_copy() -> N
             address = author.get_run(output.run_id).address
             assert address is not None and address.collection_id == collection.id
         assert lab.plans.get(saved.ref).definition.inputs == {"polarity": "positive"}
+
+
+def test_multi_stage_plan_retains_scope_while_candidate_changes_configuration() -> None:
+    from scopecat.records.sample import SampleRevisionDraft
+
+    from reference_lab.application import create_application
+    from reference_lab.configuration import EXAMPLE_ROOT
+
+    endpoint = os.environ["SCOPECAT_DAEMON_URL"]
+    with (
+        AuthorProject(endpoint) as author,
+        create_application(EXAMPLE_ROOT).connect(endpoint) as lab,
+    ):
+        sample = lab.samples.create(
+            f"timing-plan-{uuid4().hex}",
+            kind="synthetic",
+            content=SampleRevisionDraft(display_name="Timing chip"),
+        )
+        prepared = author.prepare("channel-timing", sample=sample.id)
+        plan = prepared.save_plan("Timing review", saved_by="alice")
+        reopened = author.prepare_plan(plan.ref)
+        receipt = reopened.submit(request_key=f"timing-plan-{uuid4().hex}")
+        handle = lab.procedures.get(receipt.procedure_id).resume()
+        assert handle.state == "waiting_for_input", handle.snapshot.attention_reason
+        source_output = handle.output("source")
+        candidate_output = handle.output("candidate")
+        assert source_output.kind == "run"
+        assert candidate_output.kind == "run"
+        source = lab.get_run(source_output.run_id)
+        candidate = lab.get_run(candidate_output.run_id)
+        assert source.snapshot.scientific_binding == plan.definition.scientific_binding
+        assert (
+            candidate.snapshot.scientific_binding.subject
+            == source.snapshot.scientific_binding.subject
+        )
+        assert (
+            candidate.snapshot.config_content_hash
+            != source.snapshot.config_content_hash
+        )
+        assert source.request.plan_ref == candidate.request.plan_ref == plan.ref
+        handle.cancel(actor="alice", reason="Plan execution evidence checked")
