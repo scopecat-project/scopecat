@@ -85,6 +85,8 @@ from scopecat.daemon.wire import (
     ConfigEntryActivationCommand,
     ConfigPublishCommand,
     ConfigPublishReceipt,
+    ConfigSetupRebindCommand,
+    ConfigSetupRebindPreviewCommand,
     DirectConfigRevisionSource,
     InstrumentInventoryMigrationCommand,
     InstrumentInventoryMigrationReceipt,
@@ -187,6 +189,38 @@ class ConfigService:
     ) -> ConfigProfileSnapshot:
         with self._config_registry.borrowed_unit_of_work(connection) as work:
             return work.registry.read_config(entry.config_ref)
+
+    def preview_setup_rebind(
+        self, command: ConfigSetupRebindPreviewCommand
+    ) -> ConfigProfileSnapshot:
+        with self._config_errors():
+            try:
+                return config_registry_service.preview_setup_rebind(
+                    base=command.base,
+                    setup=command.setup,
+                    unit_of_work=self._config_registry.read_unit_of_work,
+                )
+            except KeyError as error:
+                raise BackendNotFound("setup revision was not found") from error
+            except ValueError as error:
+                raise BackendConflict(str(error)) from error
+
+    def rebind_setup(self, command: ConfigSetupRebindCommand) -> ConfigEntryView:
+        with self._mutation_lock, self._config_errors():
+            try:
+                saved = config_registry_service.rebind_config_setup(
+                    base=command.base,
+                    setup=command.setup,
+                    entry_id=command.entry_id,
+                    actor=command.actor,
+                    note=command.note,
+                    unit_of_work=self._services.config_registry,
+                )
+                return ConfigEntryView(entry=saved.entry, config=saved.config)
+            except KeyError as error:
+                raise BackendNotFound("setup revision was not found") from error
+            except ValueError as error:
+                raise BackendConflict(str(error)) from error
 
     def latest_context(self, context: ConfigContextRef) -> ConfigEntryView:
         with self._config_errors():

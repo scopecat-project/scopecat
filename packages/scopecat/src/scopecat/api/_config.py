@@ -56,6 +56,8 @@ from scopecat.daemon.wire import (
     ConfigEntryActivationCommand,
     ConfigPublishCommand,
     ConfigPublishReceipt,
+    ConfigSetupRebindCommand,
+    ConfigSetupRebindPreviewCommand,
     DirectConfigRevisionSource,
     InstrumentInventoryMigrationCommand,
     InstrumentInventoryMigrationReceipt,
@@ -74,6 +76,7 @@ from scopecat.records.run import (
     RunConfigSource,
 )
 from scopecat.records.sample import SampleSelector
+from scopecat.records.setup import SetupRevision, SetupRevisionRef
 from scopecat.runs.selectors import RunSelector
 
 
@@ -117,6 +120,52 @@ class LabConfigOperations:
     ) -> ParameterWorkspace:
         """Open an isolated dictionary editor for one saved sample/workpoint version."""
         return ParameterWorkspace(self, context=context, latest=latest)
+
+    def _rebind_inputs(
+        self,
+        base: str | ConfigContextRef | ParameterVersion,
+        setup: str | SetupRevisionRef | SetupRevision,
+    ) -> tuple[ConfigContextRef, SetupRevisionRef]:
+        if isinstance(base, str):
+            entry = self.entry(base).entry
+            base = ConfigContextRef(entry_id=entry.id, content_hash=entry.content_hash)
+        elif isinstance(base, ParameterVersion):
+            base = base.context
+        if isinstance(setup, str):
+            setup = self.client.setup_revision(setup)
+        return base, setup.ref if isinstance(setup, SetupRevision) else setup
+
+    def preview_setup_rebind(
+        self,
+        *,
+        base: str | ConfigContextRef | ParameterVersion,
+        setup: str | SetupRevisionRef | SetupRevision,
+    ) -> ConfigProfileSnapshot:
+        """Review explicit setup composition without altering any saved input."""
+        base_ref, setup_ref = self._rebind_inputs(base, setup)
+        return self.client.preview_setup_rebind(
+            ConfigSetupRebindPreviewCommand(base=base_ref, setup=setup_ref)
+        )
+
+    def rebind_setup(
+        self,
+        *,
+        base: str | ConfigContextRef | ParameterVersion,
+        setup: str | SetupRevisionRef | SetupRevision,
+        name: str,
+        note: str = "",
+    ) -> ConfigEntryView:
+        """Save an unverified copy on another setup; never rewrite the original."""
+        base_ref, setup_ref = self._rebind_inputs(base, setup)
+        return self.client.rebind_setup(
+            ConfigSetupRebindCommand(
+                base=base_ref,
+                setup=setup_ref,
+                entry_id=name,
+                actor=self.operator,
+                note=note,
+            )
+        )
 
     def latest_context(self, context: ConfigContextRef) -> ConfigEntryView:
         return self.client.latest_context(context)
