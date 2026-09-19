@@ -61,7 +61,6 @@ if TYPE_CHECKING:
         plan_instrument_inventory_migration,
         preview_manual_config_draft,
         publish_config_revision,
-        publish_instrument_inventory_migration_revision,
         resolve_config_registry_config_source,
     )
 
@@ -119,7 +118,6 @@ _SERVICE_EXPORTS = (
     "plan_instrument_inventory_migration",
     "preview_manual_config_draft",
     "publish_config_revision",
-    "publish_instrument_inventory_migration_revision",
     "resolve_config_registry_config_source",
 )
 _EXPORTS = {

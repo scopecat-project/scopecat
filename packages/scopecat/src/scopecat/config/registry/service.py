@@ -49,12 +49,14 @@ from scopecat.config.registry.records import (
     DirectConfigRegistrySource,
     ManualConfigDraftRegistrySource,
     ResolvedCalibrationCohortMergeContribution,
+    SetupRebindRegistrySource,
 )
 from scopecat.config.structure import (
     ParameterStructurePlan,
     mapped_structure_origins,
     preview_parameter_structure,
 )
+from scopecat.kernel.content_identity import sha256_json_hash
 from scopecat.kernel.errors import (
     CheckFailed,
     Conflict,
@@ -92,6 +94,11 @@ from scopecat.records.run import (
 )
 from scopecat.records.sample import SampleBinding
 from scopecat.records.scientific_scope import setup_content_hash
+from scopecat.records.setup import (
+    ExecutableSetupSnapshot,
+    SetupRevision,
+    SetupRevisionRef,
+)
 from scopecat.runs.refs import record_content_ref
 from scopecat.runs.repository import RunRepository
 
@@ -334,6 +341,7 @@ def publish_config_revision(
 
     _validate_config_revision(revision)
     with unit_of_work() as work:
+        _bootstrap_executable_setup(work, revision, expected_generation)
         saved = _save_config_revision_locked(
             revision=revision,
             work=work,
@@ -354,70 +362,46 @@ def publish_config_revision(
         )
 
 
-def publish_instrument_inventory_migration_revision(
-    *,
-    revision: ConfigRevision,
-    declared: Sequence[InstrumentInventoryMigrationDelta],
-    unit_of_work: ConfigRegistryUnitOfWorkFactory,
-    expected_generation: int,
-) -> ConfigRegistryMutationResult:
-    """Publish a declared destructive change to the instrument inventory."""
-
-    _validate_config_revision(revision)
-    source = revision.source
-    if not isinstance(source, DirectConfigRevisionSource):
-        raise _registry_failure(
-            CheckFailed,
-            code="config_registry.inventory_migration_requires_direct_revision",
-            message="instrument inventory migrations require a direct config revision",
-            location=_registry_model_location("revision", "source"),
-        )
-    with unit_of_work() as work:
-        current_activation = _read_latest_activation(work.registry)
-        _require_expected_generation(
-            current_activation,
-            expected_generation,
-            active_ref=work.registry.active_ref,
-        )
-        if current_activation is None:
-            raise _registry_failure(
-                NotFound,
-                code="config_registry.no_active_entry",
-                message="config registry has no active entry",
-                location=_registry_model_location("active"),
-            )
-        current = _load_config_registry_entry_locked(
-            entry_id=current_activation.entry_id,
-            work=work,
-        )
-        _validate_active_entry_identity(
-            work.registry,
-            current_activation,
-            current.entry,
-        )
-        plan = plan_instrument_inventory_migration(
-            current=current.config,
-            target=source.config,
-            declared=declared,
-        )
-        saved = _save_config_revision_locked(
-            revision=revision,
-            work=work,
-        )
-        activated = _activate_instrument_inventory_migration_locked(
-            entry_id=saved.entry.id,
-            work=work,
+def _bootstrap_executable_setup(
+    work: ConfigRegistryUnitOfWork, revision: ConfigRevision, expected_generation: int
+) -> None:
+    """Only the first full-config publication initializes both independent owners."""
+    if work.setups.read_current() is not None:
+        return
+    if (
+        expected_generation != 0
+        or work.registry.list_entries()
+        or work.setups.list_revisions()
+        or not isinstance(revision.source, DirectConfigRevisionSource)
+    ):
+        raise ValueError("configuration registry has no initialized setup authority")
+    setup = ExecutableSetupSnapshot.from_config(revision.source.config)
+    saved = work.setups.save_revision(
+        SetupRevision(
+            id=f"setup-{setup.content_hash.removeprefix('sha256:')}",
+            content_hash=setup.content_hash,
+            setup=setup,
             actor=revision.actor,
             note=revision.note,
-            expected_generation=expected_generation,
-            plan=plan,
         )
-        return ConfigRegistryMutationResult(
-            entry=saved.entry,
-            activation=activated.activation,
-            saved=saved.saved,
-            activated=activated.activated,
-        )
+    )
+    command = {
+        "revision": saved.ref.model_dump(mode="json"),
+        "expected_generation": 0,
+        "actor": revision.actor,
+        "note": revision.note,
+        "changes": [],
+    }
+    work.setups.activate(
+        revision=saved.ref,
+        expected_generation=0,
+        operation_id=f"bootstrap-setup:{saved.id}",
+        actor=revision.actor,
+        note=revision.note,
+        intent_hash=sha256_json_hash(
+            {"codec": "scopecat.setup-activation.v1", "command": command}
+        ),
+    )
 
 
 def _save_config_revision_locked(
@@ -576,9 +560,12 @@ def _prepare_calibration_cohort_merge_locked(
         or work.registry.context_head(scope.workspace_id) != base.entry.id
     ):
         raise ValueError("calibration working point changed")
-    active = _load_active_config_registry_activation_locked(work.registry)
-    authority = _load_config_registry_entry_locked(entry_id=active.entry_id, work=work)
-    if setup_content_hash(base.config) != setup_content_hash(authority.config):
+    authority = work.setups.read_current()
+    if (
+        authority is None
+        or setup_content_hash(base.config)
+        != authority.revision.setup.execution_content_hash
+    ):
         raise ValueError("calibration executable setup changed")
 
     proposals = tuple(
@@ -811,26 +798,6 @@ def _activate_config_registry_entry_locked(
         actor=actor,
         expected_generation=expected_generation,
         note=note,
-        inventory_migration=None,
-    )
-
-
-def _activate_instrument_inventory_migration_locked(
-    *,
-    entry_id: str,
-    work: ConfigRegistryUnitOfWork,
-    actor: str,
-    expected_generation: int,
-    note: str,
-    plan: InstrumentInventoryMigrationPlan,
-) -> ConfigRegistryMutationResult:
-    return _commit_config_registry_activation_locked(
-        entry_id=entry_id,
-        work=work,
-        actor=actor,
-        expected_generation=expected_generation,
-        note=note,
-        inventory_migration=plan,
     )
 
 
@@ -841,7 +808,6 @@ def _commit_config_registry_activation_locked(
     actor: str,
     expected_generation: int | None,
     note: str,
-    inventory_migration: InstrumentInventoryMigrationPlan | None,
 ) -> ConfigRegistryMutationResult:
     current_activation = _read_latest_activation(work.registry)
     if expected_generation is not None:
@@ -855,6 +821,22 @@ def _commit_config_registry_activation_locked(
         work=work,
     )
     entry = loaded.entry
+    setup = work.setups.read_current()
+    if (
+        setup is None
+        or setup.revision.setup.execution_content_hash
+        != setup_content_hash(loaded.config)
+    ):
+        raise _registry_failure(
+            Conflict,
+            code="config_registry.setup_mismatch",
+            message=(
+                "configuration does not match the active setup; "
+                "explicitly rebind or select the intended setup first"
+            ),
+            location=_registry_model_location("entry_id"),
+            details={"entry_id": entry.id},
+        )
     if isinstance(entry.source, ContextConfigRegistrySource):
         raise _registry_failure(
             Conflict,
@@ -875,21 +857,6 @@ def _commit_config_registry_activation_locked(
             entry=entry,
             activation=current_activation,
         )
-    if current_activation is not None:
-        current = _load_config_registry_entry_locked(
-            entry_id=current_activation.entry_id,
-            work=work,
-        )
-        _validate_active_entry_identity(
-            work.registry,
-            current_activation,
-            current.entry,
-        )
-        if inventory_migration is None:
-            _require_stable_instrument_exclusivity_keys(
-                current=current.config,
-                candidate=loaded.config,
-            )
     previous_entry_id = (
         current_activation.entry_id if current_activation is not None else None
     )
@@ -904,7 +871,7 @@ def _commit_config_registry_activation_locked(
     generation = current_generation + 1
     record = ConfigRegistryActivationRecord(
         generation=generation,
-        action=("activation" if inventory_migration is None else "inventory_migration"),
+        action="activation",
         entry_id=entry.id,
         entry_content_hash=entry.content_hash,
         restored_from_generation=(
@@ -1261,13 +1228,14 @@ def _require_valid_config(config: ConfigProfileSnapshot) -> None:
 
 def plan_instrument_inventory_migration(
     *,
-    current: ConfigProfileSnapshot,
-    target: ConfigProfileSnapshot,
+    current: ConfigProfileSnapshot | ExecutableSetupSnapshot,
+    target: ConfigProfileSnapshot | ExecutableSetupSnapshot,
     declared: Sequence[InstrumentInventoryMigrationDelta],
 ) -> InstrumentInventoryMigrationPlan:
     """Match explicit intent to every destructive inventory change."""
 
-    _require_valid_config(target)
+    if isinstance(target, ConfigProfileSnapshot):
+        _require_valid_config(target)
     current_by_id = {
         instrument.id: instrument.exclusivity_key
         for instrument in current.instrument_registry.instruments
@@ -1413,65 +1381,6 @@ def _inventory_change_details(
     }
 
 
-def _require_stable_instrument_exclusivity_keys(
-    *,
-    current: ConfigProfileSnapshot,
-    candidate: ConfigProfileSnapshot,
-) -> None:
-    """Reserve removal and rekeying for an explicit inventory migration."""
-
-    current_by_id = {
-        instrument.id: instrument.exclusivity_key
-        for instrument in current.instrument_registry.instruments
-    }
-    for instrument in candidate.instrument_registry.instruments:
-        previous_key = current_by_id.get(instrument.id)
-        if previous_key is None or previous_key == instrument.exclusivity_key:
-            continue
-        raise _registry_failure(
-            Conflict,
-            code="config_registry.instrument_exclusivity_key_changed",
-            message=(
-                "an existing logical instrument cannot change its exclusivity key"
-            ),
-            location=_registry_model_location(
-                "config",
-                "system",
-                "instrument_registry",
-                "instruments",
-                instrument.id,
-                "exclusivity_key",
-            ),
-            details={"instrument_id": instrument.id},
-        )
-    candidate_keys = {
-        instrument.exclusivity_key
-        for instrument in candidate.instrument_registry.instruments
-    }
-    removed_keys = sorted(set(current_by_id.values()) - candidate_keys)
-    if removed_keys:
-        raise _registry_failure(
-            Conflict,
-            code="config_registry.instrument_exclusivity_key_removed",
-            message=(
-                "ordinary configuration activation cannot remove or replace "
-                "an instrument exclusivity key"
-            ),
-            location=_registry_model_location(
-                "config",
-                "system",
-                "instrument_registry",
-            ),
-            details={
-                "instrument_ids": sorted(
-                    instrument_id
-                    for instrument_id, key in current_by_id.items()
-                    if key in removed_keys
-                )
-            },
-        )
-
-
 def _registry_failure(
     failure_type: type[ProblemFailure],
     *,
@@ -1534,7 +1443,6 @@ __all__ = [
     "plan_instrument_inventory_migration",
     "preview_manual_config_draft",
     "publish_config_revision",
-    "publish_instrument_inventory_migration_revision",
     "resolve_config_registry_config_source",
 ]
 
@@ -1591,6 +1499,7 @@ def _save_config_context_locked(
     note: str,
     work: ConfigRegistryUnitOfWork,
     profile_id: str | None = None,
+    rebound_setup: SetupRevision | None = None,
 ) -> ConfigRegistryEntrySnapshot:
     _validate_entry_id(entry_id)
     _validate_required_text(actor, field="actor")
@@ -1625,6 +1534,8 @@ def _save_config_context_locked(
         else None
     )
     baseline = structural.config if structural else loaded.config
+    if rebound_setup is not None:
+        baseline = rebound_setup.setup.compose(baseline)
     config = baseline.model_copy(
         update={
             "id": baseline.id if profile_id is None else profile_id,
@@ -1643,6 +1554,11 @@ def _save_config_context_locked(
         else ()
     )
     source = ContextConfigRegistrySource(
+        rebind=(
+            SetupRebindRegistrySource(base=base, setup=rebound_setup.ref)
+            if rebound_setup
+            else None
+        ),
         publication=publication,
         context=ConfigContextMetadata(
             sample=sample,
@@ -1749,3 +1665,67 @@ def publish_calibration_context(
         return ConfigRegistryMutationResult(
             entry=saved.entry, saved=True, deltas=deltas
         )
+
+
+def preview_setup_rebind(
+    *,
+    base: ConfigContextRef,
+    setup: SetupRevisionRef,
+    unit_of_work: ConfigRegistryUnitOfWorkFactory,
+) -> ConfigProfileSnapshot:
+    """Compose explicitly without saving, selecting, or claiming calibration."""
+    with unit_of_work() as work:
+        loaded = _load_config_registry_entry_locked(entry_id=base.entry_id, work=work)
+        revision = work.setups.read_revision(setup.revision_id)
+        if loaded.entry.content_hash != base.content_hash or revision.ref != setup:
+            raise ValueError("setup rebind requires exact saved inputs")
+        config = revision.setup.compose(loaded.config)
+        _require_valid_config(config)
+        return config
+
+
+def rebind_config_setup(
+    *,
+    base: ConfigContextRef,
+    setup: SetupRevisionRef,
+    entry_id: str,
+    actor: str,
+    note: str,
+    unit_of_work: ConfigRegistryUnitOfWorkFactory,
+) -> ConfigRegistryEntrySnapshot:
+    """Save a new unverified branch; never advance its source or any default."""
+    with unit_of_work() as work:
+        _validate_entry_id(entry_id)
+        _validate_required_text(actor, field="actor")
+        loaded = _load_config_registry_entry_locked(entry_id=base.entry_id, work=work)
+        revision = work.setups.read_revision(setup.revision_id)
+        if loaded.entry.content_hash != base.content_hash or revision.ref != setup:
+            raise ValueError("setup rebind requires exact saved inputs")
+        config = revision.setup.compose(loaded.config)
+        _require_valid_config(config)
+        if isinstance(loaded.entry.source, ContextConfigRegistrySource):
+            context = loaded.entry.source.context
+            return _save_config_context_locked(
+                entry_id=entry_id,
+                base=base,
+                sample=context.sample,
+                working_point_id=context.working_point_id,
+                label=entry_id,
+                parameters=None,
+                actor=actor,
+                note=note,
+                work=work,
+                rebound_setup=revision,
+            )
+        entry = ConfigRegistryEntry(
+            id=entry_id,
+            config_ref=work.registry.config_ref(entry_id),
+            content_hash=config_content_hash(config),
+            actor=actor,
+            note=note,
+            source=SetupRebindRegistrySource(base=base, setup=setup),
+        )
+        saved = _commit_revision_locked(
+            repository=work.registry, requested_entry=entry, config=config
+        )
+        return ConfigRegistryEntrySnapshot(entry=saved.entry, config=config)
