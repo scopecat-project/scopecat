@@ -164,6 +164,19 @@ def _validate_host(value: str) -> str:
 
 
 @app.command(
+    "app", context_settings={"allow_extra_args": True, "ignore_unknown_options": True}
+)
+def application_command(context: typer.Context) -> None:
+    """Open the workbench service entry; optionally register an existing project."""
+    try:
+        from lab_tools.application import main as application_main
+    except ImportError as error:
+        _fail(RuntimeError("Install scopecat-lab-tools or use the Scopecat delivery."))
+        raise AssertionError("unreachable") from error
+    application_main(context.args)
+
+
+@app.command(
     "teach", context_settings={"allow_extra_args": True, "ignore_unknown_options": True}
 )
 def teach_command(context: typer.Context) -> None:
@@ -570,7 +583,7 @@ def serve(
 
     try:
         selected = open_project(project)
-        selected_static_dir = _select_static_dir(
+        selected_static_dir = select_static_dir(
             static_dir=static_dir,
             api_only=api_only,
         )
@@ -639,7 +652,7 @@ def start(
 
     try:
         selected = open_project(project)
-        selected_static_dir = _select_static_dir(
+        selected_static_dir = select_static_dir(
             static_dir=static_dir,
             api_only=api_only,
         )
@@ -661,7 +674,7 @@ def start(
     )
 
 
-def _select_static_dir(
+def select_static_dir(
     *,
     static_dir: Path | None,
     api_only: bool,

@@ -1,19 +1,63 @@
 # Local application host
 
-Status: shipped teaching lifecycle infrastructure. The selected product direction
-is the [experiment workbench with session contexts](experiment-contexts.md).
-The teaching page is transitional; it must move under Help rather than become the
-primary application. Its checks do not establish multi-workspace experimental
-contexts, collection numbering or shared physical-device ownership.
+Status: an application entry for explicitly registered experiment services, with
+teaching under Help. The selected product direction remains the
+[experiment workbench with session contexts](experiment-contexts.md).
+The host opens each service's real workbench; it does not replace that workbench
+with tutorial inventory or establish shared physical-device ownership.
 
-The default teaching installation has one management service per installation home,
-with a browser page and CLI using the same authenticated API. The first delivered
-slice manages synthetic teaching exercises. Existing project daemons, kernels,
-source revisions and scientific stores retain their execution semantics.
+## Register and open an existing experiment service
+
+Run the following in the project's environment, with `scopecat-lab-tools` installed:
+
+```sh
+scopecat app /path/to/existing-project
+```
+
+For a separate target interpreter or a source GUI build:
+
+```sh
+scopecat app /path/to/existing-project --python /path/to/environment/bin/python --static-dir /path/to/gui/dist
+```
+
+On Windows the interpreter is typically `environment\Scripts\python.exe`.
+The paths are trusted local CLI inputs. The browser only submits a registered
+service ID; it cannot register an arbitrary path or interpreter. Registration
+validates the actual project root, environment and GUI without starting its
+daemon. **Open workbench** runs the existing startup lifecycle in that environment,
+then opens the actual service GUI. Startup may initialize the project's configured
+instruments; it does not submit a measurement. Existing hardware startup policy
+remains the project's responsibility.
+
+`scopecat app` without a project reopens the manager. Installed `lab.cmd` / `lab.py`
+launchers use this entry. **Help** contains managed teaching exercises;
+`scopecat teach` opens it directly. Explicit installed tutorial automation uses
+`python lab.py teach compute --verify`. A normal installation without a tutorial
+delivery can still manage experiment services; Help reports teaching unavailable.
+Source users pass `--source CHECKOUT` to enable source-backed teaching.
+
+The service registration records an absolute interpreter path without resolving
+venv symlinks, its prefix/Python/package versions and selected GUI directory.
+Startup checks that identity and refuses a running daemon from another interpreter,
+an API-only service or a mismatched GUI. It leaves an existing service running so
+the maintainer can stop it explicitly. After changing an environment, finish active
+management operations, stop that service and register it again. This version check
+is not a lockfile/content attestation of every dependency or editable source byte.
+Failed startup stays visible in the operation log; there is no fallback interpreter.
+
+This first slice does not provide automatic reopening of the last selected service,
+service removal/stop controls, or a Help link inside every experimental GUI.
+It retains separate child daemons; it does not establish one shared executor or
+cross-service hardware exclusion. Those remain tracked in issue #614 and the
+runtime design. Notebook/page scientific selections are unchanged.
 
 ## Ownership
 
-The host owns discovery, the teaching inventory and serialized lifecycle operations.
+The host owns a local deployment catalog, the teaching inventory and serialized
+lifecycle operations. `host/services.sqlite` assigns stable deployment IDs to
+canonical project roots and explicit runtimes. Registration and operation admission
+share a lock; queued/running startup prevents rebinding its environment. This is
+not the future daemon workspace-source catalog or a scientific applicability ID.
 The managed directory UUID identifies a teaching workspace; API requests use that
 identity rather than accepting arbitrary filesystem paths. Existing managed copies
 are discovered from their teaching metadata, version and current-generation record.

@@ -216,14 +216,20 @@ def install_home(root: Path, home: Path) -> Path:
         "Scripts/python.exe" if sys.platform == "win32" else "bin/python"
     )
     # Validate the installed entry before changing the user's default release.
-    _ = subprocess.run([str(python), "-m", "lab_tools.sandbox", "--help"], check=True)  # noqa: S603 - explicit local tool and argument list
+    _ = subprocess.run(  # noqa: S603 - explicit local tool and argument list
+        [str(python), "-m", "lab_tools.application", "--help"], check=True
+    )
     launcher = home / "lab.py"
     _ = launcher.write_text(
         "import subprocess, sys\nfrom pathlib import Path\n"
         "home = Path(__file__).resolve().parent\n"
         f"python = home / {python.relative_to(home).as_posix()!r}\n"
-        "command = [str(python), '-m', 'lab_tools.sandbox', '--home', str(home)]\n"
-        "raise SystemExit(subprocess.call([*command, *sys.argv[1:]]))\n",
+        "args = sys.argv[1:]\n"
+        "module = ('lab_tools.sandbox' if args[:1] == ['teach'] "
+        "else 'lab_tools.application')\n"
+        "if args[:1] == ['teach']: args = args[1:]\n"
+        "command = [str(python), '-m', module, '--home', str(home)]\n"
+        "raise SystemExit(subprocess.call([*command, *args]))\n",
         encoding="utf-8",
     )
     _ = (home / "lab.cmd").write_text(

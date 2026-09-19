@@ -1,4 +1,4 @@
-"""Local application host: one authenticated entry manages teaching workers."""
+"""Authenticated local entry for experimental services and teaching."""
 
 from __future__ import annotations
 
@@ -24,7 +24,7 @@ from filelock import FileLock
 from lab_teaching.lessons import TOPICS
 
 from .bundle import configure_console
-from .host_client import HostRecord, HostState, runtime_key
+from .host_client import HostRecord, HostState, runtime_key, teaching_key
 from .host_operations import (
     Command,
     Operation,
@@ -33,7 +33,18 @@ from .host_operations import (
     owned_workspace,
     workspaces,
 )
-from .sandboxes import sandbox_key
+from .services import Services
+
+
+def _require_teaching(key: str | None) -> str:
+    if key is None:
+        raise ValueError("教学尚未安装；请使用带教材的交付或 --source 源码目录")
+    return key
+
+
+def _validate_command_capability(key: str | None, command: Command) -> None:
+    if command.action != "service_start":
+        _require_teaching(key)
 
 
 def application(
@@ -41,7 +52,7 @@ def application(
 ) -> FastAPI:
     app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
     store = Operations(home)
-    key = sandbox_key(source)
+    key = teaching_key(source)
     authority = record.url.removeprefix("http://")
     assets = Path(__file__).parent / "host_assets"
     admission = Lock()
@@ -99,10 +110,11 @@ def application(
         store.reconcile()
         return HostState(
             home=str(home),
-            version=key,
-            topics=TOPICS,
-            workspaces=workspaces(home, key),
+            version=key or "local",
+            topics=TOPICS if key is not None else {},
+            workspaces=workspaces(home, key) if key is not None else [],
             operations=store.list(),
+            services=Services(home).views(),
         )
 
     @app.post("/api/operations")
@@ -110,6 +122,7 @@ def application(
         with admission:
             if closing:
                 raise ValueError("管理服务正在退出，请重新打开安装入口")
+            _validate_command_capability(key, command)
             return launch(home, source, command)
 
     @app.get("/api/operations/{identity}")
@@ -130,7 +143,7 @@ def application(
 
     @app.post("/api/editor/{identity}")
     def editor(identity: str) -> dict[str, str]:
-        workspace = owned_workspace(home, key, identity)
+        workspace = owned_workspace(home, _require_teaching(key), identity)
         code = shutil.which("code")
         if code is None:
             return {

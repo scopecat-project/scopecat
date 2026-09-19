@@ -3,6 +3,7 @@ const fragment = new URLSearchParams(location.hash.slice(1));
 if (fragment.has("token")) {
   sessionStorage.setItem("scopecat-token", fragment.get("token"));
   history.replaceState(null, "", location.pathname);
+  if (fragment.get("view") === "help") document.getElementById("help").open = true;
 }
 const token = sessionStorage.getItem("scopecat-token") || "";
 const notice = document.getElementById("notice");
@@ -52,6 +53,12 @@ async function submit(command) {
     }
     if (operation.status !== "succeeded") throw new Error(operation.detail);
     message("已完成。");
+    if (command.action === "service_start") {
+      const state = await api("/api/state");
+      const service = state.services.find(item => item.service.id === command.service);
+      if (!service?.url) throw new Error("实验服务尚未就绪，请查看日志。");
+      location.assign(service.url);
+    }
     if (command.action === "open" && operation.workspace) await openEditor(operation.workspace);
   } finally {
     busy = false;
@@ -67,8 +74,23 @@ async function refresh() {
   const signature = JSON.stringify([state, disabled]);
   if (signature === renderedState) return;
   renderedState = signature;
+  const services = document.getElementById("services");
+  services.replaceChildren();
+  if (!state.services.length) services.append(element("p", "尚未登记实验服务。请展开下方指引，连接已有项目；教学练习在帮助中。"));
+  const serviceStates = { running: "运行中", stopped: "未启动", stale: "记录待检查", degraded: "需要处理", unavailable: "不可用" };
+  for (const item of state.services) {
+    const row = element("article", undefined, "row");
+    row.append(element("strong", item.service.name), element("p", serviceStates[item.state]));
+    if (item.detail) row.append(element("p", item.detail));
+    row.append(button("打开工作台", () => submit({ action: "service_start", service: item.service.id }), "primary", disabled));
+    const details = element("details");
+    details.append(element("summary", "项目与环境"), element("p", item.service.root, "meta"), element("p", item.service.python, "meta"));
+    row.append(details);
+    services.append(row);
+  }
   const topics = document.getElementById("topics");
   topics.replaceChildren();
+  if (!Object.keys(state.topics).length) topics.append(element("p", "此环境未安装教学交付；实验服务可独立使用。"));
   for (const [topic, title] of Object.entries(state.topics)) {
     const card = element("article", undefined, "card");
     card.append(element("h3", title));
@@ -106,11 +128,11 @@ async function refresh() {
   const operations = document.getElementById("operations");
   operations.replaceChildren();
   const states = { starting: "准备中", running: "进行中", succeeded: "已完成", failed: "失败", interrupted: "已中断" };
-  const actions = { open: "打开练习", verify: "自动验收", stop: "停止服务", delete: "删除旧副本" };
+  const actions = { open: "打开练习", verify: "自动验收", stop: "停止服务", delete: "删除旧副本", service_start: "打开工作台" };
   for (const operation of state.operations.slice(0, 12)) {
     const row = element("article", undefined, "row");
     const topic = operation.command.topic || state.workspaces.find(item => item.id === operation.command.workspace)?.topic;
-    const target = state.topics[topic] || operation.command.workspace?.slice(0, 8) || "";
+    const target = state.services.find(item => item.service.id === operation.command.service)?.service.name || state.topics[topic] || operation.command.workspace?.slice(0, 8) || "";
     row.append(element("strong", `${target} · ${actions[operation.command.action]} · ${states[operation.status]}`));
     row.append(element("p", operation.detail));
     row.append(button("查看日志", async () => {
@@ -131,6 +153,6 @@ document.getElementById("shutdown").addEventListener("click", async () => {
     message(result.detail + "。再次打开 Scopecat 安装入口可启动管理服务。");
   } catch (error) { message(error.message, true); }
 });
-refresh().then(() => message("已连接本机 Scopecat。选择专题开始练习。"))
+refresh().then(() => message("已连接本机 Scopecat。选择实验服务打开工作台。"))
   .catch(error => message(error.message, true));
 polling = setInterval(() => refresh().catch(error => message(`连接暂不可用：${error.message}。请从 Scopecat 安装入口重新打开。`, true)), 2500);

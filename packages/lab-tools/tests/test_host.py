@@ -43,7 +43,7 @@ def test_http_boundary_and_managed_inventory(tmp_path: Path, monkeypatch) -> Non
     root.mkdir(parents=True)
     (root / "author-environment.json").write_text(json.dumps({"kind": "teaching"}))
     (root.parent / "current.json").write_text(json.dumps({"generation": root.name}))
-    monkeypatch.setattr(app_host, "sandbox_key", lambda _: key)
+    monkeypatch.setattr(app_host, "teaching_key", lambda _: key)
     record = HostRecord(
         instance="test",
         pid=1,

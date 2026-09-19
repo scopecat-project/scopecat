@@ -1,9 +1,12 @@
 <!doctype html>
-<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Scopecat · 教学工作区</title><link rel="stylesheet" href="/app.css"><script src="/app.js" defer></script></head>
-<body><main><header><p class="eyebrow">SCOPECAT</p><h1>教学工作区</h1><p>选一个专题，打开即练习。环境与后台服务由 Scopecat 管理。</p></header>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Scopecat · 实验工作台</title><link rel="stylesheet" href="/app.css"><script src="/app.js" defer></script></head>
+<body><main><header><p class="eyebrow">SCOPECAT</p><h1>实验工作台</h1><p>打开已登记的实验服务，继续测量与查看记录。</p></header>
 <p id="notice" role="status" aria-live="polite">正在连接本机服务…</p>
+<section id="experiments"><h2>实验服务</h2><div id="services"></div><details><summary>登记已有实验项目</summary><p>在该项目的 Python 环境中运行 <code>scopecat app 项目目录</code>。也可以通过 <code>--python</code> 指定实验环境，源码部署使用 <code>--static-dir</code> 指定已构建的 GUI。</p><p>登记不启动设备。点击打开工作台才会按项目已有设置启动服务；测量仍需在工作台提交。</p></details></section>
+<details id="help"><summary>帮助 · 教学与练习</summary><p>专题只使用合成数据；练习与真实实验服务分别管理。</p>
 <section><h2>开始一个专题</h2><div id="topics" class="topics"></div></section>
 <section><h2>我的练习</h2><p>重复打开继续当前练习。重置创建新副本，原来的修改仍然保留。</p><p>重置前关闭 Notebook 内核并停止该练习服务；旧副本由你选择删除。</p><div id="workspaces"></div></section>
+</details>
 <section><h2>最近的操作</h2><p>关闭此页面不会中断操作；重新打开可以查看结果。</p><div id="operations"></div><details id="log-panel"><summary>操作日志</summary><pre id="log"></pre></details></section>
-<footer><p>这些专题只使用合成数据。真实实验与科学记录不属于可丢弃的教学练习。</p><button id="shutdown" class="secondary">退出管理服务</button><small>退出不会停止已有练习服务或实验。重新打开 Scopecat 可再次连接。</small></footer>
+<footer><p>此入口管理已登记服务的打开操作。关闭页面或退出管理服务不会停止实验服务，也不会删除科学记录。</p><button id="shutdown" class="secondary">退出管理服务</button><small>退出不会停止已有练习服务或实验。重新打开 Scopecat 可再次连接。</small></footer>
 </main></body></html>
