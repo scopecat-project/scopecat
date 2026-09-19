@@ -137,8 +137,9 @@ class AuthorProject(DaemonClient):
     def use(self, **changes: Unpack[SessionContextUpdate]) -> SessionContext:
         """Validate and atomically update this client's defaults for future work.
 
-        Omitted fields stay selected; None clears an optional selection. An explicit
-        working point selects its sample unless a sample is supplied alongside it.
+        Collection/operator updates preserve scientific defaults. Choosing a new
+        sample or target starts a fresh scope; a working point supplies its exact
+        sample and batch unless an explicit subject is supplied alongside it.
         Selection never activates configuration or submits hardware operations.
         """
         if self.is_closed:
@@ -393,7 +394,8 @@ class AuthorProject(DaemonClient):
                 )
             science = ScientificSelection()
         else:
-            science = self._select_science(defaults.science, changes)
+            base = ScientificSelection() if context is None else defaults.science
+            science = self._select_science(base, changes)
         if overrides:
             if not isinstance(science.configuration, WorkingPointConfiguration):
                 raise ValueError("parameter overrides require a working point")

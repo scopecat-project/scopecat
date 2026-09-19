@@ -4,12 +4,14 @@ from datetime import UTC, datetime
 from typing import cast
 
 import pytest
+from scopecat_testkit.workflow_fixtures import load_config
 
 from scopecat.application.experiment_plans import (
     plan_launch_request,
     validate_plan_launch,
 )
 from scopecat.application.launch import LaunchCatalogEntry, LaunchInputSchema
+from scopecat.config.scientific_binding import bind_scientific_evidence
 from scopecat.kernel.content_identity import sha256_json_hash
 from scopecat.records.control_edit import ControlEdit
 from scopecat.records.experiment_plan import (
@@ -18,6 +20,10 @@ from scopecat.records.experiment_plan import (
 )
 from scopecat.records.plan_ref import ExperimentPlanRef, PlanConfigRef
 from scopecat.records.run_request import RunRequest
+from scopecat.records.scientific_selection import (
+    SavedConfiguration,
+    ScientificSelection,
+)
 
 
 def test_plan_frozen_inputs_current_actor_and_changed_definition() -> None:
@@ -35,8 +41,15 @@ def test_plan_frozen_inputs_current_actor_and_changed_definition() -> None:
         experiment=entry.id,
         version=entry.version,
         definition_hash=sha256_json_hash(entry.model_dump(mode="json")),
-        configuration=PlanConfigRef(
-            entry_id="old-default", content_hash="sha256:" + "b" * 64
+        selection=ScientificSelection(
+            configuration=SavedConfiguration(
+                ref=PlanConfigRef(
+                    entry_id="old-default", content_hash="sha256:" + "b" * 64
+                )
+            )
+        ),
+        scientific_binding=bind_scientific_evidence(
+            catalog_id="tests", config=load_config(), samples=(), sample_revisions={}
         ),
         inputs={"selected": [1, 3]},
         control_edits={"amplitude": ControlEdit(mode="fixed", value=0.1)},
@@ -60,8 +73,8 @@ def test_plan_frozen_inputs_current_actor_and_changed_definition() -> None:
     assert request.actor == "bob"
     assert request.request_key == ""
     assert request.expected_request_hash is None
-    assert request.config_source is None
-    assert request.configuration == definition.configuration
+    assert request.reviewed is None
+    assert request.selection == definition.selection
     assert request.inputs == {"selected": [1, 3]}
     validate_plan_launch(plan, request, entry)
     with pytest.raises(ValueError, match="differs"):
