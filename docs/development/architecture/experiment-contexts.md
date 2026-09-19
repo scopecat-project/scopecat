@@ -30,7 +30,26 @@ submission. Changing a selection affects future requests in that session only.
 An operator identity records attribution; a selected name is not authentication
 or permission to control hardware.
 
-## Audit of current ownership
+## Current capability and remaining boundaries
+
+The workbench has collection-qualified run addresses, declared batches, Python
+session selection and independent GUI page selection. These are usable single-
+sample features; they do not yet establish the complete target/setup model below.
+
+| Area | Implemented | Next boundary |
+|---|---|---|
+| Scientific identity | Immutable store-local sample revisions; target-content contract with member-qualified entities | Persistent target revisions and catalog-qualified identities; executable assembly validation |
+| Applicability | Declared batch guards; shared target/batch/setup content comparison used by parameter rebase | Use resolved applicability in preparation, admission, working-point publication and calibration |
+| Working points | Exact single-sample scope, value provenance, explicit estimate copies and revision conflicts | Separate parameter state from maintained setup; migrate the single-subject consumers together |
+| Execution setup | Complete retained config; setup-content projection for strict comparison | Independent maintained setup revisions and one authoritative resolver |
+| Session and addressing | Per-page/kernel choices, retained plans, collection numbering | Source-qualified multi-workspace execution and setup selection |
+| Application | Existing experiment console plus local host lifecycle | Workbench entry, Help exercises and server-enforced practice boundaries |
+
+This table is the current work list. The implementation history and original audit
+below explain prior decisions; their historical limitations are not additional
+independent TODOs.
+
+## Historical ownership audit
 
 Paths in this table are repository-relative. They describe the implementation at
 `b9d6bb73c`, not the proposed end state.
@@ -260,7 +279,9 @@ selection, while a fresh client starts unselected. The existing LaunchRequest an
 preview/admission contracts carry the frozen values; no daemon-global selection or
 new storage schema is introduced. See [session context](../../how-to/select-session-context.md).
 
-The following consumer constraints still block batch/assembly support:
+At this stage the following consumer constraints remained. Declared batch support
+was subsequently delivered; assembly/setup scope still requires the replacement
+contracts described below:
 
 | Consumer | Current constraint | Required next contract |
 |---|---|---|
@@ -301,7 +322,8 @@ status, metadata rename/restart, and old-data migration/restore. See
 
 The earlier audit remains open for assembly/member identities, setup applicability,
 explicit cross-scope dependency policy, shared-active-configuration composition,
-GUI selection, multi-workspace source ownership and physical resource authority.
+multi-workspace source ownership and physical resource authority. GUI selection
+was subsequently delivered in the fourth implementation.
 This slice does not establish hardware qualification or an event's physical truth.
 
 ## Fourth implementation: workbench page selection
@@ -323,3 +345,55 @@ and one collection, saved-plan rejection, acquisition and retained numbering.
 This connects the already shipped single-sample contracts to the workbench; it
 does not add multi-workspace source ownership, assembly/setup composition, shared
 physical resource authority, or the final installation-level entry and Help flow.
+
+## Fifth implementation: shared applicability contract and rebase boundary
+
+`records/scientific_scope.py` defines target content within one owning catalog:
+exact sample-revision members, member-qualified entity addresses, and declared
+undirected interconnections. Member and connection ordering do not change the
+content identity. A single-member target and an A+B target remain distinct; A/q0
+and B/q0 do not collide. This is not a persisted target catalog, cross-catalog
+identity, assembly execution, or a declaration that referenced local entities and
+physical connections have been validated.
+
+`ScientificApplicability` combines that target with an explicit declared/unscoped
+batch variant and a setup-content hash. Unscoped is not a wildcard. Strict reuse
+requires all three scopes to match. The current single-sample projection reads
+existing records without adding fields or changing their serialization/hashes.
+
+The first consumer is parameter-workspace rebase. Previously it checked the sample
+and parameter declarations but could take values from a working point whose
+routing, topology or instrument connections differed. Rebase now checks shared
+applicability before merging; rejection leaves the original base and local edits
+unchanged. It still requires the same working-point identity and parameter schema.
+Explicit copying into another working point remains the path for starting estimates;
+that operation does not assert calibration validity.
+
+The setup-content projection excludes profile/system names, entity descriptive
+metadata, role descriptions, parameter declarations and parameter values. It keeps
+execution topology, primary entity, routing, instrument connections/drivers,
+lifecycle policies and domain configuration. Logical IDs matter because existing
+plans address them. Equality is conservative declared-configuration equality,
+not physical-device identity, live state verification, or hardware qualification.
+
+### Next coordinated implementation slices
+
+1. Define persistent, catalog-qualified target/setup references and a resolved
+   execution context, including how existing unscoped evidence is read. Replace
+   the single-sample model in one path; do not add assembly/setup optional fields
+   independently to `SampleBinding`, `LaunchRequest` and `CalibrationTargetRef`.
+2. Separate maintained apparatus/setup from parameter state, retaining one complete
+   frozen execution snapshot. Replace active-config scientific defaults with the
+   resolver while preserving authoritative inventory, fencing and quarantine.
+3. Migrate working-point/candidate publication, calibration dependency matching and
+   saved-plan/procedure consumers to that same resolved applicability. Calibration
+   targets currently lack exact target/setup revisions: do not fabricate them from
+   the current sample name or batch alone. Cross-scope evidence reuse needs an
+   explicit policy and remains unsupported.
+4. Connect GUI/Python selection to the resolver and qualify assembly execution with
+   synthetic member/connection and conflict scenarios. Source-worker isolation and
+   application entry can progress independently against agreed context references.
+
+Preserve retained scientific objects and acquisition addresses during these API
+changes. Compatibility readers/migrations belong at the evidence boundary; new
+write paths should converge on one model rather than preserve two active APIs.
