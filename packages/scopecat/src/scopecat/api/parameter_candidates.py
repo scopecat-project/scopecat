@@ -5,11 +5,12 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Protocol, cast
+from uuid import uuid4
 
 from scopecat.analysis.facts import ordinary_result_schema
 from scopecat.api._remote import RemoteRunOperations
 from scopecat.api.analysis import AnalysisContext
-from scopecat.api.parameters import RowKey
+from scopecat.api.parameters import ParameterVersion, RowKey
 from scopecat.api.project_analysis import RemoteProjectAnalysisOperations
 from scopecat.api.published_analysis import AnalysisResult, PublishedAnalysis
 from scopecat.api.run import RunHandle
@@ -28,12 +29,18 @@ from scopecat.authoring.parameter_models import (
 from scopecat.config.candidates import CandidateConfig
 from scopecat.config.parameter_updates import update_parameter_rows
 from scopecat.daemon.client import DaemonClient, DaemonConflictError
-from scopecat.daemon.wire import ConfigPublishReceipt
+from scopecat.daemon.wire import (
+    ConfigContextPublishCommand,
+    ConfigContextPublishReceipt,
+    ConfigPublishReceipt,
+)
 from scopecat.kernel.entity import EntityRef
 from scopecat.kernel.value_types import Table
 from scopecat.kernel.value_validation import coerce_literal
+from scopecat.records.analysis import ProjectAnalysisDecisionReference
 from scopecat.records.author_revision import AuthorRevisionRef
 from scopecat.records.config import ConfigProfileSnapshot
+from scopecat.records.config_context import ConfigContextRef
 from scopecat.records.parameter import ParameterAtomValue
 from scopecat.records.run import RunConfigSource
 
@@ -48,6 +55,13 @@ class CandidateOperations(Protocol):
     def resolve_with_source(
         self, config: CandidateConfig
     ) -> tuple[ConfigProfileSnapshot, RunConfigSource | None]: ...
+
+    @property
+    def operator(self) -> str: ...
+
+    def publish_context(
+        self, command: ConfigContextPublishCommand
+    ) -> ConfigContextPublishReceipt: ...
 
     def accept_verified(
         self,
@@ -144,6 +158,45 @@ class VerifiedParameterCandidate:
     def select(self) -> ParameterCandidate:
         """Return this exact candidate for one explicit prepare(candidate=...) call."""
         return self.candidate
+
+    def publish_to(
+        self,
+        *,
+        working_point: ParameterVersion | ConfigContextRef,
+        name: str,
+        note: str = "",
+        operation_id: str | None = None,
+    ) -> ParameterVersion:
+        """Publish to this exact working point; unrelated heads stay unchanged."""
+        base = (
+            working_point.context
+            if isinstance(working_point, ParameterVersion)
+            else working_point
+        )
+        decision = self.verification.fact("decision")
+        receipt = self.candidate.operations.publish_context(
+            ConfigContextPublishCommand(
+                operation_id=operation_id or f"context-publish-{uuid4().hex}",
+                base=base,
+                run_id=self.candidate.config.source_run_id,
+                proposal_id=self.candidate.config.proposal_id,
+                verification=ProjectAnalysisDecisionReference(
+                    analysis_record_id=self.verification.id,
+                    output_id="decision",
+                    schema_id=decision.schema_id,
+                    schema_hash=decision.schema_hash,
+                ),
+                entry_id=name,
+                actor=self.candidate.operations.operator,
+                note=note,
+            )
+        )
+        return ParameterVersion(
+            ConfigContextRef(
+                entry_id=receipt.entry.id,
+                content_hash=receipt.entry.content_hash,
+            )
+        )
 
     def publish_default(self, *, name: str, note: str = "") -> ConfigPublishReceipt:
         """Change the shared default through existing verified acceptance fences."""

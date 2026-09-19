@@ -42,6 +42,7 @@ from scopecat.config.registry.records import (
     CalibrationCohortMergeContribution,
     ConfigActivationOperation,
     ConfigCompositionEvidenceStepRef,
+    ConfigContextPublishOperation,
     ConfigPublishOperation,
     ConfigRegistryActivationRecord,
     ConfigRegistryEntry,
@@ -78,6 +79,8 @@ from scopecat.daemon.wire import (
     CalibrationPublicationReceipt,
     CandidateConfigRevisionSource,
     ConfigActivationReceipt,
+    ConfigContextPublishCommand,
+    ConfigContextPublishReceipt,
     ConfigContextResolveCommand,
     ConfigContextSaveCommand,
     ConfigDraftCommand,
@@ -385,6 +388,131 @@ class ConfigService:
                 raise BackendConflict(
                     f"config operation is not a calibration publication: {operation_id}"
                 )
+            return receipt
+
+    def get_context_publish_operation(
+        self, operation_id: str
+    ) -> ConfigContextPublishReceipt:
+        with self._config_errors():
+            receipt = self._config_operations.find(operation_id)
+            if not isinstance(receipt, ConfigContextPublishReceipt):
+                raise BackendNotFound(f"context publication not found: {operation_id}")
+            return receipt
+
+    def publish_context(
+        self, command: ConfigContextPublishCommand
+    ) -> ConfigContextPublishReceipt:
+        """Commit verification, one working-point head, and receipt together."""
+        with (
+            self._mutation_lock,
+            self._config_errors(),
+            self._config_transaction() as (connection, services),
+        ):
+            existing = self._config_operations.find_in_transaction(
+                connection, command.operation_id
+            )
+            if existing is not None:
+                if (
+                    not isinstance(existing, ConfigContextPublishReceipt)
+                    or existing.operation.intent_hash != command.intent_hash
+                ):
+                    raise BackendConflict("config operation id has a different intent")
+                return existing
+            base = config_registry_service.load_config_registry_entry_snapshot(
+                entry_id=command.base.entry_id,
+                unit_of_work=services.config_registry,
+            )
+            if base.entry.content_hash != command.base.content_hash or not isinstance(
+                base.entry.source, ContextConfigRegistrySource
+            ):
+                raise BackendConflict("publication requires an exact working point")
+            metadata = base.entry.source.context
+            baseline = self._runs.read_snapshot(command.run_id)
+            if (
+                not isinstance(baseline.config_source, ContextRunConfigSource)
+                or baseline.config_source.context != command.base
+                or baseline.samples != (metadata.sample,)
+            ):
+                raise BackendConflict(
+                    "candidate source must use this exact working point "
+                    "and sample scope"
+                )
+            acceptance = CrossRunCandidateAcceptance(decision=command.verification)
+            with services.config_registry() as work:
+                workspace_id = metadata.workspace_id or command.base.entry_id
+                if work.registry.context_head(workspace_id) != command.base.entry_id:
+                    raise BackendConflict(
+                        "Working point changed since candidate baseline"
+                    )
+                candidate = config_registry_service.validate_candidate_source_records(
+                    storage=work.runs,
+                    run_id=command.run_id,
+                    proposal_id=command.proposal_id,
+                    acceptance=acceptance,
+                )
+            if candidate.source.base_config_content_hash != command.base.content_hash:
+                raise BackendConflict("candidate base differs from the working point")
+            self._analyses.validate_candidate_verification(
+                command.verification,
+                source_run_id=command.run_id,
+                proposal_id=command.proposal_id,
+            )
+            # Save performs the workspace-local CAS in this same transaction.
+            try:
+                saved = config_registry_service.save_config_context(
+                    entry_id=command.entry_id,
+                    base=command.base,
+                    sample=metadata.sample,
+                    working_point_id=metadata.working_point_id,
+                    label=metadata.label,
+                    parameters=candidate.config.parameter_snapshot,
+                    advance=True,
+                    candidate=candidate.source,
+                    actor=command.actor,
+                    note=command.note,
+                    unit_of_work=services.config_registry,
+                )
+            except ValueError as error:
+                raise BackendConflict(str(error)) from error
+            prepared = prepare_parameter_change_approval(
+                run_id=command.run_id,
+                selector=command.proposal_id,
+                services=services,
+                actor=command.actor,
+                note=command.note,
+            )
+            if prepared.publication is not None:
+                publication = self._runs.prepare_content_publication(
+                    prepared.publication
+                )
+                self._runs.publish_prepared_content_in_transaction(
+                    connection, publication
+                )
+                self._control.append_event_in_transaction(
+                    connection,
+                    DurableEventInput(
+                        run_id=command.run_id,
+                        kind="parameter_proposal_approved",
+                        payload={
+                            "proposal_id": command.proposal_id,
+                            "actor": command.actor,
+                        },
+                        occurred_at=prepared.approval.approved_at,
+                    ),
+                )
+            receipt = ConfigContextPublishReceipt(
+                operation=ConfigContextPublishOperation(
+                    operation_id=command.operation_id,
+                    intent_hash=command.intent_hash,
+                    base=command.base,
+                    entry_id=command.entry_id,
+                    actor=command.actor,
+                    note=command.note,
+                ),
+                entry=saved.entry,
+                deltas=candidate.deltas,
+            )
+            self._config_operations.commit_in_transaction(connection, receipt)
             return receipt
 
     def publish_config(

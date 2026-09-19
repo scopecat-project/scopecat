@@ -17,7 +17,7 @@ from scopecat.kernel.content_identity import stable_content_hash
 from scopecat.kernel.run_outcome import utc_now
 from scopecat.records.analysis import ProjectAnalysisDecisionReference
 from scopecat.records.config import ConfigContentHash
-from scopecat.records.config_context import ConfigContextMetadata
+from scopecat.records.config_context import ConfigContextMetadata, ConfigContextRef
 from scopecat.records.content import Sha256ContentHash
 
 _CONFIG_ACTIVATION_INTENT_CODEC = "scopecat.config-activation-intent.v1"
@@ -304,6 +304,7 @@ class CalibrationCohortMergeRegistrySource(_FrozenRegistryModel):
 class ContextConfigRegistrySource(_FrozenRegistryModel):
     kind: Literal["parameter_context"] = "parameter_context"
     context: ConfigContextMetadata
+    candidate: CandidateConfigRegistrySource | None = None
 
 
 ConfigRegistryEntrySource = Annotated[
@@ -490,3 +491,15 @@ class ConfigRegistryActivationPage(_FrozenRegistryModel):
 
     items: tuple[ConfigRegistryActivationRecord, ...] = ()
     next_cursor: int | None = Field(default=None, ge=1)
+
+
+class ConfigContextPublishOperation(_FrozenRegistryModel):
+    """Publication advances one working point, never the global default."""
+
+    operation_id: _NonEmptyText
+    intent_hash: Sha256ContentHash
+    base: ConfigContextRef
+    entry_id: _NonEmptyText
+    actor: _NonEmptyText
+    note: str = ""
+    recorded_at: datetime = Field(default_factory=utc_now)

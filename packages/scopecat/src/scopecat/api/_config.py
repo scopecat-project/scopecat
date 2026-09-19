@@ -48,6 +48,8 @@ from scopecat.daemon.views import (
 from scopecat.daemon.wire import (
     CandidateConfigRevisionSource,
     ConfigActivationReceipt,
+    ConfigContextPublishCommand,
+    ConfigContextPublishReceipt,
     ConfigContextResolveCommand,
     ConfigContextSaveCommand,
     ConfigDraftCommand,
@@ -342,6 +344,16 @@ class LabConfigOperations:
                 note=note,
             )
         )
+
+    def publish_context(
+        self, command: ConfigContextPublishCommand
+    ) -> ConfigContextPublishReceipt:
+        return self.client.publish_context(command)
+
+    def context_publish_operation(
+        self, operation_id: str
+    ) -> ConfigContextPublishReceipt:
+        return self.client.context_publish_operation(operation_id)
 
     def publish_config(self, command: ConfigPublishCommand) -> ConfigPublishReceipt:
         """Publish one exact caller-owned idempotent config command."""

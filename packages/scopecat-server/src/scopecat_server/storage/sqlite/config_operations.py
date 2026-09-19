@@ -10,6 +10,7 @@ from pydantic_core import PydanticSerializationError
 from scopecat.daemon.wire import (
     CalibrationPublicationReceipt,
     ConfigActivationReceipt,
+    ConfigContextPublishReceipt,
     ConfigPublishReceipt,
 )
 from scopecat.kernel.errors import DataIntegrityError, StorageError
@@ -21,9 +22,13 @@ type ConfigOperationKind = Literal[
     "activate_entry",
     "publish_revision",
     "publish_calibration",
+    "publish_context",
 ]
 type ConfigOperationReceipt = (
-    ConfigActivationReceipt | ConfigPublishReceipt | CalibrationPublicationReceipt
+    ConfigActivationReceipt
+    | ConfigPublishReceipt
+    | CalibrationPublicationReceipt
+    | ConfigContextPublishReceipt
 )
 
 _CONFIG_OPERATIONS_REF = "config-registry/operations"
@@ -74,6 +79,8 @@ class SQLiteConfigOperationStore:
                 receipt = CalibrationPublicationReceipt.model_validate_json(
                     receipt_json
                 )
+            elif kind == "publish_context":
+                receipt = ConfigContextPublishReceipt.model_validate_json(receipt_json)
             else:
                 raise ValueError("config operation kind is not supported")
         except (ValidationError, ValueError) as error:
@@ -110,9 +117,13 @@ class SQLiteConfigOperationStore:
                     operation.operation_id,
                     kind,
                     operation.intent_hash,
-                    operation.expected_generation,
+                    None
+                    if isinstance(receipt, ConfigContextPublishReceipt)
+                    else receipt.operation.expected_generation,
                     operation.entry_id,
-                    operation.activation_generation,
+                    None
+                    if isinstance(receipt, ConfigContextPublishReceipt)
+                    else receipt.operation.activation_generation,
                     receipt_json,
                     operation.recorded_at.isoformat(),
                 ),
@@ -124,6 +135,8 @@ class SQLiteConfigOperationStore:
 
 
 def config_operation_kind(receipt: ConfigOperationReceipt) -> ConfigOperationKind:
+    if isinstance(receipt, ConfigContextPublishReceipt):
+        return "publish_context"
     if isinstance(receipt, ConfigActivationReceipt):
         return "activate_entry"
     if isinstance(receipt, CalibrationPublicationReceipt):

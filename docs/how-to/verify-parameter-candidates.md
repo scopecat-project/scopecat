@@ -48,6 +48,11 @@ completed run with this exact proposal and the same sample revision and workpoin
 The project decision retains both data inputs and the verification publication.
 A rejected decision is saved for inspection and raises an actionable error.
 
+For independent sample or operating-point histories,
+[publish to the exact working point](publish-working-point-calibration.md) used by
+the baseline with `verified.publish_to(working_point=version, name="rabi-verified")`.
+This advances only that working point and retains the accepted proposal evidence.
+
 Select the candidate for another experiment, or explicitly change the shared
 default. These are separate actions:
 
