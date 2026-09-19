@@ -65,7 +65,7 @@ const targetPlan: PlanRevision = {
       subject: {
         kind: "registered_target",
         ref: {
-          catalog_id: "test-project",
+          catalog_id: "project-a",
           target_id: "device-target",
           revision: 3,
           content_hash: `sha256:${"f".repeat(64)}`,
@@ -77,7 +77,7 @@ const targetPlan: PlanRevision = {
       subject: {
         kind: "registered_target",
         ref: {
-          catalog_id: "test-project",
+          catalog_id: "project-a",
           target_id: "device-target",
           revision: 3,
           content_hash: `sha256:${"f".repeat(64)}`,
@@ -349,10 +349,25 @@ it("preserves a registered target through reopening, preview, submission and pla
     binding: targetPlan.definition.scientific_binding,
   };
   const posted: { path: string; body: Record<string, unknown> }[] = [];
+  const resolutions: unknown[] = [];
   vi.stubGlobal(
     "fetch",
     vi.fn(async (request: Request) => {
       const path = new URL(request.url).pathname;
+      if (path.endsWith("/measurement-targets/resolve")) {
+        const subject = targetPlan.definition.scientific_binding.subject;
+        if (subject.kind !== "registered_target") throw new Error("Expected target fixture");
+        resolutions.push(await request.json());
+        return reply({
+          ref: subject.ref,
+          content: subject.content,
+          name: "Saved target",
+          description: "",
+          actor: "alice",
+          note: "",
+          recorded_at: "2026-09-19T00:00:00Z",
+        });
+      }
       if (request.method === "POST") {
         posted.push({ path, body: await request.json() });
         if (path.endsWith("/preview"))
@@ -386,7 +401,7 @@ it("preserves a registered target through reopening, preview, submission and pla
   setup();
   fireEvent.click(screen.getByText("Select previous batch"));
   fireEvent.click(screen.getByText("Open target"));
-  expect(screen.getByText(/Registered target device-target, revision 3/)).toBeVisible();
+  expect(screen.getByLabelText("Selected registered target")).toHaveTextContent("revision 3");
   expect(screen.getByLabelText("Sample ID")).toBeDisabled();
   fireEvent.click(screen.getByRole("button", { name: "Preview" }));
   await screen.findByText("Preview ready");
@@ -398,6 +413,11 @@ it("preserves a registered target through reopening, preview, submission and pla
   );
   const preview = posted.find((item) => item.path.endsWith("/preview"))!.body;
   const submit = posted.find((item) => item.path.endsWith("/submit"))!.body;
+  expect(resolutions).toContainEqual(
+    targetPlan.definition.selection.subject?.kind === "registered_target"
+      ? targetPlan.definition.selection.subject.ref
+      : undefined,
+  );
   expect(preview.selection).toEqual(targetPlan.definition.selection);
   expect(submit.selection).toEqual(targetPlan.definition.selection);
   expect(submit.reviewed).toEqual(reviewed);

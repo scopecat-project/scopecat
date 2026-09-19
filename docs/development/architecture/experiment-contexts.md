@@ -41,7 +41,7 @@ sample features; they do not yet establish the complete target/setup model below
 
 | Area | Implemented | Next boundary |
 |---|---|---|
-| Scientific identity | Immutable sample revisions; exact single-member target selection through Python, preview, plans and parent/child admission | Graphical target picker (#643); executable assembly validation |
+| Scientific identity | Immutable sample revisions; exact single-member target selection through Python and the workbench, preview, plans and parent/child admission | Executable assembly validation |
 | Applicability | Declared batch guards; shared target/batch/setup content comparison used by parameter rebase | Use resolved applicability in preparation, admission, working-point publication and calibration |
 | Working points | Exact single-sample scope, value provenance, explicit estimate copies and verified candidate publication with per-head conflicts | Bounded automated cohorts share working-point ownership; qualified cross-object dependencies remain future work |
 | Apparatus history | Descriptive object/revision and observation slice (#644); separate from executable target selection | Useful history navigation and explicit evidence links; no live wiring or calibration-validity claim |
@@ -383,8 +383,9 @@ selection model:
    qualified calibration remain different operations.
 4. Qualify A/B independent calibration, a no-sample physical-line measurement and
    a chip calibration depending on a qualified line calibration. Assembly execution
-   and the graphical target picker follow their explicit contracts. Neither requires
-   a universal object graph or implicit room-temperature/low-temperature reuse.
+   follows its explicit execution contract; the graphical picker already supports
+   single-member targets. These steps require neither a universal object graph nor
+   implicit room-temperature/low-temperature reuse.
 
 Within the current format, preserve scientific objects and acquisition addresses.
 During incompatible prebaseline redesigns, leave original files intact but update

@@ -3,8 +3,8 @@
 A measurement target records which sample revisions participate and how their
 member-qualified entities connect. You can register and inspect single-sample or
 assembly targets through Python. Notebook sessions can select an exact single-member
-target for authored experiments, previews and saved plans. Assembly execution and
-a graphical target picker remain pending. Registration alone does not claim that
+target for authored experiments, previews and saved plans. The workbench can select
+the same exact targets. Assembly execution remains pending. Registration alone does not claim that
 wiring is physically verified.
 
 Use an existing connected `LabClient` and registered sample. A member ID such as
@@ -109,6 +109,29 @@ point can be supplied alongside `target`.
 Preview freezes the target reference, retained content, entity projection, sample
 revision, batch and exact configuration evidence. Submit and saved plans retain
 that binding. Reopening a plan does not substitute the notebook's current target.
-The existing workbench can reopen a target-bearing plan and display its target;
-it does not yet provide a catalog target picker. Multi-stage maintained reference
-workflows that change configurations still require a sample selection.
+Multi-stage maintained reference workflows that change configurations still require
+a sample selection.
+
+## Select a target in the workbench
+
+In the experiment page, open **Browse samples, batches and collections** in
+**Measurement context · this page**. The **Registered target** list shows the
+latest catalog revisions. Select a single-member target and review its name,
+revision, owning catalog and exact sample member. Targets with multiple members
+or explicit connections are listed as unsupported for execution.
+
+Selection pins the displayed revision. **Refresh target list**, author source
+refresh and switching experiments do not advance it. To adopt a later revision,
+select that revision explicitly and preview again. Reopening a saved plan keeps
+its original target, even when the catalog head has changed. A foreign-catalog
+reference is reported as an error; it is not converted to an ordinary sample.
+
+A compatible working point selected from Configuration can be combined with the
+target; preview checks their exact sample and batch agreement. Without a working
+point, choose the experimental batch independently. The record collection and
+operator remain separate choices. Changes to the scientific selection invalidate
+the old preview before acquisition.
+
+This draft remains in the open workbench when navigating between pages. Changing
+the connected catalog clears it. It does not change another notebook's selection
+or any already admitted measurement.

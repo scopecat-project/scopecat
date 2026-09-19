@@ -2,7 +2,8 @@
 
 Status: concrete implementation contract for [#626](https://github.com/scopecat-project/scopecat/issues/626),
 audited at `3ddaeb27b` after target catalog PR #625. This is the full execution design; the internal run-binding stage below is
-implemented, while authored/session target selection remains pending. It refines [experiment contexts](experiment-contexts.md).
+implemented. Authored/session and workbench selection are also implemented as
+described in the later stages below. It refines [experiment contexts](experiment-contexts.md).
 This design follows the [prebaseline data policy](../data-compatibility.md).
 Current format 76 is not a compatibility baseline; no old-format reader or
 migration obligation is introduced here. Coordinate shared source-side files
@@ -306,7 +307,11 @@ Notebook sessions accept a registered single-member target, resolving a target I
 to an exact reference when selected. Refresh leaves it fixed. Saved plans contain
 that exact binding and reopen independently of the session's current scientific
 scope. The workbench consumes the same contract and preserves target-bearing
-plans; a dedicated target catalog picker remains follow-on work.
+plans. The workbench target picker (#643) now selects exact catalog-qualified
+revisions, resolves reopened references independently from the current head list,
+and retains the selection through author refresh and page navigation. Batch,
+record destination and operator remain separate; working-point compatibility is
+checked by the same preview resolver. List refresh never advances a selection.
 
 Authored procedures carry the binding as a typed parent field and each durable
 child is checked against it and its claimed step intent. Generic multi-stage

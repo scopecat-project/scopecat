@@ -1,3 +1,4 @@
+import { targetRefKey } from "./target-api";
 import type { SubmissionRequest } from "./launch-submission";
 import { reviewedFixture } from "../../test/scientific-fixtures";
 // @vitest-environment jsdom
@@ -589,4 +590,113 @@ it("keeps context across experiments and preserves the original submission after
   await waitFor(() => expect(submissions).toHaveLength(2));
   expect(submissions[1]).toEqual(submissions[0]);
   expect(screen.getByLabelText("Experimental batch")).toHaveValue("batch-b");
+});
+
+it("pins a picked target across head refresh and pages, then clears it on catalog scope change", async () => {
+  const ref = {
+    catalog_id: "project-a",
+    target_id: "chip-target",
+    revision: 1,
+    content_hash: `sha256:${"f".repeat(64)}`,
+  };
+  const target = {
+    ref,
+    name: "Chip target",
+    description: "",
+    actor: "Alice",
+    note: "",
+    recorded_at: "2026-09-19T00:00:00Z",
+    content: {
+      members: [
+        { id: "device", sample_id: "chip", revision: 2, content_hash: `sha256:${"c".repeat(64)}` },
+      ],
+      connections: [],
+    },
+  };
+  let head = target;
+  const fallback = globalThis.fetch;
+  const previews: SubmissionRequest[] = [];
+  const resolutions: unknown[] = [];
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (request: Request) => {
+      const path = new URL(request.url).pathname;
+      if (path.endsWith("/measurement-targets"))
+        return Response.json({ items: [head], next_cursor: null });
+      if (path.endsWith("/measurement-targets/resolve")) {
+        resolutions.push(await request.json());
+        return Response.json(target);
+      }
+      if (path.endsWith("/preview")) {
+        const body = (await request.json()) as SubmissionRequest;
+        previews.push(body);
+        const result = preview();
+        return Response.json({
+          ...result,
+          reviewed: {
+            ...result.reviewed,
+            binding: {
+              ...result.reviewed.binding,
+              subject: {
+                kind: "registered_target",
+                ref,
+                content: target.content,
+                sample: {
+                  role: "subject",
+                  sample_id: "chip",
+                  revision: 2,
+                  content_hash: `sha256:${"c".repeat(64)}`,
+                  kind: "chip",
+                  display_name: "Chip",
+                },
+                projection: [],
+              },
+            },
+          },
+        });
+      }
+      return fallback(request);
+    }),
+  );
+  const view = render(<Harness />);
+  await selectPrepared();
+  fireEvent.click(screen.getByRole("button", { name: "Browse samples, batches and collections" }));
+  const picker = await screen.findByLabelText("Registered target");
+  await screen.findByRole("option", { name: /Chip target/ });
+  fireEvent.change(picker, { target: { value: targetRefKey(ref) } });
+  fireEvent.change(screen.getByLabelText("Operator"), { target: { value: "Alice" } });
+  fireEvent.change(screen.getByLabelText("Experimental batch"), { target: { value: "batch-a" } });
+  fireEvent.change(screen.getByLabelText("Record collection"), {
+    target: { value: "collection-a" },
+  });
+  await previewReady();
+  head = { ...target, name: "New target label", ref: { ...ref, revision: 2 } };
+  fireEvent.click(screen.getByRole("button", { name: "Refresh target list" }));
+  await screen.findByRole("option", { name: /New target label/ });
+  expect(screen.getByText("Preview ready", { exact: true })).toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "configuration" }));
+  await returnToLaunch();
+  fireEvent.change(screen.getByLabelText("Experiment"), { target: { value: "first" } });
+  await previewReady();
+  expect(resolutions.length).toBeGreaterThan(0);
+  expect(resolutions.every((value) => JSON.stringify(value) === JSON.stringify(ref))).toBe(true);
+  expect(previews.at(-1)?.selection).toMatchObject({
+    subject: { kind: "registered_target", ref },
+    batch: { kind: "declared", id: "batch-a" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Start acquisition" }));
+  await waitFor(() => expect(submissions).toHaveLength(1));
+  expect(submissions[0]).toMatchObject({
+    actor: "Alice",
+    record_collection: "collection-a",
+    selection: previews.at(-1)?.selection,
+    reviewed: { binding: { subject: { kind: "registered_target", ref } } },
+  });
+  fireEvent.change(screen.getByLabelText("Experimental batch"), { target: { value: "batch-b" } });
+  expect(screen.queryByText("Preview ready", { exact: true })).toBeNull();
+  view.rerender(<Harness projectId="project-b" />);
+  await selectPrepared();
+  expect(screen.getByLabelText("Sample ID")).toHaveValue("");
+  expect(screen.getByLabelText("Operator")).toHaveValue("operator");
+  expect(screen.queryByText(/exact registered target retained/)).toBeNull();
 });
