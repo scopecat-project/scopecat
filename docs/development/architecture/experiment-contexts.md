@@ -414,3 +414,9 @@ runs or manufacture target references. See [target registration](../../how-to/re
 This completes catalog registration only: launch selection, exact target freezing
 at admission, working-point/calibration migration and assembly execution remain
 pending. No new target field was appended to the existing launch/run JSON contracts.
+
+
+The next execution slice is specified in [frozen target selection and admission](target-execution.md),
+including single-member/subject projection, the new intent and retained-evidence
+boundary, procedure-child propagation and concrete acceptance scenarios. That
+contract is prospective; catalog registration alone still does not enable execution.
