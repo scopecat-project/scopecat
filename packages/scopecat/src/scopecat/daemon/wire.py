@@ -30,7 +30,9 @@ from scopecat.config.parameter_updates import ParameterUpdate
 from scopecat.config.registry.records import (
     CalibrationCohortMergeContribution,
     CalibrationCohortMergeRegistrySource,
+    CalibrationPublicationOperation,
     CandidateAcceptance,
+    CandidateConfigRegistrySource,
     ConfigActivationOperation,
     ConfigCompositionPolicyRef,
     ConfigContextPublishOperation,
@@ -64,6 +66,7 @@ from scopecat.records.analysis import (
     SampleAnalysisSubject,
     analysis_record_id,
 )
+from scopecat.records.calibration_scope import CalibrationConfigSourceRef
 from scopecat.records.config import (
     ConfigContentHash,
     ConfigProfileSnapshot,
@@ -195,9 +198,7 @@ class CalibrationCohortMergeRevisionSource(_WireModel):
     automatic_publication: CalibrationPublicationPolicyRef | None = None
     composition_policy_ref: ConfigCompositionPolicyRef
     merge_policy: Literal["common_base_cells_v1"] = "common_base_cells_v1"
-    base_entry_id: NonEmptyText
-    base_content_hash: ConfigContentHash
-    base_generation: int = Field(ge=1)
+    base: CalibrationConfigSourceRef
     candidate_id: NonEmptyText
     contributions: tuple[CalibrationCohortMergeContribution, ...] = Field(
         min_length=1,
@@ -301,18 +302,12 @@ class CalibrationPublicationCommand(_WireModel):
     operation_id: NonEmptyText
     source: CalibrationCohortMergeRevisionSource
     actor: NonEmptyText
-    expected_generation: int = Field(ge=0)
     expected_finalization_revision: int | None = Field(default=None, ge=1)
     entry_id: NonEmptyText
     note: str = ""
 
     @model_validator(mode="after")
     def validate_calibration_contract(self) -> CalibrationPublicationCommand:
-        if self.expected_generation != self.source.base_generation:
-            raise ValueError(
-                "calibration cohort merge expected_generation must equal its "
-                "base_generation"
-            )
         automatic_merge = self.source.automatic_publication is not None
         if automatic_merge and self.expected_finalization_revision is None:
             raise ValueError(
@@ -338,18 +333,18 @@ class CalibrationPublicationCommand(_WireModel):
     def intent_hash(self) -> Sha256ContentHash:
         # The finalization revision is an execution fence, not publication
         # meaning. A retry from a newer ready occurrence keeps the operation.
-        return config_publish_intent_hash(
-            source_intent_hash=self.source_intent_hash,
-            entry_id=self.entry_id,
-            expected_generation=self.expected_generation,
-            actor=self.actor,
-            note=self.note,
+        identity = self.model_dump(
+            mode="json", exclude={"operation_id", "expected_finalization_revision"}
         )
+        return f"sha256:{stable_content_hash(identity)}"
 
 
-class CalibrationPublicationReceipt(ConfigPublishReceipt):
+class CalibrationPublicationReceipt(_WireModel):
     """Config publication plus the effective successes anchored by that commit."""
 
+    operation: CalibrationPublicationOperation
+    entry: ConfigRegistryEntry
+    deltas: tuple[ParameterValueDelta, ...] = ()
     calibration_successes: tuple[CalibrationSuccessRef, ...]
 
     @field_validator("calibration_successes")
@@ -379,27 +374,32 @@ class CalibrationPublicationReceipt(ConfigPublishReceipt):
 
     @model_validator(mode="after")
     def validate_calibration_identity(self) -> CalibrationPublicationReceipt:
-        source = self.entry.source
-        if not isinstance(source, CalibrationCohortMergeRegistrySource):
+        context_source = self.entry.source
+        if not isinstance(
+            context_source, ContextConfigRegistrySource
+        ) or not isinstance(
+            context_source.publication, CalibrationCohortMergeRegistrySource
+        ):
             raise ValueError(
-                "calibration publication receipt requires a cohort merge entry"
+                "calibration publication requires a working-point cohort merge"
             )
-
+        source = context_source.publication
+        if (
+            context_source.context.base != source.base.context_ref
+            or self.operation.base != source.base
+            or self.operation.entry_id != self.entry.id
+            or self.operation.actor != self.entry.actor
+            or self.operation.note != self.entry.note
+        ):
+            raise ValueError(
+                "calibration publication does not follow its exact working point"
+            )
         contributions = {item.member_id: item for item in source.contributions}
         successes = {
             success.attempt.member_id: success for success in self.calibration_successes
         }
         if successes.keys() != contributions.keys():
-            raise ValueError(
-                "merge config publication must cover every resolved contribution"
-            )
-        if (
-            self.operation.expected_generation != source.base_registry_generation
-            or self.activation.previous_entry_id != source.base_entry_id
-            or self.activation.previous_entry_content_hash
-            != source.base_config_content_hash
-        ):
-            raise ValueError("merge config publication does not follow its exact base")
+            raise ValueError("merge publication must cover every contribution")
         for member_id, contribution in contributions.items():
             success = successes[member_id]
             publication = success.publication
@@ -411,11 +411,7 @@ class CalibrationPublicationReceipt(ConfigPublishReceipt):
                 or success.attempt.cohort_id != source.cohort_id
                 or success.attempt.procedure_run_id
                 != contribution.proof.evidence_step.procedure_run_id
-                or success.base_config_source.entry_id != source.base_entry_id
-                or success.base_config_source.content_hash
-                != source.base_config_content_hash
-                or success.base_config_source.registry_generation
-                != source.base_registry_generation
+                or success.base_config_source != source.base
                 or contribution.result_input_fingerprint
                 != publication.result_input_fingerprint
                 or publication.operation_id != self.operation.operation_id
@@ -424,11 +420,11 @@ class CalibrationPublicationReceipt(ConfigPublishReceipt):
                 or result_source.entry_id != self.entry.id
                 or result_source.config_ref != self.entry.config_ref
                 or result_source.content_hash != self.entry.content_hash
-                or result_source.registry_generation != self.activation.generation
-                or publication.published_at != self.activation.recorded_at
+                or result_source.scope != source.base.scope
+                or publication.published_at != self.operation.recorded_at
             ):
                 raise ValueError(
-                    "merge calibration success does not match its config receipt"
+                    "merge success does not match its working-point receipt"
                 )
         return self
 
@@ -1509,10 +1505,12 @@ class ConfigContextPublishReceipt(_WireModel):
             or self.operation.note != self.entry.note
             or not isinstance(source, ContextConfigRegistrySource)
             or source.context.base != self.operation.base
-            or source.candidate is None
-            or source.candidate.base_config_content_hash
+            or not isinstance(source.publication, CandidateConfigRegistrySource)
+            or source.publication.base_config_content_hash
             != self.operation.base.content_hash
-            or not isinstance(source.candidate.acceptance, CrossRunCandidateAcceptance)
+            or not isinstance(
+                source.publication.acceptance, CrossRunCandidateAcceptance
+            )
         ):
             raise ValueError("context publication receipt identity mismatch")
         return self
