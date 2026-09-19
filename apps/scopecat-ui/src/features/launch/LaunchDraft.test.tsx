@@ -163,6 +163,19 @@ beforeEach(() => {
         if (configFails) throw new TypeError("temporarily offline");
         return Response.json({ entries: [], activation: { entry_id: "baseline", generation } });
       }
+      if (path.endsWith("/experimental-batches"))
+        return Response.json({
+          items: [
+            { id: "batch-a", name: "Batch A" },
+            { id: "batch-b", name: "Batch B" },
+          ],
+          next_cursor: null,
+        });
+      if (path.endsWith("/record-collections"))
+        return Response.json({
+          items: [{ id: "collection-a", name: "Collection A" }],
+          next_cursor: null,
+        });
       if (path.endsWith("/validity")) return Response.json({ valid: true, changes: [] });
       if (path.endsWith("/preview"))
         return deferPreview
@@ -229,8 +242,8 @@ it("retains the complete project draft across pages and resets explicitly withou
   expect(submissions).toHaveLength(0);
   fireEvent.click(screen.getByRole("button", { name: "Reset launch draft" }));
   expect(screen.getByLabelText("Note")).toHaveValue("original");
-  expect(screen.getByLabelText("Sample ID")).toHaveValue("");
-  expect(screen.getByLabelText("Operator")).toHaveValue("operator");
+  expect(screen.getByLabelText("Sample ID")).toHaveValue("sample-42");
+  expect(screen.getByLabelText("Operator")).toHaveValue("scientist");
   expect(screen.getByLabelText("Frequency")).toHaveValue(4.8);
 });
 it("keeps an unknown submission key across navigation and temporary configuration read failure", async () => {
@@ -523,4 +536,37 @@ it("keeps preview clickable during a background catalog read and blocks a failed
   });
   await waitFor(() => expect(button).toBeDisabled());
   expect(screen.queryByText("Preview ready", { exact: true })).toBeNull();
+});
+
+it("keeps context across experiments and preserves the original submission after context edits", async () => {
+  render(<Harness />);
+  await selectPrepared();
+  fireEvent.click(screen.getByRole("button", { name: "Browse samples, batches and collections" }));
+  await screen.findByRole("option", { name: "Batch A" });
+  fireEvent.change(screen.getByLabelText("Sample ID"), { target: { value: "chip-a" } });
+  fireEvent.change(screen.getByLabelText("Operator"), { target: { value: "Alice" } });
+  fireEvent.change(screen.getByLabelText("Experimental batch"), { target: { value: "batch-a" } });
+  fireEvent.change(screen.getByLabelText("Record collection"), {
+    target: { value: "collection-a" },
+  });
+  fireEvent.change(screen.getByLabelText("Experiment"), { target: { value: "first" } });
+  expect(screen.getByLabelText("Sample ID")).toHaveValue("chip-a");
+  expect(screen.getByLabelText("Experimental batch")).toHaveValue("batch-a");
+  expect(screen.getByLabelText("Operator")).toHaveValue("Alice");
+  await previewReady();
+  fireEvent.click(screen.getByRole("button", { name: "Start acquisition" }));
+  await screen.findByRole("alert");
+  expect(submissions[0]).toMatchObject({
+    sample: "chip-a",
+    actor: "Alice",
+    batch_id: "batch-a",
+    record_collection: "collection-a",
+  });
+  fireEvent.change(screen.getByLabelText("Experimental batch"), { target: { value: "batch-b" } });
+  expect(screen.queryByText("Preview ready", { exact: true })).toBeNull();
+  expect(screen.getByRole("button", { name: "Start acquisition" })).toBeDisabled();
+  fireEvent.click(screen.getByRole("button", { name: "Retry original submission" }));
+  await waitFor(() => expect(submissions).toHaveLength(2));
+  expect(submissions[1]).toEqual(submissions[0]);
+  expect(screen.getByLabelText("Experimental batch")).toHaveValue("batch-b");
 });

@@ -110,6 +110,9 @@ export function importLaunchRequest(
     },
     controls,
     sample: request.sample ?? "",
+    batch:
+      request.batch_id ??
+      (request.context ? (selectedSource?.sample.batch_id ?? undefined) : undefined),
     actor: request.actor ?? "operator",
   };
 }

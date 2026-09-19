@@ -4,6 +4,7 @@ import { apiClient, apiData } from "../../api-client";
 import type { LaunchCatalogEntry } from "./launch-api";
 import { ControlFields, ControlSummary, controlEdits } from "./ControlFields";
 import { invalidateDraft, useLaunchDraft, type LaunchDraft } from "./LaunchDraft";
+import { MeasurementContext } from "./MeasurementContext";
 import { PlanSave } from "./PlanSave";
 import { PreflightSummary } from "./PreflightSummary";
 import { canRenderField, type FormField } from "./launch-fields";
@@ -74,7 +75,9 @@ export function LaunchForm({
     );
   }, [fence, manual.data, update]);
   function changeInput(
-    changes: Partial<Pick<LaunchDraft, "values" | "controls" | "sample" | "actor">>,
+    changes: Partial<
+      Pick<LaunchDraft, "values" | "controls" | "sample" | "actor" | "batch" | "collection">
+    >,
   ) {
     update((current) =>
       invalidateDraft(
@@ -83,7 +86,8 @@ export function LaunchForm({
           ...changes,
           planDirty:
             current.planDirty ||
-            (Boolean(current.plan) && Object.keys(changes).some((key) => key !== "actor")),
+            (Boolean(current.plan) &&
+              Object.keys(changes).some((key) => key !== "actor" && key !== "collection")),
           sampleBinding: "sample" in changes ? undefined : current.sampleBinding,
         },
         "Inputs changed. Preview again before starting.",
@@ -126,6 +130,8 @@ export function LaunchForm({
             sample:
               draft.sampleBinding?.sample_id ?? (selectedContext ? null : sample.trim() || null),
             sample_binding: draft.sampleBinding,
+            batch_id: draft.batch || undefined,
+            record_collection: draft.collection || undefined,
             configuration: draft.configuration,
             plan_ref: draft.planDirty ? undefined : draft.plan?.ref,
             context: selectedContext?.config_source.context,
@@ -181,6 +187,8 @@ export function LaunchForm({
           sample:
             draft.sampleBinding?.sample_id ?? (selectedContext ? null : sample.trim() || null),
           sample_binding: draft.sampleBinding,
+          batch_id: draft.batch || undefined,
+          record_collection: draft.collection || undefined,
           configuration: draft.configuration,
           plan_ref: draft.planDirty ? undefined : draft.plan?.ref,
           context: selectedContext?.config_source.context,
@@ -215,6 +223,12 @@ export function LaunchForm({
       className="space-y-4 max-w-3xl"
     >
       <p>{entry.description}</p>
+      <MeasurementContext
+        draft={draft}
+        selectedContext={selectedContext}
+        projectId={projectId}
+        onChange={changeInput}
+      />
       <PlanSave
         key={`${draft.plan?.ref.plan_id ?? "new"}:${draft.plan?.ref.revision ?? 0}`}
         preview={result}
@@ -360,29 +374,6 @@ export function LaunchForm({
       )}
       {entry.actions.includes("submit") && (
         <fieldset disabled={pending} className="flex flex-wrap gap-3">
-          <label>
-            Sample ID{" "}
-            <input
-              aria-label="Sample ID"
-              disabled={!!selectedContext}
-              value={selectedContext?.config_source.sample.sample_id ?? sample}
-              onChange={(e) => {
-                changeInput({ sample: e.target.value });
-              }}
-              className="border rounded p-2"
-            />
-          </label>
-          <label>
-            Operator{" "}
-            <input
-              aria-label="Operator"
-              value={actor}
-              onChange={(e) => {
-                changeInput({ actor: e.target.value });
-              }}
-              className="border rounded p-2"
-            />
-          </label>
           <button
             type="button"
             disabled={

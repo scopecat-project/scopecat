@@ -1,4 +1,4 @@
-# Select a notebook's experimental context
+# Select an experimental context
 
 An author session can remember the sample, experimental batch, saved working point, record collection
 and operator for its next requests. This selection belongs to that client. Two
@@ -86,8 +86,51 @@ legacy store-wide number/history without changing the selection. A session with
 no collection selected keeps the previous store-wide behavior. See
 [record collections](record-collections.md) for stable addresses and migration.
 
-This is currently a Python/Notebook selection facility for existing single-sample
+Python/Notebook clients and the workbench support existing single-sample
 working points. Declared batch/cooldown applicability is covered by
 [experimental batches](experimental-batches.md). Multi-sample assemblies, setup
-applicability, page-local GUI selection and multiple code workspaces remain pending. A collection named “cooldown 3” is not proof that a previous
+applicability and multiple code workspaces remain pending. A collection named
+“cooldown 3” is not proof that a previous
 calibration applies in that cooldown.
+
+## Select context in the workbench
+
+In **Experiments**, **Measurement context · this page** holds the sample and
+operator. Open **Browse samples, batches and collections** to choose registered
+samples, an experimental batch and a record collection. Lists have explicit
+**Load more** controls. **New batch** and **New collection** create named catalog
+entries; use the newly created entry when ready. Creating metadata never starts a
+measurement or changes another page's selection.
+
+These selections survive switching experiments, refreshing author code and moving
+between console views. **Reset launch draft** resets experiment inputs and detaches
+a saved recipe while keeping the page's sample, batch, collection and operator.
+Reloading the browser or connecting to a different project starts a new selection;
+separate tabs do not share mutable defaults. This is still one connected code
+workspace, not a multi-workspace application selector.
+
+Select a saved working point through **Configuration → Use for next experiment**.
+Its exact sample revision and batch become the selected scope. Those fields are
+read-only while bound; **Use lab default** releases the working point while keeping
+sample/batch selection. When saving a working-point copy, **Choose experimental
+batch** can explicitly bind the copy to a new event. Its parameter values remain
+starting estimates, not new calibration evidence.
+
+Opening a saved plan retains its sample revision and batch, while collection and
+operator remain the destination page's choices. A plan from another batch is
+rejected without replacing the current draft. To intentionally revisit it, release
+the working point or reset the recipe draft as needed, then select its original
+batch (or clear the batch constraint) before opening it. Imported analysis
+suggestions retain the current operator and collection; without an explicit
+working point they clear the old scientific scope.
+
+Every selection edit invalidates the preview. **Preview** validates it through the
+same launch contract used by Python; only **Start acquisition** admits a procedure.
+The original request remains available if a submission response is lost, even after
+subsequent edits. None of these selections publishes a new shared default config.
+
+Declared batch and collection selection currently require an authored experiment
+(the standard `@experiment` path). Legacy custom launch providers report an
+unsupported-selection error at preview; the console never drops these choices to
+make such a launch proceed. Their procedure adapters need explicit support before
+using this scope.
