@@ -28,6 +28,7 @@ nav = [
     { "Refresh author code" = "how-to/refresh-author-code.md" },
     { "Scans and grouped analysis" = "how-to/grouped-analysis.md" },
     { "Register measurement targets" = "how-to/register-measurement-targets.md" },
+    { "Record apparatus history" = "how-to/record-apparatus-history.md" },
     { "Keep experimental batches distinct" = "how-to/experimental-batches.md" },
     { "Select session context" = "how-to/select-session-context.md" },
     { "Number runs in collections" = "how-to/record-collections.md" },
@@ -78,6 +79,7 @@ nav = [
     { "Architecture" = [
       "development/architecture/index.md",
       { "Experiment workbench contexts" = "development/architecture/experiment-contexts.md" },
+      { "Apparatus history and configuration ownership" = "development/architecture/apparatus-history.md" },
       { "Workspace and data binding contract" = "development/architecture/workspace-bindings.md" },
       { "Structured authoring direction" = "development/architecture/structured-authoring.md" },
       { "Experiment execution" = "development/architecture/execution.md" },

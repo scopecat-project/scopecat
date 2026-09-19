@@ -17,6 +17,7 @@ from scopecat.analysis.arguments import AnalysisArgument, encode_arguments
 from scopecat.analysis.facts import ordinary_result_schema
 from scopecat.api._config import LabConfigOperations
 from scopecat.api._remote import RemoteRunOperations
+from scopecat.api.apparatus_history import LabApparatusOperations
 from scopecat.api.lab import LabClient
 from scopecat.api.parameter_candidates import ParameterCandidate
 from scopecat.api.parameters import ParameterWorkspace
@@ -236,6 +237,10 @@ class AuthorProject(DaemonClient):
             ),
         )
         return selected
+
+    @property
+    def apparatus(self) -> LabApparatusOperations:
+        return LabApparatusOperations(self, operator=self.selection.operator)
 
     @property
     def run_operations(self) -> RemoteRunOperations:

@@ -226,6 +226,17 @@ from scopecat.kernel.content_identity import (
 from scopecat.kernel.errors import SessionClosedError
 from scopecat.measurements.recording_arrow import encode_measurement_append
 from scopecat.planning.catalog import InstrumentContractCatalog
+from scopecat.records.apparatus_history import (
+    ApparatusAttachment,
+    ApparatusObjectCreate,
+    ApparatusObjectPage,
+    ApparatusObjectRef,
+    ApparatusObjectRevise,
+    ApparatusObjectRevision,
+    ApparatusObservation,
+    ApparatusObservationCreate,
+    ApparatusObservationPage,
+)
 from scopecat.records.author_revision import (
     AuthorAnalysisReceipt,
     AuthorAnalysisRequest,
@@ -1524,6 +1535,114 @@ class DaemonClient:
             ),
         )
         return InstrumentSessionEndReceipt.model_validate_json(response.content)
+
+    def apparatus_objects(
+        self, *, query: str = "", limit: int = 100, before: int | None = None
+    ) -> ApparatusObjectPage:
+        params: dict[str, str | int] = {"query": query, "limit": limit}
+        if before is not None:
+            params["before"] = before
+        return self._get_model(
+            f"{_API_PREFIX}/apparatus-objects", ApparatusObjectPage, params=params
+        )
+
+    def apparatus_object(
+        self, object_id: str, *, revision: int | None = None
+    ) -> ApparatusObjectRevision:
+        params: dict[str, str | int] = (
+            {} if revision is None else {"revision": revision}
+        )
+        return self._get_model(
+            f"{_API_PREFIX}/apparatus-objects/{quote(object_id, safe='')}",
+            ApparatusObjectRevision,
+            params=params,
+        )
+
+    def resolve_apparatus_object(
+        self, ref: ApparatusObjectRef
+    ) -> ApparatusObjectRevision:
+        response = self._request(
+            "POST",
+            f"{_API_PREFIX}/apparatus-objects/resolve",
+            json=ref.model_dump(mode="json"),
+        )
+        return ApparatusObjectRevision.model_validate_json(response.content)
+
+    def create_apparatus_object(
+        self, command: ApparatusObjectCreate
+    ) -> ApparatusObjectRevision:
+        response = self._request(
+            "POST",
+            f"{_API_PREFIX}/apparatus-objects",
+            json=command.model_dump(mode="json"),
+        )
+        return ApparatusObjectRevision.model_validate_json(response.content)
+
+    def revise_apparatus_object(
+        self, command: ApparatusObjectRevise
+    ) -> ApparatusObjectRevision:
+        response = self._request(
+            "POST",
+            f"{_API_PREFIX}/apparatus-objects/revisions",
+            json=command.model_dump(mode="json"),
+        )
+        return ApparatusObjectRevision.model_validate_json(response.content)
+
+    def record_apparatus_observation(
+        self, command: ApparatusObservationCreate
+    ) -> ApparatusObservation:
+        response = self._request(
+            "POST",
+            f"{_API_PREFIX}/apparatus-observations",
+            json=command.model_dump(mode="json"),
+        )
+        return ApparatusObservation.model_validate_json(response.content)
+
+    def apparatus_observation(self, observation_id: str) -> ApparatusObservation:
+        return self._get_model(
+            f"{_API_PREFIX}/apparatus-observations/{quote(observation_id, safe='')}",
+            ApparatusObservation,
+        )
+
+    def apparatus_history(
+        self,
+        object_id: str,
+        *,
+        limit: int = 100,
+        before: int | None = None,
+        run_id: str | None = None,
+    ) -> ApparatusObservationPage:
+        params: dict[str, str | int] = {"limit": limit}
+        if before is not None:
+            params["before"] = before
+        if run_id is not None:
+            params["run_id"] = run_id
+        return self._get_model(
+            f"{_API_PREFIX}/apparatus-objects/{quote(object_id, safe='')}/observations",
+            ApparatusObservationPage,
+            params=params,
+        )
+
+    def import_apparatus_attachment(
+        self, content: bytes, *, filename: str
+    ) -> ApparatusAttachment:
+        response = self._request(
+            "POST",
+            f"{_API_PREFIX}/apparatus-attachments",
+            params={"filename": filename},
+            content=content,
+            headers={"Content-Type": "application/octet-stream"},
+        )
+        return ApparatusAttachment.model_validate_json(response.content)
+
+    def apparatus_attachment(self, observation_id: str, content_hash: str) -> bytes:
+        return self._request(
+            "GET",
+            (
+                f"{_API_PREFIX}/apparatus-observations/{quote(observation_id, safe='')}"
+                f"/attachments/{quote(content_hash, safe='')}"
+            ),
+        ).content
 
     def targets(
         self, *, limit: int = 100, before: int | None = None

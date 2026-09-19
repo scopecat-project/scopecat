@@ -1,6 +1,9 @@
 """Current SQLite project-store schema."""
 
 from scopecat_server.storage.sqlite.analysis_schema import ANALYSIS_TABLES_SQL
+from scopecat_server.storage.sqlite.apparatus_history_schema import (
+    APPARATUS_HISTORY_TABLES_SQL,
+)
 from scopecat_server.storage.sqlite.author_revision_schema import (
     AUTHOR_REVISION_TABLES_SQL,
 )
@@ -28,7 +31,7 @@ from scopecat_server.storage.sqlite.run_schema import RUN_TABLES_SQL
 from scopecat_server.storage.sqlite.sample_schema import SAMPLE_TABLES_SQL
 from scopecat_server.storage.sqlite.target_schema import TARGET_CATALOG_TABLES_SQL
 
-PROJECT_SCHEMA_VERSION = 77
+PROJECT_SCHEMA_VERSION = 78
 
 _CONTROL_TABLES_SQL = f"""
 CREATE TABLE IF NOT EXISTS project_schema (
@@ -212,6 +215,7 @@ PROJECT_SCHEMA_SQL = "\n".join(
         RECORD_COLLECTION_TABLES_SQL,
         EXPERIMENTAL_BATCH_TABLES_SQL,
         TARGET_CATALOG_TABLES_SQL,
+        APPARATUS_HISTORY_TABLES_SQL,
         ANALYSIS_TABLES_SQL,
         AUTOMATION_TABLES_SQL,
         CALIBRATION_COHORT_TABLES_SQL,

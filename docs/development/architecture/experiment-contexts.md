@@ -4,7 +4,7 @@ Status: selected product direction and proposed implementation contracts, record
 2026-09-19 after the teaching-host trial. The entities and APIs proposed here are
 not all shipped; implementation status is recorded below. This document governs the next implementation slices; it does not
 relax current ownership checks. The [prebaseline data policy](../data-compatibility.md)
-retires the schema 68–74 migration exercises; current format 77 is not a supported
+retires the schema 68–74 migration exercises; current format 78 is not a supported
 baseline. All retained-evidence and recovery contracts below concern the current
 format, not a promise to read or upgrade earlier development stores.
 
@@ -43,10 +43,15 @@ sample features; they do not yet establish the complete target/setup model below
 |---|---|---|
 | Scientific identity | Immutable sample revisions; exact single-member target selection through Python, preview, plans and parent/child admission | Graphical target picker (#643); executable assembly validation |
 | Applicability | Declared batch guards; shared target/batch/setup content comparison used by parameter rebase | Use resolved applicability in preparation, admission, working-point publication and calibration |
-| Working points | Exact single-sample scope, value provenance, explicit estimate copies and revision conflicts | Separate parameter state from maintained setup; migrate the single-subject consumers together |
-| Execution setup | Complete retained config; setup-content projection for strict comparison | Independent maintained setup revisions and one authoritative resolver |
+| Working points | Exact single-sample scope, value provenance, explicit estimate copies and revision conflicts | Separate object-scoped parameter publication from executable setup and shared active-config defaults |
+| Apparatus history | Descriptive object/revision and observation slice (#644); separate from executable target selection | Useful history navigation and explicit evidence links; no live wiring or calibration-validity claim |
+| Execution setup | Complete retained config; setup-content projection for strict comparison | Independent maintained setup revisions and one authoritative resolver; descriptive documentation is not required to be a complete wiring model |
 | Session and addressing | Per-page/kernel choices, frozen target plans, collection numbering and same-environment source-qualified workspace execution | Graphical workspace selection, heterogeneous environments and setup selection |
 | Application | Registered services open the experiment workbench; Help entry and local lifecycle controls | Further Help integration and server-enforced practice boundaries |
+
+The apparatus-history row describes the bounded slice introduced with this change,
+not a completed physical-state or calibration model. Its scope and the next
+configuration-ownership work are specified in [apparatus history](apparatus-history.md).
 
 This table is the current work list. The implementation sections below explain
 prior decisions; their historical limitations are not additional independent TODOs.
@@ -65,7 +70,8 @@ not merge physical samples merely because both are named `chip-a`.
 | Measurement target / assembly revision | Selected sample revisions, roles, member-qualified entities and interconnections | A new physical identity for each cooldown |
 | Experimental batch | A named event/campaign such as mounting or cooldown, with stable ID and metadata | A database, process or mandatory wall-clock-derived identity |
 | Working point | Versioned parameter state applicable to a target and compatible setup | Another session's selection or an automatic hardware write |
-| Apparatus and setup revision | Maintained instrument identities, connection/routing configuration and capabilities | Which research project owns results |
+| Descriptive apparatus object and observation | Stable identity, recorded descriptions and historical evidence under declared conditions | Current wiring, executable targeting or calibration validity |
+| Executable setup revision | Maintained execution connections/routes, drivers and capabilities | A complete physical inventory or proof that the real wiring matches |
 | Operator | Attribution and, separately, authorized capabilities | A new environment or data directory |
 | Record collection | Stable run-address namespace and history organization for acquisition | Physical file layout or arbitrary search-result numbering |
 | Research project | Changeable scientific grouping of samples and evidence | Immutable acquisition addresses |
@@ -358,21 +364,27 @@ not physical-device identity, live state verification, or hardware qualification
 
 ### Next coordinated implementation slices
 
-1. Define persistent, catalog-qualified target/setup references and a resolved
-   execution context with explicit unscoped semantics. Replace
-   the single-sample model in one path; do not add assembly/setup optional fields
-   independently to `SampleBinding`, `LaunchRequest` and `CalibrationTargetRef`.
-2. Separate maintained apparatus/setup from parameter state, retaining one complete
-   frozen execution snapshot. Replace active-config scientific defaults with the
-   resolver while preserving authoritative inventory, fencing and quarantine.
-3. Migrate working-point/candidate publication, calibration dependency matching and
-   saved-plan/procedure consumers to that same resolved applicability. Calibration
-   targets currently lack exact target/setup revisions: do not fabricate them from
-   the current sample name or batch alone. Cross-scope evidence reuse needs an
-   explicit policy and remains unsupported.
-4. Connect GUI/Python selection to the resolver and qualify assembly execution with
-   synthetic member/connection and conflict scenarios. Source-worker isolation and
-   application entry can progress independently against agreed context references.
+The target catalog and unified authored selection described below have shipped.
+The remaining priority is ownership and applicability, not another independent
+selection model:
+
+1. Deliver lightweight [apparatus history](apparatus-history.md) for observations,
+   documents and linked runs. Recording a line must not require a fake sample or
+   a complete live topology. Descriptive evidence does not qualify calibration.
+2. Separate maintained executable setup from object-scoped parameter state,
+   retaining one complete frozen execution snapshot. Audit and replace shared
+   active-config scientific defaults while preserving authoritative inventory,
+   runtime fencing and quarantine. Parameter publication checks the relevant
+   working-point revision, not an unrelated object's publication.
+3. Extend executable subject/applicability where needed, then carry it through
+   working-point/candidate publication and calibration dependency matching. Scope
+   must be retained at measurement/publication time; do not fabricate apparatus
+   bindings from historical links or sample names. Explicit estimate adoption and
+   qualified calibration remain different operations.
+4. Qualify A/B independent calibration, a no-sample physical-line measurement and
+   a chip calibration depending on a qualified line calibration. Assembly execution
+   and the graphical target picker follow their explicit contracts. Neither requires
+   a universal object graph or implicit room-temperature/low-temperature reuse.
 
 Within the current format, preserve scientific objects and acquisition addresses.
 During incompatible prebaseline redesigns, leave original files intact but update
