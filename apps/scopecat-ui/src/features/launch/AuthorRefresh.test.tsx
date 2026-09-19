@@ -84,6 +84,47 @@ it("announces readiness only after the consumer catalog has updated", async () =
   const updated = new Promise<void>((resolve) => {
     release = resolve;
   });
+  let operationId: string | undefined;
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (request: Request) => {
+      const path = new URL(request.url).pathname;
+      if (path.endsWith("author-revisions")) return Response.json(state);
+      if (request.method === "POST") operationId = (await request.json()).operation_id;
+      const completed = {
+        ...running,
+        operation_id: operationId,
+        status: "succeeded",
+        phase: "published",
+        result: state,
+      };
+      return Response.json(
+        path.endsWith("author-preparations") && request.method === "GET"
+          ? operationId
+            ? [completed]
+            : []
+          : completed,
+      );
+    }),
+  );
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(
+    <QueryClientProvider client={client}>
+      <AuthorRefresh projectId="lab" onRefreshed={() => updated} />
+    </QueryClientProvider>,
+  );
+  await waitFor(() =>
+    expect(screen.getByRole("button", { name: "Refresh author code" })).toBeEnabled(),
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Refresh author code" }));
+  await screen.findByText(/Updating catalog/);
+  expect(screen.queryByText(/Author code refreshed/)).not.toBeInTheDocument();
+  release();
+  await screen.findByText(/Author code refreshed/);
+});
+
+it("does not notify the draft for previously completed history", async () => {
+  const onRefreshed = vi.fn();
   vi.stubGlobal(
     "fetch",
     vi.fn(async (request: Request) => {
@@ -93,14 +134,13 @@ it("announces readiness only after the consumer catalog has updated", async () =
       return Response.json(path.endsWith("author-preparations") ? [completed] : completed);
     }),
   );
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
-    <QueryClientProvider client={client}>
-      <AuthorRefresh projectId="lab" onRefreshed={() => updated} />
+    <QueryClientProvider
+      client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+    >
+      <AuthorRefresh projectId="lab" workspaceId="source-B" onRefreshed={onRefreshed} />
     </QueryClientProvider>,
   );
-  await screen.findByText(/Updating catalog/);
-  expect(screen.queryByText(/Author code refreshed/)).not.toBeInTheDocument();
-  release();
   await screen.findByText(/Author code refreshed/);
+  expect(onRefreshed).not.toHaveBeenCalled();
 });

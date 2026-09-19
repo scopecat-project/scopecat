@@ -124,6 +124,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/author-workspaces": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Author Workspace Catalog */
+        get: operations["author_workspace_catalog_api_v1_author_workspaces_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/config-registry": {
         parameters: {
             query?: never;
@@ -2630,6 +2647,28 @@ export interface components {
             generation: number;
             /** Preparation Id */
             preparation_id?: string | null;
+        };
+        /** AuthorWorkspaceCatalog */
+        AuthorWorkspaceCatalog: {
+            /**
+             * Items
+             * @default []
+             */
+            items: components["schemas"]["AuthorWorkspaceSummary"][];
+        };
+        /**
+         * AuthorWorkspaceSummary
+         * @description Retained source identity and its current local execution availability.
+         */
+        AuthorWorkspaceSummary: {
+            /** Available */
+            available: boolean;
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Unavailable Reason */
+            unavailable_reason?: string | null;
         };
         /**
          * AxisAroundSourceRecord
@@ -10293,6 +10332,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    author_workspace_catalog_api_v1_author_workspaces_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthorWorkspaceCatalog"];
                 };
             };
         };

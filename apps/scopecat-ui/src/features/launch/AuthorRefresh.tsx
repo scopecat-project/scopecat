@@ -10,6 +10,7 @@ type Request = { operation_id: string; expected_generation: number };
 type Props = {
   projectId: string | undefined;
   workspaceId?: string;
+  disabled?: boolean;
   onRefreshed?: () => void | Promise<void>;
 };
 
@@ -17,7 +18,12 @@ export function AuthorRefresh(props: Props) {
   return <AuthorRefreshPanel key={`${props.projectId}:${props.workspaceId}`} {...props} />;
 }
 
-function AuthorRefreshPanel({ projectId, onRefreshed, workspaceId = "legacy" }: Props) {
+function AuthorRefreshPanel({
+  projectId,
+  onRefreshed,
+  workspaceId = "legacy",
+  disabled = false,
+}: Props) {
   const queryClient = useQueryClient();
   const headers = { "X-Scopecat-Workspace": workspaceId };
   const [request, setRequest] = useState<Request>();
@@ -25,14 +31,14 @@ function AuthorRefreshPanel({ projectId, onRefreshed, workspaceId = "legacy" }: 
   const notified = useRef<string | undefined>(undefined);
   const state = useQuery({
     queryKey: ["author-revisions", projectId, workspaceId],
-    enabled: Boolean(projectId),
+    enabled: Boolean(projectId && !disabled),
     queryFn: () => apiData(apiClient.GET("/api/v1/author-revisions", { headers })),
     refetchInterval: (query) =>
       query.state.data?.enabled && !query.state.data.active ? 1000 : false,
   });
   const history = useQuery({
     queryKey: ["author-preparations", projectId, workspaceId],
-    enabled: Boolean(projectId && state.data?.enabled),
+    enabled: Boolean(projectId && !disabled && state.data?.enabled),
     queryFn: () => apiData(apiClient.GET("/api/v1/author-preparations", { headers })),
     refetchInterval: (query) =>
       !state.data?.active || query.state.data?.some((item) => !terminal(item.status))
@@ -43,7 +49,7 @@ function AuthorRefreshPanel({ projectId, onRefreshed, workspaceId = "legacy" }: 
     request?.operation_id ?? state.data?.preparation_id ?? history.data?.[0]?.operation_id;
   const operation = useQuery({
     queryKey: ["author-preparation", projectId, workspaceId, identity],
-    enabled: Boolean(identity && projectId),
+    enabled: Boolean(identity && projectId && !disabled),
     queryFn: () =>
       apiData(
         apiClient.GET("/api/v1/author-preparations/{operation_id}", {
@@ -99,11 +105,13 @@ function AuthorRefreshPanel({ projectId, onRefreshed, workspaceId = "legacy" }: 
       await queryClient.invalidateQueries({
         queryKey: ["author-revisions", projectId, workspaceId],
       });
-      await queryClient.invalidateQueries({ queryKey: ["experiment-launcher"] });
-      await onRefreshed?.();
+      await queryClient.invalidateQueries({
+        queryKey: ["experiment-launcher", projectId, workspaceId],
+      });
+      if (request?.operation_id === next.operation_id) await onRefreshed?.();
       setSynchronized(next.operation_id);
     })();
-  }, [operation.data, projectId, workspaceId, queryClient, onRefreshed]);
+  }, [operation.data, projectId, workspaceId, queryClient, onRefreshed, request?.operation_id]);
   if (state.data && !state.data.enabled) return null;
   const busy = identity && (!operation.data || !terminal(operation.data.status));
   return (
@@ -111,7 +119,9 @@ function AuthorRefreshPanel({ projectId, onRefreshed, workspaceId = "legacy" }: 
       <button
         type="button"
         className="border rounded px-3 py-2"
-        disabled={Boolean(busy) || refresh.isPending || state.isPending}
+        disabled={
+          disabled || Boolean(busy) || refresh.isPending || state.isPending || state.isError
+        }
         onClick={() => {
           const body = {
             operation_id: crypto.randomUUID(),

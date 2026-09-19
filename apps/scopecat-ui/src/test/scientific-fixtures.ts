@@ -16,3 +16,7 @@ export function reviewedFixture(
     },
   };
 }
+
+export const serviceWorkspaceCatalog: components["schemas"]["AuthorWorkspaceCatalog"] = {
+  items: [{ id: "legacy", name: "Service code", available: true, unavailable_reason: null }],
+};

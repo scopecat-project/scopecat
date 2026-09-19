@@ -2,10 +2,15 @@
 
 import sys
 from pathlib import Path
+from typing import cast
 
 from scopecat.author_workspaces import local_author_workspaces
 from scopecat.project_sources import require_environment
-from scopecat.records.author_workspace import SERVICE_AUTHOR_WORKSPACE
+from scopecat.records.author_workspace import (
+    SERVICE_AUTHOR_WORKSPACE,
+    AuthorWorkspaceCatalog,
+    AuthorWorkspaceSummary,
+)
 from scopecat.runtime_binding import load_runtime_binding
 
 from scopecat_server.services.author_revisions import AuthorRevisionService
@@ -65,6 +70,35 @@ class AuthorWorkspaceServices:
         except BaseException:
             self.close()
             raise
+
+    def catalog(self) -> AuthorWorkspaceCatalog:
+        """List retained owners without reading, importing or publishing source."""
+        with self.store.sqlite.read_connection() as connection:
+            rows = cast(
+                "list[tuple[str, str]]",
+                connection.execute(
+                    "SELECT workspace_id, name FROM author_workspaces "
+                    "ORDER BY workspace_id"
+                ).fetchall(),
+            )
+        return AuthorWorkspaceCatalog(
+            items=tuple(
+                AuthorWorkspaceSummary(
+                    id=identity,
+                    name=name,
+                    available=identity in self.services,
+                    unavailable_reason=(
+                        None
+                        if identity in self.services
+                        else self.unavailable.get(
+                            identity,
+                            "Author workspace is not registered for this deployment",
+                        )
+                    ),
+                )
+                for identity, name in rows
+            )
+        )
 
     def get(self, identity: str) -> AuthorRevisionService:
         if identity in self.unavailable:

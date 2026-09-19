@@ -54,6 +54,10 @@ export interface LaunchDraft {
 type DraftUpdate = (current: LaunchDraft) => LaunchDraft;
 interface DraftContext {
   projectId: string | undefined;
+  workspaceId: string;
+  selectWorkspace: (workspaceId: string) => void;
+  useCurrentSource: (workspaceId?: string) => void;
+  authorRefreshed: (workspaceId: string) => void;
   selectedContext: ConfigContextResolution | undefined;
   selectContext: (resolution?: ConfigContextResolution) => void;
   draft: LaunchDraft | undefined;
@@ -63,7 +67,7 @@ interface DraftContext {
     context?: ConfigContextResolution,
   ) => void;
   importHandoff: (entry: LaunchCatalogEntry, handoff: ComparisonHandoff) => void;
-  select: (entry: LaunchCatalogEntry, reset?: boolean) => void;
+  select: (entry: LaunchCatalogEntry, reset?: boolean, workspaceId?: string) => void;
   update: (change: DraftUpdate) => void;
   isCurrent: (revision: number | undefined) => boolean;
   configurationReady: boolean;
@@ -153,6 +157,8 @@ function ProjectDraft({
   children: ReactNode;
 }) {
   const [draft, setDraft] = useState<LaunchDraft>();
+  const [workspaceId, setWorkspaceId] = useState("legacy");
+  const currentWorkspace = useRef("legacy");
   const [selectedContext, setSelectedContext] = useState<ConfigContextResolution>();
   const [attempt, setAttempt] = useState<SubmissionAttempt>();
   const queryClient = useQueryClient();
@@ -196,17 +202,45 @@ function ProjectDraft({
       ),
     );
   }
+  const resetSource = useCallback((owner: string) => {
+    currentWorkspace.current = owner;
+    latest.current = undefined;
+    setWorkspaceId(owner);
+    setDraft((current) =>
+      current
+        ? {
+            selection: current.selection,
+            actor: current.actor,
+            collection: current.collection,
+            workspaceId: owner,
+            experiment: "",
+            definition: "",
+            controlDefinition: "",
+            values: {},
+            controls: {},
+            revision: current.revision + 1,
+            pending: false,
+            error: "",
+            notice: "Code workspace changed. Select an experiment and preview before starting.",
+          }
+        : current,
+    );
+  }, []);
   const select = useCallback(
-    (entry: LaunchCatalogEntry, reset = false) => {
+    (entry: LaunchCatalogEntry, reset = false, owner = workspaceId) => {
       setDraft((current) => {
-        if (!reset && current?.definition === definitionKey(entry)) return current;
+        if (currentWorkspace.current !== owner) return current;
+        if (!reset && current?.workspaceId === owner && current.definition === definitionKey(entry))
+          return current;
         const next = initialDraft(entry, (current?.revision ?? 0) + 1);
+        next.workspaceId = owner;
+        next.codeRevision = current?.workspaceId === owner ? current.codeRevision : undefined;
         next.selection =
           current?.selection ??
           (selectedContext ? contextSelection(selectedContext) : defaultSelection());
         next.collection = current?.collection;
         next.actor = current?.actor ?? "operator";
-        if (!reset && current?.experiment === entry.id) {
+        if (!reset && current?.workspaceId === owner && current.experiment === entry.id) {
           // Keep raw inputs for review; the new declaration and server validate them.
           next.values = Object.fromEntries(
             Object.entries(next.values).map(([name, value]) => [
@@ -226,7 +260,7 @@ function ProjectDraft({
         return next;
       });
     },
-    [selectedContext],
+    [selectedContext, workspaceId],
   );
   async function submit(request: SubmissionRequest, definition: string) {
     const wasUnknown = attempt?.status === "unknown";
@@ -284,6 +318,22 @@ function ProjectDraft({
     <Context
       value={{
         projectId,
+        workspaceId,
+        selectWorkspace: (owner) => {
+          if (owner !== currentWorkspace.current) resetSource(owner);
+        },
+        useCurrentSource: (owner) => resetSource(owner ?? currentWorkspace.current),
+        authorRefreshed: (owner) =>
+          setDraft((current) =>
+            currentWorkspace.current === owner &&
+            current?.workspaceId === owner &&
+            !current.codeRevision
+              ? invalidateDraft(
+                  current,
+                  "Author code refreshed. Inputs are retained; preview the current source before starting.",
+                )
+              : current,
+          ),
         selectedContext,
         selectContext: (resolved) => {
           if (!alive.current) return;
@@ -319,6 +369,10 @@ function ProjectDraft({
         configurationError: configuration.error?.message ?? "",
         retryOriginalAllowed:
           attempt?.definition === draft?.definition &&
+          (attempt?.request.workspace_id ?? "legacy") === workspaceId &&
+          draft?.workspaceId === workspaceId &&
+          (!draft?.codeRevision ||
+            attempt?.request.code_revision?.content_hash === draft.codeRevision.content_hash) &&
           configuration.isSuccess &&
           !configuration.isFetching &&
           matchesActive(attempt?.request.reviewed?.config_source, configuration.data),
@@ -349,6 +403,8 @@ function ProjectDraft({
             },
             context?.config_source,
           );
+          currentWorkspace.current = d.workspace_id;
+          setWorkspaceId(d.workspace_id);
           setSelectedContext(context);
           setDraft({
             ...imported,
@@ -378,7 +434,10 @@ function ProjectDraft({
               normalizeSelection(handoff.request.selection).configuration.kind !== "working_point"
             )
               setSelectedContext(undefined);
-            setDraft({ ...imported, actor: current?.actor ?? "operator" });
+            const owner = imported.workspaceId ?? "legacy";
+            currentWorkspace.current = owner;
+            setWorkspaceId(owner);
+            setDraft({ ...imported, workspaceId: owner, actor: current?.actor ?? "operator" });
           } catch (error) {
             setDraft({
               ...(current ?? next),
@@ -388,7 +447,10 @@ function ProjectDraft({
         },
         select,
         update: (change) => setDraft((current) => (current ? change(current) : current)),
-        isCurrent: (revision) => alive.current && latest.current?.revision === revision,
+        isCurrent: (revision) =>
+          alive.current &&
+          currentWorkspace.current === workspaceId &&
+          latest.current?.revision === revision,
         // Background event refreshes must not swallow a click on a checked preview.
         // Admission still validates its configuration; a failed or changed read blocks it.
         configurationReady: matchesConfiguration && !configuration.isError,

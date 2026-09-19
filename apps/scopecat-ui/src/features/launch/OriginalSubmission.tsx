@@ -20,7 +20,8 @@ export function OriginalSubmission({
             : "Original submission awaiting confirmation"}
       </h3>
       <p>
-        {attempt.request.experiment} · version {attempt.request.version} · {attempt.request.actor} ·
+        Workspace {attempt.request.workspace_id ?? "legacy"} · {attempt.request.experiment} ·
+        version {attempt.request.version} · {attempt.request.actor} ·
         {subjectLabel(attempt.request.selection)}
       </p>
       <p>
@@ -55,8 +56,8 @@ export function OriginalSubmission({
           </button>
           {(!retryOriginalAllowed || !catalogReady) && (
             <p>
-              The original definition or configuration is changed or unverified. Its original
-              request will not be recompiled; checking for retained work is read-only.
+              The original workspace, definition or configuration is changed or unverified. Its
+              original request will not be recompiled; checking for retained work is read-only.
             </p>
           )}
         </>
