@@ -897,7 +897,7 @@ def test_run_start_applies_default_state_after_fresh_observation(
             value=StateValue(Quantity(value=5.1, unit="GHz")),
         )
     )
-    with _runtime(tmp_path, provider) as runtime:
+    with _runtime(tmp_path, provider, config=config) as runtime:
         run_id, lease_id = _start_run(runtime, config)
         instruments = runtime.application.instruments
 
@@ -947,7 +947,7 @@ def test_run_start_preserves_observed_state_when_default_state_exists(
         ),
         run_start="preserve",
     )
-    with _runtime(tmp_path, provider) as runtime:
+    with _runtime(tmp_path, provider, config=config) as runtime:
         run_id, lease_id = _start_run(runtime, config)
 
         provision = runtime.application.instruments.provision_run(
@@ -971,7 +971,7 @@ def test_unknown_default_state_reconciliation_quarantines_the_run(
             value=StateValue(Quantity(value=5.0, unit="GHz")),
         )
     )
-    with _runtime(tmp_path, provider) as runtime:
+    with _runtime(tmp_path, provider, config=config) as runtime:
         run_id, lease_id = _start_run(runtime, config)
 
         with pytest.raises(
@@ -1044,7 +1044,7 @@ def test_run_start_requires_default_state_to_converge(tmp_path: Path) -> None:
             value=StateValue(Quantity(value=5.0, unit="GHz")),
         )
     )
-    with _runtime(tmp_path, provider) as runtime:
+    with _runtime(tmp_path, provider, config=config) as runtime:
         run_id, lease_id = _start_run(
             runtime,
             config,
@@ -1082,7 +1082,7 @@ def test_rejected_default_state_reconciliation_releases_without_quarantine(
             value=StateValue(Quantity(value=5.0, unit="GHz")),
         )
     )
-    with _runtime(tmp_path, provider) as runtime:
+    with _runtime(tmp_path, provider, config=config) as runtime:
         run_id, lease_id = _start_run(runtime, config)
         instruments = runtime.application.instruments
 
@@ -1191,7 +1191,7 @@ def test_run_start_skips_default_state_matching_observed_state(
             value=StateValue(False),
         ),
     )
-    with _runtime(tmp_path, provider) as runtime:
+    with _runtime(tmp_path, provider, config=config) as runtime:
         run_id, lease_id = _start_run(
             runtime,
             config,
@@ -1218,7 +1218,7 @@ def test_run_start_skips_unit_equivalent_default_state(tmp_path: Path) -> None:
             value=StateValue(Quantity(value=1000.0, unit="MHz")),
         )
     )
-    with _runtime(tmp_path, provider) as runtime:
+    with _runtime(tmp_path, provider, config=config) as runtime:
         run_id, lease_id = _start_run(
             runtime,
             config,
