@@ -1010,6 +1010,8 @@ class CalibrationCohortSpec(_CalibrationModel):
                     raise ValueError(
                         "member dependency must equal observed latest success"
                     )
+                if latest_success.attempt.target.owner != member.target.owner:
+                    raise ValueError("calibration dependency belongs to another owner")
                 if latest_success.attempt.target.batch_id != member.target.batch_id:
                     raise ValueError(
                         "calibration dependency belongs to another batch; "
