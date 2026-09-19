@@ -436,7 +436,7 @@ def _save_config_revision_locked(
         )
         entry_id = _required_revision_entry_id(revision)
     elif isinstance(source, CandidateConfigRevisionSource):
-        validated = _validate_candidate_source_records(
+        validated = validate_candidate_source_records(
             storage=work.runs,
             run_id=source.run_id,
             proposal_id=source.proposal_id,
@@ -520,7 +520,7 @@ def _required_revision_entry_id(
     return revision.entry_id
 
 
-def _validate_candidate_source_records(
+def validate_candidate_source_records(
     *,
     storage: RunRepository,
     run_id: str,
@@ -1592,6 +1592,7 @@ def save_config_context(
     parameters: ParameterSnapshot | None,
     structure_plan: ParameterStructurePlan | None = None,
     advance: bool = False,
+    candidate: CandidateConfigRegistrySource | None = None,
     actor: str,
     note: str,
     unit_of_work: ConfigRegistryUnitOfWorkFactory,
@@ -1652,6 +1653,7 @@ def save_config_context(
             else ()
         )
         source = ContextConfigRegistrySource(
+            candidate=candidate,
             context=ConfigContextMetadata(
                 sample=sample,
                 working_point_id=working_point_id,
@@ -1686,7 +1688,7 @@ def save_config_context(
                     selected_ref=selected_ref,
                     inherited=inherited,
                 ),
-            )
+            ),
         )
         entry = ConfigRegistryEntry(
             id=entry_id,

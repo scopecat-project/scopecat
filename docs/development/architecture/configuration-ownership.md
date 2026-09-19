@@ -1,8 +1,9 @@
 # Configuration ownership and execution fences
 
-The first executable slice of #645 separates fixed scientific selections from
-unrelated changes to the lab default (#647). It does not introduce independently
-maintained setup revisions or complete object-scoped calibration automation.
+Two slices of #645 separate fixed scientific selections from unrelated default
+changes (#647), and publish verified candidates into one exact working point
+(#648). They do not introduce independently maintained setup revisions or complete
+object-scoped calibration automation.
 
 ## Existing owners
 
@@ -54,11 +55,12 @@ stale. Instrument inventory migration and direct session acquisition retain thei
 existing protection. Idempotent submissions replay retained results before stale
 preview checks so retries do not create duplicate execution.
 
-## Next: verified publication into one working point (#648)
+## Verified publication into one working point (#648)
 
-The existing `publish_default()` path explicitly changes the shared default and
-still uses global acceptance fences. It must not be described as independent
-object-scoped publication. The next slice should reuse the existing workspace head:
+The explicit `publish_to(working_point=version, name=...)` operation reuses the
+existing workspace head and returns a reusable `ParameterVersion`. The separate
+`publish_default()` path still changes the shared default with global acceptance
+fences. Publication to a working point follows these rules:
 
 1. Select an exact destination working-point version and verified candidate.
 2. Require that destination to remain the workspace head, and require the
@@ -68,9 +70,15 @@ object-scoped publication. The next slice should reuse the existing workspace he
 4. Atomically retain the acceptance/verification evidence, immutable new context,
    new head and idempotent operation receipt. Do not fabricate a global activation.
 
-A and B should then publish independently; two competing updates to A must
-conflict. A failed or stale publication must leave neither an approval nor a new
-head. Explicit rebasing changes the proposal and requires new independent evidence.
+A and B publish independently; two competing updates to A conflict. A failed
+or stale publication leaves neither an approval nor a new head. The receipt,
+context provenance and approval survive current-format backup/restore. Explicit
+rebasing changes the proposal and requires new independent evidence.
+
+For recoverable client calls, retain and reuse `operation_id`. The shared config
+operation ledger records this operation without inventing an activation generation;
+an exact retry returns the original receipt before checking the now-advanced head.
+A different operation cannot use an existing destination entry to bypass head CAS.
 
 The current calibration cohort planner still resolves `active`, and its cohort
 merge/finalization contracts carry a global base generation. They need a separate

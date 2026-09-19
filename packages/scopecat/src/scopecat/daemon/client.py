@@ -169,6 +169,8 @@ from scopecat.daemon.wire import (
     CalibrationPublicationCommand,
     CalibrationPublicationReceipt,
     ConfigActivationReceipt,
+    ConfigContextPublishCommand,
+    ConfigContextPublishReceipt,
     ConfigContextResolveCommand,
     ConfigContextSaveCommand,
     ConfigDraftCommand,
@@ -1071,6 +1073,24 @@ class DaemonClient:
             f"{_API_PREFIX}/config-registry/contexts/resolve",
             command,
             ConfigContextResolution,
+        )
+
+    def publish_context(
+        self, command: ConfigContextPublishCommand
+    ) -> ConfigContextPublishReceipt:
+        return self._post_idempotent_model(
+            f"{_API_PREFIX}/config-registry/contexts/publish-operations",
+            command,
+            ConfigContextPublishReceipt,
+        )
+
+    def context_publish_operation(
+        self, operation_id: str
+    ) -> ConfigContextPublishReceipt:
+        return self._get_model(
+            f"{_API_PREFIX}/config-registry/contexts/publish-operations/"
+            f"{quote(operation_id, safe='')}",
+            ConfigContextPublishReceipt,
         )
 
     def publish_config(

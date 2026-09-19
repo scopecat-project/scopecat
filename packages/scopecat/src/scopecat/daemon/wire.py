@@ -33,9 +33,12 @@ from scopecat.config.registry.records import (
     CandidateAcceptance,
     ConfigActivationOperation,
     ConfigCompositionPolicyRef,
+    ConfigContextPublishOperation,
     ConfigPublishOperation,
     ConfigRegistryActivationRecord,
     ConfigRegistryEntry,
+    ContextConfigRegistrySource,
+    CrossRunCandidateAcceptance,
     canonical_calibration_merge_contributions,
     config_activation_intent_hash,
     config_publish_intent_hash,
@@ -56,6 +59,7 @@ from scopecat.records.analysis import (
     AnalysisInterpretationReference,
     AnalysisPublishedOutputReference,
     AnalysisTableViewSpec,
+    ProjectAnalysisDecisionReference,
     ProjectAnalysisSubject,
     SampleAnalysisSubject,
     analysis_record_id,
@@ -1383,6 +1387,8 @@ __all__ = [
     "CalibrationPublicationReceipt",
     "CandidateConfigRevisionSource",
     "ConfigActivationReceipt",
+    "ConfigContextPublishCommand",
+    "ConfigContextPublishReceipt",
     "ConfigDraftCommand",
     "ConfigEntryActivationCommand",
     "ConfigPublishCommand",
@@ -1466,3 +1472,47 @@ class ConfigContextSaveCommand(_WireModel):
 class ConfigContextResolveCommand(_WireModel):
     context: ConfigContextRef
     overrides: tuple[ParameterUpdate, ...] = Field(default=(), max_length=256)
+
+
+class ConfigContextPublishCommand(_WireModel):
+    """Accept a retained verified candidate into one exact working point."""
+
+    operation_id: NonEmptyText
+    base: ConfigContextRef
+    run_id: NonEmptyText
+    proposal_id: NonEmptyText
+    verification: ProjectAnalysisDecisionReference
+    entry_id: NonEmptyText
+    actor: NonEmptyText
+    note: str = ""
+
+    @property
+    def intent_hash(self) -> Sha256ContentHash:
+        identity = {
+            "codec": "scopecat.context-publication.v1",
+            "command": self.model_dump(mode="json", exclude={"operation_id"}),
+        }
+        return f"sha256:{stable_content_hash(identity)}"
+
+
+class ConfigContextPublishReceipt(_WireModel):
+    operation: ConfigContextPublishOperation
+    entry: ConfigRegistryEntry
+    deltas: tuple[ParameterValueDelta, ...] = ()
+
+    @model_validator(mode="after")
+    def validate_identity(self) -> ConfigContextPublishReceipt:
+        source = self.entry.source
+        if (
+            self.operation.entry_id != self.entry.id
+            or self.operation.actor != self.entry.actor
+            or self.operation.note != self.entry.note
+            or not isinstance(source, ContextConfigRegistrySource)
+            or source.context.base != self.operation.base
+            or source.candidate is None
+            or source.candidate.base_config_content_hash
+            != self.operation.base.content_hash
+            or not isinstance(source.candidate.acceptance, CrossRunCandidateAcceptance)
+        ):
+            raise ValueError("context publication receipt identity mismatch")
+        return self

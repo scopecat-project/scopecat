@@ -2381,3 +2381,225 @@ def test_typed_candidate_policy_uses_retained_decision_and_workpoint(
                     .accepted
                 )
         assert lab.config.active().entry.id != "wrong-point"
+
+
+def test_verified_candidates_publish_to_independent_working_points(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from scopecat.api.parameter_candidates import VerifiedParameterCandidate
+    from scopecat.config.registry.records import ContextConfigRegistrySource
+    from scopecat.daemon.wire import ConfigContextPublishCommand
+    from scopecat.records.config_context import ConfigContextRef
+
+    from scopecat_server.storage.sqlite.config_operations import (
+        SQLiteConfigOperationStore,
+    )
+
+    project_root = tmp_path / "source"
+    with (
+        LocalDaemonRuntime(project_root, bootstrap_config=_config()) as runtime,
+        TestClient(runtime.app()) as transport,
+    ):
+        lab = LabClient(_daemon_client(transport))
+        active = lab.config.active()
+        base = ConfigContextRef(
+            entry_id=active.entry.id, content_hash=active.entry.content_hash
+        )
+        commands: list[ConfigContextPublishCommand] = []
+        verified_candidates: list[VerifiedParameterCandidate] = []
+        for sample_id in ("a", "b"):
+            sample = lab.samples.create(
+                sample_id,
+                kind="synthetic",
+                content=SampleRevisionDraft(display_name=sample_id),
+            )
+            saved = lab.config.save_context(
+                entry_id=f"{sample_id}-parked",
+                base=base,
+                sample=SampleSelector(sample_id=sample.id, revision=1),
+                working_point_id="parked",
+                label=f"{sample_id} parked",
+            )
+            ref = ConfigContextRef(
+                entry_id=saved.entry.id, content_hash=saved.entry.content_hash
+            )
+            context = lab.config.resolve_context(ref)
+            samples = (
+                SampleSelector(sample_id=sample.id, revision=1, context_id="parked"),
+            )
+            baseline_id = _complete_signal_run(
+                runtime,
+                submission_id=f"{sample_id}-baseline",
+                signal=0.8,
+                submission=_submission(f"{sample_id}-baseline").model_copy(
+                    update={
+                        "config": context.config,
+                        "config_source": context.config_source,
+                        "request": RunRequest(experiment_id="scratch", samples=samples),
+                    }
+                ),
+            )
+            proposal = _analysis_proposal(baseline_id)
+            runtime.application.runs.save_run_analysis(
+                baseline_id, _analysis_command(proposal)
+            )
+            baseline = lab.get_run(baseline_id)
+            candidate = baseline.published_analysis("fit").candidate_config()
+            config, source = lab.config.resolve_with_source(candidate)
+            candidate_id = _complete_signal_run(
+                runtime,
+                submission_id=f"{sample_id}-candidate",
+                signal=1.1,
+                submission=_submission(f"{sample_id}-candidate").model_copy(
+                    update={
+                        "config": config,
+                        "config_source": source,
+                        "request": RunRequest(experiment_id="scratch", samples=samples),
+                    }
+                ),
+            )
+            comparison = lab.analysis(f"Verify {sample_id}", key=f"verify-{sample_id}")
+            comparison.measurements(baseline, id="baseline", role="baseline")
+            comparison.measurements(
+                lab.get_run(candidate_id), id="candidate", role="candidate"
+            )
+            verification = (
+                comparison.result()
+                .fact(
+                    "decision",
+                    _CandidateDecision(accepted=True),
+                    schema=_CANDIDATE_DECISION_SCHEMA,
+                )
+                .save()
+            )
+            verified_candidates.append(
+                VerifiedParameterCandidate(
+                    ParameterCandidate(lab.config, candidate),
+                    verification,
+                )
+            )
+            decision = verification.fact("decision")
+            commands.append(
+                ConfigContextPublishCommand(
+                    operation_id=f"publish-context:{sample_id}",
+                    base=ref,
+                    run_id=baseline_id,
+                    proposal_id=proposal.id,
+                    verification=ProjectAnalysisDecisionReference(
+                        analysis_record_id=verification.id,
+                        output_id="decision",
+                        schema_id=decision.schema_id,
+                        schema_hash=decision.schema_hash,
+                    ),
+                    entry_id=f"{sample_id}-calibrated",
+                    actor="operator",
+                )
+            )
+        a, b = commands
+        # Identical configuration bytes cannot authorize cross-object publication.
+        assert a.base.content_hash == b.base.content_hash
+        with pytest.raises(BackendConflict, match="exact working point"):
+            runtime.application.config.publish_context(
+                a.model_copy(update={"base": b.base})
+            )
+
+        rejected_context = lab.analysis("Rejected", key="rejected")
+        rejected_context.measurements(
+            lab.get_run(a.run_id), id="baseline", role="baseline"
+        )
+        rejected = (
+            rejected_context.result()
+            .fact(
+                "decision",
+                _CandidateDecision(accepted=False),
+                schema=_CANDIDATE_DECISION_SCHEMA,
+            )
+            .save()
+        )
+        rejection = rejected.fact("decision")
+        with pytest.raises(BackendConflict, match="did not accept"):
+            runtime.application.config.publish_context(
+                a.model_copy(
+                    update={
+                        "verification": ProjectAnalysisDecisionReference(
+                            analysis_record_id=rejected.id,
+                            output_id="decision",
+                            schema_id=rejection.schema_id,
+                            schema_hash=rejection.schema_hash,
+                        ),
+                    }
+                )
+            )
+
+        # A failure at the final ledger write rolls back approval, entry, and head.
+        def fail_receipt(*args: object) -> None:
+            raise RuntimeError("receipt unavailable")
+
+        with monkeypatch.context() as patch:
+            patch.setattr(
+                SQLiteConfigOperationStore, "commit_in_transaction", fail_receipt
+            )
+            with pytest.raises(RuntimeError, match="receipt unavailable"):
+                runtime.application.config.publish_context(a)
+        assert lab.config.latest_context(a.base).entry.id == a.base.entry_id
+        with pytest.raises(DaemonNotFoundError):
+            lab.config.entry(a.entry_id)
+        assert not any(
+            event.kind == "parameter_proposal_approved"
+            for event in _events(runtime).items
+        )
+        assert _approval_count(runtime, (a.run_id, b.run_id)) == 0
+        receipt = lab.config.publish_context(a)
+        assert isinstance(receipt.entry.source, ContextConfigRegistrySource)
+        assert receipt.entry.source.candidate is not None
+        assert isinstance(
+            receipt.entry.source.candidate.acceptance, CrossRunCandidateAcceptance
+        )
+        assert receipt.entry.source.candidate.acceptance.decision == a.verification
+        assert lab.config.context_publish_operation(a.operation_id) == receipt
+        assert lab.config.publish_context(a) == receipt
+        with pytest.raises(DaemonConflictError, match="different intent"):
+            lab.config.publish_context(a.model_copy(update={"note": "changed"}))
+        with pytest.raises(DaemonConflictError, match="Working point changed"):
+            lab.config.publish_context(
+                a.model_copy(update={"operation_id": "new-operation"})
+            )
+        assert lab.config.latest_context(b.base).entry.id == b.base.entry_id
+        published = verified_candidates[1].publish_to(
+            working_point=b.base,
+            name=b.entry_id,
+            operation_id=b.operation_id,
+        )
+        assert (
+            verified_candidates[1].publish_to(
+                working_point=b.base,
+                name=b.entry_id,
+                operation_id=b.operation_id,
+            )
+            == published
+        )
+        second = lab.config.entry(published.name)
+        assert lab.config.latest_context(a.base).entry == receipt.entry
+        assert lab.config.latest_context(b.base).entry == second.entry
+        assert lab.config.active() == active
+    with LocalDaemonRuntime(project_root) as restarted:
+        assert (
+            restarted.application.config.get_context_publish_operation(a.operation_id)
+            == receipt
+        )
+
+    from scopecat_server.snapshots import create_snapshot, restore_snapshot
+
+    (project_root / "scopecat.toml").write_text("[lab]\n")
+    snapshot = tmp_path / "snapshot"
+    restored = tmp_path / "restored"
+    create_snapshot(load_project(project_root / "scopecat.toml"), snapshot)
+    restore_snapshot(snapshot, restored)
+    with LocalDaemonRuntime(restored) as recovered:
+        assert (
+            recovered.application.config.get_context_publish_operation(a.operation_id)
+            == receipt
+        )
+        assert (
+            recovered.application.config.latest_context(a.base).entry == receipt.entry
+        )

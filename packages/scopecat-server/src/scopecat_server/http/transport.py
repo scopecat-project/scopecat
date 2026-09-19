@@ -188,6 +188,8 @@ from scopecat.daemon.wire import (
     CalibrationPublicationCommand,
     CalibrationPublicationReceipt,
     ConfigActivationReceipt,
+    ConfigContextPublishCommand,
+    ConfigContextPublishReceipt,
     ConfigContextResolveCommand,
     ConfigContextSaveCommand,
     ConfigDraftCommand,
@@ -884,6 +886,18 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
             limit=limit,
             before=before,
         )
+
+    @app.post(f"{_API_PREFIX}/config-registry/contexts/publish-operations")
+    def publish_context(
+        command: ConfigContextPublishCommand,
+    ) -> ConfigContextPublishReceipt:
+        return application.config.publish_context(command)
+
+    @app.get(
+        f"{_API_PREFIX}/config-registry/contexts/publish-operations/{{operation_id:path}}"
+    )
+    def context_publish_operation(operation_id: str) -> ConfigContextPublishReceipt:
+        return application.config.get_context_publish_operation(operation_id)
 
     @app.post(f"{_API_PREFIX}/config-registry/contexts")
     def save_context(command: ConfigContextSaveCommand) -> ConfigEntryView:

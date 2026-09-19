@@ -25,19 +25,24 @@ CREATE TABLE IF NOT EXISTS parameter_workspace_heads (
 CREATE TABLE IF NOT EXISTS config_operations (
     operation_id TEXT PRIMARY KEY,
     kind TEXT NOT NULL CHECK (
-        kind IN ('activate_entry', 'publish_revision', 'publish_calibration')
+        kind IN ('activate_entry', 'publish_revision',
+            'publish_calibration', 'publish_context')
     ),
     intent_hash TEXT NOT NULL,
-    expected_generation INTEGER NOT NULL CHECK (expected_generation >= 0),
+    expected_generation INTEGER CHECK (expected_generation >= 0),
     result_entry_id TEXT NOT NULL,
-    result_activation_generation INTEGER NOT NULL CHECK (
+    result_activation_generation INTEGER CHECK (
         result_activation_generation >= 1
     ),
     receipt_json TEXT NOT NULL,
     recorded_at TEXT NOT NULL,
     CHECK (
-        result_activation_generation = expected_generation
-        OR result_activation_generation = expected_generation + 1
+        (kind = 'publish_context' AND expected_generation IS NULL
+            AND result_activation_generation IS NULL)
+        OR (kind != 'publish_context' AND expected_generation IS NOT NULL
+            AND result_activation_generation IS NOT NULL AND (
+                result_activation_generation = expected_generation
+                OR result_activation_generation = expected_generation + 1))
     ),
     FOREIGN KEY (result_entry_id)
         REFERENCES config_registry_entries(entry_id),

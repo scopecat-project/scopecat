@@ -145,9 +145,9 @@ binding behavior remains the execution boundary to build upon.
 
 The first execution slice now uses setup-content fences for fixed selections,
 while active-default selection retains its generation fence. Working-point saves
-already compare their own heads; verified candidate publication still targets the
-global default. See [configuration ownership](configuration-ownership.md) for the
-implemented boundary, race protection and next publication slice.
+already compare their own heads; verified candidates can now explicitly publish
+to an exact working point without changing the global default. See [configuration ownership](configuration-ownership.md) for the
+implemented boundary, race protection and remaining automation work.
 
 ## Order of work and evidence for convergence
 
