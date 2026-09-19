@@ -119,7 +119,7 @@ class LabCalibrationOperations:
                     config_ref=latest.entry.config_ref,
                     content_hash=latest.entry.content_hash,
                     scope=WorkingPointCalibrationScope(
-                        workspace_id=metadata.workspace_id or latest.entry.id,
+                        workspace_id=metadata.workspace_id,
                         sample=metadata.sample,
                     ),
                 ),

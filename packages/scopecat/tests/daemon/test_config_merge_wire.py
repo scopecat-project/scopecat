@@ -22,6 +22,24 @@ from scopecat.daemon.wire import (
     ConfigPublishCommand,
 )
 from scopecat.records.analysis import ProjectAnalysisDecisionReference
+from scopecat.records.calibration_scope import (
+    CalibrationConfigSourceRef,
+    WorkingPointCalibrationScope,
+)
+from scopecat.records.sample import SampleBinding
+
+_SCOPE = WorkingPointCalibrationScope(
+    workspace_id="test-working-point",
+    sample=SampleBinding(
+        role="subject",
+        sample_id="chip",
+        revision=1,
+        content_hash="sha256:" + "a" * 64,
+        kind="synthetic",
+        display_name="Chip",
+        context_id="parked",
+    ),
+)
 
 _CONFIG_HASH = f"sha256:{'a' * 64}"
 _RESULT_HASH = f"sha256:{'b' * 64}"
@@ -80,7 +98,7 @@ def test_calibration_merge_accepts_one_contribution_but_not_zero() -> None:
         _registry_source(())
 
 
-def test_calibration_merge_command_requires_base_generation_cas() -> None:
+def test_calibration_merge_uses_working_point_base() -> None:
     source = _source((_contribution("q0"), _contribution("q1")))
 
     with pytest.raises(ValidationError):
@@ -94,13 +112,15 @@ def test_calibration_merge_command_requires_base_generation_cas() -> None:
             }
         )
 
-    with pytest.raises(ValidationError, match="must equal its base_generation"):
-        CalibrationPublicationCommand(
-            operation_id="merge-op",
-            source=source,
-            actor="automation",
-            expected_generation=6,
-            entry_id="merged-entry",
+    with pytest.raises(ValidationError, match="expected_generation"):
+        CalibrationPublicationCommand.model_validate(
+            {
+                "operation_id": "merge-op",
+                "source": source,
+                "actor": "automation",
+                "expected_generation": 6,
+                "entry_id": "merged-entry",
+            }
         )
 
 
@@ -112,7 +132,6 @@ def test_automatic_merge_requires_revision_fence_outside_publish_intent() -> Non
             operation_id="merge-op",
             source=source,
             actor="automation",
-            expected_generation=7,
             entry_id="merged-entry",
         )
 
@@ -120,7 +139,6 @@ def test_automatic_merge_requires_revision_fence_outside_publish_intent() -> Non
         operation_id="merge-op",
         source=source,
         actor="automation",
-        expected_generation=7,
         expected_finalization_revision=2,
         entry_id="merged-entry",
     )
@@ -133,7 +151,6 @@ def test_automatic_merge_requires_revision_fence_outside_publish_intent() -> Non
             operation_id="manual-merge-op",
             source=_source((_contribution("q0"),)),
             actor="automation",
-            expected_generation=7,
             expected_finalization_revision=2,
             entry_id="manual-merged-entry",
         )
@@ -191,9 +208,12 @@ def _registry_source(
         cohort_id="cohort-1",
         spec_hash=_SPEC_HASH,
         composition_policy_ref=_policy(),
-        base_entry_id="base-entry",
-        base_config_content_hash=_CONFIG_HASH,
-        base_registry_generation=7,
+        base=CalibrationConfigSourceRef(
+            entry_id="base-entry",
+            config_ref="configs/base",
+            content_hash=_CONFIG_HASH,
+            scope=_SCOPE,
+        ),
         candidate_id="merged-candidate",
         contributions=contributions,
     )
@@ -206,7 +226,6 @@ def _command(
         operation_id="merge-op",
         source=_source(contributions),
         actor="automation",
-        expected_generation=7,
         entry_id="merged-entry",
     )
 
@@ -218,9 +237,12 @@ def _source(
         cohort_id="cohort-1",
         spec_hash=_SPEC_HASH,
         composition_policy_ref=_policy(),
-        base_entry_id="base-entry",
-        base_content_hash=_CONFIG_HASH,
-        base_generation=7,
+        base=CalibrationConfigSourceRef(
+            entry_id="base-entry",
+            config_ref="configs/base",
+            content_hash=_CONFIG_HASH,
+            scope=_SCOPE,
+        ),
         candidate_id="merged-candidate",
         contributions=contributions,
         expected_result_content_hash=_RESULT_HASH,

@@ -49,10 +49,12 @@ from scopecat.automation.calibrations import (
     CalibrationPublicationSupersession,
     CalibrationStatus,
     CalibrationTargetRef,
+    CalibrationWorkingPointSupersession,
     calibration_cohort_member_request_key,
     calibration_cohort_spec_hash,
     calibration_freshness_fingerprint,
     calibration_key,
+    scoped_calibration_target,
 )
 from scopecat.automation.models import ProcedureDefinitionRef
 from scopecat.config.registry.records import (
@@ -64,6 +66,21 @@ from scopecat.config.registry.records import (
 from scopecat.daemon.client import DaemonConflictError
 from scopecat.daemon.wire import CalibrationPublicationReceipt
 from scopecat.records.analysis import ProjectAnalysisDecisionReference
+from scopecat.records.calibration_scope import WorkingPointCalibrationScope
+from scopecat.records.sample import SampleBinding
+
+_SCOPE = WorkingPointCalibrationScope(
+    workspace_id="test-working-point",
+    sample=SampleBinding(
+        role="subject",
+        sample_id="chip",
+        revision=1,
+        content_hash="sha256:" + "a" * 64,
+        kind="synthetic",
+        display_name="Chip",
+        context_id="parked",
+    ),
+)
 
 _NOW = datetime(2026, 8, 19, 9, tzinfo=UTC)
 _HASH_A = f"sha256:{'a' * 64}"
@@ -93,7 +110,7 @@ _BASE = CalibrationConfigSourceRef(
     entry_id="base-entry",
     config_ref="config-registry/entries/base-entry/config.json",
     content_hash=_HASH_D,
-    registry_generation=7,
+    scope=_SCOPE,
 )
 
 _PLANS: dict[str, CalibrationCohortPublicationPlan] = {}
@@ -951,7 +968,9 @@ def _fixture(
     cohort_id: str = "cohort-ready",
     sequence: int = 1,
 ) -> _Fixture:
-    target = CalibrationTargetRef(kind="qubit", id=cohort_id)
+    target = scoped_calibration_target(
+        CalibrationTargetRef(kind="qubit", id=cohort_id), _BASE
+    )
     input_fingerprint = _HASH_E
     member_spec = CalibrationCohortMemberSpec(
         member_id=f"member-{cohort_id}",
@@ -1160,8 +1179,10 @@ def _superseded(
         updated_at=updated_at,
         ready_at=finalization.ready_at,
         supersession=CalibrationPublicationSupersession(
-            superseded_by_generation=(
-                finalization.base_config_source.registry_generation + 1
+            evidence=CalibrationWorkingPointSupersession(
+                superseded_by=finalization.base_config_source.model_copy(
+                    update={"entry_id": "later-entry"}
+                ),
             ),
             superseded_at=updated_at,
         ),

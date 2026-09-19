@@ -56,7 +56,7 @@ _LOG = logging.getLogger(__name__)
 
 @dataclass(frozen=True, slots=True)
 class CalibrationPlanningContext:
-    """One exact active configuration snapshot shared by a planning cycle."""
+    """One exact saved configuration and ownership scope per planning cycle."""
 
     config: ConfigProfileSnapshot
     config_source: CalibrationConfigSourceRef

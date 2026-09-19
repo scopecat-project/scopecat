@@ -36,7 +36,7 @@ from scopecat.records.calibration_scope import (
 )
 from scopecat.records.content import Sha256ContentHash
 from scopecat.records.experimental_batch import ExperimentalBatchId, absent_batch
-from scopecat.records.sample import SampleId, SampleSelector
+from scopecat.records.sample import SampleId
 
 type _NonEmptyText = Annotated[str, Field(min_length=1)]
 
@@ -161,22 +161,6 @@ def scoped_calibration_target(
     if target.sample_id is not None:
         raise ValueError("sample calibration requires an explicit working point")
     return target.model_copy(update={"owner": scope.owner})
-
-
-def calibration_target_sample_selectors(
-    target: CalibrationTargetRef,
-) -> tuple[SampleSelector, ...]:
-    """Return the child-run sample scope implied by a calibration target."""
-
-    if target.sample_id is None:
-        return ()
-    return (
-        SampleSelector(
-            sample_id=target.sample_id,
-            context_id=target.context_id,
-            batch_id=target.batch_id,
-        ),
-    )
 
 
 def calibration_key(
@@ -1508,5 +1492,4 @@ __all__ = [
     "calibration_cohort_spec_hash",
     "calibration_freshness_fingerprint",
     "calibration_key",
-    "calibration_target_sample_selectors",
 ]

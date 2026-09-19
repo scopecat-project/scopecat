@@ -56,7 +56,22 @@ from scopecat.automation.calibration_definition import (
 )
 from scopecat.config.registry.records import ConfigCompositionPolicyRef
 from scopecat.daemon.client import DaemonConflictError, DaemonNotFoundError
+from scopecat.records.calibration_scope import WorkingPointCalibrationScope
 from scopecat.records.config import ConfigProfileSnapshot
+from scopecat.records.sample import SampleBinding
+
+_SCOPE = WorkingPointCalibrationScope(
+    workspace_id="test-working-point",
+    sample=SampleBinding(
+        role="subject",
+        sample_id="chip",
+        revision=1,
+        content_hash="sha256:" + "a" * 64,
+        kind="synthetic",
+        display_name="Chip",
+        context_id="parked",
+    ),
+)
 
 _NOW = datetime(2026, 8, 18, 10, tzinfo=UTC)
 _EVENTS: list[str] = []
@@ -247,7 +262,7 @@ class _UnknownCreateOperations(_Operations):
                     entry_id="drifted-config-entry",
                     config_ref=source.config_ref,
                     content_hash=source.content_hash,
-                    registry_generation=source.registry_generation,
+                    scope=source.scope,
                 ),
                 fanout_scope=attempted_spec.fanout_scope,
                 max_in_flight=attempted_spec.max_in_flight,
@@ -739,7 +754,7 @@ def test_pending_publication_base_drift_admits_a_new_truthful_need() -> None:
     evaluator = ProjectCalibrationEvaluator(
         operations,
         CalibrationRegistry((definition,)),
-        lambda: _context(registry_generation=2),
+        lambda: _context(head_version=2),
     )
 
     result = evaluator.cycle()
@@ -754,10 +769,7 @@ def test_pending_publication_base_drift_admits_a_new_truthful_need() -> None:
     )
     assert len(reasons) == 1
     assert reasons[0].previous_success == pending_status.latest_success
-    assert (
-        reasons[0].current_config_source
-        == _context(registry_generation=2).config_source
-    )
+    assert reasons[0].current_config_source == _context(head_version=2).config_source
 
 
 def test_evaluator_pins_exact_automatic_publication_policy_into_cohort() -> None:
@@ -818,7 +830,7 @@ def test_published_result_uses_result_inputs_as_effective_freshness() -> None:
     evaluator = ProjectCalibrationEvaluator(
         operations,
         CalibrationRegistry((definition,)),
-        lambda: _context(registry_generation=2),
+        lambda: _context(head_version=2),
     )
 
     result = evaluator.cycle()
@@ -854,7 +866,7 @@ def test_published_result_ttl_still_starts_at_procedure_closure() -> None:
     evaluator = ProjectCalibrationEvaluator(
         operations,
         CalibrationRegistry((definition,)),
-        lambda: _context(registry_generation=2),
+        lambda: _context(head_version=2),
     )
 
     result = evaluator.cycle()
@@ -886,7 +898,7 @@ def test_generation_only_context_change_does_not_stale_semantic_inputs() -> None
     evaluator = ProjectCalibrationEvaluator(
         operations,
         CalibrationRegistry((definition,)),
-        lambda: _context(registry_generation=2),
+        lambda: _context(head_version=2),
     )
 
     result = evaluator.cycle()
@@ -953,21 +965,20 @@ def _evaluator(
     )
 
 
-def _context(*, registry_generation: int = 1) -> CalibrationPlanningContext:
+def _context(*, head_version: int = 1) -> CalibrationPlanningContext:
     return CalibrationPlanningContext(
         config=cast("ConfigProfileSnapshot", object()),
         config_source=CalibrationConfigSourceRef(
-            selector="active",
-            entry_id=f"config-entry-{registry_generation}",
-            config_ref=f"config-entry-{registry_generation}@r1",
-            content_hash=f"sha256:{str(registry_generation % 10) * 64}",
-            registry_generation=registry_generation,
+            entry_id=f"config-entry-{head_version}",
+            config_ref=f"config-entry-{head_version}@r1",
+            content_hash=f"sha256:{str(head_version % 10) * 64}",
+            scope=_SCOPE,
         ),
     )
 
 
 def _target(id: str) -> CalibrationTargetRef:
-    return CalibrationTargetRef(kind="qubit", id=id)
+    return _context().target(CalibrationTargetRef(kind="qubit", id=id))
 
 
 def _response(status: int) -> httpx2.Response:
@@ -1062,7 +1073,7 @@ def _published_status(
             input_fingerprint=result_input_fingerprint,
             dependencies=pending.attempt.dependencies,
         ),
-        result_config_source=_context(registry_generation=2).config_source,
+        result_config_source=_context(head_version=2).config_source,
         published_at=_NOW - timedelta(minutes=30),
     )
     published = CalibrationSuccessRef(
@@ -1076,3 +1087,98 @@ def _published_status(
         latest_attempt=status.latest_attempt,
         latest_success=published,
     )
+
+
+def test_planner_normalizes_targets_and_dependency_ownership() -> None:
+    global _targets
+    definition = _definition()
+    _targets = (CalibrationTargetRef(kind="qubit", id="a"),)
+    _values["a"] = 1
+    descriptor = CalibrationTargetRef(kind="qubit", id="dependency")
+    dependency_definition = _definition(id="tests.dependency")
+    dependency_status = _attempt_status(
+        dependency_definition,
+        _context().target(descriptor),
+        procedure_state="closed",
+        closure_status="succeeded",
+    )
+    _dependencies["a"] = (
+        CalibrationDependencyRequirement(
+            definition_id=dependency_definition.id, target=descriptor
+        ),
+    )
+    operations = _Operations(
+        statuses={dependency_status.calibration_key: dependency_status}
+    )
+    result = _evaluator(definition, operations).cycle()
+    assert result.admitted_members == 1
+    member = next(iter(operations.cohorts.values())).cohort.spec.members[0]
+    assert member.target == _context().target(_targets[0])
+    assert member.dependencies[0].calibration_key == _context().key(
+        dependency_definition.id, descriptor
+    )
+
+
+def test_scoped_keys_follow_owner_not_head_and_reject_cross_owner_dependencies() -> (
+    None
+):
+    global _targets
+    descriptor = CalibrationTargetRef(kind="qubit", id="a")
+    context = _context()
+    other = CalibrationPlanningContext(
+        config=context.config,
+        config_source=context.config_source.model_copy(
+            update={
+                "scope": _SCOPE.model_copy(update={"workspace_id": "another-branch"}),
+            }
+        ),
+    )
+    definition = _definition()
+    assert context.key(definition.id, descriptor) == _context(head_version=2).key(
+        definition.id, descriptor
+    )
+    assert context.key(definition.id, descriptor) != other.key(
+        definition.id, descriptor
+    )
+    assert context.config_source.scope.sample_selectors()[0].revision == 1
+    _targets = (descriptor,)
+    _values["a"] = 1
+    _dependencies["a"] = (
+        CalibrationDependencyRequirement(
+            definition_id="other", target=other.target(descriptor)
+        ),
+    )
+    operations = _Operations()
+    result = _evaluator(definition, operations).cycle()
+    assert result.failures == 1
+    assert not operations.cohorts
+    assert _EVENTS == []
+
+
+def test_catalog_evaluator_checks_devices_without_choosing_a_writable_owner() -> None:
+    from scopecat.records.calibration_scope import CatalogCalibrationScope
+
+    global _targets
+    _targets = (CalibrationTargetRef(kind="instrument", id="a"),)
+    _values["a"] = 1
+    catalog = CalibrationPlanningContext(
+        config=_context().config,
+        config_source=_context().config_source.model_copy(
+            update={"scope": CatalogCalibrationScope()}
+        ),
+    )
+    operations = _Operations()
+    result = ProjectCalibrationEvaluator(
+        operations,
+        CalibrationRegistry(
+            (
+                _definition("check"),
+                _definition("publish", success_policy="published_result"),
+            )
+        ),
+        lambda: catalog,
+    ).cycle()
+    assert result.admitted_members == 1
+    [receipt] = operations.cohorts.values()
+    assert receipt.cohort.spec.definition.id == "check"
+    assert receipt.cohort.spec.config_source.scope.sample_selectors() == ()

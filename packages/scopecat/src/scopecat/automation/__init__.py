@@ -73,7 +73,6 @@ from scopecat.automation.calibrations import (
     calibration_cohort_spec_hash,
     calibration_freshness_fingerprint,
     calibration_key,
-    calibration_target_sample_selectors,
     scoped_calibration_target,
 )
 from scopecat.automation.definition import (
@@ -352,7 +351,6 @@ __all__ = [
     "calibration_cohort_spec_hash",
     "calibration_freshness_fingerprint",
     "calibration_key",
-    "calibration_target_sample_selectors",
     "interval_occurrence_schedule_id",
     "interval_schedule",
     "procedure",
