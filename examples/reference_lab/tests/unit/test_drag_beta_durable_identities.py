@@ -20,8 +20,8 @@ from reference_lab.workflows.drag_beta_publication import (
 def test_drag_beta_durable_capability_manifest_changes_explicitly() -> None:
     """Require an intentional version-and-fingerprint review for code changes."""
 
-    # Explicit experiment builds change procedure and transitive policy identity.
-    # Advance their durable versions; scientific measurement and fit stay unchanged.
+    # Fixed selections now use setup fences rather than global activation.
+    # Advance procedure and transitive policy identities for this wire contract.
     assert {
         "manual_procedure": drag_beta_calibration_procedure.ref.model_dump(mode="json"),
         "verification_procedure": drag_beta_verification_procedure.ref.model_dump(
@@ -35,59 +35,59 @@ def test_drag_beta_durable_capability_manifest_changes_explicitly() -> None:
     } == {
         "manual_procedure": {
             "id": "reference-lab.drag-beta-calibration",
-            "version": "8",
+            "version": "9",
             "fingerprint": (
-                "sha256:d9af400d7aac20bf87062fa6def36af62"
-                "7251b2adecc660c51adc31d24a7e2ca"
+                "sha256:cf31e98d821144151b72fb4f15213bb8"
+                "bd0f848587775521c262f3b2817c6bd0"
             ),
         },
         "verification_procedure": {
             "id": "reference-lab.drag-beta-verification",
-            "version": "7",
+            "version": "8",
             "fingerprint": (
-                "sha256:27d687f5a69cbddbc1bffd92340a9bba6"
-                "86eb189ad7bc1dc094ddc92956d10f0"
+                "sha256:7df205a91f643e710b7d088ae73ddff8"
+                "f337ae3b84c340d5308407e19c9114ba"
             ),
         },
         "calibration": {
             "id": "reference-lab.drag-beta-freshness",
-            "version": "8",
+            "version": "9",
             "fingerprint": (
-                "sha256:0ac7a851e5aeadb6aed3aadd0ff41c5fd"
-                "82bc1e8db3adfc442f49346b91cc31c"
+                "sha256:835464afcdbe22cf69e7308252d23fb2"
+                "037e5435d834f6ff3b38217909657f28"
             ),
             "success_policy": "published_result",
         },
         "composition": {
             "id": "reference-lab.drag-beta-cohort-composition",
-            "version": "9",
+            "version": "10",
             "fingerprint": (
-                "sha256:3533262a933abef22e4ddb940db8e8d0d"
-                "05cc8248817348a482b46bcd83768ce"
+                "sha256:ccf9ac13ee9da4e2f48edbab549d7f71"
+                "ee5e4c7e02ceb5f09dce927dc13652ba"
             ),
         },
         "automatic_publication": {
             "id": "reference-lab.drag-beta-automatic-publication",
-            "version": "9",
+            "version": "10",
             "fingerprint": (
-                "sha256:1d279b564c53ffacbe36f11d26cd8c5e9"
-                "80246bad50088384387294f3c998d3b"
+                "sha256:5116c5d4b5533577424d2e2eb2df35b9"
+                "6051911070c73ece3d44d5a82c567574"
             ),
             "calibration": {
                 "id": "reference-lab.drag-beta-freshness",
-                "version": "8",
+                "version": "9",
                 "fingerprint": (
-                    "sha256:0ac7a851e5aeadb6aed3aadd0ff41c5fd"
-                    "82bc1e8db3adfc442f49346b91cc31c"
+                    "sha256:835464afcdbe22cf69e7308252d23fb2"
+                    "037e5435d834f6ff3b38217909657f28"
                 ),
                 "success_policy": "published_result",
             },
             "composition_policy": {
                 "id": "reference-lab.drag-beta-cohort-composition",
-                "version": "9",
+                "version": "10",
                 "fingerprint": (
-                    "sha256:3533262a933abef22e4ddb940db8e8d0d"
-                    "05cc8248817348a482b46bcd83768ce"
+                    "sha256:ccf9ac13ee9da4e2f48edbab549d7f71"
+                    "ee5e4c7e02ceb5f09dce927dc13652ba"
                 ),
             },
         },
