@@ -96,6 +96,7 @@ from scopecat.records.sample import (
     SampleRevisionDraft,
     SampleSelector,
 )
+from scopecat.records.scientific_binding import ResolvedScientificBinding
 from scopecat.sdk.instruments.contracts import InstrumentDescription
 from scopecat.sdk.instruments.execution import RunHardwareBatch
 
@@ -767,6 +768,7 @@ class RunSubmission(_WireModel):
 
     procedure_child: ProcedureChildSubmission | None = None
     submission_id: NonEmptyText
+    scientific_binding: ResolvedScientificBinding
     config: ConfigProfileSnapshot
     config_source: RunConfigSource | None = None
     request: RunRequest
@@ -777,7 +779,12 @@ class RunSubmission(_WireModel):
         """Identify submission content independently of its retry key."""
 
         return stable_content_hash(
-            self.model_dump(mode="json", exclude={"submission_id", "procedure_child"})
+            {
+                "codec": "scopecat.run-submission.v2",
+                **self.model_dump(
+                    mode="json", exclude={"submission_id", "procedure_child"}
+                ),
+            }
         )
 
 
