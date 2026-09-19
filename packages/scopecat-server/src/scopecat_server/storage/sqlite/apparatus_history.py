@@ -1,5 +1,6 @@
 """Immutable descriptive history; observations never imply current apparatus state."""
 
+import hashlib
 import sqlite3
 from datetime import UTC, datetime
 from typing import cast
@@ -22,7 +23,6 @@ from scopecat_server.errors import BackendConflict, BackendNotFound
 from scopecat_server.storage.sqlite.connection import SQLiteDatabase
 from scopecat_server.storage.sqlite.object_store import (
     ImmutableObjectStore,
-    ObjectStoreError,
 )
 
 
@@ -261,8 +261,9 @@ class ApparatusHistoryStore:
 
     def _attachment_bytes(self, attachment: ApparatusAttachment) -> bytes:
         try:
-            content = self.objects.read(attachment.content_hash)
-        except ObjectStoreError as error:
+            with self.objects.path_for(attachment.content_hash).open("rb") as source:
+                content = source.read(attachment.size_bytes + 1)
+        except OSError as error:
             raise BackendConflict(
                 "apparatus attachment is missing or corrupt"
             ) from error
@@ -270,6 +271,8 @@ class ApparatusHistoryStore:
             raise BackendConflict(
                 "apparatus attachment size does not match retained bytes"
             )
+        if f"sha256:{hashlib.sha256(content).hexdigest()}" != attachment.content_hash:
+            raise BackendConflict("apparatus attachment is missing or corrupt")
         return content
 
     def attachment_content(self, observation_id: str, content_hash: str) -> bytes:

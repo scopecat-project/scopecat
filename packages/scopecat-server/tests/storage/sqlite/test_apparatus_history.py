@@ -1,5 +1,6 @@
 from collections.abc import Generator
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 import pytest
 from scopecat.records.apparatus_history import (
@@ -177,7 +178,7 @@ def test_owned_attachments_preserve_bytes_and_restrict_lookup(
                 ),
             )
         )
-    history.objects.path_for(attachment.content_hash).write_bytes(b"corrupted")
+    history.objects.path_for(attachment.content_hash).write_bytes(b"x" * len(content))
     with pytest.raises(BackendConflict, match="corrupt"):
         history.attachment_content(command.observation_id, attachment.content_hash)
     with pytest.raises(BackendConflict, match="corrupt"):
@@ -207,3 +208,34 @@ def test_run_links_require_local_retained_runs_and_support_filtering(
     assert history.observations("L3", run_id="run-1").items == (value,)
     assert history.observations("L3", run_id="run-2").items == ()
     assert history.record_observation(command) == value
+
+
+def test_attachment_verification_bounds_read_before_size_validation(
+    history: ApparatusHistoryStore,
+) -> None:
+    subject = _create(history).ref
+    attachment = history.import_attachment(b"actual bytes are longer", "data.bin")
+    declared = attachment.model_copy(update={"size_bytes": 3})
+    command = ApparatusObservationCreate(
+        observation_id="oversized",
+        draft=ApparatusObservationDraft(
+            subject=subject,
+            title="Oversized reference",
+            actor="operator",
+            attachments=(declared,),
+        ),
+    )
+    with history.objects.path_for(attachment.content_hash).open("rb") as source:
+        reader = MagicMock(wraps=source)
+        reader.__enter__.return_value = reader
+        with (
+            patch.object(Path, "open", return_value=reader),
+            pytest.raises(BackendConflict, match="size"),
+        ):
+            history.record_observation(command)
+        reader.read.assert_called_once_with(declared.size_bytes + 1)
+    with pytest.raises(BackendNotFound):
+        history.get_observation(command.observation_id)
+    history.objects.path_for(attachment.content_hash).unlink()
+    with pytest.raises(BackendConflict, match="missing or corrupt"):
+        history.record_observation(command)
