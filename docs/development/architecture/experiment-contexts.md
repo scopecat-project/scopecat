@@ -4,7 +4,7 @@ Status: selected product direction and proposed implementation contracts, record
 2026-09-19 after the teaching-host trial. The entities and APIs proposed here are
 not all shipped; implementation status is recorded below. This document governs the next implementation slices; it does not
 relax current ownership checks. The [prebaseline data policy](../data-compatibility.md)
-retires the schema 68–74 migration exercises; current format 76 is not a supported
+retires the schema 68–74 migration exercises; current format 77 is not a supported
 baseline. All retained-evidence and recovery contracts below concern the current
 format, not a promise to read or upgrade earlier development stores.
 
@@ -41,12 +41,12 @@ sample features; they do not yet establish the complete target/setup model below
 
 | Area | Implemented | Next boundary |
 |---|---|---|
-| Scientific identity | Immutable store-local sample revisions; catalog-qualified target revisions with member-qualified entities | Target selection in execution; executable assembly validation |
+| Scientific identity | Immutable sample revisions; exact single-member target selection through Python, preview, plans and parent/child admission | Graphical target picker (#643); executable assembly validation |
 | Applicability | Declared batch guards; shared target/batch/setup content comparison used by parameter rebase | Use resolved applicability in preparation, admission, working-point publication and calibration |
 | Working points | Exact single-sample scope, value provenance, explicit estimate copies and revision conflicts | Separate parameter state from maintained setup; migrate the single-subject consumers together |
 | Execution setup | Complete retained config; setup-content projection for strict comparison | Independent maintained setup revisions and one authoritative resolver |
-| Session and addressing | Per-page/kernel choices, retained plans, collection numbering | Source-qualified multi-workspace execution and setup selection |
-| Application | Existing experiment console plus local host lifecycle | Workbench entry, Help exercises and server-enforced practice boundaries |
+| Session and addressing | Per-page/kernel choices, frozen target plans, collection numbering and same-environment source-qualified workspace execution | Graphical workspace selection, heterogeneous environments and setup selection |
+| Application | Registered services open the experiment workbench; Help entry and local lifecycle controls | Further Help integration and server-enforced practice boundaries |
 
 This table is the current work list. The implementation sections below explain
 prior decisions; their historical limitations are not additional independent TODOs.
@@ -401,3 +401,14 @@ The next execution slice is specified in [frozen target selection and admission]
 including single-member/subject projection, the new intent and retained-evidence
 boundary, procedure-child propagation and concrete acceptance scenarios. That
 contract is prospective; catalog registration alone still does not enable execution.
+
+
+## Unified authored scientific selection (#641)
+
+The coordinated execution contract is now implemented for single-member targets.
+One selection and reviewed envelope replaces the old flat launch fields. Notebook
+selection, preview, immutable plans, typed authored parent procedures and child runs
+retain exact target/configuration evidence. The GUI preserves target plans; its
+catalog picker remains #643. Generic saved multi-stage sample workflows may change
+configuration while admission preserves their exact sample scope. Maintained setup,
+calibration applicability and assembly execution remain open, as shown in the table.
