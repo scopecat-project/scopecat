@@ -126,16 +126,26 @@ for (const scoped of [false, true]) {
         await page.getByRole("button", { name: "Preview", exact: true }).click();
         const preview = await previewing;
         expect(preview.status()).toBe(200);
-        expect((await preview.json()).config_source).toMatchObject({
+        const prepared = await preview.json();
+        const expectedSample = {
+          sample_id: `context-${sample}`,
+          revision: 1,
+          context_id: point,
+          ...(scoped ? { batch_id: `cooldown-${sample}` } : {}),
+        };
+        expect(prepared.reviewed.config_source).toMatchObject({
           kind: "parameter_context",
           context: { entry_id: saved.entry.id },
-          sample: {
-            sample_id: `context-${sample}`,
-            revision: 1,
-            context_id: point,
-            ...(scoped ? { batch_id: `cooldown-${sample}` } : {}),
-          },
+          sample: expectedSample,
         });
+        expect(prepared.reviewed.binding.subject).toMatchObject({
+          kind: "inline_samples",
+          samples: [expectedSample],
+        });
+        if (!scoped) {
+          expect(prepared.reviewed.config_source.sample.batch_id).toBeUndefined();
+          expect(prepared.reviewed.binding.subject.samples[0].batch_id).toBeUndefined();
+        }
         await expect(page.getByText("Preview ready", { exact: true })).toBeVisible();
         const submitting = page.waitForResponse(
           (response) =>
@@ -147,7 +157,12 @@ for (const scoped of [false, true]) {
         expect(submission.status(), await submission.text()).toBe(200);
         expect(submission.request().postDataJSON()).toMatchObject({
           experiment: scoped || index % 2 === 0 ? "signal" : "reference_lab.frequency_amplitude",
-          context: { entry_id: saved.entry.id },
+          selection: {
+            subject: { kind: "sample", sample_id: `context-${sample}`, revision: 1 },
+            configuration: { kind: "working_point", ref: { entry_id: saved.entry.id } },
+            batch: scoped ? { kind: "declared", id: `cooldown-${sample}` } : { kind: "unscoped" },
+          },
+          reviewed: prepared.reviewed,
         });
         await expect(
           page.getByText(

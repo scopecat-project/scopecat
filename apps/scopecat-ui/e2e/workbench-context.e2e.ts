@@ -99,7 +99,10 @@ test("two workbench pages retain independent context and share collection number
     await expect(page.getByLabel("Experimental batch", { exact: true })).toHaveValue(batchA);
     await expect(page.getByLabel("Record collection", { exact: true })).toHaveValue(collection);
     const preparedA = await preview(page);
-    expect(preparedA.sample_binding).toMatchObject({ sample_id: "chip-a", batch_id: batchA });
+    expect(preparedA.reviewed.binding.subject).toMatchObject({
+      kind: "inline_samples",
+      samples: [{ sample_id: "chip-a", revision: 1, batch_id: batchA }],
+    });
     await page.getByLabel("Plan name", { exact: true }).fill("First batch recipe");
     await page.getByRole("button", { name: "Save plan", exact: true }).click();
     await expect(page.getByText(/Saved First batch recipe, revision 1/)).toBeVisible();
@@ -123,7 +126,10 @@ test("two workbench pages retain independent context and share collection number
     await expect(other.getByLabel("Experimental batch", { exact: true })).toHaveValue(batchB);
     await expect(other.getByLabel("Sample ID", { exact: true })).toHaveValue("chip-b");
     const preparedB = await preview(other);
-    expect(preparedB.sample_binding).toMatchObject({ sample_id: "chip-b", batch_id: batchB });
+    expect(preparedB.reviewed.binding.subject).toMatchObject({
+      kind: "inline_samples",
+      samples: [{ sample_id: "chip-b", revision: 1, batch_id: batchB }],
+    });
     await page.screenshot({ path: testInfo.outputPath("page-context.png"), fullPage: true });
     const first = await acquire(page);
     const second = await acquire(other);
