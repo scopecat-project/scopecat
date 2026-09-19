@@ -34,7 +34,7 @@ from scopecat.application.launch import (
     LaunchSubmission,
 )
 from scopecat.application.launch_config import (
-    launch_config_generation,
+    launch_configuration_fence,
     launch_preflight_configuration,
     launch_preflight_meaning,
     resolve_launch_config,
@@ -507,7 +507,7 @@ class AuthorExperiments:
             samples=resolved.reviewed.binding.sample_selectors(),
             scientific_binding=resolved.reviewed.binding,
             expected_manual_preview=request.manual_state,
-            expected_config_generation=launch_config_generation(source),
+            expected_configuration=launch_configuration_fence(resolved.reviewed),
             plan_ref=request.plan_ref,
             plan_request=request if request.plan_ref is not None else None,
         )

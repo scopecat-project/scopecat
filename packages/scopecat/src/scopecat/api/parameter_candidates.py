@@ -35,7 +35,7 @@ from scopecat.kernel.value_validation import coerce_literal
 from scopecat.records.author_revision import AuthorRevisionRef
 from scopecat.records.config import ConfigProfileSnapshot
 from scopecat.records.parameter import ParameterAtomValue
-from scopecat.records.run import AnalysisCandidateRunConfigSource, RunConfigSource
+from scopecat.records.run import RunConfigSource
 
 
 class CandidateOperations(Protocol):
@@ -91,10 +91,6 @@ class ParameterCandidate:
         snapshot = run.snapshot
         _, expected_source = self.operations.resolve_with_source(self.config)
         actual_source = snapshot.config_source
-        if isinstance(actual_source, AnalysisCandidateRunConfigSource):
-            actual_source = actual_source.model_copy(
-                update={"registry_generation": None}
-            )
         if run.id == baseline.id or actual_source != expected_source:
             raise ValueError(
                 f"{', '.join(self.cells)}: verification needs an independent retained "

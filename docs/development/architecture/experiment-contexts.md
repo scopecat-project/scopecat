@@ -4,7 +4,7 @@ Status: selected product direction and proposed implementation contracts, record
 2026-09-19 after the teaching-host trial. The entities and APIs proposed here are
 not all shipped; implementation status is recorded below. This document governs the next implementation slices; it does not
 relax current ownership checks. The [prebaseline data policy](../data-compatibility.md)
-retires the schema 68–74 migration exercises; current format 78 is not a supported
+retires the schema 68–74 migration exercises; current format 79 is not a supported
 baseline. All retained-evidence and recovery contracts below concern the current
 format, not a promise to read or upgrade earlier development stores.
 
@@ -45,7 +45,7 @@ sample features; they do not yet establish the complete target/setup model below
 | Applicability | Declared batch guards; shared target/batch/setup content comparison used by parameter rebase | Use resolved applicability in preparation, admission, working-point publication and calibration |
 | Working points | Exact single-sample scope, value provenance, explicit estimate copies and revision conflicts | Separate object-scoped parameter publication from executable setup and shared active-config defaults |
 | Apparatus history | Descriptive object/revision and observation slice (#644); separate from executable target selection | Useful history navigation and explicit evidence links; no live wiring or calibration-validity claim |
-| Execution setup | Complete retained config; setup-content projection for strict comparison | Independent maintained setup revisions and one authoritative resolver; descriptive documentation is not required to be a complete wiring model |
+| Execution setup | Complete retained config; setup-content fences for fixed selections, separate from active-default freshness | Independent maintained setup revisions and one authoritative resolver; descriptive documentation is not required to be a complete wiring model |
 | Session and addressing | Per-page/kernel choices, frozen target plans, collection numbering and same-environment source-qualified workspace execution | Graphical workspace selection, heterogeneous environments and setup selection |
 | Application | Registered services open the experiment workbench; Help entry and local lifecycle controls | Further Help integration and server-enforced practice boundaries |
 

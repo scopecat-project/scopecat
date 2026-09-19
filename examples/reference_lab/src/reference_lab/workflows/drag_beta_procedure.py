@@ -21,9 +21,9 @@ from reference_lab.workflows.drag_beta_verification import (
 )
 
 DRAG_BETA_PROCEDURE_ID = "reference-lab.drag-beta-calibration"
-DRAG_BETA_PROCEDURE_VERSION = "8"
+DRAG_BETA_PROCEDURE_VERSION = "9"
 DRAG_BETA_VERIFICATION_PROCEDURE_ID = "reference-lab.drag-beta-verification"
-DRAG_BETA_VERIFICATION_PROCEDURE_VERSION = "7"
+DRAG_BETA_VERIFICATION_PROCEDURE_VERSION = "8"
 
 
 def drag_beta_calibration_request_key(

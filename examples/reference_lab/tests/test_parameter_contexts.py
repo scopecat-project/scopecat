@@ -110,25 +110,6 @@ def test_contexts_select_parameters_and_preserve_sample_and_run_history(
             ):
                 lab.run(exploratory_signal.build(), config=refs[0])
 
-        def stale_source(
-            client: DaemonClient, submission: RunSubmission
-        ) -> RunAdmission:
-            source = submission.config_source
-            assert isinstance(source, ContextRunConfigSource)
-            stale = source.model_copy(
-                update={"lab_generation": source.lab_generation + 1}
-            )
-            return submit_run(
-                client, submission.model_copy(update={"config_source": stale})
-            )
-
-        with monkeypatch.context() as patch:
-            patch.setattr(DaemonClient, "submit_run", stale_source)
-            with pytest.raises(
-                DaemonConflictError, match="changed since context resolution"
-            ):
-                lab.run(exploratory_signal.build(), config=refs[0])
-
         assert trial.config_source.overrides
         trial_run = lab.run(exploratory_signal.build(), config=trial)
         assert (
@@ -225,7 +206,7 @@ def test_context_unknown_values_block_only_the_experiment_that_needs_them() -> N
         assert lab.config.active() == active
 
 
-def test_context_launch_replay_preserves_reviewed_generation() -> None:
+def test_context_launch_survives_unrelated_parameter_publication() -> None:
     from scopecat.application.launch import LaunchPreview, LaunchSubmission
     from scopecat.records.launch_request import LaunchRequest
     from scopecat.records.scientific_selection import (
@@ -296,9 +277,17 @@ def test_context_launch_replay_preserves_reviewed_generation() -> None:
         selected_author = application.authors.get("signal")
         author_run = selected_author.run(lab, config=ref)
         assert author_run.samples[0].revision == 1
-        lab.config.set_default(active.config)
+        lab.config.set_default(exploration_config(sc.Quantity(5.1, "GHz")))
         assert application.launch_provider(lab, command) == admitted
-        with pytest.raises(DaemonConflictError, match="active configuration changed"):
-            application.launch_provider(
-                lab, command.model_copy(update={"request_key": "new-context-replay"})
-            )
+        submitted = application.launch_provider(
+            lab, command.model_copy(update={"request_key": "new-context-replay"})
+        )
+        assert isinstance(submitted, LaunchSubmission)
+        next_procedure = lab.procedures.get(submitted.procedure_id)
+        next_procedure.resume()
+        output = next_procedure.output("signal")
+        assert output.kind == "run"
+        retained = lab.get_run(output.run_id)
+        assert retained.snapshot.scientific_binding == preview.reviewed.binding
+        assert retained.config == saved.config
+        lab.config.set_default(active.config)

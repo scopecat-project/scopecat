@@ -1922,11 +1922,6 @@ export interface components {
             kind: "analysis_candidate";
             /** Proposal Id */
             proposal_id: string;
-            /**
-             * Registry Generation
-             * @description Observed preview generation, not part of candidate identity or activation.
-             */
-            registry_generation?: number | null;
             /** Source Run Id */
             source_run_id: string;
         };
@@ -3734,7 +3729,7 @@ export interface components {
             kind: "config_registry";
             /**
              * Registry Generation
-             * @description For active: historical activation generation. For an exact entry: optional observed lab-generation fence, not a claim of activation.
+             * @description Historical activation generation for the active selector only.
              */
             registry_generation?: number | null;
             /** Selector */
@@ -3818,8 +3813,6 @@ export interface components {
              * @constant
              */
             kind: "parameter_context";
-            /** Lab Generation */
-            lab_generation: number;
             /**
              * Overrides
              * @default []
@@ -3839,8 +3832,6 @@ export interface components {
              * @enum {string}
              */
             kind: "parameter_context";
-            /** Lab Generation */
-            lab_generation: number;
             /**
              * Overrides
              * @default []

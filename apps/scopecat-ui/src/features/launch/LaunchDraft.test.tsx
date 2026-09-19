@@ -42,6 +42,7 @@ let catalog: LaunchCatalogEntry[];
 let deferCatalog: boolean;
 let catalogResponse: ((response: Response) => void) | undefined;
 let generation: number;
+let fixedSource: boolean;
 let manualEventId: number;
 let configFails: boolean;
 let rejectSubmission: boolean;
@@ -67,11 +68,11 @@ function preview() {
     point_count: 1,
     reviewed: reviewedFixture({
       kind: "config_registry",
-      selector: "active",
+      selector: fixedSource ? "baseline" : "active",
       entry_id: "baseline",
       config_ref: "baseline",
       content_hash: `sha256:${"b".repeat(64)}`,
-      registry_generation: generation,
+      registry_generation: fixedSource ? null : generation,
     }),
     summary: "Checked preparation",
     resources: [],
@@ -103,6 +104,7 @@ beforeEach(() => {
   catalogResponse = undefined;
   lookupMatch = "none";
   generation = 1;
+  fixedSource = false;
   manualEventId = 0;
   configFails = false;
   rejectSubmission = false;
@@ -305,6 +307,18 @@ it("invalidates previews after configuration or definition changes while retaini
   expect(await screen.findByText(/Experiment revision changed/)).toBeVisible();
   expect(screen.getByLabelText("Note")).toHaveValue("keep me");
   expect(screen.queryByText("Preview ready")).toBeNull();
+});
+it("retains fixed-source previews across unrelated active parameter publication", async () => {
+  fixedSource = true;
+  render(<Harness />);
+  await selectPrepared();
+  await previewReady();
+  generation = 2;
+  await act(async () => {
+    await client.invalidateQueries({ queryKey: ["config"] });
+  });
+  expect(screen.getByText("Preview ready")).toBeVisible();
+  expect(screen.getByRole("button", { name: "Start acquisition" })).toBeEnabled();
 });
 it("does not transfer a draft or late preview when the same console changes project identity", async () => {
   const view = render(<Harness />);

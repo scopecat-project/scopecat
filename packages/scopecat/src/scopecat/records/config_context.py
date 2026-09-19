@@ -94,6 +94,5 @@ class ContextRunConfigSource(_ContextModel):
     kind: Literal["parameter_context"] = "parameter_context"
     context: ConfigContextRef
     content_hash: ConfigContentHash
-    lab_generation: int = Field(ge=1)
     sample: SampleBinding
     overrides: tuple[ParameterUpdate, ...] = Field(default=(), max_length=256)

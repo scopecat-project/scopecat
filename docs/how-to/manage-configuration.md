@@ -406,9 +406,10 @@ modify the saved context. The resolution lists effective values, per-value
 origins, and missing values. Runs freeze the resolved snapshot, exact context
 reference, typed overrides, and physical sample binding.
 
-Admission checks the selected entry's ID and content hash separately from the
-current lab generation. If the lab default changed after resolution, resolve
-again before submitting; selecting a context never implicitly activates it.
+Admission checks the selected entry's ID and content hash, and compares its
+executable setup with current authority. A parameter-only default change does not
+invalidate this fixed selection; changed setup or relevant manual instrument
+activity still requires review. Selecting a context never implicitly activates it.
 Historical selection preserves parameters and provenance, and does not grant a
 new claim of calibration freshness or evidence quality.
 

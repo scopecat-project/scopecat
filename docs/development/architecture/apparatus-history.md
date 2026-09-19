@@ -143,6 +143,12 @@ maintenance ownership must not scatter the only recoverable description of an
 experiment across mutable heads. Existing exact preview, saved-plan and admitted
 binding behavior remains the execution boundary to build upon.
 
+The first execution slice now uses setup-content fences for fixed selections,
+while active-default selection retains its generation fence. Working-point saves
+already compare their own heads; verified candidate publication still targets the
+global default. See [configuration ownership](configuration-ownership.md) for the
+implemented boundary, race protection and next publication slice.
+
 ## Order of work and evidence for convergence
 
 1. Deliver descriptive history and current-format recovery first. Assess concrete

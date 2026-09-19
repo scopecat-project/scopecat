@@ -17,7 +17,6 @@ it("matches an exact context admission without treating the active entry as its 
       kind: "parameter_context",
       context: { entry_id: "sample-a-parked", content_hash: `sha256:${"b".repeat(64)}` },
       content_hash: `sha256:${"c".repeat(64)}`,
-      lab_generation: 4,
       sample: {
         sample_id: "a",
         revision: 2,
@@ -46,7 +45,13 @@ it("matches an exact context admission without treating the active entry as its 
   ).toBe(false);
   expect(
     matchesSubmissionIntent(
-      { ...intent, config_source: { ...request.reviewed?.config_source, lab_generation: 5 } },
+      {
+        ...intent,
+        config_source: {
+          ...request.reviewed.config_source,
+          content_hash: `sha256:${"e".repeat(64)}`,
+        },
+      },
       request,
       request.reviewed?.binding,
     ),

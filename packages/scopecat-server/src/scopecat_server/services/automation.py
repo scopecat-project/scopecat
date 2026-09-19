@@ -70,6 +70,11 @@ from scopecat.automation.wire import (
     ProcedureStepResourceWaitCommand,
     ProcedureStepResourceWaitReceipt,
 )
+from scopecat.records.configuration_fence import (
+    ActiveConfigurationFence,
+    ProcedureConfigurationFence,
+    SetupContentFence,
+)
 from scopecat.records.content import Sha256ContentHash
 from scopecat.records.launch_request import LaunchRequest
 from scopecat.records.manual_preview import ManualPreviewFence
@@ -79,6 +84,7 @@ from scopecat.records.scientific_binding import (
     RegisteredTargetSubject,
     ResolvedScientificBinding,
 )
+from scopecat.records.scientific_scope import setup_content_hash
 
 from scopecat_server.services.manual_previews import ManualPreviewService
 from scopecat_server.storage.sqlite.automation import (
@@ -225,7 +231,7 @@ class AutomationService:
                 samples=command.samples,
                 scientific_binding=command.scientific_binding,
                 expected_manual_preview=command.expected_manual_preview,
-                expected_config_generation=command.expected_config_generation,
+                expected_configuration=command.expected_configuration,
                 recovery=command.recovery,
                 plan_ref=command.plan_ref,
                 plan_request=command.plan_request,
@@ -542,7 +548,7 @@ class AutomationService:
         samples: tuple[SampleSelector, ...] = (),
         scientific_binding: ResolvedScientificBinding | None = None,
         expected_manual_preview: ManualPreviewFence | None = None,
-        expected_config_generation: int | None = None,
+        expected_configuration: ProcedureConfigurationFence | None = None,
         recovery: ProcedureRecoverySource | None = None,
         plan_ref: ExperimentPlanRef | None = None,
         plan_request: LaunchRequest | None = None,
@@ -563,7 +569,7 @@ class AutomationService:
                 samples=samples,
                 scientific_binding=scientific_binding,
                 expected_manual_preview=expected_manual_preview,
-                expected_config_generation=expected_config_generation,
+                expected_configuration=expected_configuration,
                 recovery=recovery,
                 plan_ref=plan_ref,
                 plan_request=plan_request,
@@ -579,7 +585,7 @@ class AutomationService:
         samples: tuple[SampleSelector, ...] = (),
         scientific_binding: ResolvedScientificBinding | None = None,
         expected_manual_preview: ManualPreviewFence | None = None,
-        expected_config_generation: int | None = None,
+        expected_configuration: ProcedureConfigurationFence | None = None,
         recovery: ProcedureRecoverySource | None = None,
         plan_ref: ExperimentPlanRef | None = None,
         plan_request: LaunchRequest | None = None,
@@ -682,10 +688,16 @@ class AutomationService:
                 )
             except ManualPreviewChanged as error:
                 raise AutomationConflict(str(error)) from error
-        if expected_config_generation is not None:
-            registry = SQLiteConfigRegistryRepository(connection)
-            if registry.current_generation() != expected_config_generation:
-                raise AutomationConflict("active configuration changed since preview")
+        _require_configuration_authority(
+            connection,
+            expected_configuration,
+            scientific_binding
+            or (
+                plan_request.reviewed.binding
+                if plan_request is not None and plan_request.reviewed is not None
+                else None
+            ),
+        )
         now = self._now() if at is None else _require_aware_time(at)
         run = ProcedureRun(
             procedure_run_id=f"procedure-{uuid4().hex}",
@@ -1759,3 +1771,38 @@ __all__ = [
     "AutomationService",
     "ProcedureStepTransition",
 ]
+
+
+def _require_configuration_authority(
+    connection: sqlite3.Connection,
+    expected_configuration: ProcedureConfigurationFence | None,
+    scientific_binding: ResolvedScientificBinding | None,
+) -> None:
+    """Check exact science and selector freshness within parent admission."""
+    if expected_configuration is not None or scientific_binding is not None:
+        registry = SQLiteConfigRegistryRepository(connection)
+        activation = registry.read_latest_activation()
+        if activation is None:
+            raise AutomationConflict("executable setup has no active authority")
+        if (
+            isinstance(expected_configuration, ActiveConfigurationFence)
+            and activation.generation != expected_configuration.generation
+        ):
+            raise AutomationConflict("active configuration changed since preview")
+        if scientific_binding is not None or isinstance(
+            expected_configuration, SetupContentFence
+        ):
+            entry = registry.read_entry(activation.entry_id)
+            current_setup = setup_content_hash(registry.read_config(entry.config_ref))
+            if (
+                scientific_binding is not None
+                and scientific_binding.setup_content_hash != current_setup
+            ):
+                raise AutomationConflict(
+                    "procedure executable setup differs from current authority"
+                )
+            if (
+                isinstance(expected_configuration, SetupContentFence)
+                and expected_configuration.content_hash != current_setup
+            ):
+                raise AutomationConflict("executable setup changed since preview")

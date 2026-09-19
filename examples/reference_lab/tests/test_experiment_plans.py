@@ -174,7 +174,7 @@ def test_retained_analysis_plan_copy_revalidate_and_child_origin() -> None:
                 )
             )
             assert copied.ref.plan_id != saved.ref.plan_id
-            stale = reopened.prepare_plan(copied.ref, actor="carol")
+            previewed = reopened.prepare_plan(copied.ref, actor="carol")
             try:
                 lab.config.set_default(
                     original_active.config.model_copy(
@@ -182,15 +182,6 @@ def test_retained_analysis_plan_copy_revalidate_and_child_origin() -> None:
                     ),
                     entry_id=f"plan-default-{key}",
                 )
-                with pytest.raises(httpx2.HTTPStatusError) as rejected:
-                    stale.submit(request_key=f"{key}-stale")
-                assert rejected.value.response.status_code in (409, 422)
-                assert (
-                    "configuration changed since preview"
-                    in rejected.value.response.text
-                ), rejected.value.response.text
-                assert run_count() == original_count
-                previewed = reopened.prepare_plan(copied.ref, actor="carol")
                 assert previewed.preview.plan_ref == copied.ref
                 assert (
                     previewed.preview.reviewed.config_source.content_hash

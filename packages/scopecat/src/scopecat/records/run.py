@@ -25,15 +25,8 @@ class ConfigRegistryRunConfigSource(BaseModel):
     registry_generation: int | None = Field(
         default=None,
         ge=1,
-        description=(
-            "For active: historical activation generation. For an exact entry: "
-            "optional observed lab-generation fence, not a claim of activation."
-        ),
+        description=("Historical activation generation for the active selector only."),
     )
-
-
-def _unset_review_generation(value: object) -> bool:
-    return value is None
 
 
 class AnalysisCandidateRunConfigSource(BaseModel):
@@ -47,15 +40,6 @@ class AnalysisCandidateRunConfigSource(BaseModel):
     proposal_id: str
     base_config_content_hash: ConfigContentHash
     content_hash: ConfigContentHash
-    registry_generation: int | None = Field(
-        default=None,
-        ge=1,
-        description=(
-            "Observed preview generation, not part of candidate identity or activation."
-        ),
-        # An old source without a fence keeps its original wire bytes/hash.
-        exclude_if=_unset_review_generation,
-    )
 
     @model_validator(mode="after")
     def validate_identity(self) -> AnalysisCandidateRunConfigSource:

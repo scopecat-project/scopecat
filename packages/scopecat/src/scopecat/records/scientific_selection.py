@@ -88,9 +88,7 @@ class ScientificSelection(_SelectionModel):
     batch: BatchScope = Field(default_factory=UnscopedBatch)
 
     def intent_content(self) -> dict[str, JsonValue]:
-        return self.model_dump(
-            mode="json", exclude={"configuration": {"source": {"registry_generation"}}}
-        )
+        return self.model_dump(mode="json")
 
 
 class ReviewedScientificSelection(_SelectionModel):

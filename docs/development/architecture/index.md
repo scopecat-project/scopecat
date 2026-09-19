@@ -10,6 +10,8 @@ directions to Scopecat contributors:
   staged acceptance; these contracts are not yet implemented.
 - [Local application host](application-host.md) covers the unified teaching entry,
   managed operations and the boundaries retained for future deployment.
+- [Configuration ownership](configuration-ownership.md) separates fixed scientific
+  selection fences from default activation and records scoped publication work.
 - [Lab daemon](daemon.md) covers durable run ownership, instrument workers,
   cancellation, API events, configuration, and storage.
 - [Durable procedure automation](automation.md) covers replayable multi-run

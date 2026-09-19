@@ -90,15 +90,18 @@ remain available in the catalog, but the console explicitly directs the operator
 to a project-specific form/Python workflow. It does not cast arbitrary catalog JSON
 into a second local entry type or implement a general schema renderer.
 
-Preview only reads and compiles, returning its exact request hash, immutable active
+Preview only reads and compiles, returning its exact request hash, immutable selected
 configuration binding and bounded first-experiment summary. The form invalidates
 preview after input, sample, actor or catalog-version changes. Submission includes
 the same binding/hash and one retry key. The project resolves the immutable config
 entry rather than silently switching to the latest default, and calls
-`lab.procedures.submit(..., expected_config_generation=...)`. The existing admission
-transaction resolves an exact retry before checking the current generation for new
-work. Reusing a key with different intent conflicts; retrying an admitted request
-still returns its procedure after the default changes.
+`lab.procedures.submit(..., expected_configuration=...)`. Active-default selection
+uses an activation-generation fence; fixed working-point, saved-entry and candidate
+selections use executable setup content. The server checks fixed scientific setup
+evidence independently of the optional caller fence. The admission transaction
+resolves an exact retry before checking current authority for new work. Reusing a
+key with different intent conflicts; retrying an admitted request still returns its
+procedure after the default changes.
 
 Callbacks run in a separate project process using the daemon interpreter, with
 a 60-second timeout. They must not acquire data or activate configuration inside
