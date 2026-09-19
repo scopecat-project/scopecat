@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Generator
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from threading import Lock
 
 from scopecat.config.inventory import (
@@ -12,6 +12,7 @@ from scopecat.config.inventory import (
     InstrumentInventoryRenameRekey,
 )
 from scopecat.config.registry import service as config_registry_service
+from scopecat.config.resolution import validate_config_profile
 from scopecat.control.models import (
     DurableEventInput,
     InventoryMigrationBlocker,
@@ -93,6 +94,8 @@ class SetupService:
             actor=command.actor,
             note=command.note,
         )
+        with self._errors():
+            validate_config_profile(setup_config(revision))
         with (
             self._errors(),
             self._control.write_transaction() as connection,
@@ -138,9 +141,22 @@ class SetupService:
                         declared=_inventory_migration_deltas(command),
                     )
                     affected_keys = plan.affected_exclusivity_keys
-            with self._actors.begin_retirement(affected_keys) as retirement:
+            retirement_context = (
+                self._actors.begin_retirement(affected_keys)
+                if affected_keys
+                else nullcontext(None)
+            )
+            with retirement_context as retirement:
                 self._require_drained(affected_keys)
-                retirement.retire_idle()
+                if retirement is not None:
+                    try:
+                        retirement.retire_idle()
+                    except InstrumentActorConflict, InstrumentActorShutdown:
+                        raise
+                    except Exception as error:
+                        raise BackendConflict(
+                            "instrument connection could not be retired safely"
+                        ) from error
                 with self._control.write_transaction() as connection:
                     blockers = (
                         self._control.inventory_migration_blockers_in_transaction(
@@ -175,7 +191,8 @@ class SetupService:
                         at=result.activation.recorded_at,
                     )
                     # The writer lock and setup generation CAS still fence old readers.
-                    retirement.release_gate()
+                    if retirement is not None:
+                        retirement.release_gate()
                 return result
 
     def _require_drained(self, keys: tuple[str, ...]) -> None:

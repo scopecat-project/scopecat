@@ -20,7 +20,6 @@ from scopecat.api.lab import LabClient
 from scopecat.config.scientific_binding import bind_scientific_evidence
 from scopecat.control.models import RunPlanSummary, RunResourceRequirement
 from scopecat.daemon.client import DaemonClient, DaemonConflictError
-from scopecat.daemon.views import ActiveConfigView
 from scopecat.daemon.wire import (
     ConfigPublishCommand,
     DirectConfigRevisionSource,
@@ -29,6 +28,8 @@ from scopecat.daemon.wire import (
     InstrumentDriverProbeCommand,
     InstrumentSessionOpenCommand,
     RunSubmission,
+    SetupActivateCommand,
+    SetupSaveCommand,
 )
 from scopecat.kernel.problems import ProblemPhase, model_location, problem
 from scopecat.kernel.quantity import Quantity
@@ -53,6 +54,7 @@ from scopecat.records.measurement import (
     MeasurementScalar,
 )
 from scopecat.records.run_request import RunRequest
+from scopecat.records.setup import ActiveSetupView, ExecutableSetupSnapshot
 from scopecat.sdk.instruments import (
     AcquisitionResultRef,
     DriverAcquisition,
@@ -647,7 +649,7 @@ def test_instrument_views_expose_only_safe_configuration_summaries(
     assert list_response.status_code == 200
     assert detail_response.status_code == 200
     payload = list_response.json()
-    assert set(payload) == {"config_entry_id", "items", "problems"}
+    assert set(payload) == {"setup", "items", "problems"}
     by_id = {item["instrument_id"]: item for item in payload["items"]}
     assert by_id["source-0"]["driver_id"] == "tests.signal_instrument"
     assert by_id["source-0"]["connection"] == {
@@ -1213,7 +1215,7 @@ def test_open_retry_recovers_before_resolving_replacement_config(
     provider = _ToggleDescriptionProvider()
     with _runtime(tmp_path, provider) as runtime:  # noqa: SIM117
         with TestClient(runtime.app()) as transport:
-            original = runtime.application.config.get_active_config()
+            original = runtime.application.setup.current()
             command = InstrumentSessionOpenCommand(
                 operation_id="open-retry-after-config-activation",
                 actor="alice",
@@ -1242,8 +1244,7 @@ def test_open_retry_recovers_before_resolving_replacement_config(
 
             [durable] = runtime.application.executor._control.list_instrument_sessions()
             assert session.session_id == durable.session_id
-            assert session.config_entry_id == original.entry.id
-            assert session.config_content_hash == original.entry.content_hash
+            assert session.setup == original.revision.ref
             assert len(provider.drivers) == 1
             daemon.close_instrument_session(session.session_id)
 
@@ -1429,14 +1430,8 @@ def test_config_activation_reuses_matching_connection_with_fresh_state(
                 )
             ).model_copy(update={"id": "updated-config"})
 
-            receipt = runtime.application.config.publish_config(
-                ConfigPublishCommand(
-                    operation_id="publish:updated-config-session-state",
-                    source=DirectConfigRevisionSource(config=updated),
-                    entry_id="updated-config",
-                    actor="operator",
-                    expected_generation=1,
-                )
+            receipt = _select_setup(
+                runtime, updated, revision_id="updated-config", expected_generation=1
             )
 
             assert receipt.activation.generation == 2
@@ -1464,35 +1459,28 @@ def test_session_open_fences_an_activation_after_active_resolution(
     config = load_config()
     with _runtime(tmp_path, provider) as runtime:  # noqa: SIM117
         with TestClient(runtime.app()) as transport:
-            get_active = runtime.application.config.get_active_config
+            get_active = runtime.application.setup.current
 
-            def resolve_then_activate() -> ActiveConfigView:
+            def resolve_then_activate() -> ActiveSetupView:
                 resolved = get_active()
-                runtime.application.config.publish_config(
-                    ConfigPublishCommand(
-                        operation_id="publish:activated-during-open",
-                        source=DirectConfigRevisionSource(
-                            config=config.model_copy(
-                                update={"id": "activated-during-open"}
-                            )
-                        ),
-                        entry_id="activated-during-open",
-                        actor="operator",
-                        expected_generation=resolved.activation.generation,
-                    )
+                _select_setup(
+                    runtime,
+                    config.model_copy(update={"id": "activated-during-open"}),
+                    revision_id="activated-during-open",
+                    expected_generation=resolved.activation.generation,
                 )
                 return resolved
 
             monkeypatch.setattr(
-                runtime.application.config,
-                "get_active_config",
+                runtime.application.setup,
+                "current",
                 resolve_then_activate,
             )
             daemon = _daemon_client(transport)
 
             with pytest.raises(
                 DaemonConflictError,
-                match="active configuration changed",
+                match="active setup changed",
             ):
                 daemon.open_instrument_session(
                     InstrumentSessionOpenCommand(
@@ -1546,14 +1534,8 @@ def test_exclusivity_key_survives_logical_instrument_rename(tmp_path: Path) -> N
                     ),
                 }
             )
-            runtime.application.config.publish_config(
-                ConfigPublishCommand(
-                    operation_id="publish:renamed-config",
-                    source=DirectConfigRevisionSource(config=renamed),
-                    entry_id="renamed-config",
-                    actor="operator",
-                    expected_generation=1,
-                )
+            _select_setup(
+                runtime, renamed, revision_id="renamed-config", expected_generation=1
             )
 
             [current] = daemon.list_instruments().items
@@ -1624,14 +1606,8 @@ def test_binding_identity_change_reconnects_idle_instrument(
                     ),
                 }
             )
-            runtime.application.config.publish_config(
-                ConfigPublishCommand(
-                    operation_id="publish:updated-binding",
-                    source=DirectConfigRevisionSource(config=updated),
-                    entry_id="updated-binding",
-                    actor="operator",
-                    expected_generation=1,
-                )
+            _select_setup(
+                runtime, updated, revision_id="updated-binding", expected_generation=1
             )
 
             second = daemon.open_instrument_session(
@@ -2404,7 +2380,7 @@ def test_explicit_defaults_use_session_pinned_preserve_config(
     )
     with _runtime(tmp_path, provider, config=pinned_config) as runtime:  # noqa: SIM117
         with TestClient(runtime.app()) as transport:
-            active = runtime.application.config.get_active_config()
+            active = runtime.application.setup.current()
             handle = LabClient(_daemon_client(transport)).instruments.open(
                 _raw_instrument("source-0"),
             )
@@ -2416,20 +2392,17 @@ def test_explicit_defaults_use_session_pinned_preserve_config(
                     value=StateValue(Quantity(value=6.0, unit="GHz")),
                 )
             ).model_copy(update={"id": "later-defaults"})
-            runtime.application.config.publish_config(
-                ConfigPublishCommand(
-                    operation_id="publish:later-defaults",
-                    source=DirectConfigRevisionSource(config=later_config),
-                    entry_id="later-defaults",
-                    actor="operator",
-                    expected_generation=active.activation.generation,
-                )
+            _select_setup(
+                runtime,
+                later_config,
+                revision_id="later-defaults",
+                expected_generation=active.activation.generation,
             )
 
             receipt = handle._apply_configured_defaults()
 
             assert receipt.status == "applied"
-            assert receipt.config_entry_id == active.entry.id
+            assert receipt.setup == active.revision.ref
             [driver] = provider.drivers
             [request] = driver.applied
             assert next(iter(request.values.values())) == Quantity(
@@ -3275,3 +3248,27 @@ def test_write_only_rejected_write_has_no_confirmation_or_retry(tmp_path: Path) 
             assert receipt.readback is None
             assert len(driver.applied) == 1
             assert driver.disconnect_count == 0
+
+
+def _select_setup(
+    runtime: LocalDaemonRuntime,
+    config: ConfigProfileSnapshot,
+    *,
+    revision_id: str,
+    expected_generation: int,
+) -> ActiveSetupView:
+    revision = runtime.application.setup.save(
+        SetupSaveCommand(
+            revision_id=revision_id,
+            setup=ExecutableSetupSnapshot.from_config(config),
+            actor="operator",
+        )
+    )
+    return runtime.application.setup.activate(
+        SetupActivateCommand(
+            operation_id=f"select:{revision_id}",
+            revision=revision.ref,
+            expected_generation=expected_generation,
+            actor="operator",
+        )
+    )

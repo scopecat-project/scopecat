@@ -611,13 +611,19 @@ def test_fixed_setup_fence_survives_parameters_but_rejects_structure(
     tmp_path: Path,
 ) -> None:
     from scopecat.automation import ProcedureDefinitionRef, ProcedureSubmitCommand
-    from scopecat.daemon.wire import ConfigPublishCommand, DirectConfigRevisionSource
+    from scopecat.daemon.wire import (
+        ConfigPublishCommand,
+        DirectConfigRevisionSource,
+        SetupActivateCommand,
+        SetupSaveCommand,
+    )
     from scopecat.kernel.quantity import Quantity
     from scopecat.records.configuration_fence import (
         ActiveConfigurationFence,
         SetupContentFence,
     )
     from scopecat.records.parameter import ScalarParameterValue
+    from scopecat.records.setup import ExecutableSetupSnapshot
 
     config = load_config()
     with LocalDaemonRuntime(tmp_path, bootstrap_config=config) as runtime:
@@ -682,14 +688,20 @@ def test_fixed_setup_fence_survives_parameters_but_rejects_structure(
                 )
             }
         )
-        runtime.application.config.publish_config(
-            ConfigPublishCommand(
-                source=DirectConfigRevisionSource(config=changed_setup),
-                operation_id="publish-setup",
-                expected_generation=2,
-                entry_id="setup-changed",
+        revision = runtime.application.setup.save(
+            SetupSaveCommand(
+                revision_id="setup-changed",
+                setup=ExecutableSetupSnapshot.from_config(changed_setup),
                 actor="operator",
-            ),
+            )
+        )
+        runtime.application.setup.activate(
+            SetupActivateCommand(
+                operation_id="publish-setup",
+                revision=revision.ref,
+                expected_generation=1,
+                actor="operator",
+            )
         )
         # Replay is recognized before mutable-authority checks.
         assert service.submit(command).run == parent
