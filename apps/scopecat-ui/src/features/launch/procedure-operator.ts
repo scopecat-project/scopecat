@@ -1,6 +1,7 @@
 import type { components } from "../../api-schema";
 
-export type ProcedureOperatorView = components["schemas"]["ProcedureOperatorView"];
+import type { ProcedureOperatorView } from "../../api-contract";
+export type { ProcedureOperatorView } from "../../api-contract";
 export type ProcedureOutput = components["schemas"]["ProcedureStepAttempt"]["output"];
 
 export function procedurePhase(view: ProcedureOperatorView): string {

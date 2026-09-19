@@ -1,4 +1,4 @@
-import type { components } from "../../api-schema";
+import type { ProcedureOperatorView } from "../../api-contract";
 import { normalizeRun } from "../runs/run-api";
 import { RunCancellationNotice } from "../runs/RunCancellationNotice";
 
@@ -7,7 +7,7 @@ export function ProcedureChildRun({
   procedureId,
   current = false,
 }: {
-  child: components["schemas"]["ProcedureChildRunView"];
+  child: ProcedureOperatorView["child_runs"][number];
   procedureId: string;
   current?: boolean;
 }) {

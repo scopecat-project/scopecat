@@ -245,7 +245,8 @@ This design does not designate a compatibility baseline, execute a target, or re
 | Current-format recovery and unsupported formats | Backup/restore preserves current binding/ref/address; unsupported formats are rejected without rewriting files or inferring target/setup |
 | Label-only target revision; changed scientific target content | Old provenance stays exact; the future applicability comparator distinguishes metadata from scientific changes |
 
-These are unpassed acceptance requirements for #626. Keep them as short synthetic
+These are the complete acceptance requirements for #626, not a claim that the
+internal stage below completes the user workflow. Keep them as short synthetic
 contract/admission journeys during the fast-CI window; installed GUI/Windows and
 physical-device qualification remain separate finishing gates.
 

@@ -4097,6 +4097,12 @@ export interface components {
         };
         /** @enum {string} */
         EntityAcquisitionPolicy: "independent" | "best_effort" | "all_or_nothing";
+        /** EntityProjection */
+        EntityProjection: {
+            /** Runtime Entity Id */
+            runtime_entity_id: string;
+            target_entity: components["schemas"]["TargetEntity"];
+        };
         /**
          * EntityRef
          * @description Reference to a domain entity without making the domain core vocabulary.
@@ -4501,6 +4507,18 @@ export interface components {
              * @enum {string}
              */
             kind: "inline";
+        };
+        /** InlineSamplesSubject */
+        InlineSamplesSubject: {
+            /** Catalog Id */
+            catalog_id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "inline_samples";
+            /** Samples */
+            samples: components["schemas"]["SampleBinding"][];
         };
         /**
          * InsertParameterRows
@@ -6141,6 +6159,22 @@ export interface components {
             variable_ids?: string[] | null;
         };
         /**
+         * MeasurementTarget
+         * @description Exact target content; member IDs and connections carry scientific meaning.
+         *
+         *     Ordering is not identity. Entity existence and connection capabilities must
+         *     be checked against resolved member descriptions before executable admission.
+         */
+        MeasurementTarget: {
+            /**
+             * Connections
+             * @default []
+             */
+            connections: components["schemas"]["TargetConnection"][];
+            /** Members */
+            members: components["schemas"]["TargetMember"][];
+        };
+        /**
          * MeasurementTraceFailure
          * @description One bounded point/entity trace selection with no plottable samples.
          */
@@ -7357,6 +7391,19 @@ export interface components {
             /** Next Cursor */
             next_cursor?: number | null;
         };
+        /** RegisteredTargetSubject */
+        RegisteredTargetSubject: {
+            content: components["schemas"]["MeasurementTarget"];
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "registered_target";
+            /** Projection */
+            projection: components["schemas"]["EntityProjection"][];
+            ref: components["schemas"]["TargetRevisionRef"];
+            sample: components["schemas"]["SampleBinding"];
+        };
         /**
          * RenameParameterColumn
          * @description Change a semantic column id explicitly; this is not an alias.
@@ -7485,6 +7532,19 @@ export interface components {
             /** Total Point Count */
             total_point_count: number;
         };
+        /** ResolvedScientificBinding */
+        ResolvedScientificBinding: {
+            /**
+             * Codec
+             * @default scopecat.scientific-binding.v1
+             * @constant
+             */
+            codec: "scopecat.scientific-binding.v1";
+            config_content_hash: components["schemas"]["Sha256ContentHash"];
+            setup_content_hash: components["schemas"]["Sha256ContentHash"];
+            subject: components["schemas"]["ResolvedSubject"];
+        };
+        ResolvedSubject: components["schemas"]["UnboundSubject"] | components["schemas"]["InlineSamplesSubject"] | components["schemas"]["RegisteredTargetSubject"];
         /**
          * ResolvedVerifiedParameterProposalProofV1
          * @description Server-resolved exact lineage behind one accepted proposal proof.
@@ -8608,6 +8668,7 @@ export interface components {
              * @default []
              */
             samples: components["schemas"]["SampleBinding"][];
+            scientific_binding: components["schemas"]["ResolvedScientificBinding"];
         };
         /**
          * RunSummary
@@ -9281,6 +9342,53 @@ export interface components {
              */
             shape: "table";
         };
+        /**
+         * TargetConnection
+         * @description A declared undirected interconnection, not an apparatus route.
+         */
+        TargetConnection: {
+            /** Endpoints */
+            endpoints: [
+                components["schemas"]["TargetEntity"],
+                components["schemas"]["TargetEntity"]
+            ];
+            /** Id */
+            id: string;
+            /** Kind */
+            kind: string;
+        };
+        /**
+         * TargetEntity
+         * @description An entity address whose member prevents A/q0 and B/q0 collisions.
+         */
+        TargetEntity: {
+            /** Entity Id */
+            entity_id: string;
+            /** Member Id */
+            member_id: string;
+        };
+        /**
+         * TargetMember
+         * @description One physical sample revision in a target-local role.
+         */
+        TargetMember: {
+            content_hash: components["schemas"]["Sha256ContentHash"];
+            /** Id */
+            id: string;
+            /** Revision */
+            revision: number;
+            sample_id: components["schemas"]["SampleId"];
+        };
+        /** TargetRevisionRef */
+        TargetRevisionRef: {
+            /** Catalog Id */
+            catalog_id: string;
+            content_hash: components["schemas"]["Sha256ContentHash"];
+            /** Revision */
+            revision: number;
+            /** Target Id */
+            target_id: string;
+        };
         /** TcpipSocketInstrumentConnection */
         TcpipSocketInstrumentConnection: {
             /** Host */
@@ -9341,6 +9449,14 @@ export interface components {
         TraceLayout: "overlay" | "small_multiples";
         /** @enum {string} */
         TraceValueMode: "value" | "magnitude" | "phase" | "real" | "imag";
+        /** UnboundSubject */
+        UnboundSubject: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "unbound";
+        };
         /** UnknownQuantity */
         UnknownQuantity: {
             /** Basis */
