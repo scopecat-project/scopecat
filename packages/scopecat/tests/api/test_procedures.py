@@ -79,6 +79,7 @@ from scopecat.runs.selectors import RunSelector
 
 class _ImmediateProcedureContext:
     plan_ref = None
+    scientific_binding = None
     procedure_run_id = "procedure-test"
     samples: tuple[object, ...] = ()
 
@@ -425,7 +426,9 @@ class _TransportFailingRunner:
         procedure_child: ProcedureChildSubmission | None = None,
     ) -> RunSnapshot:
         del executor_id, submission_id, wait_for_resources
-        assert procedure_child is None
+        assert procedure_child == ProcedureChildSubmission(
+            procedure_run_id="procedure-test", step_key="child"
+        )
         raise httpx2.ReadError("child run response was lost")
 
 
