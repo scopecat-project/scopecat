@@ -10,8 +10,11 @@ uv run --locked python -m scopecat_testkit.check journey
 uv run --locked python -m scopecat_testkit.check full
 ```
 
-`fast` covers core/library tests. `integration` covers server tests except the
-explicit journey files. `journey` covers reference-lab workflows, fresh-process
+`fast` covers core/library tests and reference scientific/compiler unit tests.
+Explicit `fast_paths` take precedence over broader journey/integration prefixes;
+the reference unit directory uses this after its automatic daemon fixture was
+removed. Reference workflows still use the journey tier. `integration` covers
+server tests except the explicit journey files. `journey` covers reference-lab workflows, fresh-process
 snapshots and validation-process diagnostics. `core` combines fast and integration
 for CI. The runner pins the workspace pytest configuration and root even when
 a tier contains only a nested project. These are file-level cost boundaries, not promises that every fast test

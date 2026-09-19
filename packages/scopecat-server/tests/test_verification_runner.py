@@ -18,6 +18,7 @@ def test_tiers_and_weighted_shards_cover_every_file_once(tmp_path: Path) -> None
     (tmp_path / "pyproject.toml").write_text("""
 [tool.scopecat-tests]
 roots = ["tests"]
+fast_paths = ["tests/journey/unit"]
 integration_paths = ["tests/integration"]
 journey_paths = ["tests/journey", "tests/integration/test_restart.py"]
 [tool.scopecat-tests.weights]
@@ -31,6 +32,7 @@ journey_paths = ["tests/journey", "tests/integration/test_restart.py"]
         "tests/integration/test_restart.py",
         "tests/journey/test_long.py",
         "tests/journey/test_short.py",
+        "tests/journey/unit/test_compiler.py",
     }
     for name in files:
         path = tmp_path / name
@@ -39,7 +41,11 @@ journey_paths = ["tests/journey", "tests/integration/test_restart.py"]
     fast = set(select_files(tmp_path, "fast"))
     integration = set(select_files(tmp_path, "integration"))
     journey = set(select_files(tmp_path, "journey"))
-    assert fast == {"tests/test_new.py", "tests/suffix_test.py"}
+    assert fast == {
+        "tests/test_new.py",
+        "tests/suffix_test.py",
+        "tests/journey/unit/test_compiler.py",
+    }
     assert integration == {"tests/integration/test_api.py"}
     assert fast | integration | journey == files == set(select_files(tmp_path, "full"))
     assert set(select_files(tmp_path, "core")) == fast | integration
@@ -90,6 +96,12 @@ def test_repository_tiers_cover_pytest_roots() -> None:
     assert set(config["tool"]["scopecat-tests"]["roots"]) == set(
         config["tool"]["pytest"]["testpaths"]
     )
+    unit_files = {
+        path.relative_to(root).as_posix()
+        for path in (root / "examples/reference_lab/tests/unit").glob("test_*.py")
+    }
+    assert unit_files <= set(select_files(root, "fast"))
+    assert not unit_files & set(select_files(root, "journey"))
 
 
 def test_runner_keeps_workspace_config_for_a_nested_only_tier(tmp_path: Path) -> None:

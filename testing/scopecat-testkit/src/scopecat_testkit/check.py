@@ -19,6 +19,7 @@ def select_files(root: Path, suite: str, shard: tuple[int, int] = (1, 1)) -> lis
     tool = cast("dict[str, object]", config["tool"])
     settings = cast("dict[str, object]", tool["scopecat-tests"])
     paths = cast("list[str]", settings["roots"])
+    fast = cast("list[str]", settings.get("fast_paths", []))
     integration = cast("list[str]", settings.get("integration_paths", []))
     journeys = cast("list[str]", settings.get("journey_paths", []))
     weights = cast("dict[str, float]", settings.get("weights", {}))
@@ -37,6 +38,8 @@ def select_files(root: Path, suite: str, shard: tuple[int, int] = (1, 1)) -> lis
         )
 
     def tier(path: str) -> str:
+        if matches(path, fast):
+            return "fast"
         if matches(path, journeys):
             return "journey"
         return "integration" if matches(path, integration) else "fast"
