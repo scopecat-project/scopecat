@@ -164,14 +164,7 @@ for (const scoped of [false, true]) {
           },
           reviewed: prepared.reviewed,
         });
-        await expect(
-          page.getByText(
-            scoped || index % 2 === 0 ? "experiment: Completed" : "signal: Completed",
-            {
-              exact: true,
-            },
-          ),
-        ).toBeVisible();
+        await expect(page.getByText("experiment: Completed", { exact: true })).toBeVisible();
         await page.getByRole("link", { name: /^Open retained run:/ }).click();
         await expect(page.getByTestId("run-status")).toHaveText("Succeeded");
         const runId = new URL(page.url()).searchParams.get("run");
