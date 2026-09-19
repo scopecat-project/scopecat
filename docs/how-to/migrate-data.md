@@ -1,14 +1,15 @@
 # Upgrade a verified copy of retained data
 
-The runtime uses one current storage schema: **72**. The release/package version,
+The runtime uses one current storage schema: **73**. The release/package version,
 storage schema number, snapshot format (**1**) and migration receipt format (**1**)
 are separate identities. Downgrading a package does not downgrade scientific data.
 
-The tested development upgrade edges are **68 → 69 → 70 → 71 → 72**. Schema 68 adds a
+The tested development upgrade edges are **68 → 69 → 70 → 71 → 72 → 73**. Schema 68 adds a
 workspace-head index in 69; schema 69 adds research associations and run deployment
 records in 70; schema 70 adds record collections and stable run addresses in 71;
-schema 71 adds the experimental batch catalog and run/batch index in 72.
-Old records remain unscoped: no historical batch is inferred.
+schema 71 adds the experimental batch catalog and run/batch index in 72;
+schema 72 adds immutable measurement-target revisions in 73.
+Old records remain unscoped: no historical batch or target is inferred.
 The new default collection preserves each existing scheduler number and run ID.
 None of these edges rewrites old scientific records. Missing historical
 bench identities remain unknown, and no calibration, unit or project association

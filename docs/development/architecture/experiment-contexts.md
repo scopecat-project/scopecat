@@ -38,7 +38,7 @@ sample features; they do not yet establish the complete target/setup model below
 
 | Area | Implemented | Next boundary |
 |---|---|---|
-| Scientific identity | Immutable store-local sample revisions; target-content contract with member-qualified entities | Persistent target revisions and catalog-qualified identities; executable assembly validation |
+| Scientific identity | Immutable store-local sample revisions; catalog-qualified target revisions with member-qualified entities | Target selection in execution; executable assembly validation |
 | Applicability | Declared batch guards; shared target/batch/setup content comparison used by parameter rebase | Use resolved applicability in preparation, admission, working-point publication and calibration |
 | Working points | Exact single-sample scope, value provenance, explicit estimate copies and revision conflicts | Separate parameter state from maintained setup; migrate the single-subject consumers together |
 | Execution setup | Complete retained config; setup-content projection for strict comparison | Independent maintained setup revisions and one authoritative resolver |
@@ -397,3 +397,20 @@ not physical-device identity, live state verification, or hardware qualification
 Preserve retained scientific objects and acquisition addresses during these API
 changes. Compatibility readers/migrations belong at the evidence boundary; new
 write paths should converge on one model rather than preserve two active APIs.
+
+
+## Sixth implementation: local target catalog
+
+Schema 73 persists target heads and immutable revisions. Python/HTTP create,
+compare-and-swap revise, paginated list, latest/exact get and qualified resolve
+reuse the existing `project_identity` as catalog identity. Registration validates
+members against retained local sample revisions and connection endpoints against
+their topology, atomically. Labels/audit data are retained per revision but excluded
+from scientific target-content hashes. Foreign-catalog references are rejected;
+restoring the existing data space preserves its identity and references.
+
+The 72→73 copy migration adds empty catalog tables and does not reinterpret old
+runs or manufacture target references. See [target registration](../../how-to/register-measurement-targets.md).
+This completes catalog registration only: launch selection, exact target freezing
+at admission, working-point/calibration migration and assembly execution remain
+pending. No new target field was appended to the existing launch/run JSON contracts.

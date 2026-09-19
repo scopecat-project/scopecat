@@ -22,6 +22,7 @@ from scopecat_server.storage.sqlite.experimental_batches import ExperimentalBatc
 from scopecat_server.storage.sqlite.project_store import SQLiteProjectStore
 from scopecat_server.storage.sqlite.record_collections import RecordCollectionStore
 from scopecat_server.storage.sqlite.research_projects import ResearchProjectStore
+from scopecat_server.storage.sqlite.target_catalog import TargetCatalogStore
 
 from ..command_payloads import CommandPayloadService
 from .admission import AdmissionService
@@ -99,6 +100,9 @@ class DaemonApplication:
         self.research = ResearchProjectStore(project_store.sqlite)
         self.record_collections = RecordCollectionStore(project_store.sqlite)
         self.experimental_batches = ExperimentalBatchStore(project_store.sqlite)
+        self.targets = TargetCatalogStore(
+            project_store.sqlite, catalog_id=project_store.identity()
+        )
         self._lease_supervisor = lease_supervisor
 
     def start(self) -> None:

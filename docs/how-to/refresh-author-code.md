@@ -202,7 +202,7 @@ See [data migration](migrate-data.md) for the current storage boundary and teste
 copy upgrades. Preserve original stores and pinned readers; opening a project
 never implicitly migrates it.
 
-Within schema 72, [backup and restore](backup-and-restore.md) retains source
+Within schema 73, [backup and restore](backup-and-restore.md) retains source
 bundles, manifest identities, active generation, preparation results and original
 admitted procedure intents. Unfinished preparation records become `interrupted`
 after daemon restart or restore; they do not silently rerun against today's files.

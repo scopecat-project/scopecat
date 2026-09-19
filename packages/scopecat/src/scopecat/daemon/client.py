@@ -282,6 +282,13 @@ from scopecat.records.research_project import (
 from scopecat.records.run import RunSnapshot
 from scopecat.records.sample import SampleArtifactRef, SampleRevision
 from scopecat.records.sample_artifact import SampleArtifactPage
+from scopecat.records.target_catalog import (
+    TargetCatalogPage,
+    TargetCreateCommand,
+    TargetReviseCommand,
+    TargetRevision,
+    TargetRevisionRef,
+)
 from scopecat.runs.data import (
     RunArtifactJsonResult,
     RunArtifactTextResult,
@@ -1514,6 +1521,50 @@ class DaemonClient:
             ),
         )
         return InstrumentSessionEndReceipt.model_validate_json(response.content)
+
+    def targets(
+        self, *, limit: int = 100, before: int | None = None
+    ) -> TargetCatalogPage:
+        params: dict[str, str | int] = {"limit": limit}
+        if before is not None:
+            params["before"] = before
+        return self._get_model(
+            f"{_API_PREFIX}/measurement-targets", TargetCatalogPage, params=params
+        )
+
+    def target(self, target_id: str, *, revision: int | None = None) -> TargetRevision:
+        params: dict[str, str | int] = (
+            {"revision": revision} if revision is not None else {}
+        )
+        return self._get_model(
+            f"{_API_PREFIX}/measurement-targets/{quote(target_id, safe='')}",
+            TargetRevision,
+            params=params,
+        )
+
+    def resolve_target(self, ref: TargetRevisionRef) -> TargetRevision:
+        response = self._request(
+            "POST",
+            f"{_API_PREFIX}/measurement-targets/resolve",
+            json=ref.model_dump(mode="json"),
+        )
+        return TargetRevision.model_validate_json(response.content)
+
+    def create_target(self, command: TargetCreateCommand) -> TargetRevision:
+        response = self._request(
+            "POST",
+            f"{_API_PREFIX}/measurement-targets",
+            json=command.model_dump(mode="json"),
+        )
+        return TargetRevision.model_validate_json(response.content)
+
+    def revise_target(self, command: TargetReviseCommand) -> TargetRevision:
+        response = self._request(
+            "POST",
+            f"{_API_PREFIX}/measurement-targets/revisions",
+            json=command.model_dump(mode="json"),
+        )
+        return TargetRevision.model_validate_json(response.content)
 
     def experimental_batches(
         self, *, limit: int = 100, before: int | None = None

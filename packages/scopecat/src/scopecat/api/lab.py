@@ -48,6 +48,13 @@ from scopecat.records.experimental_batch import ExperimentalBatch
 from scopecat.records.record_collection import RecordCollection
 from scopecat.records.run import RunConfigSource
 from scopecat.records.sample import SampleSelector
+from scopecat.records.target_catalog import (
+    TargetCatalogPage,
+    TargetCreateCommand,
+    TargetReviseCommand,
+    TargetRevision,
+    TargetRevisionRef,
+)
 from scopecat.runs.selectors import RunSelector
 
 type ExperimentSpec = ExperimentInvocation | Experiment[...]
@@ -278,6 +285,23 @@ class LabClient:
 
     def health(self) -> DaemonHealth:
         return self._control.health()
+
+    def targets(
+        self, *, limit: int = 100, before: int | None = None
+    ) -> TargetCatalogPage:
+        return self._client.targets(limit=limit, before=before)
+
+    def target(self, target_id: str, *, revision: int | None = None) -> TargetRevision:
+        return self._client.target(target_id, revision=revision)
+
+    def resolve_target(self, ref: TargetRevisionRef) -> TargetRevision:
+        return self._client.resolve_target(ref)
+
+    def create_target(self, command: TargetCreateCommand) -> TargetRevision:
+        return self._client.create_target(command)
+
+    def revise_target(self, command: TargetReviseCommand) -> TargetRevision:
+        return self._client.revise_target(command)
 
     def experimental_batch(self, batch_id: str) -> ExperimentalBatch:
         return self._client.experimental_batch(batch_id)

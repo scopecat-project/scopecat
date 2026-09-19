@@ -27,7 +27,7 @@ from scopecat_server.storage.sqlite.project_store import (
     require_schema_version,
 )
 
-SUPPORTED_SNAPSHOT_SCHEMAS = (68, 69, 70, 71, 72)
+SUPPORTED_SNAPSHOT_SCHEMAS = (68, 69, 70, 71, 72, 73)
 
 _DATABASE = Path(".scopecat/control.sqlite3")
 _OBJECTS = Path(".scopecat/objects")

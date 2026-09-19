@@ -298,6 +298,13 @@ from scopecat.records.sample_artifact import (
     MAX_SAMPLE_ARTIFACT_BYTES,
     SampleArtifactPage,
 )
+from scopecat.records.target_catalog import (
+    TargetCatalogPage,
+    TargetCreateCommand,
+    TargetReviseCommand,
+    TargetRevision,
+    TargetRevisionRef,
+)
 from scopecat.runs.data import (
     RunArtifactJsonResult,
     RunArtifactTextResult,
@@ -896,6 +903,32 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
         command: ConfigEntryActivationCommand,
     ) -> ConfigActivationReceipt:
         return application.config.activate_config_entry(command)
+
+    @app.get(f"{_API_PREFIX}/measurement-targets")
+    def list_targets(
+        limit: Annotated[int, Query(ge=1, le=500)] = 100,
+        before: Annotated[int | None, Query(ge=1)] = None,
+    ) -> TargetCatalogPage:
+        return application.targets.list(limit=limit, before=before)
+
+    @app.post(f"{_API_PREFIX}/measurement-targets")
+    def create_target(command: TargetCreateCommand) -> TargetRevision:
+        return application.targets.create(command)
+
+    @app.post(f"{_API_PREFIX}/measurement-targets/resolve")
+    def resolve_target(ref: TargetRevisionRef) -> TargetRevision:
+        return application.targets.resolve(ref)
+
+    @app.post(f"{_API_PREFIX}/measurement-targets/revisions")
+    def revise_target(command: TargetReviseCommand) -> TargetRevision:
+        return application.targets.revise(command)
+
+    @app.get(f"{_API_PREFIX}/measurement-targets/{{target_id}}")
+    def get_target(
+        target_id: str,
+        revision: Annotated[int | None, Query(ge=1)] = None,
+    ) -> TargetRevision:
+        return application.targets.get(target_id, revision=revision)
 
     @app.get(f"{_API_PREFIX}/experimental-batches")
     def list_experimental_batches(
