@@ -69,6 +69,10 @@ from scopecat.kernel.problems import (
     ProblemPhase,
     StorageLocation,
 )
+from scopecat.records.calibration_scope import (
+    CalibrationConfigSourceRef,
+    WorkingPointCalibrationScope,
+)
 from scopecat.records.config import (
     ConfigContentHash,
     ConfigProfileSnapshot,
@@ -87,6 +91,7 @@ from scopecat.records.run import (
     RunConfigSource,
 )
 from scopecat.records.sample import SampleBinding
+from scopecat.records.scientific_scope import setup_content_hash
 from scopecat.runs.refs import record_content_ref
 from scopecat.runs.repository import RunRepository
 
@@ -131,9 +136,7 @@ class CalibrationCohortMergeRevisionSource:
     spec_hash: Sha256ContentHash
     composition_policy_ref: ConfigCompositionPolicyRef
     merge_policy: Literal["common_base_cells_v1"]
-    base_entry_id: str
-    base_content_hash: ConfigContentHash
-    base_generation: int
+    base: CalibrationConfigSourceRef
     candidate_id: str
     contributions: tuple[ResolvedCalibrationCohortMergeContribution, ...]
     expected_result_content_hash: ConfigContentHash
@@ -146,7 +149,6 @@ type ConfigRevisionSource = (
     DirectConfigRevisionSource
     | ManualConfigDraftRevisionSource
     | CandidateConfigRevisionSource
-    | CalibrationCohortMergeRevisionSource
 )
 
 
@@ -435,7 +437,7 @@ def _save_config_revision_locked(
             source=source,
         )
         entry_id = _required_revision_entry_id(revision)
-    elif isinstance(source, CandidateConfigRevisionSource):
+    else:
         validated = validate_candidate_source_records(
             storage=work.runs,
             run_id=source.run_id,
@@ -447,12 +449,6 @@ def _save_config_revision_locked(
         deltas = validated.deltas
         entry_id = revision.entry_id or f"{config.id}-{source.run_id}"
         _validate_entry_id(entry_id)
-    else:
-        config, entry_source, deltas = _prepare_calibration_cohort_merge_locked(
-            work=work,
-            source=source,
-        )
-        entry_id = _required_revision_entry_id(revision)
     entry = ConfigRegistryEntry(
         id=entry_id,
         config_ref=work.registry.config_ref(entry_id),
@@ -482,29 +478,6 @@ def _validate_config_revision(
     if isinstance(revision.source, CandidateConfigRevisionSource):
         _validate_required_text(revision.source.run_id, field="run_id")
         _validate_required_text(revision.source.proposal_id, field="proposal_id")
-    elif isinstance(revision.source, CalibrationCohortMergeRevisionSource):
-        source = revision.source
-        _validate_required_text(source.cohort_id, field="cohort_id")
-        _validate_required_text(source.base_entry_id, field="base_entry_id")
-        _validate_required_text(source.candidate_id, field="candidate_id")
-        if source.base_generation < 1:
-            raise _registry_failure(
-                CheckFailed,
-                code="config_registry.calibration_merge_generation_invalid",
-                message="calibration merge base generation must be positive",
-                location=_registry_model_location("revision", "source"),
-            )
-        if not 1 <= len(source.contributions) <= 200:
-            raise _registry_failure(
-                CheckFailed,
-                code="config_registry.calibration_merge_contributions_invalid",
-                message=("calibration merge requires between 1 and 200 contributions"),
-                location=_registry_model_location(
-                    "revision",
-                    "source",
-                    "contributions",
-                ),
-            )
 
 
 def _required_revision_entry_id(
@@ -588,38 +561,25 @@ def _prepare_calibration_cohort_merge_locked(
 ]:
     """Resolve exact proposal records and compose their common active base."""
 
-    activation = _load_active_config_registry_activation_locked(work.registry)
-    _require_expected_generation(
-        activation,
-        source.base_generation,
-        active_ref=work.registry.active_ref,
-    )
-    if (
-        activation.entry_id != source.base_entry_id
-        or activation.entry_content_hash != source.base_content_hash
+    base = _load_config_registry_entry_locked(entry_id=source.base.entry_id, work=work)
+    scope = source.base.scope
+    if not isinstance(scope, WorkingPointCalibrationScope) or not isinstance(
+        base.entry.source, ContextConfigRegistrySource
     ):
-        raise _registry_failure(
-            Conflict,
-            code="config_registry.calibration_merge_base_changed",
-            message="calibration merge base is no longer the active entry",
-            location=_registry_model_location(
-                "revision",
-                "source",
-                "base_entry_id",
-            ),
-            related_locations=(_registry_storage_location(work.registry.active_ref),),
-            details={
-                "expected_entry_id": source.base_entry_id,
-                "actual_entry_id": activation.entry_id,
-                "expected_content_hash": source.base_content_hash,
-                "actual_content_hash": activation.entry_content_hash,
-            },
-        )
-    base = _load_config_registry_entry_locked(
-        entry_id=source.base_entry_id,
-        work=work,
-    )
-    _validate_active_entry_identity(work.registry, activation, base.entry)
+        raise ValueError("calibration publication requires a working point")
+    metadata = base.entry.source.context
+    if (
+        base.entry.content_hash != source.base.content_hash
+        or base.entry.config_ref != source.base.config_ref
+        or metadata.sample != scope.sample
+        or metadata.workspace_id != scope.workspace_id
+        or work.registry.context_head(scope.workspace_id) != base.entry.id
+    ):
+        raise ValueError("calibration working point changed")
+    active = _load_active_config_registry_activation_locked(work.registry)
+    authority = _load_config_registry_entry_locked(entry_id=active.entry_id, work=work)
+    if setup_content_hash(base.config) != setup_content_hash(authority.config):
+        raise ValueError("calibration executable setup changed")
 
     proposals = tuple(
         _load_calibration_merge_proposal(
@@ -662,9 +622,7 @@ def _prepare_calibration_cohort_merge_locked(
             ),
             composition_policy_ref=source.composition_policy_ref,
             merge_policy=source.merge_policy,
-            base_entry_id=base.entry.id,
-            base_config_content_hash=base.entry.content_hash,
-            base_registry_generation=activation.generation,
+            base=source.base,
             candidate_id=source.candidate_id,
             contributions=source.contributions,
         ),
@@ -1267,7 +1225,6 @@ def _validate_derived_entry_base(
     if isinstance(
         entry.source,
         (
-            CalibrationCohortMergeRegistrySource,
             CandidateConfigRegistrySource,
             ManualConfigDraftRegistrySource,
         ),
@@ -1592,118 +1549,149 @@ def save_config_context(
     parameters: ParameterSnapshot | None,
     structure_plan: ParameterStructurePlan | None = None,
     advance: bool = False,
-    candidate: CandidateConfigRegistrySource | None = None,
+    publication: CandidateConfigRegistrySource
+    | CalibrationCohortMergeRegistrySource
+    | None = None,
     actor: str,
     note: str,
     unit_of_work: ConfigRegistryUnitOfWorkFactory,
 ) -> ConfigRegistryEntrySnapshot:
-    """Save an alternative in the existing registry without an activation."""
+    """Save one working point with a transaction-local head CAS."""
+    with unit_of_work() as work:
+        return _save_config_context_locked(
+            entry_id=entry_id,
+            base=base,
+            sample=sample,
+            working_point_id=working_point_id,
+            label=label,
+            parameters=parameters,
+            structure_plan=structure_plan,
+            advance=advance,
+            publication=publication,
+            actor=actor,
+            note=note,
+            work=work,
+        )
+
+
+def _save_config_context_locked(
+    *,
+    entry_id: str,
+    base: ConfigContextRef,
+    sample: SampleBinding,
+    working_point_id: str,
+    label: str,
+    parameters: ParameterSnapshot | None,
+    structure_plan: ParameterStructurePlan | None = None,
+    advance: bool = False,
+    publication: CandidateConfigRegistrySource
+    | CalibrationCohortMergeRegistrySource
+    | None = None,
+    actor: str,
+    note: str,
+    work: ConfigRegistryUnitOfWork,
+) -> ConfigRegistryEntrySnapshot:
     _validate_entry_id(entry_id)
     _validate_required_text(actor, field="actor")
-    with unit_of_work() as work:
-        loaded = _load_config_registry_entry_locked(entry_id=base.entry_id, work=work)
-        if loaded.entry.content_hash != base.content_hash:
-            raise ValueError("context base does not match the exact registry revision")
-        existing = work.registry.entry_exists(entry_id)
-        context = (
-            loaded.entry.source.context
-            if isinstance(loaded.entry.source, ContextConfigRegistrySource)
-            else None
-        )
-        if advance and (
-            context is None
-            or context.sample != sample
-            or context.working_point_id != working_point_id
-        ):
+    loaded = _load_config_registry_entry_locked(entry_id=base.entry_id, work=work)
+    if loaded.entry.content_hash != base.content_hash:
+        raise ValueError("context base does not match the exact registry revision")
+    existing = work.registry.entry_exists(entry_id)
+    context = (
+        loaded.entry.source.context
+        if isinstance(loaded.entry.source, ContextConfigRegistrySource)
+        else None
+    )
+    if advance and (
+        context is None
+        or context.sample != sample
+        or context.working_point_id != working_point_id
+    ):
+        raise ValueError("saving a workspace cannot change its sample or working point")
+    workspace_id = context.workspace_id if advance and context else entry_id
+    if advance and not existing:
+        head = work.registry.context_head(workspace_id)
+        if head != base.entry_id:
             raise ValueError(
-                "saving a workspace cannot change its sample or working point"
+                f"Workspace changed: latest version is {head!r}; "
+                "reopen latest or rebase before saving"
             )
-        workspace_id = (
-            (context.workspace_id or base.entry_id) if advance and context else entry_id
-        )
-        if advance and not existing:
-            head = work.registry.context_head(workspace_id)
-            if head != base.entry_id:
-                raise ValueError(
-                    f"Workspace changed: latest version is {head!r}; "
-                    "reopen latest or rebase before saving"
-                )
-        if structure_plan is not None and structure_plan.base != base:
-            raise ValueError("structure plan must match the exact base")
-        structural = (
-            preview_parameter_structure(loaded.config, structure_plan)
-            if structure_plan
-            else None
-        )
-        baseline = structural.config if structural else loaded.config
-        config = baseline.model_copy(
-            update={
-                "parameter_snapshot": baseline.parameter_snapshot
-                if parameters is None
-                else parameters
-            }
-        )
-        validate_context_config(config)
-        selected_ref = ConfigContextRef(
-            entry_id=entry_id, content_hash=config_content_hash(config)
-        )
-        inherited = (
-            loaded.entry.source.context.value_origins
-            if isinstance(loaded.entry.source, ContextConfigRegistrySource)
-            else ()
-        )
-        source = ContextConfigRegistrySource(
-            candidate=candidate,
-            context=ConfigContextMetadata(
-                sample=sample,
-                working_point_id=working_point_id,
-                label=label,
-                workspace_id=workspace_id,
-                base=base,
-                structure=structural.origin
-                if structural
-                else (
-                    loaded.entry.source.context.structure
-                    if isinstance(loaded.entry.source, ContextConfigRegistrySource)
-                    else None
-                ),
-                value_origins=context_value_origins(
-                    config,
-                    base=structural.config.parameter_snapshot,
-                    base_ref=base,
-                    selected_ref=selected_ref,
-                    inherited=mapped_structure_origins(
-                        loaded.config,
-                        structural,
-                        base_ref=base,
-                        selected_ref=selected_ref,
-                        inherited=inherited,
-                    ),
-                )
-                if structural
-                else context_value_origins(
-                    config,
-                    base=loaded.config.parameter_snapshot,
+    if structure_plan is not None and structure_plan.base != base:
+        raise ValueError("structure plan must match the exact base")
+    structural = (
+        preview_parameter_structure(loaded.config, structure_plan)
+        if structure_plan
+        else None
+    )
+    baseline = structural.config if structural else loaded.config
+    config = baseline.model_copy(
+        update={
+            "parameter_snapshot": baseline.parameter_snapshot
+            if parameters is None
+            else parameters
+        }
+    )
+    validate_context_config(config)
+    selected_ref = ConfigContextRef(
+        entry_id=entry_id, content_hash=config_content_hash(config)
+    )
+    inherited = (
+        loaded.entry.source.context.value_origins
+        if isinstance(loaded.entry.source, ContextConfigRegistrySource)
+        else ()
+    )
+    source = ContextConfigRegistrySource(
+        publication=publication,
+        context=ConfigContextMetadata(
+            sample=sample,
+            working_point_id=working_point_id,
+            label=label,
+            workspace_id=workspace_id,
+            base=base,
+            structure=structural.origin
+            if structural
+            else (
+                loaded.entry.source.context.structure
+                if isinstance(loaded.entry.source, ContextConfigRegistrySource)
+                else None
+            ),
+            value_origins=context_value_origins(
+                config,
+                base=structural.config.parameter_snapshot,
+                base_ref=base,
+                selected_ref=selected_ref,
+                inherited=mapped_structure_origins(
+                    loaded.config,
+                    structural,
                     base_ref=base,
                     selected_ref=selected_ref,
                     inherited=inherited,
                 ),
+            )
+            if structural
+            else context_value_origins(
+                config,
+                base=loaded.config.parameter_snapshot,
+                base_ref=base,
+                selected_ref=selected_ref,
+                inherited=inherited,
             ),
-        )
-        entry = ConfigRegistryEntry(
-            id=entry_id,
-            config_ref=work.registry.config_ref(entry_id),
-            content_hash=selected_ref.content_hash,
-            source=source,
-            actor=actor,
-            note=note,
-        )
-        committed = _commit_revision_locked(
-            repository=work.registry, requested_entry=entry, config=config
-        )
-        if not existing:
-            work.registry.set_context_head(workspace_id, entry_id)
-        return ConfigRegistryEntrySnapshot(entry=committed.entry, config=config)
+        ),
+    )
+    entry = ConfigRegistryEntry(
+        id=entry_id,
+        config_ref=work.registry.config_ref(entry_id),
+        content_hash=selected_ref.content_hash,
+        source=source,
+        actor=actor,
+        note=note,
+    )
+    committed = _commit_revision_locked(
+        repository=work.registry, requested_entry=entry, config=config
+    )
+    if not existing:
+        work.registry.set_context_head(workspace_id, entry_id)
+    return ConfigRegistryEntrySnapshot(entry=committed.entry, config=config)
 
 
 def latest_parameter_context(
@@ -1718,7 +1706,43 @@ def latest_parameter_context(
             raise ValueError("context reference does not match saved version")
         if not isinstance(selected.entry.source, ContextConfigRegistrySource):
             raise ValueError("not a parameter workspace context")
-        workspace_id = selected.entry.source.context.workspace_id or context.entry_id
+        workspace_id = selected.entry.source.context.workspace_id
         return _load_config_registry_entry_locked(
             entry_id=work.registry.context_head(workspace_id), work=work
+        )
+
+
+def publish_calibration_context(
+    *,
+    source: CalibrationCohortMergeRevisionSource,
+    entry_id: str,
+    actor: str,
+    note: str,
+    unit_of_work: ConfigRegistryUnitOfWorkFactory,
+) -> ConfigRegistryMutationResult:
+    """Compose verified evidence and advance only its owning working point."""
+    with unit_of_work() as work:
+        config, publication, deltas = _prepare_calibration_cohort_merge_locked(
+            work=work, source=source
+        )
+        base = _load_config_registry_entry_locked(
+            entry_id=source.base.entry_id, work=work
+        )
+        assert isinstance(base.entry.source, ContextConfigRegistrySource)
+        context = base.entry.source.context
+        saved = _save_config_context_locked(
+            entry_id=entry_id,
+            base=source.base.context_ref,
+            sample=context.sample,
+            working_point_id=context.working_point_id,
+            label=context.label,
+            parameters=config.parameter_snapshot,
+            advance=True,
+            publication=publication,
+            actor=actor,
+            note=note,
+            work=work,
+        )
+        return ConfigRegistryMutationResult(
+            entry=saved.entry, saved=True, deltas=deltas
         )

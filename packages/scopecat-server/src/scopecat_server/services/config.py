@@ -40,11 +40,11 @@ from scopecat.config.inventory import (
 from scopecat.config.registry import service as config_registry_service
 from scopecat.config.registry.records import (
     CalibrationCohortMergeContribution,
+    CalibrationPublicationOperation,
     ConfigActivationOperation,
     ConfigCompositionEvidenceStepRef,
     ConfigContextPublishOperation,
     ConfigPublishOperation,
-    ConfigRegistryActivationRecord,
     ConfigRegistryEntry,
     ContextConfigRegistrySource,
     CrossRunCandidateAcceptance,
@@ -74,7 +74,6 @@ from scopecat.daemon.views import (
     ConfigRegistryPage,
 )
 from scopecat.daemon.wire import (
-    CalibrationCohortMergeRevisionSource,
     CalibrationPublicationCommand,
     CalibrationPublicationReceipt,
     CandidateConfigRevisionSource,
@@ -103,7 +102,8 @@ from scopecat.records.analysis import (
     ProjectAnalysisDecisionReference,
     ProjectAnalysisSubject,
 )
-from scopecat.records.config import config_content_hash
+from scopecat.records.calibration_scope import WorkingPointCalibrationScope
+from scopecat.records.config import ConfigProfileSnapshot, config_content_hash
 from scopecat.records.config_context import ConfigContextRef, ContextRunConfigSource
 from scopecat.records.parameter_structure import (
     AddParameterColumn,
@@ -184,6 +184,12 @@ class ConfigService:
         self._calibration_cohorts = calibration_cohorts
         self._mutation_lock = Lock()
 
+    def _config_registry_config_in_transaction(
+        self, connection: sqlite3.Connection, entry: ConfigRegistryEntry
+    ) -> ConfigProfileSnapshot:
+        with self._config_registry.borrowed_unit_of_work(connection) as work:
+            return work.registry.read_config(entry.config_ref)
+
     def latest_context(self, context: ConfigContextRef) -> ConfigEntryView:
         with self._config_errors():
             try:
@@ -195,7 +201,11 @@ class ConfigService:
                 raise BackendConflict(str(error)) from error
 
     def save_context(self, command: ConfigContextSaveCommand) -> ConfigEntryView:
-        with self._mutation_lock, self._config_errors():
+        with (
+            self._mutation_lock,
+            self._config_errors(),
+            self._config_transaction() as (connection, services),
+        ):
             try:
                 self._validate_structure_evidence(command.structure_plan)
                 selector = command.sample.model_copy(
@@ -213,7 +223,10 @@ class ConfigService:
                     actor=command.actor,
                     note=command.note,
                     advance=command.advance,
-                    unit_of_work=self._config_registry.write_unit_of_work,
+                    unit_of_work=services.config_registry,
+                )
+                self._calibration_cohorts.supersede_working_point_in_transaction(
+                    connection, entry=snapshot.entry
                 )
                 return ConfigEntryView(entry=snapshot.entry, config=snapshot.config)
             except ValueError as error:
@@ -439,7 +452,7 @@ class ConfigService:
                 )
             acceptance = CrossRunCandidateAcceptance(decision=command.verification)
             with services.config_registry() as work:
-                workspace_id = metadata.workspace_id or command.base.entry_id
+                workspace_id = metadata.workspace_id
                 if work.registry.context_head(workspace_id) != command.base.entry_id:
                     raise BackendConflict(
                         "Working point changed since candidate baseline"
@@ -467,7 +480,7 @@ class ConfigService:
                     label=metadata.label,
                     parameters=candidate.config.parameter_snapshot,
                     advance=True,
-                    candidate=candidate.source,
+                    publication=candidate.source,
                     actor=command.actor,
                     note=command.note,
                     unit_of_work=services.config_registry,
@@ -513,6 +526,9 @@ class ConfigService:
                 deltas=candidate.deltas,
             )
             self._config_operations.commit_in_transaction(connection, receipt)
+            self._calibration_cohorts.supersede_working_point_in_transaction(
+                connection, entry=saved.entry
+            )
             return receipt
 
     def publish_config(
@@ -531,19 +547,80 @@ class ConfigService:
     ) -> CalibrationPublicationReceipt:
         """Publish one verified cohort and finalize it in the same commit."""
 
-        receipt = self._publish_revision(command)
-        assert isinstance(receipt, CalibrationPublicationReceipt)
-        return receipt
+        with (
+            self._mutation_lock,
+            self._config_errors(),
+            self._config_transaction() as (connection, services),
+        ):
+            existing = self._config_operations.find_in_transaction(
+                connection, command.operation_id
+            )
+            if existing is not None:
+                if (
+                    not isinstance(existing, CalibrationPublicationReceipt)
+                    or existing.operation.intent_hash != command.intent_hash
+                ):
+                    raise BackendConflict("config operation id has a different intent")
+                return existing
+            merge = self._prepare_calibration_merge(connection, command)
+            try:
+                result = config_registry_service.publish_calibration_context(
+                    source=merge.revision_source,
+                    entry_id=command.entry_id,
+                    actor=command.actor,
+                    note=command.note,
+                    unit_of_work=services.config_registry,
+                )
+            except ValueError as error:
+                raise BackendConflict(str(error)) from error
+            self._publish_calibration_merge_approvals(
+                connection, merge, actor=command.actor
+            )
+            operation = CalibrationPublicationOperation(
+                operation_id=command.operation_id,
+                intent_hash=command.intent_hash,
+                source_intent_hash=command.source_intent_hash,
+                base=command.source.base,
+                entry_id=command.entry_id,
+                actor=command.actor,
+                note=command.note,
+                recorded_at=result.entry.recorded_at,
+            )
+            successes = _calibration_successes(
+                merge, operation=operation, result_entry=result.entry
+            )
+            receipt = CalibrationPublicationReceipt(
+                operation=operation,
+                entry=result.entry,
+                deltas=result.deltas,
+                calibration_successes=successes,
+            )
+            self._config_operations.commit_in_transaction(connection, receipt)
+            for success in successes:
+                self._calibration_cohorts.insert_success_publication_in_transaction(
+                    connection, success
+                )
+            source = command.source
+            if source.automatic_publication is not None:
+                revision = command.expected_finalization_revision
+                assert revision is not None
+                self._calibration_cohorts.complete_publication_in_transaction(
+                    connection,
+                    cohort_id=source.cohort_id,
+                    policy=source.automatic_publication,
+                    expected_revision=revision,
+                    operation_id=operation.operation_id,
+                    at=operation.recorded_at,
+                )
+            self._calibration_cohorts.supersede_working_point_in_transaction(
+                connection, entry=result.entry
+            )
+            return receipt
 
     def _publish_revision(
         self,
-        command: ConfigPublishCommand | CalibrationPublicationCommand,
-    ) -> ConfigPublishReceipt | CalibrationPublicationReceipt:
-        calibration_publication = isinstance(
-            command,
-            CalibrationPublicationCommand,
-        )
-
+        command: ConfigPublishCommand,
+    ) -> ConfigPublishReceipt:
         with self._mutation_lock, self._config_errors():
             with self._config_transaction() as transaction:
                 connection, services = transaction
@@ -552,13 +629,8 @@ class ConfigService:
                     command.operation_id,
                 )
                 if existing is not None:
-                    expected_type = (
-                        CalibrationPublicationReceipt
-                        if calibration_publication
-                        else ConfigPublishReceipt
-                    )
                     if (
-                        type(existing) is not expected_type
+                        type(existing) is not ConfigPublishReceipt
                         or existing.operation.intent_hash != command.intent_hash
                     ):
                         raise BackendConflict(
@@ -567,20 +639,7 @@ class ConfigService:
                         )
                     return existing
                 source = command.source
-                calibration_merge: _PreparedCalibrationMerge | None = None
-                if calibration_publication:
-                    assert isinstance(command, CalibrationPublicationCommand)
-                    assert isinstance(source, CalibrationCohortMergeRevisionSource)
-                    calibration_merge = self._prepare_calibration_merge(
-                        connection,
-                        command,
-                    )
-                    self._publish_calibration_merge_approvals(
-                        connection,
-                        calibration_merge,
-                        actor=command.actor,
-                    )
-                elif isinstance(source, CandidateConfigRevisionSource):
+                if isinstance(source, CandidateConfigRevisionSource):
                     if isinstance(source.acceptance, CrossRunCandidateAcceptance):
                         self._analyses.validate_candidate_verification(
                             source.acceptance.decision,
@@ -615,10 +674,7 @@ class ConfigService:
                             ),
                         )
                 result = config_registry_service.publish_config_revision(
-                    revision=_config_revision(
-                        command,
-                        calibration_merge=calibration_merge,
-                    ),
+                    revision=_config_revision(command),
                     unit_of_work=services.config_registry,
                     expected_generation=command.expected_generation,
                 )
@@ -635,52 +691,18 @@ class ConfigService:
                     note=command.note,
                     activation_generation=activation.generation,
                 )
-                if calibration_merge is None:
-                    receipt: ConfigPublishReceipt | CalibrationPublicationReceipt = (
-                        ConfigPublishReceipt(
-                            operation=operation,
-                            entry=result.entry,
-                            deltas=result.deltas,
-                            activation=activation,
-                        )
-                    )
-                else:
-                    calibration_successes = _calibration_successes(
-                        calibration_merge,
-                        operation=operation,
-                        result_entry=result.entry,
-                        activation=activation,
-                    )
-                    receipt = CalibrationPublicationReceipt(
-                        operation=operation,
-                        entry=result.entry,
-                        deltas=result.deltas,
-                        activation=activation,
-                        calibration_successes=calibration_successes,
-                    )
+                receipt = ConfigPublishReceipt(
+                    operation=operation,
+                    entry=result.entry,
+                    deltas=result.deltas,
+                    activation=activation,
+                )
                 self._config_operations.commit_in_transaction(connection, receipt)
-                if isinstance(receipt, CalibrationPublicationReceipt):
-                    for success in receipt.calibration_successes:
-                        self._calibration_cohorts.insert_success_publication_in_transaction(
-                            connection,
-                            success,
-                        )
-                    assert isinstance(command, CalibrationPublicationCommand)
-                    source = command.source
-                    if source.automatic_publication is not None:
-                        expected_revision = command.expected_finalization_revision
-                        assert expected_revision is not None
-                        self._calibration_cohorts.complete_publication_in_transaction(
-                            connection,
-                            cohort_id=source.cohort_id,
-                            policy=source.automatic_publication,
-                            expected_revision=expected_revision,
-                            operation_id=operation.operation_id,
-                            at=activation.recorded_at,
-                        )
-                self._calibration_cohorts.supersede_stale_publications_in_transaction(
+                self._calibration_cohorts.supersede_setup_in_transaction(
                     connection,
-                    active_generation=activation.generation,
+                    config=self._config_registry_config_in_transaction(
+                        connection, result.entry
+                    ),
                     at=activation.recorded_at,
                 )
             return receipt
@@ -716,10 +738,7 @@ class ConfigService:
                 and source.automatic_publication.composition_policy
                 != source.composition_policy_ref
             )
-            or base.entry_id != source.base_entry_id
-            or base.content_hash != source.base_content_hash
-            or base.registry_generation != source.base_generation
-            or command.expected_generation != base.registry_generation
+            or base != source.base
         ):
             raise BackendConflict(
                 "calibration merge cohort or base config does not match its source"
@@ -916,9 +935,7 @@ class ConfigService:
                     ),
                     composition_policy_ref=source.composition_policy_ref,
                     merge_policy=source.merge_policy,
-                    base_entry_id=source.base_entry_id,
-                    base_content_hash=source.base_content_hash,
-                    base_generation=source.base_generation,
+                    base=source.base,
                     candidate_id=source.candidate_id,
                     contributions=tuple(resolved),
                     expected_result_content_hash=(source.expected_result_content_hash),
@@ -1028,9 +1045,11 @@ class ConfigService:
                         result,
                         change_count=len(plan.changes),
                     )
-                    self._calibration_cohorts.supersede_stale_publications_in_transaction(
+                    self._calibration_cohorts.supersede_setup_in_transaction(
                         connection,
-                        active_generation=activation.generation,
+                        config=self._config_registry_config_in_transaction(
+                            connection, result.entry
+                        ),
                         at=activation.recorded_at,
                     )
                     # Old-snapshot claims still lose the generation CAS, while
@@ -1143,9 +1162,11 @@ class ConfigService:
                     connection,
                     receipt,
                 )
-                self._calibration_cohorts.supersede_stale_publications_in_transaction(
+                self._calibration_cohorts.supersede_setup_in_transaction(
                     connection,
-                    active_generation=activation.generation,
+                    config=self._config_registry_config_in_transaction(
+                        connection, result.entry
+                    ),
                     at=activation.recorded_at,
                 )
             return receipt
@@ -1184,7 +1205,7 @@ class ConfigService:
     def _append_revision_events(
         self,
         connection: sqlite3.Connection,
-        command: ConfigPublishCommand | CalibrationPublicationCommand,
+        command: ConfigPublishCommand,
         result: config_registry_service.ConfigRegistryMutationResult,
     ) -> None:
         source = command.source
@@ -1247,9 +1268,7 @@ class ConfigService:
 
 
 def _config_revision(
-    command: ConfigPublishCommand | CalibrationPublicationCommand,
-    *,
-    calibration_merge: _PreparedCalibrationMerge | None = None,
+    command: ConfigPublishCommand,
 ) -> config_registry_service.ConfigRevision:
     source = command.source
     if isinstance(source, DirectConfigRevisionSource):
@@ -1266,16 +1285,12 @@ def _config_revision(
             updates=draft.updates,
             expected_result_content_hash=source.expected_result_content_hash,
         )
-    elif isinstance(source, CandidateConfigRevisionSource):
+    else:
         revision_source = config_registry_service.CandidateConfigRevisionSource(
             run_id=source.run_id,
             proposal_id=source.proposal_id,
             acceptance=source.acceptance,
         )
-    else:
-        if calibration_merge is None:
-            raise ValueError("calibration merge proof must be resolved by the server")
-        revision_source = calibration_merge.revision_source
     return config_registry_service.ConfigRevision(
         source=revision_source,
         entry_id=command.entry_id,
@@ -1326,7 +1341,9 @@ def _resolve_calibration_evidence_runs(
     baseline_runs = tuple(
         run
         for run in runs
-        if isinstance(run.config_source, ConfigRegistryRunConfigSource)
+        if isinstance(
+            run.config_source, (ConfigRegistryRunConfigSource, ContextRunConfigSource)
+        )
         and _matches_calibration_base(run.config_source, base)
     )
     candidate_runs = tuple(
@@ -1343,30 +1360,35 @@ def _resolve_calibration_evidence_runs(
 
 
 def _matches_calibration_base(
-    source: ConfigRegistryRunConfigSource,
+    source: ConfigRegistryRunConfigSource | ContextRunConfigSource,
     base: CalibrationConfigSourceRef,
 ) -> bool:
+    if isinstance(source, ContextRunConfigSource):
+        return (
+            source.context == base.context_ref
+            and source.content_hash == base.content_hash
+            and isinstance(base.scope, WorkingPointCalibrationScope)
+            and source.sample == base.scope.sample
+            and not source.overrides
+        )
     return (
-        source.selector == "active"
-        and source.entry_id == base.entry_id
+        source.entry_id == base.entry_id
         and source.config_ref == base.config_ref
         and source.content_hash == base.content_hash
-        and source.registry_generation == base.registry_generation
     )
 
 
 def _calibration_successes(
     merge: _PreparedCalibrationMerge,
     *,
-    operation: ConfigPublishOperation,
+    operation: CalibrationPublicationOperation,
     result_entry: ConfigRegistryEntry,
-    activation: ConfigRegistryActivationRecord,
 ) -> tuple[CalibrationSuccessRef, ...]:
     result_source = CalibrationConfigSourceRef(
         entry_id=result_entry.id,
         config_ref=result_entry.config_ref,
         content_hash=result_entry.content_hash,
-        registry_generation=activation.generation,
+        scope=merge.base_config_source.scope,
     )
     successes: list[CalibrationSuccessRef] = []
     for proof in merge.members:
@@ -1383,7 +1405,7 @@ def _calibration_successes(
                 dependencies=attempt.dependencies,
             ),
             result_config_source=result_source,
-            published_at=activation.recorded_at,
+            published_at=operation.recorded_at,
         )
         successes.append(
             CalibrationSuccessRef(

@@ -66,7 +66,10 @@ from scopecat.records.analysis import (
     SampleAnalysisSubject,
     analysis_record_id,
 )
-from scopecat.records.calibration_scope import CalibrationConfigSourceRef
+from scopecat.records.calibration_scope import (
+    CalibrationConfigSourceRef,
+    WorkingPointCalibrationScope,
+)
 from scopecat.records.config import (
     ConfigContentHash,
     ConfigProfileSnapshot,
@@ -218,6 +221,8 @@ class CalibrationCohortMergeRevisionSource(_WireModel):
     def validate_automatic_publication(
         self,
     ) -> CalibrationCohortMergeRevisionSource:
+        if not isinstance(self.base.scope, WorkingPointCalibrationScope):
+            raise ValueError("calibration publication requires a working point")
         policy = self.automatic_publication
         if (
             policy is not None
@@ -333,9 +338,12 @@ class CalibrationPublicationCommand(_WireModel):
     def intent_hash(self) -> Sha256ContentHash:
         # The finalization revision is an execution fence, not publication
         # meaning. A retry from a newer ready occurrence keeps the operation.
-        identity = self.model_dump(
-            mode="json", exclude={"operation_id", "expected_finalization_revision"}
-        )
+        identity = {
+            "codec": "scopecat.calibration-publication-intent.v1",
+            "command": self.model_dump(
+                mode="json", exclude={"operation_id", "expected_finalization_revision"}
+            ),
+        }
         return f"sha256:{stable_content_hash(identity)}"
 
 
@@ -384,6 +392,15 @@ class CalibrationPublicationReceipt(_WireModel):
                 "calibration publication requires a working-point cohort merge"
             )
         source = context_source.publication
+        scope = source.base.scope
+        if (
+            not isinstance(scope, WorkingPointCalibrationScope)
+            or context_source.context.workspace_id != scope.workspace_id
+            or context_source.context.sample != scope.sample
+        ):
+            raise ValueError(
+                "calibration publication owner differs from its working point"
+            )
         if (
             context_source.context.base != source.base.context_ref
             or self.operation.base != source.base

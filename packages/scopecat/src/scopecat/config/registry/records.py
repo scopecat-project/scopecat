@@ -16,7 +16,10 @@ from pydantic import (
 from scopecat.kernel.content_identity import stable_content_hash
 from scopecat.kernel.run_outcome import utc_now
 from scopecat.records.analysis import ProjectAnalysisDecisionReference
-from scopecat.records.calibration_scope import CalibrationConfigSourceRef
+from scopecat.records.calibration_scope import (
+    CalibrationConfigSourceRef,
+    WorkingPointCalibrationScope,
+)
 from scopecat.records.config import ConfigContentHash
 from scopecat.records.config_context import ConfigContextMetadata, ConfigContextRef
 from scopecat.records.content import Sha256ContentHash
@@ -288,6 +291,8 @@ class CalibrationCohortMergeRegistrySource(_FrozenRegistryModel):
     def validate_automatic_publication(
         self,
     ) -> CalibrationCohortMergeRegistrySource:
+        if not isinstance(self.base.scope, WorkingPointCalibrationScope):
+            raise ValueError("calibration merge requires a working point")
         identity = (
             self.automatic_publication_policy_id,
             self.automatic_publication_policy_version,

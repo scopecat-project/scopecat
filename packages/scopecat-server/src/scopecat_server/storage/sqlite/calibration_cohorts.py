@@ -23,14 +23,29 @@ from scopecat.automation.calibrations import (
     CalibrationPublicationFailure,
     CalibrationPublicationPolicyRef,
     CalibrationPublicationSupersession,
+    CalibrationSetupSupersession,
     CalibrationStatus,
     CalibrationStatusSnapshot,
     CalibrationSuccessPublication,
     CalibrationSuccessRef,
+    CalibrationWorkingPointSupersession,
 )
 from scopecat.automation.models import ProcedureRun
+from scopecat.config.registry.records import (
+    ConfigRegistryEntry,
+    ContextConfigRegistrySource,
+)
 from scopecat.daemon.wire import CalibrationPublicationReceipt
+from scopecat.records.calibration_scope import (
+    CalibrationConfigSourceRef,
+    WorkingPointCalibrationScope,
+)
+from scopecat.records.config import ConfigProfileSnapshot
+from scopecat.records.scientific_scope import setup_content_hash
 
+from scopecat_server.storage.sqlite.config_registry import (
+    SQLiteConfigRegistryRepository,
+)
 from scopecat_server.storage.sqlite.connection import SQLiteDatabase
 
 _ACTIVE_CALIBRATION_COUNT_SQL = """
@@ -598,66 +613,90 @@ class SQLiteCalibrationCohortStore:
             ) from error
         return self.read_finalization_in_transaction(connection, cohort_id)
 
-    def supersede_stale_publications_in_transaction(
+    def supersede_working_point_in_transaction(
+        self, connection: sqlite3.Connection, *, entry: ConfigRegistryEntry
+    ) -> int:
+        source = entry.source
+        assert isinstance(source, ContextConfigRegistrySource)
+        context = source.context
+        if (
+            SQLiteConfigRegistryRepository(connection).context_head(
+                context.workspace_id
+            )
+            != entry.id
+        ):
+            return 0
+        scope = WorkingPointCalibrationScope(
+            workspace_id=context.workspace_id, sample=context.sample
+        )
+        replacement = CalibrationConfigSourceRef(
+            entry_id=entry.id,
+            config_ref=entry.config_ref,
+            content_hash=entry.content_hash,
+            scope=scope,
+        )
+        rows = _all(
+            connection.execute(
+                """SELECT cohort_id FROM calibration_cohort_finalizations
+                WHERE owner_workspace_id = ? AND base_entry_id != ?
+                AND state IN ('waiting','ready','attention_required')""",
+                (scope.workspace_id, entry.id),
+            )
+        )
+        evidence = CalibrationPublicationSupersession(
+            evidence=CalibrationWorkingPointSupersession(superseded_by=replacement),
+            superseded_at=entry.recorded_at,
+        )
+        return self._supersede_rows(connection, rows, evidence)
+
+    def supersede_setup_in_transaction(
         self,
         connection: sqlite3.Connection,
         *,
-        active_generation: int,
+        config: ConfigProfileSnapshot,
         at: datetime,
     ) -> int:
-        try:
-            rows = _all(
-                connection.execute(
-                    """
-                    SELECT cohort_id
-                    FROM calibration_cohort_finalizations
-                    WHERE base_generation < ?
-                      AND state IN ('waiting', 'ready', 'attention_required')
-                    """,
-                    (active_generation,),
-                )
-            )
-            cohort_ids = tuple(_text(row, "cohort_id") for row in rows)
-            if not cohort_ids:
-                return 0
-            placeholders = ", ".join("?" for _cohort_id in cohort_ids)
+        current = setup_content_hash(config)
+        rows = _all(
             connection.execute(
-                f"""
-                UPDATE calibration_cohort_finalizations
-                SET revision = revision + 1,
-                    state = 'superseded',
-                    updated_at = ?,
-                    available_at = NULL,
-                    attention_actor = NULL,
-                    attention_reason = NULL,
-                    attention_required_at = NULL,
-                    superseded_by_generation = ?,
-                    superseded_at = ?
-                WHERE cohort_id IN ({placeholders})
-                """,  # noqa: S608 - generated placeholders only
+                """SELECT cohort_id FROM calibration_cohort_finalizations
+                WHERE setup_content_hash != ?
+                AND state IN ('waiting','ready','attention_required')""",
+                (current,),
+            )
+        )
+        evidence = CalibrationPublicationSupersession(
+            evidence=CalibrationSetupSupersession(setup_content_hash=current),
+            superseded_at=at,
+        )
+        return self._supersede_rows(connection, rows, evidence)
+
+    def _supersede_rows(
+        self,
+        connection: sqlite3.Connection,
+        rows: list[sqlite3.Row],
+        evidence: CalibrationPublicationSupersession,
+    ) -> int:
+        for row in rows:
+            cohort_id = _text(row, "cohort_id")
+            connection.execute(
+                """UPDATE calibration_cohort_finalizations
+                SET revision = revision + 1, state = 'superseded', updated_at = ?,
+                available_at = NULL, attention_actor = NULL, attention_reason = NULL,
+                attention_required_at = NULL, supersession_json = ?, superseded_at = ?
+                WHERE cohort_id = ?""",
                 (
-                    _timestamp(at),
-                    active_generation,
-                    _timestamp(at),
-                    *cohort_ids,
+                    _timestamp(evidence.superseded_at),
+                    evidence.model_dump_json(),
+                    _timestamp(evidence.superseded_at),
+                    cohort_id,
                 ),
             )
             connection.execute(
-                f"""
-                DELETE FROM calibration_publication_ready_queue
-                WHERE cohort_id IN ({placeholders})
-                """,  # noqa: S608 - generated placeholders only
-                cohort_ids,
+                "DELETE FROM calibration_publication_ready_queue WHERE cohort_id = ?",
+                (cohort_id,),
             )
-            return len(cohort_ids)
-        except sqlite3.IntegrityError as error:
-            raise CalibrationCohortConflict(
-                "calibration publication supersession conflicts with durable state"
-            ) from error
-        except sqlite3.Error as error:
-            raise CalibrationCohortStoreError(
-                "failed to supersede stale calibration publications"
-            ) from error
+        return len(rows)
 
     def _require_publication_transition(
         self,
@@ -749,7 +788,6 @@ class SQLiteCalibrationCohortStore:
         connection: sqlite3.Connection,
         cohort: CalibrationCohort,
     ) -> None:
-        generation = cohort.spec.config_source.registry_generation
         policy = cohort.spec.automatic_publication
         try:
             connection.execute(
@@ -767,6 +805,11 @@ class SQLiteCalibrationCohortStore:
             )
             if policy is not None:
                 selected_composition = policy.composition_policy
+                base = cohort.spec.config_source
+                assert isinstance(base.scope, WorkingPointCalibrationScope)
+                config = SQLiteConfigRegistryRepository(connection).read_config(
+                    base.config_ref
+                )
                 connection.execute(
                     """
                     INSERT INTO calibration_cohort_finalizations(
@@ -777,10 +820,11 @@ class SQLiteCalibrationCohortStore:
                         calibration_definition_fingerprint,
                         composition_policy_id,
                         composition_policy_version,
-                        composition_policy_fingerprint, base_generation,
+                        composition_policy_fingerprint, base_entry_id,
+                        owner_workspace_id, setup_content_hash,
                         revision, state, attempt_count, created_at, updated_at
                     )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1,
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1,
                             'waiting', 0, ?, ?)
                     """,
                     (
@@ -796,7 +840,9 @@ class SQLiteCalibrationCohortStore:
                         selected_composition.id,
                         selected_composition.version,
                         selected_composition.fingerprint,
-                        generation,
+                        base.entry_id,
+                        base.scope.workspace_id,
+                        setup_content_hash(config),
                         _timestamp(cohort.created_at),
                         _timestamp(cohort.created_at),
                     ),
@@ -934,16 +980,12 @@ class SQLiteCalibrationCohortStore:
                 or receipt.operation.operation_id != publication.operation_id
                 or receipt.operation.source_intent_hash
                 != publication.source_intent_hash
-                or receipt.operation.expected_generation
-                != base_source.registry_generation
-                or receipt.activation.previous_entry_id != base_source.entry_id
-                or receipt.activation.previous_entry_content_hash
-                != base_source.content_hash
+                or receipt.operation.base != base_source
                 or receipt.entry.id != result_source.entry_id
                 or receipt.entry.config_ref != result_source.config_ref
                 or receipt.entry.content_hash != result_source.content_hash
-                or receipt.activation.generation != result_source.registry_generation
-                or receipt.activation.recorded_at != publication.published_at
+                or receipt.operation.recorded_at != publication.published_at
+                or result_source.scope != base_source.scope
             ):
                 raise CalibrationCohortConflict(
                     "calibration publication does not match its exact config receipt"
@@ -955,8 +997,8 @@ class SQLiteCalibrationCohortStore:
                     operation_id, source_intent_hash, result_input_fingerprint,
                     result_freshness_fingerprint, result_entry_id,
                     result_config_ref, result_content_hash,
-                    result_registry_generation, published_at, publication_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    published_at, publication_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     success.attempt.procedure_run_id,
@@ -970,7 +1012,6 @@ class SQLiteCalibrationCohortStore:
                     result_source.entry_id,
                     result_source.config_ref,
                     result_source.content_hash,
-                    result_source.registry_generation,
                     _timestamp(publication.published_at),
                     publication.model_dump_json(),
                 ),
@@ -1243,8 +1284,10 @@ def _finalization(row: sqlite3.Row) -> CalibrationCohortFinalization:
         or _text(row, "composition_policy_id") != composition.id
         or _text(row, "composition_policy_version") != composition.version
         or _text(row, "composition_policy_fingerprint") != composition.fingerprint
-        or _integer(row, "base_generation")
-        != cohort.spec.config_source.registry_generation
+        or _text(row, "base_entry_id") != cohort.spec.config_source.entry_id
+        or not isinstance(cohort.spec.config_source.scope, WorkingPointCalibrationScope)
+        or _text(row, "owner_workspace_id")
+        != cohort.spec.config_source.scope.workspace_id
     ):
         raise CalibrationCohortStoreError(
             "durable calibration finalization identity drifted"
@@ -1255,10 +1298,7 @@ def _finalization(row: sqlite3.Row) -> CalibrationCohortFinalization:
         attention_reason = _optional_text(row, "attention_reason")
         failed_at = _optional_datetime(row, "failed_at")
         superseded_at = _optional_datetime(row, "superseded_at")
-        superseded_by_generation = _optional_integer(
-            row,
-            "superseded_by_generation",
-        )
+        supersession_json = _optional_text(row, "supersession_json")
         published_at = _optional_datetime(row, "published_at")
         operation_id = _optional_text(row, "publication_operation_id")
         return CalibrationCohortFinalization(
@@ -1291,10 +1331,9 @@ def _finalization(row: sqlite3.Row) -> CalibrationCohortFinalization:
             ),
             supersession=(
                 None
-                if superseded_at is None or superseded_by_generation is None
-                else CalibrationPublicationSupersession(
-                    superseded_by_generation=superseded_by_generation,
-                    superseded_at=superseded_at,
+                if superseded_at is None or supersession_json is None
+                else CalibrationPublicationSupersession.model_validate_json(
+                    supersession_json
                 )
             ),
             publication=(
