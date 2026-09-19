@@ -43,7 +43,7 @@ def _require_teaching(key: str | None) -> str:
 
 
 def _validate_command_capability(key: str | None, command: Command) -> None:
-    if command.action != "service_start":
+    if command.action not in ("service_start", "service_stop", "service_remove"):
         _require_teaching(key)
 
 

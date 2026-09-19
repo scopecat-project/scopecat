@@ -26,7 +26,14 @@ def main() -> None:
     try:
         operation.workspace = execute(args.home, args.source, operation.command)
         operation.status = "succeeded"
-        operation.detail = "已完成"
+        operation.detail = {
+            "service_stop": (
+                "实验服务已停止。项目和科学记录保留；重新测量前请打开工作台。"
+            ),
+            "service_remove": (
+                "已移除服务登记。项目和科学数据没有删除，可从本机 CLI 重新登记。"
+            ),
+        }.get(operation.command.action, "已完成")
     except Exception as error:
         import traceback
 

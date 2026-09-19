@@ -80,7 +80,7 @@ def owned_workspace(home: Path, key: str, identity: str) -> Workspace:
 
 
 def launch(home: Path, source: Path | None, command: Command) -> Operation:
-    if command.action == "service_start":
+    if command.action in ("service_start", "service_stop", "service_remove"):
         from .services import Services
 
         with Services(home).lock:
@@ -89,7 +89,13 @@ def launch(home: Path, source: Path | None, command: Command) -> Operation:
 
 
 def _launch(home: Path, source: Path | None, command: Command) -> Operation:
-    if command.action == "service_start":
+    operations = Operations(home)
+    previous = operations.find(command.id)
+    if previous is not None:
+        if previous.command != command:
+            raise ValueError("同一操作编号不能用于不同请求")
+        return previous
+    if command.action in ("service_start", "service_stop", "service_remove"):
         from .services import Services
 
         if (
@@ -107,7 +113,6 @@ def _launch(home: Path, source: Path | None, command: Command) -> Operation:
             raise ValueError("请选择有效专题")
     elif command.workspace is None or command.reset or command.topic is not None:
         raise ValueError("请选择受管理练习的编号")
-    operations = Operations(home)
     operation, created = operations.begin(command)
     if not created:
         return operation
@@ -138,11 +143,17 @@ def execute(home: Path, source: Path | None, command: Command) -> str | None:
     from .notebook import project_python
     from .sandboxes import run
 
-    if command.action == "service_start":
+    if command.action in ("service_start", "service_stop", "service_remove"):
         from .services import Services
 
         assert command.service is not None
-        Services(home).start(command.service)
+        services = Services(home)
+        if command.action == "service_start":
+            services.start(command.service)
+        elif command.action == "service_stop":
+            services.stop(command.service)
+        else:
+            services.remove(command.service, operation_id=command.id)
         return None
     key = sandbox_key(source)
     if command.action in ("stop", "delete"):

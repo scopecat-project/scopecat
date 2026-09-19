@@ -18,11 +18,11 @@ from pydantic import BaseModel, Field
 
 from scopecat.project import open_project
 from scopecat_server.cli import select_static_dir
-from scopecat_server.lifecycle import inspect_daemon, start_project
+from scopecat_server.lifecycle import inspect_daemon, start_project, stop_project
 
 
 class Request(BaseModel):
-    action: Literal["probe", "start"]
+    action: Literal["probe", "start", "stop"]
     root: str
     static_dir: str | None
     environment: dict[str, str] = Field(default_factory=dict)
@@ -31,9 +31,13 @@ class Request(BaseModel):
 def main() -> None:
     request = Request.model_validate_json(sys.argv[1])
     project = open_project(request.root)
-    gui = select_static_dir(
-        static_dir=Path(request.static_dir) if request.static_dir else None,
-        api_only=False,
+    gui = (
+        None
+        if request.action == "stop"
+        else select_static_dir(
+            static_dir=Path(request.static_dir) if request.static_dir else None,
+            api_only=False,
+        )
     )
     environment = {
         "prefix": sys.prefix,
@@ -41,14 +45,14 @@ def main() -> None:
         "scopecat": version("scopecat"),
         "server": version("scopecat-server"),
     }
-    if request.action == "start":
+    if request.action in ("start", "stop"):
         if environment != request.environment:
             raise ValueError(
-                "Registered runtime changed; register this service again "
-                "before starting it"
+                "登记的 Python 环境已改变。请恢复原环境，或在实际运行环境中"
+                "显式执行 scopecat stop 后重新登记；本次没有停止或启动服务。"
             )
         status = inspect_daemon(project)
-        if status.state == "running" and status.record is not None:
+        if status.state in ("running", "degraded") and status.record is not None:
             executable = psutil.Process(status.record.pid).cmdline()[0]
             if os.path.normcase(str(Path(executable).absolute())) != os.path.normcase(
                 str(Path(sys.executable).absolute())
@@ -57,21 +61,24 @@ def main() -> None:
                     "Existing daemon uses another interpreter; stop it explicitly "
                     "before switching environments"
                 )
-        record = start_project(
-            project,
-            static_dir=gui,
-            on_progress=lambda elapsed, stage: print(
-                f"Starting ({elapsed:.0f}s): {stage}", flush=True
-            ),
-        )
-        executable = psutil.Process(record.pid).cmdline()[0]
-        if os.path.normcase(str(Path(executable).absolute())) != os.path.normcase(
-            str(Path(sys.executable).absolute())
-        ):
-            raise ValueError(
-                "Daemon started in another interpreter; "
-                "retain it and stop explicitly before switching"
+        if request.action == "stop":
+            stop_project(project)
+        else:
+            record = start_project(
+                project,
+                static_dir=gui,
+                on_progress=lambda elapsed, stage: print(
+                    f"Starting ({elapsed:.0f}s): {stage}", flush=True
+                ),
             )
+            executable = psutil.Process(record.pid).cmdline()[0]
+            if os.path.normcase(str(Path(executable).absolute())) != os.path.normcase(
+                str(Path(sys.executable).absolute())
+            ):
+                raise ValueError(
+                    "Daemon started in another interpreter; "
+                    "retain it and stop explicitly before switching"
+                )
     Path(sys.argv[2]).write_text(
         json.dumps(
             {
@@ -85,4 +92,10 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as error:
+        Path(sys.argv[2]).write_text(
+            json.dumps({"error": str(error)}), encoding="utf-8"
+        )
+        raise

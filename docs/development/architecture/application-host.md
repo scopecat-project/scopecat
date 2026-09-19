@@ -45,8 +45,22 @@ management operations, stop that service and register it again. This version che
 is not a lockfile/content attestation of every dependency or editable source byte.
 Failed startup stays visible in the operation log; there is no fallback interpreter.
 
-This first slice does not provide automatic reopening of the last selected service,
-service removal/stop controls, or a Help link inside every experimental GUI.
+**Stop service** asks for confirmation because it can interrupt active work and
+Notebook connections. It uses the registered interpreter and existing daemon
+lifecycle, including graceful shutdown and its existing timeout policy. The
+process identity and interpreter must match; a failed check leaves the service
+untouched and retains the operation log. Stopping does not require GUI assets.
+It never automatically restarts the service or resumes measurement.
+
+**Remove registration** is available after the service is stopped, with no other
+pending management operation. It only removes the deployment catalog row. Project
+files, scientific data and operation history remain, and the CLI can register that
+project again. Retrying the same successful removal operation returns its retained
+result. A stopped service with an unreadable/missing project remains an explicit
+maintenance error, rather than guessing that its process is safe to forget.
+
+This slice does not provide automatic reopening of the last selected service
+or a Help link inside every experimental GUI.
 It retains separate child daemons; it does not establish one shared executor or
 cross-service hardware exclusion. Those remain tracked in issue #614 and the
 runtime design. Notebook/page scientific selections are unchanged.
