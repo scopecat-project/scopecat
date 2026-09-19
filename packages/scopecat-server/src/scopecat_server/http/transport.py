@@ -265,6 +265,7 @@ from scopecat.records.author_revision import (
     AuthorRevisionRef,
     AuthorRevisionState,
 )
+from scopecat.records.author_workspace import AuthorWorkspaceCatalog
 from scopecat.records.comparison import ComparisonRequest
 from scopecat.records.config import ConfigProfileSnapshot
 from scopecat.records.config_context import ConfigContextRef
@@ -460,6 +461,10 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
     def hide_experiment_plan(ref: ExperimentPlanRef) -> ExperimentPlanRef:
         application.plans.repository.hide(ref)
         return ref
+
+    @app.get(f"{_API_PREFIX}/author-workspaces")
+    def author_workspace_catalog() -> AuthorWorkspaceCatalog:
+        return application.author_workspaces.catalog()
 
     @app.get(f"{_API_PREFIX}/author-revisions")
     def author_revision_state(
