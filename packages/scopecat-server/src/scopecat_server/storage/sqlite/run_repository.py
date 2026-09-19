@@ -40,11 +40,13 @@ from scopecat.records.measurement import MeasurementRecord
 from scopecat.records.measurement_recording import MeasurementDatasetHeader
 from scopecat.records.run import RunConfigSource, RunSnapshot
 from scopecat.records.sample import SampleBinding
+from scopecat.records.scientific_binding import ResolvedScientificBinding
 from scopecat.runs.admission import RunSkeleton
 from scopecat.runs.provenance import validate_run_config_provenance
 from scopecat.runs.refs import (
     CONFIG_PROFILE_SNAPSHOT_REF,
     RUN_REQUEST_REF,
+    SCIENTIFIC_BINDING_REF,
 )
 from scopecat.runs.repository import (
     RunContentPage,
@@ -352,6 +354,9 @@ class SQLiteRunRepository:
                 skeleton.config,
             ),
             self._prepare_model(run_id, RUN_REQUEST_REF, skeleton.request),
+            self._prepare_model(
+                run_id, SCIENTIFIC_BINDING_REF, snapshot.scientific_binding
+            ),
         ]
         return PreparedRunSkeleton(
             snapshot=snapshot,
@@ -750,8 +755,29 @@ class SQLiteRunRepository:
                     (run_id,),
                 )
             )
+            binding_ref = _one(
+                connection.execute(
+                    "SELECT digest FROM run_repository_refs WHERE run_id=? AND ref=?",
+                    (run_id, SCIENTIFIC_BINDING_REF),
+                )
+            )
+            if binding_ref is None:
+                raise _integrity_failure(
+                    run_id=run_id,
+                    ref=SCIENTIFIC_BINDING_REF,
+                    code="run.ref_missing",
+                    message="run is missing its scientific binding",
+                )
+            binding = ResolvedScientificBinding.model_validate_json(
+                self._read_object(
+                    _text(binding_ref, "digest"),
+                    run_id=run_id,
+                    ref=SCIENTIFIC_BINDING_REF,
+                )
+            )
             return RunSnapshot(
                 run_id=run_id,
+                scientific_binding=binding,
                 created_at=datetime.fromisoformat(_text(row, "created_at")),
                 config_content_hash=_text(row, "config_content_hash"),
                 config_source=(

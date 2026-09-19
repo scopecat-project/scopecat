@@ -23,6 +23,7 @@ from scopecat.records.plan_ref import ExperimentPlanRef
 from scopecat.records.run import RunConfigSource
 from scopecat.records.run_request import RunRequest
 from scopecat.records.sample import SampleSelector
+from scopecat.records.scientific_binding import ResolvedScientificBinding
 
 
 @dataclass(frozen=True, slots=True)
@@ -33,6 +34,7 @@ class PlannedRun:
     request: RunRequest
     program: RunProgram
     config_source: RunConfigSource | None = None
+    scientific_binding: ResolvedScientificBinding | None = None
     system: ExperimentSystem | None = field(default=None, repr=False, compare=False)
 
 

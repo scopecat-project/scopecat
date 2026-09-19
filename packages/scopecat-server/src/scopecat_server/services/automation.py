@@ -102,6 +102,7 @@ from scopecat_server.storage.sqlite.manual_preview import (
     ManualPreviewRepository,
 )
 from scopecat_server.storage.sqlite.run_repository import SQLiteRunRepository
+from scopecat_server.storage.sqlite.samples import SQLiteSampleStore
 
 from ..errors import BackendConflict, BackendNotFound
 from .resource_waits import ProcedureResourceWaits
@@ -133,6 +134,9 @@ class AutomationService:
         if lease_ttl <= timedelta(0):
             raise ValueError("procedure lease TTL must be positive")
         self._store = store
+        self._samples = SQLiteSampleStore(
+            store.sqlite, control=SQLiteControlPlane(store.sqlite)
+        )
         self._runs = runs
         self._lease_ttl = lease_ttl
         self._clock = clock or _utc_now
@@ -645,6 +649,7 @@ class AutomationService:
                 raise AutomationConflict(
                     "procedure intent does not match the saved plan launch"
                 )
+        resolved_samples: tuple[SampleSelector, ...]
         if recovery is not None:
             source = self._store.read_run_in_transaction(
                 connection, recovery.procedure_run_id
@@ -670,6 +675,21 @@ class AutomationService:
                     raise ValueError("recovery must preserve source sample bindings")
             except ValueError as error:
                 raise AutomationConflict(str(error)) from error
+            resolved_samples = source.resolved_samples
+        else:
+            bindings = self._samples.resolve_bindings_in_transaction(
+                connection, samples
+            )
+            resolved_samples = tuple(
+                SampleSelector(
+                    role=binding.role,
+                    sample_id=binding.sample_id,
+                    revision=binding.revision,
+                    context_id=binding.context_id,
+                    batch_id=binding.batch_id,
+                )
+                for binding in bindings
+            )
         if expected_manual_preview is not None:
             try:
                 ManualPreviewRepository.require_valid_in_transaction(
@@ -689,6 +709,7 @@ class AutomationService:
             intent=selected_intent,
             intent_hash=intent_hash,
             samples=samples,
+            resolved_samples=resolved_samples,
             recovery=recovery,
             plan_ref=plan_ref,
             revision=1,

@@ -12,6 +12,7 @@ from typing import Literal, override
 import httpx2
 import pytest
 from fastapi.testclient import TestClient
+from scopecat.config.scientific_binding import bind_scientific_evidence
 from scopecat.control.models import RunPlanSummary, RunResourceRequirement
 from scopecat.daemon.client import DaemonClient, DaemonConflictError
 from scopecat.daemon.wire import (
@@ -1003,6 +1004,9 @@ def _start_run(daemon: DaemonClient) -> tuple[str, str]:
     )
     admission = daemon.submit_run(
         RunSubmission(
+            scientific_binding=bind_scientific_evidence(
+                catalog_id="test", config=config, samples=(), sample_revisions={}
+            ),
             submission_id="payload-transport",
             config=config,
             request=RunRequest(experiment_id="payload-transport"),

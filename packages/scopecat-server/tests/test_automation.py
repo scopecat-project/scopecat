@@ -26,13 +26,21 @@ from scopecat.automation import (
     ProcedureWorkerLeaseReleaseCommand,
     RunOutputRef,
 )
+from scopecat.config.scientific_binding import bind_scientific_evidence
+from scopecat.control.models import RunPlanSummary
+from scopecat.daemon.wire import RunSubmission, SampleCreateCommand, SampleReviseCommand
+from scopecat.records.run_request import RunRequest
+from scopecat.records.sample import SampleRevisionDraft, SampleSelector
+from scopecat_testkit.workflow_fixtures import load_config
 
 from scopecat_server import BackendConflict, LocalDaemonRuntime
 from scopecat_server.services.automation import AutomationService
 from scopecat_server.storage.sqlite.automation import SQLiteAutomationStore
 from scopecat_server.storage.sqlite.connection import SQLiteDatabase
+from scopecat_server.storage.sqlite.control_plane import SQLiteControlPlane
 from scopecat_server.storage.sqlite.project_store import SQLiteProjectStore
 from scopecat_server.storage.sqlite.run_repository import SQLiteRunRepository
+from scopecat_server.storage.sqlite.samples import SQLiteSampleStore
 
 _START = datetime(2026, 8, 18, 9, tzinfo=UTC)
 _DEFINITION_HASH = "sha256:" + "1" * 64
@@ -636,3 +644,71 @@ def test_request_key_filter_preserves_definition_collisions_and_pagination(
     )
     assert older.items == (first,) and older.next_cursor is None
     assert service.list(ProcedureRunListQuery(request_key="missing")).items == ()
+
+
+def test_parent_sample_heads_freeze_before_step_replay(tmp_path: Path) -> None:
+    service, _ = _service(tmp_path)
+    sqlite = SQLiteDatabase(tmp_path / "control.sqlite3")
+    samples = SQLiteSampleStore(sqlite, control=SQLiteControlPlane(sqlite))
+    samples.create_sample(
+        SampleCreateCommand(
+            operation_id="create-chip",
+            sample_id="chip",
+            kind="chip",
+            actor="test",
+            content=SampleRevisionDraft(display_name="Chip first revision"),
+        )
+    )
+    command = ProcedureSubmitCommand(
+        request_key="sample-parent",
+        definition=_definition(),
+        intent={},
+        samples=(SampleSelector(sample_id="chip", context_id="cooldown-1"),),
+    )
+    first = service.submit(command).run
+    assert first.samples == command.samples
+    assert first.resolved_samples == (
+        SampleSelector(sample_id="chip", revision=1, context_id="cooldown-1"),
+    )
+
+    def child_intent(selectors: tuple[SampleSelector, ...]) -> str:
+        config = load_config()
+        binding = bind_scientific_evidence(
+            catalog_id="test-store",
+            config=config,
+            samples=samples.resolve_bindings(selectors),
+            sample_revisions={},
+        )
+        return RunSubmission(
+            submission_id="procedure-step-intent",
+            config=config,
+            scientific_binding=binding,
+            request=RunRequest(experiment_id="child", samples=selectors),
+            plan=RunPlanSummary(
+                experiment_id="child",
+                experiment_kind="child",
+                point_plan_fingerprint="a" * 64,
+                measurement_contract_fingerprint="b" * 64,
+                point_count=1,
+                initial_point_count=1,
+                point_limit=1,
+            ),
+        ).intent_content_hash
+
+    before = child_intent(first.resolved_samples)
+    samples.revise_sample(
+        "chip",
+        SampleReviseCommand(
+            operation_id="revise-chip",
+            expected_revision=1,
+            actor="test",
+            content=SampleRevisionDraft(display_name="Chip second revision"),
+        ),
+    )
+    repeated = service.submit(command).run
+    assert repeated == first
+    assert child_intent(repeated.resolved_samples) == before
+    later = service.submit(command.model_copy(update={"request_key": "new-parent"})).run
+    assert later.resolved_samples[0].revision == 2
+    assert later.intent_hash == first.intent_hash
+    assert child_intent(later.resolved_samples) != before

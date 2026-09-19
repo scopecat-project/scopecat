@@ -28,6 +28,7 @@ from scopecat.config.registry import (
     ActiveConfigRegistrySnapshot,
     ManualCandidateAcceptance,
 )
+from scopecat.config.scientific_binding import bind_scientific_evidence
 from scopecat.control.models import (
     AdaptiveRegionSpec,
     DurableEvent,
@@ -284,6 +285,9 @@ def _submission(
     point_count: int = 1,
 ) -> RunSubmission:
     return RunSubmission(
+        scientific_binding=bind_scientific_evidence(
+            catalog_id="test", config=_config(), samples=(), sample_revisions={}
+        ),
         submission_id=submission_id,
         config=_config(),
         request=RunRequest(experiment_id="scratch"),
@@ -379,6 +383,9 @@ def _domain_only_submission(
     target = config.domain_target
     assert target is not None
     return RunSubmission(
+        scientific_binding=bind_scientific_evidence(
+            catalog_id="test", config=config, samples=(), sample_revisions={}
+        ),
         submission_id=submission_id,
         config=config,
         request=RunRequest(experiment_id="domain-only"),
@@ -1756,6 +1763,7 @@ def test_admission_is_durably_idempotent(tmp_path: Path) -> None:
                         sample_store, ImmutableObjectStore(state / "objects")
                     ),
                     sample_store=sample_store,
+                    targets=runtime.application.targets,
                 )
             )
         services = tuple(admission_services)
@@ -2012,7 +2020,15 @@ def test_registry_admission_replays_but_uses_current_inventory_for_new_runs(
             )
         current = runtime.application.submit_run(
             _submission("current-active-inventory").model_copy(
-                update={"config": changed}
+                update={
+                    "config": changed,
+                    "scientific_binding": bind_scientific_evidence(
+                        catalog_id=runtime.application.project_id,
+                        config=changed,
+                        samples=(),
+                        sample_revisions={},
+                    ),
+                }
             )
         )
         control = runtime.application.executor._control.get_run(current.run_id)
@@ -2059,6 +2075,7 @@ def test_authority_failure_replays_a_concurrently_admitted_submission(
                 sample_store, ImmutableObjectStore(state / "objects")
             ),
             sample_store=sample_store,
+            targets=runtime.application.targets,
         )
         resolve_active = racing._resolve_active_config
         admitted: RunAdmission | None = None

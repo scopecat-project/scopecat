@@ -55,6 +55,7 @@ from scopecat.automation.worker import (
     ProcedureNeedsAttention,
     ProcedureWorker,
 )
+from scopecat.records.sample import SampleSelector
 
 _STEP_INTENT_HASH = "sha256:" + "2" * 64
 
@@ -213,6 +214,11 @@ class MemoryProcedureControl:
                 definition=command.definition,
                 intent=command.intent,
                 intent_hash=command.intent_hash,
+                samples=command.samples,
+                resolved_samples=tuple(
+                    sample.model_copy(update={"revision": sample.revision or 1})
+                    for sample in command.samples
+                ),
                 revision=1,
                 state="ready",
                 created_at=now,
@@ -577,11 +583,16 @@ def test_worker_uses_context_factory_without_coupling_to_the_wrapper() -> None:
         {"case": "wrapped"},
         "request-wrapped",
         "worker-1",
+        samples=(SampleSelector(sample_id="chip"),),
     )
 
     assert run.state == "closed"
     assert len(durable_contexts) == 1
     assert durable_contexts[0].procedure_run_id == run.procedure_run_id
+    assert run.samples == (SampleSelector(sample_id="chip"),)
+    assert durable_contexts[0].samples == (
+        SampleSelector(sample_id="chip", revision=1),
+    )
     assert _OUTPUTS["wrapped"].run_id.startswith("child-for-procedure-step:")
 
 

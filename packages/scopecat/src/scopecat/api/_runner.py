@@ -16,6 +16,7 @@ from scopecat.adaptive_coordination import derive_adaptive_region_layout
 from scopecat.api.review import ExperimentReviewHandle, create_experiment_review
 from scopecat.authoring import MetadataValue
 from scopecat.authoring.experiments import ExperimentInvocation
+from scopecat.config.scientific_binding import bind_scientific_evidence
 from scopecat.control.models import (
     AdaptiveRegionSpec,
     PointCoordinateValue,
@@ -63,7 +64,8 @@ from scopecat.records.run import (
     RunSnapshot,
 )
 from scopecat.records.run_request import RunRequest
-from scopecat.records.sample import SampleSelector
+from scopecat.records.sample import SampleBinding, SampleSelector
+from scopecat.records.scientific_binding import ResolvedScientificBinding
 
 
 class RunResourcesBlocked(Exception):
@@ -191,6 +193,7 @@ class _DaemonRunner:
             metadata=cast("Mapping[str, MetadataValue]", request.metadata),
             operator=request.operator,
             samples=request.samples,
+            scientific_binding=detail.snapshot.scientific_binding,
             record_collection=request.record_collection,
         )
         _validate_resumed_plan(planned, detail=detail, request=request)
@@ -318,6 +321,7 @@ class _DaemonRunner:
         metadata: Mapping[str, MetadataValue] | None,
         operator: str | None,
         samples: tuple[SampleSelector, ...] = (),
+        scientific_binding: ResolvedScientificBinding | None = None,
         plan_ref: ExperimentPlanRef | None = None,
         record_collection: str | None = None,
     ) -> PlannedRun:
@@ -357,6 +361,14 @@ class _DaemonRunner:
             )
         else:
             selected_config = config
+        samples = tuple(sorted(samples, key=lambda selector: selector.role))
+        if scientific_binding is None:
+            scientific_binding = self._freeze_scientific_binding(
+                selected_config, samples
+            )
+        elif scientific_binding.sample_selectors() != samples:
+            raise ValueError("retained scientific binding does not match run samples")
+        samples = scientific_binding.sample_selectors()
         instrument_catalog = self.client.resolve_instrument_contracts(
             selected_config,
         )
@@ -380,9 +392,40 @@ class _DaemonRunner:
         )
         return replace(
             planned,
+            scientific_binding=scientific_binding,
             request=planned.request.model_copy(
                 update={"record_collection": record_collection}
             ),
+        )
+
+    def _freeze_scientific_binding(
+        self, config: ConfigProfileSnapshot, selectors: tuple[SampleSelector, ...]
+    ) -> ResolvedScientificBinding:
+        samples: list[SampleBinding] = []
+        for selector in selectors:
+            current = self.client.get_sample(selector.sample_id)
+            revision = (
+                current.revision
+                if selector.revision is None
+                else self.client.sample_revision(selector.sample_id, selector.revision)
+            )
+            samples.append(
+                SampleBinding(
+                    role=selector.role,
+                    sample_id=selector.sample_id,
+                    revision=revision.revision,
+                    content_hash=revision.content_hash,
+                    kind=current.record.kind,
+                    display_name=revision.content.display_name,
+                    context_id=selector.context_id,
+                    batch_id=selector.batch_id,
+                )
+            )
+        return bind_scientific_evidence(
+            catalog_id=self.client.health().project_id if samples else "",
+            config=config,
+            samples=tuple(samples),
+            sample_revisions={},
         )
 
 
@@ -612,8 +655,11 @@ def _prepare_run_submission(
 ) -> tuple[RunSubmission, Sha256ContentHash]:
     """Build one exact admission command and its prefixed intent content hash."""
 
+    if planned.scientific_binding is None:
+        raise ValueError("run submission requires resolved scientific evidence")
     submission = RunSubmission(
         submission_id=submission_id,
+        scientific_binding=planned.scientific_binding,
         config=planned.config,
         config_source=planned.config_source,
         request=planned.request,

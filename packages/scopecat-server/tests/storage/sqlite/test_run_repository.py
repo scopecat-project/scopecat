@@ -24,8 +24,12 @@ from scopecat.records.run import (
     RunSnapshot,
 )
 from scopecat.records.run_request import RunRequest
+from scopecat.records.scientific_binding import (
+    ResolvedScientificBinding,
+    UnboundSubject,
+)
 from scopecat.runs.admission import RunSkeleton
-from scopecat.runs.refs import CONFIG_PROFILE_SNAPSHOT_REF
+from scopecat.runs.refs import CONFIG_PROFILE_SNAPSHOT_REF, SCIENTIFIC_BINDING_REF
 from scopecat.runs.repository import (
     RunContentPublication,
     TerminalRunCommit,
@@ -62,6 +66,11 @@ def _repository(root: Path) -> SQLiteTestRunRepository:
 
 def _snapshot(run_id: str) -> RunSnapshot:
     return RunSnapshot(
+        scientific_binding=ResolvedScientificBinding(
+            subject=UnboundSubject(),
+            config_content_hash=f"sha256:{'0' * 64}",
+            setup_content_hash="sha256:" + "0" * 64,
+        ),
         run_id=run_id,
         created_at=datetime(2026, 7, 23, tzinfo=UTC),
         config_content_hash=f"sha256:{'0' * 64}",
@@ -109,6 +118,11 @@ def _object_files(repository: SQLiteRunRepository) -> set[Path]:
 
 def _portable_snapshot(run_id: str, day: int) -> RunSnapshot:
     return RunSnapshot(
+        scientific_binding=ResolvedScientificBinding(
+            subject=UnboundSubject(),
+            config_content_hash="sha256:" + "0" * 64,
+            setup_content_hash="sha256:" + "0" * 64,
+        ),
         run_id=run_id,
         created_at=datetime(2026, 1, day, tzinfo=UTC),
         config_content_hash="sha256:" + "0" * 64,
@@ -140,6 +154,11 @@ def _structured_run_inputs(
     content_hash = config_content_hash(selected_config)
     return RunSkeleton(
         snapshot=RunSnapshot(
+            scientific_binding=ResolvedScientificBinding(
+                subject=UnboundSubject(),
+                config_content_hash=content_hash,
+                setup_content_hash="sha256:" + "0" * 64,
+            ),
             run_id=run_id,
             config_content_hash=content_hash,
             config_source=_config_source(content_hash) if with_source else None,
@@ -210,7 +229,10 @@ def test_run_projection_is_relational_without_a_manifest_object(tmp_path: Path) 
             """,
             (run_id,),
         ).fetchone() == (0,)
-    assert _object_files(repository) == set()
+    assert (
+        repository.read_model(run_id, SCIENTIFIC_BINDING_REF, ResolvedScientificBinding)
+        == snapshot.scientific_binding
+    )
     assert repository.read_snapshot(run_id) == snapshot
     assert (
         repository.read_content(
@@ -327,6 +349,11 @@ def test_terminal_commit_publishes_outcome_and_content(
     )
     repository.write_snapshot(
         RunSnapshot(
+            scientific_binding=ResolvedScientificBinding(
+                subject=UnboundSubject(),
+                config_content_hash="sha256:" + "0" * 64,
+                setup_content_hash="sha256:" + "0" * 64,
+            ),
             run_id=run_id,
             config_content_hash="sha256:" + "0" * 64,
         )
@@ -597,6 +624,11 @@ def test_config_read_remains_independent_for_capture_runs(tmp_path: Path) -> Non
     config = load_config()
     repository.write_snapshot(
         RunSnapshot(
+            scientific_binding=ResolvedScientificBinding(
+                subject=UnboundSubject(),
+                config_content_hash=config_content_hash(config),
+                setup_content_hash="sha256:" + "0" * 64,
+            ),
             run_id=run_id,
             config_content_hash=config_content_hash(config),
         )
@@ -639,11 +671,12 @@ def test_equal_content_reuses_one_immutable_object(tmp_path: Path) -> None:
         digests = {
             row[0]
             for row in connection.execute(
-                "SELECT digest FROM run_repository_refs ORDER BY run_id"
+                "SELECT digest FROM run_repository_refs "
+                "WHERE ref LIKE 'artifacts/%' ORDER BY run_id"
             )
         }
     assert len(digests) == 1
-    assert len(_object_files(repository)) == 1
+    assert len(_object_files(repository)) == 2
 
 
 def test_cached_measurement_chunks_follow_current_ref_and_owner(tmp_path: Path) -> None:

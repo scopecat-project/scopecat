@@ -27,6 +27,7 @@ from scopecat.config.registry.records import (
     CrossRunCandidateAcceptance,
     DirectConfigRegistrySource,
 )
+from scopecat.config.scientific_binding import bind_scientific_evidence
 from scopecat.control.models import (
     PointCoordinateSpec,
     ResourceKey,
@@ -557,6 +558,12 @@ def test_run_submission_is_closed_typed_json_without_executable_state() -> None:
     submission = RunSubmission(
         submission_id="submit-1",
         config=config,
+        scientific_binding=bind_scientific_evidence(
+            catalog_id="test-store",
+            config=config,
+            samples=(),
+            sample_revisions={},
+        ),
         config_source=source,
         request=_request(),
         plan=RunPlanSummary(

@@ -12,6 +12,7 @@ from scopecat_testkit.workflow_fixtures import load_config
 
 import scopecat.daemon.execution as daemon_execution
 from scopecat.adaptive_domains import DomainProposalAttempt, ResolvedDomainFragment
+from scopecat.config.scientific_binding import bind_scientific_evidence
 from scopecat.control.models import (
     AdaptiveRegionSpec,
     PointCoordinateSpec,
@@ -103,6 +104,12 @@ def test_daemon_execution_ports_round_trip_through_fenced_http_commands(
     submission = RunSubmission(
         submission_id="submission-1",
         config=load_config(),
+        scientific_binding=bind_scientific_evidence(
+            catalog_id="test-store",
+            config=load_config(),
+            samples=(),
+            sample_revisions={},
+        ),
         request=RunRequest(experiment_id="scratch"),
         plan=RunPlanSummary(
             experiment_id="scratch",
@@ -136,6 +143,7 @@ def test_daemon_execution_ports_round_trip_through_fenced_http_commands(
             run_id="run-1",
             created_at=_NOW,
             config_content_hash=config_content_hash(submission.config),
+            scientific_binding=submission.scientific_binding,
         ),
     )
     record = _measurement()
@@ -536,6 +544,7 @@ def test_daemon_execution_ports_round_trip_through_fenced_http_commands(
         run_id=admission.run_id,
         created_at=accepted.created_at,
         config_content_hash=accepted.config_content_hash,
+        scientific_binding=accepted.scientific_binding,
         outcome=outcome,
     )
     committed = session.commit_terminal(
@@ -572,6 +581,12 @@ def test_daemon_execution_rejects_provision_receipt_for_another_operation() -> N
     submission = RunSubmission(
         submission_id="submission-1",
         config=load_config(),
+        scientific_binding=bind_scientific_evidence(
+            catalog_id="test-store",
+            config=load_config(),
+            samples=(),
+            sample_revisions={},
+        ),
         request=RunRequest(experiment_id="scratch"),
         plan=RunPlanSummary(
             experiment_id="scratch",
@@ -589,6 +604,7 @@ def test_daemon_execution_rejects_provision_receipt_for_another_operation() -> N
             run_id="run-1",
             created_at=_NOW,
             config_content_hash=config_content_hash(submission.config),
+            scientific_binding=submission.scientific_binding,
         ),
     )
 
@@ -621,6 +637,12 @@ def test_initial_lease_cancellation_skips_remote_provisioning(resuming: bool) ->
     submission = RunSubmission(
         submission_id="submission-1",
         config=load_config(),
+        scientific_binding=bind_scientific_evidence(
+            catalog_id="test-store",
+            config=load_config(),
+            samples=(),
+            sample_revisions={},
+        ),
         request=RunRequest(experiment_id="scratch"),
         plan=RunPlanSummary(
             experiment_id="scratch",
@@ -638,6 +660,7 @@ def test_initial_lease_cancellation_skips_remote_provisioning(resuming: bool) ->
             run_id="run-1",
             created_at=_NOW,
             config_content_hash=config_content_hash(submission.config),
+            scientific_binding=submission.scientific_binding,
         ),
     )
     provisioned = False

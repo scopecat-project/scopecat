@@ -2,10 +2,11 @@
 
 A measurement target records which sample revisions participate and how their
 member-qualified entities connect. You can register and inspect single-sample or
-assembly targets through Python. **Registered targets are not yet selectable for
-execution**: the current launch, working-point and calibration paths still use
+assembly targets through Python. **Registered targets are not yet selectable in notebook/session or GUI launches**: the current launch, working-point and calibration paths still use
 single-sample contracts. Registration does not claim an assembly is executable or
-its wiring is physically verified.
+its wiring is physically verified. The internal admission binding now validates
+exact single-member target evidence; the public selection and saved-recipe paths
+are still being connected, so continue using the documented sample launch workflow.
 
 Use an existing connected `LabClient` and registered sample. A member ID such as
 `A` is local to this target; `A/q0` and `B/q0` remain distinct.

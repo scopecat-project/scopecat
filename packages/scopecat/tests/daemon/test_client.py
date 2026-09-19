@@ -16,6 +16,7 @@ from scopecat.config.registry.records import (
     ConfigRegistryEntry,
     DirectConfigRegistrySource,
 )
+from scopecat.config.scientific_binding import bind_scientific_evidence
 from scopecat.control.models import (
     RunExecutionSegment,
     RunExecutionSegmentPage,
@@ -948,6 +949,12 @@ def _submission(submission_id: str = "submission-1") -> RunSubmission:
     return RunSubmission(
         submission_id=submission_id,
         config=load_config(),
+        scientific_binding=bind_scientific_evidence(
+            catalog_id="test-store",
+            config=load_config(),
+            samples=(),
+            sample_revisions={},
+        ),
         request=_REQUEST,
         plan=RunPlanSummary(
             experiment_id="scratch",
@@ -977,7 +984,13 @@ def _accepted_manifest() -> RunSnapshot:
     return RunSnapshot(
         run_id="run-1",
         created_at=_NOW,
-        config_content_hash=_HASH,
+        config_content_hash=config_content_hash(load_config()),
+        scientific_binding=bind_scientific_evidence(
+            catalog_id="test-store",
+            config=load_config(),
+            samples=(),
+            sample_revisions={},
+        ),
     )
 
 

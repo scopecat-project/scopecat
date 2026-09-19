@@ -1,10 +1,10 @@
 # Frozen target selection and admission
 
 Status: concrete implementation contract for [#626](https://github.com/scopecat-project/scopecat/issues/626),
-audited at `3ddaeb27b` after target catalog PR #625. This is a design, not shipped
-execution support. It refines [experiment contexts](experiment-contexts.md).
+audited at `3ddaeb27b` after target catalog PR #625. This is the full execution design; the internal run-binding stage below is
+implemented, while authored/session target selection remains pending. It refines [experiment contexts](experiment-contexts.md).
 This design follows the [prebaseline data policy](../data-compatibility.md).
-Current format 75 is not a compatibility baseline; no old-format reader or
+Current format 76 is not a compatibility baseline; no old-format reader or
 migration obligation is introduced here. Coordinate shared source-side files
 with workspace publication.
 
@@ -245,7 +245,8 @@ This design does not designate a compatibility baseline, execute a target, or re
 | Current-format recovery and unsupported formats | Backup/restore preserves current binding/ref/address; unsupported formats are rejected without rewriting files or inferring target/setup |
 | Label-only target revision; changed scientific target content | Old provenance stays exact; the future applicability comparator distinguishes metadata from scientific changes |
 
-These are unpassed acceptance requirements for #626. Keep them as short synthetic
+These are the complete acceptance requirements for #626, not a claim that the
+internal stage below completes the user workflow. Keep them as short synthetic
 contract/admission journeys during the fast-CI window; installed GUI/Windows and
 physical-device qualification remain separate finishing gates.
 
@@ -257,6 +258,37 @@ validation, consumed by the existing target catalog's create/revise operations.
 Its internal single-member projection preserves the exact qualified target ref,
 keeps member IDs separate from run role `subject`, and compares topology without
 description/order sensitivity. Contract tests cover foreign catalogs, composite
-targets, absent/different topology and label-only target revisions. No preparation,
-admission, HTTP execution surface or calibration writer consumes the projection
-yet; the execution acceptance requirements above remain open.
+targets, absent/different topology and label-only target revisions. The internal run-binding and admission path now consumes this projection. Public
+authored/session selection, target-bearing saved recipes and target-qualified
+calibration remain pending; registration alone still does not enable those paths.
+
+
+## Internal run-binding stage (#639)
+
+Every live run submission carries a versioned `ResolvedScientificBinding`. It
+records an explicit unbound, catalog-qualified inline-sample, or registered-target
+subject together with the accepted configuration and setup-content hashes. The
+existing frozen submission envelope retains configuration provenance; the binding
+does not introduce a second independently editable config source. Inline samples
+preserve existing multiple-role records without claiming assembly execution.
+
+The direct runner resolves sample revisions before submission and uses exact
+selectors as its runtime projection. Resume reuses retained evidence. Procedure
+admission also freezes inherited sample selectors in `resolved_samples`, while
+retaining the original selection for request-key identity. Reentering a child
+step therefore does not advance its inherited sample head; explicit per-step
+selection and the full target-bearing recipe contract remain follow-on work. Admission
+checks that evidence against local immutable catalog records, submitted config,
+setup and selectors before allocating a visible run or acquisition address. A
+dedicated repository reference is committed in the existing admission transaction;
+current-format recovery retains the same object and identity. Schema 76 marks this
+new development format, with no migration or earlier-format reader.
+
+The low-level registered-target variant permits only the reviewed single-member
+projection. Target head movement does not replace an exact reference; foreign
+catalogs, incompatible topology and altered mappings are rejected. This boundary
+is internal staging for #626, not an invitation to manually compose target launch
+payloads. The remaining slice must replace flat scientific selection in author
+sessions, previews, saved recipes and procedure children together before offering
+notebook or GUI target selection. Maintained setup and calibration applicability
+remain separate follow-on work.

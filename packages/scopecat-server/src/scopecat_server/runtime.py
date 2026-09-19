@@ -59,6 +59,7 @@ from scopecat_server.storage.sqlite.procedure_schedules import (
 from scopecat_server.storage.sqlite.project_store import SQLiteProjectStore
 from scopecat_server.storage.sqlite.run_repository import SQLiteRunRepository
 from scopecat_server.storage.sqlite.samples import SQLiteSampleStore
+from scopecat_server.storage.sqlite.target_catalog import TargetCatalogStore
 
 from .http.transport import create_app
 from .instruments.actors import InstrumentActorRegistry
@@ -221,6 +222,7 @@ class LocalDaemonRuntime:
                 point_plans=point_plans,
                 samples=samples,
                 sample_store=sample_store,
+                targets=TargetCatalogStore(sqlite, catalog_id=project_store.identity()),
                 deployment_id=deployment_id,
             )
 

@@ -100,7 +100,15 @@ def _application(root: Path, *, attempt: int = 1) -> tuple[DaemonApplication, Mo
                     "stop_reason": "complete",
                 },
             },
-            "snapshot": {"run_id": "admitted-child", "config_content_hash": HASH},
+            "snapshot": {
+                "run_id": "admitted-child",
+                "config_content_hash": HASH,
+                "scientific_binding": {
+                    "subject": {"kind": "unbound"},
+                    "config_content_hash": HASH,
+                    "setup_content_hash": HASH,
+                },
+            },
         }
     )
     lookup = Mock(return_value=child)

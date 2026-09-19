@@ -17,6 +17,7 @@ from scopecat.api.instruments import (
     temporary_instrument,
 )
 from scopecat.api.lab import LabClient
+from scopecat.config.scientific_binding import bind_scientific_evidence
 from scopecat.control.models import RunPlanSummary, RunResourceRequirement
 from scopecat.daemon.client import DaemonClient, DaemonConflictError
 from scopecat.daemon.views import ActiveConfigView
@@ -3027,6 +3028,9 @@ def _config_with_private_instrument_settings() -> ConfigProfileSnapshot:
 def _submission(config: ConfigProfileSnapshot) -> RunSubmission:
     [instrument] = config.instrument_registry.instruments
     return RunSubmission(
+        scientific_binding=bind_scientific_evidence(
+            catalog_id="test", config=config, samples=(), sample_revisions={}
+        ),
         submission_id="interactive-exclusion",
         config=config,
         request=RunRequest(experiment_id="scratch"),

@@ -46,6 +46,7 @@ from scopecat.config.registry.records import (
     ManualConfigDraftRegistrySource,
 )
 from scopecat.config.resolution import config_revision_entry_id
+from scopecat.config.scientific_binding import bind_scientific_evidence
 from scopecat.control.models import (
     RunExecutionSegment,
     RunExecutionSegmentPage,
@@ -233,6 +234,12 @@ def test_lab_runs_preserves_bounded_page_navigation() -> None:
         run_id="run-page",
         created_at=_NOW,
         config_content_hash=config_content_hash(load_config()),
+        scientific_binding=bind_scientific_evidence(
+            catalog_id="test-store",
+            config=load_config(),
+            samples=(),
+            sample_revisions={},
+        ),
     )
     summary = RunSummary(
         control=RunControlView(
@@ -297,6 +304,12 @@ def test_remote_run_uses_full_dataset_batches_and_projected_arrow_pages() -> Non
     snapshot = RunSnapshot(
         run_id="run-batches",
         config_content_hash=config_content_hash(load_config()),
+        scientific_binding=bind_scientific_evidence(
+            catalog_id="test-store",
+            config=load_config(),
+            samples=(),
+            sample_revisions={},
+        ),
     )
     detail = RunDetail(
         control=RunControlView(
@@ -1674,9 +1687,11 @@ def test_run_invocation_plans_against_explicit_snapshot_without_local_storage(
             executor_id=executor_id,
             submission_id=submission_id,
         )
+        assert planned.scientific_binding is not None
         accepted = RunSnapshot(
             run_id="run-scratch",
             config_content_hash=planned.program.config_content_hash,
+            scientific_binding=planned.scientific_binding,
         )
         return _terminal_manifest(accepted)
 
@@ -1755,10 +1770,12 @@ def test_run_invocation_uses_active_config_and_bound_system(
     ) -> RunSnapshot:
         del self, executor_id, submission_id
         captured["planned"] = planned
+        assert planned.scientific_binding is not None
         return _terminal_manifest(
             RunSnapshot(
                 run_id="run-scratch",
                 config_content_hash=planned.program.config_content_hash,
+                scientific_binding=planned.scientific_binding,
             )
         )
 
@@ -1803,10 +1820,12 @@ def test_run_invocation_uses_daemon_catalog_without_a_local_builder(
     ) -> RunSnapshot:
         del self, executor_id, submission_id
         captured["planned"] = planned
+        assert planned.scientific_binding is not None
         return _terminal_manifest(
             RunSnapshot(
                 run_id="run-scratch",
                 config_content_hash=planned.program.config_content_hash,
+                scientific_binding=planned.scientific_binding,
             )
         )
 
@@ -1866,11 +1885,16 @@ def test_preview_invocation_uses_active_config_without_admission() -> None:
 
 def _planned() -> PlannedRun:
     config = load_config()
-    return plan_configured_experiment(
-        load_invocation(),
-        config=config,
-        system=ExperimentSystem(
-            instrument_catalog=_instrument_catalog(config),
+    return replace(
+        plan_configured_experiment(
+            load_invocation(),
+            config=config,
+            system=ExperimentSystem(
+                instrument_catalog=_instrument_catalog(config),
+            ),
+        ),
+        scientific_binding=bind_scientific_evidence(
+            catalog_id="tests", config=config, samples=(), sample_revisions={}
         ),
     )
 
@@ -2098,6 +2122,7 @@ def _admission(submission: RunSubmission) -> RunAdmission:
             run_id="run-1",
             created_at=_NOW,
             config_content_hash=config_content_hash(submission.config),
+            scientific_binding=submission.scientific_binding,
             config_source=submission.config_source,
         ),
     )
@@ -2244,4 +2269,173 @@ def test_remote_entity_projection_forwards_selection_on_every_snapshot_page() ->
             "entities": [entity.model_dump(mode="json") for entity in entities],
         }
         for query in queries
+    )
+
+
+def test_scientific_preparation_freezes_sample_heads_and_canonical_roles() -> None:
+    from scopecat.daemon.views import SampleView
+    from scopecat.records.sample import (
+        SampleRecord,
+        SampleRevision,
+        SampleRevisionDraft,
+        SampleSelector,
+        sample_revision_content_hash,
+    )
+
+    config = load_config()
+    catalog = _instrument_catalog(config)
+    generation = 1
+    reads: list[str] = []
+
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        reads.append(request.url.path)
+        if request.url.path == "/api/v1/instrument-contracts/resolve":
+            return _model(catalog)
+        if request.url.path == "/api/v1/health":
+            return httpx2.Response(
+                200,
+                json={
+                    "status": "ok",
+                    "project_id": "catalog-a",
+                    "deployment_id": "d",
+                    "project_name": "test",
+                    "project_root": "/test",
+                    "data_root": "/test/data",
+                    "deployment_root": "/test/deployment",
+                },
+            )
+        sample_id = request.url.path.rsplit("/", 1)[-1]
+        assert sample_id in ("chip-a", "chip-b")
+        content = SampleRevisionDraft(display_name=f"revision {generation}")
+        return _model(
+            SampleView(
+                record=SampleRecord(
+                    id=sample_id, kind="chip", active_revision=generation
+                ),
+                revision=SampleRevision(
+                    sample_id=sample_id,
+                    revision=generation,
+                    actor="test",
+                    content=content,
+                    content_hash=sample_revision_content_hash(
+                        sample_id=sample_id, content=content
+                    ),
+                ),
+            )
+        )
+
+    runner = _DaemonRunner(
+        _client(handler),
+        lambda _config, _catalog: ExperimentSystem(instrument_catalog=catalog),
+    )
+    prepared = runner._plan(
+        load_invocation(),
+        config=config,
+        config_source=None,
+        name=None,
+        tags=(),
+        description=None,
+        metadata=None,
+        operator=None,
+        samples=(
+            SampleSelector(sample_id="chip-a", role="subject"),
+            SampleSelector(sample_id="chip-b", role="reference"),
+        ),
+    )
+    assert prepared.scientific_binding is not None
+    assert tuple(sample.role for sample in prepared.scientific_binding.samples) == (
+        "reference",
+        "subject",
+    )
+    assert all(sample.revision == 1 for sample in prepared.request.samples)
+    generation = 2
+    reads.clear()
+    retained = runner._plan(
+        load_invocation(),
+        config=config,
+        config_source=None,
+        name=None,
+        tags=(),
+        description=None,
+        metadata=None,
+        operator=None,
+        samples=prepared.request.samples,
+        scientific_binding=prepared.scientific_binding,
+    )
+    assert retained.scientific_binding == prepared.scientific_binding
+    assert reads == ["/api/v1/instrument-contracts/resolve"]
+    first, _ = runner_module._prepare_run_submission(prepared, submission_id="first")
+    second, _ = runner_module._prepare_run_submission(retained, submission_id="second")
+    assert first.intent_content_hash == second.intent_content_hash
+
+
+def test_offline_plan_cannot_be_submitted_without_scientific_resolution() -> None:
+    offline = replace(_planned(), scientific_binding=None)
+    with pytest.raises(ValueError, match="resolved scientific evidence"):
+        runner_module._prepare_run_submission(offline, submission_id="offline")
+
+
+def test_retained_context_binding_preserves_roles_after_subject_on_resume() -> None:
+    from scopecat.records.config_context import ConfigContextRef, ContextRunConfigSource
+    from scopecat.records.sample import SampleBinding
+
+    config = load_config()
+    catalog = _instrument_catalog(config)
+    subject = SampleBinding(
+        role="subject",
+        sample_id="chip-a",
+        revision=1,
+        content_hash="sha256:" + "a" * 64,
+        kind="chip",
+        display_name="Chip A",
+        context_id="wp-a",
+    )
+    witness = subject.model_copy(
+        update={
+            "role": "witness",
+            "sample_id": "chip-b",
+            "context_id": None,
+        }
+    )
+    binding = bind_scientific_evidence(
+        catalog_id="catalog-a",
+        config=config,
+        samples=(witness, subject),
+        sample_revisions={},
+    )
+    source = ContextRunConfigSource(
+        context=ConfigContextRef(
+            entry_id="working-point", content_hash=config_content_hash(config)
+        ),
+        content_hash=config_content_hash(config),
+        lab_generation=1,
+        sample=subject,
+    )
+
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        # A retained binding must never consult a sample head during replanning.
+        assert request.url.path == "/api/v1/instrument-contracts/resolve"
+        return _model(catalog)
+
+    runner = _DaemonRunner(
+        _client(handler),
+        lambda _config, _catalog: ExperimentSystem(instrument_catalog=catalog),
+    )
+    retained = runner._plan(
+        load_invocation(),
+        config=config,
+        config_source=source,
+        name=None,
+        tags=(),
+        description=None,
+        metadata=None,
+        operator=None,
+        samples=binding.sample_selectors(),
+        scientific_binding=binding,
+    )
+    assert retained.scientific_binding == binding
+    assert retained.request.samples == binding.sample_selectors()
+    assert tuple(sample.role for sample in retained.request.samples) == (
+        "subject",
+        "witness",
     )

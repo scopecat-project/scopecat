@@ -9,6 +9,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from scopecat.config.documents import load_config_snapshot_document
+from scopecat.config.scientific_binding import bind_scientific_evidence
 from scopecat.control.models import (
     DurableEvent,
     EventPage,
@@ -41,6 +42,10 @@ from scopecat.records.config import (
 )
 from scopecat.records.run import RunSnapshot
 from scopecat.records.run_request import RunRequest
+from scopecat.records.scientific_binding import (
+    ResolvedScientificBinding,
+    UnboundSubject,
+)
 from scopecat.sdk.instruments.catalog import DriverCatalog
 from scopecat.sdk.instruments.contracts import InstrumentDescription
 
@@ -510,6 +515,9 @@ def _wire_admission(submission_id: str) -> RunAdmission:
 
 def _submission(submission_id: str) -> dict[str, object]:
     return RunSubmission(
+        scientific_binding=bind_scientific_evidence(
+            catalog_id="test", config=_config(), samples=(), sample_revisions={}
+        ),
         submission_id=submission_id,
         config=_config(),
         request=_REQUEST,
@@ -539,6 +547,11 @@ def _executor_lease() -> ExecutorLease:
 
 def _accepted_manifest() -> RunSnapshot:
     return RunSnapshot(
+        scientific_binding=ResolvedScientificBinding(
+            subject=UnboundSubject(),
+            config_content_hash=_HASH,
+            setup_content_hash="sha256:" + "0" * 64,
+        ),
         run_id="run-1",
         created_at=_NOW,
         config_content_hash=_HASH,

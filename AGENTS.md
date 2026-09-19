@@ -9,7 +9,7 @@ acceptable; update affected consumers instead of adding speculative compatibilit
 layers. Persistent scientific data has a separate compatibility policy: promises
 begin at explicitly designated supported baselines, not every development store.
 No persistent-data baseline is designated yet. Schemas 68–74 and their migration
-exercises are retired development formats; schema 75 is not a supported baseline.
+exercises are retired development formats; schema 76 is not a supported baseline.
 Do not add compatibility readers, old-codec fallbacks or migration edges for
 prebaseline formats. Keep current-format backup/restore and scientific invariants tested.
 Do not delete or silently rewrite historical files during a code refactor; owners

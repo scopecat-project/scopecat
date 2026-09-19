@@ -18,6 +18,7 @@ from scopecat.config.changes import (
 from scopecat.config.contexts import apply_context_overrides
 from scopecat.config.registry import service as config_registry_service
 from scopecat.config.registry.records import ContextConfigRegistrySource
+from scopecat.config.scientific_binding import bind_scientific_evidence
 from scopecat.control.models import (
     ControlRun,
     ResourceKey,
@@ -55,6 +56,11 @@ from scopecat.records.run import (
     RunConfigSource,
 )
 from scopecat.records.sample import SampleBinding
+from scopecat.records.scientific_binding import (
+    InlineSamplesSubject,
+    RegisteredTargetSubject,
+    ResolvedScientificBinding,
+)
 from scopecat.runs.admission import build_run_admission
 from scopecat.runs.refs import record_content_ref
 from scopecat.runs.repository import (
@@ -73,6 +79,7 @@ from scopecat_server.storage.sqlite.control_plane import (
 from scopecat_server.storage.sqlite.record_collections import allocate_address
 from scopecat_server.storage.sqlite.run_repository import SQLiteRunRepository
 from scopecat_server.storage.sqlite.samples import SQLiteSampleStore
+from scopecat_server.storage.sqlite.target_catalog import TargetCatalogStore
 
 from ..errors import BackendConflict, BackendNotFound
 from .point_plans import RunPointPlanService
@@ -91,6 +98,7 @@ class AdmissionService:
         point_plans: RunPointPlanService,
         samples: SampleService,
         sample_store: SQLiteSampleStore,
+        targets: TargetCatalogStore,
         deployment_id: str | None = None,
     ) -> None:
         self._control = control
@@ -99,6 +107,7 @@ class AdmissionService:
         self._point_plans = point_plans
         self._samples = samples
         self._sample_store = sample_store
+        self._targets = targets
         self._deployment_id = deployment_id
 
     def submit_run(self, submission: RunSubmission) -> RunAdmission:
@@ -145,8 +154,10 @@ class AdmissionService:
                     submitted=submission.config,
                     authoritative=active_config,
                 )
-            sample_bindings = self._samples.resolve_bindings(submission.request.samples)
-            self._require_candidate_batch(submission.config_source, sample_bindings)
+            sample_bindings = self._validate_scientific_binding(submission)
+            self._require_candidate_subject(
+                submission.config_source, submission.scientific_binding
+            )
             if (
                 isinstance(submission.config_source, ContextRunConfigSource)
                 and submission.config_source.sample not in sample_bindings
@@ -160,6 +171,7 @@ class AdmissionService:
                 request=submission.request,
                 config_source=submission.config_source,
                 samples=sample_bindings,
+                scientific_binding=submission.scientific_binding,
             )
             admission = RunAdmissionRecord(
                 submission_id=submission.submission_id,
@@ -381,18 +393,61 @@ class AdmissionService:
         except ProblemFailure as error:
             raise BackendConflict("run config source cannot be resolved") from error
 
-    def _require_candidate_batch(
-        self, source: RunConfigSource | None, bindings: tuple[SampleBinding, ...]
+    def _validate_scientific_binding(
+        self, submission: RunSubmission
+    ) -> tuple[SampleBinding, ...]:
+        binding = submission.scientific_binding
+        if submission.request.samples != binding.sample_selectors():
+            raise BackendConflict(
+                "run sample selectors must match scientific binding exactly"
+            )
+        try:
+            subject = binding.subject
+            if (
+                isinstance(subject, InlineSamplesSubject)
+                and subject.catalog_id != self._targets.catalog_id
+            ):
+                raise BackendConflict("scientific binding belongs to another catalog")
+            target = (
+                self._targets.resolve(subject.ref)
+                if isinstance(subject, RegisteredTargetSubject)
+                else None
+            )
+            samples = self._samples.resolve_bindings(binding.sample_selectors())
+            revisions = (
+                {
+                    (member.sample_id, member.revision): self._samples.revision(
+                        member.sample_id, member.revision
+                    )
+                    for member in target.content.members
+                }
+                if target is not None
+                else {}
+            )
+            expected = bind_scientific_evidence(
+                catalog_id=self._targets.catalog_id,
+                config=submission.config,
+                samples=samples,
+                target=target,
+                sample_revisions=revisions,
+            )
+            if expected != binding:
+                raise BackendConflict(
+                    "scientific binding does not match retained evidence"
+                )
+            return samples
+        except ValueError as error:
+            raise BackendConflict(str(error)) from error
+
+    def _require_candidate_subject(
+        self, source: RunConfigSource | None, binding: ResolvedScientificBinding
     ) -> None:
         if not isinstance(source, AnalysisCandidateRunConfigSource):
             return
-        original = self._runs.read_snapshot(source.source_run_id).samples
-        if (
-            any(binding.batch_id is not None for binding in (*original, *bindings))
-            and original != bindings
-        ):
+        original = self._runs.read_snapshot(source.source_run_id).scientific_binding
+        if original.subject != binding.subject:
             raise BackendConflict(
-                "candidate requires its original sample revisions and batch; "
+                "candidate requires its original scientific subject and batch; "
                 "copy estimates explicitly into a new working point instead"
             )
 

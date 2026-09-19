@@ -244,6 +244,7 @@ class ProcedureRun(_ProcedureModel):
     intent: ProcedureIntent
     intent_hash: Sha256ContentHash
     samples: tuple[SampleSelector, ...] = ()
+    resolved_samples: tuple[SampleSelector, ...] = ()
     revision: int = Field(ge=1)
     state: ProcedureRunState
     created_at: datetime = Field(default_factory=utc_now)
@@ -255,7 +256,7 @@ class ProcedureRun(_ProcedureModel):
     recovery: ProcedureRecoverySource | None = None
     plan_ref: ExperimentPlanRef | None = None
 
-    @field_validator("samples")
+    @field_validator("samples", "resolved_samples")
     @classmethod
     def validate_samples(
         cls,
@@ -271,6 +272,25 @@ class ProcedureRun(_ProcedureModel):
 
     @model_validator(mode="after")
     def validate_state_details(self) -> ProcedureRun:
+        requested = {sample.role: sample for sample in self.samples}
+        resolved = {sample.role: sample for sample in self.resolved_samples}
+        if requested.keys() != resolved.keys():
+            raise ValueError("resolved procedure samples must cover requested roles")
+        for role, selected in resolved.items():
+            original = requested[role]
+            if (
+                selected.revision is None
+                or selected.sample_id != original.sample_id
+                or selected.context_id != original.context_id
+                or selected.batch_id != original.batch_id
+                or (
+                    original.revision is not None
+                    and selected.revision != original.revision
+                )
+            ):
+                raise ValueError(
+                    "resolved procedure samples must preserve exact intent"
+                )
         expected_intent_hash = procedure_intent_hash(
             self.definition,
             self.intent,

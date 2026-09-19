@@ -66,12 +66,13 @@ from scopecat.config.registry.service import (
 from scopecat.daemon.wire import (
     ConfigPublishCommand,
     ConfigPublishReceipt,
+    SampleCreateCommand,
 )
 from scopecat.daemon.wire import (
     DirectConfigRevisionSource as WireDirectConfigRevisionSource,
 )
 from scopecat.records.run import ConfigRegistryRunConfigSource
-from scopecat.records.sample import SampleSelector
+from scopecat.records.sample import SampleRevisionDraft, SampleSelector
 from scopecat_testkit.workflow_fixtures import load_config
 
 from scopecat_server import BackendConflict, BackendNotFound, LocalDaemonRuntime
@@ -90,8 +91,10 @@ from scopecat_server.storage.sqlite.calibration_cohorts import (
 from scopecat_server.storage.sqlite.config_operations import SQLiteConfigOperationStore
 from scopecat_server.storage.sqlite.config_registry import SQLiteConfigRegistryStore
 from scopecat_server.storage.sqlite.connection import SQLiteDatabase
+from scopecat_server.storage.sqlite.control_plane import SQLiteControlPlane
 from scopecat_server.storage.sqlite.project_store import SQLiteProjectStore
 from scopecat_server.storage.sqlite.run_repository import SQLiteRunRepository
+from scopecat_server.storage.sqlite.samples import SQLiteSampleStore
 
 _START = datetime(2026, 8, 18, 9, tzinfo=UTC)
 _DEFINITION_HASH = "sha256:" + "1" * 64
@@ -155,6 +158,19 @@ def _harness(tmp_path: Path) -> _Harness:
         config_registry=config_registry,
         source=source,
         now=now,
+    )
+
+
+def _register_sample(harness: _Harness, sample_id: str) -> None:
+    sqlite = harness.automation_store.sqlite
+    SQLiteSampleStore(sqlite, control=SQLiteControlPlane(sqlite)).create_sample(
+        SampleCreateCommand(
+            operation_id=f"create:{sample_id}",
+            sample_id=sample_id,
+            kind="chip",
+            actor="test",
+            content=SampleRevisionDraft(display_name=sample_id),
+        )
     )
 
 
@@ -768,6 +784,7 @@ def test_sample_scoped_calibration_propagates_to_procedure_child_runs(
     tmp_path: Path,
 ) -> None:
     harness = _harness(tmp_path)
+    _register_sample(harness, "die-1")
     member = _member(
         "q0",
         sample_id="die-1",
@@ -785,6 +802,9 @@ def test_sample_scoped_calibration_propagates_to_procedure_child_runs(
 
     assert procedure.samples == (
         SampleSelector(sample_id="die-1", context_id="cooldown-2"),
+    )
+    assert procedure.resolved_samples == (
+        SampleSelector(sample_id="die-1", revision=1, context_id="cooldown-2"),
     )
 
 
@@ -1496,6 +1516,7 @@ def test_new_batch_never_reuses_previous_calibration_success(tmp_path: Path) -> 
     )
 
     harness = _harness(tmp_path)
+    _register_sample(harness, "chip")
     batches = ExperimentalBatchStore(SQLiteDatabase(tmp_path / "control.sqlite3"))
     for batch in ("cooldown-a", "cooldown-b"):
         batches.save(batch, ExperimentalBatchEdit(name=batch))
@@ -1514,6 +1535,11 @@ def test_new_batch_never_reuses_previous_calibration_success(tmp_path: Path) -> 
     )
     procedure = harness.automation.get(created.members[0].procedure_run_id)
     assert procedure.samples[0].batch_id == "cooldown-a"
+    assert procedure.resolved_samples == (
+        SampleSelector(
+            sample_id="chip", revision=1, context_id="parked", batch_id="cooldown-a"
+        ),
+    )
     _close(harness, created.members[0], status="succeeded")
     prior = _status(harness, (old,)).snapshot.statuses[0].latest_success
     assert prior is not None

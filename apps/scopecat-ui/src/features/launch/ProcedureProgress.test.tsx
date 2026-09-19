@@ -23,6 +23,7 @@ function view(overrides: Partial<ProcedureOperatorView> = {}): ProcedureOperator
       intent: {},
       intent_hash: "sha256:" + "2".repeat(64),
       samples: [],
+      resolved_samples: [],
       revision: 1,
       state: "ready",
       created_at: NOW,

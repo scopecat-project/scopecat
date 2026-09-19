@@ -11,6 +11,7 @@ from scopecat.kernel.run_outcome import RunOutcome, RunStatus, utc_now
 from scopecat.records.config import ConfigContentHash
 from scopecat.records.config_context import ContextRunConfigSource
 from scopecat.records.sample import SampleBinding
+from scopecat.records.scientific_binding import ResolvedScientificBinding
 
 
 class ConfigRegistryRunConfigSource(BaseModel):
@@ -84,6 +85,7 @@ class RunSnapshot(BaseModel):
     )
 
     run_id: str
+    scientific_binding: ResolvedScientificBinding
     created_at: datetime = Field(default_factory=utc_now)
     outcome: RunOutcome | None = None
     config_content_hash: ConfigContentHash
@@ -92,6 +94,12 @@ class RunSnapshot(BaseModel):
 
     @model_validator(mode="after")
     def validate_identity(self) -> RunSnapshot:
+        if self.scientific_binding.config_content_hash != self.config_content_hash:
+            raise ValueError("scientific binding config hash does not match run")
+        if sorted(
+            self.scientific_binding.samples, key=lambda item: item.role
+        ) != sorted(self.samples, key=lambda item: item.role):
+            raise ValueError("scientific binding samples do not match run")
         if (
             self.config_source is not None
             and self.config_source.content_hash != self.config_content_hash
