@@ -13,7 +13,10 @@ import pytest
 from scopecat.records.author_revision import AuthorRevisionRef
 from scopecat.records.launch_request import LaunchRequest
 
-from scopecat_server.services.revision_workers import RevisionWorkers
+from scopecat_server.services.revision_workers import (
+    AuthorWorkerBinding,
+    RevisionWorkers,
+)
 
 if TYPE_CHECKING:
     from scopecat.application import LabApplication
@@ -28,7 +31,8 @@ for line in sys.stdin:
         sys.exit(1)
     if command['experiment'] == 'slow':
         time.sleep(120)
-    print(json.dumps({'pid': os.getpid(), 'revision': sys.argv[1]}), flush=True)
+    result = {'pid': os.getpid(), 'revision': sys.argv[1], 'workspace': sys.argv[2]}
+    print(json.dumps(result), flush=True)
 """
 
 
@@ -55,7 +59,7 @@ def test_reuse_isolation_eviction_and_failure(tmp_path: Path) -> None:
     ) -> subprocess.Popen[str]:
         # Preserve the real pipe/encoding/diagnostics protocol, replace project code.
         child = real_spawn(
-            [sys.executable, "-c", _CODE, args[-1]],
+            [args[0], "-c", _CODE, args[-1], args[3]],
             stdin=stdin,
             stdout=stdout,
             stderr=stderr,
@@ -65,31 +69,38 @@ def test_reuse_isolation_eviction_and_failure(tmp_path: Path) -> None:
         children.append(child)
         return child
 
+    binding = AuthorWorkerBinding(tmp_path, Path(sys.executable).absolute())
     pool = RevisionWorkers()
     try:
         with patch(
             "scopecat_server.services.revision_workers.subprocess.Popen",
             side_effect=spawn,
         ):
-            a = pool.call(tmp_path, request())
+            a = pool.call(binding, request())
             assert a.returncode == 0
-            assert pool.call(tmp_path, request()).stdout == a.stdout
-            b = pool.call(tmp_path, request("b"))
+            assert pool.call(binding, request()).stdout == a.stdout
+            b = pool.call(binding, request("b"))
             assert json.loads(a.stdout)["pid"] != json.loads(b.stdout)["pid"]
-            assert pool.call(tmp_path, request()).stdout == a.stdout
-            assert pool.call(tmp_path, request("c")).returncode == 0
+            assert pool.call(binding, request()).stdout == a.stdout
+            assert pool.call(binding, request("c")).returncode == 0
             assert children[1].poll() is not None  # b was least recently used
-            failed = pool.call(tmp_path, request(experiment="fail"))
+            failed = pool.call(binding, request(experiment="fail"))
             assert failed.returncode == 1
             assert "controlled failure" in failed.stderr
             assert len(children) == 3  # no implicit retry
-            recovered = pool.call(tmp_path, request())
+            recovered = pool.call(binding, request())
             assert recovered.returncode == 0
             assert recovered.stdout != a.stdout
             with pytest.raises(subprocess.TimeoutExpired):
-                pool.call(tmp_path, request(experiment="slow"), timeout=0.1)
+                pool.call(binding, request(experiment="slow"), timeout=0.1)
             assert children[-1].poll() is not None
             assert len(children) == 4  # timeout also never retries
+            original = pool.call(binding, request())
+            other_binding = AuthorWorkerBinding(tmp_path / "other", binding.python)
+            other = pool.call(other_binding, request())
+            assert json.loads(original.stdout)["pid"] != json.loads(other.stdout)["pid"]
+            assert json.loads(other.stdout)["workspace"] == str(other_binding.workspace)
+            assert pool.call(binding, request()).stdout == original.stdout
     finally:
         pool.close()
     assert all(child.poll() is not None for child in children)

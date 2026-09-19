@@ -472,7 +472,7 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
         operation = command.kind
         try:
             completed = retained_workers.call(
-                application.project_root, command, timeout=60
+                application.author_revisions.worker_binding, command, timeout=60
             )
         except subprocess.TimeoutExpired as error:
             stage, evidence = diagnostic_excerpt(error.stderr)
@@ -533,7 +533,9 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
                 raise subprocess.TimeoutExpired("author revision initialization", 60)
             completed = (
                 application.author_revisions.workers.call(
-                    application.project_root, command, timeout=remaining
+                    application.author_revisions.worker_binding,
+                    command,
+                    timeout=remaining,
                 )
                 if ref is not None
                 else subprocess.run(  # noqa: S603 - fixed project worker command
