@@ -85,8 +85,6 @@ from scopecat.daemon.wire import (
     DirectConfigRevisionSource,
     ExecutorLease,
     InstrumentContractCatalogRequest,
-    InstrumentInventoryMigrationCommand,
-    InstrumentInventoryMigrationReceipt,
     ManualConfigDraftRevisionSource,
     RunAdmission,
     RunCoverageState,
@@ -98,6 +96,9 @@ from scopecat.daemon.wire import (
     RunInstrumentProvisionReceipt,
     RunRecoveryGroupPage,
     RunSubmission,
+    SetupActivateCommand,
+    SetupRevisionList,
+    SetupSaveCommand,
     TerminalRunCommitCommand,
 )
 from scopecat.execution.program import RunProgram
@@ -132,6 +133,12 @@ from scopecat.records.execution import DomainJobInvocationTransition
 from scopecat.records.instrument import InstrumentStateSnapshot
 from scopecat.records.measurement import MeasurementScalar
 from scopecat.records.run import ConfigRegistryRunConfigSource, RunSnapshot
+from scopecat.records.setup import (
+    ActiveSetupView,
+    ExecutableSetupSnapshot,
+    SetupActivationRecord,
+    SetupRevision,
+)
 from scopecat.runs.data import RunMeasurementDatasetResult
 from scopecat.runs.repository import TerminalRunCommit
 from scopecat.sdk.instruments import InstrumentProviderContext
@@ -1596,74 +1603,70 @@ def test_lab_candidate_accept_resolves_default_entry_before_publish() -> None:
     assert receipt.entry.id == command.entry_id
 
 
-def test_lab_config_inventory_migration_assembles_registry_coordination() -> None:
+def test_lab_setup_save_list_and_explicit_activation_use_independent_authority() -> (
+    None
+):
     config = load_config()
-    entry, activation = _config_registry_records(config)
-    changes = (
-        InstrumentInventoryRekey(
-            instrument_id="source-0",
-            from_exclusivity_key="source-0",
-            to_exclusivity_key="rack-a/source",
-        ),
-    )
-    migrated_entry = ConfigRegistryEntry(
+    setup = ExecutableSetupSnapshot.from_config(config)
+    revision = SetupRevision(
         id="inventory-v2",
-        config_ref="config-registry/entries/inventory-v2/config.json",
-        content_hash=config_content_hash(config),
-        source=DirectConfigRegistrySource(),
+        content_hash=setup.content_hash,
+        setup=setup,
         actor="notebook-operator",
-        note="move source",
-        recorded_at=_NOW + timedelta(seconds=1),
     )
-    receipt = InstrumentInventoryMigrationReceipt(
-        entry=migrated_entry,
-        activation=ConfigRegistryActivationRecord(
-            generation=activation.generation + 1,
-            action="inventory_migration",
-            entry_id=migrated_entry.id,
-            entry_content_hash=migrated_entry.content_hash,
-            previous_entry_id=entry.id,
-            previous_entry_content_hash=entry.content_hash,
-            actor="notebook-operator",
-            note="move source",
-            recorded_at=_NOW + timedelta(seconds=1),
+    current = ActiveSetupView(
+        revision=revision,
+        activation=SetupActivationRecord(
+            generation=3, revision=revision.ref, actor="notebook-operator"
         ),
-        changes=changes,
     )
-    seen: list[InstrumentInventoryMigrationCommand] = []
+    seen: list[SetupSaveCommand | SetupActivateCommand] = []
 
     def handler(request: httpx2.Request) -> httpx2.Response:
         path = request.url.path
-        if path == "/api/v1/config-registry":
-            return _model(ConfigRegistryPage(entries=(entry,), activation=activation))
-        if path == "/api/v1/config-registry/instrument-inventory-migrations":
-            seen.append(
-                InstrumentInventoryMigrationCommand.model_validate_json(request.content)
-            )
-            return _model(receipt)
+        if path == "/api/v1/setup/revisions":
+            if request.method == "GET":
+                return _model(SetupRevisionList(items=(revision,)))
+            seen.append(SetupSaveCommand.model_validate_json(request.content))
+            return _model(revision)
+        if path == "/api/v1/setup/revisions/inventory-v2":
+            return _model(revision)
+        if path == "/api/v1/setup/active":
+            return _model(current)
+        if path == "/api/v1/setup/activation-operations":
+            seen.append(SetupActivateCommand.model_validate_json(request.content))
+            return _model(current)
         raise AssertionError(f"unexpected request: {request.method} {path}")
 
     lab = LabClient(_client(handler), operator="notebook-operator")
-
-    assert (
-        lab.config.migrate_instrument_inventory(
-            config,
-            changes=changes,
-            entry_id=migrated_entry.id,
-            note="move source",
-        )
-        == receipt
+    assert lab.setup.save(config, name="inventory-v2") == revision
+    assert lab.setup.list() == (revision,)
+    assert lab.setup.get("inventory-v2") == revision
+    assert len(seen) == 1  # Saving never selects executable authority.
+    change = InstrumentInventoryRekey(
+        instrument_id="source-0",
+        from_exclusivity_key="source-0",
+        to_exclusivity_key="rack/source",
     )
-    assert seen == [
-        InstrumentInventoryMigrationCommand(
-            config=config,
-            entry_id=migrated_entry.id,
-            changes=changes,
-            actor="notebook-operator",
-            expected_generation=activation.generation,
-            note="move source",
+    assert (
+        lab.setup.activate(
+            "inventory-v2",
+            expected_generation=2,
+            operation_id="reviewed-selection",
+            changes=(change,),
         )
-    ]
+        == current
+    )
+    assert seen[-1] == SetupActivateCommand(
+        operation_id="reviewed-selection",
+        revision=revision.ref,
+        expected_generation=2,
+        actor="notebook-operator",
+        changes=(change,),
+    )
+    lab.setup.activate(revision)
+    assert isinstance(seen[-1], SetupActivateCommand)
+    assert seen[-1].expected_generation == 3
 
 
 def test_run_invocation_plans_against_explicit_snapshot_without_local_storage(

@@ -196,6 +196,8 @@ from scopecat.daemon.wire import (
     ConfigEntryActivationCommand,
     ConfigPublishCommand,
     ConfigPublishReceipt,
+    ConfigSetupRebindCommand,
+    ConfigSetupRebindPreviewCommand,
     ExecutorHeartbeat,
     ExecutorLease,
     ExecutorStartRequest,
@@ -203,8 +205,6 @@ from scopecat.daemon.wire import (
     InstrumentContractCatalogRequest,
     InstrumentDriverProbeCommand,
     InstrumentDriverProbeReceipt,
-    InstrumentInventoryMigrationCommand,
-    InstrumentInventoryMigrationReceipt,
     InstrumentReleaseCommand,
     InstrumentReleaseReceipt,
     InstrumentSessionEndReceipt,
@@ -238,6 +238,9 @@ from scopecat.daemon.wire import (
     SampleCreateCommand,
     SampleMutationReceipt,
     SampleReviseCommand,
+    SetupActivateCommand,
+    SetupRevisionList,
+    SetupSaveCommand,
     TerminalRunCommitCommand,
 )
 from scopecat.planning.catalog import InstrumentContractCatalog
@@ -263,6 +266,7 @@ from scopecat.records.author_revision import (
     AuthorRevisionState,
 )
 from scopecat.records.comparison import ComparisonRequest
+from scopecat.records.config import ConfigProfileSnapshot
 from scopecat.records.config_context import ConfigContextRef
 from scopecat.records.content import ContentEntry
 from scopecat.records.costs import RunMeasuredCosts
@@ -311,6 +315,7 @@ from scopecat.records.sample_artifact import (
     MAX_SAMPLE_ARTIFACT_BYTES,
     SampleArtifactPage,
 )
+from scopecat.records.setup import ActiveSetupView, SetupRevision
 from scopecat.records.target_catalog import (
     TargetCatalogPage,
     TargetCreateCommand,
@@ -870,6 +875,36 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
             declared_size_bytes=_request_content_length(request),
         )
 
+    @app.get(f"{_API_PREFIX}/setup/active")
+    def active_setup() -> ActiveSetupView:
+        return application.setup.current()
+
+    @app.get(f"{_API_PREFIX}/setup/revisions")
+    def list_setup_revisions() -> SetupRevisionList:
+        return SetupRevisionList(items=application.setup.list())
+
+    @app.get(f"{_API_PREFIX}/setup/revisions/{{revision_id:path}}")
+    def get_setup_revision(revision_id: str) -> SetupRevision:
+        return application.setup.get(revision_id)
+
+    @app.post(f"{_API_PREFIX}/setup/revisions")
+    def save_setup(command: SetupSaveCommand) -> SetupRevision:
+        return application.setup.save(command)
+
+    @app.post(f"{_API_PREFIX}/setup/activation-operations")
+    def activate_setup(command: SetupActivateCommand) -> ActiveSetupView:
+        return application.setup.activate(command)
+
+    @app.post(f"{_API_PREFIX}/config-registry/setup-rebindings/preview")
+    def preview_setup_rebind(
+        command: ConfigSetupRebindPreviewCommand,
+    ) -> ConfigProfileSnapshot:
+        return application.config.preview_setup_rebind(command)
+
+    @app.post(f"{_API_PREFIX}/config-registry/setup-rebindings")
+    def rebind_setup(command: ConfigSetupRebindCommand) -> ConfigEntryView:
+        return application.config.rebind_setup(command)
+
     @app.get(f"{_API_PREFIX}/config-registry")
     def get_config_registry(
         limit: Annotated[int, Query(ge=1, le=500)] = 100,
@@ -932,12 +967,6 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
     @app.post(f"{_API_PREFIX}/config-registry/publish-operations")
     def publish_config(command: ConfigPublishCommand) -> ConfigPublishReceipt:
         return application.config.publish_config(command)
-
-    @app.post(f"{_API_PREFIX}/config-registry/instrument-inventory-migrations")
-    def migrate_instrument_inventory(
-        command: InstrumentInventoryMigrationCommand,
-    ) -> InstrumentInventoryMigrationReceipt:
-        return application.config.migrate_instrument_inventory(command)
 
     @app.post(f"{_API_PREFIX}/config-registry/drafts/preview")
     def preview_config_draft(

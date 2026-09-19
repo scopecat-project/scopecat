@@ -7,6 +7,7 @@ import pytest
 from scopecat.control.models import DurableEventInput
 from scopecat.records.author_revision import AuthorRevisionRef
 from scopecat.records.manual_preview import ManualPreviewBinding, PreviewInstrument
+from scopecat.records.setup import SetupRevisionRef
 
 from scopecat_server.storage.sqlite.connection import SQLiteDatabase
 from scopecat_server.storage.sqlite.control_plane import SQLiteControlPlane
@@ -38,12 +39,13 @@ def test_manual_mutations_invalidate_only_the_compiled_physical_footprint(
         unrelated = control.open_instrument_session(
             operation_id="unrelated",
             actor="operator",
-            config_entry_id="config",
-            config_content_hash="hash",
+            setup=SetupRevisionRef(
+                revision_id="setup", content_hash="sha256:" + "a" * 64
+            ),
             instrument_ids=("other",),
             exclusivity_keys=("physical-b",),
             ttl=timedelta(minutes=1),
-            expected_config_generation=0,
+            expected_setup_generation=0,
         )
         control.start_instrument_operation(
             unrelated.session_id,
@@ -56,12 +58,13 @@ def test_manual_mutations_invalidate_only_the_compiled_physical_footprint(
         alias = control.open_instrument_session(
             operation_id="alias",
             actor="operator",
-            config_entry_id="config",
-            config_content_hash="hash",
+            setup=SetupRevisionRef(
+                revision_id="setup", content_hash="sha256:" + "a" * 64
+            ),
             instrument_ids=("manual-alias",),
             exclusivity_keys=("physical-a",),
             ttl=timedelta(minutes=1),
-            expected_config_generation=0,
+            expected_setup_generation=0,
         )
         # Ownership/connection and read-only queries are not mutation facts.
         assert repository.validity(fence).valid

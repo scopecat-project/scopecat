@@ -143,11 +143,13 @@ maintenance ownership must not scatter the only recoverable description of an
 experiment across mutable heads. Existing exact preview, saved-plan and admitted
 binding behavior remains the execution boundary to build upon.
 
-The first execution slice now uses setup-content fences for fixed selections,
-while active-default selection retains its generation fence. Working-point saves
-already compare their own heads; verified candidates can now explicitly publish
-to an exact working point without changing the global default. See [configuration ownership](configuration-ownership.md) for the
-implemented boundary, race protection and remaining automation work.
+Executable setup now has independent immutable revisions and activation authority.
+Fixed selections use setup-content fences, while parameter-default selection also
+retains its own generation fence. Working-point saves and automated publication
+compare their own heads without changing the global default. Explicit setup rebinding
+creates a new saved branch without inheriting calibration acceptance. See
+[configuration ownership](configuration-ownership.md) for the implemented boundary
+and race protection.
 
 ## Order of work and evidence for convergence
 
@@ -162,8 +164,9 @@ implemented boundary, race protection and remaining automation work.
    candidates and publication. Build explicit adoption only where that workflow
    needs it. A graphical target picker can follow the settled selection contract.
 
-The following future synthetic scenarios constrain steps 2–4. They are acceptance
-requirements, not tests passed by the descriptive catalog:
+Steps 1–2 are implemented, including a bounded independent A/B publication case.
+The following scenarios distinguish that evidence from the remaining executable
+apparatus and cross-object work; the descriptive catalog alone does not satisfy them:
 
 | Scenario | Required observation |
 |---|---|

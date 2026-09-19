@@ -118,18 +118,19 @@ class CalibrationCohortService:
             with self._config_registry.borrowed_unit_of_work(connection) as work:
                 entry = work.registry.read_entry(source.entry_id)
                 config = work.registry.read_config(entry.config_ref)
-                activation = work.registry.read_latest_activation()
+                active_setup = work.setups.read_current()
                 if (
-                    activation is None
+                    active_setup is None
                     or entry.config_ref != source.config_ref
                     or entry.content_hash != source.content_hash
                 ):
                     raise CalibrationCohortConflict(
                         "calibration cohort config source changed"
                     )
-                active_entry = work.registry.read_entry(activation.entry_id)
-                authority = work.registry.read_config(active_entry.config_ref)
-                if setup_content_hash(config) != setup_content_hash(authority):
+                if (
+                    setup_content_hash(config)
+                    != active_setup.revision.setup.execution_content_hash
+                ):
                     raise CalibrationCohortConflict(
                         "calibration cohort executable setup changed"
                     )

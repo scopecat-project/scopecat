@@ -328,6 +328,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/config-registry/setup-rebindings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Rebind Setup */
+        post: operations["rebind_setup_api_v1_config_registry_setup_rebindings_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/config-registry/setup-rebindings/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Preview Setup Rebind */
+        post: operations["preview_setup_rebind_api_v1_config_registry_setup_rebindings_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/events": {
         parameters: {
             query?: never;
@@ -1625,6 +1659,75 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/setup/activation-operations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Activate Setup */
+        post: operations["activate_setup_api_v1_setup_activation_operations_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/setup/active": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Active Setup */
+        get: operations["active_setup_api_v1_setup_active_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/setup/revisions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Setup Revisions */
+        get: operations["list_setup_revisions_api_v1_setup_revisions_get"];
+        put?: never;
+        /** Save Setup */
+        post: operations["save_setup_api_v1_setup_revisions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/setup/revisions/{revision_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Setup Revision */
+        get: operations["get_setup_revision_api_v1_setup_revisions__revision_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1823,6 +1926,11 @@ export interface components {
             activation: components["schemas"]["ConfigRegistryActivationRecord"];
             config: components["schemas"]["ConfigProfileSnapshot"];
             entry: components["schemas"]["ConfigRegistryEntry"];
+        };
+        /** ActiveSetupView */
+        ActiveSetupView: {
+            activation: components["schemas"]["SetupActivationRecord"];
+            revision: components["schemas"]["SetupRevision"];
         };
         /**
          * AdaptiveRegionSpec
@@ -3727,7 +3835,7 @@ export interface components {
              */
             recorded_at?: string;
             /** Source */
-            source: components["schemas"]["DirectConfigRegistrySource"] | components["schemas"]["ManualConfigDraftRegistrySource"] | components["schemas"]["CandidateConfigRegistrySource"] | components["schemas"]["ContextConfigRegistrySource"];
+            source: components["schemas"]["DirectConfigRegistrySource"] | components["schemas"]["ManualConfigDraftRegistrySource"] | components["schemas"]["CandidateConfigRegistrySource"] | components["schemas"]["ContextConfigRegistrySource"] | components["schemas"]["SetupRebindRegistrySource"];
         };
         /**
          * ConfigRegistryPage
@@ -3762,6 +3870,23 @@ export interface components {
             registry_generation?: number | null;
             /** Selector */
             selector: string;
+        };
+        /** ConfigSetupRebindCommand */
+        ConfigSetupRebindCommand: {
+            actor: components["schemas"]["NonEmptyText"];
+            base: components["schemas"]["ConfigContextRef"];
+            entry_id: components["schemas"]["NonEmptyText"];
+            /**
+             * Note
+             * @default
+             */
+            note: string;
+            setup: components["schemas"]["SetupRevisionRef"];
+        };
+        /** ConfigSetupRebindPreviewCommand */
+        ConfigSetupRebindPreviewCommand: {
+            base: components["schemas"]["ConfigContextRef"];
+            setup: components["schemas"]["SetupRevisionRef"];
         };
         "ConfigurationChoice-Input": components["schemas"]["ActiveConfiguration"] | components["schemas"]["SavedConfiguration"] | components["schemas"]["WorkingPointConfiguration-Input"] | components["schemas"]["CandidateConfiguration"];
         "ConfigurationChoice-Output": components["schemas"]["ActiveConfiguration"] | components["schemas"]["SavedConfiguration"] | components["schemas"]["WorkingPointConfiguration-Output"] | components["schemas"]["CandidateConfiguration"];
@@ -3829,6 +3954,7 @@ export interface components {
             kind: "parameter_context";
             /** Publication */
             publication?: components["schemas"]["CandidateConfigRegistrySource"] | components["schemas"]["CalibrationCohortMergeRegistrySource"] | null;
+            rebind?: components["schemas"]["SetupRebindRegistrySource"] | null;
         };
         /**
          * ContextRunConfigSource
@@ -4188,6 +4314,15 @@ export interface components {
             unit: string;
             /** Value */
             value: number;
+        };
+        /** ExecutableSetupSnapshot */
+        ExecutableSetupSnapshot: {
+            domain_target: components["schemas"]["DomainTargetBinding"] | null;
+            instrument_registry: components["schemas"]["InstrumentRegistry"];
+            /** Primary Entity Id */
+            primary_entity_id: string;
+            routing: components["schemas"]["RoutingGraph"];
+            topology: components["schemas"]["Topology"];
         };
         /** ExperimentalBatch */
         ExperimentalBatch: {
@@ -4692,7 +4827,6 @@ export interface components {
          * @description Outcome of reconciling a live session with configured defaults.
          */
         InstrumentConfiguredDefaultsApplyReceipt: {
-            config_entry_id: components["schemas"]["_NonEmptyId"];
             instrument_id: components["schemas"]["_NonEmptyId"];
             operation_id: components["schemas"]["_NonEmptyId"];
             /**
@@ -4701,6 +4835,7 @@ export interface components {
              */
             problems: components["schemas"]["Problem-Output"][];
             session_id: components["schemas"]["_NonEmptyId"];
+            setup: components["schemas"]["SetupRevisionRef"];
             state?: components["schemas"]["InstrumentStateSnapshot"] | null;
             /**
              * Status
@@ -4758,10 +4893,42 @@ export interface components {
         };
         /** @enum {string} */
         InstrumentFailureAction: "abort_and_release" | "abort_then_safe_state";
+        InstrumentInventoryChange: components["schemas"]["InstrumentInventoryRemoval"] | components["schemas"]["InstrumentInventoryRekey"] | components["schemas"]["InstrumentInventoryRenameRekey"];
+        /** InstrumentInventoryRekey */
+        InstrumentInventoryRekey: {
+            from_exclusivity_key: components["schemas"]["_NonEmptyText"];
+            instrument_id: components["schemas"]["_NonEmptyText"];
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "rekey";
+            to_exclusivity_key: components["schemas"]["_NonEmptyText"];
+        };
+        /** InstrumentInventoryRemoval */
+        InstrumentInventoryRemoval: {
+            exclusivity_key: components["schemas"]["_NonEmptyText"];
+            instrument_id: components["schemas"]["_NonEmptyText"];
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "remove";
+        };
+        /** InstrumentInventoryRenameRekey */
+        InstrumentInventoryRenameRekey: {
+            from_exclusivity_key: components["schemas"]["_NonEmptyText"];
+            from_instrument_id: components["schemas"]["_NonEmptyText"];
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "rename_rekey";
+            to_exclusivity_key: components["schemas"]["_NonEmptyText"];
+            to_instrument_id: components["schemas"]["_NonEmptyText"];
+        };
         /** InstrumentListView */
         InstrumentListView: {
-            /** Config Entry Id */
-            config_entry_id: string;
             /**
              * Items
              * @default []
@@ -4772,6 +4939,7 @@ export interface components {
              * @default []
              */
             problems: components["schemas"]["Problem-Output"][];
+            setup: components["schemas"]["SetupRevisionRef"];
         };
         /** InstrumentOperationArgument */
         InstrumentOperationArgument: {
@@ -4866,12 +5034,10 @@ export interface components {
         };
         /**
          * InstrumentSessionOpenReceipt
-         * @description Daemon-owned direct-control session opened against one config revision.
+         * @description Daemon-owned direct-control session opened against one setup revision.
          */
         InstrumentSessionOpenReceipt: {
             actor: components["schemas"]["NonEmptyText"];
-            config_content_hash: components["schemas"]["ConfigContentHash"];
-            config_entry_id: components["schemas"]["NonEmptyText"];
             /** Configured Default Instrument Ids */
             configured_default_instrument_ids: components["schemas"]["NonEmptyText"][];
             /** Descriptions */
@@ -4896,6 +5062,7 @@ export interface components {
              */
             renewed_at: string;
             session_id: components["schemas"]["NonEmptyText"];
+            setup: components["schemas"]["SetupRevisionRef"];
         };
         /**
          * InstrumentSpec
@@ -9239,6 +9406,103 @@ export interface components {
             /** Port */
             port: string;
         };
+        /**
+         * SetupActivateCommand
+         * @description Select executable setup with an independent generation fence.
+         */
+        SetupActivateCommand: {
+            actor: components["schemas"]["NonEmptyText"];
+            /**
+             * Changes
+             * @default []
+             */
+            changes: components["schemas"]["InstrumentInventoryChange"][];
+            /** Expected Generation */
+            expected_generation: number;
+            /**
+             * Note
+             * @default
+             */
+            note: string;
+            operation_id: components["schemas"]["NonEmptyText"];
+            revision: components["schemas"]["SetupRevisionRef"];
+        };
+        /** SetupActivationRecord */
+        SetupActivationRecord: {
+            /** Actor */
+            actor: string;
+            /** Generation */
+            generation: number;
+            /**
+             * Note
+             * @default
+             */
+            note: string;
+            previous_revision?: components["schemas"]["SetupRevisionRef"] | null;
+            /**
+             * Recorded At
+             * Format: date-time
+             */
+            recorded_at?: string;
+            revision: components["schemas"]["SetupRevisionRef"];
+        };
+        /**
+         * SetupRebindRegistrySource
+         * @description Explicitly composed setup and parameter input; no calibration acceptance.
+         */
+        SetupRebindRegistrySource: {
+            base: components["schemas"]["ConfigContextRef"];
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "setup_rebind";
+            setup: components["schemas"]["SetupRevisionRef"];
+        };
+        /** SetupRevision */
+        SetupRevision: {
+            /** Actor */
+            actor: string;
+            content_hash: components["schemas"]["Sha256ContentHash"];
+            /** Id */
+            id: string;
+            /**
+             * Note
+             * @default
+             */
+            note: string;
+            /**
+             * Recorded At
+             * Format: date-time
+             */
+            recorded_at?: string;
+            setup: components["schemas"]["ExecutableSetupSnapshot"];
+        };
+        /** SetupRevisionList */
+        SetupRevisionList: {
+            /** Items */
+            items: components["schemas"]["SetupRevision"][];
+        };
+        /** SetupRevisionRef */
+        SetupRevisionRef: {
+            content_hash: components["schemas"]["Sha256ContentHash"];
+            /** Revision Id */
+            revision_id: string;
+        };
+        /**
+         * SetupSaveCommand
+         * @description Save an immutable executable setup revision without activating it.
+         */
+        SetupSaveCommand: {
+            actor: components["schemas"]["NonEmptyText"];
+            /**
+             * Note
+             * @default
+             */
+            note: string;
+            revision_id: components["schemas"]["NonEmptyText"];
+            setup: components["schemas"]["ExecutableSetupSnapshot"];
+        };
         Sha256ContentHash: string;
         StateLiteral: boolean | number | string | components["schemas"]["scopecat__kernel__quantity__Quantity"] | components["schemas"]["PayloadRef"];
         StateMemberTarget: components["schemas"]["InterfaceStateMemberTarget"] | components["schemas"]["DeviceStateMemberTarget"];
@@ -10327,6 +10591,72 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ConfigPublishReceipt"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rebind_setup_api_v1_config_registry_setup_rebindings_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConfigSetupRebindCommand"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConfigEntryView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_setup_rebind_api_v1_config_registry_setup_rebindings_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConfigSetupRebindPreviewCommand"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConfigProfileSnapshot"];
                 };
             };
             /** @description Validation Error */
@@ -12972,6 +13302,143 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SampleArtifactPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    activate_setup_api_v1_setup_activation_operations_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetupActivateCommand"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActiveSetupView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    active_setup_api_v1_setup_active_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActiveSetupView"];
+                };
+            };
+        };
+    };
+    list_setup_revisions_api_v1_setup_revisions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SetupRevisionList"];
+                };
+            };
+        };
+    };
+    save_setup_api_v1_setup_revisions_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetupSaveCommand"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SetupRevision"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_setup_revision_api_v1_setup_revisions__revision_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                revision_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SetupRevision"];
                 };
             };
             /** @description Validation Error */

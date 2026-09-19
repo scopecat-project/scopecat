@@ -29,6 +29,7 @@ from scopecat.records.instrument import (
     InstrumentStateSnapshot,
 )
 from scopecat.records.measurement import MeasurementScalar
+from scopecat.records.setup import SetupRevisionRef
 from scopecat.sdk.instruments import (
     CollectReceipt,
     InstrumentCollectFailure,
@@ -103,8 +104,9 @@ class _CollectingDaemon(DaemonClient):
         return InstrumentSessionOpenReceipt(
             session_id="session-1",
             actor=command.actor,
-            config_entry_id="config-1",
-            config_content_hash=f"sha256:{'0' * 64}",
+            setup=SetupRevisionRef(
+                revision_id="setup-1", content_hash="sha256:" + "0" * 64
+            ),
             instrument_ids=command.instrument_ids,
             configured_default_instrument_ids=(),
             descriptions=(self.description,),
@@ -172,8 +174,9 @@ class _ConfiguredDefaultsDaemon(DaemonClient):
         return InstrumentSessionOpenReceipt(
             session_id="session-1",
             actor=command.actor,
-            config_entry_id="config-1",
-            config_content_hash=f"sha256:{'0' * 64}",
+            setup=SetupRevisionRef(
+                revision_id="setup-1", content_hash="sha256:" + "0" * 64
+            ),
             instrument_ids=command.instrument_ids,
             configured_default_instrument_ids=command.instrument_ids,
             descriptions=tuple(
@@ -211,7 +214,9 @@ class _ConfiguredDefaultsDaemon(DaemonClient):
             session_id=session_id,
             operation_id=command.operation_id,
             instrument_id=instrument_id,
-            config_entry_id="config-1",
+            setup=SetupRevisionRef(
+                revision_id="setup-1", content_hash="sha256:" + "0" * 64
+            ),
             status="unchanged",
             state=InstrumentStateSnapshot(instrument_id=instrument_id),
         )

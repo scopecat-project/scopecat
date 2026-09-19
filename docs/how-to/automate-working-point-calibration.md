@@ -61,6 +61,10 @@ cycle can evaluate the new state. B's unrelated head remains usable. A changed
 executable setup also prevents stale work; changing only global default parameter
 values does not invalidate fixed working-point inputs.
 
+Setup maintenance is explicit; see [maintain executable setup](maintain-executable-setup.md).
+Rebinding to a changed setup creates a new unverified workspace rather than moving
+its old calibration history.
+
 The baseline and verification runs retain their exact sample revision and batch.
 Updating the sample catalog during a cohort does not silently retarget its later
 stages. Candidate parameters may differ from the baseline, as required for

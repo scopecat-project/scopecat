@@ -35,7 +35,6 @@ from scopecat.config.registry import (
     plan_instrument_inventory_migration,
     preview_manual_config_draft,
     publish_config_revision,
-    publish_instrument_inventory_migration_revision,
     resolve_config_registry_config_source,
 )
 from scopecat.kernel.errors import (
@@ -452,6 +451,12 @@ def test_manual_config_draft_restores_after_its_original_base_changes(
 def test_candidate_config_publish_preserves_parameter_proposal_source(
     tmp_path: Path,
 ) -> None:
+    _publish_direct_revision(
+        config=load_config(),
+        unit_of_work=sqlite_config_registry_unit_of_work(tmp_path),
+        entry_id="seed",
+        actor="operator",
+    )
     run_id = signal_run_with_parameter_change(tmp_path)
     proposal = load_parameter_change_proposal(
         run_id=run_id,
@@ -694,16 +699,14 @@ def test_publish_rejects_rekeying_an_existing_logical_instrument(
             actor="operator",
         )
 
-    assert error.value.problems[0].code == (
-        "config_registry.instrument_exclusivity_key_changed"
-    )
+    assert error.value.problems[0].code == ("config_registry.setup_mismatch")
     assert current_config_registry_generation(unit_of_work=unit_of_work) == 1
     assert [
         entry.id for entry in list_config_registry_entries(unit_of_work=unit_of_work)
     ] == ["seed"]
 
 
-def test_publish_allows_domain_target_rename(
+def test_publish_domain_target_rename_requires_selected_setup(
     tmp_path: Path,
 ) -> None:
     unit_of_work = sqlite_config_registry_unit_of_work(tmp_path)
@@ -729,6 +732,8 @@ def test_publish_allows_domain_target_rename(
         }
     )
 
+    _select_setup(unit_of_work, renamed, name="renamed-setup")
+
     _publish_direct_revision(
         config=renamed,
         unit_of_work=unit_of_work,
@@ -741,7 +746,7 @@ def test_publish_allows_domain_target_rename(
     assert activated.domain_target.id == "tests.renamed-domain-target"
 
 
-def test_publish_allows_logical_instrument_rename_with_the_same_key(
+def test_publish_logical_rename_requires_selected_setup(
     tmp_path: Path,
 ) -> None:
     unit_of_work = sqlite_config_registry_unit_of_work(tmp_path)
@@ -776,6 +781,8 @@ def test_publish_allows_logical_instrument_rename_with_the_same_key(
             ),
         }
     )
+
+    _select_setup(unit_of_work, renamed, name="renamed-setup")
 
     result = _publish_direct_revision(
         config=renamed,
@@ -839,95 +846,23 @@ def test_publish_rejects_logical_rename_that_also_rekeys(
             actor="operator",
         )
 
-    assert error.value.problems[0].code == (
-        "config_registry.instrument_exclusivity_key_removed"
-    )
+    assert error.value.problems[0].code == ("config_registry.setup_mismatch")
     assert current_config_registry_generation(unit_of_work=unit_of_work) == 1
 
 
 @pytest.mark.parametrize("kind", ("remove", "rekey", "rename_rekey"))
-def test_publish_inventory_migration_records_declared_destructive_change(
-    tmp_path: Path,
+def test_inventory_plan_requires_exact_destructive_declaration(
     kind: Literal["remove", "rekey", "rename_rekey"],
 ) -> None:
-    unit_of_work = sqlite_config_registry_unit_of_work(tmp_path)
     config = load_config()
-    seed = _publish_direct_revision(
-        config=config,
-        unit_of_work=unit_of_work,
-        entry_id="seed",
-        actor="operator",
-    )
-    assert seed.activation is not None
     target, change, affected_keys = _inventory_migration_case(config, kind)
-
-    plan = plan_instrument_inventory_migration(
-        current=config,
-        target=target,
-        declared=(change,),
+    assert plan_instrument_inventory_migration(
+        current=config, target=target, declared=(change,)
+    ) == InstrumentInventoryMigrationPlan(
+        changes=(change,), affected_exclusivity_keys=affected_keys
     )
-    assert plan == InstrumentInventoryMigrationPlan(
-        changes=(change,),
-        affected_exclusivity_keys=affected_keys,
-    )
-
-    result = publish_instrument_inventory_migration_revision(
-        revision=ConfigRevision(
-            source=DirectConfigRevisionSource(target),
-            entry_id=f"{kind}-target",
-            actor="operator",
-        ),
-        declared=(change,),
-        unit_of_work=unit_of_work,
-        expected_generation=seed.activation.generation,
-    )
-
-    assert result.saved
-    assert result.activated
-    assert result.activation is not None
-    assert result.activation.action == "inventory_migration"
-    assert result.activation.generation == seed.activation.generation + 1
-    assert load_active_config_registry_config(unit_of_work=unit_of_work) == target
-
-
-def test_inventory_migration_rejects_declared_diff_mismatch(
-    tmp_path: Path,
-) -> None:
-    unit_of_work = sqlite_config_registry_unit_of_work(tmp_path)
-    config = load_config()
-    seed = _publish_direct_revision(
-        config=config,
-        unit_of_work=unit_of_work,
-        entry_id="seed",
-        actor="operator",
-    )
-    assert seed.activation is not None
-    target, rekey, _affected_keys = _inventory_migration_case(config, "rekey")
-    mismatched = InstrumentInventoryMigrationDelta(
-        kind="remove",
-        old_instrument_id=rekey.old_instrument_id,
-        old_exclusivity_key=rekey.old_exclusivity_key,
-    )
-
-    with pytest.raises(Conflict) as error:
-        publish_instrument_inventory_migration_revision(
-            revision=ConfigRevision(
-                source=DirectConfigRevisionSource(target),
-                entry_id="mismatched",
-                actor="operator",
-            ),
-            declared=(mismatched,),
-            unit_of_work=unit_of_work,
-            expected_generation=seed.activation.generation,
-        )
-
-    assert error.value.problems[0].code == (
-        "config_registry.instrument_inventory_migration_mismatch"
-    )
-    assert [
-        entry.id for entry in list_config_registry_entries(unit_of_work=unit_of_work)
-    ] == ["seed"]
-    assert current_config_registry_generation(unit_of_work=unit_of_work) == 1
+    with pytest.raises(Conflict, match="instrument_inventory_migration_mismatch"):
+        plan_instrument_inventory_migration(current=config, target=target, declared=())
 
 
 def test_inventory_migration_plan_ignores_non_destructive_inventory_changes() -> None:
@@ -1005,73 +940,48 @@ def test_inventory_migration_plan_validates_target_before_returning_keys() -> No
     )
 
 
-def test_inventory_migration_rejects_stale_generation_before_saving(
-    tmp_path: Path,
-) -> None:
-    unit_of_work = sqlite_config_registry_unit_of_work(tmp_path)
-    config = load_config()
-    _publish_direct_revision(
-        config=config,
-        unit_of_work=unit_of_work,
-        entry_id="seed",
-        actor="operator",
-    )
-    target, change, _affected_keys = _inventory_migration_case(config, "rekey")
-
-    with pytest.raises(Conflict) as error:
-        publish_instrument_inventory_migration_revision(
-            revision=ConfigRevision(
-                source=DirectConfigRevisionSource(target),
-                entry_id="stale-migration",
-                actor="operator",
-            ),
-            declared=(change,),
-            unit_of_work=unit_of_work,
-            expected_generation=0,
-        )
-
-    assert error.value.problems[0].code == "config_registry.conflict"
-    assert [
-        entry.id for entry in list_config_registry_entries(unit_of_work=unit_of_work)
-    ] == ["seed"]
-
-
-def test_ordinary_activation_cannot_reverse_inventory_migration(
-    tmp_path: Path,
-) -> None:
-    unit_of_work = sqlite_config_registry_unit_of_work(tmp_path)
+def test_default_activation_cannot_reverse_selected_setup(tmp_path: Path) -> None:
+    work = sqlite_config_registry_unit_of_work(tmp_path)
     config = load_config()
     seed = _publish_direct_revision(
-        config=config,
-        unit_of_work=unit_of_work,
-        entry_id="seed",
-        actor="operator",
+        config=config, unit_of_work=work, entry_id="seed", actor="operator"
     )
-    assert seed.activation is not None
-    target, change, _affected_keys = _inventory_migration_case(config, "rekey")
-    migrated = publish_instrument_inventory_migration_revision(
-        revision=ConfigRevision(
-            source=DirectConfigRevisionSource(target),
-            entry_id="migrated",
-            actor="operator",
-        ),
-        declared=(change,),
-        unit_of_work=unit_of_work,
-        expected_generation=seed.activation.generation,
-    )
-    assert migrated.activation is not None
-
-    with pytest.raises(Conflict) as activate_error:
+    target, _, _ = _inventory_migration_case(config, "rekey")
+    _select_setup(work, target, name="replacement-setup")
+    with pytest.raises(Conflict, match="setup_mismatch"):
         activate_config_registry_entry(
             entry_id=seed.entry.id,
-            unit_of_work=unit_of_work,
+            unit_of_work=work,
             actor="operator",
-            expected_generation=migrated.activation.generation,
+            expected_generation=1,
         )
-    assert activate_error.value.problems[0].code == (
-        "config_registry.instrument_exclusivity_key_changed"
-    )
-    assert current_config_registry_generation(unit_of_work=unit_of_work) == 2
+    assert current_config_registry_generation(unit_of_work=work) == 1
+
+
+def _select_setup(
+    work: ConfigRegistryUnitOfWorkFactory, config: ConfigProfileSnapshot, *, name: str
+) -> None:
+    from scopecat.kernel.content_identity import sha256_json_hash
+    from scopecat.records.setup import ExecutableSetupSnapshot, SetupRevision
+
+    # Registry ownership fixture; service tests cover device drain.
+    with work() as transaction:
+        setup = ExecutableSetupSnapshot.from_config(config)
+        revision = transaction.setups.save_revision(
+            SetupRevision(
+                id=name, content_hash=setup.content_hash, setup=setup, actor="operator"
+            )
+        )
+        current = transaction.setups.read_current()
+        assert current is not None
+        transaction.setups.activate(
+            revision=revision.ref,
+            expected_generation=current.activation.generation,
+            operation_id=name,
+            intent_hash=sha256_json_hash({"fixture": name}),
+            actor="operator",
+            note="",
+        )
 
 
 def test_concurrent_publishes_apply_one_generation(
@@ -1342,6 +1252,12 @@ def _publish_candidate_revision(
 def _resolved_candidate(
     project_root: Path,
 ) -> tuple[str, ParameterChangeProposal, _ResolvedCandidate]:
+    _publish_direct_revision(
+        config=load_config(),
+        unit_of_work=sqlite_config_registry_unit_of_work(project_root),
+        entry_id="seed",
+        actor="operator",
+    )
     run_id = signal_run_with_parameter_change(project_root)
     proposal = load_parameter_change_proposal(
         run_id=run_id,

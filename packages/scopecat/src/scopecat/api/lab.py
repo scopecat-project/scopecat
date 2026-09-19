@@ -25,6 +25,7 @@ from scopecat.api.published_analysis import PublishedAnalysis
 from scopecat.api.review import ExperimentReviewHandle
 from scopecat.api.run import RunHandle, RunHandlePage, run_handle_id
 from scopecat.api.samples import LabSampleOperations, SampleHandle, SampleOperations
+from scopecat.api.setup import LabSetupOperations
 from scopecat.authoring.experiments import Experiment, ExperimentInvocation
 from scopecat.automation import ProcedureRegistry, ProcedureScheduleRegistry
 from scopecat.automation.calibration_definition import CalibrationRegistry
@@ -182,6 +183,7 @@ class LabClient:
             default_config=config,
             operator=operator,
         )
+        self._setup = LabSetupOperations(self._client, operator=operator)
         self._control = LabControlOperations(self._client)
         self._instruments = LabInstrumentOperations(
             self._client,
@@ -256,6 +258,10 @@ class LabClient:
     @property
     def plans(self) -> LabPlanOperations:
         return LabPlanOperations(self._client)
+
+    @property
+    def setup(self) -> LabSetupOperations:
+        return self._setup
 
     @property
     def config(self) -> LabConfigOperations:

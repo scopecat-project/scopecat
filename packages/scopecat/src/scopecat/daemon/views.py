@@ -62,6 +62,7 @@ from scopecat.records.record_collection import RunAddress
 from scopecat.records.run import RunSnapshot
 from scopecat.records.run_request import RunRequest
 from scopecat.records.sample import SampleId, SampleRecord, SampleRevision
+from scopecat.records.setup import SetupRevisionRef
 from scopecat.sdk.instruments.contracts import InstrumentDescription
 
 
@@ -211,7 +212,7 @@ class InstrumentView(_ViewModel):
 
 
 class InstrumentListView(_ViewModel):
-    config_entry_id: str
+    setup: SetupRevisionRef
     items: tuple[InstrumentView, ...] = ()
     problems: tuple[Problem, ...] = ()
 

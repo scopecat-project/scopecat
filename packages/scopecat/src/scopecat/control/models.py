@@ -16,6 +16,7 @@ from pydantic import (
 
 from scopecat.kernel.entity import EntityRef
 from scopecat.kernel.quantity import Quantity
+from scopecat.records.setup import SetupRevisionRef
 
 type PointCoordinateValue = bool | int | float | str | Quantity | EntityRef | None
 type PointCoordinateKind = Literal[
@@ -457,8 +458,7 @@ class InstrumentSession(_ControlModel):
     session_id: str = Field(min_length=1)
     open_operation_id: str = Field(min_length=1)
     actor: str = Field(min_length=1)
-    config_entry_id: str = Field(min_length=1)
-    config_content_hash: str = Field(min_length=1)
+    setup: SetupRevisionRef
     instrument_ids: tuple[str, ...] = Field(min_length=1)
     exclusivity_keys: tuple[str, ...] = Field(min_length=1)
     state: InstrumentSessionState

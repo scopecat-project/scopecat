@@ -20,6 +20,7 @@ from scopecat.control.models import (
     RunPlanSummary,
     RunResourceRequirement,
 )
+from scopecat.records.setup import SetupRevisionRef
 
 from scopecat_server.storage.sqlite.connection import SQLiteDatabase
 from scopecat_server.storage.sqlite.control_plane import (
@@ -52,12 +53,13 @@ def _open_instrument_session(
     return store.open_instrument_session(
         operation_id=f"open-{name}",
         actor="alice",
-        config_entry_id="baseline",
-        config_content_hash=f"sha256:{'a' * 64}",
+        setup=SetupRevisionRef(
+            revision_id="baseline", content_hash=f"sha256:{'a' * 64}"
+        ),
         instrument_ids=(name,),
         exclusivity_keys=(f"visa:{name}",),
         ttl=ttl,
-        expected_config_generation=0,
+        expected_setup_generation=0,
         at=at,
     )
 
@@ -93,13 +95,13 @@ def _admit(
     store: SQLiteControlPlane,
     admission: RunAdmissionRecord,
     *,
-    expected_config_generation: int = 0,
+    expected_setup_generation: int = 0,
 ) -> ControlRun:
     with store.write_transaction() as connection:
         return store.admit_run_in_transaction(
             connection,
             admission,
-            expected_config_generation=expected_config_generation,
+            expected_setup_generation=expected_setup_generation,
         )
 
 
@@ -229,7 +231,7 @@ def test_run_admission_state_and_pagination(tmp_path: Path) -> None:
     assert _admit(
         store,
         retry,
-        expected_config_generation=999,
+        expected_setup_generation=999,
     ) == store.get_run("run-0")
     assert second.items[0].admission.submission_id == "submission:run-0"
     assert [event.kind for event in store.list_events(run_id="run-0").items] == [
@@ -435,12 +437,13 @@ def test_inventory_migration_blockers_include_active_instrument_session(
     session = store.open_instrument_session(
         operation_id="open-1",
         actor="alice",
-        config_entry_id="baseline",
-        config_content_hash=f"sha256:{'a' * 64}",
+        setup=SetupRevisionRef(
+            revision_id="baseline", content_hash=f"sha256:{'a' * 64}"
+        ),
         instrument_ids=("scope",),
         exclusivity_keys=(key.id,),
         ttl=SESSION_TTL,
-        expected_config_generation=0,
+        expected_setup_generation=0,
         at=NOW,
     )
 
@@ -468,12 +471,13 @@ def test_inventory_migration_blockers_include_quarantined_session_claim(
     session = store.open_instrument_session(
         operation_id="open-1",
         actor="alice",
-        config_entry_id="baseline",
-        config_content_hash=f"sha256:{'a' * 64}",
+        setup=SetupRevisionRef(
+            revision_id="baseline", content_hash=f"sha256:{'a' * 64}"
+        ),
         instrument_ids=("scope",),
         exclusivity_keys=(key.id,),
         ttl=SESSION_TTL,
-        expected_config_generation=0,
+        expected_setup_generation=0,
         at=NOW,
     )
     store.start_instrument_operation(
@@ -772,23 +776,25 @@ def test_instrument_session_retry_operation_recovery_and_explicit_close(
     first = store.open_instrument_session(
         operation_id="open-1",
         actor="alice",
-        config_entry_id="baseline",
-        config_content_hash=f"sha256:{'a' * 64}",
+        setup=SetupRevisionRef(
+            revision_id="baseline", content_hash=f"sha256:{'a' * 64}"
+        ),
         instrument_ids=("scope",),
         exclusivity_keys=("visa:scope",),
         ttl=SESSION_TTL,
-        expected_config_generation=0,
+        expected_setup_generation=0,
         at=NOW,
     )
     retry = store.open_instrument_session(
         operation_id="open-1",
         actor="alice",
-        config_entry_id="replacement",
-        config_content_hash=f"sha256:{'b' * 64}",
+        setup=SetupRevisionRef(
+            revision_id="replacement", content_hash=f"sha256:{'b' * 64}"
+        ),
         instrument_ids=("scope",),
         exclusivity_keys=("visa:replacement",),
         ttl=SESSION_TTL,
-        expected_config_generation=None,
+        expected_setup_generation=None,
         at=NOW + timedelta(seconds=1),
     )
 
@@ -806,7 +812,7 @@ def test_instrument_session_retry_operation_recovery_and_explicit_close(
         "operation_id": "open-1",
         "actor": "alice",
         "instrument_ids": ["scope"],
-        "config_entry_id": "baseline",
+        "setup_revision_id": "baseline",
     }
     assert store.get_instrument_session_by_open_operation_id("open-1") == first
     with pytest.raises(ControlPlaneNotFound):
@@ -815,12 +821,13 @@ def test_instrument_session_retry_operation_recovery_and_explicit_close(
         store.open_instrument_session(
             operation_id="open-1",
             actor="bob",
-            config_entry_id="baseline",
-            config_content_hash=f"sha256:{'a' * 64}",
+            setup=SetupRevisionRef(
+                revision_id="baseline", content_hash=f"sha256:{'a' * 64}"
+            ),
             instrument_ids=("scope",),
             exclusivity_keys=("visa:scope",),
             ttl=SESSION_TTL,
-            expected_config_generation=None,
+            expected_setup_generation=None,
             at=NOW + timedelta(seconds=1),
         )
 
@@ -908,12 +915,13 @@ def test_instrument_session_lease_renews_silently_and_expires_idle_session(
         store.open_instrument_session(
             operation_id="open-scope",
             actor="alice",
-            config_entry_id="replacement",
-            config_content_hash=f"sha256:{'b' * 64}",
+            setup=SetupRevisionRef(
+                revision_id="replacement", content_hash=f"sha256:{'b' * 64}"
+            ),
             instrument_ids=("scope",),
             exclusivity_keys=("visa:replacement",),
             ttl=timedelta(minutes=1),
-            expected_config_generation=None,
+            expected_setup_generation=None,
             at=NOW + timedelta(seconds=25),
         )
     assert store.get_instrument_session(opened.session_id) == renewed
@@ -998,23 +1006,25 @@ def test_restart_releases_idle_session_and_quarantines_unfinished_operation(
     idle = store.open_instrument_session(
         operation_id="open-idle",
         actor="alice",
-        config_entry_id="baseline",
-        config_content_hash=f"sha256:{'a' * 64}",
+        setup=SetupRevisionRef(
+            revision_id="baseline", content_hash=f"sha256:{'a' * 64}"
+        ),
         instrument_ids=("idle-scope",),
         exclusivity_keys=("visa:idle-scope",),
         ttl=timedelta(seconds=2),
-        expected_config_generation=0,
+        expected_setup_generation=0,
         at=NOW,
     )
     active = store.open_instrument_session(
         operation_id="open-active",
         actor="alice",
-        config_entry_id="baseline",
-        config_content_hash=f"sha256:{'a' * 64}",
+        setup=SetupRevisionRef(
+            revision_id="baseline", content_hash=f"sha256:{'a' * 64}"
+        ),
         instrument_ids=("active-scope",),
         exclusivity_keys=("visa:active-scope",),
         ttl=timedelta(seconds=2),
-        expected_config_generation=0,
+        expected_setup_generation=0,
         at=NOW,
     )
     store.start_instrument_operation(
@@ -1060,12 +1070,13 @@ def test_instrument_session_cannot_claim_a_run_owned_resource(
         store.open_instrument_session(
             operation_id="open-1",
             actor="alice",
-            config_entry_id="baseline",
-            config_content_hash=f"sha256:{'a' * 64}",
+            setup=SetupRevisionRef(
+                revision_id="baseline", content_hash=f"sha256:{'a' * 64}"
+            ),
             instrument_ids=("scope",),
             exclusivity_keys=("visa:scope",),
             ttl=SESSION_TTL,
-            expected_config_generation=0,
+            expected_setup_generation=0,
             at=NOW,
         )
     assert "visa:scope" not in str(caught.value)
@@ -1095,11 +1106,12 @@ def test_instrument_session_rejects_invalid_exclusivity_keys(
         store.open_instrument_session(
             operation_id="open-1",
             actor="alice",
-            config_entry_id="baseline",
-            config_content_hash=f"sha256:{'a' * 64}",
+            setup=SetupRevisionRef(
+                revision_id="baseline", content_hash=f"sha256:{'a' * 64}"
+            ),
             instrument_ids=instrument_ids,
             exclusivity_keys=exclusivity_keys,
             ttl=SESSION_TTL,
-            expected_config_generation=0,
+            expected_setup_generation=0,
             at=NOW,
         )

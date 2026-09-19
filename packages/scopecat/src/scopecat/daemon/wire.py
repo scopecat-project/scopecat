@@ -107,6 +107,11 @@ from scopecat.records.sample import (
     SampleSelector,
 )
 from scopecat.records.scientific_binding import ResolvedScientificBinding
+from scopecat.records.setup import (
+    ExecutableSetupSnapshot,
+    SetupRevision,
+    SetupRevisionRef,
+)
 from scopecat.sdk.instruments.contracts import InstrumentDescription
 from scopecat.sdk.instruments.execution import RunHardwareBatch
 
@@ -446,21 +451,41 @@ class CalibrationPublicationReceipt(_WireModel):
         return self
 
 
-class InstrumentInventoryMigrationCommand(_WireModel):
-    """Publish a complete config through an explicitly drained migration."""
-
-    config: ConfigProfileSnapshot
+class ConfigSetupRebindCommand(_WireModel):
+    base: ConfigContextRef
+    setup: SetupRevisionRef
     entry_id: NonEmptyText
-    changes: tuple[InstrumentInventoryChange, ...] = Field(min_length=1)
     actor: NonEmptyText
-    expected_generation: int = Field(ge=1)
     note: str = ""
 
 
-class InstrumentInventoryMigrationReceipt(_WireModel):
-    entry: ConfigRegistryEntry
-    activation: ConfigRegistryActivationRecord
-    changes: tuple[InstrumentInventoryChange, ...] = Field(min_length=1)
+class ConfigSetupRebindPreviewCommand(_WireModel):
+    base: ConfigContextRef
+    setup: SetupRevisionRef
+
+
+class SetupRevisionList(_WireModel):
+    items: tuple[SetupRevision, ...]
+
+
+class SetupSaveCommand(_WireModel):
+    """Save an immutable executable setup revision without activating it."""
+
+    revision_id: NonEmptyText
+    setup: ExecutableSetupSnapshot
+    actor: NonEmptyText
+    note: str = ""
+
+
+class SetupActivateCommand(_WireModel):
+    """Select executable setup with an independent generation fence."""
+
+    operation_id: NonEmptyText
+    revision: SetupRevisionRef
+    expected_generation: int = Field(ge=0)
+    actor: NonEmptyText
+    note: str = ""
+    changes: tuple[InstrumentInventoryChange, ...] = ()
 
 
 class ConfigEntryActivationCommand(_WireModel):
@@ -1305,12 +1330,11 @@ class InstrumentSessionLeaseReceipt(_WireModel):
 
 
 class InstrumentSessionOpenReceipt(_WireModel):
-    """Daemon-owned direct-control session opened against one config revision."""
+    """Daemon-owned direct-control session opened against one setup revision."""
 
     session_id: NonEmptyText
     actor: NonEmptyText
-    config_entry_id: NonEmptyText
-    config_content_hash: ConfigContentHash
+    setup: SetupRevisionRef
     instrument_ids: tuple[NonEmptyText, ...] = Field(min_length=1)
     configured_default_instrument_ids: tuple[NonEmptyText, ...]
     descriptions: tuple[InstrumentDescription, ...]
@@ -1408,6 +1432,8 @@ __all__ = [
     "ConfigPublishReceipt",
     "ConfigPublishSource",
     "ConfigRevisionSource",
+    "ConfigSetupRebindCommand",
+    "ConfigSetupRebindPreviewCommand",
     "DirectConfigRevisionSource",
     "ExecutorHeartbeat",
     "ExecutorLease",
@@ -1416,8 +1442,6 @@ __all__ = [
     "InstrumentContractCatalogRequest",
     "InstrumentDriverProbeCommand",
     "InstrumentDriverProbeReceipt",
-    "InstrumentInventoryMigrationCommand",
-    "InstrumentInventoryMigrationReceipt",
     "InstrumentReleaseCommand",
     "InstrumentReleaseReceipt",
     "InstrumentSessionEndReceipt",
@@ -1456,6 +1480,9 @@ __all__ = [
     "SampleCreateCommand",
     "SampleMutationReceipt",
     "SampleReviseCommand",
+    "SetupActivateCommand",
+    "SetupRevisionList",
+    "SetupSaveCommand",
     "TerminalModelWrite",
     "TerminalRunCommitCommand",
 ]

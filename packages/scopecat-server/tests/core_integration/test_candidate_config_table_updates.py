@@ -8,6 +8,11 @@ from scopecat.config.parameter_resolution import resolve_config_parameters
 from scopecat.config.registry import (
     CandidateConfigRegistrySource,
 )
+from scopecat.config.registry.service import (
+    ConfigRevision,
+    DirectConfigRevisionSource,
+    publish_config_revision,
+)
 from scopecat.kernel.quantity import Quantity
 from scopecat.kernel.value_types import Float, Scalar, String, Table, TableColumn
 from scopecat.kernel.value_types import Quantity as QuantityType
@@ -35,6 +40,15 @@ def test_candidate_config_activation_materializes_table_row_updates(
     tmp_path: Path,
 ) -> None:
     config = _config_with_drive_channels()
+    publish_config_revision(
+        revision=ConfigRevision(
+            source=DirectConfigRevisionSource(config),
+            entry_id="initial",
+            actor="operator",
+        ),
+        unit_of_work=sqlite_config_registry_unit_of_work(tmp_path),
+        expected_generation=0,
+    )
     composition = compose_test_instruments(
         config=config,
         provider=TestSignalInstrumentProvider(),

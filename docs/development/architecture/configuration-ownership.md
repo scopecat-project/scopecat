@@ -3,8 +3,9 @@
 The implemented slices of #645 separate fixed scientific selections from default
 changes (#647), publish verified candidates to one exact working point (#648),
 and give bounded automatic calibration cohorts that same independent ownership
-(#651). They do not introduce independently maintained setup revisions, executable
-apparatus subjects or qualified cross-object calibration dependencies.
+(#651). Independent maintained setup revisions and explicit rebinding (#653) now
+separate execution authority from parameter defaults. Executable apparatus subjects
+and qualified cross-object calibration dependencies remain outside this boundary.
 
 ## Existing owners
 
@@ -48,14 +49,44 @@ Exact request/source/code hashes and resource-scoped manual mutation cursors sti
 protect reviewed launches. Resource ownership, actor state and unknown-effect
 quarantine remain separate runtime responsibilities.
 
-The internal activation-generation compare used when claiming devices remains
-inside the admission transaction. Even a parameter-only activation racing with
-authority resolution can therefore cause that individual admission to retry or
-fail. This deliberately conservative race check closes the authority-read to
-resource-claim gap; it is distinct from making every outstanding fixed preview
-stale. Instrument inventory migration and direct session acquisition retain their
-existing protection. Idempotent submissions replay retained results before stale
-preview checks so retries do not create duplicate execution.
+Resource admission and direct session acquisition compare the independent setup
+activation generation inside the write transaction. A parameter-only default
+change cannot invalidate that authority-read/resource-claim fence. An explicit
+active-parameter choice still has its separate default-generation freshness check.
+Instrument removal/rekey keeps its retirement gate, queued-reservation and live-claim
+drain checks, and transactional recheck. Idempotent submissions replay retained
+results before stale preview checks.
+
+## Maintained executable setup (#653)
+
+`setup_revisions` holds immutable executable payloads without parameter declarations
+or values. `setup_activations` is the current deployment authority; its generation
+is separate from `config_registry_activations`, which selects the parameter default.
+The setup operation ledger records exact activation intents and results.
+
+A setup revision has an exact payload hash, including descriptive metadata. Its
+execution hash uses the scientific projection above. Same executable content can
+therefore remain compatible despite a new descriptive revision. Direct instrument
+sessions retain the exact selected setup reference. Runs retain their complete
+configuration and scientific setup hash, rather than acquiring a rewritten snapshot
+when the current setup changes.
+
+Only initial publication into a genuinely empty catalog seeds both owners in one
+transaction. Parameter-default activation thereafter requires matching setup content
+and never changes setup. Setup activation leaves parameter versions untouched.
+Independent setup activation invokes cohort supersession only for incompatible
+execution hashes; parameter-default activation does not invoke it.
+
+`rebind_setup` explicitly composes a saved setup with an exact parameter input and
+validates the result. A working-point input creates a new independent workspace,
+retaining exact sample/batch identity but no publication acceptance. Source cell
+origins remain provenance for estimates, not a transfer of calibration applicability.
+The read-only preview and save use the same composition contract. No implicit
+rebase, migration or background synchronization is provided.
+
+One active setup is the current executable deployment authority. This slice does
+not authorize simultaneously incompatible setups or infer physical connectivity.
+See [the maintenance guide](../../how-to/maintain-executable-setup.md).
 
 ## Verified publication into one working point (#648)
 
@@ -122,8 +153,8 @@ this slice rejects them. It neither promotes descriptive apparatus observations 
 calibrations nor treats room-temperature measurements as suitable cold parameters.
 See [durable automation](automation.md) for proofs, queues and worker behavior.
 
-Further work includes maintained setup revisions, automation requirements and
-qualified cross-object dependencies. Descriptive apparatus observations never
+Further work includes automation requirements, concurrent deployment applicability
+and qualified cross-object dependencies. Descriptive apparatus observations never
 become executable authority or calibration validity implicitly. See
 [apparatus history](apparatus-history.md) for that boundary and the
 [prebaseline policy](../data-compatibility.md) for retained data.

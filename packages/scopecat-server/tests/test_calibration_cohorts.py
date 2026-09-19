@@ -1701,10 +1701,15 @@ def test_working_point_heads_and_setup_supersede_only_affected_publications(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from scopecat.daemon.wire import ConfigPublishCommand
+    from scopecat.daemon.wire import (
+        ConfigPublishCommand,
+        SetupActivateCommand,
+        SetupSaveCommand,
+    )
     from scopecat.daemon.wire import DirectConfigRevisionSource as DirectSource
     from scopecat.kernel.quantity import Quantity
     from scopecat.records.parameter import ScalarParameterValue
+    from scopecat.records.setup import ExecutableSetupSnapshot
 
     config = load_config()
     with LocalDaemonRuntime(tmp_path, bootstrap_config=config) as runtime:
@@ -1844,15 +1849,22 @@ def test_working_point_heads_and_setup_supersede_only_affected_publications(
                 )
             }
         )
-        app.config.publish_config(
-            ConfigPublishCommand(
-                operation_id="setup-change",
-                source=DirectSource(config=changed),
-                entry_id="setup-change",
+        setup = app.setup.save(
+            SetupSaveCommand(
+                revision_id="setup-change",
+                setup=ExecutableSetupSnapshot.from_config(changed),
                 actor="test",
-                expected_generation=2,
             )
         )
+        app.setup.activate(
+            SetupActivateCommand(
+                operation_id="setup-change",
+                revision=setup.ref,
+                actor="test",
+                expected_generation=1,
+            )
+        )
+        assert app.config.get_active_config().activation.generation == 2
         b = store.read_finalization("B")
         assert b.state == "superseded"
         assert (

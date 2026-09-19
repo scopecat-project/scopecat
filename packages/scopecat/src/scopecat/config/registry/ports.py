@@ -14,6 +14,7 @@ from scopecat.config.registry.records import (
 )
 from scopecat.records.config import ConfigProfileSnapshot
 from scopecat.runs.repository import RunRepository
+from scopecat.setup.ports import SetupRepository
 
 
 class ConfigRegistryRepository(Protocol):
@@ -84,6 +85,9 @@ class ConfigRegistryUnitOfWork(Protocol):
 
     @property
     def registry(self) -> ConfigRegistryRepository: ...
+
+    @property
+    def setups(self) -> SetupRepository: ...
 
     @property
     def runs(self) -> RunRepository: ...

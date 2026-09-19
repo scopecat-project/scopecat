@@ -54,8 +54,6 @@ from scopecat.daemon.wire import (
     InstrumentContractCatalogRequest,
     InstrumentDriverProbeCommand,
     InstrumentDriverProbeReceipt,
-    InstrumentInventoryMigrationCommand,
-    InstrumentInventoryMigrationReceipt,
     InstrumentSessionLeaseReceipt,
     PayloadObjectReceipt,
     RunAdmission,
@@ -63,6 +61,7 @@ from scopecat.daemon.wire import (
     RunInstrumentProvisionCommand,
     RunInstrumentProvisionReceipt,
     RunSubmission,
+    SetupActivateCommand,
 )
 from scopecat.kernel.content_identity import sha256_content_hash_segments
 from scopecat.kernel.state import PayloadRef, StateValue
@@ -83,6 +82,13 @@ from scopecat.records.content import (
 from scopecat.records.instrument import InstrumentStateSnapshot
 from scopecat.records.run import RunSnapshot
 from scopecat.records.run_request import RunRequest
+from scopecat.records.setup import (
+    ActiveSetupView,
+    ExecutableSetupSnapshot,
+    SetupActivationRecord,
+    SetupRevision,
+    SetupRevisionRef,
+)
 from scopecat.sdk.instruments.catalog import DriverCatalog
 from scopecat.sdk.instruments.commands import (
     InstrumentConfiguredDefaultsApplyReceipt,
@@ -439,7 +445,9 @@ def test_apply_configured_defaults_posts_the_typed_command_to_the_instrument() -
         session_id="session-1",
         operation_id=command.operation_id,
         instrument_id="source-0",
-        config_entry_id="baseline",
+        setup=SetupRevisionRef(
+            revision_id="baseline", content_hash="sha256:" + "0" * 64
+        ),
         status="applied",
         state=InstrumentStateSnapshot(instrument_id="source-0"),
     )
@@ -497,12 +505,18 @@ def test_renew_instrument_session_posts_an_empty_heartbeat() -> None:
     assert request.content == b""
 
 
-def test_migrate_instrument_inventory_posts_the_typed_command() -> None:
+def test_setup_activation_retries_the_exact_reviewed_command() -> None:
     requests: list[httpx2.Request] = []
-    config = load_config()
-    command = InstrumentInventoryMigrationCommand(
-        config=config,
-        entry_id="inventory-v2",
+    setup = ExecutableSetupSnapshot.from_config(load_config())
+    revision = SetupRevision(
+        id="inventory-v2",
+        content_hash=setup.content_hash,
+        setup=setup,
+        actor="operator",
+    )
+    command = SetupActivateCommand(
+        operation_id="activate-setup-2",
+        revision=revision.ref,
         changes=(
             InstrumentInventoryRekey(
                 instrument_id="source-0",
@@ -514,42 +528,27 @@ def test_migrate_instrument_inventory_posts_the_typed_command() -> None:
         expected_generation=1,
         note="move source",
     )
-    entry = ConfigRegistryEntry(
-        id=command.entry_id,
-        config_ref="config-registry/entries/inventory-v2/config.json",
-        content_hash=config_content_hash(config),
-        source=DirectConfigRegistrySource(),
-        actor=command.actor,
-    )
-    receipt = InstrumentInventoryMigrationReceipt(
-        entry=entry,
-        activation=ConfigRegistryActivationRecord(
-            generation=2,
-            action="inventory_migration",
-            entry_id=entry.id,
-            entry_content_hash=entry.content_hash,
-            actor=command.actor,
+    receipt = ActiveSetupView(
+        revision=revision,
+        activation=SetupActivationRecord(
+            generation=2, revision=revision.ref, actor="operator"
         ),
-        changes=command.changes,
     )
 
     def handler(request: httpx2.Request) -> httpx2.Response:
         requests.append(request)
+        if len(requests) == 1:
+            raise httpx2.ReadError("receipt lost", request=request)
         return _model(receipt)
 
     client = DaemonClient(
-        "http://daemon.local/",
-        transport=httpx2.MockTransport(handler),
+        "http://daemon.local/", transport=httpx2.MockTransport(handler)
     )
-
-    assert client.migrate_instrument_inventory(command) == receipt
-    [request] = requests
-    assert request.method == "POST"
-    assert request.url.path == "/api/v1/config-registry/instrument-inventory-migrations"
-    assert (
-        InstrumentInventoryMigrationCommand.model_validate_json(request.content)
-        == command
-    )
+    assert client.activate_setup(command) == receipt
+    assert len(requests) == 2
+    assert requests[0].content == requests[1].content
+    assert requests[1].url.path == "/api/v1/setup/activation-operations"
+    assert SetupActivateCommand.model_validate_json(requests[1].content) == command
 
 
 def test_config_activation_retries_exact_command_and_supports_lookup() -> None:

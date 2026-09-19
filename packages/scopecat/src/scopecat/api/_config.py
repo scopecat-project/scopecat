@@ -22,7 +22,6 @@ from scopecat.config.candidates import (
     resolve_candidate_config_from_snapshot,
 )
 from scopecat.config.drafts import ConfigDraft
-from scopecat.config.inventory import InstrumentInventoryChange
 from scopecat.config.parameter_updates import ParameterUpdate
 from scopecat.config.registry.records import (
     CandidateAcceptance,
@@ -56,9 +55,9 @@ from scopecat.daemon.wire import (
     ConfigEntryActivationCommand,
     ConfigPublishCommand,
     ConfigPublishReceipt,
+    ConfigSetupRebindCommand,
+    ConfigSetupRebindPreviewCommand,
     DirectConfigRevisionSource,
-    InstrumentInventoryMigrationCommand,
-    InstrumentInventoryMigrationReceipt,
     ManualConfigDraftRevisionSource,
 )
 from scopecat.records.analysis import (
@@ -74,6 +73,7 @@ from scopecat.records.run import (
     RunConfigSource,
 )
 from scopecat.records.sample import SampleSelector
+from scopecat.records.setup import SetupRevision, SetupRevisionRef
 from scopecat.runs.selectors import RunSelector
 
 
@@ -117,6 +117,52 @@ class LabConfigOperations:
     ) -> ParameterWorkspace:
         """Open an isolated dictionary editor for one saved sample/workpoint version."""
         return ParameterWorkspace(self, context=context, latest=latest)
+
+    def _rebind_inputs(
+        self,
+        base: str | ConfigContextRef | ParameterVersion,
+        setup: str | SetupRevisionRef | SetupRevision,
+    ) -> tuple[ConfigContextRef, SetupRevisionRef]:
+        if isinstance(base, str):
+            entry = self.entry(base).entry
+            base = ConfigContextRef(entry_id=entry.id, content_hash=entry.content_hash)
+        elif isinstance(base, ParameterVersion):
+            base = base.context
+        if isinstance(setup, str):
+            setup = self.client.setup_revision(setup)
+        return base, setup.ref if isinstance(setup, SetupRevision) else setup
+
+    def preview_setup_rebind(
+        self,
+        *,
+        base: str | ConfigContextRef | ParameterVersion,
+        setup: str | SetupRevisionRef | SetupRevision,
+    ) -> ConfigProfileSnapshot:
+        """Review explicit setup composition without altering any saved input."""
+        base_ref, setup_ref = self._rebind_inputs(base, setup)
+        return self.client.preview_setup_rebind(
+            ConfigSetupRebindPreviewCommand(base=base_ref, setup=setup_ref)
+        )
+
+    def rebind_setup(
+        self,
+        *,
+        base: str | ConfigContextRef | ParameterVersion,
+        setup: str | SetupRevisionRef | SetupRevision,
+        name: str,
+        note: str = "",
+    ) -> ConfigEntryView:
+        """Save an unverified copy on another setup; never rewrite the original."""
+        base_ref, setup_ref = self._rebind_inputs(base, setup)
+        return self.client.rebind_setup(
+            ConfigSetupRebindCommand(
+                base=base_ref,
+                setup=setup_ref,
+                entry_id=name,
+                actor=self.operator,
+                note=note,
+            )
+        )
 
     def latest_context(self, context: ConfigContextRef) -> ConfigEntryView:
         return self.client.latest_context(context)
@@ -396,28 +442,6 @@ class LabConfigOperations:
         """Reopen the exact durable result of an activate-entry command."""
 
         return self.client.config_activation_operation(operation_id)
-
-    def migrate_instrument_inventory(
-        self,
-        config: ConfigProfileSnapshot,
-        *,
-        changes: tuple[InstrumentInventoryChange, ...],
-        entry_id: str | None = None,
-        actor: str | None = None,
-        note: str = "",
-    ) -> InstrumentInventoryMigrationReceipt:
-        """Publish changed physical identities after their owners are drained."""
-
-        return self.client.migrate_instrument_inventory(
-            InstrumentInventoryMigrationCommand(
-                config=config,
-                entry_id=entry_id or config_revision_entry_id(config),
-                changes=changes,
-                actor=actor or self.operator,
-                expected_generation=self._generation(),
-                note=note,
-            )
-        )
 
     def proposals(
         self,

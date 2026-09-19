@@ -38,6 +38,7 @@ from scopecat.records.instrument import (
     validate_entity_target as _validate_entity_target,
 )
 from scopecat.records.metadata import JsonMetadata
+from scopecat.records.setup import SetupRevisionRef
 from scopecat.sdk.problems import Problem
 
 type _NonEmptyId = Annotated[str, Field(min_length=1)]
@@ -124,7 +125,7 @@ class InstrumentConfiguredDefaultsApplyReceipt(BaseModel):
     session_id: _NonEmptyId
     operation_id: _NonEmptyId
     instrument_id: _NonEmptyId
-    config_entry_id: _NonEmptyId
+    setup: SetupRevisionRef
     status: Literal["applied", "unchanged", "rejected"]
     problems: tuple[Problem, ...] = ()
     state: _InstrumentStateSnapshot | None = None

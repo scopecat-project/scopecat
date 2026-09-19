@@ -31,11 +31,6 @@ from scopecat.config.contexts import (
     context_value_origins,
     missing_context_values,
 )
-from scopecat.config.inventory import (
-    InstrumentInventoryRekey,
-    InstrumentInventoryRemoval,
-    InstrumentInventoryRenameRekey,
-)
 from scopecat.config.registry import service as config_registry_service
 from scopecat.config.registry.records import (
     CalibrationCohortMergeContribution,
@@ -50,9 +45,6 @@ from scopecat.config.registry.records import (
     ResolvedCalibrationCohortMergeContribution,
     ResolvedVerifiedParameterProposalProofV1,
 )
-from scopecat.config.registry.service import (
-    publish_instrument_inventory_migration_revision,
-)
 from scopecat.config.structure import (
     ParameterStructurePlan,
     ParameterStructurePreview,
@@ -61,8 +53,6 @@ from scopecat.config.structure import (
 )
 from scopecat.control.models import (
     DurableEventInput,
-    InventoryMigrationBlocker,
-    ResourceKey,
 )
 from scopecat.daemon.views import (
     ActiveConfigView,
@@ -85,9 +75,9 @@ from scopecat.daemon.wire import (
     ConfigEntryActivationCommand,
     ConfigPublishCommand,
     ConfigPublishReceipt,
+    ConfigSetupRebindCommand,
+    ConfigSetupRebindPreviewCommand,
     DirectConfigRevisionSource,
-    InstrumentInventoryMigrationCommand,
-    InstrumentInventoryMigrationReceipt,
     ManualConfigDraftRevisionSource,
 )
 from scopecat.kernel.errors import (
@@ -128,11 +118,6 @@ from scopecat_server.storage.sqlite.control_plane import SQLiteControlPlane
 from scopecat_server.storage.sqlite.run_repository import SQLiteRunRepository
 
 from ..errors import BackendConflict, BackendNotFound
-from ..instruments.actors import (
-    InstrumentActorConflict,
-    InstrumentActorRegistry,
-    InstrumentActorShutdown,
-)
 from .analyses import AnalysisService
 from .samples import SampleService
 
@@ -164,7 +149,6 @@ class ConfigService:
         config_operations: SQLiteConfigOperationStore,
         runs: SQLiteRunRepository,
         services: ProjectStateServices,
-        actors: InstrumentActorRegistry,
         analyses: AnalysisService,
         automation: SQLiteAutomationStore,
         calibration_cohorts: SQLiteCalibrationCohortStore,
@@ -176,17 +160,46 @@ class ConfigService:
         self._config_operations = config_operations
         self._runs = runs
         self._services = services
-        self._actors = actors
         self._analyses = analyses
         self._automation = automation
         self._calibration_cohorts = calibration_cohorts
         self._mutation_lock = Lock()
 
-    def _config_registry_config_in_transaction(
-        self, connection: sqlite3.Connection, entry: ConfigRegistryEntry
+    def preview_setup_rebind(
+        self, command: ConfigSetupRebindPreviewCommand
     ) -> ConfigProfileSnapshot:
-        with self._config_registry.borrowed_unit_of_work(connection) as work:
-            return work.registry.read_config(entry.config_ref)
+        with self._config_errors():
+            try:
+                return config_registry_service.preview_setup_rebind(
+                    base=command.base,
+                    setup=command.setup,
+                    unit_of_work=self._config_registry.read_unit_of_work,
+                )
+            except KeyError as error:
+                raise BackendNotFound("setup revision was not found") from error
+            except ValueError as error:
+                raise BackendConflict(str(error)) from error
+
+    def rebind_setup(self, command: ConfigSetupRebindCommand) -> ConfigEntryView:
+        with (
+            self._mutation_lock,
+            self._config_errors(),
+            self._config_transaction() as (_, services),
+        ):
+            try:
+                saved = config_registry_service.rebind_config_setup(
+                    base=command.base,
+                    setup=command.setup,
+                    entry_id=command.entry_id,
+                    actor=command.actor,
+                    note=command.note,
+                    unit_of_work=services.config_registry,
+                )
+                return ConfigEntryView(entry=saved.entry, config=saved.config)
+            except KeyError as error:
+                raise BackendNotFound("setup revision was not found") from error
+            except ValueError as error:
+                raise BackendConflict(str(error)) from error
 
     def latest_context(self, context: ConfigContextRef) -> ConfigEntryView:
         with self._config_errors():
@@ -696,13 +709,6 @@ class ConfigService:
                     activation=activation,
                 )
                 self._config_operations.commit_in_transaction(connection, receipt)
-                self._calibration_cohorts.supersede_setup_in_transaction(
-                    connection,
-                    config=self._config_registry_config_in_transaction(
-                        connection, result.entry
-                    ),
-                    at=activation.recorded_at,
-                )
             return receipt
 
     def _prepare_calibration_merge(
@@ -968,111 +974,6 @@ class ConfigService:
                 ),
             )
 
-    def migrate_instrument_inventory(
-        self,
-        command: InstrumentInventoryMigrationCommand,
-    ) -> InstrumentInventoryMigrationReceipt:
-        """Publish one destructive inventory change after fencing its keys."""
-
-        declared = _inventory_migration_deltas(command)
-        with self._mutation_lock, self._config_errors():
-            active = config_registry_service.load_active_config_registry_snapshot(
-                unit_of_work=self._config_registry.read_unit_of_work
-            )
-            # Do not retire healthy idle connections for an already-stale intent.
-            if active.activation.generation != command.expected_generation:
-                raise BackendConflict("config registry active state changed")
-            plan = config_registry_service.plan_instrument_inventory_migration(
-                current=active.config,
-                target=command.config,
-                declared=declared,
-            )
-            try:
-                retirement = self._actors.begin_retirement(
-                    plan.affected_exclusivity_keys
-                )
-            except (InstrumentActorConflict, InstrumentActorShutdown) as error:
-                raise BackendConflict(str(error)) from error
-            with retirement:
-                # Known owners should fail before idle connections are disconnected.
-                self._require_inventory_migration_drained(
-                    plan.affected_exclusivity_keys
-                )
-                try:
-                    retirement.retire_idle()
-                except (InstrumentActorConflict, InstrumentActorShutdown) as error:
-                    raise BackendConflict(str(error)) from error
-                except Exception as error:
-                    raise BackendConflict(
-                        "instrument connection could not be retired safely"
-                    ) from error
-
-                with self._config_transaction() as transaction:
-                    connection, services = transaction
-                    # Close the claim race after the first drained snapshot.
-                    blockers = (
-                        self._control.inventory_migration_blockers_in_transaction(
-                            connection,
-                            tuple(
-                                ResourceKey.instrument(key)
-                                for key in plan.affected_exclusivity_keys
-                            ),
-                        )
-                    )
-                    _require_no_inventory_migration_blockers(blockers)
-                    result = publish_instrument_inventory_migration_revision(
-                        revision=config_registry_service.ConfigRevision(
-                            source=(
-                                config_registry_service.DirectConfigRevisionSource(
-                                    command.config
-                                )
-                            ),
-                            entry_id=command.entry_id,
-                            actor=command.actor,
-                            note=command.note,
-                        ),
-                        declared=declared,
-                        unit_of_work=services.config_registry,
-                        expected_generation=command.expected_generation,
-                    )
-                    activation = result.activation
-                    assert activation is not None
-                    self._append_inventory_migration_events(
-                        connection,
-                        result,
-                        change_count=len(plan.changes),
-                    )
-                    self._calibration_cohorts.supersede_setup_in_transaction(
-                        connection,
-                        config=self._config_registry_config_in_transaction(
-                            connection, result.entry
-                        ),
-                        at=activation.recorded_at,
-                    )
-                    # Old-snapshot claims still lose the generation CAS, while
-                    # new-snapshot owners no longer see an activation-to-gate gap.
-                    retirement.release_gate()
-                    receipt = InstrumentInventoryMigrationReceipt(
-                        entry=result.entry,
-                        activation=activation,
-                        changes=tuple(
-                            _wire_inventory_migration_change(change)
-                            for change in plan.changes
-                        ),
-                    )
-                return receipt
-
-    def _require_inventory_migration_drained(
-        self,
-        exclusivity_keys: tuple[str, ...],
-    ) -> None:
-        with self._control.read_transaction() as connection:
-            blockers = self._control.inventory_migration_blockers_in_transaction(
-                connection,
-                tuple(ResourceKey.instrument(key) for key in exclusivity_keys),
-            )
-        _require_no_inventory_migration_blockers(blockers)
-
     def preview_config_draft(
         self,
         command: ConfigDraftCommand,
@@ -1159,45 +1060,7 @@ class ConfigService:
                     connection,
                     receipt,
                 )
-                self._calibration_cohorts.supersede_setup_in_transaction(
-                    connection,
-                    config=self._config_registry_config_in_transaction(
-                        connection, result.entry
-                    ),
-                    at=activation.recorded_at,
-                )
             return receipt
-
-    def _append_inventory_migration_events(
-        self,
-        connection: sqlite3.Connection,
-        result: config_registry_service.ConfigRegistryMutationResult,
-        *,
-        change_count: int,
-    ) -> None:
-        if result.saved:
-            self._control.append_event_in_transaction(
-                connection,
-                DurableEventInput(
-                    kind="config_saved",
-                    payload={"entry_id": result.entry.id},
-                    occurred_at=result.entry.recorded_at,
-                ),
-            )
-        activation = result.activation
-        if result.activated and activation is not None:
-            self._control.append_event_in_transaction(
-                connection,
-                DurableEventInput(
-                    kind="instrument_inventory_migrated",
-                    payload={
-                        "entry_id": result.entry.id,
-                        "generation": activation.generation,
-                        "change_count": change_count,
-                    },
-                    occurred_at=activation.recorded_at,
-                ),
-            )
 
     def _append_revision_events(
         self,
@@ -1413,83 +1276,3 @@ def _calibration_successes(
             )
         )
     return tuple(successes)
-
-
-def _inventory_migration_deltas(
-    command: InstrumentInventoryMigrationCommand,
-) -> tuple[config_registry_service.InstrumentInventoryMigrationDelta, ...]:
-    changes: list[config_registry_service.InstrumentInventoryMigrationDelta] = []
-    for change in command.changes:
-        if isinstance(change, InstrumentInventoryRemoval):
-            changes.append(
-                config_registry_service.InstrumentInventoryMigrationDelta(
-                    kind="remove",
-                    old_instrument_id=change.instrument_id,
-                    old_exclusivity_key=change.exclusivity_key,
-                )
-            )
-        elif isinstance(change, InstrumentInventoryRekey):
-            changes.append(
-                config_registry_service.InstrumentInventoryMigrationDelta(
-                    kind="rekey",
-                    old_instrument_id=change.instrument_id,
-                    old_exclusivity_key=change.from_exclusivity_key,
-                    new_instrument_id=change.instrument_id,
-                    new_exclusivity_key=change.to_exclusivity_key,
-                )
-            )
-        else:
-            assert isinstance(change, InstrumentInventoryRenameRekey)
-            changes.append(
-                config_registry_service.InstrumentInventoryMigrationDelta(
-                    kind="rename_rekey",
-                    old_instrument_id=change.from_instrument_id,
-                    old_exclusivity_key=change.from_exclusivity_key,
-                    new_instrument_id=change.to_instrument_id,
-                    new_exclusivity_key=change.to_exclusivity_key,
-                )
-            )
-    return tuple(changes)
-
-
-def _wire_inventory_migration_change(
-    change: config_registry_service.InstrumentInventoryMigrationDelta,
-) -> (
-    InstrumentInventoryRemoval
-    | InstrumentInventoryRekey
-    | InstrumentInventoryRenameRekey
-):
-    if change.kind == "remove":
-        return InstrumentInventoryRemoval(
-            instrument_id=change.old_instrument_id,
-            exclusivity_key=change.old_exclusivity_key,
-        )
-    if change.kind == "rekey":
-        assert change.new_exclusivity_key is not None
-        return InstrumentInventoryRekey(
-            instrument_id=change.old_instrument_id,
-            from_exclusivity_key=change.old_exclusivity_key,
-            to_exclusivity_key=change.new_exclusivity_key,
-        )
-    assert change.new_instrument_id is not None
-    assert change.new_exclusivity_key is not None
-    return InstrumentInventoryRenameRekey(
-        from_instrument_id=change.old_instrument_id,
-        to_instrument_id=change.new_instrument_id,
-        from_exclusivity_key=change.old_exclusivity_key,
-        to_exclusivity_key=change.new_exclusivity_key,
-    )
-
-
-def _require_no_inventory_migration_blockers(
-    blockers: tuple[InventoryMigrationBlocker, ...],
-) -> None:
-    if not blockers:
-        return
-    details = ", ".join(
-        f"{blocker.owner_kind} {blocker.owner_id} ({blocker.state}) on {blocker.key.id}"
-        for blocker in blockers
-    )
-    raise BackendConflict(
-        f"instrument inventory migration requires drained resources: {details}"
-    )
