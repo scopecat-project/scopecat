@@ -559,7 +559,7 @@ def _prepare_calibration_cohort_merge_locked(
     CalibrationCohortMergeRegistrySource,
     tuple[ParameterValueDelta, ...],
 ]:
-    """Resolve exact proposal records and compose their common active base."""
+    """Resolve exact proposal records and compose their exact working-point base."""
 
     base = _load_config_registry_entry_locked(entry_id=source.base.entry_id, work=work)
     scope = source.base.scope
@@ -1590,6 +1590,7 @@ def _save_config_context_locked(
     actor: str,
     note: str,
     work: ConfigRegistryUnitOfWork,
+    profile_id: str | None = None,
 ) -> ConfigRegistryEntrySnapshot:
     _validate_entry_id(entry_id)
     _validate_required_text(actor, field="actor")
@@ -1626,9 +1627,10 @@ def _save_config_context_locked(
     baseline = structural.config if structural else loaded.config
     config = baseline.model_copy(
         update={
+            "id": baseline.id if profile_id is None else profile_id,
             "parameter_snapshot": baseline.parameter_snapshot
             if parameters is None
-            else parameters
+            else parameters,
         }
     )
     validate_context_config(config)
@@ -1742,6 +1744,7 @@ def publish_calibration_context(
             actor=actor,
             note=note,
             work=work,
+            profile_id=config.id,
         )
         return ConfigRegistryMutationResult(
             entry=saved.entry, saved=True, deltas=deltas
