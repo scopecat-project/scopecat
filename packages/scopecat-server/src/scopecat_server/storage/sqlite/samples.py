@@ -346,20 +346,27 @@ class SQLiteSampleStore:
         self,
         selectors: tuple[SampleSelector, ...],
     ) -> tuple[SampleBinding, ...]:
+        try:
+            with self.sqlite.read_connection() as connection:
+                return self.resolve_bindings_in_transaction(connection, selectors)
+        except sqlite3.Error as error:
+            raise BackendConflict("could not resolve run samples") from error
+
+    def resolve_bindings_in_transaction(
+        self,
+        connection: sqlite3.Connection,
+        selectors: tuple[SampleSelector, ...],
+    ) -> tuple[SampleBinding, ...]:
+        """Freeze sample heads within the caller's admission transaction."""
         roles = tuple(selector.role for selector in selectors)
         if len(roles) != len(set(roles)):
             raise BackendConflict("run sample roles must be unique")
         sample_ids = tuple(selector.sample_id for selector in selectors)
         if len(sample_ids) != len(set(sample_ids)):
             raise BackendConflict("one sample cannot fill multiple run roles")
-        try:
-            with self.sqlite.read_connection() as connection:
-                return tuple(
-                    self._resolve_binding(connection, selector)
-                    for selector in selectors
-                )
-        except sqlite3.Error as error:
-            raise BackendConflict("could not resolve run samples") from error
+        return tuple(
+            self._resolve_binding(connection, selector) for selector in selectors
+        )
 
     def bind_run_in_transaction(
         self,

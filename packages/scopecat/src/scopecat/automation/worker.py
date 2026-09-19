@@ -516,7 +516,7 @@ class ProcedureWorker:
         context = ProcedureContext(
             self._control,
             authority,
-            samples=acquired.run.samples,
+            samples=acquired.run.resolved_samples,
             plan_ref=acquired.run.plan_ref,
             should_yield=should_yield,
         )
