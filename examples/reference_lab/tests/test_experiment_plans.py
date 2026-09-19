@@ -149,7 +149,9 @@ def test_retained_analysis_plan_copy_revalidate_and_child_origin() -> None:
             ),
         )
         frozen = saved.model_dump_json()
-        assert saved.definition.sample is None  # no synthetic working point required
+        assert (
+            not saved.definition.scientific_binding.samples
+        )  # no synthetic working point required
         assert run_count() == original_count
 
         # A new client proves the plan survives the original author session.
@@ -191,7 +193,7 @@ def test_retained_analysis_plan_copy_revalidate_and_child_origin() -> None:
                 previewed = reopened.prepare_plan(copied.ref, actor="carol")
                 assert previewed.preview.plan_ref == copied.ref
                 assert (
-                    previewed.preview.config_source.content_hash
+                    previewed.preview.reviewed.config_source.content_hash
                     == original_active.entry.content_hash
                 )
                 submitted = previewed.submit(request_key=f"{key}-target")
@@ -278,8 +280,8 @@ def test_plan_freezes_active_sample_and_named_context_without_activation() -> No
         plain = author.prepare("frequency-amplitude", sample=sample.id).save_plan(
             "Exact sample", saved_by="alice"
         )
-        assert plain.definition.sample is not None
-        assert plain.definition.sample.revision == 1
+        assert plain.definition.scientific_binding.samples
+        assert plain.definition.scientific_binding.samples[0].revision == 1
         context_entry = lab.config.save_context(
             entry_id=f"plan-context-{key}",
             base=ConfigContextRef(
@@ -303,12 +305,17 @@ def test_plan_freezes_active_sample_and_named_context_without_activation() -> No
         )
         for saved in (plain, contextual):
             reopened = author.prepare_plan(saved.ref, actor="bob")
-            assert reopened.preview.sample_binding == saved.definition.sample
-            assert reopened.preview.sample_binding is not None
-            assert reopened.preview.sample_binding.revision == 1
-        assert contextual.definition.context == context
-        assert contextual.definition.sample is not None
-        assert contextual.definition.sample.context_id == "bias-a"
+            assert (
+                reopened.preview.reviewed.binding == saved.definition.scientific_binding
+            )
+            assert reopened.preview.reviewed.binding.samples
+            assert reopened.preview.reviewed.binding.samples[0].revision == 1
+        assert contextual.definition.selection.configuration.kind == "working_point"
+        assert contextual.definition.selection.configuration.ref == context
+        assert contextual.definition.scientific_binding.samples
+        assert (
+            contextual.definition.scientific_binding.samples[0].context_id == "bias-a"
+        )
         assert lab.config.active().activation == active.activation
 
 

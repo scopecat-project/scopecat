@@ -43,7 +43,7 @@ def admit_without_dispatch(root: Path, key: str) -> str:
             "action": "submit",
             "request_key": key,
             "expected_request_hash": preview.request_hash,
-            "config_source": preview.config_source,
+            "reviewed": preview.reviewed,
             "code_revision": preview.code_revision,
             "manual_state": preview.manual_state,
         }

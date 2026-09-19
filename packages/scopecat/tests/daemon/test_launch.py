@@ -6,6 +6,11 @@ from pydantic import ValidationError
 from scopecat.application.launch import LaunchInputSchema
 from scopecat.records.launch_request import LaunchRequest
 from scopecat.records.run import ConfigRegistryRunConfigSource
+from scopecat.records.scientific_binding import (
+    ResolvedScientificBinding,
+    UnboundSubject,
+)
+from scopecat.records.scientific_selection import ReviewedScientificSelection
 
 
 def test_catalog_retains_project_schema_beyond_console_renderer() -> None:
@@ -27,7 +32,7 @@ def test_catalog_retains_project_schema_beyond_console_renderer() -> None:
     "change",
     [
         {"inputs": {"delay_ns": 2}},
-        {"sample": "chip-2"},
+        {"selection": {"subject": {"kind": "sample", "sample_id": "chip-2"}}},
         {"actor": "second-operator"},
         {"version": "2"},
         {"experiment": "other"},
@@ -36,7 +41,23 @@ def test_catalog_retains_project_schema_beyond_console_renderer() -> None:
 def test_submission_rejects_a_changed_preview_request(
     change: dict[str, object],
 ) -> None:
-    request = LaunchRequest(action="preview", experiment="timing", version="1")
+    reviewed = ReviewedScientificSelection(
+        binding=ResolvedScientificBinding(
+            subject=UnboundSubject(),
+            config_content_hash="sha256:" + "a" * 64,
+            setup_content_hash="sha256:" + "b" * 64,
+        ),
+        config_source=ConfigRegistryRunConfigSource(
+            selector="active",
+            entry_id="baseline",
+            config_ref="baseline",
+            content_hash="sha256:" + "a" * 64,
+            registry_generation=1,
+        ),
+    )
+    request = LaunchRequest(
+        action="preview", experiment="timing", version="1", reviewed=reviewed
+    )
     with pytest.raises(ValidationError, match="request changed"):
         LaunchRequest.model_validate(
             {
@@ -45,12 +66,5 @@ def test_submission_rejects_a_changed_preview_request(
                 "action": "submit",
                 "request_key": "retry",
                 "expected_request_hash": request.request_hash,
-                "config_source": ConfigRegistryRunConfigSource(
-                    selector="active",
-                    entry_id="baseline",
-                    config_ref="baseline",
-                    content_hash="sha256:" + "a" * 64,
-                    registry_generation=1,
-                ),
             }
         )

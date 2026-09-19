@@ -87,7 +87,7 @@ def submit_request(
             "action": "submit",
             "request_key": key,
             "expected_request_hash": preview.request_hash,
-            "config_source": preview.config_source,
+            "reviewed": preview.reviewed,
             "code_revision": preview.code_revision,
             "manual_state": preview.manual_state,
         }
@@ -204,8 +204,8 @@ def test_real_http_preview_shares_catalog_and_never_admits_acquisition(
                     stage.inspections[0].artifact_fingerprint
                 )
         assert preview.point_count == (1 if experiment == "temperature" else 2)
-        assert isinstance(preview.config_source, ConfigRegistryRunConfigSource)
-        assert preview.config_source.entry_id == active.entry.id
+        assert isinstance(preview.reviewed.config_source, ConfigRegistryRunConfigSource)
+        assert preview.reviewed.config_source.entry_id == active.entry.id
         assert client.list_runs() == before
         assert lab.config.active() == active
 
@@ -241,7 +241,7 @@ def test_submission_fences_new_stale_work_but_replays_exact_admission(
         assert output.kind == "run"
         run = lab.get_run(output.run_id)
         assert run.status == "completed"
-        assert run.snapshot.config_source == preview.config_source
+        assert run.snapshot.config_source == preview.reviewed.config_source
         assert preview.preflight is not None
         assert_retained_shapes(preview.preflight.stages[0], run)
         records = run.measurements().records

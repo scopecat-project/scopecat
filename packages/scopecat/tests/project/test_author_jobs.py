@@ -156,6 +156,11 @@ def test_submission_rejection_is_distinct_from_unknown(
     from scopecat.application.author_project import AuthorPreparedLaunch
     from scopecat.application.launch import LaunchPreview
     from scopecat.records.run import ConfigRegistryRunConfigSource
+    from scopecat.records.scientific_binding import (
+        ResolvedScientificBinding,
+        UnboundSubject,
+    )
+    from scopecat.records.scientific_selection import ReviewedScientificSelection
 
     def respond(request: httpx2.Request) -> httpx2.Response:
         assert request.method == "POST"
@@ -173,13 +178,22 @@ def test_submission_rejection_is_distinct_from_unknown(
             content_hash="sha256:" + "a" * 64,
             registry_generation=1,
         )
+        reviewed = ReviewedScientificSelection(
+            binding=ResolvedScientificBinding(
+                subject=UnboundSubject(),
+                config_content_hash=source.content_hash,
+                setup_content_hash="sha256:" + "b" * 64,
+            ),
+            config_source=source,
+        )
+        request = request.model_copy(update={"reviewed": reviewed})
         prepared = AuthorPreparedLaunch(
             session,
             request,
             LaunchPreview(
                 experiment_id="signal",
                 request_hash=request.request_hash,
-                config_source=source,
+                reviewed=reviewed,
                 point_count=1,
                 summary="Checked",
             ),

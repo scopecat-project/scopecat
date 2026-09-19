@@ -7,9 +7,13 @@ from scopecat.kernel.content_identity import sha256_json_hash
 from scopecat.records.config import config_content_hash
 from scopecat.records.launch_request import LaunchRequest
 from scopecat.records.run import AnalysisCandidateRunConfigSource, RunSnapshot
+from scopecat.records.scientific_selection import (
+    CandidateConfiguration,
+    ScientificSelection,
+)
 
 
-def test_old_candidate_source_round_trips_without_hash_change() -> None:
+def test_unfenced_candidate_source_round_trips_without_hash_change() -> None:
     old = {
         "kind": "analysis_candidate",
         "source_run_id": "baseline",
@@ -53,13 +57,30 @@ def test_review_generation_is_retained_but_not_candidate_request_identity() -> N
         == 3
     )
     first = LaunchRequest(
-        action="preview", experiment="signal", version="v1", config_source=source
+        action="preview",
+        experiment="signal",
+        version="v1",
+        selection=ScientificSelection(
+            configuration=CandidateConfiguration(source=source)
+        ),
     )
     next_review = first.model_copy(
-        update={"config_source": source.model_copy(update={"registry_generation": 4})}
+        update={
+            "selection": ScientificSelection(
+                configuration=CandidateConfiguration(
+                    source=source.model_copy(update={"registry_generation": 4})
+                )
+            )
+        }
     )
     assert first.request_hash == next_review.request_hash
     other_candidate = first.model_copy(
-        update={"config_source": source.model_copy(update={"proposal_id": "other"})}
+        update={
+            "selection": ScientificSelection(
+                configuration=CandidateConfiguration(
+                    source=source.model_copy(update={"proposal_id": "other"})
+                )
+            )
+        }
     )
     assert first.request_hash != other_candidate.request_hash

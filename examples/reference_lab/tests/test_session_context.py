@@ -52,41 +52,48 @@ def test_session_selection_is_local_and_preparation_is_frozen(tmp_path: Path) ->
         selected = first.use(
             working_point=refs[0], collection=alpha.id, operator="alice"
         )
-        assert selected.sample == samples[0]
+        assert selected.science.subject.kind == "sample"
+        assert selected.science.subject.sample_id == samples[0]
         assert second.selection.collection is None
         second.use(working_point=refs[1], collection=beta.id, operator="bob")
         prepared = first.prepare("signal")
-        assert prepared.request.context == refs[0]
+        assert prepared.request.selection.configuration.kind == "working_point"
+        assert prepared.request.selection.configuration.ref == refs[0]
         assert prepared.request.actor == "alice"
         frozen = prepared.request.model_dump_json()
         # A partial update preserves independent choices and never mutates old work.
         first.use(working_point=refs[1], operator="carol")
         assert first.selection.collection == alpha.id
-        assert first.selection.sample == samples[1]
+        assert first.selection.science.subject.kind == "sample"
+        assert first.selection.science.subject.sample_id == samples[1]
         assert prepared.request.model_dump_json() == frozen
         assert second.selection.operator == "bob"
         before_failure = first.selection
         with pytest.raises(ValueError, match="sample does not match"):
-            first.use(sample=samples[0])
+            first.use(sample=samples[0], working_point=refs[1])
         assert first.selection == before_failure
         with pytest.raises(DaemonNotFoundError):
             first.use(collection="missing-session-collection", operator="not-accepted")
         assert first.selection == before_failure
         # An explicit scientific override must not inherit another sample/workpoint.
         override = first.prepare("signal", context=refs[0])
-        assert override.request.context == refs[0]
-        assert override.request.sample is None
-        assert override.preview.sample_binding is not None
-        assert override.preview.sample_binding.sample_id == samples[0]
+        assert override.request.selection.configuration.kind == "working_point"
+        assert override.request.selection.configuration.ref == refs[0]
+        assert override.request.selection.subject.kind == "sample"
+        assert override.preview.reviewed.binding.samples
+        assert override.preview.reviewed.binding.samples[0].sample_id == samples[0]
         assert override.request.record_collection == alpha.id
         from_workspace = first.prepare(
             "signal", parameters=first.config.workspace(context=refs[0].entry_id)
         )
-        assert from_workspace.request.context == refs[0]
-        assert from_workspace.request.sample == samples[0]
+        assert from_workspace.request.selection.configuration.kind == "working_point"
+        assert from_workspace.request.selection.configuration.ref == refs[0]
+        assert from_workspace.request.selection.subject.kind == "sample"
+        assert from_workspace.request.selection.subject.sample_id == samples[0]
         assert from_workspace.request.record_collection == alpha.id
         clear = first.prepare("signal", context=None, record_collection=None)
-        assert clear.request.context is None and clear.request.sample is None
+        assert clear.request.selection.configuration.kind == "active"
+        assert clear.request.selection.subject.kind == "unbound"
         assert clear.request.record_collection is None
         assert first.selection == before_failure
 
@@ -118,7 +125,8 @@ def test_session_selection_is_local_and_preparation_is_frozen(tmp_path: Path) ->
         # Saved recipes retain scientific scope and inherit only destination/actor.
         plan = prepared.save_plan("Frozen A recipe", saved_by="alice")
         reopened = second.prepare_plan(plan.ref)
-        assert reopened.request.context == refs[0]
+        assert reopened.request.selection.configuration.kind == "working_point"
+        assert reopened.request.selection.configuration.ref == refs[0]
         assert reopened.request.actor == "bob"
         assert reopened.request.record_collection == beta.id
         assert lab.config.active() == active
@@ -129,5 +137,5 @@ def test_session_selection_is_local_and_preparation_is_frozen(tmp_path: Path) ->
         assert first.selection == before_failure
     with AuthorProject(endpoint) as reopened:
         assert reopened.selection.collection is None
-        assert reopened.selection.working_point is None
+        assert reopened.selection.science.configuration.kind == "active"
         assert reopened.selection.operator == "operator"
