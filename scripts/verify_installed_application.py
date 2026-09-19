@@ -13,11 +13,12 @@ from pathlib import Path
 
 import httpx2
 
+from lab_teaching.project import create_project
 from lab_tools.host_client import ensure_host
 from lab_tools.host_operations import Command
 from lab_tools.services import Services
+from scopecat.project import open_project
 from scopecat_server.lifecycle import (  # noqa: TID251 - installed server qualification
-    initialize_project,
     inspect_daemon,
     stop_project,
 )
@@ -34,7 +35,11 @@ def files(root: Path) -> dict[str, str]:
 def verify(home: Path, destination: Path, gui: Path) -> None:
     destination.mkdir(parents=True, exist_ok=False)
     root = destination / "实验 服务"
-    project = initialize_project(root)
+    # This delivery contains the compute-only lab, not the optional instrument
+    # packages used by the server starter. Register it as an ordinary service;
+    # virtual instrument execution is qualified by verify_pilot_bundle separately.
+    create_project(root)
+    project = open_project(root)
     # Owner-held material must survive maintenance, even when outside the store.
     (root / "owner-notes.txt").write_text("保留实验记录\n", encoding="utf-8")
     store = Services(home)
