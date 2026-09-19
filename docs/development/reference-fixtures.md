@@ -60,3 +60,11 @@ compute-only tutorial daemon (`packages/lab-tools/tests/test_unknown_parameter_a
 Its former reference-lab test and probe module are removed. The same assertions
 cover unknown consumption, frozen requests and retained old contexts without the
 four-qubit device/quantum setup.
+
+## Explicit process fixtures
+
+The shared `reference_lab_daemon` is opt-in. Gallery tests request it directly
+or through `reference_lab_notebooks`; pure compiler/scientific unit tests do not
+start a service. Journeys that own a cloned workspace use their own lifecycle
+fixture rather than starting an unrelated reference daemon as well. Keep process
+ownership explicit when adding tests.

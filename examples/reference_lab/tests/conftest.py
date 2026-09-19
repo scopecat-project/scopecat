@@ -28,7 +28,7 @@ def isolate_project_loader() -> Generator[None]:
         yield
 
 
-@pytest.fixture(scope="session", autouse=True)
+@pytest.fixture(scope="session")
 def reference_lab_daemon(
     tmp_path_factory: pytest.TempPathFactory,
 ) -> Generator[ReferenceLabDaemon]:

@@ -30,6 +30,8 @@ from scopecat.records.run_request import AxisValuesSourceRecord
 from reference_lab.comparison import FIT_SCHEMA, NEXT_INPUT_SCHEMA, REVIEW_SCHEMA
 from reference_lab.workflows.authored.comparison import MODEL
 
+pytestmark = pytest.mark.usefixtures("reference_lab_daemon")
+
 
 def test_two_retained_runs_fit_candidate_rejection_and_handoff() -> None:
     url = os.environ["SCOPECAT_DAEMON_URL"]

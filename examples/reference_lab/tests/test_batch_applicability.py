@@ -18,6 +18,8 @@ from scopecat.records.sample import SampleRevisionDraft
 from reference_lab.parameters import QubitParameters
 from reference_lab.workflows.authored.signal import signal
 
+pytestmark = pytest.mark.usefixtures("reference_lab_daemon")
+
 
 def test_new_batch_requires_its_own_working_point(tmp_path: Path) -> None:
     endpoint = os.environ["SCOPECAT_DAEMON_URL"]
