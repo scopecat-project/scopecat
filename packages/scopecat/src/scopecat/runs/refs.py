@@ -8,6 +8,7 @@ RECORDS_DIR = "records"
 EXECUTION_DIR = "execution"
 CONFIG_PROFILE_SNAPSHOT_REF = "config-profile.snapshot.json"
 RUN_REQUEST_REF = "run-request.json"
+SCIENTIFIC_BINDING_REF = "scientific-binding.json"
 
 
 def artifact_content_ref(*, artifact_id: str, kind: str) -> str:
