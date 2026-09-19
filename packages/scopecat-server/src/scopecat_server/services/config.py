@@ -255,7 +255,6 @@ class ConfigService:
                     raise ValueError(
                         "context reference does not match a saved parameter context"
                     )
-                active = self.get_active_config()
                 resolved = apply_context_overrides(saved.config, command.overrides)
                 metadata = saved.entry.source.context
                 return ConfigContextResolution(
@@ -263,7 +262,6 @@ class ConfigService:
                     config_source=ContextRunConfigSource(
                         context=command.context,
                         content_hash=config_content_hash(resolved),
-                        lab_generation=active.activation.generation,
                         sample=metadata.sample,
                         overrides=command.overrides,
                     ),

@@ -104,6 +104,7 @@ from scopecat.records.analysis import (
     analysis_record_id,
 )
 from scopecat.records.config import ConfigProfileSnapshot, config_content_hash
+from scopecat.records.configuration_fence import ProcedureConfigurationFence
 from scopecat.records.content import Sha256ContentHash
 from scopecat.records.launch_request import LaunchRequest
 from scopecat.records.manual_preview import ManualPreviewFence
@@ -815,7 +816,7 @@ class LabProcedureOperations:
         plan_ref: ExperimentPlanRef | None = None,
         plan_request: LaunchRequest | None = None,
         scientific_binding: ResolvedScientificBinding | None = None,
-        expected_config_generation: int | None = None,
+        expected_configuration: ProcedureConfigurationFence | None = None,
         sample: str | SampleSelector | None = None,
         samples: tuple[SampleSelector, ...] = (),
     ) -> ProcedureHandle:
@@ -832,7 +833,7 @@ class LabProcedureOperations:
                 plan_ref=plan_ref,
                 plan_request=plan_request,
                 scientific_binding=scientific_binding,
-                expected_config_generation=expected_config_generation,
+                expected_configuration=expected_configuration,
                 definition=selected.ref,
                 intent=selected.encode_intent(intent),
                 samples=_procedure_sample_selectors(sample, samples),

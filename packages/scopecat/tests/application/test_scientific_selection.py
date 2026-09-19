@@ -225,7 +225,6 @@ def test_target_member_a_can_use_matching_working_point_and_batch(
     source = ContextRunConfigSource(
         context=ref,
         content_hash=config_content_hash(config),
-        lab_generation=1,
         sample=SampleBinding(
             role="subject",
             sample_id="chip",

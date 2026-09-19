@@ -7,6 +7,11 @@ from scopecat.config.candidates import CandidateConfig
 from scopecat.config.scientific_binding import bind_scientific_evidence
 from scopecat.records.config import ConfigProfileSnapshot
 from scopecat.records.config_context import ContextRunConfigSource
+from scopecat.records.configuration_fence import (
+    ActiveConfigurationFence,
+    ProcedureConfigurationFence,
+    SetupContentFence,
+)
 from scopecat.records.launch_request import LaunchConfigSource, LaunchRequest
 from scopecat.records.run import (
     AnalysisCandidateRunConfigSource,
@@ -39,9 +44,9 @@ class ResolvedLaunchScience:
 
 def _without_generation(source: LaunchConfigSource) -> LaunchConfigSource:
     return (
-        source.model_copy(update={"lab_generation": 1})
-        if isinstance(source, ContextRunConfigSource)
-        else source.model_copy(update={"registry_generation": None})
+        source.model_copy(update={"registry_generation": None})
+        if isinstance(source, ConfigRegistryRunConfigSource)
+        else source
     )
 
 
@@ -155,9 +160,7 @@ def _resolve_configuration(
         assert isinstance(resolved_source, AnalysisCandidateRunConfigSource)
         if _without_generation(resolved_source) != _without_generation(expected):
             raise ValueError("candidate no longer matches its exact saved proposal")
-        source: LaunchConfigSource = resolved_source.model_copy(
-            update={"registry_generation": lab.config.active().activation.generation}
-        )
+        source: LaunchConfigSource = resolved_source
         candidate_binding = lab.config.client.get_run(
             expected.source_run_id
         ).snapshot.scientific_binding
@@ -176,7 +179,6 @@ def _resolve_configuration(
             entry_id=selected.entry.id,
             config_ref=selected.entry.config_ref,
             content_hash=selected.entry.content_hash,
-            registry_generation=lab.config.active().activation.generation,
         )
     else:
         assert isinstance(choice, ActiveConfiguration)
@@ -219,11 +221,17 @@ def _resolve_configuration(
     return config, source, candidate_binding
 
 
-def launch_config_generation(source: LaunchConfigSource) -> int:
-    if isinstance(source, ContextRunConfigSource):
-        return source.lab_generation
-    assert source.registry_generation is not None
-    return source.registry_generation
+def launch_configuration_fence(
+    reviewed: ReviewedScientificSelection,
+) -> ProcedureConfigurationFence:
+    source = reviewed.config_source
+    if (
+        isinstance(source, ConfigRegistryRunConfigSource)
+        and source.selector == "active"
+    ):
+        assert source.registry_generation is not None
+        return ActiveConfigurationFence(generation=source.registry_generation)
+    return SetupContentFence(content_hash=reviewed.binding.setup_content_hash)
 
 
 def launch_preflight_configuration(

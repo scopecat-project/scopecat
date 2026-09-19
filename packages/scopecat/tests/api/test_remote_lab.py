@@ -2408,7 +2408,6 @@ def test_retained_context_binding_preserves_roles_after_subject_on_resume() -> N
             entry_id="working-point", content_hash=config_content_hash(config)
         ),
         content_hash=config_content_hash(config),
-        lab_generation=1,
         sample=subject,
     )
 

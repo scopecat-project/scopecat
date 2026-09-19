@@ -15,7 +15,11 @@ from scopecat.records.run import AnalysisCandidateRunConfigSource
 from scopecat.records.run_request import RunRequest
 from scopecat.records.sample import SampleRevisionDraft, SampleSelector
 from scopecat.records.scientific_binding import RegisteredTargetSubject
-from scopecat.records.scientific_scope import MeasurementTarget, TargetMember
+from scopecat.records.scientific_scope import (
+    MeasurementTarget,
+    TargetMember,
+    setup_content_hash,
+)
 from scopecat.records.target_catalog import (
     TargetCreateCommand,
     TargetReviseCommand,
@@ -601,3 +605,115 @@ def test_generic_saved_plan_allows_distinct_stage_configurations(
         else:
             admitted = application.submit_run(child)
             assert admitted.snapshot.scientific_binding == changed_binding
+
+
+def test_fixed_setup_fence_survives_parameters_but_rejects_structure(
+    tmp_path: Path,
+) -> None:
+    from scopecat.automation import ProcedureDefinitionRef, ProcedureSubmitCommand
+    from scopecat.daemon.wire import ConfigPublishCommand, DirectConfigRevisionSource
+    from scopecat.kernel.quantity import Quantity
+    from scopecat.records.configuration_fence import (
+        ActiveConfigurationFence,
+        SetupContentFence,
+    )
+    from scopecat.records.parameter import ScalarParameterValue
+
+    config = load_config()
+    with LocalDaemonRuntime(tmp_path, bootstrap_config=config) as runtime:
+        target = _target(runtime, config)
+        child = _submission(runtime, config, target)
+        binding = child.scientific_binding
+        command = ProcedureSubmitCommand(
+            request_key="fixed-b",
+            definition=ProcedureDefinitionRef(
+                id="author", version="1", fingerprint="sha256:" + "a" * 64
+            ),
+            intent={},
+            samples=binding.sample_selectors(),
+            scientific_binding=binding,
+            expected_configuration=SetupContentFence(
+                content_hash=binding.setup_content_hash
+            ),
+        )
+        # A different parameter snapshot/profile remains the same executable setup.
+        changed_parameters = config.model_copy(
+            update={
+                "id": "A-published",
+                "parameter_snapshot": config.parameter_snapshot.model_copy(
+                    update={
+                        "values": (
+                            ScalarParameterValue(
+                                id="drive_frequency", value=Quantity(5.1, "GHz")
+                            ),
+                        )
+                    }
+                ),
+            }
+        )
+        runtime.application.config.publish_config(
+            ConfigPublishCommand(
+                source=DirectConfigRevisionSource(config=changed_parameters),
+                operation_id="publish-A",
+                expected_generation=1,
+                entry_id="A-published",
+                actor="operator",
+            ),
+        )
+        service = runtime.application.automation
+        parent = service.submit(command).run
+        admitted = runtime.application.submit_run(child)
+        assert admitted.snapshot.scientific_binding == binding
+        with pytest.raises(BackendConflict, match="active configuration changed"):
+            service.submit(
+                command.model_copy(
+                    update={
+                        "request_key": "active-stale",
+                        "expected_configuration": ActiveConfigurationFence(
+                            generation=1
+                        ),
+                    }
+                )
+            )
+        changed_setup = config.model_copy(
+            update={
+                "system": config.system.model_copy(
+                    update={"primary_entity_id": "drive-q0"}
+                )
+            }
+        )
+        runtime.application.config.publish_config(
+            ConfigPublishCommand(
+                source=DirectConfigRevisionSource(config=changed_setup),
+                operation_id="publish-setup",
+                expected_generation=2,
+                entry_id="setup-changed",
+                actor="operator",
+            ),
+        )
+        # Replay is recognized before mutable-authority checks.
+        assert service.submit(command).run == parent
+        assert runtime.application.submit_run(child).run_id == admitted.run_id
+        before = _counts(tmp_path)
+        with pytest.raises(BackendConflict, match="executable setup differs"):
+            service.submit(command.model_copy(update={"request_key": "new-parent"}))
+        with pytest.raises(BackendConflict, match="executable setup differs"):
+            runtime.application.submit_run(
+                child.model_copy(update={"submission_id": "new-child"})
+            )
+        for fence in (
+            None,
+            SetupContentFence(content_hash=setup_content_hash(changed_setup)),
+        ):
+            with pytest.raises(
+                BackendConflict, match="procedure executable setup differs"
+            ):
+                service.submit(
+                    command.model_copy(
+                        update={
+                            "request_key": "unfenced-stale",
+                            "expected_configuration": fence,
+                        }
+                    )
+                )
+        assert _counts(tmp_path) == before

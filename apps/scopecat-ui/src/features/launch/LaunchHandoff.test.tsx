@@ -142,7 +142,6 @@ it("clears an unrelated sample and resolved context when importing inputs withou
           kind: "parameter_context",
           context: { entry_id: "old-context", content_hash: "old-hash" },
           content_hash: "effective-old",
-          lab_generation: 1,
           selection: defaultSelection(),
           sample: { sample_id: "old-sample", revision: 1, context_id: "old-point" },
         },

@@ -4,12 +4,10 @@ import shutil
 from dataclasses import replace
 from pathlib import Path
 
-import httpx2
 import pytest
 import scopecat as sc
 from scopecat.analysis.facts import ordinary_result_schema
 from scopecat.application import LabApplication
-from scopecat.automation.wire import ProcedureRunListQuery
 from scopecat.project import load_project
 from scopecat.records.parameter import TableParameterValue
 from scopecat.records.run import AnalysisCandidateRunConfigSource
@@ -166,27 +164,12 @@ def test_typed_candidates_retain_cells_and_independent_policy(
             assert author.config.active() == baseline_default
             verified.publish_default(name="verified-carrier")
             assert author.config.active().entry.id == "verified-carrier"
-            runs_before_stale = author.list_runs()
-            procedures_before_stale = author.list_procedures(ProcedureRunListQuery())
-            with pytest.raises(httpx2.HTTPStatusError) as stale_preview:
-                next_prepared.run()
+            retained = next_prepared.run().wait(timeout=60).result()
+            assert retained.config == check_run.config
             assert (
-                "active configuration changed since preview"
-                in stale_preview.value.response.text
+                retained.snapshot.config_source
+                == prepared.preview.reviewed.config_source
             )
-            assert author.list_runs() == runs_before_stale
-            assert (
-                author.list_procedures(ProcedureRunListQuery())
-                == procedures_before_stale
-            )
-            reviewed_again = author.prepare("signal", candidate=verified.select())
-            reviewed_source = reviewed_again.preview.reviewed.config_source
-            assert isinstance(reviewed_source, AnalysisCandidateRunConfigSource)
-            assert (
-                reviewed_source.registry_generation
-                == author.config.active().activation.generation
-            )
-            reviewed_again.run().wait(timeout=60).result()
 
             author.config.undo()
             assert author.config.active().entry.id == baseline_default.entry.id

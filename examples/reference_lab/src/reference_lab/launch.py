@@ -18,7 +18,7 @@ from scopecat.application.launch import (
     validate_launch_control_edits,
 )
 from scopecat.application.launch_config import (
-    launch_config_generation,
+    launch_configuration_fence,
     launch_preflight_configuration,
     launch_preflight_meaning,
 )
@@ -332,7 +332,7 @@ def launch_provider(lab: LabClient, request: LaunchRequest) -> LaunchResult:
         if entry.kind == "diagnostic"
         else None,
         expected_manual_preview=request.manual_state,
-        expected_config_generation=launch_config_generation(source),
+        expected_configuration=launch_configuration_fence(resolved.reviewed),
         plan_ref=request.plan_ref,
         plan_request=request if request.plan_ref is not None else None,
     )

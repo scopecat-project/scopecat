@@ -33,6 +33,7 @@ from scopecat.automation.models import (
     procedure_intent_hash,
 )
 from scopecat.kernel.content_identity import stable_content_hash
+from scopecat.records.configuration_fence import ProcedureConfigurationFence
 from scopecat.records.content import Sha256ContentHash
 from scopecat.records.launch_request import LaunchRequest
 from scopecat.records.manual_preview import ManualPreviewFence
@@ -60,7 +61,7 @@ class ProcedureSubmitCommand(_WireModel):
     samples: tuple[SampleSelector, ...] = ()
     scientific_binding: ResolvedScientificBinding | None = None
     expected_manual_preview: ManualPreviewFence | None = None
-    expected_config_generation: int | None = Field(default=None, ge=1)
+    expected_configuration: ProcedureConfigurationFence | None = None
     recovery: ProcedureRecoverySource | None = None
     plan_ref: ExperimentPlanRef | None = None
     plan_request: LaunchRequest | None = None

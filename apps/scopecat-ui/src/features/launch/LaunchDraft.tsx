@@ -409,10 +409,9 @@ function matchesActive(
   activation: { generation: number; entry_id: string } | null | undefined,
 ) {
   if (source == null) return true;
-  if (source.kind === "analysis_candidate")
-    return source.registry_generation === activation?.generation;
-  return source.kind === "parameter_context"
-    ? source.lab_generation === activation?.generation
-    : source.registry_generation === activation?.generation &&
-        (source.selector !== "active" || source.entry_id === activation?.entry_id);
+  if (source.kind !== "config_registry" || source.selector !== "active") return true;
+  return (
+    source.registry_generation === activation?.generation &&
+    source.entry_id === activation?.entry_id
+  );
 }

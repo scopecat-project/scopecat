@@ -83,7 +83,6 @@ class RegistryOperations:
             config_source=ContextRunConfigSource(
                 context=context,
                 content_hash=config_content_hash(config),
-                lab_generation=1,
                 sample=saved.entry.source.context.sample,
                 overrides=overrides,
             ),

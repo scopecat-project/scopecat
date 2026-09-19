@@ -19,7 +19,6 @@ from scopecat.records.plan_ref import ExperimentPlanRef
 from scopecat.records.record_collection import RecordCollectionId
 from scopecat.records.request_sweep import ParameterSweep
 from scopecat.records.run import (
-    AnalysisCandidateRunConfigSource,
     ConfigRegistryRunConfigSource,
 )
 from scopecat.records.scientific_selection import (
@@ -71,8 +70,9 @@ class LaunchRequest(BaseModel):
             if self.reviewed is None or (
                 isinstance(
                     self.reviewed.config_source,
-                    ConfigRegistryRunConfigSource | AnalysisCandidateRunConfigSource,
+                    ConfigRegistryRunConfigSource,
                 )
+                and self.reviewed.config_source.selector == "active"
                 and self.reviewed.config_source.registry_generation is None
             ):
                 raise ValueError("submit requires the preview's configuration binding")

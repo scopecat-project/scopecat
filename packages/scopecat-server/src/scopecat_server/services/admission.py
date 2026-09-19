@@ -59,6 +59,7 @@ from scopecat.records.scientific_binding import (
     RegisteredTargetSubject,
     ResolvedScientificBinding,
 )
+from scopecat.records.scientific_scope import setup_content_hash
 from scopecat.runs.admission import build_run_admission
 from scopecat.runs.refs import record_content_ref
 from scopecat.runs.repository import (
@@ -125,24 +126,6 @@ class AdmissionService:
                 )
             self._resolve_provenance_config(submission.config_source)
             active = self._resolve_active_config()
-            source = submission.config_source
-            if (
-                isinstance(source, ConfigRegistryRunConfigSource)
-                and source.selector != "active"
-                and source.registry_generation is not None
-                and source.registry_generation != active.activation.generation
-            ):
-                raise BackendConflict(
-                    "lab configuration changed since the saved-entry preview"
-                )
-            if (
-                isinstance(submission.config_source, ContextRunConfigSource)
-                and submission.config_source.lab_generation
-                != active.activation.generation
-            ):
-                raise BackendConflict(
-                    "lab configuration changed since context resolution; resolve again"
-                )
             active_config = active.config
             _require_authoritative_instrument_inventory(
                 submitted=submission.config,
@@ -152,6 +135,12 @@ class AdmissionService:
                 _require_authoritative_domain_target(
                     submitted=submission.config,
                     authoritative=active_config,
+                )
+            if submission.scientific_binding.setup_content_hash != setup_content_hash(
+                active.config
+            ):
+                raise BackendConflict(
+                    "run executable setup differs from current authority"
                 )
             sample_bindings = self._validate_scientific_binding(submission)
             self._require_candidate_subject(
