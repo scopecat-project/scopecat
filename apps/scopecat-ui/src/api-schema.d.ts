@@ -3793,6 +3793,7 @@ export interface components {
         };
         /** ContextConfigRegistrySource */
         ContextConfigRegistrySource: {
+            candidate?: components["schemas"]["CandidateConfigRegistrySource"] | null;
             context: components["schemas"]["ConfigContextMetadata"];
             /**
              * @description discriminator enum property added by openapi-typescript

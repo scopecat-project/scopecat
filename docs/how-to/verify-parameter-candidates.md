@@ -79,7 +79,7 @@ a changed executable setup or a relevant manual instrument mutation still requir
 a fresh preview. Selecting the active default retains its activation-generation
 fence. Publication to the shared default still uses verified-acceptance and global
 generation fences: a stale base cannot become the default through this facade.
-Independent verified publication into a working point remains follow-on work. Inspect the named table,
-row and field, reopen/rebase the desired parameter workspace explicitly, and
+For independent publication, use an [exact working point](publish-working-point-calibration.md).
+Inspect the named table, row and field, reopen/rebase the desired parameter workspace explicitly, and
 collect independent evidence for any changed proposal. Restoring a previous
 default does not renew calibration validity.
