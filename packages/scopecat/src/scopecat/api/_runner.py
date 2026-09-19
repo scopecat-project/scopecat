@@ -361,6 +361,7 @@ class _DaemonRunner:
             )
         else:
             selected_config = config
+        samples = tuple(sorted(samples, key=lambda selector: selector.role))
         if scientific_binding is None:
             scientific_binding = self._freeze_scientific_binding(
                 selected_config, samples

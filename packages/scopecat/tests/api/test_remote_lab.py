@@ -2373,3 +2373,69 @@ def test_offline_plan_cannot_be_submitted_without_scientific_resolution() -> Non
     offline = replace(_planned(), scientific_binding=None)
     with pytest.raises(ValueError, match="resolved scientific evidence"):
         runner_module._prepare_run_submission(offline, submission_id="offline")
+
+
+def test_retained_context_binding_preserves_roles_after_subject_on_resume() -> None:
+    from scopecat.records.config_context import ConfigContextRef, ContextRunConfigSource
+    from scopecat.records.sample import SampleBinding
+
+    config = load_config()
+    catalog = _instrument_catalog(config)
+    subject = SampleBinding(
+        role="subject",
+        sample_id="chip-a",
+        revision=1,
+        content_hash="sha256:" + "a" * 64,
+        kind="chip",
+        display_name="Chip A",
+        context_id="wp-a",
+    )
+    witness = subject.model_copy(
+        update={
+            "role": "witness",
+            "sample_id": "chip-b",
+            "context_id": None,
+        }
+    )
+    binding = bind_scientific_evidence(
+        catalog_id="catalog-a",
+        config=config,
+        samples=(witness, subject),
+        sample_revisions={},
+    )
+    source = ContextRunConfigSource(
+        context=ConfigContextRef(
+            entry_id="working-point", content_hash=config_content_hash(config)
+        ),
+        content_hash=config_content_hash(config),
+        lab_generation=1,
+        sample=subject,
+    )
+
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        # A retained binding must never consult a sample head during replanning.
+        assert request.url.path == "/api/v1/instrument-contracts/resolve"
+        return _model(catalog)
+
+    runner = _DaemonRunner(
+        _client(handler),
+        lambda _config, _catalog: ExperimentSystem(instrument_catalog=catalog),
+    )
+    retained = runner._plan(
+        load_invocation(),
+        config=config,
+        config_source=source,
+        name=None,
+        tags=(),
+        description=None,
+        metadata=None,
+        operator=None,
+        samples=binding.sample_selectors(),
+        scientific_binding=binding,
+    )
+    assert retained.scientific_binding == binding
+    assert retained.request.samples == binding.sample_selectors()
+    assert tuple(sample.role for sample in retained.request.samples) == (
+        "subject",
+        "witness",
+    )
