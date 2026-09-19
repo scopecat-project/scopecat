@@ -23,6 +23,7 @@ from scopecat.records.calibration_scope import (
 from scopecat.records.config import ConfigContentHash
 from scopecat.records.config_context import ConfigContextMetadata, ConfigContextRef
 from scopecat.records.content import Sha256ContentHash
+from scopecat.records.setup import SetupRevisionRef
 
 _CONFIG_ACTIVATION_INTENT_CODEC = "scopecat.config-activation-intent.v1"
 _CONFIG_PUBLISH_INTENT_CODEC = "scopecat.config-publish-intent.v1"
@@ -305,9 +306,18 @@ class CalibrationCohortMergeRegistrySource(_FrozenRegistryModel):
         return self
 
 
+class SetupRebindRegistrySource(_FrozenRegistryModel):
+    """Explicitly composed setup and parameter input; no calibration acceptance."""
+
+    kind: Literal["setup_rebind"] = "setup_rebind"
+    base: ConfigContextRef
+    setup: SetupRevisionRef
+
+
 class ContextConfigRegistrySource(_FrozenRegistryModel):
     kind: Literal["parameter_context"] = "parameter_context"
     context: ConfigContextMetadata
+    rebind: SetupRebindRegistrySource | None = None
     publication: (
         CandidateConfigRegistrySource | CalibrationCohortMergeRegistrySource | None
     ) = None
@@ -317,7 +327,8 @@ ConfigRegistryEntrySource = Annotated[
     DirectConfigRegistrySource
     | ManualConfigDraftRegistrySource
     | CandidateConfigRegistrySource
-    | ContextConfigRegistrySource,
+    | ContextConfigRegistrySource
+    | SetupRebindRegistrySource,
     Field(discriminator="kind"),
 ]
 
