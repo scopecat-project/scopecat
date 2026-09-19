@@ -46,6 +46,7 @@ from scopecat.automation.wire import (
 from scopecat.records.content import Sha256ContentHash
 from scopecat.records.plan_ref import ExperimentPlanRef
 from scopecat.records.sample import SampleSelector
+from scopecat.records.scientific_binding import ResolvedScientificBinding
 
 
 class ProcedureControl(Protocol):
@@ -190,7 +191,14 @@ class _ProcedureYieldRequested(BaseException):
 class ProcedureContext:
     """Lease-fenced primitive used by imperative procedure definitions."""
 
-    __slots__ = ("_authority", "_control", "_plan_ref", "_samples", "_should_yield")
+    __slots__ = (
+        "_authority",
+        "_control",
+        "_plan_ref",
+        "_samples",
+        "_scientific_binding",
+        "_should_yield",
+    )
 
     def __init__(
         self,
@@ -199,12 +207,14 @@ class ProcedureContext:
         *,
         samples: tuple[SampleSelector, ...] = (),
         plan_ref: ExperimentPlanRef | None = None,
+        scientific_binding: ResolvedScientificBinding | None = None,
         should_yield: Callable[[], bool] | None = None,
     ) -> None:
         self._control = control
         self._authority = authority
         self._samples = samples
         self._plan_ref = plan_ref
+        self._scientific_binding = scientific_binding
         self._should_yield = should_yield
 
     @property
@@ -222,6 +232,10 @@ class ProcedureContext:
     @property
     def plan_ref(self) -> ExperimentPlanRef | None:
         return self._plan_ref
+
+    @property
+    def scientific_binding(self) -> ResolvedScientificBinding | None:
+        return self._scientific_binding
 
     def step[OutputT: ProcedureStepOutputRef](
         self,
@@ -518,6 +532,7 @@ class ProcedureWorker:
             authority,
             samples=acquired.run.resolved_samples,
             plan_ref=acquired.run.plan_ref,
+            scientific_binding=acquired.run.scientific_binding,
             should_yield=should_yield,
         )
         authority.start()

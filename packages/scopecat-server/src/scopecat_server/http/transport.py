@@ -23,7 +23,6 @@ from fastapi.staticfiles import StaticFiles
 from scopecat.api.comparison import reopen_comparison
 from scopecat.application.comparison import ComparisonResult
 from scopecat.application.launch import LaunchCatalog, LaunchPreview, LaunchSubmission
-from scopecat.application.launch_config import launch_sample_selection
 from scopecat.automation import (
     ProcedureCancelCommand,
     ProcedureCancelReceipt,
@@ -292,7 +291,6 @@ from scopecat.records.sample import (
     SampleArtifactRef,
     SampleId,
     SampleRevision,
-    SampleSelector,
 )
 from scopecat.records.sample_artifact import (
     MAX_SAMPLE_ARTIFACT_BYTES,
@@ -741,19 +739,6 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
             raise HTTPException(422, "Expected preview action")
         cursor = application.manual_previews.cursor()
         preview = LaunchPreview.model_validate_json(launch_call(command, response))
-        selection = launch_sample_selection(command, preview.config_source)
-        if selection is not None:
-            selector = (
-                SampleSelector(sample_id=selection)
-                if isinstance(selection, str)
-                else selection
-            )
-            binding = application.samples.resolve_bindings((selector,))[0]
-            if command.sample_binding is not None and command.sample_binding != binding:
-                raise HTTPException(
-                    422, "sample binding differs from its exact saved revision"
-                )
-            preview = preview.model_copy(update={"sample_binding": binding})
         return application.manual_previews.record_preview(preview, cursor=cursor)
 
     @app.post(f"{_API_PREFIX}/experiment-launcher/validity")

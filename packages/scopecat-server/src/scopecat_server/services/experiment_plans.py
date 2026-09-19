@@ -10,12 +10,18 @@ from scopecat.records.experiment_plan import (
     ExperimentPlanRevision,
     ExperimentPlanSave,
 )
-from scopecat.records.sample import SampleSelector
+from scopecat.records.scientific_selection import (
+    SavedConfiguration,
+    WorkingPointConfiguration,
+    require_selection_binding,
+)
 
 from scopecat_server.errors import BackendConflict
+from scopecat_server.services.scientific_binding import validate_scientific_binding
 from scopecat_server.storage.sqlite.experiment_plan_repository import (
     ExperimentPlanRepository,
 )
+from scopecat_server.storage.sqlite.target_catalog import TargetCatalogStore
 
 if TYPE_CHECKING:
     from scopecat_server.services.author_workspaces import AuthorWorkspaceServices
@@ -33,43 +39,50 @@ class ExperimentPlanService:
         samples: SampleService,
         runs: RunService,
         authors: AuthorWorkspaceServices,
+        targets: TargetCatalogStore,
     ) -> None:
         self.repository = repository
         self.config = config
         self.samples = samples
         self.runs = runs
         self.authors = authors
+        self.targets = targets
 
     def validate_definition(self, definition: ExperimentPlanDefinition) -> None:
-        if definition.configuration is not None:
-            entry = self.config.get_config_entry(definition.configuration.entry_id)
-            if entry.entry.content_hash != definition.configuration.content_hash:
+        choice = definition.selection.configuration
+        if isinstance(choice, SavedConfiguration):
+            entry = self.config.get_config_entry(choice.ref.entry_id)
+            if entry.entry.content_hash != choice.ref.content_hash:
                 raise BackendConflict("plan configuration content hash does not match")
-        if definition.context is not None:
+            config = entry.config
+        elif isinstance(choice, WorkingPointConfiguration):
             context = self.config.resolve_context(
                 ConfigContextResolveCommand(
-                    context=definition.context, overrides=definition.overrides
+                    context=choice.ref, overrides=choice.overrides
                 )
             )
-            if context.config_source.sample != definition.sample:
+            config = context.config
+            if (
+                context.config_source.sample
+                not in definition.scientific_binding.samples
+            ):
                 raise BackendConflict("plan sample must match its exact saved context")
-        if definition.sample is not None:
-            sample = definition.sample
-            actual = self.samples.resolve_bindings(
-                (
-                    SampleSelector(
-                        sample_id=sample.sample_id,
-                        revision=sample.revision,
-                        role=sample.role,
-                        context_id=sample.context_id,
-                        batch_id=sample.batch_id,
-                    ),
-                )
+        else:
+            raise BackendConflict(
+                "saved plan requires exact saved configuration or working point"
             )
-            if actual != (sample,):
-                raise BackendConflict(
-                    "plan sample binding does not match its immutable revision"
-                )
+        try:
+            require_selection_binding(
+                definition.selection, definition.scientific_binding
+            )
+        except ValueError as error:
+            raise BackendConflict(str(error)) from error
+        validate_scientific_binding(
+            definition.scientific_binding,
+            config,
+            sample_service=self.samples,
+            targets=self.targets,
+        )
         if definition.code_revision is not None:
             self.authors.get(definition.workspace_id).get(definition.code_revision)
         if definition.source is not None:

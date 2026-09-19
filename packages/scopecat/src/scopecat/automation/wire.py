@@ -38,6 +38,7 @@ from scopecat.records.launch_request import LaunchRequest
 from scopecat.records.manual_preview import ManualPreviewFence
 from scopecat.records.plan_ref import ExperimentPlanRef
 from scopecat.records.sample import SampleSelector
+from scopecat.records.scientific_binding import ResolvedScientificBinding
 
 type _NonEmptyText = Annotated[str, Field(min_length=1)]
 
@@ -57,6 +58,7 @@ class ProcedureSubmitCommand(_WireModel):
     definition: ProcedureDefinitionRef
     intent: ProcedureIntent
     samples: tuple[SampleSelector, ...] = ()
+    scientific_binding: ResolvedScientificBinding | None = None
     expected_manual_preview: ManualPreviewFence | None = None
     expected_config_generation: int | None = Field(default=None, ge=1)
     recovery: ProcedureRecoverySource | None = None
@@ -69,6 +71,7 @@ class ProcedureSubmitCommand(_WireModel):
             self.definition,
             self.intent,
             samples=self.samples,
+            scientific_binding=self.scientific_binding,
             recovery=self.recovery,
             plan_ref=self.plan_ref,
         )

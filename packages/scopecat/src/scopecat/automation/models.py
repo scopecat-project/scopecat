@@ -32,6 +32,7 @@ from scopecat.records.config import ConfigContentHash
 from scopecat.records.content import Sha256ContentHash
 from scopecat.records.plan_ref import ExperimentPlanRef
 from scopecat.records.sample import SampleSelector
+from scopecat.records.scientific_binding import ResolvedScientificBinding
 
 type _NonEmptyText = Annotated[str, Field(min_length=1)]
 
@@ -101,6 +102,7 @@ def procedure_intent_hash(
     intent: Mapping[str, object],
     *,
     samples: tuple[SampleSelector, ...] = (),
+    scientific_binding: ResolvedScientificBinding | None = None,
     recovery: ProcedureRecoverySource | None = None,
     plan_ref: ExperimentPlanRef | None = None,
 ) -> Sha256ContentHash:
@@ -111,6 +113,8 @@ def procedure_intent_hash(
         "intent": cast("dict[str, JsonValue]", thaw_json_value(intent)),
         "samples": [sample.model_dump(mode="json") for sample in samples],
     }
+    if scientific_binding is not None:
+        identity["scientific_binding"] = scientific_binding.model_dump(mode="json")
     if plan_ref is not None:
         identity["plan_ref"] = plan_ref.model_dump(mode="json")
     if recovery is not None:
@@ -245,6 +249,7 @@ class ProcedureRun(_ProcedureModel):
     intent_hash: Sha256ContentHash
     samples: tuple[SampleSelector, ...] = ()
     resolved_samples: tuple[SampleSelector, ...] = ()
+    scientific_binding: ResolvedScientificBinding | None = None
     revision: int = Field(ge=1)
     state: ProcedureRunState
     created_at: datetime = Field(default_factory=utc_now)
@@ -291,10 +296,16 @@ class ProcedureRun(_ProcedureModel):
                 raise ValueError(
                     "resolved procedure samples must preserve exact intent"
                 )
+        if (
+            self.scientific_binding is not None
+            and self.resolved_samples != self.scientific_binding.sample_selectors()
+        ):
+            raise ValueError("procedure samples must match its scientific binding")
         expected_intent_hash = procedure_intent_hash(
             self.definition,
             self.intent,
             samples=self.samples,
+            scientific_binding=self.scientific_binding,
             recovery=self.recovery,
             plan_ref=self.plan_ref,
         )

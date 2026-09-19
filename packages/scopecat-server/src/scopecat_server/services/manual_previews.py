@@ -42,7 +42,7 @@ class ManualPreviewService:
         *,
         cursor: int,
     ) -> LaunchPreview:
-        source = preview.config_source
+        source = preview.reviewed.config_source
         if isinstance(source, AnalysisCandidateRunConfigSource):
             # Candidates change only parameter cells; physical inventory belongs
             # to the exact baseline and was checked by the launch resolver.
@@ -77,12 +77,12 @@ class ManualPreviewService:
         request: LaunchRequest,
     ) -> None:
         fence = request.manual_state
-        if fence is None or request.config_source is None:
+        if fence is None or request.reviewed is None:
             raise ValueError("Submit requires the checked preview; preview again")
         expected = ManualPreviewBinding(
             request_hash=request.request_hash,
             config_source_hash=sha256_json_hash(
-                request.config_source.model_dump(mode="json")
+                request.reviewed.config_source.model_dump(mode="json")
             ),
             code_revision=request.code_revision,
         )
