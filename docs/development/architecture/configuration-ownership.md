@@ -54,7 +54,7 @@ stale. Instrument inventory migration and direct session acquisition retain thei
 existing protection. Idempotent submissions replay retained results before stale
 preview checks so retries do not create duplicate execution.
 
-## Next: verified publication into one working point
+## Next: verified publication into one working point (#648)
 
 The existing `publish_default()` path explicitly changes the shared default and
 still uses global acceptance fences. It must not be described as independent
@@ -71,6 +71,11 @@ object-scoped publication. The next slice should reuse the existing workspace he
 A and B should then publish independently; two competing updates to A must
 conflict. A failed or stale publication must leave neither an approval nor a new
 head. Explicit rebasing changes the proposal and requires new independent evidence.
+
+The current calibration cohort planner still resolves `active`, and its cohort
+merge/finalization contracts carry a global base generation. They need a separate
+coordinated change before automated publication can claim independent A/B
+ownership; the working-point publication API alone does not complete that change.
 
 Further work includes maintained setup revisions, automation requirements and
 qualified cross-object dependencies. Descriptive apparatus observations never
