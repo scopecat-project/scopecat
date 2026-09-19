@@ -69,10 +69,11 @@ original procedure before current admission fences are evaluated.
 
 ## Storage and supported source boundary
 
-Plans use immutable owned objects and small revision/head tables. See
-[data migration](migrate-data.md) for the current storage boundary and tested copy
-upgrades. Snapshot/restore includes all plan revisions, including hidden heads,
-and preserves referenced author bundles and sample content.
+Plans use immutable owned objects and small revision/head tables.
+[Current-format snapshot/restore](backup-and-restore.md) includes all plan revisions,
+including hidden heads, and referenced author bundles/sample content. New builds
+provide no prebaseline plan reader or conversion promise; see the
+[data policy](../development/data-compatibility.md).
 
 Supported author revisions use the existing complete-source manifest and
 matching environment contract. Maintained definitions retain their declaration

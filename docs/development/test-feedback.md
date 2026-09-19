@@ -98,7 +98,7 @@ successful run does not qualify the new revision.
 
 | Change or milestone | Required evidence beyond the common gate |
 | --- | --- |
-| Storage/identity/migration | Focused migration, retained-data and frozen-request checks; actual copy/restore journey before the storage milestone closes |
+| Storage/identity | Focused current-format, rejection-without-mutation and frozen-request checks; actual current-format backup/restore journey before the milestone closes. No prebaseline migration gate; see [data policy](data-compatibility.md). |
 | Worker/code loading/resource ownership | Relevant process, restart, cancellation and resource-exclusion journeys on the PR's revision |
 | Wire/UI consumer | Regenerate from the producer; focused component/payload checks and the affected browser journey |
 | Installation/tutorial changes | Affected installed/offline checks on the changed platform; full Linux/Windows acceptance before participant delivery |

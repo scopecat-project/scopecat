@@ -198,11 +198,11 @@ No automatic migration of arbitrary failed procedures is provided.
 ## Store and backup boundary
 
 Preparation operations live alongside immutable revisions and experiment plans.
-See [data migration](migrate-data.md) for the current storage boundary and tested
-copy upgrades. Preserve original stores and pinned readers; opening a project
-never implicitly migrates it.
+The [prebaseline data policy](../development/data-compatibility.md) applies:
+current builds do not read or migrate earlier development formats. Preserve
+historical files separately if you maintain an archival environment.
 
-Within schema 73, [backup and restore](backup-and-restore.md) retains source
+Within the current format, [backup and restore](backup-and-restore.md) retains source
 bundles, manifest identities, active generation, preparation results and original
 admitted procedure intents. Unfinished preparation records become `interrupted`
 after daemon restart or restore; they do not silently rerun against today's files.
@@ -346,9 +346,8 @@ root installation files for exploratory projects whose dependency boundary is
 not yet declared. An empty list explicitly selects just the framework, declared
 author packages and their dependencies. New CLI starter projects select their
 instrument dependency automatically. Additional installed packages are permitted
-when recovering a revision, but every recorded version must still match. Older
-schema 67 manifests keep their recorded full inventory; this change neither
-rewrites their identity nor migrates an older store.
+when recovering a current-format revision, but every recorded version must still
+match. This check does not add readers for earlier manifest or store formats.
 
 This remains an environment compatibility check, not a hermetic archive or an
 import sandbox. Python must match; native libraries, drivers and external system

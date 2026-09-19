@@ -235,6 +235,7 @@ export function LaunchForm({
         key={`${draft.plan?.ref.plan_id ?? "new"}:${draft.plan?.ref.revision ?? 0}`}
         preview={result}
         request={() => ({
+          workspace_id: draft.workspaceId ?? "legacy",
           scan_mode: "cartesian",
           parameter_sweeps: [],
           action: "preview",

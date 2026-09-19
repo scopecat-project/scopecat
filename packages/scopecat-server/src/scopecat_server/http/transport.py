@@ -378,9 +378,8 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
 ) -> FastAPI:
     """Create transport routes around an already-composed daemon application."""
 
-    def authors(identity: str | None = None):
-        # The absent historical owner is fixed, never an app-wide selection.
-        if identity is None or identity == "legacy":
+    def authors(identity: str):
+        if identity == "legacy":
             return application.author_revisions
         try:
             return application.author_workspaces.get(identity)
@@ -388,8 +387,12 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
             raise HTTPException(422, str(error)) from error
 
     def procedure_root(procedure_id: str) -> Path:
-        owner = application.automation.get(procedure_id).intent.get("workspace_id")
-        return authors(owner if isinstance(owner, str) else None).root
+        # Non-author procedures run in the service composition. Author intents
+        # always serialize their explicit workspace owner.
+        owner = application.automation.get(procedure_id).intent.get(
+            "workspace_id", "legacy"
+        )
+        return authors(cast("str", owner)).root
 
     project_workers = ProjectProcedureWorkers(
         lambda: application.project_root,
@@ -551,8 +554,6 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
 
     def launch_call(command: LaunchRequest, response: Response) -> str:
         started = time.perf_counter()
-        if command.workspace_id is None:
-            command = command.model_copy(update={"workspace_id": "legacy"})
         try:
             # Active selection is cheap and remains fresh across other sessions.
             service = authors(command.workspace_id)

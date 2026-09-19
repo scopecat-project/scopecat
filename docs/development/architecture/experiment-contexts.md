@@ -3,7 +3,10 @@
 Status: selected product direction and proposed implementation contracts, recorded
 2026-09-19 after the teaching-host trial. The entities and APIs proposed here are
 not all shipped; implementation status is recorded below. This document governs the next implementation slices; it does not
-relax current ownership checks or designate a new supported scientific-data baseline.
+relax current ownership checks. The [prebaseline data policy](../data-compatibility.md)
+retires the schema 68–74 migration exercises; current format 75 is not a supported
+baseline. All retained-evidence and recovery contracts below concern the current
+format, not a promise to read or upgrade earlier development stores.
 
 ## Product outcome
 
@@ -45,31 +48,12 @@ sample features; they do not yet establish the complete target/setup model below
 | Session and addressing | Per-page/kernel choices, retained plans, collection numbering | Source-qualified multi-workspace execution and setup selection |
 | Application | Existing experiment console plus local host lifecycle | Workbench entry, Help exercises and server-enforced practice boundaries |
 
-This table is the current work list. The implementation history and original audit
-below explain prior decisions; their historical limitations are not additional
-independent TODOs.
+This table is the current work list. The implementation sections below explain
+prior decisions; their historical limitations are not additional independent TODOs.
 
-## Historical ownership audit
-
-Paths in this table are repository-relative. They describe the implementation at
-`b9d6bb73c`, not the proposed end state.
-
-| Surface | Current responsibility | Consequence for the next design |
-|---|---|---|
-| `packages/scopecat/src/scopecat/project.py` | `Project` discovers code, composition, backend entry and default daemon connection | Keep code discovery; do not let its directory define scientific grouping or all session choices |
-| `packages/scopecat/src/scopecat/runtime_binding.py` | Separates workspace, data and deployment paths | This is a location/ownership foundation, not a model of chips or experimental batches |
-| `packages/scopecat-server/src/scopecat_server/runtime.py` | One data writer and deployment owner; composes services for one workspace | Multi-workspace admission needs a new source/execution ownership contract, not removal of endpoint validation |
-| `packages/scopecat/src/scopecat/application/author_project.py` and server `storage/sqlite/schema.py` | Short run numbers expose `scheduler_runs.sequence` within a store | User numbering scope is currently tied to storage rather than an explicit record collection |
-| `packages/scopecat/src/scopecat/records/sample.py` | Stable store-local sample IDs, immutable revisions, roles and relations | Preserve provenance; relations alone do not specify executable multi-chip wiring or joint calibration |
-| `packages/scopecat/src/scopecat/records/config_context.py` | Working-point context tied to one exact sample binding and registry base | Multi-sample working points need an explicit target/assembly scope |
-| `packages/scopecat/src/scopecat/records/config.py` | A complete snapshot includes topology, instruments, routing, parameter definitions and values | Separate authoring/maintenance ownership while retaining one resolved execution snapshot |
-| `packages/scopecat/src/scopecat/records/research_project.py` | Mutable many-to-many research organization around samples and runs | Research membership and history filters must not determine or renumber a run's permanent short address |
-
-The [workspace binding contract](workspace-bindings.md) remains authoritative for
-current execution. Its one-active-workspace limit is an implementation boundary
-to replace deliberately. Existing sample IDs are store-local; a common application
-must qualify imported identities by their owning catalog/store or explicitly map
-them, never merge two samples merely because both are called `chip-a`.
+Current source/workspace ownership is described in [workspace bindings](workspace-bindings.md).
+Sample and target identities remain catalog-qualified; a common application must
+not merge physical samples merely because both are named `chip-a`.
 
 ## Concepts and independent lifetimes
 
@@ -129,12 +113,9 @@ collection label, for example `chip A / cooldown 3 / #42`.
   identity. Restore/import must retain origin addresses and establish an explicit
   new ownership/branch policy before accepting new measurements.
 
-This is a proposed replacement for the store-sequence convenience API. Migration
-must retain old run IDs, evidence, source/config hashes and existing local number
-references. A possible legacy mapping is one explicit collection per original
-store with the existing sequence values; validate it against supported baselines
-before choosing a migration. Do not infer historical cooldown boundaries from
-folder names or renumber previously retained evidence automatically.
+These address invariants apply to current-format acquisition and recovery. No
+prebaseline store mapping or upgrade path is required. Do not infer historical
+cooldown boundaries from folder names or rewrite files as part of a code refactor.
 
 ## Session selection, preparation and admission
 
@@ -230,9 +211,9 @@ checks establish lifecycle behavior only.
 
 1. **Context and address contracts.** Define stable target/assembly, batch and record
    collection references; audit current short-number consumers, research filters,
-   sample/calibration scopes and supported-store migration. Specify frozen request
+   sample/calibration scopes and current-format storage. Specify frozen request
    context and conflicts. Exit: a synthetic admission/history journey demonstrates
-   collection numbering and retained legacy references without new UI navigation.
+   collection numbering and frozen evidence without new UI navigation.
 2. **Session-scoped execution.** Implement GUI/Python request context, compatible
    config composition, source-qualified workspace admission and resource authority.
    Adapt analysis, procedures and calibration consumers. Exit: two real kernels and
@@ -256,15 +237,14 @@ committing to broad GUI polish. Real device behavior remains a separate evidence
 
 ## First implementation: record addresses
 
-Schema 71 implements record collections, atomic admission-time numbering and
-collection-qualified Python/HTTP history/lookup. The legacy store-wide sequence
-lookup is retained. Explicit copy migration from schema 70 assigns default
-collection addresses without rewriting old scientific records. See
+Record collections provide atomic admission-time numbering and collection-qualified
+Python/HTTP history/lookup. Store-wide sequence lookup remains a convenience in
+the current format. The earlier development migration exercise is retired. See
 [record collections](../../how-to/record-collections.md) for the supported surface.
 
 Automated scenarios cover independent collections, concurrent allocation, retry
 conflicts, rename/restart stability, authored execution, saved-plan destinations
-and retained-data migration/restore. These cover the numbering portion of slice 1;
+and current-format recovery. These cover the numbering portion of slice 1;
 they do not complete target/assembly and batch contracts, per-session selection,
 resource authority, or the application/workbench integration in later slices.
 
@@ -299,11 +279,10 @@ arbitration across separate deployments or multi-chip calibration.
 
 ## Third implementation: declared batch applicability
 
-Schema 72 adds a stable batch catalog and an indexed run/batch association, with an
-explicit 71→72 copy migration that leaves old evidence unscoped. Sample selectors
-and immutable bindings carry an optional batch identity; physical sample identity
-and collection numbering remain independent. Existing serialized hashes are
-preserved when the optional batch is absent.
+The batch catalog and indexed run/batch association retain declared event identity.
+Sample selectors and immutable bindings can carry a batch identity; physical sample
+identity and collection numbering remain independent. An unspecified event is not
+inferred from a name or directory. No prebaseline batch migration is provided.
 
 Working points pin this binding. Session preparation checks its selected batch
 against working points, candidates and saved plans. In-place workspace advance
@@ -317,7 +296,7 @@ that event; existing unscoped integrations are not silently reclassified.
 
 Automated checks cover one chip across two batches, independent retained numbering,
 copy versus in-place relabeling, direct candidate admission, scoped calibration
-status, metadata rename/restart, and old-data migration/restore. See
+status, metadata rename/restart, and current-format recovery. See
 [experimental batches](../../how-to/experimental-batches.md).
 
 The earlier audit remains open for assembly/member identities, setup applicability,
@@ -359,7 +338,8 @@ physical connections have been validated.
 `ScientificApplicability` combines that target with an explicit declared/unscoped
 batch variant and a setup-content hash. Unscoped is not a wildcard. Strict reuse
 requires all three scopes to match. The current single-sample projection reads
-existing records without adding fields or changing their serialization/hashes.
+current records without adding stored fields. This projection is not a prebaseline
+reader or a cross-version hash-compatibility promise.
 
 The first consumer is parameter-workspace rebase. Previously it checked the sample
 and parameter declarations but could take values from a working point whose
@@ -379,7 +359,7 @@ not physical-device identity, live state verification, or hardware qualification
 ### Next coordinated implementation slices
 
 1. Define persistent, catalog-qualified target/setup references and a resolved
-   execution context, including how existing unscoped evidence is read. Replace
+   execution context with explicit unscoped semantics. Replace
    the single-sample model in one path; do not add assembly/setup optional fields
    independently to `SampleBinding`, `LaunchRequest` and `CalibrationTargetRef`.
 2. Separate maintained apparatus/setup from parameter state, retaining one complete
@@ -394,14 +374,15 @@ not physical-device identity, live state verification, or hardware qualification
    synthetic member/connection and conflict scenarios. Source-worker isolation and
    application entry can progress independently against agreed context references.
 
-Preserve retained scientific objects and acquisition addresses during these API
-changes. Compatibility readers/migrations belong at the evidence boundary; new
-write paths should converge on one model rather than preserve two active APIs.
+Within the current format, preserve scientific objects and acquisition addresses.
+During incompatible prebaseline redesigns, leave original files intact but update
+current writers/readers together rather than add old-format codecs or migrations.
+Long-term compatibility starts only with an explicitly designated future baseline.
 
 
 ## Sixth implementation: local target catalog
 
-Schema 73 persists target heads and immutable revisions. Python/HTTP create,
+The current catalog persists target heads and immutable revisions. Python/HTTP create,
 compare-and-swap revise, paginated list, latest/exact get and qualified resolve
 reuse the existing `project_identity` as catalog identity. Registration validates
 members against retained local sample revisions and connection endpoints against
@@ -409,8 +390,8 @@ their topology, atomically. Labels/audit data are retained per revision but excl
 from scientific target-content hashes. Foreign-catalog references are rejected;
 restoring the existing data space preserves its identity and references.
 
-The 72→73 copy migration adds empty catalog tables and does not reinterpret old
-runs or manufacture target references. See [target registration](../../how-to/register-measurement-targets.md).
+Prebaseline target-store migrations are retired; new builds do not infer target
+references for earlier data. See [target registration](../../how-to/register-measurement-targets.md).
 This completes catalog registration only: launch selection, exact target freezing
 at admission, working-point/calibration migration and assembly execution remain
 pending. No new target field was appended to the existing launch/run JSON contracts.

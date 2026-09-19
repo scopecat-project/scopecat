@@ -10,7 +10,10 @@ the [project charter](project-charter.md), not a change to its single-user scope
 The readiness table and P01–P16 sequencing below describe that historical
 baseline, not the remaining implementation backlog. Consult the linked issues
 for delivery status; completed framework work does not imply independent human
-or hardware acceptance.
+or hardware acceptance. Historical upgrade/old-reader items below are superseded
+by the [prebaseline data policy](data-compatibility.md): schema 68–74 exercises
+are retired, and only current-format backup/restore is maintained before a future
+baseline is designated.
 
 Current follow-through is organized around:
 
@@ -21,7 +24,7 @@ Current follow-through is organized around:
 - workspace/data/deployment binding [#572](https://github.com/scopecat-project/scopecat/issues/572),
   with the [code audit and minimal contract](architecture/workspace-bindings.md);
 - persistent research/sample history [#573](https://github.com/scopecat-project/scopecat/issues/573)
-  and explicit compatibility/restore [#574](https://github.com/scopecat-project/scopecat/issues/574),
+  and future baseline/current-format recovery [#574](https://github.com/scopecat-project/scopecat/issues/574),
   followed by portable evidence [#575](https://github.com/scopecat-project/scopecat/issues/575);
 - daily parameter saving [#560](https://github.com/scopecat-project/scopecat/issues/560),
   typed analysis arguments [#486](https://github.com/scopecat-project/scopecat/issues/486)

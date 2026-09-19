@@ -55,3 +55,8 @@ freezing the current UI.
 
 See the [reference fixture ownership map](reference-fixtures.md) before adding
 another full-laboratory example or journey.
+
+
+Persistent-format changes follow the [prebaseline data policy](data-compatibility.md).
+Current-format recovery remains tested; old development migration exercises do
+not establish a compatibility baseline or require new readers.

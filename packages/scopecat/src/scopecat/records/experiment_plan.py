@@ -16,7 +16,10 @@ from pydantic import (
 
 from scopecat.kernel.frozen import FrozenMapping, freeze_json_mapping, thaw_json_value
 from scopecat.records.author_revision import AuthorRevisionRef
-from scopecat.records.author_workspace import AuthorWorkspaceId, absent_workspace
+from scopecat.records.author_workspace import (
+    SERVICE_AUTHOR_WORKSPACE,
+    AuthorWorkspaceId,
+)
 from scopecat.records.config_context import ConfigContextRef
 from scopecat.records.content import Sha256ContentHash
 from scopecat.records.control_edit import ControlEdit
@@ -63,9 +66,7 @@ class ExperimentPlanDefinition(BaseModel):
     experiment: str = Field(min_length=1)
     version: str = Field(min_length=1)
     definition_hash: Sha256ContentHash
-    workspace_id: AuthorWorkspaceId | None = Field(
-        default=None, exclude_if=absent_workspace
-    )
+    workspace_id: AuthorWorkspaceId = SERVICE_AUTHOR_WORKSPACE
     code_revision: AuthorRevisionRef | None = None
     inputs: PlanInputs = Field(default_factory=dict)
     control_edits: PlanControlEdits = Field(default_factory=dict)

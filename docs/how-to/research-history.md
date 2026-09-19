@@ -46,7 +46,8 @@ cursor (`before` for projects/runs, `after` for memberships). Use
 and `associate_research_member(..., present=False)` to detach an association.
 Stable IDs remain unchanged when display names change.
 
-This feature uses schema 73. Opening an older store never migrates it implicitly.
+This feature uses the current development format. Older formats are rejected;
+see the [data policy](../development/data-compatibility.md).
 Retain its matching reader and follow [backup and restore](backup-and-restore.md).
 Shared names or column layouts do not establish scientific comparability across
 runs: units, method, configuration and conditions still need explicit review.

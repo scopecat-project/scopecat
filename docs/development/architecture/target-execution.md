@@ -3,8 +3,10 @@
 Status: concrete implementation contract for [#626](https://github.com/scopecat-project/scopecat/issues/626),
 audited at `3ddaeb27b` after target catalog PR #625. This is a design, not shipped
 execution support. It refines [experiment contexts](experiment-contexts.md).
-Workspace publication owns the concurrent source-side changes and schema 74;
-this work reserves neither that schema number nor its shared files.
+This design follows the [prebaseline data policy](../data-compatibility.md).
+Current format 75 is not a compatibility baseline; no old-format reader or
+migration obligation is introduced here. Coordinate shared source-side files
+with workspace publication.
 
 ## What must change in the existing path
 
@@ -17,7 +19,7 @@ this work reserves neither that schema number nor its shared files.
 | `daemon/wire.py::RunSubmission.intent_content_hash` | Hashes submitted config/request/plan; procedure-child identity is deliberately excluded | Include the complete new scientific binding in the new intent codec; retain existing child/parent consistency rules |
 | server `services/admission.py` | Replays first, resolves samples, stages immutable objects, then commits admission/address/sample indexes together | Independently validate exact target evidence and commit its durable association in the same transaction |
 | `records/experiment_plan.py`, server `services/experiment_plans.py` | Recipes retain one exact `SampleBinding` and config/context; child step checks the submission hash | Version new recipe definitions and freeze scientific binding through parent and child |
-| `automation/calibrations.py` | Target has sample/context/batch but no exact sample revision or setup reference | Keep it explicitly outside new target-qualified evidence until the applicability migration below |
+| `automation/calibrations.py` | Target has sample/context/batch but no exact sample revision or setup reference | Keep it explicitly outside new target-qualified evidence until the applicability redesign below |
 
 `TargetCatalogStore.resolve` already rejects a foreign catalog, checks exact revision
 and content hash, and reads immutable content. Use it, not `get(target_id)` followed
@@ -112,18 +114,17 @@ checks. Registration alone never certifies configuration or calibration validity
 ## Frozen evidence and transaction boundary
 
 Use a versioned, immutable scientific-binding object associated with the admitted
-run. The current snapshot/request/config object formats can remain unchanged as
-legacy-shaped execution records; their sample fields are a deterministic projection
-of the binding, not a second caller-controlled authority. A new live submission
+run. Current snapshot/request/config records may remain the execution projection;
+their sample fields are a deterministic projection of the binding, not a second caller-controlled authority. A new live submission
 must supply the binding, and the server rejects disagreement with those fields.
 
 Store its content-addressed object through the existing run repository and record
 its association alongside the admission, collection address and sample indexes in
 one write transaction. Reserve a dedicated repository reference and, if indexed
 lookup is required, an additive association table in a separately coordinated
-schema migration. Do not allocate a schema number while workspace publication's
-migration is in flight. Retain the exact target revision/content and projection,
-so inspection does not depend on a mutable target head or executing old code.
+format change. Coordinate its schema identifier with other in-flight storage
+changes; it does not designate a supported baseline. Retain the exact target
+revision/content and projection, so inspection does not depend on a mutable target head or executing old code.
 
 Admission order:
 
@@ -135,8 +136,9 @@ Admission order:
 3. Stage immutable binding/config/request/snapshot objects. Publish their repository
    refs, indexes and address together with admission. Failed validation allocates
    no visible run/address; transaction rollback publishes no partial binding.
-4. Return a read view exposing the retained binding. Reading a pre-feature run
-   reports explicitly that no registered-target binding was recorded.
+4. Return a read view exposing the retained binding. Do not infer a target binding
+   for evidence that did not record one. Unsupported prebaseline records need no
+   new-format read adapter.
 
 Target head advancement after preparation is allowed: the old immutable revision
 is still the reviewed target. Apparatus/config generation conflicts retain current
@@ -145,30 +147,29 @@ the same retry ID with another target ref/content is a content conflict. A renam
 revision may have the same target-content hash, but its exact reference differs
 and cannot replace the reviewed reference under the same retry key.
 
-## Plans, procedure children and old hashes
+## Plans and procedure children in the current contract
 
-Introduce explicit codecs for new selection/preparation/submission and recipe
-content. Keep old persisted decoders and hash algorithms at the evidence boundary.
-Do not reinterpret a missing binding as today's target or recompute old receipts
-with a new model containing defaults.
+Selection/preparation/submission and recipe content need explicit format identities
+for the new design. Current producers and consumers must agree; this does not
+require preserving prebaseline codecs, missing-field defaults or legacy recipe
+adapters. Changing the development format may reject earlier stores while leaving
+their files intact.
 
 - New saved recipes retain the resolved subject/config scientific binding. Reopening
   does not select the latest target or inherit a conflicting session target/batch.
 - The parent procedure's admitted step intent includes the binding. Its child must
   submit that same evidence and hash; `_require_plan_child` currently checks this
-  hash, so changing only the direct-run submission path is insufficient.
-- Reading a legacy recipe preserves its stored bytes/hash/ref. Running it requires
-  fresh preparation into the new submission codec, using its exact historical
-  sample/config as `inline_sample`; no target ref is inferred. Saving an edited
-  recipe creates new-version content with an explicit predecessor reference.
-- Previously admitted old submissions/steps stay readable and replayable through
-  their retained codec. They are not exposed as a second general-purpose legacy
-  new-admission API. Resume of old pending execution must follow a deliberate
-  migration/unsupported-version policy, not silently upgrade a durable step intent.
+  hash, so changing only direct-run submission is insufficient.
+- Within the current format, exact retries retain their original scientific intent,
+  source/config hashes, addresses and refs. Edits create new artifacts rather than
+  modifying a retained recipe.
+- A future supported baseline will define which earlier formats can be read,
+  resumed or upgraded. Before it exists, no old-plan conversion, legacy-step replay
+  or old-submission reader is a prerequisite for this implementation.
 
-Preserve existing config hashes, source hashes, sample revisions, proposal evidence,
-plan references and acquisition addresses. This is not a reason to retain replaced
-live request fields or duplicate session resolvers indefinitely.
+Historical files stay intact for owners' archival arrangements. Do not silently
+reinterpret old scientific content, and do not retain replaced live request fields
+or duplicate session resolvers solely for development-format compatibility.
 
 ## Setup and calibration: minimum non-optional boundaries
 
@@ -188,7 +189,7 @@ The following cannot be omitted from the next setup/calibration implementation:
 | Calibration identity | Use resolved target/member-qualified entity and applicability in new keys/freshness; store the exact target ref as provenance but exclude target label-only changes from scientific validity |
 | Dependencies | Initially require matching declared scope. Single-chip evidence does not automatically satisfy joint calibration; unscoped/foreign setup evidence is not a wildcard |
 | Publication | Recheck expected working-point head and applicability when publishing, and record input/result scope. A stale publication must not become valid by changing the selected target |
-| Historical success | Old calibration keys/freshness codecs remain readable; missing target/setup evidence cannot be filled from today's catalog/config |
+| Evidence boundary | No success may be assigned target/setup evidence it did not record; prebaseline keys/codecs need no new reader |
 
 For registered targets, the new calibration key includes owning catalog, stable
 target ID and member-qualified entity identity. Freshness includes target-content
@@ -200,8 +201,9 @@ explicit key variant, not an inferred registered target.
 
 `calibration_freshness_fingerprint` already hashes definition, target, procedure,
 inputs and dependency evidence; changing its target model in place would change
-old validation. Introduce a new version and migrate live writers together. Do not
-extend `CalibrationTargetRef` with independent optional target/setup fields and
+the format contract. Replace current writers/readers together and give the new
+format an explicit identity; retaining prebaseline validators is not required.
+Do not extend `CalibrationTargetRef` with independent optional target/setup fields and
 assume batch equality completes applicability.
 
 ## Delivery and ownership
@@ -213,19 +215,18 @@ assume batch equality completes applicability.
    an execution feature only when the next consumer lands. Avoid an unused parallel
    registry or a public "ready to execute" claim.
 2. **After source publication contracts land:** one owner replaces scientific live
-   selection fields, integrates the resolver and v2 prepared/submission identity,
+   selection fields, integrates the resolver and new prepared/submission identity,
    including the direct Python runner. Shared files are `author_project.py`,
    `launch_request.py`, `daemon/client.py`, HTTP transport and generated UI contracts.
-3. **Same coordinated execution feature:** admission/repository/migration, saved
-   recipe codec and procedure-child propagation land together or behind an internal
+3. **Same coordinated execution feature:** admission, repository, current-format
+   storage, saved recipe codec and procedure-child propagation land together or behind an internal
    non-user-visible staging boundary. Do not ship a target-enabled preview that
    drops the target at admission. UI selection follows the same resolver.
 4. **Next feature:** maintained setup and target-qualified working-point/calibration
    publication. Pure scope comparison tests can proceed independently; changing
    durable calibration keys before new exact inputs exist cannot.
 
-The current slice is documentation only. It does not change schema 73, execute a
-target, or relax runtime binding, source qualification or resource authority.
+This design does not designate a compatibility baseline, execute a target, or relax runtime binding, source qualification or resource authority.
 
 ## Focused acceptance before claiming target execution
 
@@ -241,7 +242,7 @@ target, or relax runtime binding, source qualification or resource authority.
 | Fail binding/index commit | No admitted run/address with a missing or mismatched scientific binding |
 | Candidate or working point from another sample/batch | Direct and authored paths reject; an explicit estimate copy remains distinct from evidence reuse |
 | Target-bearing saved recipe produces a procedure child | Parent and child binding/hash agree; session defaults cannot override it |
-| Read/migrate old run and recipe | Original hashes/refs/addresses preserved; no invented target/setup; freshly prepared legacy recipe uses explicit inline-sample evidence |
+| Current-format recovery and unsupported formats | Backup/restore preserves current binding/ref/address; unsupported formats are rejected without rewriting files or inferring target/setup |
 | Label-only target revision; changed scientific target content | Old provenance stays exact; the future applicability comparator distinguishes metadata from scientific changes |
 
 These are unpassed acceptance requirements for #626. Keep them as short synthetic

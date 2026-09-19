@@ -55,15 +55,14 @@ New named collections start at 1 and allocate independently. Use the collection 
 alongside its number when sharing a short address; retain `run.id` for existing
 machine references. Collection names are labels, not identifiers.
 
-The current storage schema is **73**. The explicit
-[copy migration](migrate-data.md) maps each old scheduler run to the default
-collection using its unchanged number and run ID. It does not infer cooldowns or
-split old data by folders. The default collection ID derives from the retained
-store identity, so migrating/restoring the same evidence preserves its addresses.
+The default collection ID derives from the current store identity.
+[Current-format backup/restore](backup-and-restore.md) retains its addresses;
+there is no supported import or upgrade of earlier development stores. Keep old
+files separately under the [data policy](../development/data-compatibility.md).
 
 This is the storage and Python/HTTP foundation for the
 [experiment workbench context](../development/architecture/experiment-contexts.md).
 [Notebook session selection](select-session-context.md) can remember a collection
-per client/kernel. There is not yet a page-local GUI selector, cross-store catalog
-or collection-aware GUI number display. A collection alone neither isolates hardware
+per client/kernel, and the experiment workbench has page-local selection. There
+is no cross-store catalog. A collection alone neither isolates hardware
 nor copies working-point parameters; teaching still uses its existing isolation.

@@ -219,11 +219,11 @@ Distinguish editor undo, reverting a saved definition, reverting laboratory
 configuration and cancelling execution. They have different consequences. Editing
 an old version creates a new revision; it never changes a retained run.
 
-Document migrations are explicit and create a new artifact/revision. Historical
-records retain the original representation and its declared format version.
-Long-term read-only inspection may need archived normalized views or readers;
-do not promise unlimited historical editability. Prototype this before choosing
-a permanent format. A migration must not silently update scientific recipes.
+Within a supported format, document edits create new artifacts/revisions rather
+than changing retained scientific recipes. No document migration or legacy reader
+is required for prebaseline prototypes; leave historical files intact under the
+[data policy](../data-compatibility.md). Specify long-term read/edit/upgrade scope
+when a future baseline is designated, not as an implicit obligation here.
 
 ## History, replay and sharing
 

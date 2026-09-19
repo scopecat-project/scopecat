@@ -25,10 +25,8 @@ from scopecat.runtime_binding import RUNTIME_BINDING_NAME
 from scopecat_server.storage.sqlite.object_store import ImmutableObjectStore
 from scopecat_server.storage.sqlite.project_store import (
     inspect_project_schema,
-    require_schema_version,
+    require_current_schema,
 )
-
-SUPPORTED_SNAPSHOT_SCHEMAS = (68, 69, 70, 71, 72, 73, 74)
 
 _DATABASE = Path(".scopecat/control.sqlite3")
 _OBJECTS = Path(".scopecat/objects")
@@ -110,14 +108,13 @@ def create_snapshot(project: Project, destination: Path) -> SnapshotManifest:
                 if relative.name.endswith(".tmp") and relative.name.startswith("."):
                     continue
                 _copy(data_root / "objects" / relative, objects / relative)
-            for folder in ("author-jobs", "migrations"):
-                receipts = data_root / folder
-                if receipts.exists():
-                    for relative in _files(receipts):
-                        _copy(
-                            receipts / relative,
-                            captured / ".scopecat" / folder / relative,
-                        )
+            receipts = data_root / "author-jobs"
+            if receipts.exists():
+                for relative in _files(receipts):
+                    _copy(
+                        receipts / relative,
+                        captured / ".scopecat/author-jobs" / relative,
+                    )
             # SQLite's copy primitive is used only after stopped-project ownership
             # is acquired. It folds a retained WAL into a standalone destination
             # database without checkpointing or changing the source database.
@@ -205,11 +202,8 @@ def restore_snapshot(snapshot: Path, destination: Path) -> SnapshotManifest:
 def stopped_store(root: Path) -> Generator[sqlite3.Connection]:
     database = root / "control.sqlite3"
     # Inspect before acquiring a lock file or opening any write connection so an
-    # unsupported schema never enters the bootstrap/migration path.
-    if (
-        inspect_project_schema(database, supported_versions=SUPPORTED_SNAPSHOT_SCHEMAS)
-        is None
-    ):
+    # unsupported schema never enters the snapshot write path.
+    if inspect_project_schema(database) is None:
         raise SnapshotError("project database has not been initialized")
     retained_wal = database.with_name(database.name + "-wal").exists()
     try:
@@ -252,9 +246,7 @@ def verify_store_files(project: Path) -> int:
     with closing(
         read_snapshot_database(project / _DATABASE, immutable=True)
     ) as connection:
-        version = require_schema_version(
-            connection, supported_versions=SUPPORTED_SNAPSHOT_SCHEMAS
-        )
+        version = require_current_schema(connection)
         integrity = cast(
             "list[sqlite3.Row]", connection.execute("PRAGMA integrity_check").fetchall()
         )
@@ -300,7 +292,6 @@ def _allowed_path(path: PurePosixPath) -> bool:
         return True
     return (
         path.is_relative_to(PurePosixPath(".scopecat/author-jobs"))
-        or path.is_relative_to(PurePosixPath(".scopecat/migrations"))
         or path == PurePosixPath(_DATABASE)
         or (path.is_relative_to(PurePosixPath(_OBJECTS)) and len(path.parts) == 4)
     )

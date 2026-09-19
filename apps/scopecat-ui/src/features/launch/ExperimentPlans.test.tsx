@@ -28,6 +28,7 @@ function plan(id: string, name: string): PlanRevision {
     saved_by: "alice",
     saved_at: "2026-09-09T00:00:00Z",
     definition: {
+      workspace_id: "legacy",
       scan_mode: "cartesian",
       parameter_sweeps: [],
       experiment: "signal",
@@ -74,6 +75,7 @@ function Harness({
         onClick={() =>
           void context.submit(
             {
+              workspace_id: "legacy",
               scan_mode: "cartesian",
               parameter_sweeps: [],
               action: "submit",

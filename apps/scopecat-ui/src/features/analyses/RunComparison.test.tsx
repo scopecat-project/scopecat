@@ -44,7 +44,7 @@ it("retains ordered selections and exact publication through explicit candidate,
         title: outputId,
         metadata: {},
         content: {
-          schema_id: "scopecat.comparison-request.v1",
+          schema_id: "scopecat.comparison-request.v2",
           schema_codec: "scopecat.analysis-fact-schema.v1",
           schema_hash: "sha256:test",
           codec: "json",

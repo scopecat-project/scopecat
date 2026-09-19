@@ -1,4 +1,4 @@
-"""在新位置准备独立环境,读回迁移/恢复副本并追加分析。"""
+"""在新位置准备独立环境,读回当前格式的恢复副本并追加分析。"""
 
 from __future__ import annotations
 
@@ -8,27 +8,24 @@ from pathlib import Path
 from typing import Protocol, cast
 
 
-def verify_copies(root: Path, *, static_dir: Path | None = None) -> None:
+def verify_restore(root: Path, *, static_dir: Path | None = None) -> None:
     from .environment import prepare_project
 
     output = root.with_name(root.name + "-maintenance")
+    output.mkdir()
     cli = [sys.executable, "-m", "scopecat_server.cli"]
     for arguments in (
-        ["migration", "plan", str(root)],
-        ["migration", "copy", str(root), str(output)],
+        ["snapshot", "create", str(root), str(output / "original")],
         ["snapshot", "verify", str(output / "original")],
         ["snapshot", "restore", str(output / "original"), str(output / "restored")],
     ):
         _ = subprocess.run([*cli, *arguments], check=True)  # noqa: S603 - explicit local tool and argument list
-    for name in ("project", "restored"):
-        project = output / name
-        python = prepare_project(
-            project, bundle=static_dir.parent if static_dir else None
-        )
-        command = [str(python), "-m", "lab_tools.verify_maintenance", str(project)]
-        if static_dir is not None:
-            command.extend(("--static-dir", str(static_dir)))
-        _ = subprocess.run(command, check=True)  # noqa: S603 - explicit local tool and argument list
+    project = output / "restored"
+    python = prepare_project(project, bundle=static_dir.parent if static_dir else None)
+    command = [str(python), "-m", "lab_tools.verify_maintenance", str(project)]
+    if static_dir is not None:
+        command.extend(("--static-dir", str(static_dir)))
+    _ = subprocess.run(command, check=True)  # noqa: S603 - explicit local tool and argument list
     print("备份副本、独立环境恢复、原结果读回及新增分析通过", flush=True)
 
 

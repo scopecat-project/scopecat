@@ -1,118 +1,53 @@
 # Workspace, data space and execution binding
 
-Current status: schema 74 implements workspace-scoped publication described in
-[the implementation section below](#workspace-scoped-author-publication).
-The initial audit and binding sections retain their historical schema-68 context
-against `a12fe550a`; they are not the current schema or admission limit. See the
-supported [project layout](../../reference/project-layout.md#bind-a-workspace-to-persistent-local-data)
-and [restore behavior](../../how-to/backup-and-restore.md#separately-located-data).
-[#572](https://github.com/scopecat-project/scopecat/issues/572) tracks integration
-acceptance. Remote execution and differing dependency environments remain outside
-this local qualification.
+Current format: schema **75** supports workspace-scoped author publication within
+one qualified local service. It is a development format, not a compatibility
+baseline. Earlier schema/migration exercises are retired; this page describes
+current behavior only. See the [data policy](../data-compatibility.md),
+[project layout](../../reference/project-layout.md#bind-a-workspace-to-persistent-local-data)
+and [current-format restore](../../how-to/backup-and-restore.md#separately-located-data).
 
-## Pre-implementation contracts and gaps
+## Current ownership contract
 
-Paths below are repository-relative implementation locations.
+1. **Workspace:** the source directory discovered by `open_project()`. Its location
+   supplies maintained composition and authored code; it is not scientific identity.
+2. **Data space:** SQLite, immutable objects, retained source bundles and durable
+   receipts share one persistent identity independent of paths. One writer owns it.
+3. **Execution deployment:** one configured owner of backend composition/device
+   bindings and one selected data space. Its canonical ownership location is shared
+   by authorized launch paths; moving code does not release that ownership.
+4. **Registered author source:** each registered workspace has its own publication
+   head, preparations and qualified worker binding. Opening a folder or connecting
+   a client does not register code, acquire hardware or replace another source.
 
-| Concern | Existing implementation | Required change |
-|---|---|---|
-| Workspace discovery | `packages/scopecat/src/scopecat/project.py`: `open_project()` walks upward; `Project.root` supplies composition and mutable source | Preserve discovery and the workspace root; resolve a separate explicit runtime binding |
-| Persistent storage | `packages/scopecat-server/src/scopecat_server/runtime.py`: SQLite and immutable objects live under `<root>/.scopecat`; `SQLiteProjectStore` already owns their physical paths | Resolve these paths from the data space; retain existing run, sample, parameter and object identities |
-| Service identity | `runtime._project_id()` hashes the absolute workspace path; `services/application.py` exposes it through health | Persist a data-space identity independent of code paths; expose and validate deployment and selected workspace identity separately |
-| Discovery and lifecycle | `packages/scopecat/src/scopecat/daemon/endpoint.py` and server `lifecycle.py`: endpoint, process identity and shutdown token are workspace-local; explicit URL/environment overrides bypass record checks | Resolve the selected binding and compare it with service health, including explicit endpoints; do not silently attach to another workspace's author service |
-| Writer ownership | Runtime holds `<root>/.scopecat/daemon.lock`; SQLite coordinates work within that owner | Lock the canonical data space, not each launch directory; also reserve the configured execution deployment before backend construction |
-| Instrument ownership | Instrument generations, leases, claims and unknown-effect quarantine operate within one daemon/store | Preserve these mechanisms; they do not establish exclusion across independently configured stores |
-| Author source | `project_sources.py` captures relative files, environment and installed-package content; `services/author_revisions.py` publishes content-addressed revisions and a single active generation | Bind exactly one mutable workspace to the service; preserve retained revisions and explicit refresh/publication |
-| Source loading | Server `author_worker.py` and `services/author_revisions.py` materialize under `<root>/.scopecat/code`; workers separately use the runtime root and captured code root | Carry resolved runtime paths through workers; never resolve live storage from the archived manifest or infer it from the materialized source directory |
-| Receipts and auxiliary state | `Project.authoring()` stores `author-jobs` under the workspace; procedure workers, diagnostics and logs also derive paths from it | Classify each as durable evidence or regenerable runtime state and route it to its owner; moving only SQLite is insufficient |
-| Snapshot and restore | Server `snapshots.py` locks a stopped project, copies SQLite plus objects, validates references and restores without executing code | Extend inventory/path ownership for external data spaces and durable receipts; current snapshot format excludes `author-jobs`, caches, endpoint records and diagnostics |
+`scopecat.runtime.toml` resolves workspace, data and deployment paths. It is local
+machine configuration, excluded from captured source and snapshots. Runtime paths
+come from the live binding, never a retained manifest. Hardware deployments select
+their maintained owner explicitly. Different dependency environments and remote
+execution remain outside this local qualification.
 
-The path-derived `project_id` is currently a health identity, not a reason to
-rewrite every run or sample record. Reuse existing content hashes and IDs.
-Research-project grouping belongs to [#573](https://github.com/scopecat-project/scopecat/issues/573);
-format migration and supported baselines belong to
-[#574](https://github.com/scopecat-project/scopecat/issues/574).
+## Ownership and recovery
 
-## Minimal binding contract
+- Acquire deployment ownership, then data-writer ownership, before constructing a
+  hardware backend. Failed startup releases both reservations.
+- Endpoint and health checks validate registered source, data and deployment owners;
+  an explicit URL does not authorize rebinding or source substitution.
+- Existing device generations, leases and unknown-effect quarantine remain in
+  force. Unrelated declarations that secretly share an instrument are not solved
+  by data-directory locks or registration.
+- Within the current format, switching source or moving its registered location
+  retains scientific identity, source/config hashes and run addresses. Publication
+  is explicit and cannot relabel another source's retained receipts.
+- Reading retained results is distinct from executing their source. Execution still
+  checks captured environment and maintained composition and never automatically
+  replays uncertain hardware work.
+- Current-format backup restores into a fresh location without an endpoint, local
+  source binding or device dispatch. Independent writable clones and cross-store
+  imports require separate identity/ownership policy.
 
-1. **Workspace:** the directory discovered by `open_project()`, containing local
-   composition, authored source and its manifest. `Project.root` continues to
-   mean this directory. Its absolute path is a location, not scientific identity.
-2. **Data space:** the owner of SQLite, immutable objects, retained source bundles
-   and durable author receipts. A newly initialized store receives a persistent
-   ID under exclusive ownership; it is not generated from a workspace or storage
-   path. Opening existing state does not silently assign a new scientific history
-   or perform a format upgrade.
-3. **Execution deployment:** a locally configured owner of backend composition,
-   device binding and one selected data space. It has a stable identity and a
-   canonical local ownership location shared by every authorized launch path.
-   Changing software directories does not change that ownership location.
-4. **Active author binding:** the running service selects exactly one workspace.
-   Another workspace may replace it only after an explicit stop and validated
-   restart. Merely opening a folder or connecting a notebook does not switch
-   mutable source, install dependencies, refresh revisions or acquire instruments.
-
-The resolved internal binding carries workspace root, data root and identity,
-deployment identity and ownership location. The separate runtime file requires
-`[runtime].data_root` and `deployment_root`; it is excluded from source capture
-and snapshots. Runtime consumers resolve it from the live workspace, never the
-retained code directory. Local synthetic projects may
-use a colocated default. Hardware consumers select their deployment explicitly.
-No general remote execution or independent client/server dependency matrix is
-introduced by this contract.
-
-## Ownership and transition rules
-
-- Acquire deployment ownership, then data-space writer ownership, before loading
-  a hardware backend. Release already-acquired resources if either reservation
-  fails. Two workspaces targeting one data space must not start two services;
-  two data spaces targeting one configured deployment must also conflict.
-- Health/discovery must identify the data space, deployment and selected mutable
-  workspace, in addition to the existing process identity checks. A mismatched
-  author connection fails before submission or refresh. Endpoint overrides do
-  not authorize rebinding.
-- The deployment mapping is maintained configuration. This does not detect two
-  unrelated deployment declarations that secretly refer to the same physical
-  instrument; arbitrary cross-host/SDK arbitration remains out of scope.
-- Switching A to B retains the same data-space ID and old run/parameter/sample
-  references. A changed workspace supplies new source only through the existing
-  validated publication path. It cannot relabel old receipts or replace retained
-  source with today's files.
-- Read access to original results and saved analyses is distinct from executing
-  old code. `require_environment()` and maintenance-hash checks remain relevant
-  to re-execution. A new software version does not automatically qualify an old
-  revision for execution or resume interrupted hardware work.
-- Captured `scopecat.toml` currently contributes to the maintenance hash. Separating
-  deployment binding from code must preserve the captured bytes and old hashes;
-  runtime location resolution must not follow stale paths in retained manifests.
-  Do not weaken maintenance checks merely to make a moved workspace pass.
-- Backup includes all declared durable owners and restores to a fresh location
-  without a live endpoint or device dispatch. A recovery copy retains lineage;
-  independent writable copies and their identity/import semantics require the
-  explicit policy in #574/#575, not accidental cloning by a folder copy.
-
-## Implementation slices and acceptance
-
-| Slice | Owned changes | Required observable result |
-|---|---|---|
-| Binding and store identity | Typed project binding, store metadata, path resolution and schema policy | Two workspace locations resolve one explicit data space; identity survives a code-directory move; unsupported old stores are rejected without mutation |
-| Lifecycle and ownership | Endpoint/health models, start/stop, deployment and data locks, config-command clients | Same-data and same-deployment conflicts fail before backend construction; explicit endpoint mismatch fails; failed startup releases its reservations |
-| Author and worker consumers | Receipts, revision service, validation/analysis/procedure workers, diagnostics | A publishes and runs; after stopping A, B attaches to the same history; old results and source refs remain readable, new refresh uses B, competing bindings fail |
-| Recovery and integrated journey | Snapshot inventory, restoration and installed starter | Snapshot external data and durable receipts; restore elsewhere and read/verify retained evidence without original paths or dispatch; restart and source/environment mismatch behavior remain explicit |
-
-Use `packages/scopecat/tests/project/test_project.py`, daemon endpoint tests,
-server `test_lifecycle.py`/`test_runtime.py`, author revision tests and
-`test_snapshot_integration.py` as existing coverage seams. Add one installed,
-synthetic A-to-B journey covering actual processes, receipts and restart. Keep
-run-like checks serial locally. Fast CI and self-review precede public merge in
-the current integration window; full installed/Windows acceptance is a milestone
-closeout gate. Hardware admission is a separate consumer qualification.
-
-The installed acceptance fixture is `scripts/verify_workspace_binding.py`, also
-run by `verify_pilot_bundle.py` and the runtime-binding journey tests. It checks
-competing author/service bindings, A-to-B history and config, original/current
-analysis, receipts and restoration after removing the original directories.
-Scientific and physical-device qualification remains external to that fixture.
+These invariants do not require new software to decode prebaseline formats. Leave
+unsupported files untouched; owner-maintained historical environments are archival
+arrangements, not a Scopecat migration service.
 
 ## Revision worker binding
 
@@ -134,7 +69,7 @@ of qualifying its original code for execution.
 
 ## Workspace-scoped author publication
 
-Schema 74 implements the vertical contract below for
+The current format implements the vertical contract below for
 [#630](https://github.com/scopecat-project/scopecat/issues/630), within
 [#613](https://github.com/scopecat-project/scopecat/issues/613). The application host
 registers whole deployments; this catalog registers author sources within one.
@@ -148,13 +83,13 @@ scopecat register-workspace /path/to/second --service /path/to/service
 Then start from the service workspace. The returned stable workspace ID selects
 independent publication state. Opening `Project`/`AuthorProject` from a registered
 source uses that owner automatically; connecting never registers a path. Only the
-service source can start the daemon, snapshot or migrate the shared store. The GUI
+service source can start the daemon or snapshot the shared store. The GUI
 defaults to its service owner and preserves saved-plan and handoff source owners.
 
 Machine-local bindings live in the data directory's `author-workspaces.json`,
-separate from persistent source membership. They are excluded from snapshots and
-not inherited by a migration copy, even with a shared deployment lock. After
-restore, historical runs and bundles remain readable without those paths. For
+separate from persistent source membership. They are excluded from snapshots.
+After a current-format restore, retained runs and bundles remain readable without
+those paths. For
 executable access, stop the service and explicitly register qualified source with
 `--identity EXISTING_WORKSPACE_ID`; unknown IDs and `legacy` are rejected. Moving
 an identity revokes its old location. Portable multi-source installation bundles
@@ -195,7 +130,7 @@ as another writable deployment.
 
 Keep `AuthorRevisionRef` as the immutable content hash: identical bundles can share
 stored content. Workspace identity qualifies publication and execution ownership;
-it must not change the bundle's historical content hash.
+it must not change a retained current-format bundle's content hash.
 
 - Make workspace selection explicit on the daemon client connection. The workbench
   and Notebook bind that identity before catalog browsing or refresh. Unregistered
@@ -221,7 +156,7 @@ it must not change the bundle's historical content hash.
 
 For a run's original-source analysis, recover the retained source owner/revision;
 `source="current"` explicitly selects a qualified workspace's current revision.
-Old results remain readable when that workspace is unavailable. Different working
+Current-format retained results remain readable when that workspace is unavailable. Different working
 points, batches or record collections do not select another source implicitly.
 
 ### Replace the singleton and route lifecycle by owner
@@ -245,26 +180,23 @@ qualifying another workspace must not introduce an unbounded worker pool.
 Do not retain an implicit globally active workspace for old routes after all
 current callers have moved to the explicit contract.
 
-The copy migration gives the old singleton and preparations one explicit legacy
-workspace identity, copies generation and content references, then retires the
-singleton bookkeeping in the destination. Preserve preparation JSON/evidence,
-source bundles, receipts, run IDs, source/config hashes and record addresses.
-Historical records without a workspace field resolve to this designated legacy
-owner; do not infer identity from paths, labels or today's selected workspace.
-This is a supported-data read rule, not a parallel mutable legacy author service.
-Machine-local locations must be rebound before execution after restore.
+The service workspace has the explicit reserved identity `legacy` in the current
+format. This is a valid current owner, not a rule for interpreting missing fields
+in old data. Source ownership must be recorded explicitly; do not invent it from
+paths, labels, a missing field or today's selected workspace. Machine-local
+locations must be rebound before execution after restore.
 
 ### Dependencies, owned files and exit evidence
 
 | Work | Main consumers | Required completion |
 |---|---|---|
-| Catalog and copy migration | `records/author_revision.py`, SQLite author repository/schema/migrations/snapshots | Legacy retained data opens without evidence/hash changes; two workspace heads and preparations are independent |
+| Catalog and current-format recovery | `records/author_revision.py`, SQLite author repository/schema/snapshots | Two workspace heads/preparations are independent; current-format backup/restore preserves source membership |
 | Service qualification | `services/author_revisions.py`, `services/application.py`, `runtime.py` | Registered owner resolves baseline/binding; incompatible maintenance/environment is rejected before publication |
 | Connection and requests | `daemon/client.py`, `daemon/endpoint.py`, HTTP transport, `LaunchRequest`, retained worker calls | No arbitrary path admission or silent workspace fallback; preview/submission bind exact source |
 | Python and workbench callers | `Project`, `AuthorProject`, Notebook workspace, catalog/refresh UI and generated API | Existing single-workspace flows use the explicit owner; switching one client leaves another untouched |
 | Execution consumers | Author/validation/retained workers, saved plans and procedure launch | Exact original source and child provenance survive refresh/restart; same-name packages remain process-isolated |
 
-Own this vertical chain in one worktree after the target-catalog migration lands;
+Own changes to this vertical chain in one coordinated worktree;
 coordinate edits to launch/source records, transport and schema with the target
 and application-host owners. The host registry work can proceed independently;
 it registers a deployment, not an author workspace inside that deployment.

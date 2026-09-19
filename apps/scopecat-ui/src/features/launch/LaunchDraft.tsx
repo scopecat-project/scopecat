@@ -29,7 +29,7 @@ export interface LaunchDraft {
   planDirty?: boolean;
   configuration?: PlanRevision["definition"]["configuration"];
   sampleBinding?: PlanRevision["definition"]["sample"];
-  workspaceId?: string | null;
+  workspaceId?: string;
   codeRevision?: PlanRevision["definition"]["code_revision"];
   definition: string;
   controlDefinition: string;
@@ -331,6 +331,7 @@ function ProjectDraft({
             next,
             entry,
             {
+              workspace_id: d.workspace_id,
               scan_mode: d.scan_mode,
               parameter_sweeps: d.parameter_sweeps,
               action: "preview",

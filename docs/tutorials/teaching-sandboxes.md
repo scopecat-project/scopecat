@@ -50,7 +50,8 @@ their cards when finished. Installing a newer release selects the new manager on
 next launch; active management work must finish first.
 
 Real scientific projects and retained experimental evidence do not belong in this
-resettable directory and continue to use explicit backup and migration policies.
+resettable directory and continue to use [current-format backup/restore](../how-to/backup-and-restore.md).
+Earlier development data follows the [prebaseline policy](../development/data-compatibility.md).
 
 ## Source development without GUI builds
 

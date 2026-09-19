@@ -120,7 +120,7 @@ def execute_project(destination: Path, *, static_dir: Path | None = None) -> Pat
 def verify_project(destination: Path, *, static_dir: Path | None = None) -> Path:
     from .environment import prepare_project
     from .project import create_project
-    from .verify_maintenance import verify_copies
+    from .verify_maintenance import verify_restore
 
     root = create_project(destination).parent
     python = prepare_project(root, bundle=static_dir.parent if static_dir else None)
@@ -130,7 +130,7 @@ def verify_project(destination: Path, *, static_dir: Path | None = None) -> Path
     env = dict(os.environ)
     _ = env.pop("PYTHONPATH", None)
     _ = subprocess.run(command, env=env, check=True)  # noqa: S603 - explicit local tool and argument list
-    verify_copies(root, static_dir=static_dir)
+    verify_restore(root, static_dir=static_dir)
     return root
 
 

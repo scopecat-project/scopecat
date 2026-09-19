@@ -25,6 +25,7 @@ const suggestion: ComparisonHandoff = {
   source_analysis: "fit-r1",
   source_hash: "sha256:fit",
   request: {
+    workspace_id: "legacy",
     scan_mode: "cartesian",
     parameter_sweeps: [],
     action: "preview",
@@ -44,6 +45,7 @@ function Probe() {
         onClick={() =>
           void state.submit(
             {
+              workspace_id: "legacy",
               scan_mode: "cartesian",
               parameter_sweeps: [],
               action: "submit",

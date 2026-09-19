@@ -19,6 +19,7 @@ const entry: LaunchCatalogEntry = {
   request: {},
 };
 const preview: LaunchPreview = {
+  workspace_id: "legacy",
   experiment_id: "candidate",
   request_hash: "sha256:" + "a".repeat(64),
   point_count: 2,

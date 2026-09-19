@@ -80,14 +80,18 @@ class Project:
             from scopecat.application.lab import LabApplication
 
             return LabApplication()
-        from scopecat.project_sources import loading_revision
+        from scopecat.author_workspaces import author_workspace_id
+        from scopecat.project_sources import loading_revision, loading_workspace
 
+        workspace = author_workspace_id(self.root)
         token = loading_revision.set(self.code_revision)
+        workspace_token = loading_workspace.set(workspace)
         try:
             return load_application_factory(
                 self.application_spec, self.code_root or self.root
             )(self.root)
         finally:
+            loading_workspace.reset(workspace_token)
             loading_revision.reset(token)
 
     def authoring(self, daemon: str | None = None) -> AuthorProject:

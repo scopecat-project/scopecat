@@ -7,6 +7,7 @@ import sys
 from dataclasses import replace
 from pathlib import Path
 from typing import cast
+from unittest.mock import Mock, patch
 
 import pytest
 
@@ -145,13 +146,14 @@ def test_application_replace_preserves_discovered_authors_without_reloading(
     monkeypatch.delitem(sys.modules, "retained_author")
 
 
+@pytest.mark.parametrize("workspace", ["legacy", "secondary"])
 def test_project_loading_pins_complete_revision_into_discovered_procedures(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, workspace: str
 ) -> None:
     from scopecat_testkit.project_loading import isolated_project_imports
 
     from scopecat.project import load_project
-    from scopecat.project_sources import loading_revision
+    from scopecat.project_sources import loading_revision, loading_workspace
     from scopecat.records.author_revision import AuthorRevisionRef
 
     monkeypatch.setattr(sys, "path", [str(tmp_path), *sys.path])
@@ -163,6 +165,9 @@ def test_project_loading_pins_complete_revision_into_discovered_procedures(
     manifest = tmp_path / "scopecat.toml"
     manifest.write_text('[lab]\napplication="revision_author:create"\n')
     project = load_project(manifest)
+    monkeypatch.setattr(
+        "scopecat.author_workspaces.author_workspace_id", Mock(return_value=workspace)
+    )
     first = AuthorRevisionRef(content_hash="sha256:" + "1" * 64)
     second = AuthorRevisionRef(content_hash="sha256:" + "2" * 64)
     with isolated_project_imports():
@@ -176,7 +181,24 @@ def test_project_loading_pins_complete_revision_into_discovered_procedures(
             original.authors.experiments[0].provenance["author_code_revision"]
             == first.content_hash
         )
+        selected = original.authors.experiments[0]
+        assert selected.workspace_id == workspace
+        assert selected.provenance["author_workspace"] == workspace
+        explicit = AuthorExperiment.from_declaration(
+            selected.declaration, code_revision=first, workspace_id=workspace
+        )
+        prepared = Mock()
+        with patch.object(AuthorExperiment, "prepare", return_value=prepared):
+            explicit.run(cast("LabClient", Mock()))
+        assert (
+            prepared.run.call_args.kwargs["metadata"]["author_workspace"] == workspace
+        )
+        assert (
+            prepared.run.call_args.kwargs["metadata"]["author_code_revision"]
+            == first.content_hash
+        )
     assert loading_revision.get() is None
+    assert loading_workspace.get() == "legacy"
 
 
 def test_author_scalar_schema_and_binding_use_the_same_declaration(

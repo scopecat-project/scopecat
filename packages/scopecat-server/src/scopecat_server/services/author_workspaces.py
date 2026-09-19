@@ -3,8 +3,9 @@
 import sys
 from pathlib import Path
 
-from scopecat.author_workspaces import LEGACY_AUTHOR_WORKSPACE, local_author_workspaces
+from scopecat.author_workspaces import local_author_workspaces
 from scopecat.project_sources import require_environment
+from scopecat.records.author_workspace import SERVICE_AUTHOR_WORKSPACE
 from scopecat.runtime_binding import load_runtime_binding
 
 from scopecat_server.services.author_revisions import AuthorRevisionService
@@ -20,7 +21,7 @@ class AuthorWorkspaceServices:
         self.store = store
         self.workers = RevisionWorkers()
         original = AuthorRevisionService(root, store, workers=self.workers)
-        self.services = {LEGACY_AUTHOR_WORKSPACE: original}
+        self.services = {SERVICE_AUTHOR_WORKSPACE: original}
         self.unavailable: dict[str, str] = {}
         binding = load_runtime_binding(root)
         try:

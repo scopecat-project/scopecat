@@ -84,7 +84,7 @@ Durable string run IDs always resolve independently of this selection.
 Pass `collection=another_id` for a scoped lookup, or `collection=None` to use the
 legacy store-wide number/history without changing the selection. A session with
 no collection selected keeps the previous store-wide behavior. See
-[record collections](record-collections.md) for stable addresses and migration.
+[record collections](record-collections.md) for stable addresses and current-format recovery.
 
 Python/Notebook clients and the workbench support existing single-sample
 working points. Declared batch/cooldown applicability is covered by

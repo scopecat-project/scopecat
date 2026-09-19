@@ -84,8 +84,8 @@ revision/hash and each referenced entity against its retained sample topology in
 the same transaction as registration. Failed validation writes no target or revision.
 No execution, calibration publication or device acquisition follows registration.
 
-The catalog uses schema **73**. [Copy migration](migrate-data.md) from 72 adds empty
-target tables without inferring targets for historical runs, rewriting scientific
-objects, or changing the data-space identity. [Recovery copies](backup-and-restore.md)
-retain catalog identity; independent writable clones do not gain a supported merge
-policy from this target feature.
+The catalog is part of the current development format.
+[Current-format recovery copies](backup-and-restore.md) retain catalog identity;
+independent writable clones do not gain a supported merge policy. New builds do
+not promise to read or migrate prebaseline target catalogs; see the
+[data policy](../development/data-compatibility.md).

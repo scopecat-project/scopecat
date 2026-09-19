@@ -33,9 +33,9 @@ for disconnecting and resuming from another client.
 
 | Command | Purpose |
 | --- | --- |
-| `scopecat snapshot create PROJECT DESTINATION` | Capture a stopped project in a fresh snapshot directory. |
-| `scopecat snapshot verify SNAPSHOT` | Verify inventory, SQLite integrity, schema and immutable objects. |
-| `scopecat snapshot restore SNAPSHOT DESTINATION` | Restore into a fresh project path without starting work. |
+| `scopecat snapshot create PROJECT DESTINATION` | Capture a stopped current-format project in a fresh snapshot directory. |
+| `scopecat snapshot verify SNAPSHOT` | Verify inventory, SQLite integrity, current schema and immutable objects. |
+| `scopecat snapshot restore SNAPSHOT DESTINATION` | Restore a current-format snapshot into a fresh path without starting work. |
 
 See [backup and restore](../how-to/backup-and-restore.md) for the source boundary,
 dependency retention and explicit schema-version policy.
