@@ -175,6 +175,21 @@ afterEach(() => {
   window.history.replaceState(null, "", "/");
 });
 
+it("opens Help through navigation and a direct hash without leaving the workbench", async () => {
+  renderApp();
+  fireEvent.click(screen.getByRole("button", { name: "Help" }));
+  expect(await screen.findByRole("heading", { name: "Help and maintenance" })).toBeVisible();
+  expect(window.location.hash).toBe("#help");
+  expect(screen.getByRole("button", { name: "Help" })).toHaveAttribute("aria-current", "page");
+  fireEvent.click(screen.getByRole("button", { name: "Experiments" }));
+  expect(await screen.findByText("Calibration launcher")).toBeVisible();
+  act(() => {
+    window.history.replaceState(null, "", "#help");
+    window.dispatchEvent(new HashChangeEvent("hashchange"));
+  });
+  expect(await screen.findByRole("heading", { name: "Help and maintenance" })).toBeVisible();
+});
+
 describe("config provenance navigation", () => {
   it("restores a sample deep link and opens its run", async () => {
     window.history.replaceState(null, "", "/?sample=chip-a17#samples");

@@ -36,24 +36,25 @@ or permission to control hardware.
 ## Current capability and remaining boundaries
 
 The workbench has collection-qualified run addresses, declared batches, Python
-session selection and independent GUI page selection. These are usable single-
-sample features; they do not yet establish the complete target/setup model below.
+session selection and independent GUI page selection. Exact single-member execution, independent setup authority and scoped publication
+are implemented; executable assemblies and cross-object applicability remain outside
+this boundary. See the [current platform status](../platform-status.md) for sequencing.
 
 | Area | Implemented | Next boundary |
 |---|---|---|
 | Scientific identity | Immutable sample revisions; exact single-member target selection through Python and the workbench, preview, plans and parent/child admission | Executable assembly validation |
-| Applicability | Declared batch guards; shared target/batch/setup content comparison used by parameter rebase | Use resolved applicability in preparation, admission, working-point publication and calibration |
-| Working points | Exact single-sample scope, value provenance, explicit estimate copies and verified candidate publication with per-head conflicts | Bounded automated cohorts share working-point ownership; qualified cross-object dependencies remain future work |
+| Applicability | Exact target/batch/setup checks in preparation, admission and scoped publication; conservative whole-setup identity | Qualified cross-object dependencies and finer dependency scopes |
+| Working points | Exact scope, value provenance, explicit estimate copies and verified publication; bounded automatic cohorts share independent working-point ownership | Qualified cross-object calibration dependencies |
 | Apparatus history | Descriptive object/revision and observation slice (#644); separate from executable target selection | Useful history navigation and explicit evidence links; no live wiring or calibration-validity claim |
 | Execution setup | Independent maintained setup revisions/selection; complete retained run config and setup-content fences | Concurrent incompatible deployments and qualified cross-object applicability |
 | Session and addressing | Per-page/kernel choices, graphical workspace selection, frozen target plans, collection numbering and same-environment source-qualified execution | Heterogeneous environments and portable multi-source installation |
-| Application | Registered services open the experiment workbench; Help entry and local lifecycle controls | Further Help integration and server-enforced practice boundaries |
+| Application | Registered service workbenches, workbench Help and manager-preserving navigation; local lifecycle controls | Explicit installation pairing/environment maintenance; server-enforced boundaries before shared real/practice execution |
 
 The apparatus-history row describes the bounded slice introduced with this change,
 not a completed physical-state or calibration model. Its scope and the next
 configuration-ownership work are specified in [apparatus history](apparatus-history.md).
 
-This table is the current work list. The implementation sections below explain
+This table summarizes capability boundaries; the platform status page orders the work. The implementation sections below explain
 prior decisions; their historical limitations are not additional independent TODOs.
 
 Current source/workspace ownership is described in [workspace bindings](workspace-bindings.md).

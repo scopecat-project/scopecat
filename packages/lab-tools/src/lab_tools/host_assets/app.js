@@ -9,6 +9,7 @@ const token = sessionStorage.getItem("scopecat-token") || "";
 const notice = document.getElementById("notice");
 let busy = false, stopped = false, polling;
 let renderedState = "";
+const readyServices = new Map();
 function message(text, error = false) {
   notice.textContent = text;
   notice.classList.toggle("error", error);
@@ -39,9 +40,26 @@ async function openEditor(id) {
   const result = await api(`/api/editor/${id}`, {});
   message(result.detail);
 }
+function workbenchUrl(value) {
+  const url = new URL(value);
+  if (url.protocol !== "http:" || !["127.0.0.1", "localhost", "[::1]"].includes(url.hostname) ||
+      !url.port || url.username || url.password || url.search || url.hash || url.pathname !== "/")
+    throw new Error("工作台地址无效，请重新检查实验服务。");
+  return url.href;
+}
+function forgetReadyLinks() {
+  readyServices.clear();
+  document.querySelectorAll("[data-workbench-link]").forEach(link => link.remove());
+}
 async function submit(command) {
   if (busy) return;
   busy = true;
+  if (command.service) {
+    readyServices.delete(command.service);
+    document.querySelectorAll("[data-workbench-link]").forEach(link => {
+      if (link.dataset.workbenchLink === command.service) link.remove();
+    });
+  }
   command.id = crypto.randomUUID().replaceAll("-", "");
   message("正在处理，请稍候。你可以关闭页面，稍后回来查看结果。");
   try {
@@ -56,8 +74,9 @@ async function submit(command) {
     if (command.action === "service_start") {
       const state = await api("/api/state");
       const service = state.services.find(item => item.service.id === command.service);
-      if (!service?.url) throw new Error("实验服务尚未就绪，请查看日志。");
-      location.assign(service.url);
+      if (service?.state !== "running" || !service.url) throw new Error("实验服务尚未就绪，请查看日志。");
+      readyServices.set(command.service, workbenchUrl(service.url));
+      message("实验服务已就绪。点击“打开工作台（新标签页）”；本管理页面会保留，方便返回帮助、教学和服务管理。");
     }
     if (command.action === "open" && operation.workspace) await openEditor(operation.workspace);
   } finally {
@@ -67,11 +86,17 @@ async function submit(command) {
 }
 async function refresh() {
   if (stopped) return;
-  const state = await api("/api/state");
+  let state;
+  try { state = await api("/api/state"); }
+  catch (error) { forgetReadyLinks(); throw error; }
   if (stopped) return;
+  for (const [identity, url] of readyServices) {
+    const service = state.services.find(item => item.service.id === identity);
+    if (service?.state !== "running" || !service.url || service.url.replace(/\/$/, "") !== url.replace(/\/$/, "")) readyServices.delete(identity);
+  }
   const running = state.operations.some(op => ["starting", "running"].includes(op.status));
   const disabled = busy || running;
-  const signature = JSON.stringify([state, disabled]);
+  const signature = JSON.stringify([state, disabled, [...readyServices]]);
   if (signature === renderedState) return;
   renderedState = signature;
   const services = document.getElementById("services");
@@ -82,7 +107,16 @@ async function refresh() {
     const row = element("article", undefined, "row");
     row.append(element("strong", item.service.name), element("p", serviceStates[item.state]));
     if (item.detail) row.append(element("p", item.detail));
-    row.append(button("打开工作台", () => submit({ action: "service_start", service: item.service.id }), "primary", disabled));
+    row.append(button("启动 / 检查工作台", () => submit({ action: "service_start", service: item.service.id }), "primary", disabled));
+    const readyUrl = readyServices.get(item.service.id);
+    if (readyUrl && !disabled) {
+      const link = element("a", "打开工作台（新标签页）", "workbench-link");
+      link.href = readyUrl;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      link.dataset.workbenchLink = item.service.id;
+      row.append(link);
+    }
     row.append(button("停止服务", () => {
       if (confirm(`停止 ${item.service.name} 的后台服务？\n这可能中断当前任务及 Notebook 连接。项目和已有科学记录保留，不会自动重启或恢复测量。`))
         return submit({ action: "service_stop", service: item.service.id });
@@ -156,6 +190,7 @@ document.getElementById("shutdown").addEventListener("click", async () => {
   try {
     const result = await api("/api/shutdown", {});
     stopped = true;
+    forgetReadyLinks();
     clearInterval(polling);
     document.querySelectorAll("button").forEach(button => { button.disabled = true; });
     message(result.detail + "。再次打开 Scopecat 安装入口可启动管理服务。");
