@@ -247,3 +247,15 @@ target, or relax runtime binding, source qualification or resource authority.
 These are unpassed acceptance requirements for #626. Keep them as short synthetic
 contract/admission journeys during the fast-CI window; installed GUI/Windows and
 physical-device qualification remain separate finishing gates.
+
+
+## Implemented domain foundation
+
+`config/target_projection.py` now owns pure sample-hash and connection-entity
+validation, consumed by the existing target catalog's create/revise operations.
+Its internal single-member projection preserves the exact qualified target ref,
+keeps member IDs separate from run role `subject`, and compares topology without
+description/order sensitivity. Contract tests cover foreign catalogs, composite
+targets, absent/different topology and label-only target revisions. No preparation,
+admission, HTTP execution surface or calibration writer consumes the projection
+yet; the execution acceptance requirements above remain open.

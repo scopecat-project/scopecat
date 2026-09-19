@@ -4,6 +4,7 @@ import sqlite3
 from datetime import UTC, datetime
 from typing import cast
 
+from scopecat.config.target_projection import validate_target_members
 from scopecat.records.sample import SampleRevision
 from scopecat.records.scientific_scope import MeasurementTarget
 from scopecat.records.target_catalog import (
@@ -150,7 +151,7 @@ def _get(
 def _validate_members(
     connection: sqlite3.Connection, target: MeasurementTarget
 ) -> None:
-    entities: dict[str, set[str]] = {}
+    samples: dict[tuple[str, int], SampleRevision] = {}
     for member in target.members:
         row = cast(
             "sqlite3.Row | None",
@@ -164,19 +165,10 @@ def _validate_members(
             raise BackendNotFound(
                 f"target member {member.id!r} sample revision not found"
             )
-        revision = SampleRevision.model_validate_json(cast("str", row["revision_json"]))
-        if revision.content_hash != member.content_hash:
-            raise BackendConflict(f"target member {member.id!r} sample hash changed")
-        topology = revision.content.topology
-        entities[member.id] = (
-            {entity.id for entity in topology.entities}
-            if topology is not None
-            else set()
+        samples[member.sample_id, member.revision] = SampleRevision.model_validate_json(
+            cast("str", row["revision_json"])
         )
-    for link in target.connections:
-        for endpoint in link.endpoints:
-            if endpoint.entity_id not in entities[endpoint.member_id]:
-                raise BackendConflict(
-                    f"target connection {link.id!r} references unknown entity "
-                    f"{endpoint.member_id}/{endpoint.entity_id}"
-                )
+    try:
+        validate_target_members(target, samples)
+    except ValueError as error:
+        raise BackendConflict(str(error)) from error
