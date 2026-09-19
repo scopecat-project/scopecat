@@ -823,6 +823,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/measurement-targets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Targets */
+        get: operations["list_targets_api_v1_measurement_targets_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/measurement-targets/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Resolve Target */
+        post: operations["resolve_target_api_v1_measurement_targets_resolve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/procedures": {
         parameters: {
             query?: never;
@@ -9680,6 +9714,16 @@ export interface components {
              */
             shape: "table";
         };
+        /** TargetCatalogPage */
+        TargetCatalogPage: {
+            /**
+             * Items
+             * @default []
+             */
+            items: components["schemas"]["TargetRevision"][];
+            /** Next Cursor */
+            next_cursor?: number | null;
+        };
         /**
          * TargetConnection
          * @description A declared undirected interconnection, not an apparatus route.
@@ -9716,6 +9760,30 @@ export interface components {
             /** Revision */
             revision: number;
             sample_id: components["schemas"]["SampleId"];
+        };
+        /** TargetRevision */
+        TargetRevision: {
+            /** Actor */
+            actor: string;
+            content: components["schemas"]["MeasurementTarget"];
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /** Name */
+            name: string;
+            /**
+             * Note
+             * @default
+             */
+            note: string;
+            /**
+             * Recorded At
+             * Format: date-time
+             */
+            recorded_at: string;
+            ref: components["schemas"]["TargetRevisionRef"];
         };
         /** TargetRevisionRef */
         TargetRevisionRef: {
@@ -11580,6 +11648,71 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["InstrumentView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_targets_api_v1_measurement_targets_get: {
+        parameters: {
+            query?: {
+                before?: number | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TargetCatalogPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    resolve_target_api_v1_measurement_targets_resolve_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TargetRevisionRef"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TargetRevision"];
                 };
             };
             /** @description Validation Error */

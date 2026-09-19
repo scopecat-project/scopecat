@@ -1,9 +1,10 @@
-import { selectedBatch, subjectLabel, subjectSample } from "./scientific-selection";
+import { selectedBatch, subjectSample } from "./scientific-selection";
 import { useId, useState } from "react";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { getSamples } from "../samples/sample-api";
 import { ScopeCatalog } from "../context/ScopeCatalog";
 import type { ConfigContextResolution } from "../config/config-api";
+import { TargetPicker } from "./TargetPicker";
 import type { LaunchDraft } from "./LaunchDraft";
 
 export function MeasurementContext({
@@ -18,6 +19,7 @@ export function MeasurementContext({
   onChange: (changes: Partial<Pick<LaunchDraft, "selection" | "actor" | "collection">>) => void;
 }) {
   const [browse, setBrowse] = useState(Boolean(selectedBatch(draft.selection) || draft.collection));
+  const [choosingSubject, setChoosingSubject] = useState(false);
   const listId = useId();
   const samples = useInfiniteQuery({
     queryKey: ["context-samples", projectId],
@@ -26,13 +28,27 @@ export function MeasurementContext({
     queryFn: ({ pageParam, signal }) => getSamples(pageParam, signal),
     getNextPageParam: (page) => page.next_cursor ?? undefined,
   });
-  const binding =
-    selectedContext?.config_source.sample ??
-    subjectSample(draft.plan?.definition.scientific_binding);
   const subject = draft.selection.subject;
+  const savedSelection = draft.plan?.definition.selection;
+  const configuration = draft.selection.configuration;
+  const matchingContext =
+    configuration.kind === "working_point" &&
+    selectedContext?.config_source.context.entry_id === configuration.ref.entry_id &&
+    selectedContext.config_source.context.content_hash === configuration.ref.content_hash;
+  const sameWorkingPoint =
+    configuration.kind === "working_point" &&
+    savedSelection?.configuration?.kind === "working_point" &&
+    configuration.ref.entry_id === savedSelection.configuration.ref.entry_id &&
+    configuration.ref.content_hash === savedSelection.configuration.ref.content_hash;
+  const binding = matchingContext
+    ? selectedContext.config_source.sample
+    : sameWorkingPoint
+      ? subjectSample(draft.plan?.definition.scientific_binding)
+      : undefined;
   const selectedSample = subject.kind === "sample" ? subject.sample_id : "";
   const batch = selectedBatch(draft.selection);
-  const subjectLocked = Boolean(binding) || subject.kind === "registered_target";
+  const subjectLocked =
+    Boolean(binding) || (subject.kind === "registered_target" && !choosingSubject);
   function changeSample(sample_id: string) {
     onChange({
       selection: {
@@ -75,13 +91,33 @@ export function MeasurementContext({
           />
         </label>
       </div>
-      {subject.kind === "registered_target" && (
-        <p>{subjectLabel(draft.selection)} · exact registered target retained.</p>
+      <TargetPicker
+        value={subject.kind === "registered_target" ? subject.ref : undefined}
+        projectId={projectId}
+        browse={browse}
+        disabled={draft.pending}
+        onChange={(ref) => {
+          setChoosingSubject(false);
+          onChange({
+            selection: { ...draft.selection, subject: { kind: "registered_target", ref } },
+          });
+        }}
+      />
+      {subject.kind === "registered_target" && !binding && !choosingSubject && (
+        <button
+          type="button"
+          onClick={() => {
+            setChoosingSubject(true);
+            setBrowse(true);
+          }}
+        >
+          Choose another subject
+        </button>
       )}
       {binding && (
         <p>
           {binding.display_name} · revision {binding.revision}. Sample and batch are bound to this
-          working point or saved plan.
+          working point.
         </p>
       )}
       <button type="button" aria-expanded={browse} onClick={() => setBrowse(!browse)}>
@@ -140,7 +176,7 @@ export function MeasurementContext({
               kind="batch"
               owner={projectId}
               value={batch}
-              disabled={subjectLocked}
+              disabled={Boolean(binding)}
               onChange={(id) =>
                 onChange({
                   selection: {
