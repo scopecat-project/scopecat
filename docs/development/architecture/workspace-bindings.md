@@ -135,3 +135,123 @@ Different dependency environments and simultaneous workspace admission require
 explicit runtime qualification and workspace-scoped publication before the public
 connection contract can admit them. Reading retained evidence remains independent
 of qualifying its original code for execution.
+
+## Next vertical slice: workspace-scoped author publication
+
+Design for [#613](https://github.com/scopecat-project/scopecat/issues/613), not a
+shipped multi-workspace API. Implement after the target-catalog schema change;
+allocate the next migration centrally. Do not expose a second workspace until the
+whole registration → preparation → submission → retained-read path below works.
+
+### Ownership and qualification
+
+| Owner | Identity and state | Boundary |
+|---|---|---|
+| Application host deployment registry | Registered service ID, local startup location/interpreter, observed daemon identity/status | Finds and starts a service; never owns its scientific catalog or author head |
+| Daemon workspace catalog | Store-local stable workspace ID, label, registered source membership | Identifies author publication within one scientific store; paths are locations, not IDs |
+| Machine-local workspace binding | Workspace ID → canonical source root and exact interpreter path | Explicit trusted registration; excluded from portable scientific snapshots and never restored as permission to execute |
+| Workspace author service | Baseline, head generation/revision, preparation operations | Refresh and cancellation affect that workspace only |
+| Existing data/deployment authority | One data writer, maintained composition, device claims and fencing | Registration does not replace the backend, active scientific configuration or another workspace |
+| Page/kernel session | Selected workspace plus existing scientific context | Refresh defaults are local; prepared work retains exact source and scientific references |
+
+The first supported pair of workspaces must share the daemon's qualified Python
+and maintained composition. Their author files and module names may overlap, but
+run in separate revision workers. Reject another environment or maintenance hash
+with an actionable qualification error; do not install dependencies or restart the
+backend as a side effect of connecting or refreshing. Different environments and
+apparatus compositions need their own qualification slice.
+
+The local interpreter path selects a process; it is not an environment content
+hash. Reuse the captured Python/package/installed-author checks before execution.
+Moving a registered workspace updates its location explicitly and preserves its ID
+and publication head. Reading existing results needs neither that location nor an
+executable environment. A copied scientific store is not automatically authorized
+as another writable deployment.
+
+### Source and request boundary
+
+Keep `AuthorRevisionRef` as the immutable content hash: identical bundles can share
+stored content. Workspace identity qualifies publication and execution ownership;
+it must not change the bundle's historical content hash.
+
+- Make workspace selection explicit on the daemon client connection. The workbench
+  and Notebook bind that identity before catalog browsing or refresh. Unregistered
+  paths cannot become registered merely by sending an HTTP request.
+- Scope author state/preparation routes to a workspace ID. Preparation requests
+  carry that workspace's expected generation. State and operation responses identify
+  their owner; cancelling or retrying another workspace's operation is rejected.
+- Carry the workspace ID alongside the exact `code_revision` through launch
+  preview, submission, saved recipes, retained analysis/comparison and procedure
+  child provenance. One shared request model is authoritative; do not add a second
+  competing source field with precedence rules. Update all current consumers.
+- An unpinned catalog/preview resolves only the selected workspace's head.
+  Submission uses the prepared revision; it never substitutes a later head.
+  Expected-generation conflicts stay local to the selected workspace.
+- The revision lookup remains content-addressed, but execution also checks that
+  the revision belongs to the selected workspace and passes its maintenance and
+  runtime qualification. Reading a retained bundle is distinct from executing it.
+- Resolve workers from the registered local binding, not an arbitrary request
+  executable/root. The worker receives the selected workspace's connection
+  identity; endpoint/health verification checks catalog membership plus the same
+  data/deployment ownership. Replace the one-root match with that explicit check,
+  rather than deleting the existing protection or treating a URL as permission.
+
+For a run's original-source analysis, recover the retained source owner/revision;
+`source="current"` explicitly selects a qualified workspace's current revision.
+Old results remain readable when that workspace is unavailable. Different working
+points, batches or record collections do not select another source implicitly.
+
+### Replace the singleton and route lifecycle by owner
+
+Keep the immutable `author_revisions` content table. Replace the mutable singleton
+head with `author_workspace_heads(workspace_id, generation, content_hash)` and
+explicit workspace/revision membership. `AuthorRevisionRepository` is constructed
+with a workspace ID so every state, publication and preparation query is scoped.
+
+Preparation identity is `(workspace_id, operation_id)`, not operation ID alone.
+This also prevents identical `initialize-{hash}` operations and generation-zero
+lookups from crossing workspaces. Store updates, publication CAS and completion of
+that preparation stay in one transaction. A workspace refresh must not interrupt,
+adopt or report another workspace's preparation. On service restart, mark only
+actually owned unfinished operations interrupted; never replay them automatically.
+
+Replace `application.author_revisions` as the one selected service with an
+owner-resolving catalog/service manager. Reuse `AuthorWorkerBinding` and the existing
+binding/revision pool key. Keep the bounded process budget and per-key serialization;
+qualifying another workspace must not introduce an unbounded worker pool.
+Do not retain an implicit globally active workspace for old routes after all
+current callers have moved to the explicit contract.
+
+The copy migration gives the old singleton and preparations one explicit legacy
+workspace identity, copies generation and content references, then retires the
+singleton bookkeeping in the destination. Preserve preparation JSON/evidence,
+source bundles, receipts, run IDs, source/config hashes and record addresses.
+Historical records without a workspace field resolve to this designated legacy
+owner; do not infer identity from paths, labels or today's selected workspace.
+This is a supported-data read rule, not a parallel mutable legacy author service.
+Machine-local locations must be rebound before execution after restore.
+
+### Dependencies, owned files and exit evidence
+
+| Work | Main consumers | Required completion |
+|---|---|---|
+| Catalog and copy migration | `records/author_revision.py`, SQLite author repository/schema/migrations/snapshots | Legacy retained data opens without evidence/hash changes; two workspace heads and preparations are independent |
+| Service qualification | `services/author_revisions.py`, `services/application.py`, `runtime.py` | Registered owner resolves baseline/binding; incompatible maintenance/environment is rejected before publication |
+| Connection and requests | `daemon/client.py`, `daemon/endpoint.py`, HTTP transport, `LaunchRequest`, retained worker calls | No arbitrary path admission or silent workspace fallback; preview/submission bind exact source |
+| Python and workbench callers | `Project`, `AuthorProject`, Notebook workspace, catalog/refresh UI and generated API | Existing single-workspace flows use the explicit owner; switching one client leaves another untouched |
+| Execution consumers | Author/validation/retained workers, saved plans and procedure launch | Exact original source and child provenance survive refresh/restart; same-name packages remain process-isolated |
+
+Own this vertical chain in one worktree after the target-catalog migration lands;
+coordinate edits to launch/source records, transport and schema with the target
+and application-host owners. The host registry work can proceed independently;
+it registers a deployment, not an author workspace inside that deployment.
+
+The focused exit journey uses two actual kernels/workspaces with the same package
+name and one qualified composition. It checks independent catalogs and refresh
+CAS, identical-hash worker isolation, old prepared/source execution, failures and
+cancellation scoped to one workspace, shared collection numbering, restart and
+retained reads after source removal. Add explicit unknown-workspace, wrong-binding
+and incompatible-environment/maintenance rejection cases. Existing shared-device
+claims remain enforced; this slice does not qualify cross-deployment physical-device
+aliases or multiple maintained apparatus compositions. Keep full installed/Windows
+and recovery acceptance in the integration closeout tracked by the parent issue.
