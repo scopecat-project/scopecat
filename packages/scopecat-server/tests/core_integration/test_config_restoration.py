@@ -16,23 +16,17 @@ from scopecat.config.registry import (
     publish_config_revision,
 )
 from scopecat.config.registry.records import (
-    CalibrationCohortMergeRegistrySource,
-    ConfigCompositionEvidenceStepRef,
-    ConfigCompositionPolicyRef,
     ConfigRegistryEntrySource,
     ManualConfigDraftRegistrySource,
-    ResolvedCalibrationCohortMergeContribution,
-    ResolvedVerifiedParameterProposalProofV1,
 )
 from scopecat.config.registry.service import load_config_registry_entry_snapshot
 from scopecat.kernel.errors import Conflict, DataIntegrityError
-from scopecat.records.analysis import ProjectAnalysisDecisionReference
 from scopecat.records.config import ConfigContentHash, config_content_hash
 from scopecat_testkit.config_registry import load_config
 from scopecat_testkit.server.runtime import sqlite_config_registry_unit_of_work
 
 
-@pytest.mark.parametrize("kind", ["candidate", "draft", "cohort"])
+@pytest.mark.parametrize("kind", ["candidate", "draft"])
 def test_restore_previously_accepted_candidate(tmp_path: Path, kind: str) -> None:
     uow = sqlite_config_registry_unit_of_work(tmp_path)
     base = load_config()
@@ -131,42 +125,7 @@ def _source(kind: str, base_hash: ConfigContentHash) -> ConfigRegistryEntrySourc
             base_config_content_hash=base_hash,
             base_registry_generation=1,
         )
-    return CalibrationCohortMergeRegistrySource(
-        cohort_id="cohort",
-        spec_hash=base_hash,
-        composition_policy_ref=ConfigCompositionPolicyRef(
-            id="composition",
-            version="1",
-            fingerprint=base_hash,
-        ),
-        base_entry_id="base",
-        base_config_content_hash=base_hash,
-        base_registry_generation=1,
-        candidate_id="candidate-a",
-        contributions=(
-            ResolvedCalibrationCohortMergeContribution(
-                member_id="member",
-                result_input_fingerprint=base_hash,
-                proof=ResolvedVerifiedParameterProposalProofV1(
-                    evidence_step=ConfigCompositionEvidenceStepRef(
-                        procedure_run_id="procedure",
-                        step_key="verify",
-                        attempt=1,
-                    ),
-                    baseline_run_id="baseline-run",
-                    fit_analysis_record_id="fit",
-                    proposal_id="proposal",
-                    candidate_run_id="candidate-run",
-                    decision=ProjectAnalysisDecisionReference(
-                        analysis_record_id="verification",
-                        output_id="decision",
-                        schema_id="quality",
-                        schema_hash=base_hash,
-                    ),
-                ),
-            ),
-        ),
-    )
+    raise AssertionError(f"Unexpected test source {kind}")
 
 
 @pytest.mark.parametrize("field", ["entry_id", "entry_content_hash"])

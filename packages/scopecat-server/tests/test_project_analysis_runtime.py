@@ -2551,11 +2551,13 @@ def test_verified_candidates_publish_to_independent_working_points(
         assert _approval_count(runtime, (a.run_id, b.run_id)) == 0
         receipt = lab.config.publish_context(a)
         assert isinstance(receipt.entry.source, ContextConfigRegistrySource)
-        assert receipt.entry.source.candidate is not None
         assert isinstance(
-            receipt.entry.source.candidate.acceptance, CrossRunCandidateAcceptance
+            receipt.entry.source.publication, CandidateConfigRegistrySource
         )
-        assert receipt.entry.source.candidate.acceptance.decision == a.verification
+        assert isinstance(
+            receipt.entry.source.publication.acceptance, CrossRunCandidateAcceptance
+        )
+        assert receipt.entry.source.publication.acceptance.decision == a.verification
         assert lab.config.context_publish_operation(a.operation_id) == receipt
         assert lab.config.publish_context(a) == receipt
         with pytest.raises(DaemonConflictError, match="different intent"):
