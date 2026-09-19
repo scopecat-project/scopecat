@@ -120,7 +120,7 @@ export function RunComparison({
   );
   const savedRequest =
     requestFact?.kind === "fact" &&
-    requestFact.content.schema_id === "scopecat.comparison-request.v1"
+    requestFact.content.schema_id === "scopecat.comparison-request.v2"
       ? requestFact.content.value
       : undefined;
   const savedAction =
