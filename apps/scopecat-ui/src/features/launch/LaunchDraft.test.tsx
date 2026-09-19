@@ -1,3 +1,5 @@
+import type { SubmissionRequest } from "./launch-submission";
+import { reviewedFixture } from "../../test/scientific-fixtures";
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
 import { useState } from "react";
@@ -43,7 +45,7 @@ let generation: number;
 let manualEventId: number;
 let configFails: boolean;
 let rejectSubmission: boolean;
-let submissions: Record<string, unknown>[];
+let submissions: SubmissionRequest[];
 let previewResponse: ((response: Response) => void) | undefined;
 let deferPreview: boolean;
 let configurationResponse: ((response: Response) => void) | undefined;
@@ -63,14 +65,14 @@ function preview() {
       },
     },
     point_count: 1,
-    config_source: {
+    reviewed: reviewedFixture({
       kind: "config_registry",
       selector: "active",
       entry_id: "baseline",
       config_ref: "baseline",
       content_hash: `sha256:${"b".repeat(64)}`,
       registry_generation: generation,
-    },
+    }),
     summary: "Checked preparation",
     resources: [],
     resolved_inputs: {},
@@ -121,15 +123,16 @@ beforeEach(() => {
           procedure_run_id: "original-procedure",
           request_key: original?.request_key,
           definition: { id: "maintained.launch_prepared", version: "1" },
+          scientific_binding: original?.reviewed?.binding,
           intent: {
             request_hash: lookupMatch === "unverified" ? "other" : original?.expected_request_hash,
             config_source:
               lookupMatch === "different-config"
                 ? {
-                    ...(original?.config_source as Record<string, unknown>),
+                    ...original?.reviewed?.config_source,
                     registry_generation: 999,
                   }
-                : original?.config_source,
+                : original?.reviewed?.config_source,
           },
         };
         return Response.json({
@@ -493,7 +496,7 @@ it("submits a checked preview while configuration refresh is in flight", async (
   await waitFor(() => expect(submissions).toHaveLength(1));
   expect(submissions[0]).toMatchObject({
     experiment: "prepared",
-    config_source: { entry_id: "baseline", registry_generation: 1 },
+    reviewed: { config_source: { entry_id: "baseline", registry_generation: 1 } },
   });
   await act(async () => {
     configurationResponse!(
@@ -557,9 +560,12 @@ it("keeps context across experiments and preserves the original submission after
   fireEvent.click(screen.getByRole("button", { name: "Start acquisition" }));
   await screen.findByRole("alert");
   expect(submissions[0]).toMatchObject({
-    sample: "chip-a",
+    selection: {
+      subject: { kind: "sample", sample_id: "chip-a" },
+      configuration: { kind: "active" },
+      batch: { kind: "declared", id: "batch-a" },
+    },
     actor: "Alice",
-    batch_id: "batch-a",
     record_collection: "collection-a",
   });
   fireEvent.change(screen.getByLabelText("Experimental batch"), { target: { value: "batch-b" } });

@@ -1,7 +1,8 @@
+import { reviewedForRequest } from "./scientific-selection";
 import { useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient, apiData } from "../../api-client";
-import type { LaunchCatalogEntry } from "./launch-api";
+import type { LaunchCatalogEntry, LaunchPreview } from "./launch-api";
 import { ControlFields, ControlSummary, controlEdits } from "./ControlFields";
 import { invalidateDraft, useLaunchDraft, type LaunchDraft } from "./LaunchDraft";
 import { MeasurementContext } from "./MeasurementContext";
@@ -38,7 +39,7 @@ export function LaunchForm({
   } = useLaunchDraft();
   if (!retained) throw new Error("Select a launch draft before rendering its form");
   const draft: LaunchDraft = retained;
-  const { controls: drafts, sample, actor, values, error, pending } = draft;
+  const { controls: drafts, actor, values, error, pending } = draft;
   const mounted = useRef(true);
   useEffect(() => {
     mounted.current = true;
@@ -76,7 +77,7 @@ export function LaunchForm({
   }, [fence, manual.data, update]);
   function changeInput(
     changes: Partial<
-      Pick<LaunchDraft, "values" | "controls" | "sample" | "actor" | "batch" | "collection">
+      Pick<LaunchDraft, "values" | "controls" | "selection" | "actor" | "collection">
     >,
   ) {
     update((current) =>
@@ -88,7 +89,6 @@ export function LaunchForm({
             current.planDirty ||
             (Boolean(current.plan) &&
               Object.keys(changes).some((key) => key !== "actor" && key !== "collection")),
-          sampleBinding: "sample" in changes ? undefined : current.sampleBinding,
         },
         "Inputs changed. Preview again before starting.",
       ),
@@ -119,7 +119,7 @@ export function LaunchForm({
     const revision = draft.revision;
     update((current) => ({ ...current, pending: true, error: "" }));
     try {
-      const next = await apiData(
+      const next = await apiData<LaunchPreview>(
         apiClient.POST("/api/v1/experiment-launcher/preview", {
           body: {
             scan_mode: "cartesian",
@@ -127,15 +127,9 @@ export function LaunchForm({
             action: "preview",
             experiment: entry.id,
             version: entry.version,
-            sample:
-              draft.sampleBinding?.sample_id ?? (selectedContext ? null : sample.trim() || null),
-            sample_binding: draft.sampleBinding,
-            batch_id: draft.batch || undefined,
+            selection: draft.selection,
             record_collection: draft.collection || undefined,
-            configuration: draft.configuration,
             plan_ref: draft.planDirty ? undefined : draft.plan?.ref,
-            context: selectedContext?.config_source.context,
-            overrides: selectedContext?.config_source.overrides ?? [],
             inputs: inputValues(),
             control_edits: controlEdits(drafts),
             actor,
@@ -151,7 +145,7 @@ export function LaunchForm({
           preview: next,
           requestKey:
             current.preview?.request_hash === next.request_hash &&
-            JSON.stringify(current.preview.config_source) === JSON.stringify(next.config_source) &&
+            JSON.stringify(current.preview.reviewed) === JSON.stringify(next.reviewed) &&
             JSON.stringify(current.preview.manual_state) === JSON.stringify(next.manual_state)
               ? current.requestKey
               : undefined,
@@ -168,7 +162,7 @@ export function LaunchForm({
       if (isCurrent(revision)) update((current) => ({ ...current, pending: false }));
     }
   }
-  const source = result?.config_source;
+  const source = result?.reviewed.config_source;
   async function start() {
     if (!source) return;
     const revision = draft.revision;
@@ -185,17 +179,11 @@ export function LaunchForm({
           inputs: inputValues(),
           control_edits: controlEdits(drafts),
           request_key: requestKey,
-          sample:
-            draft.sampleBinding?.sample_id ?? (selectedContext ? null : sample.trim() || null),
-          sample_binding: draft.sampleBinding,
-          batch_id: draft.batch || undefined,
+          selection: draft.selection,
+          reviewed: result ? reviewedForRequest(result.reviewed) : undefined,
           record_collection: draft.collection || undefined,
-          configuration: draft.configuration,
           plan_ref: draft.planDirty ? undefined : draft.plan?.ref,
-          context: selectedContext?.config_source.context,
-          overrides: selectedContext?.config_source.overrides ?? [],
           actor,
-          config_source: source,
           code_revision: result?.code_revision,
           workspace_id: result?.workspace_id,
           manual_state: result?.manual_state,
@@ -240,7 +228,8 @@ export function LaunchForm({
           parameter_sweeps: [],
           action: "preview",
           request_key: "",
-          overrides: [],
+          selection: draft.selection,
+          reviewed: result ? reviewedForRequest(result.reviewed) : undefined,
           experiment: entry.id,
           version: entry.version,
           inputs: inputValues(),
@@ -248,14 +237,9 @@ export function LaunchForm({
           actor,
         })}
       />
-      {draft.configuration && (
+      {draft.selection.configuration.kind === "saved" && (
         <p>
           Using the plan's exact saved configuration. It is not replaced by the current lab default.
-        </p>
-      )}
-      {draft.sampleBinding && (
-        <p>
-          Saved sample: {draft.sampleBinding.display_name}, revision {draft.sampleBinding.revision}.
         </p>
       )}
       {selectedContext ? (
@@ -276,7 +260,7 @@ export function LaunchForm({
             Use lab default
           </button>
         </div>
-      ) : !draft.configuration ? (
+      ) : draft.selection.configuration.kind === "active" ? (
         <p>
           Using lab default. Select a saved sample working point in Configuration to use its
           parameters.

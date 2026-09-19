@@ -1807,6 +1807,14 @@ export interface components {
             /** Results */
             results: components["schemas"]["AcquisitionResultSpec"][];
         };
+        /** ActiveConfiguration */
+        ActiveConfiguration: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "active";
+        };
         /**
          * ActiveConfigView
          * @description The active registry identity and its resolved immutable snapshot.
@@ -2575,6 +2583,7 @@ export interface components {
             /** Values */
             values: components["schemas"]["RunRequestScalarValue-Output"][];
         };
+        BatchScope: components["schemas"]["UnscopedBatch"] | components["schemas"]["DeclaredBatch"];
         /**
          * BlobPayloadBody
          * @description Content-addressed locator resolved by the payload transport boundary.
@@ -2664,6 +2673,15 @@ export interface components {
             kind: "candidate_config";
             proposal_id: components["schemas"]["NonEmptyText"];
             run_id: components["schemas"]["NonEmptyText"];
+        };
+        /** CandidateConfiguration */
+        CandidateConfiguration: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "candidate";
+            source: components["schemas"]["AnalysisCandidateRunConfigSource"];
         };
         /** ChangeParameterColumn */
         ChangeParameterColumn: {
@@ -3722,6 +3740,8 @@ export interface components {
             /** Selector */
             selector: string;
         };
+        "ConfigurationChoice-Input": components["schemas"]["ActiveConfiguration"] | components["schemas"]["SavedConfiguration"] | components["schemas"]["WorkingPointConfiguration-Input"] | components["schemas"]["CandidateConfiguration"];
+        "ConfigurationChoice-Output": components["schemas"]["ActiveConfiguration"] | components["schemas"]["SavedConfiguration"] | components["schemas"]["WorkingPointConfiguration-Output"] | components["schemas"]["CandidateConfiguration"];
         /**
          * ConfigValueOrigin
          * @description Origin of one scalar or one keyed table cell in an effective snapshot.
@@ -3898,6 +3918,16 @@ export interface components {
             status: "ok" | "degraded";
         };
         DataType: components["schemas"]["Scalar"] | components["schemas"]["Array"];
+        /** DeclaredBatch */
+        DeclaredBatch: {
+            /** Id */
+            id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "declared";
+        };
         /**
          * DeleteParameterRows
          * @description Delete one row selected by a table primary key.
@@ -4187,30 +4217,24 @@ export interface components {
         /** ExperimentPlanDefinition */
         "ExperimentPlanDefinition-Input": {
             code_revision?: components["schemas"]["AuthorRevisionRef"] | null;
-            configuration?: components["schemas"]["PlanConfigRef"] | null;
-            context?: components["schemas"]["ConfigContextRef"] | null;
             control_edits?: components["schemas"]["PlanControlEdits-Input"];
             definition_hash: components["schemas"]["Sha256ContentHash"];
             /** Experiment */
             experiment: string;
             inputs?: components["schemas"]["PlanInputs"];
             /**
-             * Overrides
-             * @default []
-             */
-            overrides: components["schemas"]["ParameterUpdate-Input"][];
-            /**
              * Parameter Sweeps
              * @default []
              */
             parameter_sweeps: components["schemas"]["ParameterSweep-Input"][];
-            sample?: components["schemas"]["SampleBinding"] | null;
             /**
              * Scan Mode
              * @default cartesian
              * @enum {string}
              */
             scan_mode: "cartesian" | "paired";
+            scientific_binding: components["schemas"]["ResolvedScientificBinding"];
+            selection: components["schemas"]["ScientificSelection-Input"];
             source?: components["schemas"]["PlanAnalysisSource"] | null;
             /** Version */
             version: string;
@@ -4223,30 +4247,24 @@ export interface components {
         /** ExperimentPlanDefinition */
         "ExperimentPlanDefinition-Output": {
             code_revision?: components["schemas"]["AuthorRevisionRef"] | null;
-            configuration?: components["schemas"]["PlanConfigRef"] | null;
-            context?: components["schemas"]["ConfigContextRef"] | null;
             control_edits?: components["schemas"]["PlanControlEdits-Output"];
             definition_hash: components["schemas"]["Sha256ContentHash"];
             /** Experiment */
             experiment: string;
             inputs?: components["schemas"]["PlanInputs"];
             /**
-             * Overrides
-             * @default []
-             */
-            overrides: components["schemas"]["ParameterUpdate-Output"][];
-            /**
              * Parameter Sweeps
              * @default []
              */
             parameter_sweeps: components["schemas"]["ParameterSweep-Output"][];
-            sample?: components["schemas"]["SampleBinding"] | null;
             /**
              * Scan Mode
              * @default cartesian
              * @enum {string}
              */
             scan_mode: "cartesian" | "paired";
+            scientific_binding: components["schemas"]["ResolvedScientificBinding"];
+            selection: components["schemas"]["ScientificSelection-Output"];
             source?: components["schemas"]["PlanAnalysisSource"] | null;
             /** Version */
             version: string;
@@ -5412,7 +5430,6 @@ export interface components {
          */
         LaunchPreview: {
             code_revision?: components["schemas"]["AuthorRevisionRef"] | null;
-            config_source: components["schemas"]["LaunchConfigSource-Output"];
             /**
              * Controls
              * @default []
@@ -5440,7 +5457,7 @@ export interface components {
              * @default []
              */
             resources: string[];
-            sample_binding?: components["schemas"]["SampleBinding"] | null;
+            reviewed: components["schemas"]["ReviewedScientificSelection-Output"];
             /** Summary */
             summary: string;
             /**
@@ -5461,12 +5478,7 @@ export interface components {
              * @default operator
              */
             actor: string;
-            /** Batch Id */
-            batch_id?: string | null;
             code_revision?: components["schemas"]["AuthorRevisionRef"] | null;
-            config_source?: components["schemas"]["LaunchConfigSource-Input"] | null;
-            configuration?: components["schemas"]["PlanConfigRef"] | null;
-            context?: components["schemas"]["ConfigContextRef"] | null;
             /** Control Edits */
             control_edits?: {
                 [key: string]: components["schemas"]["ControlEdit-Input"];
@@ -5483,11 +5495,6 @@ export interface components {
             };
             manual_state?: components["schemas"]["ManualPreviewFence"] | null;
             /**
-             * Overrides
-             * @default []
-             */
-            overrides: components["schemas"]["ParameterUpdate-Input"][];
-            /**
              * Parameter Sweeps
              * @default []
              */
@@ -5500,15 +5507,14 @@ export interface components {
              * @default
              */
             request_key: string;
-            /** Sample */
-            sample?: string | null;
-            sample_binding?: components["schemas"]["SampleBinding"] | null;
+            reviewed?: components["schemas"]["ReviewedScientificSelection-Input"] | null;
             /**
              * Scan Mode
              * @default cartesian
              * @enum {string}
              */
             scan_mode: "cartesian" | "paired";
+            selection?: components["schemas"]["ScientificSelection-Input"];
             /**
              * Version
              * @default
@@ -5532,12 +5538,7 @@ export interface components {
              * @default operator
              */
             actor: string;
-            /** Batch Id */
-            batch_id?: string | null;
             code_revision?: components["schemas"]["AuthorRevisionRef"] | null;
-            config_source?: components["schemas"]["LaunchConfigSource-Output"] | null;
-            configuration?: components["schemas"]["PlanConfigRef"] | null;
-            context?: components["schemas"]["ConfigContextRef"] | null;
             /** Control Edits */
             control_edits?: {
                 [key: string]: components["schemas"]["ControlEdit-Output"];
@@ -5554,11 +5555,6 @@ export interface components {
             };
             manual_state?: components["schemas"]["ManualPreviewFence"] | null;
             /**
-             * Overrides
-             * @default []
-             */
-            overrides: components["schemas"]["ParameterUpdate-Output"][];
-            /**
              * Parameter Sweeps
              * @default []
              */
@@ -5571,15 +5567,14 @@ export interface components {
              * @default
              */
             request_key: string;
-            /** Sample */
-            sample?: string | null;
-            sample_binding?: components["schemas"]["SampleBinding"] | null;
+            reviewed?: components["schemas"]["ReviewedScientificSelection-Output"] | null;
             /**
              * Scan Mode
              * @default cartesian
              * @enum {string}
              */
             scan_mode: "cartesian" | "paired";
+            selection?: components["schemas"]["ScientificSelection-Output"];
             /**
              * Version
              * @default
@@ -7123,6 +7118,7 @@ export interface components {
              * @default []
              */
             samples: components["schemas"]["SampleSelector"][];
+            scientific_binding?: components["schemas"]["ResolvedScientificBinding"] | null;
             state: components["schemas"]["ProcedureRunState"];
             /**
              * Updated At
@@ -7396,6 +7392,15 @@ export interface components {
             /** Next Cursor */
             next_cursor?: number | null;
         };
+        /** RegisteredTargetChoice */
+        RegisteredTargetChoice: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "registered_target";
+            ref: components["schemas"]["TargetRevisionRef"];
+        };
         /** RegisteredTargetSubject */
         RegisteredTargetSubject: {
             content: components["schemas"]["MeasurementTarget"];
@@ -7649,6 +7654,16 @@ export interface components {
         /** @enum {string} */
         ReviewCoordinateMode: "exact" | "snap" | "free";
         ReviewCoordinateValue: boolean | number | string | components["schemas"]["scopecat__kernel__quantity__Quantity"] | components["schemas"]["EntityRef"] | null;
+        /** ReviewedScientificSelection */
+        "ReviewedScientificSelection-Input": {
+            binding: components["schemas"]["ResolvedScientificBinding"];
+            config_source: components["schemas"]["LaunchConfigSource-Input"];
+        };
+        /** ReviewedScientificSelection */
+        "ReviewedScientificSelection-Output": {
+            binding: components["schemas"]["ResolvedScientificBinding"];
+            config_source: components["schemas"]["LaunchConfigSource-Output"];
+        };
         /** ReviewInspectionView */
         "ReviewInspectionView-Output": {
             /** Artifact Fingerprint */
@@ -8996,6 +9011,17 @@ export interface components {
             role: components["schemas"]["_NonEmptyText"];
             sample_id: components["schemas"]["SampleId"];
         };
+        /** SampleSubjectChoice */
+        SampleSubjectChoice: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "sample";
+            /** Revision */
+            revision?: number | null;
+            sample_id: components["schemas"]["SampleId"];
+        };
         /**
          * SampleSummary
          * @description One sample's active revision and bounded run-history aggregates.
@@ -9026,6 +9052,15 @@ export interface components {
              */
             run_count: number;
         };
+        /** SavedConfiguration */
+        SavedConfiguration: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "saved";
+            ref: components["schemas"]["PlanConfigRef"];
+        };
         /**
          * Scalar
          * @description A single atom.
@@ -9046,6 +9081,18 @@ export interface components {
              */
             shape: "scalar";
             value: components["schemas"]["ParameterAtomValue"];
+        };
+        /** ScientificSelection */
+        "ScientificSelection-Input": {
+            batch?: components["schemas"]["BatchScope"];
+            configuration?: components["schemas"]["ConfigurationChoice-Input"];
+            subject?: components["schemas"]["SubjectChoice"];
+        };
+        /** ScientificSelection */
+        "ScientificSelection-Output": {
+            batch?: components["schemas"]["BatchScope"];
+            configuration?: components["schemas"]["ConfigurationChoice-Output"];
+            subject?: components["schemas"]["SubjectChoice"];
         };
         "scopecat__kernel__json_types__JsonValue-Output": string | boolean | number | components["schemas"]["scopecat__kernel__json_types__JsonValue-Output"][] | {
             [key: string]: components["schemas"]["scopecat__kernel__json_types__JsonValue-Output"];
@@ -9293,6 +9340,7 @@ export interface components {
             source_run_id?: string | null;
             value?: components["schemas"]["ParameterAtomValue"] | null;
         };
+        SubjectChoice: components["schemas"]["UnboundSubjectChoice"] | components["schemas"]["SampleSubjectChoice"] | components["schemas"]["RegisteredTargetChoice"];
         /**
          * SystemSpec
          * @description Stable system topology and logical parameter definitions.
@@ -9462,6 +9510,14 @@ export interface components {
              */
             kind: "unbound";
         };
+        /** UnboundSubjectChoice */
+        UnboundSubjectChoice: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "unbound";
+        };
         /** UnknownQuantity */
         UnknownQuantity: {
             /** Basis */
@@ -9473,6 +9529,17 @@ export interface components {
             kind: "unknown";
             /** Unit */
             unit: string;
+        };
+        /**
+         * UnscopedBatch
+         * @description No event was declared; this is not a wildcard for a declared batch.
+         */
+        UnscopedBatch: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "unscoped";
         };
         /**
          * UpdateParameterRows
@@ -9567,6 +9634,34 @@ export interface components {
              * @enum {string}
              */
             retention: "retained" | "unavailable_active_quota";
+        };
+        /** WorkingPointConfiguration */
+        "WorkingPointConfiguration-Input": {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "working_point";
+            /**
+             * Overrides
+             * @default []
+             */
+            overrides: components["schemas"]["ParameterUpdate-Input"][];
+            ref: components["schemas"]["ConfigContextRef"];
+        };
+        /** WorkingPointConfiguration */
+        "WorkingPointConfiguration-Output": {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "working_point";
+            /**
+             * Overrides
+             * @default []
+             */
+            overrides: components["schemas"]["ParameterUpdate-Output"][];
+            ref: components["schemas"]["ConfigContextRef"];
         };
     };
     responses: never;

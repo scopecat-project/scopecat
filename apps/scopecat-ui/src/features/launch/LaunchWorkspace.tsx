@@ -94,7 +94,7 @@ export function LaunchWorkspace({
           </a>{" "}
           · {draft.handoff.source_hash}. This source is retained only in the current draft, not yet
           as destination-run provenance.
-          {!draft.handoff.request.context && (
+          {draft.handoff.request.selection?.configuration?.kind !== "working_point" && (
             <>
               {" "}
               Only suggested inputs were imported. Previous sample and working-point selections were

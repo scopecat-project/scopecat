@@ -1,3 +1,4 @@
+import { normalizeSelection } from "./scientific-selection";
 import type { ConfigContextResolution } from "../config/config-api";
 import type { ComparisonHandoff } from "../analyses/RunComparison";
 import { initialControlDrafts, type ControlDraft } from "./ControlFields";
@@ -29,16 +30,17 @@ export function importLaunchRequest(
     throw new Error(
       "The suggested experiment definition changed. Reopen the source analysis and review its inputs.",
     );
+  const configuration = normalizeSelection(request.selection).configuration;
   if (
-    request.context &&
-    (selectedSource?.context.entry_id !== request.context.entry_id ||
-      selectedSource.context.content_hash !== request.context.content_hash ||
-      JSON.stringify(selectedSource.overrides) !== JSON.stringify(request.overrides))
+    configuration.kind === "working_point" &&
+    (selectedSource?.context.entry_id !== configuration.ref.entry_id ||
+      selectedSource.context.content_hash !== configuration.ref.content_hash ||
+      JSON.stringify(selectedSource.overrides) !== JSON.stringify(configuration.overrides))
   )
     throw new Error(
       "Select and resolve the suggested exact parameter context and overrides in Configuration first; context instructions cannot be silently dropped.",
     );
-  if (request.config_source || request.action !== "preview")
+  if (request.reviewed || request.action !== "preview")
     throw new Error(
       "Suggested inputs require a fresh preview in the selected configuration; a submitted or frozen request cannot be imported as a draft.",
     );
@@ -111,10 +113,7 @@ export function importLaunchRequest(
       ),
     },
     controls,
-    sample: request.sample ?? "",
-    batch:
-      request.batch_id ??
-      (request.context ? (selectedSource?.sample.batch_id ?? undefined) : undefined),
+    selection: normalizeSelection(request.selection),
     actor: request.actor ?? "operator",
   };
 }

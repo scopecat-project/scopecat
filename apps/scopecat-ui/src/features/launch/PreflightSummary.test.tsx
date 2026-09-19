@@ -1,3 +1,4 @@
+import { reviewedFixture } from "../../test/scientific-fixtures";
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
 import { cleanup, render, screen } from "@testing-library/react";
@@ -23,14 +24,14 @@ const preview: LaunchPreview = {
   experiment_id: "candidate",
   request_hash: "sha256:" + "a".repeat(64),
   point_count: 2,
-  config_source: {
+  reviewed: reviewedFixture({
     kind: "config_registry",
     selector: "active",
     entry_id: "baseline",
     config_ref: "baseline",
     content_hash: "sha256:" + "b".repeat(64),
     registry_generation: 1,
-  },
+  }),
   summary: "Source and proposed candidate",
   resolved_inputs: {},
   controls: [],
