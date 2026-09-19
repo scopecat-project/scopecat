@@ -20,7 +20,8 @@
 目前这里尚未记录实际运行链接和版本；PR 合并或快速 CI 通过不能替代安装验收。
 Actions 附件会过期，验收通过的交付包需另行保存。
 
-解压 Windows 附件后，`tutorial/` 是交付目录，`tutorial-evidence/` 是自动检查报告。
+解压 Windows 附件后，`tutorial.zip` 是完整交付包，`tutorial-evidence/` 是自动检查报告。
+再解压其中的 `tutorial.zip`，安装文件在第二次解压得到的 `tutorial/` 中。
 交付目录中应有 `install.py`、manifest 和全部安装文件，请保持目录完整。
 电脑需要匹配的 Python 3.14 和 uv；打开教学 Notebook 还需要 VS Code 及 Python/Jupyter 扩展。
 如果版本、附件或前置软件不明确，反馈缺少的内容即可，不必自己重新构建。

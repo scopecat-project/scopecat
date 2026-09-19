@@ -329,8 +329,13 @@ jobs:
           uv run --locked --group delivery python -m lab_tools.delivery
           dist/tutorial --source . --gui dist/tutorial-gui
 
-      - name: Verify offline notebooks, refresh, reset and installed launcher
-        run: uv run --locked --group delivery python scripts/verify_teaching_delivery.py dist/tutorial dist/tutorial-evidence
+      - name: Archive the complete offline delivery
+        run: python -m zipfile -c dist/tutorial.zip dist/tutorial
+
+      - name: Verify the archived delivery, notebooks and installed application
+        run: |
+          python -m zipfile -e dist/tutorial.zip dist/delivery-check
+          uv run --locked --group delivery python scripts/verify_teaching_delivery.py dist/delivery-check/tutorial dist/tutorial-evidence
 
       - name: Retain tutorial delivery and executed notebooks
         if: always()
@@ -338,7 +343,7 @@ jobs:
         with:
           name: scopecat-tutorial-${{ matrix.os }}
           path: |
-            dist/tutorial/
+            dist/tutorial.zip
             dist/tutorial-evidence/**/verified-*.ipynb
             dist/tutorial-evidence/**/acceptance.json
             dist/tutorial-evidence/**/*.log
