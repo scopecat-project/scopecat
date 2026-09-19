@@ -205,7 +205,6 @@ class LocalDaemonRuntime:
                 config_operations=config_operations,
                 runs=runs,
                 services=services,
-                actors=instrument_actors,
                 analyses=analysis_service,
                 automation=automation_store,
                 calibration_cohorts=calibration_cohort_store,

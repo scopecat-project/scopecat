@@ -118,9 +118,6 @@ from scopecat_server.storage.sqlite.control_plane import SQLiteControlPlane
 from scopecat_server.storage.sqlite.run_repository import SQLiteRunRepository
 
 from ..errors import BackendConflict, BackendNotFound
-from ..instruments.actors import (
-    InstrumentActorRegistry,
-)
 from .analyses import AnalysisService
 from .samples import SampleService
 
@@ -152,7 +149,6 @@ class ConfigService:
         config_operations: SQLiteConfigOperationStore,
         runs: SQLiteRunRepository,
         services: ProjectStateServices,
-        actors: InstrumentActorRegistry,
         analyses: AnalysisService,
         automation: SQLiteAutomationStore,
         calibration_cohorts: SQLiteCalibrationCohortStore,
@@ -164,17 +160,10 @@ class ConfigService:
         self._config_operations = config_operations
         self._runs = runs
         self._services = services
-        self._actors = actors
         self._analyses = analyses
         self._automation = automation
         self._calibration_cohorts = calibration_cohorts
         self._mutation_lock = Lock()
-
-    def _config_registry_config_in_transaction(
-        self, connection: sqlite3.Connection, entry: ConfigRegistryEntry
-    ) -> ConfigProfileSnapshot:
-        with self._config_registry.borrowed_unit_of_work(connection) as work:
-            return work.registry.read_config(entry.config_ref)
 
     def preview_setup_rebind(
         self, command: ConfigSetupRebindPreviewCommand
