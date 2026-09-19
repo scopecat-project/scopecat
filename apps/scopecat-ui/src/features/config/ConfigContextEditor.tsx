@@ -8,6 +8,7 @@ import type {
   ParameterScalarType,
   StoredParameterValue,
 } from "../../api-contract";
+import { ScopeCatalog } from "../context/ScopeCatalog";
 import { getSamples } from "../samples/sample-api";
 import { errorMessage } from "../../lib/presentation";
 import { ConfigParameters } from "./ConfigParameters";
@@ -41,6 +42,8 @@ export function ConfigContextEditor({
     { sample_id: string; revision: number; role: string } | undefined
   >(metadata?.sample);
 
+  const [batch, setBatch] = useState<string | undefined>(metadata?.sample.batch_id ?? undefined);
+  const [chooseBatch, setChooseBatch] = useState(false);
   const [point, setPoint] = useState(metadata?.working_point_id ?? "");
   const [label, setLabel] = useState(metadata?.label ?? "");
   const [entryId] = useState(() => createConfigOperationId("context"));
@@ -59,6 +62,7 @@ export function ConfigContextEditor({
           sample_id: selectedSample.sample_id,
           revision: selectedSample.revision,
           role: selectedSample.role,
+          batch_id: batch,
         },
         working_point_id: point.trim(),
         label: label.trim(),
@@ -133,6 +137,25 @@ export function ConfigContextEditor({
         A new saved version keeps the lab default unchanged. Unknown values stay unknown; saving
         does not validate a calibration.
       </p>
+      <div className="space-y-2">
+        <p>Experimental batch: {batch ?? "unspecified"}</p>
+        <button type="button" onClick={() => setChooseBatch(!chooseBatch)}>
+          Choose experimental batch
+        </button>
+        {chooseBatch && (
+          <ScopeCatalog
+            kind="batch"
+            owner={entry.id}
+            value={batch}
+            onChange={setBatch}
+            disabled={mutation.isPending}
+          />
+        )}
+        <p className="text-sm">
+          A copy into another batch retains parameter estimates and their origins; it does not
+          certify a new calibration.
+        </p>
+      </div>
       <label>
         Physical sample
         <select

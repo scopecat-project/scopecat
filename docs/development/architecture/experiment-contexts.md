@@ -303,3 +303,23 @@ The earlier audit remains open for assembly/member identities, setup applicabili
 explicit cross-scope dependency policy, shared-active-configuration composition,
 GUI selection, multi-workspace source ownership and physical resource authority.
 This slice does not establish hardware qualification or an event's physical truth.
+
+## Fourth implementation: workbench page selection
+
+The existing experiment console now exposes page-local sample, batch, record
+collection and operator choices through the same preview/admission request used
+by Python. Working-point selection adopts its exact sample/batch. Switching
+experiments or refreshing author source retains page selection; resetting inputs
+retains it too. Separate tabs and fresh projects start independently.
+
+Catalog browsing is paginated and offers explicit metadata creation. Saved recipes
+keep their scientific scope, reject another selected batch, and use the page's
+collection/operator for execution. Selection edits invalidate previews without
+rewriting retained submission attempts. Configuration copies preserve batch
+bindings and can explicitly choose a new event as an estimate.
+
+A real-daemon browser journey exercises two pages with different samples/batches
+and one collection, saved-plan rejection, acquisition and retained numbering.
+This connects the already shipped single-sample contracts to the workbench; it
+does not add multi-workspace source ownership, assembly/setup composition, shared
+physical resource authority, or the final installation-level entry and Help flow.

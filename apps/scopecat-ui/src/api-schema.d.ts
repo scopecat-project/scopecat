@@ -465,6 +465,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/experimental-batches": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Experimental Batches */
+        get: operations["list_experimental_batches_api_v1_experimental_batches_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/experimental-batches/{batch_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Experimental Batch */
+        get: operations["get_experimental_batch_api_v1_experimental_batches__batch_id__get"];
+        /** Save Experimental Batch */
+        put: operations["save_experimental_batch_api_v1_experimental_batches__batch_id__put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/health": {
         parameters: {
             query?: never;
@@ -867,6 +902,41 @@ export interface paths {
         put?: never;
         /** Submit Procedure Step Input */
         post: operations["submit_procedure_step_input_api_v1_procedures__procedure_run_id__steps__step_key__attempts__attempt__input_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/record-collections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Record Collections */
+        get: operations["list_record_collections_api_v1_record_collections_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/record-collections/{collection_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Record Collection */
+        get: operations["get_record_collection_api_v1_record_collections__collection_id__get"];
+        /** Save Record Collection */
+        put: operations["save_record_collection_api_v1_record_collections__collection_id__put"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -4043,6 +4113,52 @@ export interface components {
             /** Value */
             value: number;
         };
+        /** ExperimentalBatch */
+        ExperimentalBatch: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Description */
+            description: string;
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Revision */
+            revision: number;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** ExperimentalBatchEdit */
+        ExperimentalBatchEdit: {
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /**
+             * Expected Revision
+             * @default 0
+             */
+            expected_revision: number;
+            /** Name */
+            name: string;
+        };
+        /** ExperimentalBatchPage */
+        ExperimentalBatchPage: {
+            /**
+             * Items
+             * @default []
+             */
+            items: components["schemas"]["ExperimentalBatch"][];
+            /** Next Cursor */
+            next_cursor?: number | null;
+        };
         /** ExperimentPlanDefinition */
         "ExperimentPlanDefinition-Input": {
             code_revision?: components["schemas"]["AuthorRevisionRef"] | null;
@@ -7144,6 +7260,54 @@ export interface components {
             title?: string | null;
         };
         pydantic__types__JsonValue: unknown;
+        /** RecordCollection */
+        RecordCollection: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Description */
+            description: string;
+            /** Id */
+            id: string;
+            /** Is Default */
+            is_default: boolean;
+            /** Name */
+            name: string;
+            /** Revision */
+            revision: number;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** RecordCollectionEdit */
+        RecordCollectionEdit: {
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /**
+             * Expected Revision
+             * @default 0
+             */
+            expected_revision: number;
+            /** Name */
+            name: string;
+        };
+        /** RecordCollectionPage */
+        RecordCollectionPage: {
+            /**
+             * Items
+             * @default []
+             */
+            items: components["schemas"]["RecordCollection"][];
+            /** Next Cursor */
+            next_cursor?: number | null;
+        };
         /**
          * RenameParameterColumn
          * @description Change a semantic column id explicitly; this is not an alias.
@@ -10142,6 +10306,104 @@ export interface operations {
             };
         };
     };
+    list_experimental_batches_api_v1_experimental_batches_get: {
+        parameters: {
+            query?: {
+                before?: number | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExperimentalBatchPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_experimental_batch_api_v1_experimental_batches__batch_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                batch_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExperimentalBatch"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    save_experimental_batch_api_v1_experimental_batches__batch_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                batch_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExperimentalBatchEdit"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExperimentalBatch"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     health_api_v1_health_get: {
         parameters: {
             query?: never;
@@ -10893,6 +11155,104 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProcedureStepInputSubmitReceipt"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_record_collections_api_v1_record_collections_get: {
+        parameters: {
+            query?: {
+                before?: number | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecordCollectionPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_record_collection_api_v1_record_collections__collection_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                collection_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecordCollection"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    save_record_collection_api_v1_record_collections__collection_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                collection_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecordCollectionEdit"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecordCollection"];
                 };
             };
             /** @description Validation Error */

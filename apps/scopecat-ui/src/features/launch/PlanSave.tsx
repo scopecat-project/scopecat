@@ -71,6 +71,7 @@ export function PlanSave({
           planDirty: false,
           configuration: saved.definition.configuration,
           sampleBinding: saved.definition.sample,
+          batch: saved.definition.sample?.batch_id ?? undefined,
           codeRevision: saved.definition.code_revision,
         }));
       await cache.invalidateQueries({ queryKey: ["experiment-plans", projectId] });

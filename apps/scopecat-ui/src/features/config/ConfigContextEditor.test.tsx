@@ -172,6 +172,7 @@ it.each([false, true])(
             kind: "synthetic",
             display_name: "Sample A",
             context_id: "parked",
+            batch_id: "cooldown-a",
           },
           working_point_id: "parked",
           label: "Old",
@@ -205,7 +206,12 @@ it.each([false, true])(
     await waitFor(() =>
       expect(saveConfigContext).toHaveBeenCalledWith(
         expect.objectContaining({
-          sample: { sample_id: "sample-a", revision: chooseNew ? 2 : 1, role: "subject" },
+          sample: {
+            sample_id: "sample-a",
+            revision: chooseNew ? 2 : 1,
+            role: "subject",
+            batch_id: "cooldown-a",
+          },
         }),
       ),
     );

@@ -9,6 +9,10 @@ change; renaming a label never changes applicability.
 batch = session.create_experimental_batch("Chip A · cooldown 3")
 ```
 
+The workbench also provides batch creation and selection in
+[Measurement context](select-session-context.md#select-context-in-the-workbench),
+and an explicit batch choice when copying a working point.
+
 Use `session.experimental_batches()` to find retained batches and
 `session.experimental_batch(batch_id)` to reopen one. Names need not be unique;
 IDs are stable. The catalog provides bounded pages and optimistic metadata edits,

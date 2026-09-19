@@ -28,141 +28,172 @@ with project.connect() as lab:
     assert run.snapshot.config_source.context.entry_id == sys.argv[3]
     assert run.samples[0].sample_id == sys.argv[4]
     assert run.samples[0].revision == 1
+    assert run.samples[0].batch_id == (sys.argv[6] or None)
     assert run.config.parameter_snapshot.get("qubits").rows[0]["drive_carrier_frequency"].value == float(sys.argv[5])
 `;
 
-test("saves and launches two physical samples at two working points without activating them", async ({
-  page,
-}, testInfo) => {
-  test.setTimeout(120_000);
-  const project = await mkdtemp(join(tmpdir(), "scopecat-context-e2e-"));
-  let completed = false;
-  try {
-    for (const name of ["src", "config", "scopecat.toml"])
-      await cp(join(ROOT, "examples/reference_lab", name), join(project, name), {
-        recursive: true,
-      });
-    uv(["scopecat", "start", project, "--port", "0", "--static-dir", resolve("dist")]);
-    const endpoint = JSON.parse(await readFile(join(project, ".scopecat/daemon.json"), "utf8")) as {
-      base_url: string;
-    };
-    const active = await (
-      await page.request.get(`${endpoint.base_url}/api/v1/config-registry?limit=100`)
-    ).json();
-    for (const sample of ["a", "b"]) {
-      const created = await page.request.post(`${endpoint.base_url}/api/v1/samples`, {
-        data: {
-          operation_id: `create-${sample}`,
-          sample_id: `context-${sample}`,
-          kind: "synthetic",
-          actor: "operator",
-          content: { display_name: `Sample ${sample}` },
-        },
-      });
-      expect(created.status()).toBe(201);
+for (const scoped of [false, true]) {
+  test(`saves and launches two physical samples at two working points${scoped ? " in declared batches" : ""} without activating them`, async ({
+    page,
+  }, testInfo) => {
+    test.setTimeout(120_000);
+    const project = await mkdtemp(join(tmpdir(), "scopecat-context-e2e-"));
+    let completed = false;
+    try {
+      for (const name of ["src", "config", "scopecat.toml"])
+        await cp(join(ROOT, "examples/reference_lab", name), join(project, name), {
+          recursive: true,
+        });
+      uv(["scopecat", "start", project, "--port", "0", "--static-dir", resolve("dist")]);
+      const endpoint = JSON.parse(
+        await readFile(join(project, ".scopecat/daemon.json"), "utf8"),
+      ) as {
+        base_url: string;
+      };
+      const active = await (
+        await page.request.get(`${endpoint.base_url}/api/v1/config-registry?limit=100`)
+      ).json();
+      for (const sample of ["a", "b"]) {
+        const created = await page.request.post(`${endpoint.base_url}/api/v1/samples`, {
+          data: {
+            operation_id: `create-${sample}`,
+            sample_id: `context-${sample}`,
+            kind: "synthetic",
+            actor: "operator",
+            content: { display_name: `Sample ${sample}` },
+          },
+        });
+        expect(created.status()).toBe(201);
+      }
+      for (const batch of scoped ? ["cooldown-a", "cooldown-b"] : []) {
+        const created = await page.request.put(
+          `${endpoint.base_url}/api/v1/experimental-batches/${batch}`,
+          { data: { name: batch, expected_revision: 0 } },
+        );
+        expect(created.status()).toBe(200);
+      }
+      await page.goto(`${endpoint.base_url}/#configuration`);
+      for (let index = 0; index < 4; index++) {
+        const sample = index < 2 ? "a" : "b";
+        const point = index % 2 === 0 ? "parked" : "shifted";
+        const frequency = 4.8e9 + index * 1e8;
+        await page.getByRole("button", { name: "Configuration", exact: true }).click();
+        await page.getByRole("button", { name: "Save working point copy", exact: true }).click();
+        await page
+          .getByLabel("Physical sample", { exact: true })
+          .selectOption(`context-${sample}@1`);
+        if (scoped) {
+          await page
+            .getByRole("button", { name: "Choose experimental batch", exact: true })
+            .click();
+          await page
+            .getByLabel("Experimental batch", { exact: true })
+            .selectOption(`cooldown-${sample}`);
+        }
+        await page.getByLabel("Working point", { exact: true }).fill(point);
+        await page.getByLabel("Context label", { exact: true }).fill(`${sample} ${point}`);
+        await page
+          .getByLabel("qubits[q0].drive_carrier_frequency", { exact: true })
+          .fill(String(frequency));
+        const saving = page.waitForResponse(
+          (response) =>
+            response.url().endsWith("/config-registry/contexts") &&
+            response.request().method() === "POST",
+        );
+        await page.getByRole("button", { name: "Save context", exact: true }).click();
+        const savedResponse = await saving;
+        expect(savedResponse.status()).toBe(200);
+        const saved = await savedResponse.json();
+        const catalogReady = page.waitForResponse(
+          (response) =>
+            new URL(response.url()).pathname.endsWith("/experiment-launcher") &&
+            response.request().method() === "GET",
+        );
+        await page.getByRole("button", { name: "Use for next experiment", exact: true }).click();
+        const catalogResponse = await catalogReady;
+        expect(catalogResponse.status(), await catalogResponse.text()).toBe(200);
+        await expect(page.getByLabel("Experiment", { exact: true })).toBeVisible();
+        await expect(
+          page.getByText(new RegExp(`Parameter context: ${saved.entry.id}`)),
+        ).toBeVisible();
+        await page
+          .getByLabel("Experiment", { exact: true })
+          .selectOption(scoped || index % 2 === 0 ? "signal" : "frequency-amplitude");
+        await page.getByLabel("Frequency", { exact: true }).fill(String(4.8 + index / 10));
+        const previewing = page.waitForResponse((response) =>
+          response.url().endsWith("/experiment-launcher/preview"),
+        );
+        await page.getByRole("button", { name: "Preview", exact: true }).click();
+        const preview = await previewing;
+        expect(preview.status()).toBe(200);
+        expect((await preview.json()).config_source).toMatchObject({
+          kind: "parameter_context",
+          context: { entry_id: saved.entry.id },
+          sample: {
+            sample_id: `context-${sample}`,
+            revision: 1,
+            context_id: point,
+            ...(scoped ? { batch_id: `cooldown-${sample}` } : {}),
+          },
+        });
+        await expect(page.getByText("Preview ready", { exact: true })).toBeVisible();
+        const submitting = page.waitForResponse(
+          (response) =>
+            response.url().endsWith("/experiment-launcher/submit") &&
+            response.request().method() === "POST",
+        );
+        await page.getByRole("button", { name: "Start acquisition", exact: true }).click();
+        const submission = await submitting;
+        expect(submission.status(), await submission.text()).toBe(200);
+        expect(submission.request().postDataJSON()).toMatchObject({
+          experiment: scoped || index % 2 === 0 ? "signal" : "frequency-amplitude",
+          context: { entry_id: saved.entry.id },
+        });
+        await expect(
+          page.getByText(
+            scoped || index % 2 === 0 ? "experiment: Completed" : "signal: Completed",
+            {
+              exact: true,
+            },
+          ),
+        ).toBeVisible();
+        await page.getByRole("link", { name: /^Open retained run:/ }).click();
+        await expect(page.getByTestId("run-status")).toHaveText("Succeeded");
+        const runId = new URL(page.url()).searchParams.get("run");
+        expect(runId).toBeTruthy();
+        uv([
+          "python",
+          "-c",
+          VERIFY,
+          project,
+          runId!,
+          saved.entry.id,
+          `context-${sample}`,
+          String(frequency),
+          scoped ? `cooldown-${sample}` : "",
+        ]);
+      }
+      const after = await (
+        await page.request.get(`${endpoint.base_url}/api/v1/config-registry?limit=100`)
+      ).json();
+      expect(after.activation).toEqual(active.activation);
+      expect(
+        after.entries.filter(
+          (entry: { source: { kind: string } }) => entry.source.kind === "parameter_context",
+        ),
+      ).toHaveLength(4);
+      completed = true;
+    } finally {
+      uv(["scopecat", "stop", project]);
+      if (completed) await rm(project, { recursive: true, force: true });
+      else
+        await testInfo.attach("Preserved context project", {
+          body: project,
+          contentType: "text/plain",
+        });
     }
-    await page.goto(`${endpoint.base_url}/#configuration`);
-    for (let index = 0; index < 4; index++) {
-      const sample = index < 2 ? "a" : "b";
-      const point = index % 2 === 0 ? "parked" : "shifted";
-      const frequency = 4.8e9 + index * 1e8;
-      await page.getByRole("button", { name: "Configuration", exact: true }).click();
-      await page.getByRole("button", { name: "Save working point copy", exact: true }).click();
-      await page.getByLabel("Physical sample", { exact: true }).selectOption(`context-${sample}@1`);
-      await page.getByLabel("Working point", { exact: true }).fill(point);
-      await page.getByLabel("Context label", { exact: true }).fill(`${sample} ${point}`);
-      await page
-        .getByLabel("qubits[q0].drive_carrier_frequency", { exact: true })
-        .fill(String(frequency));
-      const saving = page.waitForResponse(
-        (response) =>
-          response.url().endsWith("/config-registry/contexts") &&
-          response.request().method() === "POST",
-      );
-      await page.getByRole("button", { name: "Save context", exact: true }).click();
-      const savedResponse = await saving;
-      expect(savedResponse.status()).toBe(200);
-      const saved = await savedResponse.json();
-      const catalogReady = page.waitForResponse(
-        (response) =>
-          new URL(response.url()).pathname.endsWith("/experiment-launcher") &&
-          response.request().method() === "GET",
-      );
-      await page.getByRole("button", { name: "Use for next experiment", exact: true }).click();
-      const catalogResponse = await catalogReady;
-      expect(catalogResponse.status(), await catalogResponse.text()).toBe(200);
-      await expect(page.getByLabel("Experiment", { exact: true })).toBeVisible();
-      await expect(
-        page.getByText(new RegExp(`Parameter context: ${saved.entry.id}`)),
-      ).toBeVisible();
-      await page
-        .getByLabel("Experiment", { exact: true })
-        .selectOption(index % 2 === 0 ? "signal" : "frequency-amplitude");
-      await page.getByLabel("Frequency", { exact: true }).fill(String(4.8 + index / 10));
-      const previewing = page.waitForResponse((response) =>
-        response.url().endsWith("/experiment-launcher/preview"),
-      );
-      await page.getByRole("button", { name: "Preview", exact: true }).click();
-      const preview = await previewing;
-      expect(preview.status()).toBe(200);
-      expect((await preview.json()).config_source).toMatchObject({
-        kind: "parameter_context",
-        context: { entry_id: saved.entry.id },
-        sample: { sample_id: `context-${sample}`, revision: 1, context_id: point },
-      });
-      await expect(page.getByText("Preview ready", { exact: true })).toBeVisible();
-      const submitting = page.waitForResponse(
-        (response) =>
-          response.url().endsWith("/experiment-launcher/submit") &&
-          response.request().method() === "POST",
-      );
-      await page.getByRole("button", { name: "Start acquisition", exact: true }).click();
-      const submission = await submitting;
-      expect(submission.status(), await submission.text()).toBe(200);
-      expect(submission.request().postDataJSON()).toMatchObject({
-        experiment: index % 2 === 0 ? "signal" : "frequency-amplitude",
-        context: { entry_id: saved.entry.id },
-      });
-      await expect(
-        page.getByText(index % 2 === 0 ? "experiment: Completed" : "signal: Completed", {
-          exact: true,
-        }),
-      ).toBeVisible();
-      await page.getByRole("link", { name: /^Open retained run:/ }).click();
-      await expect(page.getByTestId("run-status")).toHaveText("Succeeded");
-      const runId = new URL(page.url()).searchParams.get("run");
-      expect(runId).toBeTruthy();
-      uv([
-        "python",
-        "-c",
-        VERIFY,
-        project,
-        runId!,
-        saved.entry.id,
-        `context-${sample}`,
-        String(frequency),
-      ]);
-    }
-    const after = await (
-      await page.request.get(`${endpoint.base_url}/api/v1/config-registry?limit=100`)
-    ).json();
-    expect(after.activation).toEqual(active.activation);
-    expect(
-      after.entries.filter(
-        (entry: { source: { kind: string } }) => entry.source.kind === "parameter_context",
-      ),
-    ).toHaveLength(4);
-    completed = true;
-  } finally {
-    uv(["scopecat", "stop", project]);
-    if (completed) await rm(project, { recursive: true, force: true });
-    else
-      await testInfo.attach("Preserved context project", {
-        body: project,
-        contentType: "text/plain",
-      });
-  }
-});
+  });
+}
 
 test("adds an unknown optional table column through the GUI and launches the saved structure", async ({
   page,

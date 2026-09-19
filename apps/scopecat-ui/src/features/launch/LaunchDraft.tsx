@@ -36,6 +36,8 @@ export interface LaunchDraft {
   values: Record<string, string>;
   controls: ControlDrafts;
   sample: string;
+  batch?: string;
+  collection?: string;
   actor: string;
   revision: number;
   preview?: LaunchPreview;
@@ -190,29 +192,39 @@ function ProjectDraft({
       ),
     );
   }
-  const select = useCallback((entry: LaunchCatalogEntry, reset = false) => {
-    setDraft((current) => {
-      if (!reset && current?.definition === definitionKey(entry)) return current;
-      const next = initialDraft(entry, (current?.revision ?? 0) + 1);
-      if (!reset && current?.experiment === entry.id) {
-        // Keep raw inputs for review; the new declaration and server validate them.
-        next.values = Object.fromEntries(
-          Object.entries(next.values).map(([name, value]) => [name, current.values[name] ?? value]),
-        );
-        next.sample = current.sample;
-        next.actor = current.actor;
-        if (current.controlDefinition === next.controlDefinition) {
-          next.controls = current.controls;
-          next.notice =
-            "Experiment revision changed. Inputs and control edits are retained; preview again.";
-        } else {
-          next.notice =
-            "Control declarations changed. Check retained inputs and new control defaults, then preview again.";
+  const select = useCallback(
+    (entry: LaunchCatalogEntry, reset = false) => {
+      setDraft((current) => {
+        if (!reset && current?.definition === definitionKey(entry)) return current;
+        const next = initialDraft(entry, (current?.revision ?? 0) + 1);
+        next.sample = selectedContext?.config_source.sample.sample_id ?? current?.sample ?? "";
+        next.batch = selectedContext
+          ? (selectedContext.config_source.sample.batch_id ?? undefined)
+          : current?.batch;
+        next.collection = current?.collection;
+        next.actor = current?.actor ?? "operator";
+        if (!reset && current?.experiment === entry.id) {
+          // Keep raw inputs for review; the new declaration and server validate them.
+          next.values = Object.fromEntries(
+            Object.entries(next.values).map(([name, value]) => [
+              name,
+              current.values[name] ?? value,
+            ]),
+          );
+          if (current.controlDefinition === next.controlDefinition) {
+            next.controls = current.controls;
+            next.notice =
+              "Experiment revision changed. Inputs and control edits are retained; preview again.";
+          } else {
+            next.notice =
+              "Control declarations changed. Check retained inputs and new control defaults, then preview again.";
+          }
         }
-      }
-      return next;
-    });
-  }, []);
+        return next;
+      });
+    },
+    [selectedContext],
+  );
   async function submit(request: SubmissionRequest, definition: string) {
     const wasUnknown = attempt?.status === "unknown";
     setAttempt({ request, definition, status: "pending", error: "" });
@@ -281,6 +293,10 @@ function ProjectDraft({
                     planDirty: Boolean(current.plan),
                     configuration: undefined,
                     sampleBinding: undefined,
+                    sample: resolved?.config_source.sample.sample_id ?? current.sample,
+                    batch: resolved
+                      ? (resolved.config_source.sample.batch_id ?? undefined)
+                      : current.batch,
                   },
                   "Parameter context changed. Preview again before starting.",
                 )
@@ -304,7 +320,12 @@ function ProjectDraft({
           if (!alive.current) return;
           const current = latest.current;
           const next = initialDraft(entry, (current?.revision ?? 0) + 1);
+          next.collection = current?.collection;
           const d = plan.definition;
+          if (current?.batch && current.batch !== d.sample?.batch_id)
+            throw new Error(
+              "This plan belongs to another batch. Select its original batch or clear the batch selection before opening it.",
+            );
           const imported = importLaunchRequest(
             next,
             entry,
@@ -320,6 +341,7 @@ function ProjectDraft({
               context: d.context,
               overrides: d.overrides,
               sample: d.sample?.sample_id,
+              batch_id: d.sample?.batch_id,
               actor: current?.actor ?? "operator",
             },
             context?.config_source,
@@ -331,6 +353,8 @@ function ProjectDraft({
             planDirty: false,
             configuration: d.configuration,
             sampleBinding: d.sample,
+            batch: d.sample?.batch_id ?? undefined,
+            collection: current?.collection,
             codeRevision: d.code_revision,
             handoff: undefined,
             notice: `Opened ${plan.name}, revision ${plan.ref.revision}. Saved by ${plan.saved_by}; current operator is ${current?.actor ?? "operator"}. Fresh preview required.`,
@@ -340,6 +364,7 @@ function ProjectDraft({
           if (!alive.current) return;
           const current = latest.current;
           const next = initialDraft(entry, (current?.revision ?? 0) + 1);
+          next.collection = current?.collection;
           try {
             const imported = importLaunchHandoff(
               next,
@@ -348,7 +373,7 @@ function ProjectDraft({
               selectedContext?.config_source,
             );
             if (!handoff.request.context) setSelectedContext(undefined);
-            setDraft(imported);
+            setDraft({ ...imported, actor: current?.actor ?? "operator" });
           } catch (error) {
             setDraft({
               ...(current ?? next),
