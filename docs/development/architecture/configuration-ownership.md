@@ -72,7 +72,8 @@ fences. Publication to a working point follows these rules:
 
 A and B publish independently; two competing updates to A conflict. A failed
 or stale publication leaves neither an approval nor a new head. The receipt,
-context provenance and approval survive current-format backup/restore. Explicit rebasing changes the proposal and requires new independent evidence.
+context provenance and approval survive current-format backup/restore. Explicit
+rebasing changes the proposal and requires new independent evidence.
 
 For recoverable client calls, retain and reuse `operation_id`. The shared config
 operation ledger records this operation without inventing an activation generation;

@@ -9,7 +9,7 @@ Start the baseline measurement from an exact saved version:
 ```python
 parameters = session.config.workspace(context="chip-a-parked", latest=True)
 baseline_version = parameters.version
-baseline = session.prepare("rabi", working_point=baseline_version).run()
+baseline = session.prepare("rabi", working_point=baseline_version).run().wait().result()
 ```
 
 Stage a candidate from retained analysis, measure with that candidate, and verify it
