@@ -84,13 +84,22 @@ failures. Timing and startup artifacts remain available on failed runs.
 [Full acceptance](https://github.com/scopecat-project/scopecat/blob/main/.github/workflows/acceptance.yml)
 is a separate manual workflow. It retains the full Linux/Windows Python matrix,
 both browser shards, benchmark smoke, isolated wheel imports, offline installation and every shipped
-teaching Notebook, alongside static/UI/docs checks. Its **Full acceptance gate**
-requires all jobs to succeed. These checks were moved, not deleted or silently
+teaching Notebook, alongside static/UI/docs checks. Its default `full` profile requires every job to succeed at the
+**Acceptance gate (full)**. These checks were moved, not deleted or silently
 reported as passing by the fast gate. Successful fast CI does not qualify a release,
 Windows operation or installed/offline delivery.
 
-Run the full workflow at architecture milestones and before publishing a release
-or handing a new installed build to a participant. Select the intended branch/ref
+The explicit `local-application` profile reuses the UI build, both browser shards,
+and installed Windows/Linux pilot and offline Notebook checks. It skips the broad
+Python matrix, benchmark and duplicate static checks; those expected skips are
+checked by **Acceptance gate (local-application)**, while every selected job must
+succeed. Use it with successful fast PR CI for a bounded experimental installation
+trial. Record the exact scope and unresolved qualification in #616; it does not
+establish the full architecture milestone, a supported data baseline or release
+readiness. Platform artifacts contain the offline bundle, executed notebooks,
+acceptance report and retained lifecycle logs, including on failure.
+
+Run the `full` profile at architecture milestones and before publishing a release. Select the intended branch/ref
 in Actions and record the resulting exact revision and run URL in the parent issue.
 The manual workflow executes that checkout, without changing a private repository's
 Actions settings. A later code change needs corresponding validation; an older
@@ -101,7 +110,7 @@ successful run does not qualify the new revision.
 | Storage/identity | Focused current-format, rejection-without-mutation and frozen-request checks; actual current-format backup/restore journey before the milestone closes. No prebaseline migration gate; see [data policy](data-compatibility.md). |
 | Worker/code loading/resource ownership | Relevant process, restart, cancellation and resource-exclusion journeys on the PR's revision |
 | Wire/UI consumer | Regenerate from the producer; focused component/payload checks and the affected browser journey |
-| Installation/tutorial changes | Affected installed/offline checks on the changed platform; full Linux/Windows acceptance before participant delivery |
+| Installation/tutorial changes | Affected installed/offline checks on the changed platform; Windows/Linux installed profile before a bounded experimental trial; full acceptance before release |
 | Architecture milestone or release | Full acceptance on the integrated revision; link results and unresolved limitations |
 
 Scientific data identity, immutable requests, admission idempotency, batch
