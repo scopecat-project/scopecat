@@ -188,7 +188,7 @@ def test_bootstrap_creates_the_complete_project_store_and_is_idempotent(
         "operation_id",
         "result_input_fingerprint",
         "result_freshness_fingerprint",
-        "result_registry_generation",
+        "result_entry_id",
         "publication_json",
     } <= calibration_publication_columns
     assert (
@@ -199,7 +199,9 @@ def test_bootstrap_creates_the_complete_project_store_and_is_idempotent(
         "revision",
         "attempt_count",
         "available_at",
-        "superseded_by_generation",
+        "supersession_json",
+        "owner_workspace_id",
+        "setup_content_hash",
         "publication_operation_id",
     } <= finalization_columns
     assert ready_queue_columns == {"sequence", "cohort_id", "enqueued_at"}
