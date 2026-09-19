@@ -396,3 +396,208 @@ def test_saved_plan_reuses_authoritative_target_validation(tmp_path: Path) -> No
                 )
             )
         assert runtime.application.plans.repository.list().items == (saved,)
+
+
+@pytest.mark.parametrize("drop_subject", [False, True])
+def test_generic_saved_plan_allows_distinct_stage_configurations(
+    tmp_path: Path,
+    drop_subject: bool,
+) -> None:
+    from scopecat.application.experiment_plans import plan_launch_request
+    from scopecat.automation import (
+        ProcedureDefinitionRef,
+        ProcedureStepBeginCommand,
+        ProcedureSubmitCommand,
+        ProcedureWorkerLeaseAcquireCommand,
+        procedure_step_operation_id,
+    )
+    from scopecat.kernel.content_identity import sha256_json_hash
+    from scopecat.records.experiment_plan import (
+        ExperimentPlanDefinition,
+        ExperimentPlanSave,
+    )
+    from scopecat.records.launch_request import LaunchRequest
+    from scopecat.records.manual_preview import ManualPreviewBinding
+    from scopecat.records.plan_ref import PlanConfigRef, ProcedureChildSubmission
+    from scopecat.records.run import ConfigRegistryRunConfigSource
+    from scopecat.records.scientific_selection import (
+        ReviewedScientificSelection,
+        SampleSubjectChoice,
+        SavedConfiguration,
+        ScientificSelection,
+    )
+
+    config = load_config()
+    with LocalDaemonRuntime(tmp_path, bootstrap_config=config) as runtime:
+        application = runtime.application
+        active = application.config.get_active_config()
+        _target(runtime, config)
+        samples = application.samples.resolve_bindings(
+            (SampleSelector(sample_id="chip", revision=1),)
+        )
+        binding = bind_scientific_evidence(
+            catalog_id=application.project_id,
+            config=config,
+            samples=samples,
+            sample_revisions={},
+        )
+        saved = application.plans.save(
+            ExperimentPlanSave(
+                name="Multiple stages",
+                saved_by="test",
+                definition=ExperimentPlanDefinition(
+                    experiment="stages",
+                    version="1",
+                    definition_hash="sha256:" + "a" * 64,
+                    selection=ScientificSelection(
+                        subject=SampleSubjectChoice(sample_id="chip", revision=1),
+                        configuration=SavedConfiguration(
+                            ref=PlanConfigRef(
+                                entry_id=active.entry.id,
+                                content_hash=active.entry.content_hash,
+                            )
+                        ),
+                    ),
+                    scientific_binding=binding,
+                ),
+            )
+        )
+        reviewed = ReviewedScientificSelection(
+            binding=binding,
+            config_source=ConfigRegistryRunConfigSource(
+                selector=active.entry.id,
+                entry_id=active.entry.id,
+                config_ref=active.entry.config_ref,
+                content_hash=active.entry.content_hash,
+                registry_generation=active.activation.generation,
+            ),
+        )
+        preview_request = plan_launch_request(saved, actor="test").model_copy(
+            update={"reviewed": reviewed}
+        )
+        fence = application.manual_previews.repository.record(
+            cursor=application.manual_previews.cursor(),
+            binding=ManualPreviewBinding(
+                request_hash=preview_request.request_hash,
+                config_source_hash=sha256_json_hash(
+                    reviewed.config_source.model_dump(mode="json")
+                ),
+            ),
+            instruments=(),
+        )
+        request = LaunchRequest.model_validate(
+            preview_request.model_dump(mode="json")
+            | {
+                "action": "submit",
+                "request_key": "stages",
+                "expected_request_hash": preview_request.request_hash,
+                "manual_state": fence.model_dump(mode="json"),
+            }
+        )
+        command = ProcedureSubmitCommand(
+            request_key="stages",
+            definition=ProcedureDefinitionRef(
+                id="stages", version="1", fingerprint="sha256:" + "b" * 64
+            ),
+            intent={
+                "actor": "test",
+                "record_collection": None,
+                "request_hash": request.request_hash,
+            },
+            plan_ref=saved.ref,
+            samples=binding.sample_selectors(),
+            plan_request=request,
+            expected_manual_preview=fence,
+        )
+        service = application.automation
+        parent = service.submit(command).run
+        assert parent.scientific_binding is None
+        assert parent.resolved_samples == binding.sample_selectors()
+        assert service.submit(command).run == parent
+        changed_config = config.model_copy(update={"id": "stage-two"})
+        changed_binding = bind_scientific_evidence(
+            catalog_id=application.project_id,
+            config=changed_config,
+            samples=samples,
+            sample_revisions={},
+        )
+        assert changed_binding != binding
+        with pytest.raises(BackendConflict, match="immutable plan"):
+            service.submit(
+                command.model_copy(
+                    update={
+                        "request_key": "wrong-fixed",
+                        "scientific_binding": changed_binding,
+                    }
+                )
+            )
+        with pytest.raises(BackendConflict, match="immutable plan"):
+            service.submit(
+                command.model_copy(
+                    update={
+                        "request_key": "wrong-samples",
+                        "samples": (SampleSelector(sample_id="unrelated", revision=1),),
+                    }
+                )
+            )
+        acquired = service.acquire_lease(
+            ProcedureWorkerLeaseAcquireCommand(
+                procedure_run_id=parent.procedure_run_id,
+                worker_id="worker",
+                expected_run_revision=parent.revision,
+            )
+        )
+        child = RunSubmission(
+            submission_id=procedure_step_operation_id(
+                parent.procedure_run_id, "second"
+            ),
+            config=changed_config,
+            scientific_binding=changed_binding,
+            request=RunRequest(
+                experiment_id="stage",
+                plan_ref=saved.ref,
+                samples=binding.sample_selectors(),
+            ),
+            plan=RunPlanSummary(
+                experiment_id="stage",
+                experiment_kind="stage",
+                point_plan_fingerprint="a" * 64,
+                measurement_contract_fingerprint="b" * 64,
+                point_count=1,
+                initial_point_count=1,
+                point_limit=1,
+            ),
+            procedure_child=ProcedureChildSubmission(
+                procedure_run_id=parent.procedure_run_id, step_key="second"
+            ),
+        )
+        if drop_subject:
+            child = child.model_copy(
+                update={
+                    "request": child.request.model_copy(update={"samples": ()}),
+                    "scientific_binding": bind_scientific_evidence(
+                        catalog_id=application.project_id,
+                        config=changed_config,
+                        samples=(),
+                        sample_revisions={},
+                    ),
+                }
+            )
+        service.begin_step(
+            ProcedureStepBeginCommand(
+                procedure_run_id=parent.procedure_run_id,
+                lease_token=acquired.lease.lease_token,
+                expected_run_revision=acquired.run.revision,
+                step_key="second",
+                operation="run",
+                intent_hash="sha256:" + child.intent_content_hash,
+            )
+        )
+        before = _counts(tmp_path)
+        if drop_subject:
+            with pytest.raises(BackendConflict, match="live durable parent step"):
+                application.submit_run(child)
+            assert _counts(tmp_path) == before
+        else:
+            admitted = application.submit_run(child)
+            assert admitted.snapshot.scientific_binding == changed_binding

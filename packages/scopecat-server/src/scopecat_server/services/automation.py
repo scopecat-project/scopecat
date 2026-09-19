@@ -75,7 +75,10 @@ from scopecat.records.launch_request import LaunchRequest
 from scopecat.records.manual_preview import ManualPreviewFence
 from scopecat.records.plan_ref import ExperimentPlanRef
 from scopecat.records.sample import SampleSelector
-from scopecat.records.scientific_binding import ResolvedScientificBinding
+from scopecat.records.scientific_binding import (
+    RegisteredTargetSubject,
+    ResolvedScientificBinding,
+)
 
 from scopecat_server.services.manual_previews import ManualPreviewService
 from scopecat_server.storage.sqlite.automation import (
@@ -619,6 +622,7 @@ class AutomationService:
                 plan_request,
                 expected_manual_preview,
                 scientific_binding,
+                samples,
                 selected_intent,
             )
         resolved_samples: tuple[SampleSelector, ...]
@@ -709,6 +713,7 @@ class AutomationService:
         plan_request: LaunchRequest | None,
         expected_manual_preview: ManualPreviewFence | None,
         scientific_binding: ResolvedScientificBinding | None,
+        samples: tuple[SampleSelector, ...],
         selected_intent: ProcedureIntent,
     ) -> None:
         if self._plans is None:
@@ -740,9 +745,19 @@ class AutomationService:
             update={"reviewed": plan_request.reviewed}
         )
         if (
-            scientific_binding != plan.definition.scientific_binding
+            (
+                scientific_binding is not None
+                and scientific_binding != plan.definition.scientific_binding
+            )
             or plan_request.reviewed is None
-            or plan_request.reviewed.binding != scientific_binding
+            or plan_request.reviewed.binding != plan.definition.scientific_binding
+            or samples != plan.definition.scientific_binding.sample_selectors()
+            or (
+                scientific_binding is None
+                and isinstance(
+                    plan.definition.scientific_binding.subject, RegisteredTargetSubject
+                )
+            )
             or plan_request.request_hash != expected_request.request_hash
             or plan_request.code_revision != expected_request.code_revision
         ):

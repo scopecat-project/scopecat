@@ -56,6 +56,7 @@ from scopecat.records.run import (
 )
 from scopecat.records.sample import SampleBinding
 from scopecat.records.scientific_binding import (
+    RegisteredTargetSubject,
     ResolvedScientificBinding,
 )
 from scopecat.runs.admission import build_run_admission
@@ -260,6 +261,17 @@ class AdmissionService:
             (
                 parent.scientific_binding is not None
                 and parent.scientific_binding != submission.scientific_binding
+            )
+            or (
+                parent.plan_ref is not None
+                and parent.scientific_binding is None
+                and (
+                    submission.scientific_binding.sample_selectors()
+                    != parent.resolved_samples
+                    or isinstance(
+                        submission.scientific_binding.subject, RegisteredTargetSubject
+                    )
+                )
             )
             or parent.plan_ref != submission.request.plan_ref
             or parent.state != "leased"
