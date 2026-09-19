@@ -248,9 +248,15 @@ class NotebookSession(AuthorProject):
         mode = "live" if self.live_enabled else "fixed"
         revision = self._revision.content_hash[:12] if self._revision else "unselected"
         status = "closed" if self.is_closed else self._refresh_error or "ready"
+        working_point = self.selection.working_point
+        working_point_label = working_point.entry_id if working_point else "lab default"
         return (
             f"Scopecat Notebook ({mode}, {status})\nProject: {self.project_root}\n"
-            f"Source: {revision}\nHistory: session.history()"
+            f"Source: {revision}\n"
+            f"Sample: {self.selection.sample or 'unselected'}\n"
+            f"Working point: {working_point_label}\n"
+            f"Collection: {self.selection.collection or 'store history'}\n"
+            f"Operator: {self.selection.operator}\nHistory: session.history()"
         )
 
     def _repr_html_(self) -> str:

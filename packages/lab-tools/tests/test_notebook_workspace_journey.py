@@ -38,6 +38,9 @@ import my_experiment.teaching as experiments
 from my_experiment.teaching import teaching_rabi as rabi
 from lab_teaching.session import open_parameters
 params = open_parameters(session)
+collection = session.create_record_collection("Notebook context")
+selected = session.use(collection=collection.id, operator="notebook-author")
+assert sc.notebook(root).selection == selected
 before = rabi()
 prepared = session.prepare(before, parameters=params)
 generation = session.state().generation
@@ -60,6 +63,10 @@ else:
 assert rabi().values['seed'] == 401
 assert experiments.teaching_rabi().values['seed'] == 401
 assert before.values['seed'] == 200
+session.use(operator="after-refresh")
+assert session.selection.collection == collection.id
+assert prepared.request.actor == "notebook-author"
+assert prepared.request.record_collection == collection.id
 # Reading an old revision must not redirect subsequent live calls.
 pinned = session.load_experiment(
     before.declaration, code_revision=before.declaration.code_revision
@@ -112,11 +119,14 @@ else:
 assert rabi().values['seed'] == 401
 # The old prepared experiment still runs its original source after all edits.
 run = prepared.run().wait(timeout=120).result()
+assert run.request.operator == "notebook-author"
 number = session.run_number(run)
+assert session.run(number).id == run.id
 run_id = run.id
 session.close()
 session = sc.notebook(root)
-assert session.run(number).id == run_id
+assert session.selection.collection is None
+assert session.run(number, collection=collection.id).id == run_id
 assert rabi().values['seed'] == 401
 assert sc.notebook(root) is session
 session.close()

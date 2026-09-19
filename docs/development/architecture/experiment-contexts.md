@@ -2,7 +2,7 @@
 
 Status: selected product direction and proposed implementation contracts, recorded
 2026-09-19 after the teaching-host trial. The entities and APIs proposed here are
-not shipped. This document governs the next implementation slices; it does not
+not all shipped; implementation status is recorded below. This document governs the next implementation slices; it does not
 relax current ownership checks or designate a new supported scientific-data baseline.
 
 ## Product outcome
@@ -248,3 +248,30 @@ conflicts, rename/restart stability, authored execution, saved-plan destinations
 and retained-data migration/restore. These cover the numbering portion of slice 1;
 they do not complete target/assembly and batch contracts, per-session selection,
 resource authority, or the application/workbench integration in later slices.
+
+## Second implementation: client-local selection
+
+Author/Notebook clients now keep an immutable selection of the existing single
+sample, exact working-point reference, collection and operator. A validated partial
+update affects future preparation only. Explicit scientific preparation inputs
+replace the inherited scientific scope; saved recipes retain their own scope.
+History and numeric lookup follow the selected collection. Source refresh preserves
+selection, while a fresh client starts unselected. The existing LaunchRequest and
+preview/admission contracts carry the frozen values; no daemon-global selection or
+new storage schema is introduced. See [session context](../../how-to/select-session-context.md).
+
+The following consumer constraints still block batch/assembly support:
+
+| Consumer | Current constraint | Required next contract |
+|---|---|---|
+| `SampleBinding.entity_scope` | Physical identity is the sample ID; `context_id` denotes the working point | Catalog-qualified sample identity and assembly-member entity scope; a cooldown must not redefine physical identity |
+| `ConfigContextMetadata`, `ContextRunConfigSource` | Exactly one sample revision, one working-point ID and a base configuration | Target/assembly revision plus explicit batch/setup applicability; independent scope validation before parameter composition |
+| `CalibrationTargetRef` in `automation/calibrations.py` | Targets use sample/context plus local entity identity | Carry applicable target/batch/setup scope into requirement matching, freshness and publication; do not reuse old evidence solely by sample name |
+| Candidate launch in `application/launch_config.py` | Requires one exact subject from the source run | Assembly-aware subject/evidence validation; distinguish copied estimates from current-condition evidence |
+| `AuthorProject.prepare_plan` and procedure admission | Recipe pins scientific configuration and source; execution chooses collection/operator | Extend frozen request/child provenance when batch and target references exist; session defaults must not override retained recipe scope |
+
+The dual-client journey checks independent samples/working points/operators and
+collection numbering, frozen old preparation, rejected partial updates, explicit
+overrides and unchanged shared active configuration. The actual IPython journey
+checks reuse, source refresh and reopening. These tests do not qualify shared-device
+arbitration across separate deployments or multi-chip calibration.
