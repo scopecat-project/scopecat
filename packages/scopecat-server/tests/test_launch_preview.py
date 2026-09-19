@@ -15,6 +15,11 @@ from scopecat.application.launch import LaunchPreview
 from scopecat.records.author_revision import AuthorRevisionRef, AuthorRevisionState
 from scopecat.records.launch_request import LaunchRequest
 from scopecat.records.run import ConfigRegistryRunConfigSource
+from scopecat.records.scientific_binding import (
+    ResolvedScientificBinding,
+    UnboundSubject,
+)
+from scopecat.records.scientific_selection import ReviewedScientificSelection
 
 from scopecat_server.http.transport import create_app
 from scopecat_server.services.revision_workers import (
@@ -24,19 +29,30 @@ from scopecat_server.services.revision_workers import (
 
 
 def _submission_request() -> dict[str, object]:
-    request = LaunchRequest(action="preview", experiment="diagnostic", version="1")
-    return request.model_copy(
-        update={
-            "action": "submit",
-            "request_key": "one",
-            "expected_request_hash": request.request_hash,
-            "config_source": ConfigRegistryRunConfigSource(
+    request = LaunchRequest(
+        action="preview",
+        experiment="diagnostic",
+        version="1",
+        reviewed=ReviewedScientificSelection(
+            binding=ResolvedScientificBinding(
+                subject=UnboundSubject(),
+                config_content_hash="sha256:" + "a" * 64,
+                setup_content_hash="sha256:" + "b" * 64,
+            ),
+            config_source=ConfigRegistryRunConfigSource(
                 selector="active",
                 entry_id="baseline",
                 config_ref="baseline",
                 content_hash="sha256:" + "a" * 64,
                 registry_generation=1,
             ),
+        ),
+    )
+    return request.model_copy(
+        update={
+            "action": "submit",
+            "request_key": "one",
+            "expected_request_hash": request.request_hash,
         }
     ).model_dump(mode="json")
 

@@ -242,3 +242,157 @@ def test_scientific_ref_failure_rolls_back_admission_and_address(
         accepted = runtime.application.submit_run(request)
         assert accepted.snapshot.scientific_binding == request.scientific_binding
         assert runtime.application.runs.get_run(accepted.run_id).address is not None
+
+
+@pytest.mark.parametrize("mode", ["fixed", "generic", "wrong-subject", "wrong-step"])
+def test_every_durable_child_checks_step_and_declared_parent_binding(
+    tmp_path: Path, mode: str
+) -> None:
+    from scopecat.automation import (
+        ProcedureDefinitionRef,
+        ProcedureStepBeginCommand,
+        ProcedureSubmitCommand,
+        ProcedureWorkerLeaseAcquireCommand,
+        procedure_step_operation_id,
+    )
+    from scopecat.records.plan_ref import ProcedureChildSubmission
+
+    config = load_config()
+    with LocalDaemonRuntime(tmp_path, bootstrap_config=config) as runtime:
+        target = _target(runtime, config)
+        original = _submission(runtime, config, target)
+        changed = runtime.application.targets.revise(
+            TargetReviseCommand(
+                expected=target.ref,
+                draft=TargetRevisionDraft(
+                    name="Next", actor="test", content=target.content
+                ),
+            )
+        )
+        command = ProcedureSubmitCommand(
+            request_key="scoped-parent",
+            definition=ProcedureDefinitionRef(
+                id="author", version="1", fingerprint="sha256:" + "a" * 64
+            ),
+            intent={},
+            samples=original.scientific_binding.sample_selectors(),
+            scientific_binding=None
+            if mode == "generic"
+            else original.scientific_binding,
+        )
+        service = runtime.application.automation
+        parent = service.submit(command).run
+        assert service.submit(command).run == parent
+        assert parent.scientific_binding == command.scientific_binding
+        with pytest.raises(BackendConflict, match="different intent"):
+            service.submit(
+                command.model_copy(
+                    update={
+                        "scientific_binding": _submission(
+                            runtime, config, changed
+                        ).scientific_binding
+                    }
+                )
+            )
+        acquired = service.acquire_lease(
+            ProcedureWorkerLeaseAcquireCommand(
+                procedure_run_id=parent.procedure_run_id,
+                worker_id="worker",
+                expected_run_revision=parent.revision,
+            )
+        )
+        child = (
+            _submission(runtime, config, changed)
+            if mode == "wrong-subject"
+            else original
+        ).model_copy(
+            update={
+                "submission_id": procedure_step_operation_id(
+                    parent.procedure_run_id, "measure"
+                ),
+                "procedure_child": ProcedureChildSubmission(
+                    procedure_run_id=parent.procedure_run_id, step_key="measure"
+                ),
+            }
+        )
+        service.begin_step(
+            ProcedureStepBeginCommand(
+                procedure_run_id=parent.procedure_run_id,
+                lease_token=acquired.lease.lease_token,
+                expected_run_revision=acquired.run.revision,
+                step_key="measure",
+                operation="run",
+                intent_hash="sha256:"
+                + ("f" * 64 if mode == "wrong-step" else child.intent_content_hash),
+            )
+        )
+        before = _counts(tmp_path)
+        if mode.startswith("wrong"):
+            with pytest.raises(BackendConflict, match="live durable parent step"):
+                runtime.application.submit_run(child)
+            assert _counts(tmp_path) == before
+        else:
+            admitted = runtime.application.submit_run(child)
+            assert admitted.snapshot.scientific_binding == original.scientific_binding
+            assert runtime.application.submit_run(child).run_id == admitted.run_id
+
+
+def test_saved_plan_reuses_authoritative_target_validation(tmp_path: Path) -> None:
+    from scopecat.records.experiment_plan import (
+        ExperimentPlanDefinition,
+        ExperimentPlanSave,
+    )
+    from scopecat.records.plan_ref import PlanConfigRef
+    from scopecat.records.scientific_selection import (
+        RegisteredTargetChoice,
+        SavedConfiguration,
+        ScientificSelection,
+    )
+
+    config = load_config()
+    with LocalDaemonRuntime(tmp_path, bootstrap_config=config) as runtime:
+        target = _target(runtime, config)
+        original = _submission(runtime, config, target)
+        active = runtime.application.config.get_active_config()
+        definition = ExperimentPlanDefinition(
+            experiment="author",
+            version="1",
+            definition_hash="sha256:" + "a" * 64,
+            selection=ScientificSelection(
+                subject=RegisteredTargetChoice(ref=target.ref),
+                configuration=SavedConfiguration(
+                    ref=PlanConfigRef(
+                        entry_id=active.entry.id, content_hash=active.entry.content_hash
+                    )
+                ),
+            ),
+            scientific_binding=original.scientific_binding,
+        )
+        runtime.application.targets.revise(
+            TargetReviseCommand(
+                expected=target.ref,
+                draft=TargetRevisionDraft(
+                    name="Next", actor="test", content=target.content
+                ),
+            )
+        )
+        saved = runtime.application.plans.save(
+            ExperimentPlanSave(
+                name="Exact target", saved_by="test", definition=definition
+            )
+        )
+        assert saved.definition.scientific_binding == original.scientific_binding
+        forged = original.scientific_binding.model_copy(
+            update={"setup_content_hash": "sha256:" + "f" * 64}
+        )
+        with pytest.raises(BackendConflict, match="retained evidence"):
+            runtime.application.plans.save(
+                ExperimentPlanSave(
+                    name="Forged",
+                    saved_by="test",
+                    definition=definition.model_copy(
+                        update={"scientific_binding": forged}
+                    ),
+                )
+            )
+        assert runtime.application.plans.repository.list().items == (saved,)

@@ -309,6 +309,10 @@ class _AuthorProcedure:
         selected = self.validate_intent(intent)
         if selected.code_revision != self.experiment.code_revision:
             raise ValueError("procedure must load its admitted author revision")
+        if context.scientific_binding is None:
+            raise ValueError(
+                "authored procedure requires its reviewed scientific binding"
+            )
         context.run(
             "experiment",
             self.experiment.edit(
