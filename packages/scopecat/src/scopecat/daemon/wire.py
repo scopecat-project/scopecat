@@ -107,6 +107,7 @@ from scopecat.records.sample import (
     SampleSelector,
 )
 from scopecat.records.scientific_binding import ResolvedScientificBinding
+from scopecat.records.setup import ExecutableSetupSnapshot, SetupRevisionRef
 from scopecat.sdk.instruments.contracts import InstrumentDescription
 from scopecat.sdk.instruments.execution import RunHardwareBatch
 
@@ -444,6 +445,26 @@ class CalibrationPublicationReceipt(_WireModel):
                     "merge success does not match its working-point receipt"
                 )
         return self
+
+
+class SetupSaveCommand(_WireModel):
+    """Save an immutable executable setup revision without activating it."""
+
+    revision_id: NonEmptyText
+    setup: ExecutableSetupSnapshot
+    actor: NonEmptyText
+    note: str = ""
+
+
+class SetupActivateCommand(_WireModel):
+    """Select executable setup with an independent generation fence."""
+
+    operation_id: NonEmptyText
+    revision: SetupRevisionRef
+    expected_generation: int = Field(ge=0)
+    actor: NonEmptyText
+    note: str = ""
+    changes: tuple[InstrumentInventoryChange, ...] = ()
 
 
 class InstrumentInventoryMigrationCommand(_WireModel):
@@ -1305,12 +1326,11 @@ class InstrumentSessionLeaseReceipt(_WireModel):
 
 
 class InstrumentSessionOpenReceipt(_WireModel):
-    """Daemon-owned direct-control session opened against one config revision."""
+    """Daemon-owned direct-control session opened against one setup revision."""
 
     session_id: NonEmptyText
     actor: NonEmptyText
-    config_entry_id: NonEmptyText
-    config_content_hash: ConfigContentHash
+    setup: SetupRevisionRef
     instrument_ids: tuple[NonEmptyText, ...] = Field(min_length=1)
     configured_default_instrument_ids: tuple[NonEmptyText, ...]
     descriptions: tuple[InstrumentDescription, ...]
@@ -1456,6 +1476,8 @@ __all__ = [
     "SampleCreateCommand",
     "SampleMutationReceipt",
     "SampleReviseCommand",
+    "SetupActivateCommand",
+    "SetupSaveCommand",
     "TerminalModelWrite",
     "TerminalRunCommitCommand",
 ]
