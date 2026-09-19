@@ -2620,18 +2620,16 @@ export interface components {
             automatic_publication_policy_fingerprint?: components["schemas"]["Sha256ContentHash"] | null;
             automatic_publication_policy_id?: components["schemas"]["_NonEmptyText"] | null;
             automatic_publication_policy_version?: components["schemas"]["_NonEmptyText"] | null;
-            base_config_content_hash: components["schemas"]["ConfigContentHash"];
-            base_entry_id: components["schemas"]["_NonEmptyText"];
-            /** Base Registry Generation */
-            base_registry_generation: number;
+            base: components["schemas"]["CalibrationConfigSourceRef"];
             candidate_id: components["schemas"]["_NonEmptyText"];
             cohort_id: components["schemas"]["_NonEmptyText"];
             composition_policy_ref: components["schemas"]["ConfigCompositionPolicyRef"];
             /** Contributions */
             contributions: components["schemas"]["ResolvedCalibrationCohortMergeContribution"][];
             /**
-             * @description discriminator enum property added by openapi-typescript
-             * @enum {string}
+             * Kind
+             * @default calibration_cohort_merge
+             * @constant
              */
             kind: "calibration_cohort_merge";
             /**
@@ -2642,6 +2640,25 @@ export interface components {
             merge_policy: "common_base_cells_v1";
             spec_hash: components["schemas"]["Sha256ContentHash"];
         };
+        /**
+         * CalibrationConfigSourceRef
+         * @description Exact saved configuration and its calibration ownership scope.
+         */
+        CalibrationConfigSourceRef: {
+            /** Config Ref */
+            config_ref: string;
+            content_hash: components["schemas"]["ConfigContentHash"];
+            /** Entry Id */
+            entry_id: string;
+            /**
+             * Kind
+             * @default config_registry
+             * @constant
+             */
+            kind: "config_registry";
+            scope?: components["schemas"]["CalibrationScope"];
+        };
+        CalibrationScope: components["schemas"]["CatalogCalibrationScope"] | components["schemas"]["WorkingPointCalibrationScope"];
         /** CandidateConfigRegistrySource */
         CandidateConfigRegistrySource: {
             /** Acceptance */
@@ -2677,6 +2694,17 @@ export interface components {
              */
             kind: "candidate";
             source: components["schemas"]["AnalysisCandidateRunConfigSource"];
+        };
+        /**
+         * CatalogCalibrationScope
+         * @description Saved inputs for nonpublishing checks; no implicit parameter owner.
+         */
+        CatalogCalibrationScope: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "catalog";
         };
         /** ChangeParameterColumn */
         ChangeParameterColumn: {
@@ -3438,7 +3466,7 @@ export interface components {
             /** Working Point Id */
             working_point_id: string;
             /** Workspace Id */
-            workspace_id?: string | null;
+            workspace_id: string;
         };
         /**
          * ConfigContextRef
@@ -3699,7 +3727,7 @@ export interface components {
              */
             recorded_at?: string;
             /** Source */
-            source: components["schemas"]["DirectConfigRegistrySource"] | components["schemas"]["ManualConfigDraftRegistrySource"] | components["schemas"]["CandidateConfigRegistrySource"] | components["schemas"]["CalibrationCohortMergeRegistrySource"] | components["schemas"]["ContextConfigRegistrySource"];
+            source: components["schemas"]["DirectConfigRegistrySource"] | components["schemas"]["ManualConfigDraftRegistrySource"] | components["schemas"]["CandidateConfigRegistrySource"] | components["schemas"]["ContextConfigRegistrySource"];
         };
         /**
          * ConfigRegistryPage
@@ -3793,13 +3821,14 @@ export interface components {
         };
         /** ContextConfigRegistrySource */
         ContextConfigRegistrySource: {
-            candidate?: components["schemas"]["CandidateConfigRegistrySource"] | null;
             context: components["schemas"]["ConfigContextMetadata"];
             /**
              * @description discriminator enum property added by openapi-typescript
              * @enum {string}
              */
             kind: "parameter_context";
+            /** Publication */
+            publication?: components["schemas"]["CandidateConfigRegistrySource"] | components["schemas"]["CalibrationCohortMergeRegistrySource"] | null;
         };
         /**
          * ContextRunConfigSource
@@ -9626,6 +9655,20 @@ export interface components {
              * @enum {string}
              */
             retention: "retained" | "unavailable_active_quota";
+        };
+        /**
+         * WorkingPointCalibrationScope
+         * @description One stable workspace and the exact physical scope it owns.
+         */
+        WorkingPointCalibrationScope: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "working_point";
+            sample: components["schemas"]["SampleBinding"];
+            /** Workspace Id */
+            workspace_id: string;
         };
         /** WorkingPointConfiguration */
         "WorkingPointConfiguration-Input": {

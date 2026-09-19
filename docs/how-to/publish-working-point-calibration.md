@@ -56,3 +56,6 @@ This API publishes a single-sample working point. It does not claim that a candi
 is valid for another sample, another batch, an apparatus object, or a complete
 multi-object calibration program. `publish_default()` remains an explicit operation
 for changing the application-wide default.
+
+For a registered policy that repeatedly evaluates freshness and publishes bounded
+cohorts, use [working-point automation](automate-working-point-calibration.md).

@@ -31,7 +31,7 @@ export function ConfigSummary({
   const runtimeDerived =
     defaultEntry?.source.kind === "manual_parameter_updates" ||
     defaultEntry?.source.kind === "candidate_config" ||
-    defaultEntry?.source.kind === "calibration_cohort_merge";
+    defaultEntry?.source.kind === "parameter_context";
   return (
     <div
       className="grid grid-cols-[minmax(260px,1.5fr)_minmax(230px,1fr)_minmax(280px,1.2fr)] items-stretch overflow-hidden rounded-lg border border-line bg-panel max-[1100px]:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)] max-[460px]:grid-cols-[minmax(0,1fr)]"

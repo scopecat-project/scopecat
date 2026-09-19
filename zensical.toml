@@ -50,6 +50,7 @@ nav = [
     { "Ordinary Python analysis" = "guides/ordinary-analysis.md" },
     { "Verify fitted candidates" = "how-to/verify-parameter-candidates.md" },
     { "Publish working-point calibration" = "how-to/publish-working-point-calibration.md" },
+    { "Automate working-point calibration" = "how-to/automate-working-point-calibration.md" },
     { "Analysis publication" = "concepts/analysis-publication.md" },
   ] },
   { "Reference" = [

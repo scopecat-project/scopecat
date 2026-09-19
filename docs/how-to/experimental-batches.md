@@ -87,19 +87,19 @@ moving to new conditions.
 
 ## Calibration evidence and history
 
-Calibration integrations must pass the declared event when creating
-`CalibrationTargetRef(..., sample_id=chip.id, context_id="parked", batch_id=batch.id)`.
-The batch participates in the calibration key, freshness fingerprint, parent
-procedure selectors and inherited child-run bindings. A success in batch A cannot
-satisfy the corresponding target in batch B; an unscoped legacy success is distinct
-from both. Renaming a batch keeps its existing evidence usable in its original scope.
-Dependencies must belong to the same batch. Cross-batch and unscoped dependency
-reuse is rejected until an explicit applicability policy is implemented.
+Automatic calibration takes its exact sample revision, working point and batch
+from the selected saved working-point scope. Definition authors select logical
+members; the evaluator binds them to the workspace before status lookup. The
+stable workspace owner and declared batch participate in calibration identity,
+while parent and child runs retain the exact sample revision. Two same-named
+working-point branches do not share successes merely because their labels match.
+Renaming a batch keeps its evidence in the original scope.
 
-This does not automatically infer a batch for existing calibration integrations,
-certify copied values, or separate the existing shared active configuration into
-per-batch apparatus and parameter owners. A selected operator is still attribution,
-not authorization. Hardware and multi-chip applicability need separate qualification.
+Dependencies must belong to the same workspace owner and batch. Cross-owner,
+cross-batch and unscoped dependency reuse needs an explicit applicability policy
+and is rejected by this slice. Catalog-scoped nonpublishing checks remain possible
+without manufacturing a sample. This does not certify copied values or physical
+hardware applicability. An operator name remains attribution, not authorization.
 
 To filter retained runs without changing their addresses:
 

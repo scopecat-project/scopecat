@@ -1,5 +1,11 @@
 import type { ConfigRegistryEntry, ConfigRegistryOverview } from "../../api-contract";
 
+export type ConfigProvenanceSource =
+  | ConfigRegistryEntry["source"]
+  | NonNullable<
+      Extract<ConfigRegistryEntry["source"], { kind: "parameter_context" }>["publication"]
+    >;
+
 export interface ConfigUndoTarget {
   entryId: string;
   expectedGeneration: number;
@@ -44,25 +50,27 @@ export function configSourceLabel(entry: ConfigRegistryEntry): string {
     case "manual_parameter_updates":
       return "Typed parameter edit";
     case "parameter_context":
-      return "Parameter context";
+      return entry.source.publication?.kind === "calibration_cohort_merge"
+        ? "Calibration cohort merge"
+        : entry.source.publication
+          ? "Verified working point"
+          : "Parameter context";
     case "candidate_config":
       return "Candidate config";
-    case "calibration_cohort_merge":
-      return "Calibration cohort merge";
     default:
       return assertNever(entry.source);
   }
 }
 
-function configSourceSearchTerms(
-  source: ConfigRegistryEntry["source"],
-): Array<string | null | undefined> {
+function configSourceSearchTerms(source: ConfigProvenanceSource): Array<string | null | undefined> {
   switch (source.kind) {
     case "direct_config_profile":
     case "manual_parameter_updates":
       return [];
     case "parameter_context":
       return [
+        source.context.workspace_id,
+        ...(source.publication ? configSourceSearchTerms(source.publication) : []),
         source.context.label,
         source.context.working_point_id,
         source.context.sample.sample_id,
@@ -75,8 +83,8 @@ function configSourceSearchTerms(
         source.cohort_id,
         source.spec_hash,
         source.candidate_id,
-        source.base_entry_id,
-        source.base_config_content_hash,
+        source.base.entry_id,
+        source.base.content_hash,
         source.composition_policy_ref.id,
         source.composition_policy_ref.version,
         source.composition_policy_ref.fingerprint,

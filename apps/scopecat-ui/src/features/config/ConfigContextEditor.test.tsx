@@ -164,6 +164,7 @@ it.each([false, true])(
       source: {
         kind: "parameter_context",
         context: {
+          workspace_id: "workspace-q0",
           sample: {
             sample_id: "sample-a",
             revision: 1,

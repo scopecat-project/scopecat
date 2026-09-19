@@ -179,7 +179,7 @@ describe("ConfigWorkspace", () => {
     );
   });
 
-  it.each(["manual_parameter_updates", "candidate_config", "calibration_cohort_merge"] as const)(
+  it.each(["manual_parameter_updates", "candidate_config"] as const)(
     "distinguishes accepting and restoring a %s entry outside the history page",
     async (sourceKind) => {
       const entry = runtimeDerivedEntry(sourceKind);
@@ -295,8 +295,8 @@ describe("ConfigWorkspace", () => {
     const baseline = configEntry("baseline", "sha256:baseline");
     const entries = [entry, baseline];
     vi.mocked(getConfigRegistry).mockResolvedValue({
-      activation: activation(3, entry.id, entry.content_hash),
-      activation_history: [activation(3, entry.id, entry.content_hash)],
+      activation: activation(3, baseline.id, baseline.content_hash),
+      activation_history: [activation(3, baseline.id, baseline.content_hash)],
       entries,
     });
     vi.mocked(getConfigRegistryEntry).mockImplementation(async (entryId) => {
@@ -306,10 +306,14 @@ describe("ConfigWorkspace", () => {
     const openRun = vi.fn();
 
     renderWorkspace(openRun);
+    fireEvent.click(await screen.findByRole("button", { name: new RegExp(entry.id) }));
 
     expect(await screen.findByText("Verified calibration cohort")).toBeInTheDocument();
     expect(screen.getAllByText("Calibration cohort merge").length).toBeGreaterThan(0);
     expect(screen.queryByText("Analysis candidate")).not.toBeInTheDocument();
+    expect(screen.getAllByText("Q0 parked").length).toBeGreaterThan(0);
+    expect(screen.queryByRole("button", { name: "Accept as default" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Restore default" })).not.toBeInTheDocument();
     expect(screen.getByText("drag-nightly-2026-07-24")).toBeInTheDocument();
     expect(screen.getByText("reference_lab.drag-composition@1")).toBeInTheDocument();
     const contribution = screen.getByRole("article", { name: "Calibration member q0" });
@@ -541,6 +545,15 @@ function configEntry(id: string, contentHash: string): ConfigRegistryEntry {
   };
 }
 
+const sample = {
+  sample_id: "chip-a",
+  revision: 1,
+  content_hash: "sha256:sample",
+  role: "primary",
+  kind: "chip",
+  display_name: "Chip A",
+};
+
 function runtimeDerivedEntry(
   kind: "manual_parameter_updates" | "candidate_config" | "calibration_cohort_merge",
   proposalId = "fit-result",
@@ -550,43 +563,58 @@ function runtimeDerivedEntry(
     return {
       ...entry,
       source: {
-        kind,
-        cohort_id: "drag-nightly-2026-07-24",
-        spec_hash: `sha256:${"b".repeat(64)}`,
-        composition_policy_ref: {
-          id: "reference_lab.drag-composition",
-          version: "1",
-          fingerprint: `sha256:${"c".repeat(64)}`,
+        kind: "parameter_context",
+        context: {
+          workspace_id: "workspace-q0",
+          sample,
+          working_point_id: "parked",
+          label: "Q0 parked",
+          base: { entry_id: "baseline", content_hash: "sha256:baseline" },
+          value_origins: [],
         },
-        merge_policy: "common_base_cells_v1",
-        base_entry_id: "baseline",
-        base_config_content_hash: "sha256:baseline",
-        base_registry_generation: 2,
-        candidate_id: "drag-nightly-merged",
-        contributions: [
-          {
-            member_id: "q0",
-            proof: {
-              kind: "verified_parameter_proposal_v1",
-              evidence_step: {
-                procedure_run_id: "procedure-drag-q0",
-                step_key: "verification",
-                attempt: 1,
-              },
-              baseline_run_id: "run-baseline-q0",
-              fit_analysis_record_id: "analysis-fit-q0",
-              proposal_id: "proposal-q0",
-              candidate_run_id: "run-candidate-q0",
-              decision: {
-                analysis_record_id: "analysis-verify-q0",
-                output_id: "decision",
-                schema_id: "reference_lab.drag-decision.v1",
-                schema_hash: `sha256:${"d".repeat(64)}`,
-              },
-            },
-            result_input_fingerprint: `sha256:${"e".repeat(64)}`,
+        publication: {
+          kind,
+          cohort_id: "drag-nightly-2026-07-24",
+          spec_hash: `sha256:${"b".repeat(64)}`,
+          composition_policy_ref: {
+            id: "reference_lab.drag-composition",
+            version: "1",
+            fingerprint: `sha256:${"c".repeat(64)}`,
           },
-        ],
+          merge_policy: "common_base_cells_v1",
+          base: {
+            kind: "config_registry",
+            entry_id: "baseline",
+            config_ref: "baseline.json",
+            content_hash: "sha256:baseline",
+            scope: { kind: "working_point", workspace_id: "workspace-q0", sample },
+          },
+          candidate_id: "drag-nightly-merged",
+          contributions: [
+            {
+              member_id: "q0",
+              proof: {
+                kind: "verified_parameter_proposal_v1",
+                evidence_step: {
+                  procedure_run_id: "procedure-drag-q0",
+                  step_key: "verification",
+                  attempt: 1,
+                },
+                baseline_run_id: "run-baseline-q0",
+                fit_analysis_record_id: "analysis-fit-q0",
+                proposal_id: "proposal-q0",
+                candidate_run_id: "run-candidate-q0",
+                decision: {
+                  analysis_record_id: "analysis-verify-q0",
+                  output_id: "decision",
+                  schema_id: "reference_lab.drag-decision.v1",
+                  schema_hash: `sha256:${"d".repeat(64)}`,
+                },
+              },
+              result_input_fingerprint: `sha256:${"e".repeat(64)}`,
+            },
+          ],
+        },
       },
     };
   }

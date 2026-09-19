@@ -10,7 +10,7 @@ import { classes, primaryButton, secondaryButton } from "../../ui/styles";
 import { ConfigParameters } from "./ConfigParameters";
 import { ActionNote, ConfigFact, ConfigInlineEmpty } from "./ConfigUi";
 import type { ConfigSnapshotSummary } from "./config-api";
-import { configSourceLabel } from "./config-utils";
+import { type ConfigProvenanceSource, configSourceLabel } from "./config-utils";
 
 export function ConfigEntryInspector({
   entry,
@@ -47,7 +47,9 @@ export function ConfigEntryInspector({
   onActivate: () => void;
   onEdit?: () => void;
 }) {
-  const candidateSource = entry.source.kind === "candidate_config" ? entry.source : undefined;
+  const publication =
+    entry.source.kind === "parameter_context" ? entry.source.publication : entry.source;
+  const candidateSource = publication?.kind === "candidate_config" ? publication : undefined;
   const candidateRunId = candidateSource?.run_id;
   const candidateProposalsQuery = useQuery({
     queryKey: parameterProposalKeys.firstPage(candidateRunId!),
@@ -135,7 +137,7 @@ export function ConfigEntryInspector({
         </p>
       )}
       <EntryProvenance
-        entry={entry}
+        source={entry.source}
         onSelectEntry={onSelectEntry}
         onOpenRun={onOpenRun}
         candidateProposals={candidateProposalsQuery.data?.items}
@@ -177,7 +179,7 @@ export function ConfigEntryInspector({
 }
 
 function EntryProvenance({
-  entry,
+  source,
   onSelectEntry,
   onOpenRun,
   candidateProposals,
@@ -187,7 +189,7 @@ function EntryProvenance({
   candidateAnalysisPending,
   candidateAnalysisError,
 }: {
-  entry: ConfigRegistryEntry;
+  source: ConfigProvenanceSource;
   onSelectEntry: (entryId: string) => void;
   onOpenRun?: (runId: string) => void;
   candidateProposals?: ParameterProposal[];
@@ -197,7 +199,6 @@ function EntryProvenance({
   candidateAnalysisPending: boolean;
   candidateAnalysisError: Error | null;
 }) {
-  const source = entry.source;
   if (source.kind === "parameter_context") {
     return (
       <div className={provenance}>
@@ -205,8 +206,10 @@ function EntryProvenance({
           <strong>{source.context.label}</strong>
           <p className={provenanceCopy}>
             Sample {source.context.sample.sample_id} · revision {source.context.sample.revision} ·
-            working point {source.context.working_point_id}. Saved trial parameters; calibration
-            validity is not implied.
+            working point {source.context.working_point_id}.
+            {source.publication
+              ? " Accepted calibration evidence is recorded below."
+              : " Saved trial parameters; calibration validity is not implied."}
           </p>
           <button
             className={secondaryButton}
@@ -250,6 +253,19 @@ function EntryProvenance({
               ))}
             </dl>
           </details>
+          {source.publication && (
+            <EntryProvenance
+              source={source.publication}
+              onSelectEntry={onSelectEntry}
+              onOpenRun={onOpenRun}
+              candidateProposals={candidateProposals}
+              candidateProposalsPending={candidateProposalsPending}
+              candidateProposalsError={candidateProposalsError}
+              candidateAnalysis={candidateAnalysis}
+              candidateAnalysisPending={candidateAnalysisPending}
+              candidateAnalysisError={candidateAnalysisError}
+            />
+          )}
         </div>
       </div>
     );
@@ -311,12 +327,12 @@ function EntryProvenance({
             <button
               className="cursor-pointer border-0 bg-transparent p-0 text-purple hover:[&_code]:underline"
               type="button"
-              aria-label={`Open base version ${source.base_entry_id}`}
-              onClick={() => onSelectEntry(source.base_entry_id)}
+              aria-label={`Open base version ${source.base.entry_id}`}
+              onClick={() => onSelectEntry(source.base.entry_id)}
             >
-              <code>{source.base_entry_id}</code>
+              <code>{source.base.entry_id}</code>
             </button>{" "}
-            at registry generation {source.base_registry_generation}.
+            for its selected working point.
           </p>
           <dl className="mt-2.5 grid grid-cols-2 gap-x-3 gap-y-2 rounded-[7px] border border-[rgb(182_156_255_/_14%)] bg-[rgb(0_0_0_/_12%)] p-[9px] [&>div]:grid [&>div]:min-w-0 [&>div]:gap-0.5 [&_dt]:text-[0.52rem] [&_dt]:font-extrabold [&_dt]:tracking-[0.06em] [&_dt]:text-text-dim [&_dt]:uppercase [&_dd]:m-0 [&_dd]:min-w-0 [&_dd]:text-[0.61rem] [&_dd]:text-text-soft [&_dd_code]:[overflow-wrap:anywhere]">
             <div>
@@ -368,7 +384,7 @@ function EntryProvenance({
             <div>
               <dt>Base content</dt>
               <dd>
-                <code>{source.base_config_content_hash}</code>
+                <code>{source.base.content_hash}</code>
               </dd>
             </div>
           </dl>
