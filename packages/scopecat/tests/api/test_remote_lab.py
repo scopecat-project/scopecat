@@ -46,6 +46,7 @@ from scopecat.config.registry.records import (
     ManualConfigDraftRegistrySource,
 )
 from scopecat.config.resolution import config_revision_entry_id
+from scopecat.config.scientific_binding import bind_scientific_evidence
 from scopecat.control.models import (
     RunExecutionSegment,
     RunExecutionSegmentPage,
@@ -233,6 +234,12 @@ def test_lab_runs_preserves_bounded_page_navigation() -> None:
         run_id="run-page",
         created_at=_NOW,
         config_content_hash=config_content_hash(load_config()),
+        scientific_binding=bind_scientific_evidence(
+            catalog_id="test-store",
+            config=load_config(),
+            samples=(),
+            sample_revisions={},
+        ),
     )
     summary = RunSummary(
         control=RunControlView(
@@ -297,6 +304,12 @@ def test_remote_run_uses_full_dataset_batches_and_projected_arrow_pages() -> Non
     snapshot = RunSnapshot(
         run_id="run-batches",
         config_content_hash=config_content_hash(load_config()),
+        scientific_binding=bind_scientific_evidence(
+            catalog_id="test-store",
+            config=load_config(),
+            samples=(),
+            sample_revisions={},
+        ),
     )
     detail = RunDetail(
         control=RunControlView(
@@ -1677,6 +1690,7 @@ def test_run_invocation_plans_against_explicit_snapshot_without_local_storage(
         accepted = RunSnapshot(
             run_id="run-scratch",
             config_content_hash=planned.program.config_content_hash,
+            scientific_binding=planned.scientific_binding,
         )
         return _terminal_manifest(accepted)
 
@@ -1759,6 +1773,7 @@ def test_run_invocation_uses_active_config_and_bound_system(
             RunSnapshot(
                 run_id="run-scratch",
                 config_content_hash=planned.program.config_content_hash,
+                scientific_binding=planned.scientific_binding,
             )
         )
 
@@ -1807,6 +1822,7 @@ def test_run_invocation_uses_daemon_catalog_without_a_local_builder(
             RunSnapshot(
                 run_id="run-scratch",
                 config_content_hash=planned.program.config_content_hash,
+                scientific_binding=planned.scientific_binding,
             )
         )
 
@@ -2098,6 +2114,7 @@ def _admission(submission: RunSubmission) -> RunAdmission:
             run_id="run-1",
             created_at=_NOW,
             config_content_hash=config_content_hash(submission.config),
+            scientific_binding=submission.scientific_binding,
             config_source=submission.config_source,
         ),
     )
