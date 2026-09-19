@@ -11,6 +11,7 @@ from scopecat.records.author_revision import AuthorRevisionRef
 from scopecat.records.config_context import ConfigContextRef, ContextRunConfigSource
 from scopecat.records.content import Sha256ContentHash
 from scopecat.records.control_edit import ControlEdit
+from scopecat.records.experimental_batch import ExperimentalBatchId, absent_batch
 from scopecat.records.manual_preview import ManualPreviewFence
 from scopecat.records.parameter_update import ParameterUpdate
 from scopecat.records.plan_ref import ExperimentPlanRef, PlanConfigRef
@@ -44,6 +45,7 @@ class LaunchRequest(BaseModel):
     version: str = ""
     request_key: str = ""
     sample: str | None = None
+    batch_id: ExperimentalBatchId | None = Field(default=None, exclude_if=absent_batch)
     actor: str = "operator"
     inputs: dict[str, JsonValue] = Field(default_factory=dict)
     control_edits: dict[str, ControlEdit] = Field(default_factory=dict)
@@ -117,6 +119,7 @@ class LaunchRequest(BaseModel):
                     else {}
                 ),
                 "sample": self.sample,
+                **({"batch_id": self.batch_id} if self.batch_id is not None else {}),
                 "actor": self.actor,
                 **(
                     {"record_collection": self.record_collection}

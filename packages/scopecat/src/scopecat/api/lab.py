@@ -44,6 +44,7 @@ from scopecat.program.values import MetadataValue
 from scopecat.records.analysis import SampleAnalysisSubject
 from scopecat.records.config import ConfigProfileSnapshot
 from scopecat.records.config_context import ConfigContextRef
+from scopecat.records.experimental_batch import ExperimentalBatch
 from scopecat.records.record_collection import RecordCollection
 from scopecat.records.run import RunConfigSource
 from scopecat.records.sample import SampleSelector
@@ -277,6 +278,9 @@ class LabClient:
 
     def health(self) -> DaemonHealth:
         return self._control.health()
+
+    def experimental_batch(self, batch_id: str) -> ExperimentalBatch:
+        return self._client.experimental_batch(batch_id)
 
     def record_collection(self, collection_id: str) -> RecordCollection:
         return self._client.record_collection(collection_id)

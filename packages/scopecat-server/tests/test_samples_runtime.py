@@ -508,3 +508,96 @@ def test_collection_addresses_are_atomic_scoped_and_retained(tmp_path: Path) -> 
         next_run = client.submit_run(submission("after-restart", alpha.id))
         assert client.resolve_run_number(alpha.id, 6).run_id == next_run.run_id
         assert client.submit_run(submission("first", alpha.id)) == first
+
+
+def test_batch_catalog_and_bound_runs_survive_restart(tmp_path: Path) -> None:
+    from scopecat.daemon.client import DaemonNotFoundError
+    from scopecat.records.experimental_batch import ExperimentalBatchEdit
+    from scopecat.records.research_project import RunHistoryFilter
+
+    with (
+        LocalDaemonRuntime(tmp_path, bootstrap_config=_config()) as runtime,
+        TestClient(runtime.app()) as transport,
+        _daemon_client(transport) as client,
+    ):
+        runtime.application.samples.create(
+            SampleCreateCommand(
+                operation_id="batch-chip",
+                sample_id="batch-chip",
+                kind="chip",
+                actor="operator",
+                content=SampleRevisionDraft(display_name="Batch chip"),
+            )
+        )
+        batch = client.save_experimental_batch(
+            "cooldown-a", ExperimentalBatchEdit(name="First")
+        )
+        other = client.create_experimental_batch("Second")
+        page = client.experimental_batches(limit=1)
+        assert page.next_cursor is not None
+        assert client.experimental_batches(before=page.next_cursor).items == (batch,)
+        base = _submission("batch-chip")
+        requested = base.model_copy(
+            update={
+                "request": base.request.model_copy(
+                    update={
+                        "samples": (
+                            SampleSelector(sample_id="batch-chip", batch_id="missing"),
+                        ),
+                    }
+                )
+            }
+        )
+        with pytest.raises(DaemonNotFoundError):
+            client.submit_run(requested)
+        requested = requested.model_copy(
+            update={
+                "request": requested.request.model_copy(
+                    update={
+                        "samples": (
+                            SampleSelector(sample_id="batch-chip", batch_id=batch.id),
+                        ),
+                    }
+                )
+            }
+        )
+        run = client.submit_run(requested)
+        assert client.submit_run(requested) == run
+        assert run.snapshot.samples[0].batch_id == batch.id
+        with pytest.raises(DaemonConflictError):
+            client.submit_run(
+                requested.model_copy(
+                    update={
+                        "request": requested.request.model_copy(
+                            update={
+                                "samples": (
+                                    SampleSelector(
+                                        sample_id="batch-chip", batch_id=other.id
+                                    ),
+                                ),
+                            }
+                        )
+                    }
+                )
+            )
+        client.save_experimental_batch(
+            batch.id, ExperimentalBatchEdit(name="Renamed", expected_revision=1)
+        )
+        with pytest.raises(DaemonConflictError):
+            client.save_experimental_batch(
+                batch.id, ExperimentalBatchEdit(name="Stale")
+            )
+    with (
+        LocalDaemonRuntime(tmp_path) as runtime,
+        TestClient(runtime.app()) as transport,
+        _daemon_client(transport) as client,
+    ):
+        assert client.experimental_batch(batch.id).name == "Renamed"
+        assert client.get_run(run.run_id).snapshot == run.snapshot
+        assert [
+            item.run_id
+            for item in client.list_runs(
+                history=RunHistoryFilter(batch_id=batch.id)
+            ).items
+        ] == [run.run_id]
+        assert not client.list_runs(history=RunHistoryFilter(batch_id=other.id)).items

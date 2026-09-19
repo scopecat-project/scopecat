@@ -397,9 +397,10 @@ class AuthorExperiments:
             None,
         )
         if selected is None:
-            if request.record_collection is not None:
+            if request.record_collection is not None or request.batch_id is not None:
                 raise LaunchRequestRejected(
-                    "record collection selection requires an authored experiment"
+                    "record collection or batch selection "
+                    "requires an authored experiment"
                 )
             if maintained is None:
                 raise ValueError(f"unknown author experiment {request.experiment!r}")

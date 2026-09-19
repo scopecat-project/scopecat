@@ -18,6 +18,7 @@ from scopecat.runtime_binding import load_runtime_binding
 from scopecat_server.storage.sqlite.experiment_plan_repository import (
     ExperimentPlanRepository,
 )
+from scopecat_server.storage.sqlite.experimental_batches import ExperimentalBatchStore
 from scopecat_server.storage.sqlite.project_store import SQLiteProjectStore
 from scopecat_server.storage.sqlite.record_collections import RecordCollectionStore
 from scopecat_server.storage.sqlite.research_projects import ResearchProjectStore
@@ -97,6 +98,7 @@ class DaemonApplication:
         self.samples = samples
         self.research = ResearchProjectStore(project_store.sqlite)
         self.record_collections = RecordCollectionStore(project_store.sqlite)
+        self.experimental_batches = ExperimentalBatchStore(project_store.sqlite)
         self._lease_supervisor = lease_supervisor
 
     def start(self) -> None:

@@ -71,6 +71,7 @@ from scopecat.records.author_revision import (
 from scopecat.records.config_context import ConfigContextRef
 from scopecat.records.control_edit import ControlEdit
 from scopecat.records.experiment_plan import ExperimentPlanRevision, ExperimentPlanSave
+from scopecat.records.experimental_batch import require_batch_match
 from scopecat.records.launch_request import LaunchRequest
 from scopecat.records.measurement import MeasurementRecord
 from scopecat.records.parameter_update import ParameterUpdate
@@ -125,6 +126,10 @@ class AuthorProject(DaemonClient):
         )
         if selected.working_point is not None:
             source = self.config.resolve_context(selected.working_point).config_source
+            if "working_point" in changes and "batch" not in changes:
+                selected = selected.model_copy(update={"batch": source.sample.batch_id})
+            require_batch_match(selected.batch, source.sample.batch_id)
+            selected = selected.model_copy(update={"batch": source.sample.batch_id})
             if "working_point" in changes and "sample" not in changes:
                 selected = selected.model_copy(
                     update={"sample": source.sample.sample_id}
@@ -143,6 +148,10 @@ class AuthorProject(DaemonClient):
                 )
         elif selected.sample is not None:
             self.get_sample(selected.sample)
+        if selected.batch is not None:
+            self.experimental_batch(selected.batch)
+            if selected.sample is None:
+                raise ValueError("batch selection requires a sample or working point")
         if selected.collection is not None:
             self.record_collection(selected.collection)
         self._selection = selected
@@ -290,10 +299,12 @@ class AuthorProject(DaemonClient):
         overrides: tuple[ParameterUpdate, ...] = (),
         sample: str | SessionDefault | None = INHERIT,
         actor: str | SessionDefault = INHERIT,
+        batch: str | SessionDefault | None = INHERIT,
         record_collection: str | SessionDefault | None = INHERIT,
     ) -> AuthorPreparedLaunch:
         """Select the current declaration and retain a preview's exact submission."""
         selection = self._selection
+        batch = selection.batch if isinstance(batch, SessionDefault) else batch
         context, sample = selection.scientific_scope(
             context=context,
             sample=sample,
@@ -435,6 +446,7 @@ class AuthorProject(DaemonClient):
             overrides=overrides,
             sample=sample,
             actor=actor,
+            batch_id=batch,
             record_collection=record_collection,
             code_revision=catalog.code_revision,
         )
@@ -445,6 +457,7 @@ class AuthorProject(DaemonClient):
         ref: ExperimentPlanRef,
         *,
         actor: str | SessionDefault = INHERIT,
+        batch: str | SessionDefault | None = INHERIT,
         record_collection: str | SessionDefault | None = INHERIT,
     ) -> AuthorPreparedLaunch:
         """Read an exact plan and obtain a new preview for this execution actor."""
@@ -457,6 +470,10 @@ class AuthorProject(DaemonClient):
         request = plan_launch_request(
             self.experiment_plan(ref), actor=actor, record_collection=record_collection
         )
+        selected_batch = (
+            self._selection.batch if isinstance(batch, SessionDefault) else batch
+        )
+        require_batch_match(selected_batch, request.batch_id)
         return AuthorPreparedLaunch(self, request, self.preview(request))
 
     def state(self) -> AuthorRevisionState:

@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, Literal
 from scopecat.config.candidates import CandidateConfig
 from scopecat.records.config import ConfigProfileSnapshot
 from scopecat.records.config_context import ContextRunConfigSource
+from scopecat.records.experimental_batch import require_batch_match
 from scopecat.records.launch_request import LaunchConfigSource, LaunchRequest
 from scopecat.records.run import (
     AnalysisCandidateRunConfigSource,
@@ -19,6 +20,14 @@ if TYPE_CHECKING:
 def resolve_launch_config(
     lab: LabClient, request: LaunchRequest
 ) -> tuple[ConfigProfileSnapshot, LaunchConfigSource]:
+    if request.batch_id is not None:
+        lab.experimental_batch(request.batch_id)
+        if (
+            request.sample is None
+            and request.context is None
+            and request.sample_binding is None
+        ):
+            raise ValueError("batch selection requires a sample or working point")
     if isinstance(request.config_source, AnalysisCandidateRunConfigSource):
         source = request.config_source
         proposal = lab.config.client.parameter_proposal(
@@ -35,6 +44,7 @@ def resolve_launch_config(
             raise ValueError(
                 "candidate requires its original sample revision and workpoint"
             )
+        require_batch_match(request.batch_id, subjects[0].batch_id)
         if request.action == "preview":
             source = source.model_copy(
                 update={
@@ -47,6 +57,7 @@ def resolve_launch_config(
             request.context, overrides=request.overrides
         )
         source = resolved.config_source
+        require_batch_match(request.batch_id, source.sample.batch_id)
         if request.sample is not None and request.sample != source.sample.sample_id:
             raise ValueError("launch sample does not match the selected context")
         if request.action == "submit":
@@ -69,6 +80,8 @@ def resolve_launch_config(
         raise ValueError(
             "context source requires the matching explicit context selection"
         )
+    if request.sample_binding is not None:
+        require_batch_match(request.batch_id, request.sample_binding.batch_id)
     if request.configuration is not None:
         selected = lab.config.entry(request.configuration.entry_id)
         if selected.entry.content_hash != request.configuration.content_hash:
@@ -141,6 +154,7 @@ def launch_sample_selection(
             revision=sample.revision,
             role=sample.role,
             context_id=sample.context_id,
+            batch_id=sample.batch_id,
         )
     if request.sample_binding is not None:
         sample = request.sample_binding
@@ -149,7 +163,10 @@ def launch_sample_selection(
             revision=sample.revision,
             role=sample.role,
             context_id=sample.context_id,
+            batch_id=sample.batch_id,
         )
+    if request.sample is not None and request.batch_id is not None:
+        return SampleSelector(sample_id=request.sample, batch_id=request.batch_id)
     return request.sample
 
 

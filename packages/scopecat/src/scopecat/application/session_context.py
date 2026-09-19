@@ -6,6 +6,7 @@ from typing import TypedDict
 from pydantic import BaseModel, ConfigDict, Field
 
 from scopecat.records.config_context import ConfigContextRef
+from scopecat.records.experimental_batch import ExperimentalBatchId
 from scopecat.records.record_collection import RecordCollectionId
 from scopecat.records.sample import SampleId
 
@@ -22,6 +23,7 @@ class SessionContext(BaseModel):
 
     model_config = ConfigDict(extra="forbid", frozen=True)
     sample: SampleId | None = None
+    batch: ExperimentalBatchId | None = None
     working_point: ConfigContextRef | None = None
     collection: RecordCollectionId | None = None
     operator: str = Field(default="operator", min_length=1)
@@ -48,6 +50,7 @@ class SessionContext(BaseModel):
 
 class SessionContextUpdate(TypedDict, total=False):
     sample: str | None
+    batch: str | None
     working_point: ConfigContextRef | None
     collection: str | None
     operator: str

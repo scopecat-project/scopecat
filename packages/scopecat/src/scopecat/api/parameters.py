@@ -637,6 +637,7 @@ class ParameterWorkspace(Mapping[str, "ParameterTable"]):
                     sample_id=sample.sample_id,
                     revision=sample.revision,
                     context_id=sample.context_id,
+                    batch_id=sample.batch_id,
                 ),
                 working_point_id=self.working_point,
                 label=name or self.working_point,

@@ -36,6 +36,7 @@ def plan_launch_request(
         overrides=definition.overrides,
         sample_binding=definition.sample,
         sample=definition.sample.sample_id if definition.sample else None,
+        batch_id=definition.sample.batch_id if definition.sample else None,
         code_revision=definition.code_revision,
         plan_ref=plan.ref,
     )

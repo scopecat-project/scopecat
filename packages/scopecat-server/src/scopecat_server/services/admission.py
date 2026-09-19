@@ -54,6 +54,7 @@ from scopecat.records.run import (
     ConfigRegistryRunConfigSource,
     RunConfigSource,
 )
+from scopecat.records.sample import SampleBinding
 from scopecat.runs.admission import build_run_admission
 from scopecat.runs.refs import record_content_ref
 from scopecat.runs.repository import (
@@ -145,6 +146,7 @@ class AdmissionService:
                     authoritative=active_config,
                 )
             sample_bindings = self._samples.resolve_bindings(submission.request.samples)
+            self._require_candidate_batch(submission.config_source, sample_bindings)
             if (
                 isinstance(submission.config_source, ContextRunConfigSource)
                 and submission.config_source.sample not in sample_bindings
@@ -378,6 +380,21 @@ class AdmissionService:
             raise
         except ProblemFailure as error:
             raise BackendConflict("run config source cannot be resolved") from error
+
+    def _require_candidate_batch(
+        self, source: RunConfigSource | None, bindings: tuple[SampleBinding, ...]
+    ) -> None:
+        if not isinstance(source, AnalysisCandidateRunConfigSource):
+            return
+        original = self._runs.read_snapshot(source.source_run_id).samples
+        if (
+            any(binding.batch_id is not None for binding in (*original, *bindings))
+            and original != bindings
+        ):
+            raise BackendConflict(
+                "candidate requires its original sample revisions and batch; "
+                "copy estimates explicitly into a new working point instead"
+            )
 
     def _resolve_candidate_source(
         self,

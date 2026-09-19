@@ -26,6 +26,7 @@ from scopecat_server.snapshots import (
     stopped_store,
     verify_store_files,
 )
+from scopecat_server.storage.sqlite.batch_schema import EXPERIMENTAL_BATCH_TABLES_SQL
 from scopecat_server.storage.sqlite.collection_schema import (
     RECORD_COLLECTION_BACKFILL_SQL,
     RECORD_COLLECTION_TABLES_SQL,
@@ -47,6 +48,7 @@ _MIGRATIONS = {
     """,
     69: RESEARCH_TABLES_SQL,
     70: RECORD_COLLECTION_TABLES_SQL + RECORD_COLLECTION_BACKFILL_SQL,
+    71: EXPERIMENTAL_BATCH_TABLES_SQL,
 }
 
 
@@ -91,7 +93,7 @@ def plan_migration(project: Project) -> MigrationPlan:
     """Inspect a stopped source without importing its scientific code."""
     with stopped_store(project.runtime_binding.data_root) as connection:
         version = require_schema_version(
-            connection, supported_versions=(68, 69, 70, 71)
+            connection, supported_versions=(68, 69, 70, 71, 72)
         )
         return _plan(version)
 

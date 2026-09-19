@@ -257,6 +257,12 @@ from scopecat.records.experiment_plan import (
     ExperimentPlanRevision,
     ExperimentPlanSave,
 )
+from scopecat.records.experimental_batch import (
+    ExperimentalBatch,
+    ExperimentalBatchEdit,
+    ExperimentalBatchId,
+    ExperimentalBatchPage,
+)
 from scopecat.records.instrument import (
     InstrumentStateCacheReadback,
     InstrumentStateReadback,
@@ -888,6 +894,23 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
         command: ConfigEntryActivationCommand,
     ) -> ConfigActivationReceipt:
         return application.config.activate_config_entry(command)
+
+    @app.get(f"{_API_PREFIX}/experimental-batches")
+    def list_experimental_batches(
+        limit: Annotated[int, Query(ge=1, le=500)] = 100,
+        before: Annotated[int | None, Query(ge=1)] = None,
+    ) -> ExperimentalBatchPage:
+        return application.experimental_batches.list(limit=limit, before=before)
+
+    @app.get(f"{_API_PREFIX}/experimental-batches/{{batch_id}}")
+    def get_experimental_batch(batch_id: ExperimentalBatchId) -> ExperimentalBatch:
+        return application.experimental_batches.get(batch_id)
+
+    @app.put(f"{_API_PREFIX}/experimental-batches/{{batch_id}}")
+    def save_experimental_batch(
+        batch_id: ExperimentalBatchId, command: ExperimentalBatchEdit
+    ) -> ExperimentalBatch:
+        return application.experimental_batches.save(batch_id, command)
 
     @app.get(f"{_API_PREFIX}/record-collections")
     def list_record_collections(
@@ -1742,6 +1765,7 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
         state: ControlRunState | None = None,
         sample_id: SampleId | None = None,
         record_collection: str | None = None,
+        batch_id: str | None = None,
         research_project: str | None = None,
         working_point: str | None = None,
         deployment_id: str | None = None,
@@ -1755,6 +1779,7 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
             sample_id=sample_id,
             history=RunHistoryFilter(
                 record_collection=record_collection,
+                batch_id=batch_id,
                 research_project=research_project,
                 working_point=working_point,
                 deployment_id=deployment_id,

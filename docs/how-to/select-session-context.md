@@ -1,6 +1,6 @@
 # Select a notebook's experimental context
 
-An author session can remember the sample, saved working point, record collection
+An author session can remember the sample, experimental batch, saved working point, record collection
 and operator for its next requests. This selection belongs to that client. Two
 notebooks connected to the same daemon can make different selections without
 changing the lab's active configuration or another client's defaults.
@@ -18,7 +18,7 @@ session.run(1)
 
 Here `working_point_ref` is an existing exact `ConfigContextRef`; see
 [parameter contexts](manage-configuration.md). Selecting it also selects its bound
-sample. `rabi` is an experiment imported from your project. The same `use` API is
+sample and batch. `rabi` is an experiment imported from your project. The same `use` API is
 available on `project.authoring()` and `AuthorProject` clients. Selection performs
 read-only validation; it does not run an experiment, activate configuration, or
 establish calibration validity.
@@ -62,7 +62,9 @@ session.prepare(rabi(), context=None, record_collection=None)
 
 An explicit `parameters`, `candidate`, `context` or `sample` selects the whole
 scientific scope for that request. It does not combine with an inherited sample
-or working point. The selected operator and collection are inherited independently
+or working point. When a batch is selected, that explicit scope must still belong
+to the selected batch (or the request must explicitly select its original batch).
+The selected operator and collection are inherited independently
 unless explicitly overridden. `context=None` deliberately uses the ordinary active
 configuration without the session's sample/working point. Clearing the collection
 for one request uses the default record collection. None of these overrides changes
@@ -70,7 +72,8 @@ for one request uses the default record collection. None of these overrides chan
 
 A saved recipe has its own frozen scientific scope.
 `session.prepare_plan(ref)` uses that scope and inherits only the current operator
-and collection. Both may be explicitly overridden for that execution.
+and collection. Both may be explicitly overridden for that execution. The plan
+must match the selected batch; a different batch requires a new scientific scope.
 
 ## Number lookup follows the selected collection
 
@@ -84,7 +87,7 @@ no collection selected keeps the previous store-wide behavior. See
 [record collections](record-collections.md) for stable addresses and migration.
 
 This is currently a Python/Notebook selection facility for existing single-sample
-working points. Batch/cooldown applicability, multi-sample assemblies, page-local
-GUI selection and multiple code workspaces still require their own contracts and
-implementation. A collection named “cooldown 3” is not proof that a previous
+working points. Declared batch/cooldown applicability is covered by
+[experimental batches](experimental-batches.md). Multi-sample assemblies, setup
+applicability, page-local GUI selection and multiple code workspaces remain pending. A collection named “cooldown 3” is not proof that a previous
 calibration applies in that cooldown.
