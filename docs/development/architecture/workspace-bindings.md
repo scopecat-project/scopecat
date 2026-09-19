@@ -1,6 +1,6 @@
 # Workspace, data space and execution binding
 
-Current format: schema **75** supports workspace-scoped author publication within
+Current format: schema **76** supports workspace-scoped author publication within
 one qualified local service. It is a development format, not a compatibility
 baseline. Earlier schema/migration exercises are retired; this page describes
 current behavior only. See the [data policy](../data-compatibility.md),
