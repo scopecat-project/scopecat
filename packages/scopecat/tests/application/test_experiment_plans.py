@@ -54,7 +54,14 @@ def test_plan_frozen_inputs_current_actor_and_changed_definition() -> None:
         saved_by="alice",
         saved_at=datetime.now(UTC),
     )
+    historical_json = plan.model_dump_json()
+    historical_hash = plan.ref.content_hash
     request = plan_launch_request(plan, actor="bob")
+    assert request.workspace_id == "legacy"
+    assert plan.definition.workspace_id is None
+    assert "workspace_id" not in plan.definition.model_dump(mode="json")
+    assert plan.model_dump_json() == historical_json
+    assert plan.ref.content_hash == historical_hash
     assert request.actor == "bob"
     assert request.request_key == ""
     assert request.expected_request_hash is None
