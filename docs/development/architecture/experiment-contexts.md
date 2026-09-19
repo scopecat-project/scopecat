@@ -46,7 +46,7 @@ sample features; they do not yet establish the complete target/setup model below
 | Working points | Exact single-sample scope, value provenance, explicit estimate copies and verified candidate publication with per-head conflicts | Bounded automated cohorts share working-point ownership; qualified cross-object dependencies remain future work |
 | Apparatus history | Descriptive object/revision and observation slice (#644); separate from executable target selection | Useful history navigation and explicit evidence links; no live wiring or calibration-validity claim |
 | Execution setup | Independent maintained setup revisions/selection; complete retained run config and setup-content fences | Concurrent incompatible deployments and qualified cross-object applicability |
-| Session and addressing | Per-page/kernel choices, frozen target plans, collection numbering and same-environment source-qualified workspace execution | Graphical workspace selection, heterogeneous environments and setup selection |
+| Session and addressing | Per-page/kernel choices, graphical workspace selection, frozen target plans, collection numbering and same-environment source-qualified execution | Heterogeneous environments and portable multi-source installation |
 | Application | Registered services open the experiment workbench; Help entry and local lifecycle controls | Further Help integration and server-enforced practice boundaries |
 
 The apparatus-history row describes the bounded slice introduced with this change,

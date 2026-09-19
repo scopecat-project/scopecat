@@ -1,3 +1,4 @@
+import { serviceWorkspaceCatalog } from "../../test/scientific-fixtures";
 import { targetRefKey } from "./target-api";
 import type { SubmissionRequest } from "./launch-submission";
 import { reviewedFixture } from "../../test/scientific-fixtures";
@@ -120,6 +121,7 @@ beforeEach(() => {
     vi.fn(async (request: Request) => {
       const url = new URL(request.url);
       const path = url.pathname;
+      if (path.endsWith("/author-workspaces")) return Response.json(serviceWorkspaceCatalog);
       if (path.endsWith("/procedures") && url.searchParams.has("request_key")) {
         const original = submissions[0];
         const item = {
@@ -699,4 +701,103 @@ it("pins a picked target across head refresh and pages, then clears it on catalo
   expect(screen.getByLabelText("Sample ID")).toHaveValue("");
   expect(screen.getByLabelText("Operator")).toHaveValue("operator");
   expect(screen.queryByText(/exact registered target retained/)).toBeNull();
+});
+
+function mockWorkspaceCatalog() {
+  const fallback = globalThis.fetch;
+  const catalogOwners: string[] = [];
+  const previewOwners: string[] = [];
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (request: Request) => {
+      const path = new URL(request.url).pathname;
+      if (path.endsWith("/author-workspaces"))
+        return Response.json({
+          items: [
+            { id: "legacy", name: "Service code", available: true, unavailable_reason: null },
+            { id: "workspace-b", name: "Second code", available: true, unavailable_reason: null },
+            {
+              id: "unbound",
+              name: "Archived code",
+              available: false,
+              unavailable_reason: "Register its local source before execution",
+            },
+          ],
+        });
+      if (path.endsWith("/experiment-launcher"))
+        catalogOwners.push(request.headers.get("X-Scopecat-Workspace") ?? "missing");
+      if (path.endsWith("/preview")) {
+        const body = (await request.clone().json()) as SubmissionRequest;
+        previewOwners.push(body.workspace_id);
+      }
+      return fallback(request);
+    }),
+  );
+  return { catalogOwners, previewOwners };
+}
+
+it("switches identical experiment definitions by workspace without replacing scientific context or an uncertain submission", async () => {
+  const requests = mockWorkspaceCatalog();
+  render(<Harness />);
+  await selectPrepared();
+  await screen.findByRole("option", { name: /Second code/ });
+  expect(screen.getByRole("option", { name: /Archived code/ })).toBeDisabled();
+  fireEvent.change(screen.getByLabelText("Note"), { target: { value: "service-only edit" } });
+  fireEvent.change(screen.getByLabelText("Sample ID"), { target: { value: "chip-a" } });
+  fireEvent.change(screen.getByLabelText("Operator"), { target: { value: "Alice" } });
+  fireEvent.click(screen.getByRole("button", { name: "Browse samples, batches and collections" }));
+  await screen.findByRole("option", { name: "Collection A" });
+  fireEvent.change(screen.getByLabelText("Record collection"), {
+    target: { value: "collection-a" },
+  });
+  await previewReady();
+  fireEvent.click(screen.getByRole("button", { name: "Start acquisition" }));
+  await waitFor(() => expect(submissions).toHaveLength(1));
+  await screen.findByRole("button", { name: "Retry original submission" });
+  const original = submissions[0];
+  fireEvent.change(screen.getByLabelText("Code workspace"), { target: { value: "workspace-b" } });
+  await selectPrepared();
+  expect(screen.getByLabelText("Note")).toHaveValue("original");
+  expect(screen.getByLabelText("Sample ID")).toHaveValue("chip-a");
+  expect(screen.getByLabelText("Operator")).toHaveValue("Alice");
+  expect(screen.getByLabelText("Record collection")).toHaveValue("collection-a");
+  expect(screen.queryByText("Preview ready", { exact: true })).toBeNull();
+  expect(screen.getByRole("button", { name: "Retry original submission" })).toBeDisabled();
+  expect(submissions).toEqual([original]);
+  fireEvent.click(screen.getByRole("button", { name: "devices" }));
+  await returnToLaunch();
+  expect(screen.getByLabelText("Code workspace")).toHaveValue("workspace-b");
+  await previewReady();
+  expect(requests.catalogOwners).toContain("workspace-b");
+  expect(requests.previewOwners).toEqual(["legacy", "workspace-b"]);
+  fireEvent.change(screen.getByLabelText("Code workspace"), { target: { value: "legacy" } });
+  await selectPrepared();
+  await waitFor(() =>
+    expect(screen.getByRole("button", { name: "Retry original submission" })).toBeEnabled(),
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Retry original submission" }));
+  await waitFor(() => expect(submissions).toHaveLength(2));
+  expect(submissions[1]).toEqual(original);
+});
+
+it("ignores a pending preview from the previous source even when the experiment definition is identical", async () => {
+  mockWorkspaceCatalog();
+  const view = render(<Harness />);
+  await selectPrepared();
+  await screen.findByRole("option", { name: /Second code/ });
+  deferPreview = true;
+  fireEvent.click(screen.getByRole("button", { name: "Preview" }));
+  await waitFor(() => expect(previewResponse).toBeDefined());
+  const previous = previewResponse!;
+  fireEvent.change(screen.getByLabelText("Code workspace"), { target: { value: "workspace-b" } });
+  await selectPrepared();
+  await act(async () => {
+    previous(Response.json(preview()));
+  });
+  expect(screen.queryByText("Preview ready", { exact: true })).toBeNull();
+  expect(screen.getByRole("button", { name: "Start acquisition" })).toBeDisabled();
+  expect(screen.getByLabelText("Code workspace")).toHaveValue("workspace-b");
+  view.rerender(<Harness projectId="project-b" />);
+  await selectPrepared();
+  expect(screen.getByLabelText("Code workspace")).toHaveValue("legacy");
 });

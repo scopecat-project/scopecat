@@ -83,8 +83,22 @@ scopecat register-workspace /path/to/second --service /path/to/service
 Then start from the service workspace. The returned stable workspace ID selects
 independent publication state. Opening `Project`/`AuthorProject` from a registered
 source uses that owner automatically; connecting never registers a path. Only the
-service source can start the daemon or snapshot the shared store. The GUI
-defaults to its service owner and preserves saved-plan and handoff source owners.
+service source can start the daemon or snapshot the shared store. The GUI defaults
+to its service owner. Its **Code workspace** selector lists registered source
+identities and their current execution availability; retained sources without a
+qualified local binding remain visible as unavailable. Listing performs no source
+publication, registration or environment installation.
+
+The selected code workspace belongs to the page's draft. Switching it discards
+old experiment inputs, preview and pinned plan/source while preserving scientific
+selection, operator and record collection. Same-name experiment definitions remain
+qualified by their workspace. Refresh operates on that workspace only; completing
+an explicitly requested refresh invalidates an unpinned preview even when the
+experiment declaration is unchanged. Saved plans
+and comparison handoffs retain their exact source owner and revision; **Use current
+source** is an explicit choice that requires a fresh preview. An uncertain original
+submission remains separately recorded under its original owner and is never
+rewritten into the newly selected workspace.
 
 Machine-local bindings live in the data directory's `author-workspaces.json`,
 separate from persistent source membership. They are excluded from snapshots.
