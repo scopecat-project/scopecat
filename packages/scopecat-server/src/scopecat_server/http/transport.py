@@ -947,9 +947,9 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
 
     @app.get(f"{_API_PREFIX}/apparatus-objects")
     def list_apparatus_objects(
-        query: str = Query(default="", max_length=200),
-        limit: int = Query(default=100, ge=1, le=1000),
-        before: int | None = Query(default=None, ge=1),
+        query: Annotated[str, Query(max_length=200)] = "",
+        limit: Annotated[int, Query(ge=1, le=1000)] = 100,
+        before: Annotated[int | None, Query(ge=1)] = None,
     ) -> ApparatusObjectPage:
         return application.apparatus_history.list_objects(
             query=query, limit=limit, before=before
@@ -974,15 +974,15 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
     @app.get(f"{_API_PREFIX}/apparatus-objects/{{object_id}}")
     def get_apparatus_object(
         object_id: str,
-        revision: int | None = Query(default=None, ge=1),
+        revision: Annotated[int | None, Query(ge=1)] = None,
     ) -> ApparatusObjectRevision:
         return application.apparatus_history.get_object(object_id, revision=revision)
 
     @app.get(f"{_API_PREFIX}/apparatus-objects/{{object_id}}/observations")
     def apparatus_observations(
         object_id: str,
-        limit: int = Query(default=100, ge=1, le=1000),
-        before: int | None = Query(default=None, ge=1),
+        limit: Annotated[int, Query(ge=1, le=1000)] = 100,
+        before: Annotated[int | None, Query(ge=1)] = None,
         run_id: str | None = None,
     ) -> ApparatusObservationPage:
         return application.apparatus_history.observations(
@@ -1002,7 +1002,7 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
     @app.post(f"{_API_PREFIX}/apparatus-attachments")
     async def import_apparatus_attachment(
         request: Request,
-        filename: str = Query(min_length=1, max_length=255),
+        filename: Annotated[str, Query(min_length=1, max_length=255)],
     ) -> ApparatusAttachment:
         content = bytearray()
         async for chunk in request.stream():
