@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field, JsonValue, model_validator
 
 from scopecat.kernel.content_identity import sha256_json_hash
 from scopecat.records.author_revision import AuthorRevisionRef
+from scopecat.records.author_workspace import AuthorWorkspaceId, absent_workspace
 from scopecat.records.config_context import ConfigContextRef, ContextRunConfigSource
 from scopecat.records.content import Sha256ContentHash
 from scopecat.records.control_edit import ControlEdit
@@ -38,6 +39,9 @@ class LaunchRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     record_collection: RecordCollectionId | None = Field(
         default=None, exclude_if=_absent_collection
+    )
+    workspace_id: AuthorWorkspaceId | None = Field(
+        default=None, exclude_if=absent_workspace
     )
     code_revision: AuthorRevisionRef | None = None
     action: Literal["list", "preview", "submit"]
@@ -102,6 +106,7 @@ class LaunchRequest(BaseModel):
         return sha256_json_hash(
             {
                 "experiment": self.experiment,
+                **({"workspace_id": self.workspace_id} if self.workspace_id else {}),
                 "version": self.version,
                 "inputs": self.inputs,
                 **(

@@ -94,6 +94,8 @@ export function importLaunchRequest(
       "Suggested inputs imported from saved analysis. Preview in the selected configuration before starting. Source provenance is retained only in this console draft.",
     ),
     experiment: entry.id,
+    workspaceId: request.workspace_id,
+    codeRevision: request.code_revision,
     definition: definitionKey(entry),
     values: {
       ...current.values,

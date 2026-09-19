@@ -38,6 +38,7 @@ def plan_launch_request(
         sample=definition.sample.sample_id if definition.sample else None,
         batch_id=definition.sample.batch_id if definition.sample else None,
         code_revision=definition.code_revision,
+        workspace_id=definition.workspace_id,
         plan_ref=plan.ref,
     )
 
@@ -58,6 +59,7 @@ def validate_plan_launch(
     )
     if (
         request.request_hash != expected.request_hash
+        or request.workspace_id != expected.workspace_id
         or request.code_revision != expected.code_revision
     ):
         raise ValueError(
@@ -88,6 +90,7 @@ def plan_definition(
         version=request.version,
         definition_hash=preview.definition_hash,
         code_revision=preview.code_revision,
+        workspace_id=preview.workspace_id,
         inputs=request.inputs,
         control_edits=request.control_edits,
         scan_mode=request.scan_mode,

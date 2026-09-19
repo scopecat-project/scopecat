@@ -7,6 +7,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, FiniteFloat
 
 from scopecat.records.author_revision import AuthorRevisionRef
+from scopecat.records.author_workspace import AuthorWorkspaceId, absent_workspace
 
 
 class ComparisonParameter(BaseModel):
@@ -39,6 +40,7 @@ class ComparisonSelection(BaseModel):
 class ComparisonRequest(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
     action: Literal["list", "inspect", "fit", "candidate", "reject", "handoff"]
+    workspace_id: AuthorWorkspaceId = "legacy"
     code_revision: AuthorRevisionRef | None = None
     model_id: str = ""
     model_version: str = ""
@@ -68,11 +70,17 @@ class ComparisonCurve(BaseModel):
 class ComparisonCatalog(BaseModel):
     kind: Literal["catalog"] = "catalog"
     models: tuple[ComparisonModel, ...] = ()
+    workspace_id: AuthorWorkspaceId | None = Field(
+        default=None, exclude_if=absent_workspace
+    )
     code_revision: AuthorRevisionRef | None = None
 
 
 class ComparisonInspection(BaseModel):
     kind: Literal["inspection"] = "inspection"
+    workspace_id: AuthorWorkspaceId | None = Field(
+        default=None, exclude_if=absent_workspace
+    )
     code_revision: AuthorRevisionRef | None = None
     primary: ComparisonCurve
     secondary: ComparisonCurve

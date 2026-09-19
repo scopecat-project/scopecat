@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class DaemonHealth(BaseModel):
@@ -19,6 +19,7 @@ class DaemonHealth(BaseModel):
     project_root: str
     data_root: str
     deployment_root: str
+    author_workspaces: dict[str, str] = Field(default_factory=dict)
 
 
 __all__ = ["DaemonHealth"]

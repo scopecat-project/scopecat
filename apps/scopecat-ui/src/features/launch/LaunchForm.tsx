@@ -141,6 +141,7 @@ export function LaunchForm({
             actor,
             request_key: "",
             code_revision: draft.codeRevision,
+            workspace_id: draft.workspaceId ?? "legacy",
           },
         }),
       );
@@ -196,6 +197,7 @@ export function LaunchForm({
           actor,
           config_source: source,
           code_revision: result?.code_revision,
+          workspace_id: result?.workspace_id,
           manual_state: result?.manual_state,
           expected_request_hash: result?.request_hash,
         },

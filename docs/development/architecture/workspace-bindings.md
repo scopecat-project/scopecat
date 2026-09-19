@@ -1,17 +1,14 @@
 # Workspace, data space and execution binding
 
-Status: the first local binding implementation uses `scopecat.runtime.toml`,
-store schema 68 and separate deployment/data locks. See the supported
-[project layout](../../reference/project-layout.md#bind-a-workspace-to-persistent-local-data)
+Current status: schema 74 implements workspace-scoped publication described in
+[the implementation section below](#workspace-scoped-author-publication).
+The initial audit and binding sections retain their historical schema-68 context
+against `a12fe550a`; they are not the current schema or admission limit. See the
+supported [project layout](../../reference/project-layout.md#bind-a-workspace-to-persistent-local-data)
 and [restore behavior](../../how-to/backup-and-restore.md#separately-located-data).
-This page retains the pre-implementation audit against `a12fe550a` and explains
-the design boundaries. No historical-store migration or remote execution is
-included. [#572](https://github.com/scopecat-project/scopecat/issues/572) tracks
-integration acceptance.
-
-The [experiment-context direction](experiment-contexts.md) proposes replacing the
-one-active-workspace restriction with explicit session/source ownership. It does
-not relax this implemented binding contract before that replacement is delivered.
+[#572](https://github.com/scopecat-project/scopecat/issues/572) tracks integration
+acceptance. Remote execution and differing dependency environments remain outside
+this local qualification.
 
 ## Pre-implementation contracts and gaps
 
@@ -107,8 +104,9 @@ Use `packages/scopecat/tests/project/test_project.py`, daemon endpoint tests,
 server `test_lifecycle.py`/`test_runtime.py`, author revision tests and
 `test_snapshot_integration.py` as existing coverage seams. Add one installed,
 synthetic A-to-B journey covering actual processes, receipts and restart. Keep
-run-like checks serial locally. Linux/Windows CI and self-review precede public
-merge; hardware admission is a separate consumer qualification.
+run-like checks serial locally. Fast CI and self-review precede public merge in
+the current integration window; full installed/Windows acceptance is a milestone
+closeout gate. Hardware admission is a separate consumer qualification.
 
 The installed acceptance fixture is `scripts/verify_workspace_binding.py`, also
 run by `verify_pilot_bundle.py` and the runtime-binding journey tests. It checks
@@ -128,20 +126,45 @@ virtual-environment symlinks; resolving it to the base interpreter would lose th
 selected environment.
 
 This is an internal local process contract, not a persistent workspace catalog.
-The current daemon still composes one workspace with its own interpreter, stores
-one active author head, and validates endpoint/data/deployment bindings. Existing
-environment qualification and deployment/data writer locks remain in force.
-Different dependency environments and simultaneous workspace admission require
-explicit runtime qualification and workspace-scoped publication before the public
-connection contract can admit them. Reading retained evidence remains independent
+The daemon now composes registered workspaces with one qualified interpreter and
+maintained composition, scoped author heads, and endpoint/data/deployment checks.
+Environment qualification and deployment/data writer locks remain in force.
+Different dependency environments remain outside this qualified deployment. Reading retained evidence remains independent
 of qualifying its original code for execution.
 
-## Next vertical slice: workspace-scoped author publication
+## Workspace-scoped author publication
 
-Design for [#613](https://github.com/scopecat-project/scopecat/issues/613), not a
-shipped multi-workspace API. Implement after the target-catalog schema change;
-allocate the next migration centrally. Do not expose a second workspace until the
-whole registration → preparation → submission → retained-read path below works.
+Schema 74 implements the vertical contract below for
+[#630](https://github.com/scopecat-project/scopecat/issues/630), within
+[#613](https://github.com/scopecat-project/scopecat/issues/613). The application host
+registers whole deployments; this catalog registers author sources within one.
+
+Stop the service and run, using its installed environment:
+
+```shell
+scopecat register-workspace /path/to/second --service /path/to/service
+```
+
+Then start from the service workspace. The returned stable workspace ID selects
+independent publication state. Opening `Project`/`AuthorProject` from a registered
+source uses that owner automatically; connecting never registers a path. Only the
+service source can start the daemon, snapshot or migrate the shared store. The GUI
+defaults to its service owner and preserves saved-plan and handoff source owners.
+
+Machine-local bindings live in the data directory's `author-workspaces.json`,
+separate from persistent source membership. They are excluded from snapshots and
+not inherited by a migration copy, even with a shared deployment lock. After
+restore, historical runs and bundles remain readable without those paths. For
+executable access, stop the service and explicitly register qualified source with
+`--identity EXISTING_WORKSPACE_ID`; unknown IDs and `legacy` are rejected. Moving
+an identity revokes its old location. Portable multi-source installation bundles
+and different dependency environments remain outside this slice.
+
+Focused process coverage uses two clients/workspaces with the same package name,
+one daemon, independent refresh, shared numbering, old-version execution, saved
+plan execution and original-source analysis across clients. It also checks
+restored evidence without secondary source, registration locks and identity moves.
+Full installed/Windows and interactive-kernel qualification remains in closeout.
 
 ### Ownership and qualification
 

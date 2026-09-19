@@ -9,29 +9,31 @@ type Request = { operation_id: string; expected_generation: number };
 
 type Props = {
   projectId: string | undefined;
+  workspaceId?: string;
   onRefreshed?: () => void | Promise<void>;
 };
 
 export function AuthorRefresh(props: Props) {
-  return <AuthorRefreshPanel key={props.projectId} {...props} />;
+  return <AuthorRefreshPanel key={`${props.projectId}:${props.workspaceId}`} {...props} />;
 }
 
-function AuthorRefreshPanel({ projectId, onRefreshed }: Props) {
+function AuthorRefreshPanel({ projectId, onRefreshed, workspaceId = "legacy" }: Props) {
   const queryClient = useQueryClient();
+  const headers = { "X-Scopecat-Workspace": workspaceId };
   const [request, setRequest] = useState<Request>();
   const [synchronized, setSynchronized] = useState<string>();
   const notified = useRef<string | undefined>(undefined);
   const state = useQuery({
-    queryKey: ["author-revisions", projectId],
+    queryKey: ["author-revisions", projectId, workspaceId],
     enabled: Boolean(projectId),
-    queryFn: () => apiData(apiClient.GET("/api/v1/author-revisions")),
+    queryFn: () => apiData(apiClient.GET("/api/v1/author-revisions", { headers })),
     refetchInterval: (query) =>
       query.state.data?.enabled && !query.state.data.active ? 1000 : false,
   });
   const history = useQuery({
-    queryKey: ["author-preparations", projectId],
+    queryKey: ["author-preparations", projectId, workspaceId],
     enabled: Boolean(projectId && state.data?.enabled),
-    queryFn: () => apiData(apiClient.GET("/api/v1/author-preparations")),
+    queryFn: () => apiData(apiClient.GET("/api/v1/author-preparations", { headers })),
     refetchInterval: (query) =>
       !state.data?.active || query.state.data?.some((item) => !terminal(item.status))
         ? 1000
@@ -40,12 +42,13 @@ function AuthorRefreshPanel({ projectId, onRefreshed }: Props) {
   const identity =
     request?.operation_id ?? state.data?.preparation_id ?? history.data?.[0]?.operation_id;
   const operation = useQuery({
-    queryKey: ["author-preparation", projectId, identity],
+    queryKey: ["author-preparation", projectId, workspaceId, identity],
     enabled: Boolean(identity && projectId),
     queryFn: () =>
       apiData(
         apiClient.GET("/api/v1/author-preparations/{operation_id}", {
           params: { path: { operation_id: identity! } },
+          headers,
         }),
       ),
     retry: false,
@@ -53,17 +56,25 @@ function AuthorRefreshPanel({ projectId, onRefreshed }: Props) {
       query.state.data && terminal(query.state.data.status) ? false : 1000,
   });
   const refresh = useMutation({
-    mutationFn: (body: Request) => apiData(apiClient.POST("/api/v1/author-preparations", { body })),
+    mutationFn: (body: Request) =>
+      apiData(apiClient.POST("/api/v1/author-preparations", { body, headers })),
     retry: false,
     onError: (error) => {
       if (error instanceof ApiError && (error.status === 409 || error.status === 422)) {
         setRequest(undefined);
-        void queryClient.invalidateQueries({ queryKey: ["author-revisions", projectId] });
+        void queryClient.invalidateQueries({
+          queryKey: ["author-revisions", projectId, workspaceId],
+        });
       }
     },
     onSuccess: (next) => {
-      queryClient.setQueryData(["author-preparation", projectId, next.operation_id], next);
-      void queryClient.invalidateQueries({ queryKey: ["author-preparations", projectId] });
+      queryClient.setQueryData(
+        ["author-preparation", projectId, workspaceId, next.operation_id],
+        next,
+      );
+      void queryClient.invalidateQueries({
+        queryKey: ["author-preparations", projectId, workspaceId],
+      });
     },
   });
   const cancel = useMutation({
@@ -71,22 +82,28 @@ function AuthorRefreshPanel({ projectId, onRefreshed }: Props) {
       apiData(
         apiClient.POST("/api/v1/author-preparations/{operation_id}/cancel", {
           params: { path: { operation_id: identity! } },
+          headers,
         }),
       ),
     onSuccess: (next) =>
-      queryClient.setQueryData(["author-preparation", projectId, next.operation_id], next),
+      queryClient.setQueryData(
+        ["author-preparation", projectId, workspaceId, next.operation_id],
+        next,
+      ),
   });
   useEffect(() => {
     const next = operation.data;
     if (next?.status !== "succeeded" || notified.current === next.operation_id) return;
     notified.current = next.operation_id;
     void (async () => {
-      await queryClient.invalidateQueries({ queryKey: ["author-revisions", projectId] });
+      await queryClient.invalidateQueries({
+        queryKey: ["author-revisions", projectId, workspaceId],
+      });
       await queryClient.invalidateQueries({ queryKey: ["experiment-launcher"] });
       await onRefreshed?.();
       setSynchronized(next.operation_id);
     })();
-  }, [operation.data, projectId, queryClient, onRefreshed]);
+  }, [operation.data, projectId, workspaceId, queryClient, onRefreshed]);
   if (state.data && !state.data.enabled) return null;
   const busy = identity && (!operation.data || !terminal(operation.data.status));
   return (

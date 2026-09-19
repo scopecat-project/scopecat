@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 from types import SimpleNamespace
 from typing import cast
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -29,7 +29,10 @@ def test_timeout_reports_unknown_publication_and_never_retries(operation: str) -
             SimpleNamespace(
                 project_root=Path.cwd(),
                 author_revisions=SimpleNamespace(
-                    worker_binding=AuthorWorkerBinding(Path.cwd(), Path(sys.executable))
+                    get=Mock(),
+                    worker_binding=AuthorWorkerBinding(
+                        Path.cwd(), Path(sys.executable)
+                    ),
                 ),
             ),
         ),
@@ -79,7 +82,10 @@ def test_analysis_failure_keeps_stack_in_daemon_log(
             SimpleNamespace(
                 project_root=Path.cwd(),
                 author_revisions=SimpleNamespace(
-                    worker_binding=AuthorWorkerBinding(Path.cwd(), Path(sys.executable))
+                    get=Mock(),
+                    worker_binding=AuthorWorkerBinding(
+                        Path.cwd(), Path(sys.executable)
+                    ),
                 ),
             ),
         ),
@@ -100,3 +106,35 @@ def test_analysis_failure_keeps_stack_in_daemon_log(
     assert response.json()["detail"] == "ValueError: invalid fit"
     assert "original stack evidence" in caplog.text
     assert call.call_count == 1
+
+
+@pytest.mark.parametrize("operation", ["analysis", "comparison"])
+def test_revision_outside_owner_membership_never_dispatches(operation: str) -> None:
+    service = SimpleNamespace(
+        get=Mock(
+            side_effect=ValueError(
+                "Source revision does not belong to selected author workspace"
+            )
+        )
+    )
+    application = cast(
+        "DaemonApplication", cast("object", SimpleNamespace(author_revisions=service))
+    )
+    ref = AuthorRevisionRef(content_hash="sha256:" + "a" * 64)
+    command = (
+        AuthorAnalysisRequest(code_revision=ref, run_id="retained", analysis="lab:fit")
+        if operation == "analysis"
+        else ComparisonRequest(action="fit", code_revision=ref)
+    )
+    path = (
+        "/api/v1/author-revisions/analyze"
+        if operation == "analysis"
+        else "/api/v1/run-comparison"
+    )
+    with patch("scopecat_server.http.transport.RevisionWorkers.call") as call:
+        response = TestClient(create_app(application)).post(
+            path, json=command.model_dump(mode="json")
+        )
+    assert response.status_code == 422
+    assert "does not belong" in response.json()["detail"]
+    call.assert_not_called()

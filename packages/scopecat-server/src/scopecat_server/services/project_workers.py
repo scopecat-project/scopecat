@@ -29,8 +29,10 @@ class ProjectProcedureWorkers:
         state: Callable[[str], str],
         *,
         max_workers: int = 2,
+        resolve_root: Callable[[str], Path] | None = None,
     ) -> None:
         self.root = root
+        self.resolve_root = resolve_root
         self.state = state
         self.max_workers = max_workers
         self._lock = Lock()
@@ -133,7 +135,7 @@ class ProjectProcedureWorkers:
                 raise
 
     def _spawn(self, procedure_id: str) -> None:
-        root = self.root()
+        root = self.resolve_root(procedure_id) if self.resolve_root else self.root()
         log_path = load_runtime_binding(root).data_root / "console-worker.log"
         log_path.parent.mkdir(parents=True, exist_ok=True)
         record_timing("procedure_dispatch", procedure_id=procedure_id)

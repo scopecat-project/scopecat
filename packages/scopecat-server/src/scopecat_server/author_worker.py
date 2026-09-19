@@ -12,6 +12,7 @@ from importlib import import_module
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
+from scopecat.author_workspaces import author_workspace_id
 from scopecat.runtime_binding import load_runtime_binding
 
 from scopecat_server.worker_diagnostics import report_stage
@@ -33,7 +34,9 @@ def revision_project(root: Path, ref: AuthorRevisionRef) -> Project:
     from scopecat.project import load_project
     from scopecat.project_sources import materialize_sources, require_environment
 
-    with DaemonClient(resolve_daemon_endpoint(root)) as client:
+    with DaemonClient(
+        resolve_daemon_endpoint(root), workspace_id=author_workspace_id(root)
+    ) as client:
         bundle = client.author_revision(ref)
     require_environment(bundle.manifest)
     code_root = materialize_sources(
@@ -180,6 +183,7 @@ def analyze(
         )
         published = (
             result.fact("author_code_revision", request.code_revision.content_hash)
+            .fact("author_workspace", request.workspace_id or "legacy")
             .artifact(
                 "author_analysis_arguments", text=canonical_json(request.arguments)
             )

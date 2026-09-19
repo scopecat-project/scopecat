@@ -41,13 +41,21 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class AuthorRevisionService:
-    def __init__(self, root: Path, store: SQLiteProjectStore) -> None:
+    def __init__(
+        self,
+        root: Path,
+        store: SQLiteProjectStore,
+        *,
+        workspace_id: str = "legacy",
+        workers: RevisionWorkers | None = None,
+    ) -> None:
         self.worker_binding = AuthorWorkerBinding(
             root.resolve(), Path(sys.executable).absolute()
         )
-        self.workers = RevisionWorkers()
+        self._owns_workers = workers is None
+        self.workers = workers or RevisionWorkers()
         self.root = root
-        self.repository = AuthorRevisionRepository(store)
+        self.repository = AuthorRevisionRepository(store, workspace_id)
         self._operation_lock = threading.RLock()
         self._operations: dict[str, tuple[threading.Event, Future[None]]] = {}
         self._closing = False
@@ -281,10 +289,16 @@ class AuthorRevisionService:
     def close(self) -> None:
         self.request_stop()
         self._executor.shutdown(wait=True)
-        self.workers.close()
+        if self._owns_workers:
+            self.workers.close()
 
     def get(self, ref: AuthorRevisionRef) -> AuthorRevisionBundle:
-        bundle = self.repository.get(ref)
+        try:
+            bundle = self.repository.get(ref)
+        except KeyError as error:
+            raise ValueError(
+                "Source revision does not belong to the selected author workspace"
+            ) from error
         self._require_maintenance(bundle)
         require_environment(bundle.manifest)
         return bundle

@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Literal, cast
 
 from pydantic import BaseModel, ConfigDict
+from scopecat.author_workspaces import author_workspace_id
 from scopecat.project import Project
 from scopecat.runtime_binding import RUNTIME_BINDING_NAME
 
@@ -25,6 +26,10 @@ from scopecat_server.snapshots import (
     staged_directory,
     stopped_store,
     verify_store_files,
+)
+from scopecat_server.storage.sqlite.author_workspace_schema import (
+    AUTHOR_WORKSPACE_BACKFILL_SQL,
+    AUTHOR_WORKSPACE_TABLES_SQL,
 )
 from scopecat_server.storage.sqlite.batch_schema import EXPERIMENTAL_BATCH_TABLES_SQL
 from scopecat_server.storage.sqlite.collection_schema import (
@@ -51,6 +56,7 @@ _MIGRATIONS = {
     70: RECORD_COLLECTION_TABLES_SQL + RECORD_COLLECTION_BACKFILL_SQL,
     71: EXPERIMENTAL_BATCH_TABLES_SQL,
     72: TARGET_CATALOG_TABLES_SQL,
+    73: AUTHOR_WORKSPACE_TABLES_SQL + AUTHOR_WORKSPACE_BACKFILL_SQL,
 }
 
 
@@ -93,9 +99,11 @@ def _plan(version: int) -> MigrationPlan:
 
 def plan_migration(project: Project) -> MigrationPlan:
     """Inspect a stopped source without importing its scientific code."""
+    if author_workspace_id(project.root) != "legacy":
+        raise SnapshotError("Plan migration from the deployment service workspace")
     with stopped_store(project.runtime_binding.data_root) as connection:
         version = require_schema_version(
-            connection, supported_versions=(68, 69, 70, 71, 72, 73)
+            connection, supported_versions=(68, 69, 70, 71, 72, 73, 74)
         )
         return _plan(version)
 

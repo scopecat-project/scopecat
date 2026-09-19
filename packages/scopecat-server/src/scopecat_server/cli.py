@@ -163,6 +163,28 @@ def _validate_host(value: str) -> str:
     return value
 
 
+@app.command("register-workspace")
+def register_workspace(
+    workspace: Path,
+    service: Annotated[Path, typer.Option(help="Stopped service workspace")],
+    name: Annotated[str | None, typer.Option()] = None,
+    identity: Annotated[
+        str | None,
+        typer.Option(help="Existing source identity to rebind after a move or restore"),
+    ] = None,
+) -> None:
+    """Register another author workspace in the same stopped deployment."""
+    from scopecat_server.author_registration import register_author_workspace
+
+    try:
+        selected = register_author_workspace(
+            service, workspace, name=name, identity=identity
+        )
+    except (ValueError, OSError) as error:
+        _fail(error)
+    typer.echo(selected.model_dump_json(indent=2))
+
+
 @app.command(
     "app", context_settings={"allow_extra_args": True, "ignore_unknown_options": True}
 )

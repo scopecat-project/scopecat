@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
+from scopecat.application.comparison import ComparisonHandoff
 from scopecat.daemon.endpoint import DAEMON_URL_ENV, resolve_daemon_endpoint
 from scopecat.project import load_project
 from scopecat.records.comparison import (
@@ -49,7 +50,23 @@ def compare(
         ) as lab:
             result = application.comparison_provider(lab, request)
     if isinstance(result, ComparisonCatalog | ComparisonInspection):
-        result = result.model_copy(update={"code_revision": request.code_revision})
+        result = result.model_copy(
+            update={
+                "code_revision": request.code_revision,
+                "workspace_id": request.workspace_id,
+            }
+        )
+    if isinstance(result, ComparisonHandoff):
+        result = result.model_copy(
+            update={
+                "request": result.request.model_copy(
+                    update={
+                        "workspace_id": request.workspace_id,
+                        "code_revision": request.code_revision,
+                    }
+                )
+            }
+        )
     return result
 
 

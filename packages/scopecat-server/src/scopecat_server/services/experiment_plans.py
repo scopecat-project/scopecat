@@ -18,7 +18,7 @@ from scopecat_server.storage.sqlite.experiment_plan_repository import (
 )
 
 if TYPE_CHECKING:
-    from scopecat_server.services.author_revisions import AuthorRevisionService
+    from scopecat_server.services.author_workspaces import AuthorWorkspaceServices
     from scopecat_server.services.config import ConfigService
     from scopecat_server.services.runs import RunService
     from scopecat_server.services.samples import SampleService
@@ -32,7 +32,7 @@ class ExperimentPlanService:
         config: ConfigService,
         samples: SampleService,
         runs: RunService,
-        authors: AuthorRevisionService,
+        authors: AuthorWorkspaceServices,
     ) -> None:
         self.repository = repository
         self.config = config
@@ -71,7 +71,9 @@ class ExperimentPlanService:
                     "plan sample binding does not match its immutable revision"
                 )
         if definition.code_revision is not None:
-            self.authors.get(definition.code_revision)
+            self.authors.get(definition.workspace_id or "legacy").get(
+                definition.code_revision
+            )
         if definition.source is not None:
             source = definition.source
             publication = self.runs.get_run_analysis(source.run_id, source.analysis_id)
