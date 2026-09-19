@@ -7,6 +7,7 @@ import {
   Boxes,
   Cable,
   GitCompareArrows,
+  CircleHelp,
   LayoutDashboard,
   LoaderCircle,
   MessageSquareText,
@@ -30,7 +31,13 @@ type ProjectView =
   | "decisions"
   | "reviews"
   | "instruments"
-  | "configuration";
+  | "configuration"
+  | "help";
+
+const HelpWorkspace = lazy(async () => {
+  const module = await import("./features/help/HelpWorkspace");
+  return { default: module.HelpWorkspace };
+});
 
 const LaunchWorkspace = lazy(async () => {
   const module = await import("./features/launch/LaunchWorkspace");
@@ -339,6 +346,14 @@ export default function App() {
             <Settings2 size={15} aria-hidden="true" />
             Configuration
           </button>
+          <button
+            type="button"
+            className={navigationClass(view === "help")}
+            aria-current={view === "help" ? "page" : undefined}
+            onClick={() => selectView("help")}
+          >
+            <CircleHelp size={15} aria-hidden="true" /> Help
+          </button>
         </nav>
         <div className="flex items-center gap-2.5">
           <ConnectionState
@@ -432,7 +447,11 @@ export default function App() {
             </Suspense>
           </div>
         </LaunchDraftProvider>
-        {view === "runs" ? (
+        {view === "help" ? (
+          <Suspense fallback={<p>Loading help…</p>}>
+            <HelpWorkspace health={healthQuery.data} reachable={daemonReachable} />
+          </Suspense>
+        ) : view === "runs" ? (
           <RunsWorkspace
             selectedRunId={selectedRunId}
             onSelectRun={selectRun}
@@ -611,6 +630,7 @@ function selectedSampleRevisionFromUrl(): number | undefined {
 }
 
 function projectViewFromLocation(): ProjectView {
+  if (window.location.hash === "#help") return "help";
   if (window.location.hash === "#launch") return "launch";
   if (window.location.hash === "#configuration") return "configuration";
   if (window.location.hash === "#instruments") return "instruments";
