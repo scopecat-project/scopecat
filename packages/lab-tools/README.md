@@ -1,10 +1,15 @@
-# Scopecat tutorial tools
+# Scopecat application and tutorial tools
 
 Public tooling for disposable tutorial workspaces, pinned kernels, offline
 installation, matching GUI assets and executable course verification.
 
-Use `scopecat teach` in an installed teaching environment, or the generated
-`lab.cmd` / `lab.py` menu. Maintainers use the repository's `teach.cmd` or
+Use `scopecat app` or the installed `lab.cmd` / `lab.py` entry to open registered
+experimental services. Register an existing project from its Python environment
+with `scopecat app PATH`; use `--python` for an explicit interpreter and
+`--static-dir` for a source-built GUI. Registration does not start devices.
+
+Teaching is under **Help**. `scopecat teach` opens that section directly;
+`python lab.py teach compute --verify` keeps tutorial automation explicit. Maintainers use the repository's `teach.cmd` or
 `teach.py` entry to build, verify and optionally install a fixed delivery.
 
 See [tutorial sandboxes](../../docs/tutorials/teaching-sandboxes.md).

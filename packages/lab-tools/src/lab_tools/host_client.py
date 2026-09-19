@@ -18,9 +18,10 @@ import psutil
 from filelock import FileLock
 from pydantic import BaseModel, Field
 
-from .bundle import file_hash
+from .bundle import RECEIPT, file_hash
 from .host_operations import Command, Operation, Workspace
 from .sandboxes import sandbox_key
+from .services import ServiceView
 
 
 class HostRecord(BaseModel):
@@ -40,12 +41,20 @@ class HostState(BaseModel):
     topics: dict[str, str]
     workspaces: list[Workspace]
     operations: list[Operation]
+    services: list[ServiceView]
+
+
+def teaching_key(source: Path | None) -> str | None:
+    """Teaching is optional for a normal installed experiment host."""
+    if source is None and not (Path(sys.prefix) / RECEIPT).is_file():
+        return None
+    return sandbox_key(source)
 
 
 def runtime_key(source: Path | None) -> str:
     package = Path(__file__).parent
     digest = hashlib.sha256()
-    digest.update(f"{sys.executable}\n{source}\n{sandbox_key(source)}".encode())
+    digest.update(f"{sys.executable}\n{source}\n{teaching_key(source)}".encode())
     for path in sorted(package.rglob("*")):
         if path.is_file() and path.suffix in (".py", ".html", ".js", ".css"):
             digest.update(file_hash(path).encode())

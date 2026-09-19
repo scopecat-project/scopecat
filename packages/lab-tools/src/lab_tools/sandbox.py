@@ -67,7 +67,9 @@ def main(argv: list[str] | None = None) -> None:
                     )
                 )
             else:
-                webbrowser.open(f"{client.record.url}/#token={client.record.token}")
+                webbrowser.open(
+                    f"{client.record.url}/#token={client.record.token}&view=help"
+                )
                 print("已打开 Scopecat 教学管理页面。关闭页面不会停止后台操作。")
             return
         if args.stop:

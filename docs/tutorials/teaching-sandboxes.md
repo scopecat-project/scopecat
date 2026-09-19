@@ -13,9 +13,10 @@ copies the complete offline delivery into `~/Scopecat-Lab`.
 
 On Windows, open `Scopecat-Lab/lab.cmd`; elsewhere run
 `python ~/Scopecat-Lab/lab.py`. This opens the local Scopecat management page.
-Choose a topic and **Open / continue**; the service prepares the exercise and opens
+Expand **Help · Teaching and practice**, then choose a topic and **Open / continue**; the service prepares the exercise and opens
 its folder and Notebook in VS Code. The installed command `scopecat teach` opens
-the same page. There is no need to activate environments, choose ports or number
+the Help section directly. The default page lists experimental services, which
+are registered separately with `scopecat app PATH`. There is no need to activate environments, choose ports or number
 project folders. Repeated launching connects to the same management service.
 
 Each topic has its own environment and one complete Notebook:
@@ -77,7 +78,7 @@ The build exports the reviewed `uv.lock`, builds public wheels and a matching GU
 and records hashes and source identity. Verification uses an empty cache and
 runs the actual shipped notebooks outside the checkout, including source refresh,
 new modules, history, recovery, duplicate installation and reset. Windows and Linux
-run this in public installed-pilot CI. CI artifacts expire; retain accepted
+run this in the manually dispatched public Full acceptance workflow. CI artifacts expire; retain accepted
 release bundles separately. Successful CI is software evidence, not human or
 physical-device acceptance.
 

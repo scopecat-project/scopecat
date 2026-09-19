@@ -115,7 +115,7 @@ def verify(bundle: Path, destination: Path) -> None:
     host_instance: str | None = None
     for topic in ("parameters", "compute", "refresh", "groups"):
         subprocess.run(  # noqa: S603 - explicit local tool and argument list
-            [str(python), str(launcher), topic, "--verify"],
+            [str(python), str(launcher), "teach", topic, "--verify"],
             cwd=destination,
             env=env,
             check=True,
@@ -132,14 +132,14 @@ def verify(bundle: Path, destination: Path) -> None:
     current = next((home / "sandboxes").glob("*/parameters/current.json"))
     before = current.read_text(encoding="utf-8")
     subprocess.run(  # noqa: S603 - explicit local tool and argument list
-        [str(python), str(launcher), "parameters", "--stop"],
+        [str(python), str(launcher), "teach", "parameters", "--stop"],
         cwd=destination,
         env=env,
         check=True,
     )
     assert current.read_text(encoding="utf-8") == before
     subprocess.run(  # noqa: S603 - explicit local tool and argument list
-        [str(python), str(launcher), "parameters", "--reset", "--verify"],
+        [str(python), str(launcher), "teach", "parameters", "--reset", "--verify"],
         cwd=destination,
         env=env,
         check=True,
