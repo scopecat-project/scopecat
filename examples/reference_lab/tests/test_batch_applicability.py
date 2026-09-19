@@ -4,7 +4,6 @@ import os
 from pathlib import Path
 from uuid import uuid4
 
-import httpx2
 import pytest
 import scopecat as sc
 from scopecat.api.lab import LabClient
@@ -57,10 +56,10 @@ def test_new_batch_requires_its_own_working_point(tmp_path: Path) -> None:
         plan = prepared.save_plan("Original cooldown recipe", saved_by="operator")
         original = prepared.run().wait(timeout=60).result()
         selection = session.selection
-        with pytest.raises(ValueError, match="batch does not match"):
+        with pytest.raises(ValueError, match="selected subject/batch differs"):
             session.use(batch=second.id)
         assert session.selection == selection
-        with pytest.raises(httpx2.HTTPStatusError, match="batch does not match"):
+        with pytest.raises(ValueError, match="selected subject/batch differs"):
             session.prepare("signal", context=ref, batch=second.id)
         # Explicit copying creates a new scoped estimate; advancing the old
         # workspace in place must never relabel its physical event.
@@ -121,7 +120,7 @@ def test_new_batch_requires_its_own_working_point(tmp_path: Path) -> None:
             == first.id
         )
         with pytest.raises(
-            DaemonConflictError, match="original sample revisions and batch"
+            DaemonConflictError, match="original scientific subject and batch"
         ):
             lab.run(
                 signal,

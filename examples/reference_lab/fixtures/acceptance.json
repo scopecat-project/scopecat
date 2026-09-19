@@ -315,14 +315,6 @@
     "code_revision": {
       "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
     },
-    "config_source": {
-      "config_ref": "config-registry/configs/daemon-15248161728d3097f23ae3b6e8109e20a2a2ec2b720eafcceefc89943acd302e.config-profile-snapshot.json",
-      "content_hash": "sha256:15248161728d3097f23ae3b6e8109e20a2a2ec2b720eafcceefc89943acd302e",
-      "entry_id": "daemon-15248161728d3097f23ae3b6e8109e20a2a2ec2b720eafcceefc89943acd302e",
-      "kind": "config_registry",
-      "registry_generation": 1,
-      "selector": "active"
-    },
     "controls": [
       {
         "axis": {
@@ -400,7 +392,7 @@
           "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
         },
         "config_source_hash": "sha256:f1a47c33186c0d9ad80ee5016812607aa6f794af72131e5bf1623406c94b7d7b",
-        "request_hash": "sha256:bc4e261f25a3207a80d31817b9e83091b2e9a8855fed6236511e10e88bfc00f0"
+        "request_hash": "sha256:65886008f13d54c0db4de1da653fce0c341db4fb48996401ecb7dbc16e69999e"
       },
       "event_id": 1
     },
@@ -497,23 +489,33 @@
         }
       ]
     },
-    "request_hash": "sha256:bc4e261f25a3207a80d31817b9e83091b2e9a8855fed6236511e10e88bfc00f0",
+    "request_hash": "sha256:65886008f13d54c0db4de1da653fce0c341db4fb48996401ecb7dbc16e69999e",
     "resolved_inputs": {},
     "resources": [],
-    "sample_binding": null,
-    "summary": "Preview fixed or scanned signal controls against the reviewed q0 carrier. Project limits: at most 64 points; amplitude at most 0.2 V when detuning exceeds 0.25 GHz. This analytic model makes no device calls."
+    "reviewed": {
+      "binding": {
+        "codec": "scopecat.scientific-binding.v1",
+        "config_content_hash": "sha256:15248161728d3097f23ae3b6e8109e20a2a2ec2b720eafcceefc89943acd302e",
+        "setup_content_hash": "sha256:0dd9a56d7a191330af179ab3c90de06de2e529c6bb44934129ee18b03fa345f3",
+        "subject": {
+          "kind": "unbound"
+        }
+      },
+      "config_source": {
+        "config_ref": "config-registry/configs/daemon-15248161728d3097f23ae3b6e8109e20a2a2ec2b720eafcceefc89943acd302e.config-profile-snapshot.json",
+        "content_hash": "sha256:15248161728d3097f23ae3b6e8109e20a2a2ec2b720eafcceefc89943acd302e",
+        "entry_id": "daemon-15248161728d3097f23ae3b6e8109e20a2a2ec2b720eafcceefc89943acd302e",
+        "kind": "config_registry",
+        "registry_generation": 1,
+        "selector": "active"
+      }
+    },
+    "summary": "Preview fixed or scanned signal controls against the reviewed q0 carrier. Project limits: at most 64 points; amplitude at most 0.2 V when detuning exceeds 0.25 GHz. This analytic model makes no device calls.",
+    "workspace_id": "legacy"
   },
   "controls_scan": {
     "code_revision": {
       "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
-    },
-    "config_source": {
-      "config_ref": "config-registry/configs/daemon-15248161728d3097f23ae3b6e8109e20a2a2ec2b720eafcceefc89943acd302e.config-profile-snapshot.json",
-      "content_hash": "sha256:15248161728d3097f23ae3b6e8109e20a2a2ec2b720eafcceefc89943acd302e",
-      "entry_id": "daemon-15248161728d3097f23ae3b6e8109e20a2a2ec2b720eafcceefc89943acd302e",
-      "kind": "config_registry",
-      "registry_generation": 1,
-      "selector": "active"
     },
     "controls": [
       {
@@ -591,7 +593,7 @@
           "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
         },
         "config_source_hash": "sha256:f1a47c33186c0d9ad80ee5016812607aa6f794af72131e5bf1623406c94b7d7b",
-        "request_hash": "sha256:9b37f815398dff89e249e148ceedfe2b4fd5a03900060f2ae6cf528a621875ea"
+        "request_hash": "sha256:adc0ecab0cb27addda1b5314817beb0dcfccfda7c487f2c2b2fedfb71072cef2"
       },
       "event_id": 1
     },
@@ -688,11 +690,29 @@
         }
       ]
     },
-    "request_hash": "sha256:9b37f815398dff89e249e148ceedfe2b4fd5a03900060f2ae6cf528a621875ea",
+    "request_hash": "sha256:adc0ecab0cb27addda1b5314817beb0dcfccfda7c487f2c2b2fedfb71072cef2",
     "resolved_inputs": {},
     "resources": [],
-    "sample_binding": null,
-    "summary": "Preview fixed or scanned signal controls against the reviewed q0 carrier. Project limits: at most 64 points; amplitude at most 0.2 V when detuning exceeds 0.25 GHz. This analytic model makes no device calls."
+    "reviewed": {
+      "binding": {
+        "codec": "scopecat.scientific-binding.v1",
+        "config_content_hash": "sha256:15248161728d3097f23ae3b6e8109e20a2a2ec2b720eafcceefc89943acd302e",
+        "setup_content_hash": "sha256:0dd9a56d7a191330af179ab3c90de06de2e529c6bb44934129ee18b03fa345f3",
+        "subject": {
+          "kind": "unbound"
+        }
+      },
+      "config_source": {
+        "config_ref": "config-registry/configs/daemon-15248161728d3097f23ae3b6e8109e20a2a2ec2b720eafcceefc89943acd302e.config-profile-snapshot.json",
+        "content_hash": "sha256:15248161728d3097f23ae3b6e8109e20a2a2ec2b720eafcceefc89943acd302e",
+        "entry_id": "daemon-15248161728d3097f23ae3b6e8109e20a2a2ec2b720eafcceefc89943acd302e",
+        "kind": "config_registry",
+        "registry_generation": 1,
+        "selector": "active"
+      }
+    },
+    "summary": "Preview fixed or scanned signal controls against the reviewed q0 carrier. Project limits: at most 64 points; amplitude at most 0.2 V when detuning exceeds 0.25 GHz. This analytic model makes no device calls.",
+    "workspace_id": "legacy"
   },
   "diagnostic": {
     "dataset_schema": {
@@ -1165,19 +1185,12 @@
         "title": "Frequency / amplitude model",
         "version": "1"
       }
-    ]
+    ],
+    "workspace_id": "legacy"
   },
   "launch_preview": {
     "code_revision": {
       "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
-    },
-    "config_source": {
-      "config_ref": "config-registry/configs/daemon-15248161728d3097f23ae3b6e8109e20a2a2ec2b720eafcceefc89943acd302e.config-profile-snapshot.json",
-      "content_hash": "sha256:15248161728d3097f23ae3b6e8109e20a2a2ec2b720eafcceefc89943acd302e",
-      "entry_id": "daemon-15248161728d3097f23ae3b6e8109e20a2a2ec2b720eafcceefc89943acd302e",
-      "kind": "config_registry",
-      "registry_generation": 1,
-      "selector": "active"
     },
     "controls": [],
     "definition_hash": "sha256:53999851b06af2bae8ccc071c6ed0b81bbb88180f58c12cdefd5e787f4ea46f9",
@@ -1189,7 +1202,7 @@
           "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
         },
         "config_source_hash": "sha256:f1a47c33186c0d9ad80ee5016812607aa6f794af72131e5bf1623406c94b7d7b",
-        "request_hash": "sha256:2280b9acef34da8b74f82088be27aa7a34694d6e1aca4379028f951c1a0ffc20"
+        "request_hash": "sha256:ed75b67e8933a14bbdfbc806c4fb3660b58c8b76e1572354e0d51e4c911eb824"
       },
       "event_id": 1
     },
@@ -1302,13 +1315,31 @@
         }
       ]
     },
-    "request_hash": "sha256:2280b9acef34da8b74f82088be27aa7a34694d6e1aca4379028f951c1a0ffc20",
+    "request_hash": "sha256:ed75b67e8933a14bbdfbc806c4fb3660b58c8b76e1572354e0d51e4c911eb824",
     "resolved_inputs": {},
     "resources": [
       "mixing-chamber"
     ],
-    "sample_binding": null,
-    "summary": "Retain one thermometer sample without changing device state or default configuration."
+    "reviewed": {
+      "binding": {
+        "codec": "scopecat.scientific-binding.v1",
+        "config_content_hash": "sha256:15248161728d3097f23ae3b6e8109e20a2a2ec2b720eafcceefc89943acd302e",
+        "setup_content_hash": "sha256:0dd9a56d7a191330af179ab3c90de06de2e529c6bb44934129ee18b03fa345f3",
+        "subject": {
+          "kind": "unbound"
+        }
+      },
+      "config_source": {
+        "config_ref": "config-registry/configs/daemon-15248161728d3097f23ae3b6e8109e20a2a2ec2b720eafcceefc89943acd302e.config-profile-snapshot.json",
+        "content_hash": "sha256:15248161728d3097f23ae3b6e8109e20a2a2ec2b720eafcceefc89943acd302e",
+        "entry_id": "daemon-15248161728d3097f23ae3b6e8109e20a2a2ec2b720eafcceefc89943acd302e",
+        "kind": "config_registry",
+        "registry_generation": 1,
+        "selector": "active"
+      }
+    },
+    "summary": "Retain one thermometer sample without changing device state or default configuration.",
+    "workspace_id": "legacy"
   },
   "planned_settings": {
     "planned_setting_limit": 64,

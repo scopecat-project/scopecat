@@ -32,11 +32,13 @@ selected = session.selection
 ```
 
 Omitted fields remain selected. Switching working points selects the new point's
-sample and retains the collection and operator. To use a sample without a saved
-working point, explicitly clear the old point:
+sample and batch and retains the collection and operator. Selecting a sample or
+target on its own starts a new scientific scope and clears the previous working point
+and batch:
 
 ```python
-session.use(sample="chip-b", working_point=None)
+session.use(sample="chip-b")
+session.use(target=exact_target_ref)
 ```
 
 A mismatched sample/working-point pair or missing collection is rejected; a failed
@@ -62,8 +64,9 @@ session.prepare(rabi(), context=None, record_collection=None)
 
 An explicit `parameters`, `candidate`, `context` or `sample` selects the whole
 scientific scope for that request. It does not combine with an inherited sample
-or working point. When a batch is selected, that explicit scope must still belong
-to the selected batch (or the request must explicitly select its original batch).
+or working point or batch. An explicitly supplied batch must agree with the
+chosen working point or candidate. Changing only the batch preserves the other
+scientific choices and validates their compatibility.
 The selected operator and collection are inherited independently
 unless explicitly overridden. `context=None` deliberately uses the ordinary active
 configuration without the session's sample/working point. Clearing the collection
@@ -73,7 +76,8 @@ for one request uses the default record collection. None of these overrides chan
 A saved recipe has its own frozen scientific scope.
 `session.prepare_plan(ref)` uses that scope and inherits only the current operator
 and collection. Both may be explicitly overridden for that execution. The plan
-must match the selected batch; a different batch requires a new scientific scope.
+retains its original batch regardless of the session default. An explicit `batch`
+argument to `prepare_plan` is an assertion and must match the saved scope.
 
 ## Number lookup follows the selected collection
 
@@ -117,10 +121,8 @@ batch** can explicitly bind the copy to a new event. Its parameter values remain
 starting estimates, not new calibration evidence.
 
 Opening a saved plan retains its sample revision and batch, while collection and
-operator remain the destination page's choices. A plan from another batch is
-rejected without replacing the current draft. To intentionally revisit it, release
-the working point or reset the recipe draft as needed, then select its original
-batch (or clear the batch constraint) before opening it. Imported analysis
+operator remain the destination page's choices. Opening a plan restores its frozen scientific scope independently of the page's
+previous sample or batch. Imported analysis
 suggestions retain the current operator and collection; without an explicit
 working point they clear the old scientific scope.
 
@@ -134,3 +136,12 @@ Declared batch and collection selection currently require an authored experiment
 unsupported-selection error at preview; the console never drops these choices to
 make such a launch proceed. Their procedure adapters need explicit support before
 using this scope.
+
+## Inspect the scientific selection
+
+`session.selection.science` contains the subject, configuration choice and explicit
+batch scope. `prepared.preview.reviewed` contains the exact binding and checked
+configuration source. Ordinary users can keep using the short `sample`, `target`,
+`working_point` and `batch` arguments. Clients constructing requests directly use
+`ScientificSelection`; do not combine it with those convenience arguments.
+A preview's reviewed evidence must be carried into submit or save requests.

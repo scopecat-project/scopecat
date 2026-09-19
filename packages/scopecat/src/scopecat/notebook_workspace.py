@@ -17,6 +17,10 @@ from scopecat.authoring.experiments import Experiment
 from scopecat.daemon.endpoint import resolve_daemon_endpoint
 from scopecat.project import Project, open_project
 from scopecat.records.author_revision import AuthorRevisionRef
+from scopecat.records.scientific_selection import (
+    SavedConfiguration,
+    WorkingPointConfiguration,
+)
 
 
 class ShellEvents(Protocol):
@@ -248,14 +252,30 @@ class NotebookSession(AuthorProject):
         mode = "live" if self.live_enabled else "fixed"
         revision = self._revision.content_hash[:12] if self._revision else "unselected"
         status = "closed" if self.is_closed else self._refresh_error or "ready"
-        working_point = self.selection.working_point
-        working_point_label = working_point.entry_id if working_point else "lab default"
+        science = self.selection.science
+        subject = science.subject
+        subject_label = (
+            f"target {subject.ref.target_id} r{subject.ref.revision}"
+            if subject.kind == "registered_target"
+            else subject.sample_id
+            if subject.kind == "sample"
+            else "unselected"
+        )
+        configuration = science.configuration
+        configuration_label = (
+            configuration.ref.entry_id
+            if isinstance(configuration, WorkingPointConfiguration | SavedConfiguration)
+            else configuration.kind
+        )
+        batch_label = (
+            science.batch.id if science.batch.kind == "declared" else "unspecified"
+        )
         return (
             f"Scopecat Notebook ({mode}, {status})\nProject: {self.project_root}\n"
             f"Source: {revision}\n"
-            f"Sample: {self.selection.sample or 'unselected'}\n"
-            f"Batch: {self.selection.batch or 'unspecified'}\n"
-            f"Working point: {working_point_label}\n"
+            f"Subject: {subject_label}\n"
+            f"Batch: {batch_label}\n"
+            f"Configuration: {configuration_label}\n"
             f"Collection: {self.selection.collection or 'store history'}\n"
             f"Operator: {self.selection.operator}\nHistory: session.history()"
         )

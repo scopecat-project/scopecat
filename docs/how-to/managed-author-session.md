@@ -136,7 +136,7 @@ for parameter in facts.parameters:
         print(parameter.table_id, parameter.column_id, parameter.key_columns)
     else:
         print(parameter.parameter_id)
-print(checked.preview.code_revision, checked.preview.config_source)
+print(checked.preview.code_revision, checked.preview.reviewed.config_source)
 ```
 
 `inspection` reads an isolated copy of facts captured by that successful prepare.

@@ -69,7 +69,7 @@ def test_session_selection_is_local_and_preparation_is_frozen(tmp_path: Path) ->
         assert prepared.request.model_dump_json() == frozen
         assert second.selection.operator == "bob"
         before_failure = first.selection
-        with pytest.raises(ValueError, match="sample does not match"):
+        with pytest.raises(ValueError, match="selected subject/batch differs"):
             first.use(sample=samples[0], working_point=refs[1])
         assert first.selection == before_failure
         with pytest.raises(DaemonNotFoundError):
