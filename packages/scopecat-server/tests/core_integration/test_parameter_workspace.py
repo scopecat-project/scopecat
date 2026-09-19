@@ -19,6 +19,7 @@ from scopecat.config.registry.records import ContextConfigRegistrySource
 from scopecat.config.registry.service import (
     latest_parameter_context,
     load_config_registry_entry_snapshot,
+    rebind_config_setup,
     save_config_context,
 )
 from scopecat.config.structure import ParameterStructurePlan
@@ -43,6 +44,7 @@ from scopecat.records.parameter import (
     TableParameterValue,
 )
 from scopecat.records.sample import SampleBinding, SampleSelector
+from scopecat.records.setup import ExecutableSetupSnapshot, SetupRevision
 from scopecat_testkit.config_registry import load_config
 from scopecat_testkit.server.runtime import sqlite_config_registry_unit_of_work
 
@@ -861,23 +863,23 @@ def test_rebase_rejects_changed_setup_without_touching_edits(
     before = params.diff()
     config = operations.entry("lab").config.model_copy(deep=True)
     config.system.instrument_registry.instruments[0].connection.options["channel"] = 2
-    revision = publish_config_revision(
-        revision=ConfigRevision(
-            source=DirectConfigRevisionSource(config),
-            entry_id="rewired-lab",
-            actor="operator",
-        ),
-        unit_of_work=operations.uow,
-        expected_generation=1,
-    )
-    changed = operations.save_context(
+    setup = ExecutableSetupSnapshot.from_config(config)
+    with operations.uow() as work:
+        revision = work.setups.save_revision(
+            SetupRevision(
+                id="rewired-lab",
+                content_hash=setup.content_hash,
+                setup=setup,
+                actor="operator",
+            )
+        )
+    changed = rebind_config_setup(
         entry_id="rewired-point",
-        base=ConfigContextRef(
-            entry_id=revision.entry.id, content_hash=revision.entry.content_hash
-        ),
-        sample=SampleSelector(sample_id="sample", revision=1),
-        working_point_id="parked",
-        label="same chip after rewiring",
+        base=params.version.context,
+        setup=revision.ref,
+        actor="operator",
+        note="same chip after rewiring",
+        unit_of_work=operations.uow,
     )
     with pytest.raises(ValueError, match="same setup; explicitly copy estimates"):
         params.rebase(current=changed.entry.id)
