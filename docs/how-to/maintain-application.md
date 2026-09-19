@@ -27,6 +27,38 @@ Scientific data may live outside the project directory. Check the workbench Help
 page and project configuration, and use the [backup guide](backup-and-restore.md)
 before maintenance that affects retained data.
 
+## Install a newer fixed delivery
+
+For an offline fixed delivery, use its `install.py` with the original manager home.
+For example, from the new delivery directory in PowerShell:
+
+```powershell
+python install.py --home "D:\Scopecat-Lab"
+```
+
+Replace the example home with the existing installation directory. Do not create
+another numbered home just to update the manager. Use a delivery matching the
+computer's operating system, CPU and Python ABI.
+
+The installer prepares a retained release and verifies its installed entry before
+selecting it in `lab.py`. Installation into one home is serialized. Copy or package
+installation failures leave the previous default entry usable. Run the same command
+again after resolving the reported cause; an incomplete managed runtime is preserved
+as a failed attempt and rebuilt at its final path. A damaged complete delivery or
+mismatched receipt is reported instead of being silently replaced. Existing releases,
+project files and tutorial copies are not deleted.
+
+Reopen `lab.cmd` / `lab.py` after installation. Preparing and selecting a delivery
+is separate from replacing the running manager: active management work blocks that
+replacement. Let the operation finish, inspect its result, then reopen the launcher.
+The manager retains its service catalog and operation history. Replacement does not
+stop experiment services or replay measurements.
+
+A new manager delivery does not redirect existing registered services to its Python.
+Their registered interpreter and GUI paths remain authoritative. Use the workflows
+below when intentionally updating those environments; new tutorial copies use the
+selected delivery while old copies retain their own environment.
+
 ## Recheck after updating the existing environment
 
 1. Finish measurements and close notebook connections. In the manager choose

@@ -9,7 +9,10 @@ required. These tutorials use synthetic computation and never connect devices.
 Obtain the tutorial delivery for your operating system, CPU and Python 3.14 ABI.
 Prepare Python 3.14, uv and VS Code with its Python/Jupyter extensions. From the
 received delivery directory run `python install.py`. The installer verifies and
-copies the complete offline delivery into `~/Scopecat-Lab`.
+copies the complete offline delivery into `~/Scopecat-Lab`. Install newer deliveries
+into that same home. Failed preparation keeps the previous default entry; after
+fixing the reported cause, rerun the installer without manually deleting incomplete
+managed environments. See [fixed delivery maintenance](../how-to/maintain-application.md#install-a-newer-fixed-delivery).
 
 On Windows, open `Scopecat-Lab/lab.cmd`; elsewhere run
 `python ~/Scopecat-Lab/lab.py`. This opens the local Scopecat management page.
@@ -186,7 +189,8 @@ the page. `--status` reports managed state; `--shutdown` closes only that host.
 Source development stops its manager before updating the source runtime, preserving
 exercise processes and rejecting the update while management work is still active.
 
-The first implementation manages synthetic teaching exercises only. It retains
-project-scoped execution services internally; it does not consolidate real device
-ownership, enable LAN access, install a tray icon or register system autostart.
+The manager also opens explicitly registered experiment services. Teaching remains
+synthetic and separately managed. Child services retain their own execution and
+physical-device ownership; the manager does not establish cross-service exclusion,
+enable LAN access, install a tray icon or register system autostart.
 See the [application host architecture](../development/architecture/application-host.md).

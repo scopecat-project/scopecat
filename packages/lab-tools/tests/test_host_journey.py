@@ -112,10 +112,30 @@ store.save(operation)
             client.request("GET", f"/api/operations/{command.id}")
         )
         assert restored.status == "running"
+        # Source-backed and installed-only entry have different runtime identities.
+        # Replacement must leave the old owner and its live operation untouched.
+        with pytest.raises(ValueError, match="尚未完成"):
+            ensure_host(home, None)
+        assert (
+            HostRecord.model_validate_json(
+                (home / "host/endpoint.json").read_text(encoding="utf-8")
+            ).instance
+            == client.record.instance
+        )
+        assert client.state().operations[0].status == "running"
         release.touch()
         worker.wait(timeout=15)
         assert client.wait(restored).detail == "completed after host restart"
         assert client.submit(command).status == "succeeded"
+        previous = client.record.instance
+        client = ensure_host(home, None)
+        assert client.record.instance != previous
+        retained = Operation.model_validate(
+            client.request("GET", f"/api/operations/{command.id}")
+        )
+        assert retained.status == "succeeded"
+        assert retained.detail == "completed after host restart"
+        assert client.state().topics == {}
     finally:
         if worker is not None and worker.poll() is None:
             worker.terminate()
