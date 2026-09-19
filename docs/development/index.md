@@ -34,6 +34,7 @@ uv run --locked --package reference-lab --group test pytest examples/reference_l
 
 ## Repository and architecture
 
+- [Current platform status and remaining work](platform-status.md)
 - [Repository map](repository-map.md)
 - [Core workflow evaluations](workflow-evaluations.md)
 - [Everyday Python author contract](everyday-author-contract.md)
@@ -41,7 +42,7 @@ uv run --locked --package reference-lab --group test pytest examples/reference_l
 - [Pilot work slices and acceptance fixtures](pilot-work-slices.md)
 - [Architecture](architecture/index.md)
 - [Experiment workbench and session contexts](architecture/experiment-contexts.md)
-  (selected direction and proposed contracts)
+  (implemented boundaries and selected direction)
 - [Structured authoring direction](architecture/structured-authoring.md) (proposal)
 - [Scalability benchmarks](scalability.md)
 - [Project charter](project-charter.md)

@@ -6,9 +6,9 @@ directions to Scopecat contributors:
 - [Experiment execution semantics](execution.md) covers authoring ownership,
   specialization, domain lowering, effects, completion, and evidence.
 - [Experiment workbench and session contexts](experiment-contexts.md) defines the
-  selected product direction, proposed numbering/configuration boundaries and
-  staged acceptance; these contracts are not yet implemented.
-- [Local application host](application-host.md) covers the unified teaching entry,
+  selected product direction, implemented ownership boundaries and staged
+  acceptance. Use the [current platform status](../platform-status.md) for remaining work.
+- [Local application host](application-host.md) covers the experiment application entry,
   managed operations and the boundaries retained for future deployment.
 - [Configuration ownership](configuration-ownership.md) separates fixed scientific
   selection fences from default activation and records scoped publication work.

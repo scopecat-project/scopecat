@@ -74,6 +74,7 @@ nav = [
   ] },
   { "Development" = [
     "development/index.md",
+    { "Current platform status" = "development/platform-status.md" },
     { "Repository map" = "development/repository-map.md" },
     { "Data compatibility policy" = "development/data-compatibility.md" },
     { "Core workflow evaluations" = "development/workflow-evaluations.md" },

@@ -24,8 +24,11 @@ On Windows the interpreter is typically `environment\Scripts\python.exe`.
 The paths are trusted local CLI inputs. The browser only submits a registered
 service ID; it cannot register an arbitrary path or interpreter. Registration
 validates the actual project root, environment and GUI without starting its
-daemon. **Open workbench** runs the existing startup lifecycle in that environment,
-then opens the actual service GUI. Startup may initialize the project's configured
+daemon. Starting/checking the workbench runs the existing startup lifecycle in
+that environment. After successful startup and a fresh matching running-service
+check, an explicit **Open workbench (new tab)** link opens the service GUI while
+keeping the authenticated manager page available. The link carries no manager
+credential and isolates opener/referrer state. Startup may initialize the project's configured
 instruments; it does not submit a measurement. Existing hardware startup policy
 remains the project's responsibility.
 
@@ -59,11 +62,23 @@ project again. Retrying the same successful removal operation returns its retain
 result. A stopped service with an unreadable/missing project remains an explicit
 maintenance error, rather than guessing that its process is safe to forget.
 
-This slice does not provide automatic reopening of the last selected service
-or a Help link inside every experimental GUI.
+The experiment GUI has a **Help and maintenance** page. It uses the existing health
+response to identify the current service and provides supported documentation,
+teaching and maintenance directions. Reopen the original installed `lab.cmd` /
+`lab.py` entry to return to that installation's manager; a qualified source
+installation can use `scopecat app` with its original host-home options. Help does
+not register directories or start another service merely by being opened.
+
+There is no automatic reopening of the last selected service or authenticated
+one-click return to a particular manager. The daemon is not paired with an
+installation host: deployment/source identities do not identify its manager port,
+home or credentials. Do not expose `host.json`, infer a manager address from a
+project path, or add an unauthenticated cross-origin management endpoint to make
+a return link work. A future direct return flow requires an explicit pairing
+contract.
 It retains separate child daemons; it does not establish one shared executor or
-cross-service hardware exclusion. Those remain tracked in issue #614 and the
-runtime design. Notebook/page scientific selections are unchanged.
+cross-service hardware exclusion. Those remain tracked in the [current platform work](../platform-status.md) and
+runtime design; #614 only delivered the earlier application-entry slice. Notebook/page scientific selections are unchanged.
 
 ## Ownership
 
@@ -71,7 +86,8 @@ The host owns a local deployment catalog, the teaching inventory and serialized
 lifecycle operations. `host/services.sqlite` assigns stable deployment IDs to
 canonical project roots and explicit runtimes. Registration and operation admission
 share a lock; queued/running startup prevents rebinding its environment. This is
-not the future daemon workspace-source catalog or a scientific applicability ID.
+separate from the implemented daemon workspace-source catalog and from scientific
+applicability identity.
 The managed directory UUID identifies a teaching workspace; API requests use that
 identity rather than accepting arbitrary filesystem paths. Existing managed copies
 are discovered from their teaching metadata, version and current-generation record.
