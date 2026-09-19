@@ -57,7 +57,7 @@ def analyze_groups(
                 "author_analysis_arguments", text=canonical_json(request.arguments)
             )
             .fact("author_code_revision", request.code_revision.content_hash)
-            .fact("author_workspace", request.workspace_id or "legacy")
+            .fact("author_workspace", request.workspace_id)
             .save()
         )
         receipts.append(
@@ -78,7 +78,7 @@ def analyze_groups(
         )
         .artifact("grouping", text=canonical_json(grouping.model_dump(mode="json")))
         .fact("author_code_revision", request.code_revision.content_hash)
-        .fact("author_workspace", request.workspace_id or "legacy")
+        .fact("author_workspace", request.workspace_id)
         .artifact("author_analysis_arguments", text=canonical_json(request.arguments))
         .save()
     )

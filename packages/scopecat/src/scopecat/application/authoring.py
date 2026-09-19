@@ -58,7 +58,10 @@ from scopecat.program.scans import AxisSpec
 from scopecat.program.values import MetadataValue
 from scopecat.project_sources import loading_revision
 from scopecat.records.author_revision import AuthorRevisionRef
-from scopecat.records.author_workspace import AuthorWorkspaceId, absent_workspace
+from scopecat.records.author_workspace import (
+    SERVICE_AUTHOR_WORKSPACE,
+    AuthorWorkspaceId,
+)
 from scopecat.records.config import ConfigProfileSnapshot
 from scopecat.records.config_context import ConfigContextRef
 from scopecat.records.content import Sha256ContentHash
@@ -91,9 +94,7 @@ class AuthorLaunchIntent(BaseModel):
         default=None, exclude_if=_absent_collection
     )
     request_hash: Sha256ContentHash
-    workspace_id: AuthorWorkspaceId | None = Field(
-        default=None, exclude_if=absent_workspace
-    )
+    workspace_id: AuthorWorkspaceId = SERVICE_AUTHOR_WORKSPACE
     code_revision: AuthorRevisionRef | None = None
 
 
@@ -318,11 +319,7 @@ class _AuthorProcedure:
             record_collection=selected.record_collection,
             metadata={
                 **self.experiment.provenance,
-                **(
-                    {"author_workspace": selected.workspace_id}
-                    if selected.workspace_id
-                    else {}
-                ),
+                "author_workspace": selected.workspace_id,
             },
         )
 

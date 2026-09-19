@@ -9,5 +9,4 @@ AuthorWorkspaceId = Annotated[
 ]
 
 
-def absent_workspace(value: object) -> bool:
-    return value is None
+SERVICE_AUTHOR_WORKSPACE = "legacy"

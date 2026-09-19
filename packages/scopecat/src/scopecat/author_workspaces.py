@@ -4,9 +4,8 @@ from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from scopecat.records.author_workspace import SERVICE_AUTHOR_WORKSPACE
 from scopecat.runtime_binding import load_runtime_binding
-
-LEGACY_AUTHOR_WORKSPACE = "legacy"
 
 
 class LocalAuthorWorkspace(BaseModel):
@@ -39,10 +38,10 @@ def author_workspace_id(root: Path) -> str:
     root = root.resolve()
     path = author_bindings_path(root)
     if not path.is_file():
-        return LEGACY_AUTHOR_WORKSPACE
+        return SERVICE_AUTHOR_WORKSPACE
     registry = LocalAuthorWorkspaces.model_validate_json(path.read_bytes())
     if root == registry.service_root:
-        return LEGACY_AUTHOR_WORKSPACE
+        return SERVICE_AUTHOR_WORKSPACE
     for item in registry.items:
         if item.root == root:
             return item.id

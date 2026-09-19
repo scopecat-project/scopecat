@@ -38,7 +38,7 @@ def plan_launch_request(
         sample=definition.sample.sample_id if definition.sample else None,
         batch_id=definition.sample.batch_id if definition.sample else None,
         code_revision=definition.code_revision,
-        workspace_id=definition.workspace_id or "legacy",
+        workspace_id=definition.workspace_id,
         plan_ref=plan.ref,
     )
 

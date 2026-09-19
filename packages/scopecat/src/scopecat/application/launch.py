@@ -19,7 +19,10 @@ from scopecat.application.inspection import LaunchInspection
 from scopecat.automation.interpretations import InterpretationRequest
 from scopecat.planning.preflight import PreflightSummary
 from scopecat.records.author_revision import AuthorRevisionRef
-from scopecat.records.author_workspace import AuthorWorkspaceId, absent_workspace
+from scopecat.records.author_workspace import (
+    SERVICE_AUTHOR_WORKSPACE,
+    AuthorWorkspaceId,
+)
 from scopecat.records.content import Sha256ContentHash
 from scopecat.records.launch_request import LaunchConfigSource, LaunchRequest
 from scopecat.records.manual_preview import ManualPreviewFence
@@ -81,9 +84,7 @@ class LaunchCatalogEntry(BaseModel):
 
 class LaunchCatalog(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
-    workspace_id: AuthorWorkspaceId | None = Field(
-        default=None, exclude_if=absent_workspace
-    )
+    workspace_id: AuthorWorkspaceId = SERVICE_AUTHOR_WORKSPACE
     code_revision: AuthorRevisionRef | None = None
     entries: tuple[LaunchCatalogEntry, ...] = ()
 
@@ -92,9 +93,7 @@ class LaunchPreview(BaseModel):
     """Compile-only evidence for exactly one request and immutable configuration."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
-    workspace_id: AuthorWorkspaceId | None = Field(
-        default=None, exclude_if=absent_workspace
-    )
+    workspace_id: AuthorWorkspaceId = SERVICE_AUTHOR_WORKSPACE
     code_revision: AuthorRevisionRef | None = None
     plan_ref: ExperimentPlanRef | None = None
     definition_hash: Sha256ContentHash | None = None

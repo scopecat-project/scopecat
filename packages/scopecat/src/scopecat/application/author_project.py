@@ -718,11 +718,13 @@ class AuthorProject(DaemonClient):
 
     def _analysis_workspace(
         self, run_id: str, source: Literal["original", "current"]
-    ) -> str | None:
+    ) -> str:
         if source == "current":
             return self.workspace_id
         value = self.run(run_id).request.metadata.get("author_workspace")
-        return value if isinstance(value, str) else "legacy"
+        if not isinstance(value, str):
+            raise ValueError("Run has no recorded author workspace")
+        return value
 
     def _analysis_revision(
         self, run_id: str, source: Literal["original", "current"]

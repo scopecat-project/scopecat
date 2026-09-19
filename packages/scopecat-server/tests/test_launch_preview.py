@@ -92,7 +92,11 @@ def test_catalog_runs_a_fixed_separate_worker() -> None:
             returncode=0, stdout='{"entries": []}', stderr=""
         )
         response = client().get("/api/v1/experiment-launcher")
-        assert response.json() == {"entries": [], "code_revision": None}
+        assert response.json() == {
+            "workspace_id": "legacy",
+            "entries": [],
+            "code_revision": None,
+        }
         assert run.call_args.args[0][1:3] == [
             "-m",
             "scopecat_server.launch_worker",
@@ -181,7 +185,10 @@ def test_worker_loads_manifest_file_and_supports_empty_project(
         )
         launch_worker.main()
         load.assert_called_once_with(tmp_path / "scopecat.toml")
-    assert capsys.readouterr().out.strip() == '{"code_revision":null,"entries":[]}'
+    assert (
+        capsys.readouterr().out.strip()
+        == '{"workspace_id":"legacy","code_revision":null,"entries":[]}'
+    )
 
 
 def test_admission_survives_dispatch_failure(tmp_path: Path) -> None:

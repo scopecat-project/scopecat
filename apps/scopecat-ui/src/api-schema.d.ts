@@ -2769,8 +2769,11 @@ export interface components {
              * @default []
              */
             models: components["schemas"]["ComparisonModel"][];
-            /** Workspace Id */
-            workspace_id?: string | null;
+            /**
+             * Workspace Id
+             * @default legacy
+             */
+            workspace_id: string;
         };
         /** ComparisonCurve */
         ComparisonCurve: {
@@ -2818,8 +2821,11 @@ export interface components {
             kind: "inspection";
             primary: components["schemas"]["ComparisonCurve"];
             secondary: components["schemas"]["ComparisonCurve"];
-            /** Workspace Id */
-            workspace_id?: string | null;
+            /**
+             * Workspace Id
+             * @default legacy
+             */
+            workspace_id: string;
         };
         /** ComparisonModel */
         ComparisonModel: {
@@ -4202,8 +4208,11 @@ export interface components {
             source?: components["schemas"]["PlanAnalysisSource"] | null;
             /** Version */
             version: string;
-            /** Workspace Id */
-            workspace_id?: string | null;
+            /**
+             * Workspace Id
+             * @default legacy
+             */
+            workspace_id: string;
         };
         /** ExperimentPlanDefinition */
         "ExperimentPlanDefinition-Output": {
@@ -4235,8 +4244,11 @@ export interface components {
             source?: components["schemas"]["PlanAnalysisSource"] | null;
             /** Version */
             version: string;
-            /** Workspace Id */
-            workspace_id?: string | null;
+            /**
+             * Workspace Id
+             * @default legacy
+             */
+            workspace_id: string;
         };
         /** ExperimentPlanList */
         ExperimentPlanList: {
@@ -5214,8 +5226,11 @@ export interface components {
              * @default []
              */
             entries: components["schemas"]["LaunchCatalogEntry"][];
-            /** Workspace Id */
-            workspace_id?: string | null;
+            /**
+             * Workspace Id
+             * @default legacy
+             */
+            workspace_id: string;
         };
         /** LaunchCatalogEntry */
         LaunchCatalogEntry: {
@@ -5410,8 +5425,11 @@ export interface components {
             sample_binding?: components["schemas"]["SampleBinding"] | null;
             /** Summary */
             summary: string;
-            /** Workspace Id */
-            workspace_id?: string | null;
+            /**
+             * Workspace Id
+             * @default legacy
+             */
+            workspace_id: string;
         };
         /** LaunchRequest */
         "LaunchRequest-Input": {
@@ -5478,8 +5496,11 @@ export interface components {
              * @default
              */
             version: string;
-            /** Workspace Id */
-            workspace_id?: string | null;
+            /**
+             * Workspace Id
+             * @default legacy
+             */
+            workspace_id: string;
         };
         /** LaunchRequest */
         "LaunchRequest-Output": {
@@ -5546,8 +5567,11 @@ export interface components {
              * @default
              */
             version: string;
-            /** Workspace Id */
-            workspace_id?: string | null;
+            /**
+             * Workspace Id
+             * @default legacy
+             */
+            workspace_id: string;
         };
         /**
          * LaunchSubmission

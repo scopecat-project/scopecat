@@ -124,12 +124,10 @@ def test_missing_coordinate_does_not_select_another_column() -> None:
         )
 
 
-@pytest.mark.parametrize("legacy", [False, True])
-def test_reopen_uses_public_frozen_request_and_checks_exact_owner(legacy: bool) -> None:
+def test_reopen_uses_public_frozen_request_and_checks_exact_owner() -> None:
     from datetime import UTC, datetime
 
     from scopecat.api.comparison import (
-        _LEGACY_COMPARISON_REQUEST_SCHEMA,
         COMPARISON_REQUEST_SCHEMA,
         reopen_comparison,
     )
@@ -142,7 +140,6 @@ def test_reopen_uses_public_frozen_request_and_checks_exact_owner(legacy: bool) 
     )
     from scopecat.records.author_revision import AuthorRevisionRef
     from scopecat.records.comparison import ComparisonRequest, ComparisonSelection
-    from scopecat.records.legacy_comparison import LegacyComparisonRequest
 
     original = ComparisonRequest(
         workspace_id="source-owner",
@@ -160,20 +157,8 @@ def test_reopen_uses_public_frozen_request_and_checks_exact_owner(legacy: bool) 
             run_id="right", content_hash="right-hash", points=(2, 0)
         ),
     )
-    assert (
-        _LEGACY_COMPARISON_REQUEST_SCHEMA.schema_hash
-        == "sha256:ac4810b2ea9aa970ee979601e92afc3163178db4808efe31561f180aeb99bb10"
-    )
-    schema = _LEGACY_COMPARISON_REQUEST_SCHEMA if legacy else COMPARISON_REQUEST_SCHEMA
-    encoded = (
-        _LEGACY_COMPARISON_REQUEST_SCHEMA.encode(
-            LegacyComparisonRequest.model_validate(
-                original.model_dump(exclude={"workspace_id"})
-            )
-        )
-        if legacy
-        else COMPARISON_REQUEST_SCHEMA.encode(original)
-    )
+    schema = COMPARISON_REQUEST_SCHEMA
+    encoded = schema.encode(original)
     source = RunAnalysisView(
         run_id="left",
         entry=ContentEntry(
@@ -213,7 +198,7 @@ def test_reopen_uses_public_frozen_request_and_checks_exact_owner(legacy: bool) 
         actor="reviewer",
     )
     reopened = reopen_comparison(edited, source)
-    assert reopened.workspace_id == ("legacy" if legacy else "source-owner")
+    assert reopened.workspace_id == "source-owner"
     assert reopened.code_revision == original.code_revision
     assert reopened.model_id == original.model_id
     assert reopened.model_version == original.model_version
