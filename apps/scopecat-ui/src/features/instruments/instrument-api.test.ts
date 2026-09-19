@@ -308,7 +308,7 @@ describe("interactive collection request shaping", () => {
             session_id: "session-1",
             operation_id: "defaults-retry",
             instrument_id: "vna-1",
-            config_entry_id: "lab-default",
+            setup: { revision_id: "lab-default", content_hash: "sha256:active" },
             status: "unchanged",
             problems: [],
             state: { instrument_id: "vna-1", properties: [] },
@@ -605,8 +605,7 @@ function session(): InstrumentSession {
   return {
     session_id: "session-1",
     actor: "Ada",
-    config_entry_id: "lab-default",
-    config_content_hash: "sha256:active",
+    setup: { revision_id: "lab-default", content_hash: "sha256:active" },
     instrument_ids: ["vna-1"],
     configured_default_instrument_ids: [],
     descriptions: [],

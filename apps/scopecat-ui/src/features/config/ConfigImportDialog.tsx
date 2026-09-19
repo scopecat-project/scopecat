@@ -71,6 +71,10 @@ export function ConfigImportDialog({
               </Dialog.Close>
             </header>
             <div className="grid gap-3.5 p-[18px] [&>label]:grid [&>label]:gap-1.5 [&_label>span]:text-[0.54rem] [&_label>span]:font-extrabold [&_label>span]:tracking-[0.07em] [&_label>span]:text-text-dim [&_label>span]:uppercase [&_label>input]:min-h-[38px] [&_label>input]:w-full [&_label>input]:rounded-[8px] [&_label>input]:border [&_label>input]:border-line [&_label>input]:bg-bg [&_label>input]:px-2.5 [&_label>input]:text-[0.68rem] [&_label>input]:text-text [&_label>input]:outline-0 [&_label>input:focus]:border-[rgb(128_163_207_/_45%)] [&_label>small]:text-[0.57rem] [&_label>small]:leading-[1.4] [&_label>small]:text-red">
+              <p>
+                Import selects parameter defaults only. A snapshot with a different executable setup
+                must first have its setup saved and explicitly selected in Executable setup.
+              </p>
               <label>
                 <span>Registry entry id</span>
                 <input

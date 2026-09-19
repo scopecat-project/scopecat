@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { errorMessage } from "../../lib/presentation";
 import { classes, secondaryButton } from "../../ui/styles";
+import { SetupPanel } from "./SetupPanel";
 import { ConfigStructureEditor } from "./ConfigStructureEditor";
 import { ConfigContextEditor } from "./ConfigContextEditor";
 import {
@@ -221,6 +222,8 @@ export function ConfigWorkspace({
         version for launch. Set as default publishes it for the laboratory. Code refresh changes
         experiment code, not saved parameters.
       </p>
+
+      <SetupPanel config={registry.entryDetailQuery.data?.config} operator={workflow.operator} />
 
       <ConfigSummary
         overview={overview}

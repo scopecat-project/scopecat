@@ -253,6 +253,12 @@ function EntryProvenance({
               ))}
             </dl>
           </details>
+          {source.rebind && (
+            <p>
+              Explicitly rebound to setup {source.rebind.setup.revision_id}; calibration acceptance
+              is not carried over.
+            </p>
+          )}
           {source.publication && (
             <EntryProvenance
               source={source.publication}
@@ -267,6 +273,19 @@ function EntryProvenance({
             />
           )}
         </div>
+      </div>
+    );
+  }
+  if (source.kind === "setup_rebind") {
+    return (
+      <div className={provenance}>
+        <p>
+          Explicitly rebound to setup {source.setup.revision_id}; original parameters retained
+          without carrying calibration acceptance.
+        </p>
+        <button className={secondaryButton} onClick={() => onSelectEntry(source.base.entry_id)}>
+          Open source {source.base.entry_id}
+        </button>
       </div>
     );
   }

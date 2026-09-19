@@ -52,7 +52,7 @@ vi.mock("./instrument-api", async (importOriginal) => ({
 
 beforeEach(() => {
   vi.mocked(getInstruments).mockResolvedValue({
-    config_entry_id: "lab-default",
+    setup: { revision_id: "lab-default", content_hash: "sha256:active" },
     problems: [],
     items: [instrument()],
   });
@@ -102,7 +102,7 @@ afterEach(() => {
 describe("instrument workspace", () => {
   it("shows unscoped provider problems at workspace level", async () => {
     vi.mocked(getInstruments).mockResolvedValue({
-      config_entry_id: "lab-default",
+      setup: { revision_id: "lab-default", content_hash: "sha256:active" },
       problems: [
         {
           code: "provider_unavailable",
@@ -122,7 +122,7 @@ describe("instrument workspace", () => {
 
   it("lists connection and ownership without exposing internal identity", async () => {
     vi.mocked(getInstruments).mockResolvedValue({
-      config_entry_id: "lab-default",
+      setup: { revision_id: "lab-default", content_hash: "sha256:active" },
       problems: [],
       items: [
         instrument(),
@@ -174,7 +174,7 @@ describe("instrument workspace", () => {
       implementation_version: "v1",
     };
     vi.mocked(getInstruments).mockResolvedValue({
-      config_entry_id: "lab-default",
+      setup: { revision_id: "lab-default", content_hash: "sha256:active" },
       problems: [],
       items: [prefixed],
     });
@@ -290,7 +290,7 @@ describe("instrument workspace", () => {
   it("clears stale operation results after applying configured defaults", async () => {
     const withOperations = instrumentWithOperations();
     vi.mocked(getInstruments).mockResolvedValue({
-      config_entry_id: "lab-default",
+      setup: { revision_id: "lab-default", content_hash: "sha256:active" },
       problems: [],
       items: [withOperations],
     });
@@ -365,7 +365,7 @@ describe("instrument workspace", () => {
   it("blocks other device interactions while configured defaults are pending", async () => {
     const withOperations = instrumentWithOperations();
     vi.mocked(getInstruments).mockResolvedValue({
-      config_entry_id: "lab-default",
+      setup: { revision_id: "lab-default", content_hash: "sha256:active" },
       problems: [],
       items: [withOperations],
     });
@@ -419,7 +419,7 @@ describe("instrument workspace", () => {
       session_id: "session-1",
       operation_id: "defaults-rejected",
       instrument_id: "drive-source",
-      config_entry_id: "lab-default",
+      setup: { revision_id: "lab-default", content_hash: "sha256:active" },
       status: "rejected",
       problems: [
         {
@@ -487,7 +487,7 @@ describe("instrument workspace", () => {
 
   it("allows an operator to disconnect a daemon-owned interactive session", async () => {
     vi.mocked(getInstruments).mockResolvedValue({
-      config_entry_id: "lab-default",
+      setup: { revision_id: "lab-default", content_hash: "sha256:active" },
       problems: [],
       items: [
         instrument({
@@ -549,7 +549,7 @@ describe("instrument workspace", () => {
   it("renders every flat interface property in declaration order", async () => {
     const flatInstrument = instrumentWithFlatDcState();
     vi.mocked(getInstruments).mockResolvedValue({
-      config_entry_id: "lab-default",
+      setup: { revision_id: "lab-default", content_hash: "sha256:active" },
       problems: [],
       items: [flatInstrument],
     });
@@ -588,7 +588,7 @@ describe("instrument workspace", () => {
   it("uses physical interface mounts, implementation overrides, and device state targets", async () => {
     const mountedInstrument = instrumentWithMountedAndDeviceState();
     vi.mocked(getInstruments).mockResolvedValue({
-      config_entry_id: "lab-default",
+      setup: { revision_id: "lab-default", content_hash: "sha256:active" },
       problems: [],
       items: [mountedInstrument],
     });
@@ -649,7 +649,7 @@ describe("instrument workspace", () => {
   it("applies only explicitly staged flat properties", async () => {
     const flatInstrument = instrumentWithFlatDcState();
     vi.mocked(getInstruments).mockResolvedValue({
-      config_entry_id: "lab-default",
+      setup: { revision_id: "lab-default", content_hash: "sha256:active" },
       problems: [],
       items: [flatInstrument],
     });
@@ -707,7 +707,7 @@ describe("instrument workspace", () => {
   it("keeps flat property drafts independent when one is reset", async () => {
     const flatInstrument = instrumentWithFlatDcState();
     vi.mocked(getInstruments).mockResolvedValue({
-      config_entry_id: "lab-default",
+      setup: { revision_id: "lab-default", content_hash: "sha256:active" },
       problems: [],
       items: [flatInstrument],
     });
@@ -746,7 +746,7 @@ describe("instrument workspace", () => {
   it("fills typed operation arguments locally and invokes once outside staged apply", async () => {
     const withOperations = instrumentWithOperations();
     vi.mocked(getInstruments).mockResolvedValue({
-      config_entry_id: "lab-default",
+      setup: { revision_id: "lab-default", content_hash: "sha256:active" },
       problems: [],
       items: [withOperations],
     });
@@ -816,7 +816,7 @@ describe("instrument workspace", () => {
   it("uses the existing quarantine semantics for an unknown invoke receipt", async () => {
     const withOperations = instrumentWithOperations();
     vi.mocked(getInstruments).mockResolvedValue({
-      config_entry_id: "lab-default",
+      setup: { revision_id: "lab-default", content_hash: "sha256:active" },
       problems: [],
       items: [withOperations],
     });
@@ -1007,7 +1007,7 @@ describe("instrument workspace", () => {
       ],
     };
     vi.mocked(getInstruments).mockResolvedValue({
-      config_entry_id: "lab-default",
+      setup: { revision_id: "lab-default", content_hash: "sha256:active" },
       problems: [],
       items: [delegatedInstrument],
     });
@@ -1074,7 +1074,7 @@ describe("instrument workspace", () => {
       },
     });
     vi.mocked(getInstruments).mockResolvedValue({
-      config_entry_id: "lab-default",
+      setup: { revision_id: "lab-default", content_hash: "sha256:active" },
       problems: [],
       items: [instrument(), monitor],
     });
@@ -1113,7 +1113,7 @@ describe("instrument workspace", () => {
       },
     });
     vi.mocked(getInstruments).mockResolvedValue({
-      config_entry_id: "lab-default",
+      setup: { revision_id: "lab-default", content_hash: "sha256:active" },
       problems: [],
       items: [tcpInstrument],
     });
@@ -1178,7 +1178,7 @@ describe("instrument workspace", () => {
       port: 5025,
     };
     vi.mocked(getInstruments).mockResolvedValue({
-      config_entry_id: "lab-default",
+      setup: { revision_id: "lab-default", content_hash: "sha256:active" },
       problems: [],
       items: [tcpInstrument],
     });
@@ -1429,7 +1429,7 @@ describe("instrument workspace", () => {
 
   it("shows quarantined ownership and the operator resolution action", async () => {
     vi.mocked(getInstruments).mockResolvedValue({
-      config_entry_id: "lab-default",
+      setup: { revision_id: "lab-default", content_hash: "sha256:active" },
       problems: [],
       items: [
         instrument({
@@ -1471,7 +1471,7 @@ async function connectInstrument() {
 
 function mockInstrumentSessionOwnership({ releasedAfterRefresh = false } = {}) {
   const available = {
-    config_entry_id: "lab-default",
+    setup: { revision_id: "lab-default", content_hash: "sha256:active" },
     problems: [],
     items: [instrument()],
   };
@@ -1756,8 +1756,7 @@ function session(overrides: Partial<InstrumentSession> = {}): InstrumentSession 
   return {
     session_id: "session-1",
     actor: "local-operator",
-    config_entry_id: "lab-default",
-    config_content_hash: "sha256:active",
+    setup: { revision_id: "lab-default", content_hash: "sha256:active" },
     instrument_ids: ["drive-source"],
     configured_default_instrument_ids: [],
     descriptions: [instrument().description!],
@@ -1786,7 +1785,7 @@ function configuredDefaultsReceipt(
     session_id: "session-1",
     operation_id: "defaults-1",
     instrument_id: "drive-source",
-    config_entry_id: "lab-default",
+    setup: { revision_id: "lab-default", content_hash: "sha256:active" },
     status,
     problems: [],
     state,

@@ -49,7 +49,10 @@ export function configSourceLabel(entry: ConfigRegistryEntry): string {
       return "Direct profile";
     case "manual_parameter_updates":
       return "Typed parameter edit";
+    case "setup_rebind":
+      return "Explicit setup rebind";
     case "parameter_context":
+      if (entry.source.rebind) return "Working point setup rebind";
       return entry.source.publication?.kind === "calibration_cohort_merge"
         ? "Calibration cohort merge"
         : entry.source.publication
@@ -67,8 +70,11 @@ function configSourceSearchTerms(source: ConfigProvenanceSource): Array<string |
     case "direct_config_profile":
     case "manual_parameter_updates":
       return [];
+    case "setup_rebind":
+      return [source.base.entry_id, source.setup.revision_id];
     case "parameter_context":
       return [
+        ...(source.rebind ? configSourceSearchTerms(source.rebind) : []),
         source.context.workspace_id,
         ...(source.publication ? configSourceSearchTerms(source.publication) : []),
         source.context.label,
