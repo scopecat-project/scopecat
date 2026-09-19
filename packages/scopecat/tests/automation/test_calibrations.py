@@ -36,14 +36,21 @@ from scopecat.automation.calibrations import (
     CalibrationSuccessPublication,
     CalibrationSuccessRef,
     CalibrationTargetRef,
+    CalibrationWorkingPointSupersession,
     calibration_cohort_member_request_key,
     calibration_cohort_spec_hash,
     calibration_freshness_fingerprint,
     calibration_key,
+    scoped_calibration_target,
 )
 from scopecat.automation.models import ProcedureClosure, ProcedureDefinitionRef
 from scopecat.config.registry.records import ConfigCompositionPolicyRef
+from scopecat.records.calibration_scope import (
+    CatalogCalibrationScope,
+    WorkingPointCalibrationScope,
+)
 from scopecat.records.run import ConfigRegistryRunConfigSource
+from scopecat.records.sample import SampleBinding
 
 _HASH_1 = "sha256:" + "1" * 64
 _HASH_2 = "sha256:" + "2" * 64
@@ -84,7 +91,9 @@ def _publication_policy(
 
 
 def _target(*, target_id: str = "q0") -> CalibrationTargetRef:
-    return CalibrationTargetRef(kind="qubit", id=target_id)
+    return scoped_calibration_target(
+        CalibrationTargetRef(kind="qubit", id=target_id), _frozen_config_source()
+    )
 
 
 def _procedure(*, version: str = "4") -> ProcedureDefinitionRef:
@@ -106,22 +115,36 @@ def _config_source() -> ConfigRegistryRunConfigSource:
 
 
 def _frozen_config_source() -> CalibrationConfigSourceRef:
-    return CalibrationConfigSourceRef.from_run_config_source(_config_source())
+    return CalibrationConfigSourceRef.from_run_config_source(
+        _config_source()
+    ).model_copy(
+        update={
+            "scope": WorkingPointCalibrationScope(
+                workspace_id="parked",
+                sample=SampleBinding(
+                    role="subject",
+                    sample_id="chip",
+                    revision=1,
+                    content_hash=_HASH_1,
+                    kind="synthetic",
+                    display_name="Chip",
+                    context_id="parked",
+                ),
+            ),
+        }
+    )
 
 
-def test_config_source_requires_exact_active_generation() -> None:
+def test_catalog_config_source_retains_exact_entry_without_activation_ownership() -> (
+    None
+):
     source = _config_source()
     frozen = CalibrationConfigSourceRef.from_run_config_source(source)
-    assert frozen.selector == "active"
-
-    with pytest.raises(ValueError, match="generation"):
-        CalibrationConfigSourceRef.from_run_config_source(
-            source.model_copy(update={"registry_generation": None})
-        )
-    with pytest.raises(ValueError, match="active"):
-        CalibrationConfigSourceRef.from_run_config_source(
-            source.model_copy(update={"selector": "candidate"})
-        )
+    assert isinstance(frozen.scope, CatalogCalibrationScope)
+    assert frozen.entry_id == source.entry_id
+    assert frozen == CalibrationConfigSourceRef.from_run_config_source(
+        source.model_copy(update={"registry_generation": None, "selector": "entry"})
+    )
 
 
 def _success(
@@ -193,7 +216,6 @@ def _published_success(
             "entry_id": "config-18",
             "config_ref": "configs/18",
             "content_hash": _HASH_2,
-            "registry_generation": (pending.base_config_source.registry_generation + 1),
         }
     )
     publication = CalibrationSuccessPublication(
@@ -354,11 +376,15 @@ def test_calibration_key_is_logical_across_version_and_procedure_changes() -> No
 
 
 def test_calibration_key_isolated_by_sample_and_context() -> None:
-    shared = {"kind": "qubit", "id": "q0"}
-    first = CalibrationTargetRef(**shared, sample_id="die-1", context_id="cooldown-1")
-    second = CalibrationTargetRef(**shared, sample_id="die-2", context_id="cooldown-1")
+    first = CalibrationTargetRef(
+        kind="qubit", id="q0", sample_id="die-1", context_id="cooldown-1"
+    )
+    second = CalibrationTargetRef(
+        kind="qubit", id="q0", sample_id="die-2", context_id="cooldown-1"
+    )
     remounted = CalibrationTargetRef(
-        **shared,
+        kind="qubit",
+        id="q0",
         sample_id="die-1",
         context_id="cooldown-2",
     )
@@ -371,7 +397,7 @@ def test_calibration_key_isolated_by_sample_and_context() -> None:
 
     assert len(keys) == 3
     with pytest.raises(ValidationError, match="context requires a sample"):
-        CalibrationTargetRef(**shared, context_id="cooldown-1")
+        CalibrationTargetRef(kind="qubit", id="q0", context_id="cooldown-1")
 
 
 def test_attempt_carries_flat_dependency_evidence_and_exact_freshness() -> None:
@@ -446,7 +472,7 @@ def test_success_publication_validates_policy_generation_and_freshness() -> None
             publication=valid_publication,
         )
 
-    with pytest.raises(ValidationError, match="generation after its base"):
+    with pytest.raises(ValidationError, match="same working point"):
         CalibrationSuccessRef(
             attempt=published_result.attempt,
             base_config_source=published_result.base_config_source,
@@ -455,7 +481,7 @@ def test_success_publication_validates_policy_generation_and_freshness() -> None
                 update={
                     "result_config_source": (
                         valid_publication.result_config_source.model_copy(
-                            update={"registry_generation": 25}
+                            update={"scope": CatalogCalibrationScope()}
                         )
                     )
                 }
@@ -684,7 +710,9 @@ def test_publication_finalization_states_require_exact_conditional_audit() -> No
             updated_at=terminal_at,
             ready_at=ready_at,
             supersession=CalibrationPublicationSupersession(
-                superseded_by_generation=base.registry_generation + 1,
+                evidence=CalibrationWorkingPointSupersession(
+                    superseded_by=base.model_copy(update={"entry_id": "next"})
+                ),
                 superseded_at=terminal_at,
             ),
         ),
@@ -723,7 +751,7 @@ def test_publication_finalization_states_require_exact_conditional_audit() -> No
                 "available_at": ready.updated_at - timedelta(seconds=1),
             }
         )
-    with pytest.raises(ValidationError, match="newer config generation"):
+    with pytest.raises(ValidationError, match="another head"):
         _finalization(
             policy=policy,
             base_config_source=base,
@@ -733,7 +761,7 @@ def test_publication_finalization_states_require_exact_conditional_audit() -> No
             created_at=created_at,
             updated_at=terminal_at,
             supersession=CalibrationPublicationSupersession(
-                superseded_by_generation=base.registry_generation,
+                evidence=CalibrationWorkingPointSupersession(superseded_by=base),
                 superseded_at=terminal_at,
             ),
         )
@@ -807,7 +835,6 @@ def test_publication_base_change_reason_binds_pending_success_and_cohort_source(
         update={
             "entry_id": "config-current",
             "config_ref": "configs/current",
-            "registry_generation": 24,
         }
     )
     reason = CalibrationPublicationBaseChangedDueReason(
@@ -1051,3 +1078,26 @@ def test_cohort_and_member_validate_hash_request_key_and_utc() -> None:
     bad_member["request_key"] = "wrong"
     with pytest.raises(ValidationError, match="request key"):
         CalibrationCohortMember.model_validate(bad_member)
+
+
+def test_cohort_rejects_forged_cross_owner_dependency_even_with_matching_batch() -> (
+    None
+):
+    from scopecat.records.calibration_scope import WorkingPointCalibrationOwner
+
+    dependency, status = _success(
+        target=_target(target_id="other").model_copy(
+            update={
+                "owner": WorkingPointCalibrationOwner(workspace_id="other-branch"),
+            }
+        )
+    )
+    member = _member_spec(dependencies=(dependency.dependency_evidence,))
+    with pytest.raises(ValidationError, match="another owner"):
+        _cohort_spec(
+            member=member,
+            observations=(
+                _missing_status(target=member.target),
+                status,
+            ),
+        )

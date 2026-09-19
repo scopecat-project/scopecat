@@ -94,7 +94,7 @@ def test_legacy_run_request_identity_omits_absent_plan() -> None:
     assert RunRequest.model_validate_json(encoded).model_dump(mode="json") == original
 
 
-def test_saved_entry_generation_is_not_a_calibration_activation() -> None:
+def test_saved_entry_is_catalog_calibration_input_without_publication_owner() -> None:
     from scopecat.automation.calibrations import CalibrationConfigSourceRef
     from scopecat.records.run import ConfigRegistryRunConfigSource
 
@@ -105,8 +105,12 @@ def test_saved_entry_generation_is_not_a_calibration_activation() -> None:
         content_hash="sha256:" + "b" * 64,
         registry_generation=3,
     )
-    with pytest.raises(ValueError, match="must select active"):
-        CalibrationConfigSourceRef.from_run_config_source(source)
+    basis = CalibrationConfigSourceRef.from_run_config_source(source)
+    assert basis.entry_id == source.entry_id
+    assert basis.config_ref == source.config_ref
+    assert basis.content_hash == source.content_hash
+    assert basis.scope.kind == "catalog"
+    assert basis.scope.sample_selectors() == ()
 
 
 def test_run_request_view_plan_projection_roundtrip() -> None:

@@ -149,8 +149,9 @@ publishing configuration. A cohort finalizer then composes the exact verified
 member proposals and publishes one revision for the whole cohort. The explicit
 API remains available for operator workflows; a cohort pinned to an exact
 automatic-publication policy is instead discovered by the resident project
-worker. This keeps per-target scientific work restartable without letting
-independently finishing members overwrite the shared active configuration.
+worker. The cohort owns one explicit working-point workspace. Its members may
+calibrate different logical entities of that sample, but cannot publish into
+another workspace or change the shared active configuration.
 
 The procedure replay layer deliberately has no DAG representation, automatic
 retry policy, cron trigger, or dynamic loop checkpoint. A linear Python
@@ -166,8 +167,12 @@ schedule is idempotent; changing its exact content under the same schedule ID is
 a conflict. Due-time processing never rebuilds intent from the active
 configuration or the worker's current Python environment.
 
-`scopecat automation work PROJECT` runs the project-owned Python worker as a
-process separate from the daemon. Each bounded cycle first finalizes supported
+`scopecat automation work PROJECT --working-point ENTRY` runs the project-owned
+Python worker against the workspace identified by that saved context. Each cycle
+resolves that workspace's current head, then freezes it for the cohort. Omitting
+`--working-point` permits catalog-scoped, nonpublishing checks; it does not choose
+a writable sample or enable parameter-publication definitions. Workers remain
+processes separate from the daemon. Each bounded cycle first finalizes supported
 ready calibration publications, then performs config-sensitive interval planning
 and calibration evaluation, materializes already-frozen due schedules, and asks
 the daemon for oldest-first runnable procedures matching the worker registry's
@@ -234,17 +239,27 @@ successfully. There is no mid-effect cancellation contract.
 The project application may also register a small immutable
 `CalibrationRegistry`. Each `CalibrationDefinition` owns a typed target
 selector, a typed input/dependency observer, and a pure intent builder. One
-cycle resolves the exact active configuration entry and generation once. The
-selector, observer, and builder receive that same frozen planning context. The
+cycle resolves one exact saved configuration or working-point head. The selector,
+observer, and builder receive that same frozen planning context. A publishing
+cohort requires a working-point scope containing its stable workspace identity
+and exact sample revision/workpoint/batch. A catalog-scoped `procedure_success`
+check can remain unbound to a sample. The
 builder additionally receives its stable target, validated freshness-input
 model, and flat exact dependency-success evidence. The context contains the
 captured configuration and exact source value, not a client or read interface,
-so the builder cannot refresh mutable active configuration while admitting work.
+so the builder cannot refresh a mutable head while admitting work.
 The freshness-input model must include every semantic value whose change should
 rerun the calibration, such as a relevant configuration content hash; invocation
-provenance such as a registry generation can remain only in the context and
-exact procedure intent when it must not make an otherwise identical result
-stale.
+provenance such as the exact entry reference remains in the context and procedure
+intent without necessarily making otherwise identical semantic inputs stale.
+
+The evaluator binds declared logical targets to the planning owner before
+observation or status lookup. Calibration keys include that stable owner, rather
+than the changing head revision. Thus two branches with the same sample and
+working-point name do not share attempts or successes, and publication does not
+erase the owner's calibration history. Dependency targets use the same scope;
+cross-owner reuse needs a future explicit applicability contract. Fan-out scope
+still controls shared capacity and may intentionally span several owners.
 
 The evaluator supports at most 200 selected members and 200 combined member and
 dependency status keys per definition. It first queries all logical calibration
@@ -264,11 +279,11 @@ Each definition also declares how success becomes effective.
 not yet changed authoritative configuration. That closure is reported as
 pending publication: the same exact definition, procedure, freshness
 fingerprint, and base configuration suppress another run, but the pending result
-is neither fresh nor valid dependency evidence. If the active configuration
-source changes before publication, suppression ends and the evaluator emits a
-typed `publication_base_changed` reason. The old finalizer still names its old
-base and must lose the registry generation CAS; a later cycle may admit work
-against the new base.
+is neither fresh nor valid dependency evidence. If that workspace head changes
+before publication, suppression ends and the evaluator emits a typed
+`publication_base_changed` reason. The old finalizer still names its exact old
+base and cannot advance the new head. An unrelated workspace or parameter-only
+global default update does not have that effect.
 
 A prior effective success is fresh only when its definition, target procedure,
 semantic input fingerprint, dependency-success identities, and optional
@@ -309,7 +324,7 @@ planning, then calibration evaluation/admission. A completed publication is
 therefore visible to freshness evaluation in the same cycle. If the bounded
 publication page reports more work, the cycle raises a local planning barrier:
 it skips both interval planning and calibration admission against the soon-to-be
-obsolete active head, while still materializing frozen due schedules and
+obsolete parameter heads, while still materializing frozen due schedules and
 dispatching already-runnable procedures. Stop is checked before each project
 callback and durable call. Retryable transport and 5xx/429 control failures use
 the resident worker's interruptible exponential backoff. After an unknown
@@ -340,6 +355,12 @@ the complete lineage. The durable registry source records the proof dialect,
 checkpoint, and resolved run, analysis, proposal, and decision identities, so
 later readers do not have to trust caller-supplied derived fields.
 
+The baseline uses the cohort's exact context, and baseline/candidate runs retain
+its exact sample revision and batch. Parent sample selectors are frozen from that
+basis at admission. The generic multi-stage parent does not freeze the full
+baseline config hash, because its candidate stage legitimately changes parameters;
+child setup/resource checks and finalization proofs still apply.
+
 All proposals must branch from the cohort's one exact base. The generic
 `common_base_cells_v1` merge combines non-conflicting whole scalar values and
 keyed-table cells deterministically; incompatible edits to the same atomic value
@@ -361,19 +382,19 @@ as an ordinary config publication, while its optional finalization-revision
 fence remains calibration-specific. After resolving an exact operation replay,
 automatic publication also fences the exact still-ready finalization revision
 and its server-clock availability. The server then prepares every proposal
-approval, executes one registry save-and-activate CAS against the cohort base
-generation, emits config events, commits one dedicated receipt containing the
+approval, saves one context revision and advances the owning workspace head with
+exact-base CAS, commits one dedicated receipt containing the
 complete typed member-success tuple, records it in the shared config-operation
 ledger, marks the finalization published, and inserts one publication anchor per
 member in the same transaction. Any proof, state fence, merge, result-hash,
-generation, receipt, or anchor failure rolls the logical transaction back. A
+head, receipt, or anchor failure rolls the logical transaction back. A
 successful two-member finalization therefore creates two anchors but only one
-entry and one new registry generation; when both proposals were previously
+entry and one workspace-head update, without a global activation; when both proposals were previously
 unapproved, it also creates their two approvals.
 
 Each anchor binds the exact member success and closure time to the cohort base,
 publish operation and source-intent hash, semantic result-input fingerprint,
-server-recomputed result freshness fingerprint, result entry and generation,
+server-recomputed result freshness fingerprint, result context and workspace,
 and publication time. The calibration receipt must cover exactly the resolved
 contribution set; the generic config command and receipt do not expose
 finalization fences or calibration anchors. Status loads
@@ -387,7 +408,7 @@ the ready finalization revision without changing those replay identities. A
 successful response is validated against that frozen plan. If transport loss, a
 server failure, or an invalid response leaves the outcome uncertain,
 reconciliation only reopens the exact operation and finalization; it does not
-refresh the active head, rebuild contributions, or issue a new intent. An
+refresh the destination head, rebuild contributions, or issue a new intent. An
 unclassified outcome retains the original plan and is always retryable by the
 resident backoff loop, even when the immediate cause was response validation or
 receipt drift.
@@ -406,7 +427,7 @@ high-water, wrapping only after the terminal page, so late readiness cannot be
 lost and continuous arrivals cannot make a cycle unbounded.
 
 Workers do not persist a second claim or lease. They prepare deterministically
-and race through the finalization revision plus base-generation fences. A lost
+and race through the finalization revision plus exact working-point head fences. A lost
 publish response is reconciled by exact operation and cohort finalization;
 published and superseded states are benign completion, while an unresolved
 outcome retains the same plan for retry. Deterministic proof errors move the

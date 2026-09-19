@@ -37,9 +37,11 @@ CREATE TABLE IF NOT EXISTS config_operations (
     receipt_json TEXT NOT NULL,
     recorded_at TEXT NOT NULL,
     CHECK (
-        (kind = 'publish_context' AND expected_generation IS NULL
+        (kind IN ('publish_context', 'publish_calibration')
+            AND expected_generation IS NULL
             AND result_activation_generation IS NULL)
-        OR (kind != 'publish_context' AND expected_generation IS NOT NULL
+        OR (kind NOT IN ('publish_context', 'publish_calibration')
+            AND expected_generation IS NOT NULL
             AND result_activation_generation IS NOT NULL AND (
                 result_activation_generation = expected_generation
                 OR result_activation_generation = expected_generation + 1))

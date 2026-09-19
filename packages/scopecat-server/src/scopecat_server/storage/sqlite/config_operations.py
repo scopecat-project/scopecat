@@ -118,11 +118,17 @@ class SQLiteConfigOperationStore:
                     kind,
                     operation.intent_hash,
                     None
-                    if isinstance(receipt, ConfigContextPublishReceipt)
+                    if isinstance(
+                        receipt,
+                        (ConfigContextPublishReceipt, CalibrationPublicationReceipt),
+                    )
                     else receipt.operation.expected_generation,
                     operation.entry_id,
                     None
-                    if isinstance(receipt, ConfigContextPublishReceipt)
+                    if isinstance(
+                        receipt,
+                        (ConfigContextPublishReceipt, CalibrationPublicationReceipt),
+                    )
                     else receipt.operation.activation_generation,
                     receipt_json,
                     operation.recorded_at.isoformat(),

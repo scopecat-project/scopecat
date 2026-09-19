@@ -83,7 +83,7 @@ class ConfigContextMetadata(_ContextModel):
     working_point_id: str = Field(min_length=1)
     label: str = Field(min_length=1)
     base: ConfigContextRef
-    workspace_id: str | None = None
+    workspace_id: str = Field(min_length=1)
     value_origins: tuple[ConfigValueOrigin, ...] = ()
     structure: ParameterStructureOrigin | None = None
 

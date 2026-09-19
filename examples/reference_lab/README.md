@@ -84,12 +84,12 @@ The scripts are ordinary Python with `# %%` cells and can be followed in order.
 | `50_ragged_scope_capture.py` | Point-varying oscilloscope record length and ragged waveform slicing |
 
 The application also registers one bounded q0/q1 DRAG calibration definition.
-Its project-side policy evaluates semantic freshness from active configuration
-contents, admits immutable bounded cohorts, and runs independent durable
+Its project-side policy evaluates semantic freshness from a selected saved
+working point, admits immutable bounded cohorts, and runs independent durable
 procedures through baseline, fit, candidate, and verification. These automated
 members are verify-only: successful closure leaves each result pending a
 published freshness anchor and makes the complete cohort durable finalization
-work. The application selects an active binding from the exact DRAG v2
+work. The application selects an active binding from the exact DRAG
 definition to a fingerprinted automatic-publication policy while retaining it
 as a historical drain capability. The resident worker resolves that same policy
 after restart and calls `prepare_drag_beta_cohort_publication` through a narrow
@@ -97,11 +97,20 @@ read-only facade. The preparation resolves each exact versioned verification
 checkpoint, rejects edits outside each target's owned beta cell, previews the
 common-base cell merge, and requires each verified candidate to retain the same
 semantic inputs in the merged result. The generic finalizer then performs one
-generation-checked activation and records one published freshness anchor per
+workspace-head-checked publication and records one published freshness anchor per
 contribution before freshness is evaluated in the same worker cycle.
 `publish_verified_drag_beta_cohort` remains the explicit operator/debug path;
 both paths derive the same deterministic plan, so an exact retry returns the
-original receipt rather than publishing another generation.
+original receipt rather than creating another parameter version. The lab default
+remains unchanged. Start the resident worker with an existing parameter entry:
+
+```console
+scopecat automation work . --working-point my-saved-working-point
+```
+
+The worker follows that workspace head after publication. Omitting
+`--working-point` runs only catalog-scoped nonpublishing calibration checks; it
+does not create an implicit sample or enroll the DRAG publication workflow.
 
 ## Source map
 

@@ -16,6 +16,10 @@ from pydantic import (
 from scopecat.kernel.content_identity import stable_content_hash
 from scopecat.kernel.run_outcome import utc_now
 from scopecat.records.analysis import ProjectAnalysisDecisionReference
+from scopecat.records.calibration_scope import (
+    CalibrationConfigSourceRef,
+    WorkingPointCalibrationScope,
+)
 from scopecat.records.config import ConfigContentHash
 from scopecat.records.config_context import ConfigContextMetadata, ConfigContextRef
 from scopecat.records.content import Sha256ContentHash
@@ -261,16 +265,14 @@ class CalibrationCohortMergeRegistrySource(_FrozenRegistryModel):
     automatic_publication_policy_fingerprint: Sha256ContentHash | None = None
     composition_policy_ref: ConfigCompositionPolicyRef
     merge_policy: Literal["common_base_cells_v1"] = "common_base_cells_v1"
-    base_entry_id: _NonEmptyText
-    base_config_content_hash: ConfigContentHash
-    base_registry_generation: int = Field(ge=1)
+    base: CalibrationConfigSourceRef
     candidate_id: _NonEmptyText
     contributions: tuple[ResolvedCalibrationCohortMergeContribution, ...] = Field(
         min_length=1,
         max_length=_MAX_CALIBRATION_MERGE_CONTRIBUTIONS,
     )
 
-    @field_validator("cohort_id", "base_entry_id", "candidate_id")
+    @field_validator("cohort_id", "candidate_id")
     @classmethod
     def validate_identity(cls, value: str) -> str:
         if not value.strip():
@@ -289,6 +291,8 @@ class CalibrationCohortMergeRegistrySource(_FrozenRegistryModel):
     def validate_automatic_publication(
         self,
     ) -> CalibrationCohortMergeRegistrySource:
+        if not isinstance(self.base.scope, WorkingPointCalibrationScope):
+            raise ValueError("calibration merge requires a working point")
         identity = (
             self.automatic_publication_policy_id,
             self.automatic_publication_policy_version,
@@ -304,14 +308,15 @@ class CalibrationCohortMergeRegistrySource(_FrozenRegistryModel):
 class ContextConfigRegistrySource(_FrozenRegistryModel):
     kind: Literal["parameter_context"] = "parameter_context"
     context: ConfigContextMetadata
-    candidate: CandidateConfigRegistrySource | None = None
+    publication: (
+        CandidateConfigRegistrySource | CalibrationCohortMergeRegistrySource | None
+    ) = None
 
 
 ConfigRegistryEntrySource = Annotated[
     DirectConfigRegistrySource
     | ManualConfigDraftRegistrySource
     | CandidateConfigRegistrySource
-    | CalibrationCohortMergeRegistrySource
     | ContextConfigRegistrySource,
     Field(discriminator="kind"),
 ]
@@ -499,6 +504,19 @@ class ConfigContextPublishOperation(_FrozenRegistryModel):
     operation_id: _NonEmptyText
     intent_hash: Sha256ContentHash
     base: ConfigContextRef
+    entry_id: _NonEmptyText
+    actor: _NonEmptyText
+    note: str = ""
+    recorded_at: datetime = Field(default_factory=utc_now)
+
+
+class CalibrationPublicationOperation(_FrozenRegistryModel):
+    """Atomic verified cohort publication into one exact working-point head."""
+
+    operation_id: _NonEmptyText
+    intent_hash: Sha256ContentHash
+    source_intent_hash: Sha256ContentHash
+    base: CalibrationConfigSourceRef
     entry_id: _NonEmptyText
     actor: _NonEmptyText
     note: str = ""

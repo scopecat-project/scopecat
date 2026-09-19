@@ -1,9 +1,10 @@
 # Configuration ownership and execution fences
 
-Two slices of #645 separate fixed scientific selections from unrelated default
-changes (#647), and publish verified candidates into one exact working point
-(#648). They do not introduce independently maintained setup revisions or complete
-object-scoped calibration automation.
+The implemented slices of #645 separate fixed scientific selections from default
+changes (#647), publish verified candidates to one exact working point (#648),
+and give bounded automatic calibration cohorts that same independent ownership
+(#651). They do not introduce independently maintained setup revisions, executable
+apparatus subjects or qualified cross-object calibration dependencies.
 
 ## Existing owners
 
@@ -16,7 +17,8 @@ Working-point saves already have a separate conflict domain. Each parameter
 workspace owns a head in `parameter_workspace_heads`; advancing it compares the
 exact base entry inside the write transaction. Saving A does not advance B's head
 or activate a global configuration. A named branch establishes a separate head.
-This is parameter version management, not verified calibration publication.
+Ordinary saves remain parameter version management; only explicit verified
+publication records acceptance evidence.
 
 ## Selection freshness and executable authority
 
@@ -80,10 +82,45 @@ operation ledger records this operation without inventing an activation generati
 an exact retry returns the original receipt before checking the now-advanced head.
 A different operation cannot use an existing destination entry to bypass head CAS.
 
-The current calibration cohort planner still resolves `active`, and its cohort
-merge/finalization contracts carry a global base generation. They need a separate
-coordinated change before automated publication can claim independent A/B
-ownership; the working-point publication API alone does not complete that change.
+## Automatic calibration ownership (#651)
+
+An evaluator explicitly selects one working-point workspace. It follows that
+workspace's head between cycles, and freezes one exact entry, sample revision,
+working point and batch within a cycle. Without that selection it can evaluate
+catalog-scoped checks whose successful procedure needs no parameter publication.
+It never creates a sample or chooses a writable workspace implicitly.
+
+Logical targets acquire their owner from the planning context before observation,
+status lookup and intent construction. Calibration keys include the stable workspace
+identity, not a repeated display label or changing head. Two branches with identical
+sample/context/batch metadata therefore have independent attempts and successes.
+Publication advances the head while retaining the workspace's calibration history.
+Shared fan-out limits and instrument resource claims are separate constraints;
+independent ownership does not promise simultaneous access to one instrument.
+
+A publishing cohort owns exactly one working point. Its members may calibrate
+several logical entities within that scope. Admission checks the exact head,
+recorded scope and current executable setup in its transaction. Parent samples
+freeze exact revisions, while the baseline and candidate stages may use different
+parameter snapshots. The cohort's publication proof requires both stages to match
+its recorded scope and the baseline to use its exact context.
+
+The finalizer retains the existing independent-verification and common-base merge
+proofs. One transaction saves the context revision, advances its head, retains
+approvals and member success records, completes finalization and writes the
+idempotent receipt. No global default activation accompanies that publication.
+
+Head changes supersede pending publications only for that workspace. A branch
+save creates a different owner. A parameter-only global default change does not
+supersede working-point publication; a changed executable setup can. Supersession
+records whether the cause was an exact replacement head or changed setup content,
+rather than representing both as a global generation. Old admitted requests and
+committed publication receipts remain replayable by their exact identities.
+
+Cross-owner and cross-batch dependencies require a separate applicability contract;
+this slice rejects them. It neither promotes descriptive apparatus observations to
+calibrations nor treats room-temperature measurements as suitable cold parameters.
+See [durable automation](automation.md) for proofs, queues and worker behavior.
 
 Further work includes maintained setup revisions, automation requirements and
 qualified cross-object dependencies. Descriptive apparatus observations never

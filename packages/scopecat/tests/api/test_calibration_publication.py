@@ -41,6 +41,7 @@ from scopecat.automation.calibrations import (
     calibration_cohort_spec_hash,
     calibration_freshness_fingerprint,
     calibration_key,
+    scoped_calibration_target,
 )
 from scopecat.automation.models import (
     AnalysisPublicationOutputRef,
@@ -56,11 +57,11 @@ from scopecat.automation.wire import ProcedureStepAttemptPage
 from scopecat.config.registry.records import (
     CalibrationCohortMergeContribution,
     CalibrationCohortMergeRegistrySource,
+    CalibrationPublicationOperation,
     ConfigCompositionEvidenceStepRef,
     ConfigCompositionPolicyRef,
-    ConfigPublishOperation,
-    ConfigRegistryActivationRecord,
     ConfigRegistryEntry,
+    ContextConfigRegistrySource,
     ResolvedCalibrationCohortMergeContribution,
     ResolvedVerifiedParameterProposalProofV1,
     VerifiedParameterProposalProofV1,
@@ -85,7 +86,12 @@ from scopecat.records.analysis import (
     ProjectAnalysisSubject,
     RunAnalysisSubject,
 )
+from scopecat.records.calibration_scope import WorkingPointCalibrationScope
 from scopecat.records.config import config_content_hash
+from scopecat.records.config_context import (
+    ConfigContextMetadata,
+    ContextRunConfigSource,
+)
 from scopecat.records.parameter import ScalarParameterValue
 from scopecat.records.parameter_change import (
     ParameterChangeProposal,
@@ -93,8 +99,21 @@ from scopecat.records.parameter_change import (
 )
 from scopecat.records.run import (
     AnalysisCandidateRunConfigSource,
-    ConfigRegistryRunConfigSource,
     RunSnapshot,
+)
+from scopecat.records.sample import SampleBinding
+
+_SCOPE = WorkingPointCalibrationScope(
+    workspace_id="test-working-point",
+    sample=SampleBinding(
+        role="subject",
+        sample_id="chip",
+        revision=1,
+        content_hash="sha256:" + "a" * 64,
+        kind="synthetic",
+        display_name="Chip",
+        context_id="parked",
+    ),
 )
 
 _NOW = datetime(2026, 8, 18, 10, tzinfo=UTC)
@@ -122,7 +141,7 @@ _BASE_SOURCE = CalibrationConfigSourceRef(
     entry_id="base-entry",
     config_ref="config-registry/entries/base-entry/config.json",
     content_hash=_BASE_HASH,
-    registry_generation=7,
+    scope=_SCOPE,
 )
 _POLICY = ConfigCompositionPolicyRef(
     id="tests.calibration.merge-policy",
@@ -166,7 +185,7 @@ def test_publication_plan_and_source_are_deterministic_and_cover_whole_cohort() 
 
     assert forward == reverse
     assert forward.command.operation_id == forward.operation_id
-    assert forward.command.expected_generation == source.base_generation
+    assert forward.command.source.base == source.base
     assert forward.entry_id.startswith("calibration-merge-")
     assert forward.operation_id.startswith("calibration-cohort-publish:")
     assert (
@@ -489,7 +508,9 @@ def _cohort_and_members() -> tuple[CalibrationCohort, CalibrationCohortMemberPag
 
 
 def _member_spec(target_id: str) -> CalibrationCohortMemberSpec:
-    target = CalibrationTargetRef(kind="qubit", id=target_id)
+    target = scoped_calibration_target(
+        CalibrationTargetRef(kind="qubit", id=target_id), _BASE_SOURCE
+    )
     input_fingerprint = f"sha256:{target_id[-1] * 64}"
     freshness = calibration_freshness_fingerprint(
         definition=_DEFINITION,
@@ -564,9 +585,7 @@ def _receipt(
         cohort_id=source.cohort_id,
         spec_hash=source.spec_hash,
         composition_policy_ref=source.composition_policy_ref,
-        base_entry_id=source.base_entry_id,
-        base_config_content_hash=source.base_content_hash,
-        base_registry_generation=source.base_generation,
+        base=source.base,
         candidate_id=resolved_candidate_id or source.candidate_id,
         contributions=tuple(
             _resolved_contribution(contribution)
@@ -578,32 +597,29 @@ def _receipt(
         id=plan.entry_id,
         config_ref=f"config-registry/entries/{plan.entry_id}/config.json",
         content_hash=source.expected_result_content_hash,
-        source=resolved,
-        actor=plan.actor,
-        note=plan.note,
-        recorded_at=published_at,
-    )
-    activation = ConfigRegistryActivationRecord(
-        generation=source.base_generation + 1,
-        action="activation",
-        entry_id=entry.id,
-        entry_content_hash=entry.content_hash,
-        previous_entry_id=source.base_entry_id,
-        previous_entry_content_hash=source.base_content_hash,
+        source=ContextConfigRegistrySource(
+            context=ConfigContextMetadata(
+                sample=_SCOPE.sample,
+                working_point_id="parked",
+                label="Parked",
+                workspace_id=_SCOPE.workspace_id,
+                base=source.base.context_ref,
+            ),
+            publication=resolved,
+        ),
         actor=plan.actor,
         note=plan.note,
         recorded_at=published_at,
     )
     command = plan.command
-    operation = ConfigPublishOperation(
+    operation = CalibrationPublicationOperation(
         operation_id=command.operation_id,
         intent_hash=command.intent_hash,
         source_intent_hash=command.source_intent_hash,
         entry_id=command.entry_id,
-        expected_generation=command.expected_generation,
+        base=command.source.base,
         actor=command.actor,
         note=command.note,
-        activation_generation=activation.generation,
         recorded_at=published_at,
     )
     members = {member.spec.member_id: member for member in page.items}
@@ -613,14 +629,13 @@ def _receipt(
             contribution=contribution,
             plan=plan,
             entry=entry,
-            activation=activation,
+            published_at=published_at,
         )
         for contribution in source.contributions
     )
     return CalibrationPublicationReceipt(
         operation=operation,
         entry=entry,
-        activation=activation,
         calibration_successes=successes,
     )
 
@@ -631,7 +646,7 @@ def _published_success(
     contribution: CalibrationCohortMergeContribution,
     plan: CalibrationCohortPublicationPlan,
     entry: ConfigRegistryEntry,
-    activation: ConfigRegistryActivationRecord,
+    published_at: datetime,
 ) -> CalibrationSuccessRef:
     attempt = CalibrationAttemptRef(
         calibration_key=member.spec.calibration_key,
@@ -661,9 +676,9 @@ def _published_success(
             entry_id=entry.id,
             config_ref=entry.config_ref,
             content_hash=entry.content_hash,
-            registry_generation=activation.generation,
+            scope=_SCOPE,
         ),
-        published_at=activation.recorded_at,
+        published_at=published_at,
     )
     return CalibrationSuccessRef(
         attempt=attempt,
@@ -790,7 +805,11 @@ def _evidence_fixture(
         request_key=member.request_key,
         definition=member.spec.procedure,
         intent=member.spec.intent,
-        intent_hash=procedure_intent_hash(member.spec.procedure, member.spec.intent),
+        intent_hash=procedure_intent_hash(
+            member.spec.procedure, member.spec.intent, samples=_SCOPE.sample_selectors()
+        ),
+        samples=_SCOPE.sample_selectors(),
+        resolved_samples=_SCOPE.sample_selectors(),
         revision=5,
         state="closed",
         created_at=_NOW,
@@ -828,6 +847,7 @@ def _evidence_fixture(
     )
     baseline_snapshot = RunSnapshot(
         run_id=baseline.run_id,
+        samples=(_SCOPE.sample,),
         outcome=RunOutcome(
             run_id=baseline.run_id,
             result="succeeded",
@@ -838,19 +858,18 @@ def _evidence_fixture(
         scientific_binding=bind_scientific_evidence(
             catalog_id="test-store",
             config=_BASE_CONFIG,
-            samples=(),
+            samples=(_SCOPE.sample,),
             sample_revisions={},
         ),
-        config_source=ConfigRegistryRunConfigSource(
-            selector=_BASE_SOURCE.selector,
-            entry_id=_BASE_SOURCE.entry_id,
-            config_ref=_BASE_SOURCE.config_ref,
+        config_source=ContextRunConfigSource(
+            context=_BASE_SOURCE.context_ref,
             content_hash=_BASE_SOURCE.content_hash,
-            registry_generation=_BASE_SOURCE.registry_generation,
+            sample=_SCOPE.sample,
         ),
     )
     candidate_snapshot = RunSnapshot(
         run_id=candidate.run_id,
+        samples=(_SCOPE.sample,),
         outcome=RunOutcome(
             run_id=candidate.run_id,
             result="succeeded",
@@ -861,7 +880,7 @@ def _evidence_fixture(
         scientific_binding=bind_scientific_evidence(
             catalog_id="test-store",
             config=_RESULT_CONFIG,
-            samples=(),
+            samples=(_SCOPE.sample,),
             sample_revisions={},
         ),
         config_source=AnalysisCandidateRunConfigSource(

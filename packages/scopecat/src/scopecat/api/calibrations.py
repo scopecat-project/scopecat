@@ -17,6 +17,7 @@ from scopecat.api.calibration_publication import (
     CalibrationPublicationReadSession,
     publish_calibration_cohort,
 )
+from scopecat.api.parameters import ParameterVersion
 from scopecat.api.procedures import LabProcedureOperations
 from scopecat.automation.calibration_definition import CalibrationRegistry
 from scopecat.automation.calibration_wire import (
@@ -40,10 +41,13 @@ from scopecat.automation.calibrations import (
     CalibrationConfigSourceRef,
     CalibrationStatusSnapshot,
 )
+from scopecat.config.registry.records import ContextConfigRegistrySource
 from scopecat.daemon.client import DaemonClient
 from scopecat.daemon.wire import (
     CalibrationPublicationReceipt,
 )
+from scopecat.records.calibration_scope import WorkingPointCalibrationScope
+from scopecat.records.config_context import ConfigContextRef
 from scopecat.records.run import ConfigRegistryRunConfigSource
 
 
@@ -88,28 +92,55 @@ class LabCalibrationOperations:
     def publication_registry(self) -> CalibrationPublicationPolicyRegistry:
         return self._publication_registry
 
-    def planning_context(self) -> CalibrationPlanningContext:
+    def planning_context(
+        self,
+        *,
+        working_point: str | ConfigContextRef | ParameterVersion | None = None,
+    ) -> CalibrationPlanningContext:
+        if working_point is not None:
+            if isinstance(working_point, ParameterVersion):
+                ref = working_point.context
+            elif isinstance(working_point, str):
+                selected = self._config.entry(working_point)
+                ref = ConfigContextRef(
+                    entry_id=selected.entry.id, content_hash=selected.entry.content_hash
+                )
+            else:
+                ref = working_point
+            latest = self._config.latest_context(ref)
+            provenance = latest.entry.source
+            if not isinstance(provenance, ContextConfigRegistrySource):
+                raise ValueError("calibration requires a saved working point")
+            metadata = provenance.context
+            return CalibrationPlanningContext(
+                config=latest.config,
+                config_source=CalibrationConfigSourceRef(
+                    entry_id=latest.entry.id,
+                    config_ref=latest.entry.config_ref,
+                    content_hash=latest.entry.content_hash,
+                    scope=WorkingPointCalibrationScope(
+                        workspace_id=metadata.workspace_id,
+                        sample=metadata.sample,
+                    ),
+                ),
+            )
         config, source = self._config.resolve_with_source("active")
-        if not isinstance(source, ConfigRegistryRunConfigSource):
-            raise RuntimeError(
-                "calibration planning requires exact active registry provenance"
-            )
-        if source.registry_generation is None:
-            raise RuntimeError(
-                "calibration planning requires an active registry generation"
-            )
+        assert isinstance(source, ConfigRegistryRunConfigSource)
         return CalibrationPlanningContext(
             config=config,
             config_source=CalibrationConfigSourceRef.from_run_config_source(source),
         )
 
-    def evaluator(self) -> ProjectCalibrationEvaluator:
-        """Build a project evaluator over this exact application registry."""
-
+    def evaluator(
+        self,
+        *,
+        working_point: str | ConfigContextRef | ParameterVersion | None = None,
+    ) -> ProjectCalibrationEvaluator:
+        """Follow one selected workspace; catalog checks cannot publish parameters."""
         return ProjectCalibrationEvaluator(
             self,
             self._registry,
-            self.planning_context,
+            lambda: self.planning_context(working_point=working_point),
             publication_policies=self._publication_registry,
         )
 

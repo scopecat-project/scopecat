@@ -13,7 +13,12 @@ from scopecat.automation import (
 from scopecat.kernel.frozen import freeze_json_mapping
 from scopecat.records.analysis import ProjectAnalysisSubject, RunAnalysisSubject
 from scopecat.records.config import config_content_hash
-from scopecat.records.run import ConfigRegistryRunConfigSource, RunConfigSource
+from scopecat.records.config_context import ConfigContextRef, ContextRunConfigSource
+from scopecat.records.run import (
+    ConfigRegistryRunConfigSource,
+    RunConfigSource,
+)
+from scopecat.records.sample import SampleBinding
 
 from reference_lab.application import create_application
 from reference_lab.configuration import EXAMPLE_ROOT, bootstrap_config
@@ -310,12 +315,21 @@ def _verification_intent(qubit: DragBetaQubit) -> DragBetaVerificationIntent:
     return DragBetaVerificationIntent(
         qubit=qubit,
         initial_config=initial_config,
-        initial_config_source=ConfigRegistryRunConfigSource(
-            selector="active",
-            entry_id="config-entry-1",
-            config_ref="active@1",
+        initial_config_source=ContextRunConfigSource(
+            context=ConfigContextRef(
+                entry_id="working-point-1",
+                content_hash=config_content_hash(initial_config),
+            ),
+            sample=SampleBinding(
+                role="sample",
+                sample_id="reference-chip",
+                revision=1,
+                content_hash="sha256:" + "a" * 64,
+                kind="synthetic",
+                display_name="Reference chip",
+                context_id="parked",
+            ),
             content_hash=config_content_hash(initial_config),
-            registry_generation=1,
         ),
     )
 

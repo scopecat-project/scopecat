@@ -32,8 +32,12 @@ from scopecat.automation.calibrations import (
     CalibrationCohort,
     CalibrationCohortMember,
     calibration_cohort_member_request_key,
-    calibration_target_sample_selectors,
 )
+from scopecat.config.registry.records import ContextConfigRegistrySource
+from scopecat.kernel.errors import DataIntegrityError, NotFound
+from scopecat.records.calibration_scope import WorkingPointCalibrationScope
+from scopecat.records.configuration_fence import SetupContentFence
+from scopecat.records.scientific_scope import setup_content_hash
 
 from scopecat_server.storage.sqlite.automation import (
     AutomationConflict,
@@ -110,29 +114,33 @@ class CalibrationCohortService:
                     ),
                 )
 
-            expected_generation = command.spec.config_source.registry_generation
-            with self._config_registry.borrowed_unit_of_work(connection) as work:
-                activation = work.registry.read_latest_activation()
-                entry = (
-                    None
-                    if activation is None
-                    else work.registry.read_entry(activation.entry_id)
-                )
             source = command.spec.config_source
-            if (
-                activation is None
-                or entry is None
-                or source.selector != "active"
-                or activation.generation != expected_generation
-                or activation.entry_id != source.entry_id
-                or activation.entry_content_hash != source.content_hash
-                or entry.id != source.entry_id
-                or entry.config_ref != source.config_ref
-                or entry.content_hash != source.content_hash
-            ):
-                raise CalibrationCohortConflict(
-                    "calibration cohort config registry source changed"
-                )
+            with self._config_registry.borrowed_unit_of_work(connection) as work:
+                entry = work.registry.read_entry(source.entry_id)
+                config = work.registry.read_config(entry.config_ref)
+                activation = work.registry.read_latest_activation()
+                if (
+                    activation is None
+                    or entry.config_ref != source.config_ref
+                    or entry.content_hash != source.content_hash
+                ):
+                    raise CalibrationCohortConflict(
+                        "calibration cohort config source changed"
+                    )
+                active_entry = work.registry.read_entry(activation.entry_id)
+                authority = work.registry.read_config(active_entry.config_ref)
+                if setup_content_hash(config) != setup_content_hash(authority):
+                    raise CalibrationCohortConflict(
+                        "calibration cohort executable setup changed"
+                    )
+                scope = source.scope
+                if isinstance(scope, WorkingPointCalibrationScope) and (
+                    not isinstance(entry.source, ContextConfigRegistrySource)
+                    or entry.source.context.sample != scope.sample
+                    or (entry.source.context.workspace_id) != scope.workspace_id
+                    or work.registry.context_head(scope.workspace_id) != entry.id
+                ):
+                    raise CalibrationCohortConflict("calibration working point changed")
 
             now = self._now()
             observed = self._store.status_snapshot_in_transaction(
@@ -194,7 +202,10 @@ class CalibrationCohortService:
                     definition=member_spec.procedure,
                     request_key=request_key,
                     intent=member_spec.intent,
-                    samples=calibration_target_sample_selectors(member_spec.target),
+                    samples=scope.sample_selectors(),
+                    expected_configuration=SetupContentFence(
+                        content_hash=setup_content_hash(config)
+                    ),
                     at=now,
                     require_new=True,
                 )
@@ -341,7 +352,12 @@ def _translate_store_errors() -> Generator[None]:
         yield
     except (CalibrationCohortNotFound, AutomationNotFound) as error:
         raise BackendNotFound(str(error)) from error
-    except (CalibrationCohortConflict, AutomationConflict) as error:
+    except (
+        CalibrationCohortConflict,
+        AutomationConflict,
+        DataIntegrityError,
+        NotFound,
+    ) as error:
         raise BackendConflict(str(error)) from error
 
 

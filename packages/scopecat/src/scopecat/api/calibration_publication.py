@@ -22,7 +22,6 @@ from scopecat.automation.calibrations import (
     CalibrationCohort,
     CalibrationCohortMember,
     CalibrationConfigSourceRef,
-    calibration_target_sample_selectors,
 )
 from scopecat.automation.models import (
     AnalysisPublicationOutputRef,
@@ -35,6 +34,7 @@ from scopecat.config.registry.records import (
     CalibrationCohortMergeRegistrySource,
     ConfigCompositionEvidenceStepRef,
     ConfigCompositionPolicyRef,
+    ContextConfigRegistrySource,
     ResolvedCalibrationCohortMergeContribution,
     VerifiedParameterProposalProofV1,
 )
@@ -54,12 +54,13 @@ from scopecat.records.analysis import (
     ProjectAnalysisSubject,
     RunAnalysisSubject,
 )
+from scopecat.records.calibration_scope import WorkingPointCalibrationScope
 from scopecat.records.config import ConfigContentHash
+from scopecat.records.config_context import ContextRunConfigSource
 from scopecat.records.content import Sha256ContentHash
 from scopecat.records.parameter_change import ParameterChangeProposal
 from scopecat.records.run import (
     AnalysisCandidateRunConfigSource,
-    ConfigRegistryRunConfigSource,
 )
 
 type _NonEmptyText = Annotated[str, Field(min_length=1)]
@@ -165,7 +166,6 @@ class CalibrationCohortPublicationPlan(_PublicationModel):
             operation_id=self.operation_id,
             source=self.source,
             actor=self.actor,
-            expected_generation=self.source.base_generation,
             expected_finalization_revision=self.expected_finalization_revision,
             entry_id=self.entry_id,
             note=self.note,
@@ -246,7 +246,6 @@ def calibration_cohort_publication_operation_id(
         operation_id=_OPERATION_ID_PROBE,
         source=source,
         actor=actor,
-        expected_generation=source.base_generation,
         expected_finalization_revision=expected_finalization_revision,
         entry_id=entry_id,
         note=note,
@@ -294,9 +293,7 @@ def calibration_cohort_merge_revision_source(
         spec_hash=cohort.spec_hash,
         automatic_publication=cohort.spec.automatic_publication,
         composition_policy_ref=composition_policy_ref,
-        base_entry_id=base.entry_id,
-        base_content_hash=base.content_hash,
-        base_generation=base.registry_generation,
+        base=base,
         candidate_id=candidate_id,
         contributions=contributions,
         expected_result_content_hash=expected_result_content_hash,
@@ -507,7 +504,7 @@ def _validate_member_procedure(
         or snapshot.request_key != member.request_key
         or snapshot.definition != member.spec.procedure
         or snapshot.intent != member.spec.intent
-        or snapshot.samples != calibration_target_sample_selectors(member.spec.target)
+        or snapshot.samples != cohort.spec.config_source.scope.sample_selectors()
         or snapshot.state != "closed"
         or snapshot.closure is None
         or snapshot.closure.status != "succeeded"
@@ -580,12 +577,13 @@ def _matches_cohort_base(
     snapshot = run.snapshot
     source = snapshot.config_source
     return (
-        isinstance(source, ConfigRegistryRunConfigSource)
-        and source.selector == base.selector
-        and source.entry_id == base.entry_id
-        and source.config_ref == base.config_ref
+        isinstance(source, ContextRunConfigSource)
+        and source.context == base.context_ref
         and source.content_hash == base.content_hash
-        and source.registry_generation == base.registry_generation
+        and isinstance(base.scope, WorkingPointCalibrationScope)
+        and source.sample == base.scope.sample
+        and not source.overrides
+        and snapshot.samples == (base.scope.sample,)
     )
 
 
@@ -623,7 +621,7 @@ def _validate_publication_receipt(
         command.intent_hash,
         command.source_intent_hash,
         command.entry_id,
-        command.expected_generation,
+        command.source.base,
         command.actor,
         command.note,
     )
@@ -632,12 +630,17 @@ def _validate_publication_receipt(
         operation.intent_hash,
         operation.source_intent_hash,
         operation.entry_id,
-        operation.expected_generation,
+        operation.base,
         operation.actor,
         operation.note,
     )
     source = plan.source
-    resolved_source = receipt.entry.source
+    entry_source = receipt.entry.source
+    resolved_source = (
+        entry_source.publication
+        if isinstance(entry_source, ContextConfigRegistrySource)
+        else None
+    )
     contributions = {
         contribution.member_id: contribution for contribution in source.contributions
     }
@@ -646,8 +649,6 @@ def _validate_publication_receipt(
     }
     if (
         actual_operation != expected_operation
-        or operation.activation_generation != source.base_generation + 1
-        or receipt.activation.generation != source.base_generation + 1
         or receipt.entry.id != plan.entry_id
         or receipt.entry.content_hash != source.expected_result_content_hash
         or not isinstance(resolved_source, CalibrationCohortMergeRegistrySource)
@@ -667,9 +668,7 @@ def _validate_publication_receipt(
             success.attempt.cohort_id != source.cohort_id
             or success.attempt.procedure_run_id
             != contribution.proof.evidence_step.procedure_run_id
-            or success.base_config_source.entry_id != source.base_entry_id
-            or success.base_config_source.content_hash != source.base_content_hash
-            or success.base_config_source.registry_generation != source.base_generation
+            or success.base_config_source != source.base
             or publication is None
             or publication.operation_id != plan.operation_id
             or publication.source_intent_hash != command.source_intent_hash
@@ -679,8 +678,8 @@ def _validate_publication_receipt(
             or result_source.entry_id != receipt.entry.id
             or result_source.config_ref != receipt.entry.config_ref
             or result_source.content_hash != receipt.entry.content_hash
-            or result_source.registry_generation != receipt.activation.generation
-            or publication.published_at != receipt.activation.recorded_at
+            or result_source.scope != source.base.scope
+            or publication.published_at != operation.recorded_at
         ):
             raise CalibrationPublicationDriftError(
                 "calibration publication successes do not match its contributions"
@@ -718,9 +717,7 @@ def _resolved_source_matches(
         )
         and actual.composition_policy_ref == expected.composition_policy_ref
         and actual.merge_policy == expected.merge_policy
-        and actual.base_entry_id == expected.base_entry_id
-        and actual.base_config_content_hash == expected.base_content_hash
-        and actual.base_registry_generation == expected.base_generation
+        and actual.base == expected.base
         and actual.candidate_id == expected.candidate_id
         and projected_contributions == expected.contributions
     )

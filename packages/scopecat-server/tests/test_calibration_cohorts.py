@@ -55,24 +55,25 @@ from scopecat.automation import (
 )
 from scopecat.config.registry.records import (
     ConfigCompositionPolicyRef,
-    ConfigPublishOperation,
 )
 from scopecat.config.registry.service import (
     ConfigRevision,
     DirectConfigRevisionSource,
     publish_config_revision,
     resolve_config_registry_config_source,
+    save_config_context,
 )
 from scopecat.daemon.wire import (
-    ConfigPublishCommand,
-    ConfigPublishReceipt,
+    ConfigContextSaveCommand,
     SampleCreateCommand,
 )
-from scopecat.daemon.wire import (
-    DirectConfigRevisionSource as WireDirectConfigRevisionSource,
+from scopecat.records.calibration_scope import (
+    WorkingPointCalibrationOwner,
+    WorkingPointCalibrationScope,
 )
+from scopecat.records.config_context import ConfigContextRef
 from scopecat.records.run import ConfigRegistryRunConfigSource
-from scopecat.records.sample import SampleRevisionDraft, SampleSelector
+from scopecat.records.sample import SampleBinding, SampleRevisionDraft, SampleSelector
 from scopecat_testkit.workflow_fixtures import load_config
 
 from scopecat_server import BackendConflict, BackendNotFound, LocalDaemonRuntime
@@ -88,7 +89,6 @@ from scopecat_server.storage.sqlite.calibration_cohorts import (
     CalibrationCohortStoreError,
     SQLiteCalibrationCohortStore,
 )
-from scopecat_server.storage.sqlite.config_operations import SQLiteConfigOperationStore
 from scopecat_server.storage.sqlite.config_registry import SQLiteConfigRegistryStore
 from scopecat_server.storage.sqlite.connection import SQLiteDatabase
 from scopecat_server.storage.sqlite.control_plane import SQLiteControlPlane
@@ -136,7 +136,46 @@ def _harness(tmp_path: Path) -> _Harness:
         unit_of_work=config_registry.read_unit_of_work,
     )
     assert isinstance(run_source, ConfigRegistryRunConfigSource)
-    source = CalibrationConfigSourceRef.from_run_config_source(run_source)
+    sample_store = SQLiteSampleStore(sqlite, control=SQLiteControlPlane(sqlite))
+    sample = sample_store.create_sample(
+        SampleCreateCommand(
+            operation_id="create-default",
+            sample_id="calibration-sample",
+            kind="chip",
+            actor="test",
+            content=SampleRevisionDraft(display_name="Calibration"),
+        )
+    ).revision
+    binding = SampleBinding(
+        role="subject",
+        sample_id=sample.sample_id,
+        revision=sample.revision,
+        content_hash=sample.content_hash,
+        kind="chip",
+        display_name="Calibration",
+        context_id="parked",
+    )
+    context = save_config_context(
+        entry_id="calibration-workspace",
+        base=ConfigContextRef(
+            entry_id=run_source.entry_id, content_hash=run_source.content_hash
+        ),
+        sample=binding,
+        working_point_id="parked",
+        label="Calibration",
+        parameters=None,
+        actor="test",
+        note="",
+        unit_of_work=config_registry.write_unit_of_work,
+    )
+    source = CalibrationConfigSourceRef(
+        entry_id=context.entry.id,
+        config_ref=context.entry.config_ref,
+        content_hash=context.entry.content_hash,
+        scope=WorkingPointCalibrationScope(
+            workspace_id="calibration-workspace", sample=binding
+        ),
+    )
     now = [_START]
     automation_store = SQLiteAutomationStore(sqlite)
     automation = AutomationService(
@@ -181,6 +220,7 @@ def _member(
     sample_id: str | None = None,
     context_id: str | None = None,
     batch_id: str | None = None,
+    workspace_id: str = "calibration-workspace",
 ) -> CalibrationCohortMemberSpec:
     definition = CalibrationDefinitionRef(
         id="drag-calibration",
@@ -191,9 +231,10 @@ def _member(
     target = CalibrationTargetRef(
         kind="qubit",
         id=target_id,
-        sample_id=sample_id,
-        context_id=context_id,
+        sample_id=sample_id or "calibration-sample",
+        context_id=context_id if sample_id else "parked",
         batch_id=batch_id,
+        owner=WorkingPointCalibrationOwner(workspace_id=workspace_id),
     )
     procedure = ProcedureDefinitionRef(
         id="drag-calibration-procedure",
@@ -303,51 +344,17 @@ def _attach_success_publication(
     harness: _Harness,
     pending: CalibrationSuccessRef,
 ) -> CalibrationSuccessRef:
-    result_config = load_config().model_copy(update={"id": "calibration-result"})
-    result = publish_config_revision(
-        revision=ConfigRevision(
-            source=DirectConfigRevisionSource(result_config),
-            entry_id="calibration-result-entry",
-            actor="test",
-        ),
-        unit_of_work=harness.config_registry.write_unit_of_work,
-        expected_generation=pending.base_config_source.registry_generation,
+    result_source = pending.base_config_source.model_copy(
+        update={
+            "entry_id": "result-entry",
+            "config_ref": "result-ref",
+            "content_hash": "sha256:" + "a" * 64,
+        }
     )
-    activation = result.activation
-    assert activation is not None
-    command = ConfigPublishCommand(
-        operation_id="publish:calibration-result",
-        source=WireDirectConfigRevisionSource(config=result_config),
-        actor="test",
-        expected_generation=pending.base_config_source.registry_generation,
-        entry_id=result.entry.id,
-    )
-    operation = ConfigPublishOperation(
-        operation_id=command.operation_id,
-        intent_hash=command.intent_hash,
-        source_intent_hash=command.source_intent_hash,
-        entry_id=command.entry_id,
-        expected_generation=command.expected_generation,
-        actor=command.actor,
-        note=command.note,
-        activation_generation=activation.generation,
-        recorded_at=activation.recorded_at,
-    )
-    receipt = ConfigPublishReceipt(
-        operation=operation,
-        entry=result.entry,
-        deltas=result.deltas,
-        activation=activation,
-    )
-    result_source = CalibrationConfigSourceRef(
-        entry_id=result.entry.id,
-        config_ref=result.entry.config_ref,
-        content_hash=result.entry.content_hash,
-        registry_generation=activation.generation,
-    )
+    published_at = max(datetime.now(UTC), pending.succeeded_at)
     publication = CalibrationSuccessPublication(
-        operation_id=operation.operation_id,
-        source_intent_hash=operation.source_intent_hash,
+        operation_id="missing-publication",
+        source_intent_hash="sha256:" + "b" * 64,
         result_input_fingerprint=_RESULT_INPUT_HASH,
         result_freshness_fingerprint=calibration_freshness_fingerprint(
             definition=pending.attempt.definition,
@@ -357,7 +364,7 @@ def _attach_success_publication(
             dependencies=pending.attempt.dependencies,
         ),
         result_config_source=result_source,
-        published_at=activation.recorded_at,
+        published_at=published_at,
     )
     anchored = CalibrationSuccessRef(
         attempt=pending.attempt,
@@ -366,15 +373,11 @@ def _attach_success_publication(
         publication=publication,
     )
     with harness.store.write_transaction() as connection:
-        SQLiteConfigOperationStore(harness.store.sqlite).commit_in_transaction(
-            connection,
-            receipt,
-        )
         harness.store.insert_success_publication_in_transaction(
             connection,
             anchored,
         )
-    harness.now[0] = max(harness.now[0], activation.recorded_at)
+    harness.now[0] = max(harness.now[0], published_at)
     return anchored
 
 
@@ -784,12 +787,7 @@ def test_sample_scoped_calibration_propagates_to_procedure_child_runs(
     tmp_path: Path,
 ) -> None:
     harness = _harness(tmp_path)
-    _register_sample(harness, "die-1")
-    member = _member(
-        "q0",
-        sample_id="die-1",
-        context_id="cooldown-2",
-    )
+    member = _member("q0")
     command = _command(
         "sample-scoped-calibration",
         source=harness.source,
@@ -801,10 +799,10 @@ def test_sample_scoped_calibration_propagates_to_procedure_child_runs(
     procedure = harness.automation.get(created.members[0].procedure_run_id)
 
     assert procedure.samples == (
-        SampleSelector(sample_id="die-1", context_id="cooldown-2"),
+        SampleSelector(sample_id="calibration-sample", revision=1, context_id="parked"),
     )
     assert procedure.resolved_samples == (
-        SampleSelector(sample_id="die-1", revision=1, context_id="cooldown-2"),
+        SampleSelector(sample_id="calibration-sample", revision=1, context_id="parked"),
     )
 
 
@@ -1239,7 +1237,9 @@ def test_cohort_create_rejects_stale_config_status_and_fanout(
     )
     for label, updates in forged_fields:
         forged_source = harness.source.model_copy(update=updates)
-        with pytest.raises(BackendConflict, match="config registry source changed"):
+        with pytest.raises(
+            BackendConflict, match=r"config.*(source changed|record_missing)"
+        ):
             harness.service.create(
                 _command(
                     f"forged-config-{label}",
@@ -1306,6 +1306,7 @@ def test_cohort_refuses_to_adopt_a_preexisting_member_run(tmp_path: Path) -> Non
             definition=member.procedure,
             request_key=request_key,
             intent=member.intent,
+            samples=harness.source.scope.sample_selectors(),
         )
     ).run
 
@@ -1365,12 +1366,41 @@ def test_calibration_cohort_http_sqlite_vertical_replays_after_restart(
         TestClient(runtime.app()) as client,
     ):
         active = runtime.application.config.get_active_config()
+        sample = runtime.application.samples.create(
+            SampleCreateCommand(
+                operation_id="create-default",
+                sample_id="calibration-sample",
+                kind="chip",
+                actor="test",
+                content=SampleRevisionDraft(display_name="Calibration"),
+            )
+        )
+        context = runtime.application.config.save_context(
+            ConfigContextSaveCommand(
+                entry_id="calibration-workspace",
+                base=ConfigContextRef(
+                    entry_id=active.entry.id, content_hash=active.entry.content_hash
+                ),
+                sample=SampleSelector(sample_id=sample.record.id, revision=1),
+                working_point_id="parked",
+                label="Calibration",
+                actor="test",
+            )
+        )
+        binding = runtime.application.samples.resolve_bindings(
+            (
+                SampleSelector(
+                    sample_id="calibration-sample", revision=1, context_id="parked"
+                ),
+            )
+        )[0]
         source = CalibrationConfigSourceRef(
-            selector="active",
-            entry_id=active.entry.id,
-            config_ref=active.entry.config_ref,
-            content_hash=active.entry.content_hash,
-            registry_generation=active.activation.generation,
+            entry_id=context.entry.id,
+            config_ref=context.entry.config_ref,
+            content_hash=context.entry.content_hash,
+            scope=WorkingPointCalibrationScope(
+                workspace_id="calibration-workspace", sample=binding
+            ),
         )
         status_response = client.post(
             "/api/v1/calibration-status/query",
@@ -1520,15 +1550,61 @@ def test_new_batch_never_reuses_previous_calibration_success(tmp_path: Path) -> 
     batches = ExperimentalBatchStore(SQLiteDatabase(tmp_path / "control.sqlite3"))
     for batch in ("cooldown-a", "cooldown-b"):
         batches.save(batch, ExperimentalBatchEdit(name=batch))
-    old = _member("q0", sample_id="chip", context_id="parked", batch_id="cooldown-a")
-    new = _member("q0", sample_id="chip", context_id="parked", batch_id="cooldown-b")
-    legacy = _member("q0", sample_id="chip", context_id="parked")
+    assert isinstance(harness.source.scope, WorkingPointCalibrationScope)
+    binding = harness.source.scope.sample.model_copy(
+        update={"sample_id": "chip", "batch_id": "cooldown-a"}
+    )
+    actual = SQLiteSampleStore(
+        harness.store.sqlite, control=SQLiteControlPlane(harness.store.sqlite)
+    ).get_sample("chip")
+    binding = binding.model_copy(
+        update={
+            "content_hash": actual.revision.content_hash,
+            "display_name": actual.revision.content.display_name,
+        }
+    )
+    context = save_config_context(
+        entry_id="batch-calibration",
+        base=harness.source.context_ref,
+        sample=binding,
+        working_point_id="parked",
+        label="Batch",
+        parameters=None,
+        actor="test",
+        note="",
+        unit_of_work=harness.config_registry.write_unit_of_work,
+    )
+    source = CalibrationConfigSourceRef(
+        entry_id=context.entry.id,
+        config_ref=context.entry.config_ref,
+        content_hash=context.entry.content_hash,
+        scope=WorkingPointCalibrationScope(
+            workspace_id="batch-calibration", sample=binding
+        ),
+    )
+    old = _member(
+        "q0",
+        workspace_id="batch-calibration",
+        sample_id="chip",
+        context_id="parked",
+        batch_id="cooldown-a",
+    )
+    new = _member(
+        "q0",
+        workspace_id="batch-calibration",
+        sample_id="chip",
+        context_id="parked",
+        batch_id="cooldown-b",
+    )
+    legacy = _member(
+        "q0", workspace_id="batch-calibration", sample_id="chip", context_id="parked"
+    )
     assert len({item.calibration_key for item in (old, new, legacy)}) == 3
     assert old.freshness_fingerprint != new.freshness_fingerprint
     created = harness.service.create(
         _command(
             "old-cooldown",
-            source=harness.source,
+            source=source,
             snapshot=_status(harness, (old,)),
             members=(old,),
         )
@@ -1568,7 +1644,17 @@ def test_new_batch_never_reuses_previous_calibration_success(tmp_path: Path) -> 
     with pytest.raises(ValueError, match="dependency belongs to another batch"):
         _command(
             "cross-batch-dependency",
-            source=harness.source,
+            source=source.model_copy(
+                update={
+                    "scope": source.scope.model_copy(
+                        update={
+                            "sample": binding.model_copy(
+                                update={"batch_id": "cooldown-b"}
+                            )
+                        }
+                    )
+                }
+            ),
             snapshot=_status(harness, (old, new)),
             members=(dependent,),
         )
@@ -1576,6 +1662,7 @@ def test_new_batch_never_reuses_previous_calibration_success(tmp_path: Path) -> 
     same = with_dependency(
         _member(
             "q1",
+            workspace_id="batch-calibration",
             sample_id="chip",
             context_id="parked",
             batch_id="cooldown-a",
@@ -1584,7 +1671,7 @@ def test_new_batch_never_reuses_previous_calibration_success(tmp_path: Path) -> 
     accepted = harness.service.create(
         _command(
             "same-batch-dependency",
-            source=harness.source,
+            source=source,
             snapshot=_status(harness, (old, same)),
             members=(same,),
         )
@@ -1596,13 +1683,180 @@ def test_new_batch_never_reuses_previous_calibration_success(tmp_path: Path) -> 
         "cooldown-a", ExperimentalBatchEdit(name="Renamed", expected_revision=1)
     )
     assert _status(harness, (old,)).snapshot.statuses[0].latest_success == prior
-    missing = _member("q0", sample_id="chip", batch_id="missing")
-    with pytest.raises(BackendNotFound, match="batch not found"):
+    missing = _member(
+        "q0", workspace_id="batch-calibration", sample_id="chip", batch_id="missing"
+    )
+    with pytest.raises(ValueError, match="target differs from the working-point scope"):
         harness.service.create(
             _command(
                 "missing-batch",
-                source=harness.source,
+                source=source,
                 snapshot=_status(harness, (missing,)),
                 members=(missing,),
             )
         )
+
+
+def test_working_point_heads_and_setup_supersede_only_affected_publications(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from scopecat.daemon.wire import ConfigPublishCommand
+    from scopecat.daemon.wire import DirectConfigRevisionSource as DirectSource
+    from scopecat.kernel.quantity import Quantity
+    from scopecat.records.parameter import ScalarParameterValue
+
+    config = load_config()
+    with LocalDaemonRuntime(tmp_path, bootstrap_config=config) as runtime:
+        app = runtime.application
+        active = app.config.get_active_config()
+        app.samples.create(
+            SampleCreateCommand(
+                operation_id="sample",
+                sample_id="calibration-sample",
+                kind="chip",
+                actor="test",
+                content=SampleRevisionDraft(display_name="Calibration"),
+            )
+        )
+        selector = SampleSelector(
+            sample_id="calibration-sample", revision=1, context_id="parked"
+        )
+        sample = app.samples.resolve_bindings((selector,))[0]
+        sources: dict[str, CalibrationConfigSourceRef] = {}
+        for owner in ("A", "B"):
+            saved = app.config.save_context(
+                ConfigContextSaveCommand(
+                    entry_id=owner,
+                    base=ConfigContextRef(
+                        entry_id=active.entry.id, content_hash=active.entry.content_hash
+                    ),
+                    sample=selector,
+                    working_point_id="parked",
+                    label=owner,
+                    actor="test",
+                )
+            )
+            source = CalibrationConfigSourceRef(
+                entry_id=saved.entry.id,
+                config_ref=saved.entry.config_ref,
+                content_hash=saved.entry.content_hash,
+                scope=WorkingPointCalibrationScope(workspace_id=owner, sample=sample),
+            )
+            sources[owner] = source
+            member = _member(
+                "q0", workspace_id=owner, success_policy="published_result"
+            )
+            status = app.calibration_cohorts.status(
+                CalibrationStatusQuery(
+                    calibration_keys=(member.calibration_key,),
+                    fanout_scope="calibration-workers",
+                )
+            )
+            created = app.calibration_cohorts.create(
+                _command(
+                    owner,
+                    source=source,
+                    snapshot=status,
+                    members=(member,),
+                    automatic_publication=_publication_policy(member.definition),
+                )
+            )
+            parent = created.members[0].procedure_run_id
+            acquired = app.automation.acquire_lease(
+                ProcedureWorkerLeaseAcquireCommand(
+                    procedure_run_id=parent, worker_id="test", expected_run_revision=1
+                )
+            )
+            app.automation.close(
+                ProcedureCloseCommand(
+                    procedure_run_id=parent,
+                    lease_token=acquired.lease.lease_token,
+                    expected_run_revision=acquired.run.revision,
+                    status="succeeded",
+                )
+            )
+        store = app.calibration_cohorts._store
+        assert (
+            store.read_finalization("A").state
+            == store.read_finalization("B").state
+            == "ready"
+        )
+        parameters = config.parameter_snapshot.model_copy(
+            update={
+                "values": (
+                    ScalarParameterValue(
+                        id="drive_frequency", value=Quantity(5.1, "GHz")
+                    ),
+                )
+            }
+        )
+        app.config.publish_config(
+            ConfigPublishCommand(
+                operation_id="default-parameters",
+                source=DirectSource(
+                    config=config.model_copy(update={"parameter_snapshot": parameters})
+                ),
+                entry_id="default-parameters",
+                actor="test",
+                expected_generation=1,
+            )
+        )
+        assert (
+            store.read_finalization("A").state
+            == store.read_finalization("B").state
+            == "ready"
+        )
+        advance = ConfigContextSaveCommand(
+            entry_id="A-next",
+            base=sources["A"].context_ref,
+            sample=selector,
+            working_point_id="parked",
+            label="A",
+            parameters=parameters,
+            advance=True,
+            actor="test",
+        )
+
+        def fail_supersession(*args: object, **kwargs: object) -> int:
+            raise CalibrationCohortConflict("injected supersession failure")
+
+        with monkeypatch.context() as patch:
+            patch.setattr(
+                store, "supersede_working_point_in_transaction", fail_supersession
+            )
+            with pytest.raises(BackendConflict, match="injected supersession"):
+                app.config.save_context(advance)
+        assert app.config.latest_context(sources["A"].context_ref).entry.id == "A"
+        app.config.save_context(advance)
+        a = store.read_finalization("A")
+        assert a.state == "superseded"
+        assert (
+            a.supersession is not None
+            and a.supersession.evidence.kind == "working_point_changed"
+        )
+        assert a.supersession.evidence.superseded_by.entry_id == "A-next"
+        assert store.read_finalization("B").state == "ready"
+        changed = config.model_copy(
+            update={
+                "system": config.system.model_copy(
+                    update={"primary_entity_id": "drive-q0"}
+                )
+            }
+        )
+        app.config.publish_config(
+            ConfigPublishCommand(
+                operation_id="setup-change",
+                source=DirectSource(config=changed),
+                entry_id="setup-change",
+                actor="test",
+                expected_generation=2,
+            )
+        )
+        b = store.read_finalization("B")
+        assert b.state == "superseded"
+        assert (
+            b.supersession is not None
+            and b.supersession.evidence.kind == "setup_changed"
+        )
+        assert store.read_finalization("A") == a

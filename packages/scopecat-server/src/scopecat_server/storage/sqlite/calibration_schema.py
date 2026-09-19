@@ -68,9 +68,6 @@ CREATE TABLE IF NOT EXISTS calibration_success_publications (
         REFERENCES config_registry_entries(entry_id) ON DELETE RESTRICT,
     result_config_ref TEXT NOT NULL,
     result_content_hash TEXT NOT NULL,
-    result_registry_generation INTEGER NOT NULL CHECK (
-        result_registry_generation >= 1
-    ) REFERENCES config_registry_activations(generation) ON DELETE RESTRICT,
     published_at TEXT NOT NULL,
     publication_json TEXT NOT NULL,
     UNIQUE (cohort_id, member_id),
@@ -97,7 +94,9 @@ CREATE TABLE IF NOT EXISTS calibration_cohort_finalizations (
     composition_policy_id TEXT NOT NULL,
     composition_policy_version TEXT NOT NULL,
     composition_policy_fingerprint TEXT NOT NULL,
-    base_generation INTEGER NOT NULL CHECK (base_generation >= 1),
+    base_entry_id TEXT NOT NULL,
+    owner_workspace_id TEXT NOT NULL,
+    setup_content_hash TEXT NOT NULL,
     revision INTEGER NOT NULL CHECK (revision >= 1),
     state TEXT NOT NULL CHECK (
         state IN (
@@ -118,9 +117,7 @@ CREATE TABLE IF NOT EXISTS calibration_cohort_finalizations (
     attention_reason TEXT,
     attention_required_at TEXT,
     failed_at TEXT,
-    superseded_by_generation INTEGER CHECK (
-        superseded_by_generation IS NULL OR superseded_by_generation >= 1
-    ),
+    supersession_json TEXT,
     superseded_at TEXT,
     publication_operation_id TEXT
         REFERENCES config_operations(operation_id) ON DELETE RESTRICT,
@@ -134,7 +131,7 @@ CREATE TABLE IF NOT EXISTS calibration_cohort_finalizations (
             AND attention_reason IS NULL
             AND attention_required_at IS NULL
             AND failed_at IS NULL
-            AND superseded_by_generation IS NULL
+            AND supersession_json IS NULL
             AND superseded_at IS NULL
             AND publication_operation_id IS NULL
             AND published_at IS NULL
@@ -147,7 +144,7 @@ CREATE TABLE IF NOT EXISTS calibration_cohort_finalizations (
             AND attention_reason IS NULL
             AND attention_required_at IS NULL
             AND failed_at IS NULL
-            AND superseded_by_generation IS NULL
+            AND supersession_json IS NULL
             AND superseded_at IS NULL
             AND publication_operation_id IS NULL
             AND published_at IS NULL
@@ -160,7 +157,7 @@ CREATE TABLE IF NOT EXISTS calibration_cohort_finalizations (
             AND attention_reason IS NOT NULL
             AND attention_required_at IS NOT NULL
             AND failed_at IS NULL
-            AND superseded_by_generation IS NULL
+            AND supersession_json IS NULL
             AND superseded_at IS NULL
             AND publication_operation_id IS NULL
             AND published_at IS NULL
@@ -173,7 +170,7 @@ CREATE TABLE IF NOT EXISTS calibration_cohort_finalizations (
             AND attention_reason IS NULL
             AND attention_required_at IS NULL
             AND failed_at IS NOT NULL
-            AND superseded_by_generation IS NULL
+            AND supersession_json IS NULL
             AND superseded_at IS NULL
             AND publication_operation_id IS NULL
             AND published_at IS NULL
@@ -185,8 +182,7 @@ CREATE TABLE IF NOT EXISTS calibration_cohort_finalizations (
             AND attention_reason IS NULL
             AND attention_required_at IS NULL
             AND failed_at IS NULL
-            AND superseded_by_generation IS NOT NULL
-            AND superseded_by_generation > base_generation
+            AND supersession_json IS NOT NULL
             AND superseded_at IS NOT NULL
             AND publication_operation_id IS NULL
             AND published_at IS NULL
@@ -199,7 +195,7 @@ CREATE TABLE IF NOT EXISTS calibration_cohort_finalizations (
             AND attention_reason IS NULL
             AND attention_required_at IS NULL
             AND failed_at IS NULL
-            AND superseded_by_generation IS NULL
+            AND supersession_json IS NULL
             AND superseded_at IS NULL
             AND publication_operation_id IS NOT NULL
             AND published_at IS NOT NULL
@@ -208,7 +204,10 @@ CREATE TABLE IF NOT EXISTS calibration_cohort_finalizations (
 );
 
 CREATE INDEX IF NOT EXISTS calibration_cohort_finalizations_state
-ON calibration_cohort_finalizations(state, base_generation);
+ON calibration_cohort_finalizations(owner_workspace_id, state, base_entry_id);
+
+CREATE INDEX IF NOT EXISTS calibration_finalizations_setup
+ON calibration_cohort_finalizations(state, setup_content_hash);
 
 CREATE INDEX IF NOT EXISTS calibration_cohort_finalizations_ready_capability
 ON calibration_cohort_finalizations(

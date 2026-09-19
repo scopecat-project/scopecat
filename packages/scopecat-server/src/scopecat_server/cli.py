@@ -366,6 +366,16 @@ def automation_work(
         Path,
         typer.Argument(help="Project directory or scopecat.toml."),
     ] = _CURRENT_DIRECTORY,
+    working_point: Annotated[
+        str | None,
+        typer.Option(
+            "--working-point",
+            help=(
+                "Saved parameter entry whose workspace head calibration follows. "
+                "Without it, calibration only checks nonpublishing catalog work."
+            ),
+        ),
+    ] = None,
     once: Annotated[
         bool,
         typer.Option("--once", help="Run one bounded automation cycle and exit."),
@@ -397,7 +407,9 @@ def automation_work(
             worker = ProjectAutomationWorker(
                 lab.procedures,
                 planner=lab.procedures.interval_planner(),
-                calibration_evaluator=lab.calibrations.evaluator(),
+                calibration_evaluator=lab.calibrations.evaluator(
+                    working_point=working_point
+                ),
                 calibration_finalizer=lab.calibrations.publication_finalizer(),
             )
             if once:

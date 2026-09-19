@@ -29,6 +29,7 @@ const detail: ConfigRegistryEntryDetail = {
     source: {
       kind: "parameter_context",
       context: {
+        workspace_id: "workspace-q0",
         value_origins: [],
         sample: {
           sample_id: "sample-a",

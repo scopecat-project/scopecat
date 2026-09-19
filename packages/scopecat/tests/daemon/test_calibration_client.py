@@ -47,6 +47,21 @@ from scopecat.automation import (
 )
 from scopecat.config.registry import ConfigCompositionPolicyRef
 from scopecat.daemon.client import DaemonClient
+from scopecat.records.calibration_scope import WorkingPointCalibrationScope
+from scopecat.records.sample import SampleBinding
+
+_SCOPE = WorkingPointCalibrationScope(
+    workspace_id="test-working-point",
+    sample=SampleBinding(
+        role="subject",
+        sample_id="chip",
+        revision=1,
+        content_hash="sha256:" + "a" * 64,
+        kind="synthetic",
+        display_name="Chip",
+        context_id="parked",
+    ),
+)
 
 _HASH_1 = "sha256:" + "1" * 64
 _HASH_2 = "sha256:" + "2" * 64
@@ -318,7 +333,9 @@ def _fixture(
             "published_result" if automatic_publication else "procedure_success"
         ),
     )
-    target = CalibrationTargetRef(kind="qubit", id="q0")
+    target = CalibrationTargetRef(
+        kind="qubit", id="q0", owner=_SCOPE.owner, sample_id="chip", context_id="parked"
+    )
     procedure = ProcedureDefinitionRef(
         id="drag-procedure",
         version="1",
@@ -362,11 +379,10 @@ def _fixture(
         definition=definition,
         automatic_publication=publication_policy,
         config_source=CalibrationConfigSourceRef(
-            selector="active",
             entry_id="config-1",
             config_ref="configs/config-1",
             content_hash=_HASH_3,
-            registry_generation=3,
+            scope=_SCOPE,
         ),
         fanout_scope="chip-alpha",
         max_in_flight=2,

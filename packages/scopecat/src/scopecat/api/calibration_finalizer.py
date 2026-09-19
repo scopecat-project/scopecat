@@ -250,11 +250,7 @@ class CalibrationPublicationPlanningContext:
                 finalization.cohort_id != source.cohort_id
                 or finalization.spec_hash != source.spec_hash
                 or finalization.policy != source.automatic_publication
-                or finalization.base_config_source.entry_id != source.base_entry_id
-                or finalization.base_config_source.content_hash
-                != source.base_content_hash
-                or finalization.base_config_source.registry_generation
-                != source.base_generation
+                or finalization.base_config_source != source.base
             ):
                 raise ValueError(
                     "automatic publication finalization does not match merge source"
@@ -896,9 +892,7 @@ def _validate_policy_plan(
         or source.spec_hash != cohort.spec_hash
         or source.automatic_publication != policy.ref
         or source.composition_policy_ref != policy.composition_policy
-        or source.base_entry_id != base.entry_id
-        or source.base_content_hash != base.content_hash
-        or source.base_generation != base.registry_generation
+        or source.base != base
         or contributions.keys() != members.keys()
         or any(
             contributions[member_id].proof.evidence_step.procedure_run_id

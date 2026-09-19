@@ -40,12 +40,14 @@ from scopecat.automation.calibrations import (
     calibration_cohort_spec_hash,
     calibration_freshness_fingerprint,
     calibration_key,
+    scoped_calibration_target,
 )
 from scopecat.daemon.client import (
     DaemonClientError,
     DaemonConflictError,
     DaemonNotFoundError,
 )
+from scopecat.records.calibration_scope import WorkingPointCalibrationScope
 from scopecat.records.config import ConfigProfileSnapshot
 
 _TRANSIENT_CLIENT_STATUSES = frozenset({408, 425, 429})
@@ -54,10 +56,16 @@ _LOG = logging.getLogger(__name__)
 
 @dataclass(frozen=True, slots=True)
 class CalibrationPlanningContext:
-    """One exact active configuration snapshot shared by a planning cycle."""
+    """One exact saved configuration and ownership scope per planning cycle."""
 
     config: ConfigProfileSnapshot
     config_source: CalibrationConfigSourceRef
+
+    def target(self, target: CalibrationTargetRef) -> CalibrationTargetRef:
+        return scoped_calibration_target(target, self.config_source)
+
+    def key(self, definition_id: str, target: CalibrationTargetRef) -> str:
+        return calibration_key(definition_id, self.target(target))
 
 
 class CalibrationPlanningOperations(Protocol):
@@ -164,6 +172,10 @@ class ProjectCalibrationEvaluator:
             if _stopped(stop):
                 totals.has_more = True
                 break
+            if definition.ref.success_policy == "published_result" and not isinstance(
+                context.config_source.scope, WorkingPointCalibrationScope
+            ):
+                continue
             totals.definitions += 1
             publication_policy = self._publication_policies.for_calibration(
                 definition.ref
@@ -186,7 +198,18 @@ class ProjectCalibrationEvaluator:
                     totals.has_more = True
                     break
                 try:
+                    target = context.target(target)
                     observation = definition.observe(context, target)
+                    observation = observation.model_copy(
+                        update={
+                            "dependencies": tuple(
+                                dependency.model_copy(
+                                    update={"target": context.target(dependency.target)}
+                                )
+                                for dependency in observation.dependencies
+                            ),
+                        }
+                    )
                 except Exception as error:
                     if _is_transient_control_error(error):
                         raise

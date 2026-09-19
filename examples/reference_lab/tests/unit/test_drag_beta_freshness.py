@@ -13,7 +13,9 @@ from scopecat.automation import (
 )
 from scopecat.config.drafts import ConfigDraft
 from scopecat.config.parameter_updates import ParameterUpdate
+from scopecat.records.calibration_scope import WorkingPointCalibrationScope
 from scopecat.records.config import ConfigProfileSnapshot, config_content_hash
+from scopecat.records.sample import SampleBinding
 
 from reference_lab.configuration import bootstrap_config
 from reference_lab.parameters import LoGroupParameters, QubitParameters
@@ -28,48 +30,49 @@ from reference_lab.workflows.drag_beta_verification import (
 )
 
 
-def test_drag_beta_freshness_ignores_registry_only_provenance_changes() -> None:
+def test_drag_beta_freshness_ignores_workspace_head_provenance_changes() -> None:
     config = bootstrap_config()
     first = _planning_context(
         config,
-        entry_id="active-entry-1",
-        generation=1,
+        entry_id="working-point-entry-1",
+        revision=1,
     )
-    reactivated = _planning_context(
+    advanced = _planning_context(
         config,
-        entry_id="active-entry-2",
-        generation=2,
+        entry_id="working-point-entry-2",
+        revision=2,
     )
-    target = DRAG_BETA_CALIBRATION_TARGETS[0]
+    target = first.target(DRAG_BETA_CALIBRATION_TARGETS[0])
 
     first_observation = drag_beta_freshness_calibration.observe(first, target)
-    reactivated_observation = drag_beta_freshness_calibration.observe(
-        reactivated,
+    advanced_observation = drag_beta_freshness_calibration.observe(
+        advanced,
         target,
     )
 
-    assert DRAG_BETA_CALIBRATION_VERSION == "9"
+    assert DRAG_BETA_CALIBRATION_VERSION == "10"
     assert first_observation.inputs == drag_beta_semantic_freshness_inputs(
         config,
         "q0",
     )
-    assert reactivated_observation.inputs == first_observation.inputs
+    assert advanced_observation.inputs == first_observation.inputs
     assert drag_beta_freshness_calibration.input_fingerprint(
-        reactivated_observation.inputs
+        advanced_observation.inputs
     ) == drag_beta_freshness_calibration.input_fingerprint(first_observation.inputs)
 
     intent = drag_beta_freshness_calibration.build_intent(
-        reactivated,
+        advanced,
         target,
-        reactivated_observation.inputs,
+        advanced_observation.inputs,
         (),
     )
 
     assert intent.qubit == "q0"
     assert intent.initial_config == config
-    assert intent.initial_config_source.entry_id == "active-entry-2"
-    assert intent.initial_config_source.config_ref == "active@2"
-    assert intent.initial_config_source.registry_generation == 2
+    assert intent.initial_config_source.context.entry_id == "working-point-entry-2"
+    assert intent.initial_config_source.context == advanced.config_source.context_ref
+    assert isinstance(advanced.config_source.scope, WorkingPointCalibrationScope)
+    assert intent.initial_config_source.sample == advanced.config_source.scope.sample
 
 
 def test_drag_beta_freshness_ignores_profile_and_parameter_snapshot_ids() -> None:
@@ -233,8 +236,8 @@ def test_drag_beta_candidate_projection_matches_merged_sibling_results() -> None
 def test_drag_beta_freshness_has_two_bounded_independent_targets() -> None:
     context = _planning_context(
         bootstrap_config(),
-        entry_id="active-entry",
-        generation=1,
+        entry_id="working-point-entry",
+        revision=1,
     )
 
     assert drag_beta_freshness_calibration.select_targets(context) == (
@@ -283,15 +286,26 @@ def _planning_context(
     config: ConfigProfileSnapshot,
     *,
     entry_id: str,
-    generation: int,
+    revision: int,
 ) -> CalibrationPlanningContext:
     content_hash = config_content_hash(config)
     return CalibrationPlanningContext(
         config=config,
         config_source=CalibrationConfigSourceRef(
             entry_id=entry_id,
-            config_ref=f"active@{generation}",
+            config_ref=f"working-point@{revision}",
             content_hash=content_hash,
-            registry_generation=generation,
+            scope=WorkingPointCalibrationScope(
+                workspace_id="reference-workspace",
+                sample=SampleBinding(
+                    role="sample",
+                    sample_id="reference-chip",
+                    revision=1,
+                    content_hash="sha256:" + "a" * 64,
+                    kind="synthetic",
+                    display_name="Reference chip",
+                    context_id="parked",
+                ),
+            ),
         ),
     )
