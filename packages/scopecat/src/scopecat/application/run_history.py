@@ -12,6 +12,7 @@ class RunHistory:
     """A captured page; numbers select runs in this project, not list positions."""
 
     page: RunSummaryPage
+    collection: str | None = None
 
     @property
     def next_cursor(self) -> int | None:
@@ -20,7 +21,11 @@ class RunHistory:
     def _rows(self) -> list[tuple[str, str, str, str]]:
         return [
             (
-                str(item.control.sequence),
+                str(
+                    item.address.number
+                    if self.collection is not None and item.address is not None
+                    else item.control.sequence
+                ),
                 item.snapshot.created_at.astimezone().isoformat(timespec="seconds"),
                 item.control.admission.display_name or item.run_id,
                 item.control.state,
@@ -28,12 +33,20 @@ class RunHistory:
             for item in self.page.items
         ]
 
+    @property
+    def _hint(self) -> str:
+        return (
+            f"Select with session.run(number, collection={self.collection!r})."
+            if self.collection is not None
+            else "Select with session.run(number). Numbers belong to this project."
+        )
+
     @override
     def __repr__(self) -> str:
         return "\n".join(
             ["Run # | Local time | Experiment | State"]
             + [" | ".join(row) for row in self._rows()]
-            + ["Select with session.run(number). Numbers belong to this project."]
+            + [self._hint]
         )
 
     def _repr_html_(self) -> str:
@@ -47,5 +60,5 @@ class RunHistory:
         )
         return (
             f"<table><thead><tr>{headings}</tr></thead><tbody>{rows}</tbody></table>"
-            "<p>Select with session.run(number). Numbers belong to this project.</p>"
+            f"<p>{escape(self._hint)}</p>"
         )

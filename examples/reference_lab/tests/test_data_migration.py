@@ -76,18 +76,28 @@ def test_upgrade_retains_scientific_results_and_separate_new_analysis(
             )
             original = author.analyze_as(run.id, analysis, PeakResult)
             records = run.measurements().records
-            snapshot = author.get_run(run.id).snapshot
+            detail = author.get_run(run.id)
+            snapshot = detail.snapshot
+            old_number = detail.control.sequence
+            old_address = detail.address
+            assert old_address is not None
             revision = author.state().active
     finally:
         stop_project(project)
     _seed_retained_schema(project.runtime_binding.data_root / "control.sqlite3")
     receipt = migrate_copy(project, tmp_path / "upgrade")
-    assert receipt.plan.steps == ("68->69", "69->70")
+    assert receipt.plan.steps == ("68->69", "69->70", "70->71")
     upgraded = load_project(tmp_path / "upgrade/project/scopecat.toml")
     start_project(upgraded)
     try:
         with upgraded.authoring() as author:
             assert author.get_run(run.id).snapshot == snapshot
+            assert author.get_run(run.id).address == old_address
+            assert author.run(old_number).id == run.id
+            assert (
+                author.run(old_number, collection=old_address.collection_id).id
+                == run.id
+            )
             assert author.get_run(run.id).deployment_id is None
             assert author.run(run.id).measurements().records == records
             assert author.state().active == revision
@@ -119,6 +129,7 @@ def test_upgrade_retains_scientific_results_and_separate_new_analysis(
     start_project(restored_current)
     try:
         with restored_current.authoring() as author:
+            assert author.get_run(run.id).address == old_address
             assert author.run(run.id).measurements().records == records
             assert (
                 author.run(run.id)

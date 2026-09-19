@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
 from threading import Event, Lock, Thread
 from time import monotonic
@@ -143,6 +143,7 @@ class _DaemonRunner:
         executor_id: str = "notebook",
         submission_id: str | None = None,
         samples: tuple[SampleSelector, ...] = (),
+        record_collection: str | None = None,
     ) -> RunSnapshot:
         planned = self._plan(
             experiment,
@@ -154,6 +155,7 @@ class _DaemonRunner:
             metadata=metadata,
             operator=operator,
             samples=samples,
+            record_collection=record_collection,
         )
         return self.execute(
             planned,
@@ -189,6 +191,7 @@ class _DaemonRunner:
             metadata=cast("Mapping[str, MetadataValue]", request.metadata),
             operator=request.operator,
             samples=request.samples,
+            record_collection=request.record_collection,
         )
         _validate_resumed_plan(planned, detail=detail, request=request)
         preview = self.client.measurement_preview(run_id, limit=1)
@@ -316,6 +319,7 @@ class _DaemonRunner:
         operator: str | None,
         samples: tuple[SampleSelector, ...] = (),
         plan_ref: ExperimentPlanRef | None = None,
+        record_collection: str | None = None,
     ) -> PlannedRun:
         if isinstance(config_source, ContextRunConfigSource):
             binding = config_source.sample
@@ -359,7 +363,7 @@ class _DaemonRunner:
             selected_config,
             instrument_catalog,
         )
-        return plan_experiment_invocation(
+        planned = plan_experiment_invocation(
             experiment,
             config=selected_config,
             system=selected_system,
@@ -371,6 +375,12 @@ class _DaemonRunner:
             operator=operator,
             samples=samples,
             plan_ref=plan_ref,
+        )
+        return replace(
+            planned,
+            request=planned.request.model_copy(
+                update={"record_collection": record_collection}
+            ),
         )
 
 

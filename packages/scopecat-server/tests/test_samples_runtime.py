@@ -409,3 +409,102 @@ def test_research_history_associations_and_bench_survive_restart(
             "Renamed",
             "Beta",
         }
+
+
+def test_collection_addresses_are_atomic_scoped_and_retained(tmp_path: Path) -> None:
+    from concurrent.futures import ThreadPoolExecutor
+
+    from scopecat.daemon.client import DaemonNotFoundError
+    from scopecat.records.record_collection import RecordCollectionEdit
+    from scopecat.records.research_project import RunHistoryFilter
+
+    def submission(key: str, collection: str | None) -> RunSubmission:
+        base = _submission("unused")
+        return base.model_copy(
+            update={
+                "submission_id": key,
+                "request": base.request.model_copy(
+                    update={"samples": (), "record_collection": collection}
+                ),
+            }
+        )
+
+    with (
+        LocalDaemonRuntime(tmp_path, bootstrap_config=_config()) as runtime,
+        TestClient(runtime.app()) as transport,
+        _daemon_client(transport) as client,
+    ):
+        default = client.record_collections().items[0]
+        assert default.is_default
+        alpha = client.create_record_collection("Chip A / cooldown September")
+        beta = client.save_record_collection("beta", RecordCollectionEdit(name="Beta"))
+        first = client.submit_run(submission("first", alpha.id))
+        assert client.submit_run(submission("first", alpha.id)) == first
+        address = client.resolve_run_number(alpha.id, 1)
+        assert address.run_id == first.run_id
+        assert client.get_run(first.run_id).address == address
+        with pytest.raises(DaemonConflictError):
+            client.submit_run(submission("first", beta.id))
+        with pytest.raises(DaemonNotFoundError):
+            client.submit_run(submission("missing", "unknown"))
+        # A failed transaction must not consume this submission or a number.
+        recovered = client.submit_run(submission("missing", beta.id))
+        assert client.resolve_run_number(beta.id, 1).run_id == recovered.run_id
+        legacy = client.submit_run(submission("legacy", None))
+        legacy_detail = client.get_run(legacy.run_id)
+        assert legacy_detail.address is not None
+        assert legacy_detail.address.collection_id == default.id
+        assert legacy_detail.address.number == legacy_detail.control.sequence
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            admissions = tuple(
+                pool.map(
+                    runtime.application.submit_run,
+                    (submission(f"parallel-{i}", alpha.id) for i in range(4)),
+                )
+            )
+        numbers = {
+            client.resolve_run_number(alpha.id, number).run_id for number in range(2, 6)
+        }
+        assert numbers == {item.run_id for item in admissions}
+        renamed = client.save_record_collection(
+            alpha.id, RecordCollectionEdit(name="Renamed", expected_revision=1)
+        )
+        assert renamed.revision == 2 and renamed.id == alpha.id
+        with pytest.raises(DaemonConflictError):
+            client.save_record_collection(alpha.id, RecordCollectionEdit(name="Stale"))
+        assert client.resolve_run_number(alpha.id, 1) == address
+        page = client.list_runs(
+            limit=2, history=RunHistoryFilter(record_collection=alpha.id)
+        )
+        assert len(page.items) == 2 and page.next_cursor is not None
+        rest = client.list_runs(
+            before=page.next_cursor,
+            history=RunHistoryFilter(record_collection=alpha.id),
+        )
+        assert {item.run_id for item in (*page.items, *rest.items)} == numbers | {
+            first.run_id
+        }
+        assert all(item.address is not None for item in page.items)
+        collections = client.record_collections(limit=1)
+        assert collections.next_cursor is not None
+        assert len(client.record_collections(before=collections.next_cursor).items) == 2
+        assert (
+            transport.put(
+                "/api/v1/record-collections/invalid space", json={"name": "Bad"}
+            ).status_code
+            == 422
+        )
+        assert (
+            transport.get(f"/api/v1/record-collections/{alpha.id}/runs/0").status_code
+            == 422
+        )
+    with (
+        LocalDaemonRuntime(tmp_path) as runtime,
+        TestClient(runtime.app()) as transport,
+        _daemon_client(transport) as client,
+    ):
+        assert client.record_collection(alpha.id).name == "Renamed"
+        assert client.resolve_run_number(alpha.id, 1) == address
+        next_run = client.submit_run(submission("after-restart", alpha.id))
+        assert client.resolve_run_number(alpha.id, 6).run_id == next_run.run_id
+        assert client.submit_run(submission("first", alpha.id)) == first

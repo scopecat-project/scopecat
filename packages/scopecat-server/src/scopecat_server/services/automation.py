@@ -621,7 +621,11 @@ class AutomationService:
             except ValueError as error:
                 raise AutomationConflict(str(error)) from error
             plan = self._plans.get_in_transaction(connection, plan_ref)
-            expected_request = plan_launch_request(plan, actor=plan_request.actor)
+            expected_request = plan_launch_request(
+                plan,
+                actor=plan_request.actor,
+                record_collection=plan_request.record_collection,
+            )
             if (
                 plan_request.request_hash != expected_request.request_hash
                 or plan_request.code_revision != expected_request.code_revision
@@ -632,6 +636,8 @@ class AutomationService:
             actor = selected_intent.get("actor")
             if (
                 actor != plan_request.actor
+                or selected_intent.get("record_collection")
+                != plan_request.record_collection
                 or selected_intent.get("request_hash") != plan_request.request_hash
             ):
                 raise AutomationConflict(

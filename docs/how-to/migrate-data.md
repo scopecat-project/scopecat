@@ -1,12 +1,14 @@
 # Upgrade a verified copy of retained data
 
-The runtime uses one current storage schema: **70**. The release/package version,
+The runtime uses one current storage schema: **71**. The release/package version,
 storage schema number, snapshot format (**1**) and migration receipt format (**1**)
 are separate identities. Downgrading a package does not downgrade scientific data.
 
-The tested development upgrade edges are **68 → 69 → 70**. Schema 68 adds a
+The tested development upgrade edges are **68 → 69 → 70 → 71**. Schema 68 adds a
 workspace-head index in 69; schema 69 adds research associations and run deployment
-records in 70. Neither edge rewrites old scientific records. Missing historical
+records in 70; schema 70 adds record collections and stable run addresses in 71.
+The new default collection preserves each existing scheduler number and run ID.
+None of these edges rewrites old scientific records. Missing historical
 bench identities remain unknown, and no calibration, unit or project association
 is invented. All other old/new schema versions are refused without migration.
 These bounded development edges do **not** designate a released long-term data

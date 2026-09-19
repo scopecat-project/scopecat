@@ -266,6 +266,13 @@ from scopecat.records.launch_request import LaunchRequest
 from scopecat.records.manual_preview import ManualPreviewFence, ManualPreviewValidity
 from scopecat.records.measurement_recording import MeasurementDatasetReceipt
 from scopecat.records.plan_ref import ExperimentPlanRef
+from scopecat.records.record_collection import (
+    RecordCollection,
+    RecordCollectionEdit,
+    RecordCollectionId,
+    RecordCollectionPage,
+    RunAddress,
+)
 from scopecat.records.research_project import (
     ResearchMember,
     ResearchMemberPage,
@@ -881,6 +888,29 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
         command: ConfigEntryActivationCommand,
     ) -> ConfigActivationReceipt:
         return application.config.activate_config_entry(command)
+
+    @app.get(f"{_API_PREFIX}/record-collections")
+    def list_record_collections(
+        limit: Annotated[int, Query(ge=1, le=500)] = 100,
+        before: Annotated[int | None, Query(ge=1)] = None,
+    ) -> RecordCollectionPage:
+        return application.record_collections.list(limit=limit, before=before)
+
+    @app.get(f"{_API_PREFIX}/record-collections/{{collection_id}}")
+    def get_record_collection(collection_id: RecordCollectionId) -> RecordCollection:
+        return application.record_collections.get(collection_id)
+
+    @app.put(f"{_API_PREFIX}/record-collections/{{collection_id}}")
+    def save_record_collection(
+        collection_id: RecordCollectionId, command: RecordCollectionEdit
+    ) -> RecordCollection:
+        return application.record_collections.save(collection_id, command)
+
+    @app.get(f"{_API_PREFIX}/record-collections/{{collection_id}}/runs/{{number}}")
+    def resolve_run_number(
+        collection_id: RecordCollectionId, number: Annotated[int, ApiPath(ge=1)]
+    ) -> RunAddress:
+        return application.record_collections.resolve(collection_id, number)
 
     @app.get(f"{_API_PREFIX}/research-projects")
     def list_research_projects(
@@ -1711,6 +1741,7 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
         before: Annotated[int | None, Query(ge=1)] = None,
         state: ControlRunState | None = None,
         sample_id: SampleId | None = None,
+        record_collection: str | None = None,
         research_project: str | None = None,
         working_point: str | None = None,
         deployment_id: str | None = None,
@@ -1723,6 +1754,7 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
             state=state,
             sample_id=sample_id,
             history=RunHistoryFilter(
+                record_collection=record_collection,
                 research_project=research_project,
                 working_point=working_point,
                 deployment_id=deployment_id,

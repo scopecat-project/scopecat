@@ -14,6 +14,7 @@ from scopecat.records.control_edit import ControlEdit
 from scopecat.records.manual_preview import ManualPreviewFence
 from scopecat.records.parameter_update import ParameterUpdate
 from scopecat.records.plan_ref import ExperimentPlanRef, PlanConfigRef
+from scopecat.records.record_collection import RecordCollectionId
 from scopecat.records.request_sweep import ParameterSweep
 from scopecat.records.run import (
     AnalysisCandidateRunConfigSource,
@@ -28,8 +29,15 @@ type LaunchConfigSource = (
 )
 
 
+def _absent_collection(value: object) -> bool:
+    return value is None
+
+
 class LaunchRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
+    record_collection: RecordCollectionId | None = Field(
+        default=None, exclude_if=_absent_collection
+    )
     code_revision: AuthorRevisionRef | None = None
     action: Literal["list", "preview", "submit"]
     experiment: str = ""
@@ -110,6 +118,11 @@ class LaunchRequest(BaseModel):
                 ),
                 "sample": self.sample,
                 "actor": self.actor,
+                **(
+                    {"record_collection": self.record_collection}
+                    if self.record_collection is not None
+                    else {}
+                ),
                 **(
                     {
                         "candidate": self.config_source.model_dump(

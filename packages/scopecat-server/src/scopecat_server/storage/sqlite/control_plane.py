@@ -229,6 +229,12 @@ class SQLiteControlPlane:
             )
             parameters.append(sample_id)
         if history is not None:
+            if history.record_collection is not None:
+                clauses.append(
+                    "EXISTS (SELECT 1 FROM run_addresses ra "
+                    "WHERE ra.run_id=scheduler_runs.run_id AND ra.collection_id=?)"
+                )
+                parameters.append(history.record_collection)
             if history.research_project is not None:
                 clauses.append(
                     "EXISTS (SELECT 1 FROM research_runs rr "

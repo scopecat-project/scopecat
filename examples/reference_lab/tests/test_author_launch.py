@@ -138,6 +138,11 @@ def test_copied_author_uses_shared_control_plan_and_real_retained_run(
         catalog = http.get("/api/v1/experiment-launcher")
         catalog.raise_for_status()
         assert selected.entry in LaunchCatalog.model_validate(catalog.json()).entries
+        collection_response = http.put(
+            "/api/v1/record-collections/author-cooldown",
+            json={"name": "Author cooldown"},
+        )
+        collection_response.raise_for_status()
         before = lab.config.active()
         chip = lab.samples.create(
             "author-chip",
@@ -163,6 +168,7 @@ def test_copied_author_uses_shared_control_plan_and_real_retained_run(
                 inputs={"polarity": "negative"},
                 actor="ordinary-author",
                 sample=chip.id,
+                record_collection="author-cooldown",
             )
             response = http.post(
                 "/api/v1/experiment-launcher/preview",
@@ -203,6 +209,15 @@ def test_copied_author_uses_shared_control_plan_and_real_retained_run(
             assert run.request.metadata["author_declaration"] == dict(selected.source)
             assert run.request.metadata["author_fingerprint"] == selected.fingerprint
             assert "def copied_signal" in selected.source["source"]
+            assert run.request.record_collection == "author-cooldown"
+            with AuthorProject(fixture.url) as author:
+                address = author.get_run(run.id).address
+                assert address is not None
+                assert address.number == (1 if mode == "fixed" else 2)
+                assert (
+                    author.run(address.number, collection="author-cooldown").id
+                    == run.id
+                )
             assert run.request.operator == "ordinary-author"
             assert run.samples[0].sample_id == chip.id
             assert run.samples[0].role == "subject"

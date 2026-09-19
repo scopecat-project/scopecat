@@ -261,6 +261,12 @@ from scopecat.records.measurement_recording import (
     MeasurementDatasetReceipt,
 )
 from scopecat.records.plan_ref import ExperimentPlanRef
+from scopecat.records.record_collection import (
+    RecordCollection,
+    RecordCollectionEdit,
+    RecordCollectionPage,
+    RunAddress,
+)
 from scopecat.records.research_project import (
     ResearchMemberPage,
     ResearchProject,
@@ -1503,6 +1509,48 @@ class DaemonClient:
             ),
         )
         return InstrumentSessionEndReceipt.model_validate_json(response.content)
+
+    def record_collections(
+        self, *, limit: int = 100, before: int | None = None
+    ) -> RecordCollectionPage:
+        params: dict[str, str | int] = {"limit": limit}
+        if before is not None:
+            params["before"] = before
+        return self._get_model(
+            f"{_API_PREFIX}/record-collections", RecordCollectionPage, params=params
+        )
+
+    def record_collection(self, collection_id: str) -> RecordCollection:
+        return self._get_model(
+            f"{_API_PREFIX}/record-collections/{quote(collection_id, safe='')}",
+            RecordCollection,
+        )
+
+    def save_record_collection(
+        self, collection_id: str, command: RecordCollectionEdit
+    ) -> RecordCollection:
+        response = self._request(
+            "PUT",
+            f"{_API_PREFIX}/record-collections/{quote(collection_id, safe='')}",
+            json=command.model_dump(mode="json"),
+        )
+        return RecordCollection.model_validate_json(response.content)
+
+    def create_record_collection(
+        self, name: str, *, description: str = ""
+    ) -> RecordCollection:
+        from uuid import uuid4
+
+        return self.save_record_collection(
+            uuid4().hex, RecordCollectionEdit(name=name, description=description)
+        )
+
+    def resolve_run_number(self, collection_id: str, number: int) -> RunAddress:
+        return self._get_model(
+            f"{_API_PREFIX}/record-collections/{quote(collection_id, safe='')}"
+            f"/runs/{number}",
+            RunAddress,
+        )
 
     def research_projects(
         self, *, limit: int = 100, before: int | None = None

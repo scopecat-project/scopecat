@@ -126,11 +126,25 @@ class AuthorProject(DaemonClient):
         assert self._source_project is not None
         return capture_sources(self._source_project).manifest.ref
 
-    def history(self, *, limit: int = 20, before: int | None = None) -> RunHistory:
-        """Display a bounded history page with project-local run numbers."""
+    def history(
+        self,
+        *,
+        limit: int = 20,
+        before: int | None = None,
+        collection: str | None = None,
+    ) -> RunHistory:
+        """Display a bounded page using collection or legacy store-local numbers."""
         from scopecat.application.run_history import RunHistory
+        from scopecat.records.research_project import RunHistoryFilter
 
-        return RunHistory(self.list_runs(limit=limit, before=before))
+        return RunHistory(
+            self.list_runs(
+                limit=limit,
+                before=before,
+                history=RunHistoryFilter(record_collection=collection),
+            ),
+            collection=collection,
+        )
 
     def run_number(self, run: RunHandle | str) -> int:
         """Return this project's short number; it is not a portable data identity."""
@@ -140,11 +154,19 @@ class AuthorProject(DaemonClient):
             run.id if isinstance(run, RunHandle) else run
         ).control.sequence
 
-    def run(self, run_id: str | int) -> RunHandle:
+    def run(self, run_id: str | int, *, collection: str | None = None) -> RunHandle:
         """Reconnect a retained run without importing its original author module."""
+        if collection is not None and not isinstance(run_id, int):
+            raise ValueError(
+                "collection qualifies an integer run number; use a run id alone"
+            )
         if isinstance(run_id, int):
             if isinstance(run_id, bool) or run_id < 1:
                 raise ValueError("run number must be a positive integer")
+            if collection is not None:
+                return RunHandle(
+                    self, self.resolve_run_number(collection, run_id).run_id
+                )
             page = self.list_runs(limit=1, before=run_id + 1)
             if not page.items or page.items[0].control.sequence != run_id:
                 raise KeyError(f"No run #{run_id} in this project")
@@ -206,6 +228,7 @@ class AuthorProject(DaemonClient):
         overrides: tuple[ParameterUpdate, ...] = (),
         sample: str | None = None,
         actor: str = "operator",
+        record_collection: str | None = None,
     ) -> AuthorPreparedLaunch:
         """Select the current declaration and retain a preview's exact submission."""
         draft = experiment.copy() if isinstance(experiment, ExperimentRequest) else None
@@ -338,15 +361,22 @@ class AuthorProject(DaemonClient):
             overrides=overrides,
             sample=sample,
             actor=actor,
+            record_collection=record_collection,
             code_revision=catalog.code_revision,
         )
         return AuthorPreparedLaunch(self, request, self.preview(request))
 
     def prepare_plan(
-        self, ref: ExperimentPlanRef, *, actor: str
+        self,
+        ref: ExperimentPlanRef,
+        *,
+        actor: str,
+        record_collection: str | None = None,
     ) -> AuthorPreparedLaunch:
         """Read an exact plan and obtain a new preview for this execution actor."""
-        request = plan_launch_request(self.experiment_plan(ref), actor=actor)
+        request = plan_launch_request(
+            self.experiment_plan(ref), actor=actor, record_collection=record_collection
+        )
         return AuthorPreparedLaunch(self, request, self.preview(request))
 
     def state(self) -> AuthorRevisionState:

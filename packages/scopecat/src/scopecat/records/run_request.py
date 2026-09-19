@@ -27,6 +27,7 @@ from scopecat.records._run_request_values import (
     normalize_run_request_value,
 )
 from scopecat.records.plan_ref import ExperimentPlanRef
+from scopecat.records.record_collection import RecordCollectionId
 from scopecat.records.sample import SampleSelector
 
 type RunRequestJsonValue = Annotated[
@@ -339,6 +340,9 @@ def _absent_plan(value: ExperimentPlanRef | None) -> bool:
 class RunRequest(_RunRequestModel):
     """Operator request for one structured run."""
 
+    record_collection: RecordCollectionId | None = Field(
+        default=None, exclude_if=_absent_plan
+    )
     plan_ref: ExperimentPlanRef | None = Field(default=None, exclude_if=_absent_plan)
     experiment_id: str | None = None
     display_name: str | None = Field(default=None, min_length=1)

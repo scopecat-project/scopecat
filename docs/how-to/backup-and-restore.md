@@ -90,13 +90,13 @@ external dependencies are still available.
 
 ## Current store version
 
-The current runtime uses project store **70**, including immutable author source
+The current runtime uses project store **71**, including immutable author source
 revisions, experiment plans, durable preparation operations, a path-independent
-data-space identity and research associations. Tested development schemas 68 and
-69 can be upgraded through an [explicit copy](migrate-data.md). Version 67 and
+data-space identity, research associations and stable record addresses. Tested
+development schemas 68, 69 and 70 can be upgraded through an [explicit copy](migrate-data.md). Version 67 and
 older stores require their pinned matching readers. No implicit migration occurs.
 
-Within version 70, snapshots retain author source bundles, active revision,
+Within version 71, snapshots retain author source bundles, active revision,
 preparation receipts, author-job receipts and experiment plans. Pending preparations are marked
 interrupted when the restored daemon starts; they are not resubmitted. External
 Python environments and device SDKs still need their separately retained artifacts.
@@ -115,9 +115,9 @@ writable copies is not implemented.
 
 ## Explicit copy upgrades
 
-Snapshot format 1 can verify and restore the tested development schemas 68, 69 and
-70. Restore retains its original schema; the current runtime still accepts only
-70. Use [migrate a data copy](migrate-data.md) for the explicit 68→69→70 upgrade
+Snapshot format 1 can verify and restore the tested development schemas 68, 69, 70 and
+71. Restore retains its original schema; the current runtime still accepts only
+71. Use [migrate a data copy](migrate-data.md) for the explicit 68→69→70→71 upgrade
 path, a verified original backup, retained-file/table checks and shared bench
 ownership. Unknown formats remain rejected. A stable compatibility baseline has
 not been designated by this development support.

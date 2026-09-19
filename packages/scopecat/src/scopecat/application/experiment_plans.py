@@ -17,13 +17,16 @@ from scopecat.records.plan_ref import PlanAnalysisSource, PlanConfigRef
 from scopecat.records.run import AnalysisCandidateRunConfigSource
 
 
-def plan_launch_request(plan: ExperimentPlanRevision, *, actor: str) -> LaunchRequest:
+def plan_launch_request(
+    plan: ExperimentPlanRevision, *, actor: str, record_collection: str | None = None
+) -> LaunchRequest:
     definition = plan.definition
     return LaunchRequest(
         action="preview",
         experiment=definition.experiment,
         version=definition.version,
         actor=actor,
+        record_collection=record_collection,
         inputs=cast("dict[str, JsonValue]", thaw_json_value(definition.inputs)),
         control_edits=dict(definition.control_edits),
         scan_mode=definition.scan_mode,
@@ -49,7 +52,9 @@ def validate_plan_launch(
             "saved plan definition changed; explicitly save a new "
             "revision and preview it"
         )
-    expected = plan_launch_request(plan, actor=request.actor)
+    expected = plan_launch_request(
+        plan, actor=request.actor, record_collection=request.record_collection
+    )
     if (
         request.request_hash != expected.request_hash
         or request.code_revision != expected.code_revision

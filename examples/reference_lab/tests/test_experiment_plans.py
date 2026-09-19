@@ -314,6 +314,7 @@ def test_authored_plan_freezes_default_structural_input_and_explicit_copy() -> N
     endpoint = os.environ["SCOPECAT_DAEMON_URL"]
     key = uuid4().hex
     with AuthorProject(endpoint) as author, LabClient(DaemonClient(endpoint)) as lab:
+        collection = author.create_record_collection("Plan runs")
         prepared = author.prepare("signal", actor="alice")
         assert prepared.request.inputs == {"polarity": "positive"}
         saved = prepared.save_plan("Positive signal", saved_by="alice")
@@ -330,7 +331,9 @@ def test_authored_plan_freezes_default_structural_input_and_explicit_copy() -> N
             )
         )
         for plan, polarity in ((saved, "positive"), (copied, "negative")):
-            reopened = author.prepare_plan(plan.ref, actor="carol")
+            reopened = author.prepare_plan(
+                plan.ref, actor="carol", record_collection=collection.id
+            )
             assert reopened.request.inputs == {"polarity": polarity}
             admitted = reopened.submit(request_key=f"{key}-{polarity}")
             handle = lab.procedures.get(admitted.procedure_id)
@@ -345,4 +348,7 @@ def test_authored_plan_freezes_default_structural_input_and_explicit_copy() -> N
             assert isinstance(output, RunOutputRef)
             request = author.run_request(output.run_id).request
             assert request.plan_ref == plan.ref
+            assert request.record_collection == collection.id
+            address = author.get_run(output.run_id).address
+            assert address is not None and address.collection_id == collection.id
         assert lab.plans.get(saved.ref).definition.inputs == {"polarity": "positive"}
