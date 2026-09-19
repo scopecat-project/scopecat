@@ -55,7 +55,7 @@ New named collections start at 1 and allocate independently. Use the collection 
 alongside its number when sharing a short address; retain `run.id` for existing
 machine references. Collection names are labels, not identifiers.
 
-The current storage schema is **71**. The explicit
+The current storage schema is **72**. The explicit
 [copy migration](migrate-data.md) maps each old scheduler run to the default
 collection using its unchanged number and run ID. It does not infer cooldowns or
 split old data by folders. The default collection ID derives from the retained

@@ -254,6 +254,7 @@ class NotebookSession(AuthorProject):
             f"Scopecat Notebook ({mode}, {status})\nProject: {self.project_root}\n"
             f"Source: {revision}\n"
             f"Sample: {self.selection.sample or 'unselected'}\n"
+            f"Batch: {self.selection.batch or 'unspecified'}\n"
             f"Working point: {working_point_label}\n"
             f"Collection: {self.selection.collection or 'store history'}\n"
             f"Operator: {self.selection.operator}\nHistory: session.history()"

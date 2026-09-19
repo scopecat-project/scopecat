@@ -249,6 +249,11 @@ from scopecat.records.experiment_plan import (
     ExperimentPlanRevision,
     ExperimentPlanSave,
 )
+from scopecat.records.experimental_batch import (
+    ExperimentalBatch,
+    ExperimentalBatchEdit,
+    ExperimentalBatchPage,
+)
 from scopecat.records.instrument import (
     InstrumentStateCacheReadback,
     InstrumentStateReadback,
@@ -1509,6 +1514,41 @@ class DaemonClient:
             ),
         )
         return InstrumentSessionEndReceipt.model_validate_json(response.content)
+
+    def experimental_batches(
+        self, *, limit: int = 100, before: int | None = None
+    ) -> ExperimentalBatchPage:
+        params: dict[str, str | int] = {"limit": limit}
+        if before is not None:
+            params["before"] = before
+        return self._get_model(
+            f"{_API_PREFIX}/experimental-batches", ExperimentalBatchPage, params=params
+        )
+
+    def experimental_batch(self, batch_id: str) -> ExperimentalBatch:
+        return self._get_model(
+            f"{_API_PREFIX}/experimental-batches/{quote(batch_id, safe='')}",
+            ExperimentalBatch,
+        )
+
+    def save_experimental_batch(
+        self, batch_id: str, command: ExperimentalBatchEdit
+    ) -> ExperimentalBatch:
+        response = self._request(
+            "PUT",
+            f"{_API_PREFIX}/experimental-batches/{quote(batch_id, safe='')}",
+            json=command.model_dump(mode="json"),
+        )
+        return ExperimentalBatch.model_validate_json(response.content)
+
+    def create_experimental_batch(
+        self, name: str, *, description: str = ""
+    ) -> ExperimentalBatch:
+        from uuid import uuid4
+
+        return self.save_experimental_batch(
+            uuid4().hex, ExperimentalBatchEdit(name=name, description=description)
+        )
 
     def record_collections(
         self, *, limit: int = 100, before: int | None = None

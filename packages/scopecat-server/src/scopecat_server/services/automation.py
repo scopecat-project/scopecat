@@ -96,6 +96,7 @@ from scopecat_server.storage.sqlite.control_plane import SQLiteControlPlane
 from scopecat_server.storage.sqlite.experiment_plan_repository import (
     ExperimentPlanRepository,
 )
+from scopecat_server.storage.sqlite.experimental_batches import require_batches
 from scopecat_server.storage.sqlite.manual_preview import (
     ManualPreviewChanged,
     ManualPreviewRepository,
@@ -600,6 +601,7 @@ class AutomationService:
                     "procedure request key already has a durable run"
                 )
             return existing
+        require_batches(connection, (sample.batch_id for sample in samples))
         if plan_ref is not None:
             if self._plans is None:
                 raise AutomationConflict("experiment plan storage is unavailable")

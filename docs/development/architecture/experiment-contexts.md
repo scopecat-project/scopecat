@@ -275,3 +275,31 @@ collection numbering, frozen old preparation, rejected partial updates, explicit
 overrides and unchanged shared active configuration. The actual IPython journey
 checks reuse, source refresh and reopening. These tests do not qualify shared-device
 arbitration across separate deployments or multi-chip calibration.
+
+## Third implementation: declared batch applicability
+
+Schema 72 adds a stable batch catalog and an indexed run/batch association, with an
+explicit 71→72 copy migration that leaves old evidence unscoped. Sample selectors
+and immutable bindings carry an optional batch identity; physical sample identity
+and collection numbering remain independent. Existing serialized hashes are
+preserved when the optional batch is absent.
+
+Working points pin this binding. Session preparation checks its selected batch
+against working points, candidates and saved plans. In-place workspace advance
+cannot change scope; explicit new-workspace copies preserve value origins as
+estimates. Server admission rejects mismatched context bindings and batch-scoped
+candidate reuse with changed samples/batches. Calibration target keys, freshness
+and procedure selectors carry batch identity, so an old or unscoped success cannot
+satisfy a target declared for the new event. Cross-batch dependency evidence is
+also rejected. Integrations must actually declare
+that event; existing unscoped integrations are not silently reclassified.
+
+Automated checks cover one chip across two batches, independent retained numbering,
+copy versus in-place relabeling, direct candidate admission, scoped calibration
+status, metadata rename/restart, and old-data migration/restore. See
+[experimental batches](../../how-to/experimental-batches.md).
+
+The earlier audit remains open for assembly/member identities, setup applicability,
+explicit cross-scope dependency policy, shared-active-configuration composition,
+GUI selection, multi-workspace source ownership and physical resource authority.
+This slice does not establish hardware qualification or an event's physical truth.

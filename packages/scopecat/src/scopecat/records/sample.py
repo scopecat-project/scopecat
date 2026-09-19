@@ -18,6 +18,7 @@ from scopecat.kernel.content_identity import canonical_json, stable_content_hash
 from scopecat.kernel.run_outcome import utc_now
 from scopecat.records.config import Topology
 from scopecat.records.content import Sha256ContentHash
+from scopecat.records.experimental_batch import ExperimentalBatchId, absent_batch
 
 type _NonEmptyText = Annotated[str, Field(min_length=1)]
 type SampleId = Annotated[
@@ -200,6 +201,7 @@ class SampleSelector(_SampleModel):
     sample_id: SampleId
     revision: int | None = Field(default=None, ge=1)
     context_id: _NonEmptyText | None = None
+    batch_id: ExperimentalBatchId | None = Field(default=None, exclude_if=absent_batch)
 
 
 class SampleBinding(_SampleModel):
@@ -212,6 +214,7 @@ class SampleBinding(_SampleModel):
     kind: _NonEmptyText
     display_name: _NonEmptyText
     context_id: _NonEmptyText | None = None
+    batch_id: ExperimentalBatchId | None = Field(default=None, exclude_if=absent_batch)
 
     @property
     def entity_scope(self) -> str:

@@ -62,6 +62,7 @@ class ExperimentPlanService:
                         revision=sample.revision,
                         role=sample.role,
                         context_id=sample.context_id,
+                        batch_id=sample.batch_id,
                     ),
                 )
             )

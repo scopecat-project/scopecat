@@ -36,6 +36,7 @@ class ResearchMemberPage(BaseModel):
 class RunHistoryFilter(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     record_collection: str | None = None
+    batch_id: str | None = None
     research_project: str | None = None
     working_point: str | None = None
     deployment_id: str | None = None

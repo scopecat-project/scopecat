@@ -30,6 +30,7 @@ from scopecat.config.registry.records import ConfigCompositionPolicyRef
 from scopecat.kernel.content_identity import stable_content_hash
 from scopecat.records.config import ConfigContentHash
 from scopecat.records.content import Sha256ContentHash
+from scopecat.records.experimental_batch import ExperimentalBatchId, absent_batch
 from scopecat.records.run import ConfigRegistryRunConfigSource
 from scopecat.records.sample import SampleId, SampleSelector
 
@@ -108,6 +109,7 @@ class CalibrationTargetRef(_CalibrationModel):
     id: _NonEmptyText
     sample_id: SampleId | None = None
     context_id: _NonEmptyText | None = None
+    batch_id: ExperimentalBatchId | None = Field(default=None, exclude_if=absent_batch)
 
     @field_validator("kind", "id")
     @classmethod
@@ -116,7 +118,9 @@ class CalibrationTargetRef(_CalibrationModel):
 
     @model_validator(mode="after")
     def validate_sample_scope(self) -> CalibrationTargetRef:
-        if self.context_id is not None and self.sample_id is None:
+        if (
+            self.context_id is not None or self.batch_id is not None
+        ) and self.sample_id is None:
             raise ValueError("calibration target context requires a sample")
         return self
 
@@ -132,6 +136,7 @@ def calibration_target_sample_selectors(
         SampleSelector(
             sample_id=target.sample_id,
             context_id=target.context_id,
+            batch_id=target.batch_id,
         ),
     )
 
@@ -987,6 +992,12 @@ class CalibrationCohortSpec(_CalibrationModel):
                 ):
                     raise ValueError(
                         "member dependency must equal observed latest success"
+                    )
+                if latest_success.attempt.target.batch_id != member.target.batch_id:
+                    raise ValueError(
+                        "calibration dependency belongs to another batch; "
+                        "cross-batch and unscoped dependencies require an explicit "
+                        "applicability policy, which is not supported yet"
                     )
         return self
 

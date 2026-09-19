@@ -71,12 +71,14 @@ class SampleHandle:
         role: str = "subject",
         revision: int | None = None,
         context_id: str | None = None,
+        batch_id: str | None = None,
     ) -> SampleSelector:
         return SampleSelector(
             role=role,
             sample_id=self.id,
             revision=revision,
             context_id=context_id,
+            batch_id=batch_id,
         )
 
     def revisions(

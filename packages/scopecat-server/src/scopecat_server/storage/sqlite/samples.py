@@ -32,6 +32,7 @@ from scopecat.records.sample import (
 from scopecat_server.errors import BackendConflict, BackendNotFound
 from scopecat_server.storage.sqlite.connection import SQLiteDatabase
 from scopecat_server.storage.sqlite.control_plane import SQLiteControlPlane
+from scopecat_server.storage.sqlite.experimental_batches import require_batch
 
 
 class SQLiteSampleStore:
@@ -366,6 +367,12 @@ class SQLiteSampleStore:
         snapshot: RunSnapshot,
     ) -> None:
         for binding in snapshot.samples:
+            require_batch(connection, binding.batch_id)
+            if binding.batch_id is not None:
+                connection.execute(
+                    "INSERT INTO run_sample_batches VALUES (?,?,?)",
+                    (snapshot.run_id, binding.role, binding.batch_id),
+                )
             row = cast(
                 "sqlite3.Row | None",
                 connection.execute(
@@ -404,6 +411,7 @@ class SQLiteSampleStore:
         connection: sqlite3.Connection,
         selector: SampleSelector,
     ) -> SampleBinding:
+        require_batch(connection, selector.batch_id)
         row = _sample_row(connection, selector.sample_id)
         if row is None:
             raise BackendNotFound(f"unknown sample {selector.sample_id!r}")
@@ -435,6 +443,7 @@ class SQLiteSampleStore:
             kind=record.kind,
             display_name=revision.content.display_name,
             context_id=selector.context_id,
+            batch_id=selector.batch_id,
         )
 
     @staticmethod

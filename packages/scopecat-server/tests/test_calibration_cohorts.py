@@ -164,6 +164,7 @@ def _member(
     success_policy: CalibrationSuccessPolicy = "procedure_success",
     sample_id: str | None = None,
     context_id: str | None = None,
+    batch_id: str | None = None,
 ) -> CalibrationCohortMemberSpec:
     definition = CalibrationDefinitionRef(
         id="drag-calibration",
@@ -176,6 +177,7 @@ def _member(
         id=target_id,
         sample_id=sample_id,
         context_id=context_id,
+        batch_id=batch_id,
     )
     procedure = ProcedureDefinitionRef(
         id="drag-calibration-procedure",
@@ -1484,3 +1486,97 @@ def test_calibration_cohort_http_sqlite_vertical_replays_after_restart(
             ).json()
         ).finalization
         assert publication == deferred
+
+
+def test_new_batch_never_reuses_previous_calibration_success(tmp_path: Path) -> None:
+    from scopecat.records.experimental_batch import ExperimentalBatchEdit
+
+    from scopecat_server.storage.sqlite.experimental_batches import (
+        ExperimentalBatchStore,
+    )
+
+    harness = _harness(tmp_path)
+    batches = ExperimentalBatchStore(SQLiteDatabase(tmp_path / "control.sqlite3"))
+    for batch in ("cooldown-a", "cooldown-b"):
+        batches.save(batch, ExperimentalBatchEdit(name=batch))
+    old = _member("q0", sample_id="chip", context_id="parked", batch_id="cooldown-a")
+    new = _member("q0", sample_id="chip", context_id="parked", batch_id="cooldown-b")
+    legacy = _member("q0", sample_id="chip", context_id="parked")
+    assert len({item.calibration_key for item in (old, new, legacy)}) == 3
+    assert old.freshness_fingerprint != new.freshness_fingerprint
+    created = harness.service.create(
+        _command(
+            "old-cooldown",
+            source=harness.source,
+            snapshot=_status(harness, (old,)),
+            members=(old,),
+        )
+    )
+    procedure = harness.automation.get(created.members[0].procedure_run_id)
+    assert procedure.samples[0].batch_id == "cooldown-a"
+    _close(harness, created.members[0], status="succeeded")
+    prior = _status(harness, (old,)).snapshot.statuses[0].latest_success
+    assert prior is not None
+    assert _status(harness, (new,)).snapshot.statuses[0].latest_success is None
+    assert _status(harness, (legacy,)).snapshot.statuses[0].latest_success is None
+
+    dependency = prior.dependency_evidence
+
+    def with_dependency(
+        member: CalibrationCohortMemberSpec,
+    ) -> CalibrationCohortMemberSpec:
+        return member.model_copy(
+            update={
+                "dependencies": (dependency,),
+                "freshness_fingerprint": calibration_freshness_fingerprint(
+                    definition=member.definition,
+                    target=member.target,
+                    procedure=member.procedure,
+                    input_fingerprint=member.input_fingerprint,
+                    dependencies=(dependency,),
+                ),
+            }
+        )
+
+    dependent = with_dependency(new)
+    with pytest.raises(ValueError, match="dependency belongs to another batch"):
+        _command(
+            "cross-batch-dependency",
+            source=harness.source,
+            snapshot=_status(harness, (old, new)),
+            members=(dependent,),
+        )
+
+    same = with_dependency(
+        _member(
+            "q1",
+            sample_id="chip",
+            context_id="parked",
+            batch_id="cooldown-a",
+        )
+    )
+    accepted = harness.service.create(
+        _command(
+            "same-batch-dependency",
+            source=harness.source,
+            snapshot=_status(harness, (old, same)),
+            members=(same,),
+        )
+    )
+    assert accepted.members[0].spec.dependencies == (dependency,)
+    _close(harness, accepted.members[0], status="succeeded")
+
+    batches.save(
+        "cooldown-a", ExperimentalBatchEdit(name="Renamed", expected_revision=1)
+    )
+    assert _status(harness, (old,)).snapshot.statuses[0].latest_success == prior
+    missing = _member("q0", sample_id="chip", batch_id="missing")
+    with pytest.raises(BackendNotFound, match="batch not found"):
+        harness.service.create(
+            _command(
+                "missing-batch",
+                source=harness.source,
+                snapshot=_status(harness, (missing,)),
+                members=(missing,),
+            )
+        )

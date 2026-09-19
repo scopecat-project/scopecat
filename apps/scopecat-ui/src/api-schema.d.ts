@@ -5288,6 +5288,8 @@ export interface components {
              * @default operator
              */
             actor: string;
+            /** Batch Id */
+            batch_id?: string | null;
             code_revision?: components["schemas"]["AuthorRevisionRef"] | null;
             config_source?: components["schemas"]["LaunchConfigSource-Input"] | null;
             configuration?: components["schemas"]["PlanConfigRef"] | null;
@@ -5352,6 +5354,8 @@ export interface components {
              * @default operator
              */
             actor: string;
+            /** Batch Id */
+            batch_id?: string | null;
             code_revision?: components["schemas"]["AuthorRevisionRef"] | null;
             config_source?: components["schemas"]["LaunchConfigSource-Output"] | null;
             configuration?: components["schemas"]["PlanConfigRef"] | null;
@@ -8544,6 +8548,8 @@ export interface components {
          * @description Exact sample provenance frozen into an accepted run.
          */
         SampleBinding: {
+            /** Batch Id */
+            batch_id?: string | null;
             content_hash: components["schemas"]["Sha256ContentHash"];
             context_id?: components["schemas"]["_NonEmptyText"] | null;
             display_name: components["schemas"]["_NonEmptyText"];
@@ -8702,6 +8708,8 @@ export interface components {
          * @description Operator intent selecting one sample revision for a run role.
          */
         SampleSelector: {
+            /** Batch Id */
+            batch_id?: string | null;
             context_id?: components["schemas"]["_NonEmptyText"] | null;
             /** Revision */
             revision?: number | null;
@@ -11188,6 +11196,7 @@ export interface operations {
     list_runs_api_v1_runs_get: {
         parameters: {
             query?: {
+                batch_id?: string | null;
                 before?: number | null;
                 created_after?: string | null;
                 created_before?: string | null;

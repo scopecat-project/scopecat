@@ -328,12 +328,14 @@ class _DaemonRunner:
                 sample_id=binding.sample_id,
                 revision=binding.revision,
                 context_id=binding.context_id,
+                batch_id=binding.batch_id,
             )
             for selector in samples:
                 if selector.role == binding.role and (
                     selector.sample_id != binding.sample_id
                     or selector.revision not in (None, binding.revision)
                     or selector.context_id not in (None, binding.context_id)
+                    or selector.batch_id not in (None, binding.batch_id)
                 ):
                     raise ValueError(
                         "explicit sample does not match the selected parameter context"
