@@ -153,12 +153,68 @@ class Services:
                     raise ValueError(
                         "请先完成管理操作并显式停止原实验服务，再变更登记环境"
                     )
-            db.execute(
-                "INSERT INTO services VALUES (?, ?, ?) "
-                "ON CONFLICT(root) DO UPDATE SET payload=excluded.payload",
-                (service.id, service.root, service.model_dump_json()),
-            )
+            self._save(db, service)
         return service
+
+    @staticmethod
+    def _save(db: sqlite3.Connection, service: Service) -> None:
+        db.execute(
+            "INSERT INTO services VALUES (?, ?, ?) "
+            "ON CONFLICT(root) DO UPDATE SET payload=excluded.payload",
+            (service.id, service.root, service.model_dump_json()),
+        )
+
+    def recheck(self, identity: str, *, operation_id: str) -> Service:
+        """Revalidate an existing stopped deployment without changing its paths."""
+        from .host_store import Operations
+
+        with self.lock:
+            service = self.get(identity)
+            operations = Operations(self.database.parent.parent)
+            operations.reconcile()
+            if any(
+                item.command.id != operation_id
+                and item.status in ("starting", "running")
+                for item in operations.list()
+            ):
+                raise ValueError("还有管理操作未完成，不能复检登记环境")
+            self._require_stopped(service)
+            print(
+                "复检前登记环境: "
+                + json.dumps(service.environment, ensure_ascii=False, sort_keys=True),
+                flush=True,
+            )
+            result = _run(
+                service.python,
+                {
+                    "action": "probe",
+                    "root": service.root,
+                    "static_dir": service.static_dir,
+                },
+            )
+            if (
+                result["root"] != service.root
+                or result["static_dir"] != service.static_dir
+            ):
+                raise ValueError("登记路径已改变；请从本机 CLI 重新登记，原登记保留")
+            updated = service.model_copy(
+                update={"environment": cast("dict[str, str]", result["environment"])}
+            )
+            # A trusted local CLI could start the daemon while the probe runs.
+            self._require_stopped(service)
+            with closing(sqlite3.connect(self.database)) as db, db:
+                self._save(db, updated)
+            print(
+                "复检后登记环境: "
+                + json.dumps(updated.environment, ensure_ascii=False, sort_keys=True),
+                flush=True,
+            )
+            return updated
+
+    @staticmethod
+    def _require_stopped(service: Service) -> None:
+        if inspect_daemon(open_project(service.root)).state != "stopped":
+            raise ValueError("请先确认实验服务已停止，再复检环境；原登记保留")
 
     def views(self) -> list[ServiceView]:
         result: list[ServiceView] = []

@@ -20,6 +20,7 @@ class Command(BaseModel):
         "service_start",
         "service_stop",
         "service_remove",
+        "service_recheck",
     ]
     topic: str | None = None
     workspace: str | None = Field(default=None, pattern=r"^[0-9a-f]{32}$")

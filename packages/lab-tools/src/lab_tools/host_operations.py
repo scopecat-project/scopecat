@@ -80,7 +80,12 @@ def owned_workspace(home: Path, key: str, identity: str) -> Workspace:
 
 
 def launch(home: Path, source: Path | None, command: Command) -> Operation:
-    if command.action in ("service_start", "service_stop", "service_remove"):
+    if command.action in (
+        "service_start",
+        "service_stop",
+        "service_remove",
+        "service_recheck",
+    ):
         from .services import Services
 
         with Services(home).lock:
@@ -95,7 +100,12 @@ def _launch(home: Path, source: Path | None, command: Command) -> Operation:
         if previous.command != command:
             raise ValueError("同一操作编号不能用于不同请求")
         return previous
-    if command.action in ("service_start", "service_stop", "service_remove"):
+    if command.action in (
+        "service_start",
+        "service_stop",
+        "service_remove",
+        "service_recheck",
+    ):
         from .services import Services
 
         if (
@@ -143,7 +153,12 @@ def execute(home: Path, source: Path | None, command: Command) -> str | None:
     from .notebook import project_python
     from .sandboxes import run
 
-    if command.action in ("service_start", "service_stop", "service_remove"):
+    if command.action in (
+        "service_start",
+        "service_stop",
+        "service_remove",
+        "service_recheck",
+    ):
         from .services import Services
 
         assert command.service is not None
@@ -152,6 +167,8 @@ def execute(home: Path, source: Path | None, command: Command) -> str | None:
             services.start(command.service)
         elif command.action == "service_stop":
             services.stop(command.service)
+        elif command.action == "service_recheck":
+            services.recheck(command.service, operation_id=command.id)
         else:
             services.remove(command.service, operation_id=command.id)
         return None
