@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import math
+from dataclasses import replace
 from datetime import UTC, datetime
 from typing import Protocol, cast
 
@@ -12,7 +13,7 @@ from pydantic import JsonValue
 from scopecat.api.lab import LabClient
 from scopecat.application.author_project import AuthorProject
 from scopecat.application.controls import edit_controls
-from scopecat.application.launch import LaunchPreview
+from scopecat.application.launch import LaunchCatalog, LaunchPreview
 from scopecat.daemon.client import DaemonClient
 from scopecat.daemon.views import MeasurementPreview
 from scopecat.kernel.quantity import Quantity
@@ -24,7 +25,7 @@ from scopecat.records.measurement_recording import measurement_record_content_ha
 from scopecat_instruments import temperature_readout
 
 from reference_lab.configuration import bootstrap_config
-from reference_lab.launch import CATALOG, launch_provider
+from reference_lab.launch import launch_provider
 from reference_lab.parameters import ChannelCalibration
 from reference_lab.workflows.coherent_ramsey import coherent_ramsey
 from reference_lab.workflows.frequency_amplitude import CONTROLS, frequency_amplitude
@@ -51,22 +52,40 @@ def _checked_launch_preview(
     client: DaemonClient, request: LaunchRequest
 ) -> LaunchPreview:
     with AuthorProject(client.base_url) as authors:
-        preview = authors.preview(request)
+        catalog = authors.catalog()
+        entry = next(item for item in catalog.entries if item.id == request.experiment)
+        preview = authors.preview(request.model_copy(update={"version": entry.version}))
     assert preview.manual_state is not None
     assert preview.code_revision is not None
     assert preview.manual_state.binding.code_revision == preview.code_revision
     # UI shape/science fixtures are not executable permissions. Normalize only
-    # process/environment-dependent source identity and the retained event ID;
+    # process/environment-dependent source identity, compute IDs and retained event ID;
     # real admission journeys always use the original complete server response.
     revision = AuthorRevisionRef(content_hash="sha256:" + "0" * 64)
+    inspection = preview.inspection
+    if inspection is not None:
+        inspection = inspection.model_copy(
+            update={
+                "computes": tuple(
+                    replace(compute, implementation=f"python:fixture:{compute.id}")
+                    for compute in inspection.computes
+                ),
+            }
+        )
     return preview.model_copy(
         update={
+            "inspection": inspection,
+            "request_hash": "sha256:" + "0" * 64,
+            "definition_hash": "sha256:" + "0" * 64,
             "code_revision": revision,
             "manual_state": preview.manual_state.model_copy(
                 update={
                     "event_id": 1,
                     "binding": preview.manual_state.binding.model_copy(
-                        update={"code_revision": revision}
+                        update={
+                            "code_revision": revision,
+                            "request_hash": "sha256:" + "0" * 64,
+                        }
                     ),
                 }
             ),
@@ -78,6 +97,24 @@ def capture_acceptance_fixtures(
     lab: LabClient, client: DaemonClient
 ) -> dict[str, JsonValue]:
     """Caller owns a fresh isolated daemon; all device access uses its virtual lab."""
+    with AuthorProject(client.base_url) as authors:
+        current_catalog = authors.catalog()
+    # The shared UI fixture contains the three reference scenarios exercised here.
+    # Source-derived versions are checked by admission tests, not this shape fixture.
+    catalog = LaunchCatalog(
+        entries=tuple(
+            entry.model_copy(update={"version": "sha256:" + "0" * 64})
+            if entry.id != "channel-timing"
+            else entry
+            for entry in current_catalog.entries
+            if entry.id
+            in {
+                "channel-timing",
+                "reference_lab.frequency_amplitude",
+                "reference_lab.temperature_diagnostic",
+            }
+        )
+    )
     setting_preview = launch_provider(
         lab, LaunchRequest(action="preview", experiment="channel-timing", version="1")
     )
@@ -89,13 +126,13 @@ def capture_acceptance_fixtures(
         client,
         LaunchRequest(
             action="preview",
-            experiment="temperature",
+            experiment="reference_lab.temperature_diagnostic",
             version="1",
         ),
     )
     scalar_request = LaunchRequest(
         action="preview",
-        experiment="frequency-amplitude",
+        experiment="reference_lab.frequency_amplitude",
         version="1",
         control_edits={
             "frequency": ControlEdit.model_validate(
@@ -321,7 +358,7 @@ def capture_acceptance_fixtures(
         update={"run_id": "acceptance-waiting", "finished_at": FIXTURE_TIME}
     )
     return {
-        "launch_catalog": CATALOG.model_dump(mode="json"),
+        "launch_catalog": catalog.model_dump(mode="json"),
         "launch_preview": launch_preview.model_dump(mode="json"),
         "planned_settings": setting_preview.preflight.stages[0].model_dump(
             mode="json",

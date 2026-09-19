@@ -109,6 +109,9 @@ describe("shared reference-lab acceptance", () => {
       </QueryClientProvider>,
     );
     await screen.findByRole("option", { name: "Q1 channel timing candidate" });
+    fireEvent.change(screen.getByLabelText("Experiment"), {
+      target: { value: "reference_lab.temperature_diagnostic" },
+    });
     fireEvent.click(screen.getByRole("button", { name: "Preview" }));
     await screen.findByText("Preview ready");
     expect(
@@ -170,7 +173,7 @@ describe("shared reference-lab acceptance", () => {
       </QueryClientProvider>,
     );
     fireEvent.change(await screen.findByLabelText("Experiment"), {
-      target: { value: "frequency-amplitude" },
+      target: { value: "reference_lab.frequency_amplitude" },
     });
     expect(screen.getByText(/Configuration-owned/)).toHaveTextContent("qubits[q0]");
     fireEvent.change(screen.getByLabelText("Frequency unit"), { target: { value: "MHz" } });

@@ -14,6 +14,7 @@ from scopecat.analysis.facts import AnalysisFactSchema
 from scopecat.api.comparison import comparison_inputs, save_comparison
 from scopecat.api.lab import LabClient
 from scopecat.api.published_analysis import PublishedAnalysis
+from scopecat.application.authoring import AuthorExperiment
 from scopecat.application.comparison import ComparisonHandoff, ComparisonResult
 from scopecat.kernel.quantity import Quantity
 from scopecat.records.analysis import (
@@ -30,9 +31,9 @@ from scopecat.records.comparison import (
 from scopecat.records.control_edit import ControlEdit
 from scopecat.records.launch_request import LaunchRequest
 
-from reference_lab.control_launch import CONTROL_ENTRY
 from reference_lab.parameters import QubitParameters
 from reference_lab.workflows.authored.comparison import MODEL, SignalFit, fit_signal
+from reference_lab.workflows.frequency_amplitude import frequency_amplitude
 
 
 @dataclass(frozen=True)
@@ -137,8 +138,12 @@ def comparison_provider(lab: LabClient, request: ComparisonRequest) -> Compariso
             .fact(
                 "next-input",
                 SignalNextInput(
-                    CONTROL_ENTRY.id,
-                    CONTROL_ENTRY.version,
+                    frequency_amplitude.id,
+                    AuthorExperiment.from_declaration(
+                        frequency_amplitude,
+                        code_revision=request.code_revision,
+                        workspace_id=request.workspace_id,
+                    ).entry.version,
                     Quantity(fit.center_ghz, "GHz"),
                 ),
                 schema=NEXT_INPUT_SCHEMA,

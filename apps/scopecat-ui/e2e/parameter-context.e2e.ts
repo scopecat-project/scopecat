@@ -118,7 +118,7 @@ for (const scoped of [false, true]) {
         ).toBeVisible();
         await page
           .getByLabel("Experiment", { exact: true })
-          .selectOption(scoped || index % 2 === 0 ? "signal" : "frequency-amplitude");
+          .selectOption(scoped || index % 2 === 0 ? "signal" : "reference_lab.frequency_amplitude");
         await page.getByLabel("Frequency", { exact: true }).fill(String(4.8 + index / 10));
         const previewing = page.waitForResponse((response) =>
           response.url().endsWith("/experiment-launcher/preview"),
@@ -146,7 +146,7 @@ for (const scoped of [false, true]) {
         const submission = await submitting;
         expect(submission.status(), await submission.text()).toBe(200);
         expect(submission.request().postDataJSON()).toMatchObject({
-          experiment: scoped || index % 2 === 0 ? "signal" : "frequency-amplitude",
+          experiment: scoped || index % 2 === 0 ? "signal" : "reference_lab.frequency_amplitude",
           context: { entry_id: saved.entry.id },
         });
         await expect(

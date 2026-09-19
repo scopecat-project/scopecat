@@ -58,7 +58,7 @@ def test_retained_analysis_plan_copy_revalidate_and_child_origin() -> None:
                 time.sleep(0.05)
             assert handle.snapshot.closure is not None
             assert handle.snapshot.closure.status == "succeeded"
-            output = handle.step("signal").output
+            output = handle.step("experiment").output
             assert isinstance(output, RunOutputRef)
             return lab.get_run(output.run_id)
 
@@ -70,7 +70,7 @@ def test_retained_analysis_plan_copy_revalidate_and_child_origin() -> None:
         )
         primary = child(
             author.prepare(
-                "frequency-amplitude",
+                "reference_lab.frequency_amplitude",
                 control_edits={"frequency": frequencies},
                 actor="source-author",
             )
@@ -79,7 +79,7 @@ def test_retained_analysis_plan_copy_revalidate_and_child_origin() -> None:
         )
         secondary = child(
             author.prepare(
-                "frequency-amplitude",
+                "reference_lab.frequency_amplitude",
                 control_edits={
                     "frequency": frequencies,
                     "amplitude": ControlEdit(mode="fixed", value=Quantity(0.08, "V")),
@@ -268,9 +268,9 @@ def test_plan_freezes_active_sample_and_named_context_without_activation() -> No
             kind="synthetic",
             content=SampleRevisionDraft(display_name="Plan sample revision one"),
         )
-        plain = author.prepare("frequency-amplitude", sample=sample.id).save_plan(
-            "Exact sample", saved_by="alice"
-        )
+        plain = author.prepare(
+            "reference_lab.frequency_amplitude", sample=sample.id
+        ).save_plan("Exact sample", saved_by="alice")
         assert plain.definition.scientific_binding.samples
         assert plain.definition.scientific_binding.samples[0].revision == 1
         context_entry = lab.config.save_context(
@@ -286,9 +286,9 @@ def test_plan_freezes_active_sample_and_named_context_without_activation() -> No
             entry_id=context_entry.entry.id,
             content_hash=context_entry.entry.content_hash,
         )
-        contextual = author.prepare("frequency-amplitude", context=context).save_plan(
-            "Exact working point", saved_by="alice"
-        )
+        contextual = author.prepare(
+            "reference_lab.frequency_amplitude", context=context
+        ).save_plan("Exact working point", saved_by="alice")
         lab.samples.revise(
             sample.id,
             SampleRevisionDraft(display_name="Plan sample revision two"),

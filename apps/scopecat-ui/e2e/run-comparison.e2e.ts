@@ -114,7 +114,9 @@ test("compares retained signals, saves independent results and imports a reviewe
     ).toBeVisible();
     await page.locator("aside button").filter({ hasText: candidate.analysis_id }).click();
     await action("Import suggested inputs into Launch");
-    await expect(page.getByLabel("Experiment", { exact: true })).toHaveValue("frequency-amplitude");
+    await expect(page.getByLabel("Experiment", { exact: true })).toHaveValue(
+      "reference_lab.frequency_amplitude",
+    );
     expect(
       Math.abs(Number(await page.getByLabel("Frequency", { exact: true }).inputValue()) - 4.8),
     ).toBeLessThan(0.02);

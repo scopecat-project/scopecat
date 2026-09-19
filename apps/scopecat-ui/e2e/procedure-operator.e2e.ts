@@ -26,11 +26,12 @@ project = sc.open_project(sys.argv[1])
 application = project.load_application()
 with project.connect() as lab:
     provider = application.launch_provider
-    request = LaunchRequest(action="preview", experiment="temperature", version="1")
+    entry = application.authors.get("reference_lab.temperature_diagnostic").entry
+    request = LaunchRequest(action="preview", experiment=entry.id, version=entry.version)
     preview = provider(lab, request)
     admitted = provider(lab, LaunchRequest.model_validate({
         **request.model_dump(), "action": "submit", "request_key": "browser-retained",
-        "expected_request_hash": preview.request_hash, "config_source": preview.config_source,
+        "expected_request_hash": preview.request_hash, "reviewed": preview.reviewed,
                 "manual_state": preview.manual_state,
     }))
     print(admitted.procedure_id)
@@ -92,7 +93,9 @@ retainedProcedureTest(
       expect(catalogResponse.status(), await catalogResponse.text()).toBe(200);
       await expect(page.getByLabel("Experiment", { exact: true })).toBeVisible();
       await page.getByText("Retained procedures", { exact: true }).click();
-      await page.getByRole("button", { name: /reference_lab.launch_temperature/ }).click();
+      await page
+        .getByRole("button", { name: /author:reference_lab.temperature_diagnostic/ })
+        .click();
       await expect(page.getByText("Admitted — not dispatched", { exact: true })).toBeVisible();
       expect(new URL(page.url()).searchParams.get("procedure")).toBe(procedureId);
       const reopenedScreenshot = testInfo.outputPath("operator-reopened.png");
@@ -225,7 +228,9 @@ test("retains launch inputs across workspaces and invalidates previews without s
     });
     expect(sample.status(), await sample.text()).toBe(201);
     await page.goto(`${endpoint.base_url}/#launch`);
-    await page.getByLabel("Experiment", { exact: true }).selectOption("frequency-amplitude");
+    await page
+      .getByLabel("Experiment", { exact: true })
+      .selectOption("reference_lab.frequency_amplitude");
     await page.getByLabel("Sample ID").fill("sample-navigation");
     await page.getByLabel("Operator", { exact: true }).fill("draft-author");
     await page.getByLabel("Frequency source").selectOption("range");
@@ -243,7 +248,7 @@ test("retains launch inputs across workspaces and invalidates previews without s
         .getByRole("button", { name: "Experiments", exact: true })
         .click();
       await expect(page.getByLabel("Experiment", { exact: true })).toHaveValue(
-        "frequency-amplitude",
+        "reference_lab.frequency_amplitude",
       );
       await expect(page.getByLabel("Sample ID")).toHaveValue("sample-navigation");
       await expect(page.getByLabel("Operator", { exact: true })).toHaveValue("draft-author");
@@ -309,7 +314,9 @@ test("reopens a lost launch receipt after context changes without a second submi
       base_url: string;
     };
     await page.goto(`${endpoint.base_url}/#launch`);
-    await page.getByLabel("Experiment", { exact: true }).selectOption("frequency-amplitude");
+    await page
+      .getByLabel("Experiment", { exact: true })
+      .selectOption("reference_lab.frequency_amplitude");
     await page.getByRole("button", { name: "Preview", exact: true }).click();
     await expect(page.getByText("Preview ready", { exact: true })).toBeVisible();
     await page.route("**/api/v1/experiment-launcher/submit", async (route) => {
@@ -337,7 +344,7 @@ test("reopens a lost launch receipt after context changes without a second submi
       const changed = {
         ...catalog,
         entries: catalog.entries.map((entry) =>
-          entry.id === "frequency-amplitude"
+          entry.id === "reference_lab.frequency_amplitude"
             ? { ...entry, description: entry.description + " Updated description." }
             : entry,
         ),

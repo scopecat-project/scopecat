@@ -168,7 +168,11 @@ The maintainer configures these paths once in `scopecat.toml`:
 ```toml
 [authors]
 source_roots = ["src", "config"]
-refresh_roots = ["src/reference_lab/workflows/authored"]
+refresh_roots = [
+  "src/reference_lab/workflows/authored",
+  "src/reference_lab/workflows/frequency_amplitude.py",
+  "src/reference_lab/workflows/temperature_diagnostic.py",
+]
 ```
 
 `source_roots` archives the complete local dependency tree, including helper,
