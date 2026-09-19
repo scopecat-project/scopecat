@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, cast
 import httpx2
 import scopecat as sc
 from pydantic import ValidationError
+from scopecat.application.authoring import AuthorLaunchProvider
 from scopecat.application.experiment_plans import validate_plan_launch
 from scopecat.application.launch import (
     LaunchCatalog,
@@ -148,9 +149,12 @@ def launch(
         with application.connect(
             resolve_daemon_endpoint(root), operator=request.actor
         ) as lab:
+            provider = application.launch_provider
+            if isinstance(provider, AuthorLaunchProvider):
+                provider = provider.resolve(lab)
             catalog = LaunchCatalog()
             if request.action != "list":
-                catalog = application.launch_provider(lab, LaunchRequest(action="list"))
+                catalog = provider(lab, LaunchRequest(action="list"))
                 if not isinstance(catalog, LaunchCatalog):
                     raise TypeError("project list callback must return LaunchCatalog")
                 validate_launch_control_edits(catalog, request)
@@ -171,7 +175,7 @@ def launch(
                             "unavailable in this author revision"
                         )
                     validate_plan_launch(plan, request, entry)
-            result = application.launch_provider(lab, request)
+            result = provider(lab, request)
             if isinstance(result, LaunchPreview):
                 entry = next(
                     (
