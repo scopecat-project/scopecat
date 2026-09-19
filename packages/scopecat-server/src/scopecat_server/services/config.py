@@ -110,7 +110,6 @@ from scopecat.records.parameter_structure import (
 )
 from scopecat.records.run import (
     AnalysisCandidateRunConfigSource,
-    ConfigRegistryRunConfigSource,
     RunSnapshot,
 )
 
@@ -1339,9 +1338,7 @@ def _resolve_calibration_evidence_runs(
     baseline_runs = tuple(
         run
         for run in runs
-        if isinstance(
-            run.config_source, (ConfigRegistryRunConfigSource, ContextRunConfigSource)
-        )
+        if isinstance(run.config_source, ContextRunConfigSource)
         and _matches_calibration_base(run.config_source, base)
     )
     candidate_runs = tuple(
@@ -1354,25 +1351,27 @@ def _resolve_calibration_evidence_runs(
             "calibration merge verification must uniquely identify its exact "
             "baseline and candidate runs"
         )
-    return baseline_runs[0], candidate_runs[0]
+    assert isinstance(base.scope, WorkingPointCalibrationScope)
+    baseline, candidate = baseline_runs[0], candidate_runs[0]
+    if (
+        baseline.samples != (base.scope.sample,)
+        or candidate.samples != baseline.samples
+    ):
+        raise BackendConflict(
+            "calibration evidence differs from its exact working-point sample"
+        )
+    return baseline, candidate
 
 
 def _matches_calibration_base(
-    source: ConfigRegistryRunConfigSource | ContextRunConfigSource,
-    base: CalibrationConfigSourceRef,
+    source: ContextRunConfigSource, base: CalibrationConfigSourceRef
 ) -> bool:
-    if isinstance(source, ContextRunConfigSource):
-        return (
-            source.context == base.context_ref
-            and source.content_hash == base.content_hash
-            and isinstance(base.scope, WorkingPointCalibrationScope)
-            and source.sample == base.scope.sample
-            and not source.overrides
-        )
     return (
-        source.entry_id == base.entry_id
-        and source.config_ref == base.config_ref
+        source.context == base.context_ref
         and source.content_hash == base.content_hash
+        and isinstance(base.scope, WorkingPointCalibrationScope)
+        and source.sample == base.scope.sample
+        and not source.overrides
     )
 
 
