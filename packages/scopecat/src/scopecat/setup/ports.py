@@ -29,6 +29,7 @@ class SetupRepository(Protocol):
         revision: SetupRevisionRef,
         expected_generation: int,
         operation_id: str,
+        intent_hash: str,
         actor: str,
         note: str,
     ) -> ActiveSetupView: ...

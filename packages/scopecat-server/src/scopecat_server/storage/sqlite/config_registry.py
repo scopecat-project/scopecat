@@ -30,6 +30,7 @@ from scopecat.records.config import ConfigProfileSnapshot
 from scopecat.runs.repository import RunRepository
 
 from scopecat_server.storage.sqlite.connection import SQLiteDatabase
+from scopecat_server.storage.sqlite.setups import SQLiteSetupRepository
 
 CONFIG_REGISTRY_ROOT = "config-registry"
 CONFIG_REGISTRY_ACTIVATIONS_REF = f"{CONFIG_REGISTRY_ROOT}/activations"
@@ -452,6 +453,7 @@ class SQLiteConfigRegistryUnitOfWork:
         self._borrowed_connection = _borrowed_connection
         self._connection: sqlite3.Connection | None = None
         self._registry: SQLiteConfigRegistryRepository | None = None
+        self._setups: SQLiteSetupRepository | None = None
         self._transaction: AbstractContextManager[sqlite3.Connection] | None = None
 
     @property
@@ -460,6 +462,12 @@ class SQLiteConfigRegistryUnitOfWork:
             msg = "config registry unit of work has not been entered"
             raise RuntimeError(msg)
         return self._registry
+
+    @property
+    def setups(self) -> SQLiteSetupRepository:
+        if self._setups is None:
+            raise RuntimeError("config registry unit of work has not been entered")
+        return self._setups
 
     def __enter__(self) -> Self:
         if self._connection is not None:
@@ -479,6 +487,7 @@ class SQLiteConfigRegistryUnitOfWork:
             self._transaction = transaction
         self._connection = connection
         self._registry = SQLiteConfigRegistryRepository(connection)
+        self._setups = SQLiteSetupRepository(connection)
         return self
 
     def __exit__(
@@ -493,6 +502,7 @@ class SQLiteConfigRegistryUnitOfWork:
             raise RuntimeError(msg)
         self._connection = None
         self._registry = None
+        self._setups = None
         if self._borrowed_connection is not None:
             return
         transaction = self._transaction

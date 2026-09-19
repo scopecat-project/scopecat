@@ -12,9 +12,11 @@ from scopecat.records.config import (
     DomainTargetBinding,
     InstrumentRegistry,
     RoutingGraph,
+    SystemSpec,
     Topology,
 )
 from scopecat.records.content import Sha256ContentHash
+from scopecat.records.parameter import ParameterCatalog
 
 
 class _SetupModel(BaseModel):
@@ -28,6 +30,19 @@ class ExecutableSetupSnapshot(_SetupModel):
     routing: RoutingGraph
     domain_target: DomainTargetBinding | None
 
+    @model_validator(mode="after")
+    def validate_structure(self) -> ExecutableSetupSnapshot:
+        SystemSpec(
+            id="setup-validation",
+            primary_entity_id=self.primary_entity_id,
+            topology=self.topology,
+            instrument_registry=self.instrument_registry,
+            routing=self.routing,
+            domain_target=self.domain_target,
+            parameter_catalog=ParameterCatalog(id="setup-validation"),
+        )
+        return self
+
     @classmethod
     def from_config(cls, config: ConfigProfileSnapshot) -> ExecutableSetupSnapshot:
         return cls.model_validate(
@@ -36,9 +51,13 @@ class ExecutableSetupSnapshot(_SetupModel):
 
     def compose(self, base: ConfigProfileSnapshot) -> ConfigProfileSnapshot:
         """Explicitly replace executable fields, retaining the supplied parameters."""
-        content = base.model_dump()
-        content["system"].update(self.model_dump())
-        return ConfigProfileSnapshot.model_validate(content)
+        system = base.system.model_dump()
+        system.update(self.model_dump())
+        return ConfigProfileSnapshot(
+            id=base.id,
+            system=SystemSpec.model_validate(system),
+            parameter_snapshot=base.parameter_snapshot,
+        )
 
     @property
     def content_hash(self) -> Sha256ContentHash:
@@ -111,6 +130,7 @@ class ActiveSetupView(_SetupModel):
 
 class SetupActivationOperation(_SetupModel):
     operation_id: str = Field(min_length=1)
+    intent_hash: Sha256ContentHash
     revision: SetupRevisionRef
     expected_generation: int = Field(ge=0)
     actor: str = Field(min_length=1)

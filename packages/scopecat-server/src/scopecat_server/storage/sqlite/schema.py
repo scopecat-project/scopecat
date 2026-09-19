@@ -29,6 +29,7 @@ from scopecat_server.storage.sqlite.procedure_schedule_schema import (
 from scopecat_server.storage.sqlite.research_schema import RESEARCH_TABLES_SQL
 from scopecat_server.storage.sqlite.run_schema import RUN_TABLES_SQL
 from scopecat_server.storage.sqlite.sample_schema import SAMPLE_TABLES_SQL
+from scopecat_server.storage.sqlite.setup_schema import SETUP_TABLES_SQL
 from scopecat_server.storage.sqlite.target_schema import TARGET_CATALOG_TABLES_SQL
 
 PROJECT_SCHEMA_VERSION = 81
@@ -221,6 +222,7 @@ PROJECT_SCHEMA_SQL = "\n".join(
         CALIBRATION_COHORT_TABLES_SQL,
         PROCEDURE_SCHEDULE_TABLES_SQL,
         CONFIG_REGISTRY_TABLES_SQL,
+        SETUP_TABLES_SQL,
         EXECUTION_TABLES_SQL,
         AUTHOR_REVISION_TABLES_SQL,
         AUTHOR_WORKSPACE_TABLES_SQL,
