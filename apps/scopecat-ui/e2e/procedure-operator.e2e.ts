@@ -274,7 +274,8 @@ test("retains launch inputs across workspaces and invalidates previews without s
     });
     await page.getByRole("button", { name: "Reset launch draft" }).click();
     await expect(page.getByLabel("Frequency", { exact: true })).toHaveValue("4.8");
-    await expect(page.getByLabel("Sample ID")).toHaveValue("");
+    await expect(page.getByLabel("Sample ID")).toHaveValue("sample-navigation");
+    await expect(page.getByLabel("Operator", { exact: true })).toHaveValue("draft-author");
     expect(submissions).toBe(0);
   } catch (error) {
     failed = true;
