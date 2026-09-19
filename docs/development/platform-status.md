@@ -29,9 +29,12 @@ See [configuration ownership](architecture/configuration-ownership.md),
 
 1. **Reconcile consumers and maintenance entry points** under
    [#615](https://github.com/scopecat-project/scopecat/issues/615).
-   The launcher audit is tracked as [#659](https://github.com/scopecat-project/scopecat/issues/659):
-   retire redundant single-run adapters, reuse checked catalogs, then narrow the
-   baseline-less worker contract while retaining real multi-stage workflows.
+   The launcher convergence in [#659](https://github.com/scopecat-project/scopecat/issues/659)
+   removes redundant single-run adapters: frequency/amplitude and temperature use
+   authored discovery, while channel timing retains its multi-stage workflow.
+   Each worker request resolves its composed catalog once. Transport selects and
+   verifies source ownership before dispatch; pinned requests use revision workers,
+   and the one-shot worker serves baseline-less maintained applications.
    Bounded Help/navigation is delivered by [#658](https://github.com/scopecat-project/scopecat/issues/658).
    The remaining installation pairing and environment maintenance must keep
    registration, execution and scientific context as separate actions.
