@@ -81,7 +81,12 @@ def _lab() -> tuple[LabClient, dict[str, object], TargetRevision]:
     operations = SimpleNamespace(
         client=client,
         resolve_with_source=lambda _: (config, source),
-        active=lambda: SimpleNamespace(activation=SimpleNamespace(generation=1)),
+        active=lambda: SimpleNamespace(
+            activation=SimpleNamespace(generation=1),
+            entry=SimpleNamespace(
+                id="config", content_hash=config_content_hash(config)
+            ),
+        ),
         entry=lambda _: SimpleNamespace(
             config=config,
             entry=SimpleNamespace(
@@ -353,3 +358,100 @@ def test_explicit_clear_in_prepare_does_not_inherit_session_subject(
         )
         assert isinstance(science.subject, UnboundSubjectChoice)
         assert isinstance(session.selection.science.subject, SampleSubjectChoice)
+
+
+@pytest.mark.parametrize("registered_source", [False, True])
+def test_candidate_preserves_unbound_or_registered_subject(
+    monkeypatch: pytest.MonkeyPatch, registered_source: bool
+) -> None:
+    from scopecat.config.candidates import CandidateConfig
+    from scopecat.records.run import AnalysisCandidateRunConfigSource
+    from scopecat.records.scientific_selection import CandidateConfiguration
+
+    lab, _, target = _lab()
+    original_selection = (
+        ScientificSelection(subject=RegisteredTargetChoice(ref=target.ref))
+        if registered_source
+        else ScientificSelection()
+    )
+    original = resolve_launch_config(
+        lab,
+        LaunchRequest(
+            action="preview",
+            experiment="signal",
+            version="1",
+            selection=original_selection,
+        ),
+    ).reviewed.binding
+    config = load_config()
+    source = AnalysisCandidateRunConfigSource(
+        source_run_id="original",
+        analysis_record_id="analysis",
+        proposal_id="proposal",
+        base_config_content_hash=config_content_hash(config),
+        content_hash=config_content_hash(config),
+    )
+
+    def proposal(_run: str, _proposal: str) -> SimpleNamespace:
+        return SimpleNamespace(proposal=object())
+
+    def resolve_candidate(
+        _candidate: CandidateConfig,
+    ) -> tuple[object, AnalysisCandidateRunConfigSource]:
+        return config, source
+
+    def original_run(_run: str) -> SimpleNamespace:
+        return SimpleNamespace(snapshot=SimpleNamespace(scientific_binding=original))
+
+    monkeypatch.setattr(lab.config, "resolve_with_source", resolve_candidate)
+    monkeypatch.setattr(
+        lab.config.client, "parameter_proposal", proposal, raising=False
+    )
+    monkeypatch.setattr(lab.config.client, "get_run", original_run, raising=False)
+    request = LaunchRequest(
+        action="preview",
+        experiment="signal",
+        version="1",
+        selection=ScientificSelection(
+            configuration=CandidateConfiguration(source=source)
+        ),
+    )
+    if registered_source:
+        with pytest.raises(ValueError, match="original exact scientific subject"):
+            resolve_launch_config(lab, request)
+    else:
+        assert (
+            resolve_launch_config(lab, request).reviewed.binding.subject
+            == original.subject
+        )
+
+
+def test_repreview_cannot_attach_new_active_generation_to_old_entry(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    lab, _, _ = _lab()
+    request = LaunchRequest(action="preview", experiment="signal", version="1")
+    reviewed = resolve_launch_config(lab, request).reviewed
+    frozen = request.model_copy(update={"reviewed": reviewed})
+
+    def active() -> SimpleNamespace:
+        return SimpleNamespace(
+            activation=SimpleNamespace(generation=2),
+            entry=SimpleNamespace(
+                id="another-entry", content_hash=reviewed.binding.config_content_hash
+            ),
+        )
+
+    monkeypatch.setattr(lab.config, "active", active)
+    with pytest.raises(ValueError, match="clear reviewed evidence"):
+        resolve_launch_config(lab, frozen)
+    # A submit retains its original fence so the server can replay an exact retry.
+    submitted = LaunchRequest.model_validate(
+        {
+            **frozen.model_dump(),
+            "action": "submit",
+            "request_key": "retry",
+            "expected_request_hash": frozen.request_hash,
+        }
+    )
+    assert resolve_launch_config(lab, submitted).reviewed == reviewed

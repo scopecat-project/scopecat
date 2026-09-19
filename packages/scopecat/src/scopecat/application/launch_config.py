@@ -67,12 +67,8 @@ def resolve_launch_config(
     samples: tuple[SampleBinding, ...] = ()
     revisions: dict[tuple[str, int], SampleRevision] = {}
     if isinstance(subject, UnboundSubjectChoice):
-        if (
-            batch_id is not None
-            or isinstance(source, ContextRunConfigSource)
-            or candidate_binding is not None
-        ):
-            raise ValueError("batch, working point or candidate requires a subject")
+        if batch_id is not None or isinstance(source, ContextRunConfigSource):
+            raise ValueError("batch or working point requires a subject")
     else:
         if isinstance(subject, RegisteredTargetChoice):
             target = lab.resolve_target(subject.ref)
@@ -197,12 +193,21 @@ def _resolve_configuration(
                 raise ValueError("active selection has inconsistent reviewed source")
             selected = lab.config.entry(old.entry_id)
             config = selected.config
+            active = lab.config.active()
+            if request.action == "preview" and (
+                active.entry.id != old.entry_id
+                or active.entry.content_hash != old.content_hash
+            ):
+                raise ValueError(
+                    "active configuration changed; "
+                    "clear reviewed evidence and preview again"
+                )
             source = ConfigRegistryRunConfigSource(
                 selector="active",
                 entry_id=selected.entry.id,
                 config_ref=selected.entry.config_ref,
                 content_hash=selected.entry.content_hash,
-                registry_generation=lab.config.active().activation.generation,
+                registry_generation=active.activation.generation,
             )
     if reviewed is not None and _without_generation(
         reviewed.config_source

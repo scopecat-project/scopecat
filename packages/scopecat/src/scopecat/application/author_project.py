@@ -419,24 +419,32 @@ class AuthorProject(DaemonClient):
             binding = self.get_run(
                 selected_candidate.source_run_id
             ).snapshot.scientific_binding
-            if len(binding.samples) != 1:
-                raise ValueError("candidate requires one exact subject")
-            frozen_sample = binding.samples[0]
+            if len(binding.samples) > 1:
+                raise ValueError("authored candidate requires at most one subject")
             from scopecat.records.scientific_binding import RegisteredTargetSubject
 
-            subject = (
-                RegisteredTargetChoice(ref=binding.subject.ref)
-                if isinstance(binding.subject, RegisteredTargetSubject)
-                else SampleSubjectChoice(
-                    sample_id=frozen_sample.sample_id, revision=frozen_sample.revision
+            if not binding.samples:
+                subject = UnboundSubjectChoice()
+                batch_scope = UnscopedBatch()
+            else:
+                frozen_sample = binding.samples[0]
+                subject = (
+                    RegisteredTargetChoice(ref=binding.subject.ref)
+                    if isinstance(binding.subject, RegisteredTargetSubject)
+                    else SampleSubjectChoice(
+                        sample_id=frozen_sample.sample_id,
+                        revision=frozen_sample.revision,
+                    )
                 )
-            )
+                batch_scope = (
+                    UnscopedBatch()
+                    if frozen_sample.batch_id is None
+                    else DeclaredBatch(id=frozen_sample.batch_id)
+                )
             science = ScientificSelection(
                 subject=subject,
                 configuration=CandidateConfiguration(source=candidate_source),
-                batch=UnscopedBatch()
-                if frozen_sample.batch_id is None
-                else DeclaredBatch(id=frozen_sample.batch_id),
+                batch=batch_scope,
             )
         if parameters is not None:
             frozen = parameters.freeze()
