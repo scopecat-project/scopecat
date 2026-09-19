@@ -10,6 +10,7 @@ interface DaemonEndpointRecord {
 }
 
 interface ProjectDaemon {
+  projectRoot: string;
   baseUrl: string;
 }
 
@@ -95,7 +96,7 @@ const test = base.extend<{}, { daemon: ProjectDaemon }>({
           projectRoot,
         );
         const endpoint = await readEndpoint(projectRoot);
-        await use({ baseUrl: endpoint.base_url });
+        await use({ baseUrl: endpoint.base_url, projectRoot });
       } finally {
         if (initialized) {
           await stopAndRemoveProject(projectRoot);
@@ -106,6 +107,15 @@ const test = base.extend<{}, { daemon: ProjectDaemon }>({
     },
     { scope: "worker", timeout: 120_000 },
   ],
+});
+
+test.afterEach(async ({ daemon }, testInfo) => {
+  if (testInfo.status !== testInfo.expectedStatus) {
+    await testInfo.attach("Daemon log", {
+      body: await readFile(join(daemon.projectRoot, ".scopecat/daemon.log")),
+      contentType: "text/plain",
+    });
+  }
 });
 
 test("handles naturally expired executors from the GUI", async ({ daemon, page }) => {
@@ -190,6 +200,36 @@ async function startAbandonedRun(
       },
     },
   };
+  // Instrument ownership belongs to the executable setup. Publish the explicit
+  // setup change before selecting parameters for this resource-bearing run.
+  const setup = await checkedJson<{
+    activation: { generation: number };
+    revision: { setup: Record<string, unknown> };
+  }>(await page.request.get(`${baseUrl}/api/v1/setup/active`), "GET");
+  const revision = await checkedJson<{ id: string; content_hash: string }>(
+    await page.request.post(`${baseUrl}/api/v1/setup/revisions`, {
+      data: {
+        revision_id: `e2e-setup-${suffix}`,
+        setup: {
+          ...setup.revision.setup,
+          instrument_registry: runConfig.system.instrument_registry,
+        },
+        actor: "e2e",
+      },
+    }),
+    "POST",
+  );
+  await expectResponseOk(
+    await page.request.post(`${baseUrl}/api/v1/setup/activation-operations`, {
+      data: {
+        operation_id: `e2e-setup-${suffix}`,
+        revision: { revision_id: revision.id, content_hash: revision.content_hash },
+        expected_generation: setup.activation.generation,
+        actor: "e2e",
+      },
+    }),
+    "POST",
+  );
   await expectResponseOk(
     await page.request.post(`${baseUrl}/api/v1/config-registry/publish-operations`, {
       data: {
@@ -205,10 +245,28 @@ async function startAbandonedRun(
     }),
     "POST",
   );
+  const scientificBinding = JSON.parse(
+    runUv(
+      [
+        "python",
+        "-c",
+        [
+          "import sys",
+          "from scopecat.config.scientific_binding import bind_scientific_evidence",
+          "from scopecat.records.config import ConfigProfileSnapshot",
+          "config = ConfigProfileSnapshot.model_validate_json(sys.argv[1])",
+          "print(bind_scientific_evidence(catalog_id='e2e', config=config, samples=(), sample_revisions={}).model_dump_json())",
+        ].join("\n"),
+        JSON.stringify(runConfig),
+      ],
+      REPOSITORY_ROOT,
+    ).stdout,
+  ) as Record<string, unknown>;
   const admission = await checkedJson<RunAdmission>(
     await page.request.post(`${baseUrl}/api/v1/runs`, {
       data: {
         submission_id: `e2e-${suffix}`,
+        scientific_binding: scientificBinding,
         config: runConfig,
         request: {},
         plan: {

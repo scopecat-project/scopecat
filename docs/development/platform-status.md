@@ -1,7 +1,8 @@
 # Platform status and remaining work
 
-This is the current integration map, including source selection (#657) and the
-Help/navigation (#658) and stopped environment rechecks (#663), rather than another historical roadmap. The umbrella is [#610](https://github.com/scopecat-project/scopecat/issues/610).
+This is the current integration map, including launcher convergence (#659),
+Help/navigation (#658), stopped environment rechecks (#663) and retryable fixed
+delivery publication (#665), rather than another historical roadmap. The umbrella is [#610](https://github.com/scopecat-project/scopecat/issues/610).
 Earlier wave reports describe their own revisions; do not interpret their pending
 items as additional work when a later slice delivered them. Update this map when
 closing an ownership or product workflow, and keep implementation details in the
@@ -15,7 +16,7 @@ linked architecture documents.
 | Parameters and calibration | Independent working-point heads; verified publication and bounded automatic cohorts use exact owner/sample/batch/config evidence (#648, #652) | No executable apparatus subject or qualified cross-object dependency |
 | Executable setup | Immutable revisions, independent activation, explicit parameter rebinding and resource-generation fencing (#654) | One active setup per deployment; whole-setup content fence, not minimal experiment dependencies |
 | Author sources | Same-environment registered workspaces, scoped publication/workers and page-local code selection (#636, #657) | Different environments and portable multi-source installation are not qualified |
-| Application entry | Registered workbenches and lifecycle operations (#627, #633); workbench Help and manager-preserving navigation (#658); stopped environment revalidation (#663) | Host still supervises separate services; not shared cross-service physical authority |
+| Application entry | Registered workbenches and lifecycle operations (#627, #633); workbench Help and manager-preserving navigation (#658); stopped environment revalidation (#663); retryable fixed delivery publication (#665) | Host still supervises separate services; not shared cross-service physical authority |
 | Author/results | Direct callable compute, inferred scalar outputs, dict returns and validated native historical result rows (#584, #586) | Symbolic argument static typing remains broader than native calls |
 | Grouped analysis | Request sweeps and retained completed-run group analysis | No durable live-group completion/scheduling protocol |
 | Data recovery | Current-format backup/restore and non-mutating rejection of unsupported formats | No supported persistent baseline or selected-run exchange format |
@@ -27,28 +28,29 @@ See [configuration ownership](architecture/configuration-ownership.md),
 
 ## Near-term sequence
 
-1. **Reconcile consumers and maintenance entry points** under
-   [#615](https://github.com/scopecat-project/scopecat/issues/615).
-   The launcher convergence in [#659](https://github.com/scopecat-project/scopecat/issues/659)
-   removes redundant single-run adapters: frequency/amplitude and temperature use
-   authored discovery, while channel timing retains its multi-stage workflow.
-   Each worker request resolves its composed catalog once. Transport selects and
-   verifies source ownership before dispatch; pinned requests use revision workers,
-   and the one-shot worker serves baseline-less maintained applications.
-   Bounded Help/navigation is delivered by [#658](https://github.com/scopecat-project/scopecat/issues/658).
-   Stopped environment rechecks (#663) reuse registered paths and retain deployment
-   identity without starting execution. Installation pairing, replacement-path
-   registration and installed lifecycle qualification remain separate work; package
-   installation is not performed by the manager. Fixed delivery preparation (#665)
-   supports retry after interruption and atomic default-entry publication; actual
-   manager replacement still waits for idle management work. Registered service
-   runtimes remain independently selected.
-   Record concrete replacement coverage before removing any reference fixture.
-2. **Qualify the resulting local application milestone** under
+1. **Qualify the delivered local application milestone** under
    [#616](https://github.com/scopecat-project/scopecat/issues/616).
-   Exercise installed Windows/Linux startup/update/restart, notebook/browser source
-   flows, current-format recovery and failure cleanup. Do not wait for every future
-   platform feature. Record software evidence separately from hardware or human use.
+   The entry/lifecycle scope of [#614](https://github.com/scopecat-project/scopecat/issues/614)
+   is complete. Help/navigation (#658), launcher convergence (#659), stopped
+   environment rechecks (#663) and retryable fixed delivery publication (#665)
+   are delivered implementation, not pending development tasks.
+   Qualify installed Windows/Linux preparation, repeat installation, manager
+   reuse/restart, registered virtual-service lifecycle and environment recheck.
+   Preserve separate evidence for notebook/browser source flows, current-format
+   recovery and failed-operation cleanup. Use an explicit revision and report each
+   result; fast PR gates do not establish installed acceptance. The short
+   [Windows human trial](windows-application-trial.md) covers OS-facing entry and
+   maintenance clarity without repeating the tutorial curriculum. Its delivery
+   handoff remains pending until an artifact and automated results are available.
+2. **Remove demonstrated consumer and fixture debt** under
+   [#615](https://github.com/scopecat-project/scopecat/issues/615).
+   Frequency/amplitude and temperature already use authored discovery; channel
+   timing retains its multi-stage workflow. Each worker request resolves its
+   composed catalog once. Transport qualifies source ownership before dispatch;
+   pinned requests use revision workers, and the one-shot worker serves
+   baseline-less maintained applications. Further work is targeted fixture
+   extraction (#565, #520) and an inventory of actual remaining consumers.
+   Record concrete replacement coverage before removing any reference fixture.
 3. **Add live grouped analysis** under
    [#561](https://github.com/scopecat-project/scopecat/issues/561).
    Start with durable group-completion identity, generation/repetition semantics and
@@ -60,10 +62,15 @@ See [configuration ownership](architecture/configuration-ownership.md),
    require an execution/applicability contract. Descriptive apparatus notes and
    room-temperature attachments are not automatic low-temperature calibration.
 
-Same-environment source ownership is delivered; [#613](https://github.com/scopecat-project/scopecat/issues/613)
-remains for environment/installation boundaries and qualification. The first app
-slice closed #614 prematurely; it is reopened with the remaining local integration
-scope, separately from completed entry/lifecycle controls.
+Same-environment source ownership is delivered;
+[#613](https://github.com/scopecat-project/scopecat/issues/613) retains environment
+and installation boundaries, with installed qualification tracked in #616.
+#614 is closed for its delivered entry/lifecycle scope. Installation pairing and a
+simpler replacement-environment workflow need a separately bounded design; they
+are not implicit unfinished requirements of that closed issue. The current
+[maintenance guide](../how-to/maintain-application.md) documents explicit local
+registration when paths change. The manager does not install packages or redirect
+registered service runtimes when its own delivery changes.
 
 ## Debt and evidence boundaries
 

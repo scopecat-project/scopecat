@@ -2,6 +2,16 @@ name: Full acceptance
 
 on:
   workflow_dispatch:
+    inputs:
+      profile:
+        description: Qualification scope (ordinary PR CI is unchanged)
+        type: choice
+        default: full
+        options:
+          - full
+          - local-application
+
+run-name: Acceptance (${{ inputs.profile }}) @ ${{ github.ref_name }}
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
@@ -9,6 +19,7 @@ concurrency:
 
 jobs:
   python-tests:
+    if: inputs.profile == 'full'
     name: Python ${{ matrix.group.label }} (${{ matrix.os }})
     strategy:
       fail-fast: false
@@ -62,6 +73,7 @@ jobs:
           packages/scopecat/tests/measurements/test_dataset.py
 
   benchmark-smoke:
+    if: inputs.profile == 'full'
     name: Benchmark smoke
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -83,6 +95,7 @@ jobs:
         run: uv run --locked pytest -q -n 0 benchmarks/smoke
 
   python-quality:
+    if: inputs.profile == 'full'
     name: Python quality
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -178,18 +191,23 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Check generated daemon API types
+        if: inputs.profile == 'full'
         run: pnpm run check:api
 
       - name: Check UI formatting
+        if: inputs.profile == 'full'
         run: pnpm run format:check
 
       - name: Run UI lint
+        if: inputs.profile == 'full'
         run: pnpm run lint
 
       - name: Run UI tests
+        if: inputs.profile == 'full'
         run: pnpm run test
 
       - name: Run UI type check
+        if: inputs.profile == 'full'
         run: pnpm run typecheck
 
       - name: Build UI
@@ -311,8 +329,13 @@ jobs:
           uv run --locked --group delivery python -m lab_tools.delivery
           dist/tutorial --source . --gui dist/tutorial-gui
 
-      - name: Verify offline notebooks, refresh, reset and installed launcher
-        run: uv run --locked --group delivery python scripts/verify_teaching_delivery.py dist/tutorial dist/tutorial-evidence
+      - name: Archive the complete offline delivery
+        run: python -m zipfile -c dist/tutorial.zip dist/tutorial
+
+      - name: Verify the archived delivery, notebooks and installed application
+        run: |
+          python -m zipfile -e dist/tutorial.zip dist/delivery-check
+          uv run --locked --group delivery python scripts/verify_teaching_delivery.py dist/delivery-check/tutorial dist/tutorial-evidence
 
       - name: Retain tutorial delivery and executed notebooks
         if: always()
@@ -320,13 +343,15 @@ jobs:
         with:
           name: scopecat-tutorial-${{ matrix.os }}
           path: |
-            dist/tutorial/
+            dist/tutorial.zip
             dist/tutorial-evidence/**/verified-*.ipynb
-            dist/tutorial-evidence/acceptance.json
+            dist/tutorial-evidence/**/acceptance.json
+            dist/tutorial-evidence/**/*.log
           retention-days: 7
           if-no-files-found: warn
 
   docs:
+    if: inputs.profile == 'full'
     name: Documentation
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -350,7 +375,7 @@ jobs:
           uv run --locked --group docs zensical build --strict
 
   gate:
-    name: Full acceptance gate
+    name: Acceptance gate (${{ inputs.profile }})
     if: ${{ always() }}
     needs:
       - python-tests
@@ -365,6 +390,7 @@ jobs:
     steps:
       - name: Require successful jobs
         env:
+          PROFILE: ${{ inputs.profile }}
           INSTALLED_PILOT_RESULT: ${{ needs['installed-pilot'].result }}
           BROWSER_TESTS_RESULT: ${{ needs['browser-tests'].result }}
           PYTHON_TESTS_RESULT: ${{ needs['python-tests'].result }}
@@ -374,9 +400,14 @@ jobs:
           DOCS_RESULT: ${{ needs.docs.result }}
         run: |
           test "$INSTALLED_PILOT_RESULT" = success
-          test "$PYTHON_TESTS_RESULT" = success
           test "$BROWSER_TESTS_RESULT" = success
-          test "$BENCHMARK_SMOKE_RESULT" = success
-          test "$PYTHON_QUALITY_RESULT" = success
           test "$UI_RESULT" = success
-          test "$DOCS_RESULT" = success
+          case "$PROFILE" in
+            full) expected=success ;;
+            local-application) expected=skipped ;;
+            *) exit 1 ;;
+          esac
+          test "$PYTHON_TESTS_RESULT" = "$expected"
+          test "$BENCHMARK_SMOKE_RESULT" = "$expected"
+          test "$PYTHON_QUALITY_RESULT" = "$expected"
+          test "$DOCS_RESULT" = "$expected"
