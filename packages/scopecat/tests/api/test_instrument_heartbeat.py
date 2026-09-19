@@ -12,6 +12,9 @@ from scopecat.daemon.wire import (
     InstrumentSessionOpenReceipt,
 )
 from scopecat.records.instrument import InstrumentStateSnapshot
+from scopecat.records.setup import (
+    SetupRevisionRef,
+)
 from scopecat.sdk.instruments import InstrumentDescription
 
 
@@ -21,8 +24,9 @@ def test_instrument_heartbeat_recovers_from_temporary_unavailability() -> None:
     session = InstrumentSessionOpenReceipt(
         session_id="session-1",
         actor="operator",
-        config_entry_id="baseline",
-        config_content_hash=f"sha256:{'0' * 64}",
+        setup=SetupRevisionRef(
+            revision_id="baseline", content_hash="sha256:" + "0" * 64
+        ),
         instrument_ids=("source",),
         configured_default_instrument_ids=(),
         descriptions=(

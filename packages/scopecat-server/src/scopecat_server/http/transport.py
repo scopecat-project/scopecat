@@ -205,8 +205,6 @@ from scopecat.daemon.wire import (
     InstrumentContractCatalogRequest,
     InstrumentDriverProbeCommand,
     InstrumentDriverProbeReceipt,
-    InstrumentInventoryMigrationCommand,
-    InstrumentInventoryMigrationReceipt,
     InstrumentReleaseCommand,
     InstrumentReleaseReceipt,
     InstrumentSessionEndReceipt,
@@ -969,12 +967,6 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
     @app.post(f"{_API_PREFIX}/config-registry/publish-operations")
     def publish_config(command: ConfigPublishCommand) -> ConfigPublishReceipt:
         return application.config.publish_config(command)
-
-    @app.post(f"{_API_PREFIX}/config-registry/instrument-inventory-migrations")
-    def migrate_instrument_inventory(
-        command: InstrumentInventoryMigrationCommand,
-    ) -> InstrumentInventoryMigrationReceipt:
-        return application.config.migrate_instrument_inventory(command)
 
     @app.post(f"{_API_PREFIX}/config-registry/drafts/preview")
     def preview_config_draft(

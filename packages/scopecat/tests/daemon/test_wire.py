@@ -51,8 +51,6 @@ from scopecat.daemon.wire import (
     DirectConfigRevisionSource,
     ExecutorLease,
     InstrumentConfiguredDefaultsApplyCommand,
-    InstrumentInventoryMigrationCommand,
-    InstrumentInventoryMigrationReceipt,
     InstrumentSessionLeaseReceipt,
     InstrumentSessionOpenReceipt,
     RunCoverageAdvanceCommand,
@@ -72,6 +70,7 @@ from scopecat.daemon.wire import (
     RunRecoveryGroupCommitReceipt,
     RunRecoveryGroupView,
     RunSubmission,
+    SetupActivateCommand,
 )
 from scopecat.kernel.content_identity import sha256_content_hash
 from scopecat.kernel.problems import Problem, ProblemPhase
@@ -103,6 +102,10 @@ from scopecat.records.execution import (
 from scopecat.records.instrument import InstrumentStateSnapshot, state_member_target
 from scopecat.records.run import ConfigRegistryRunConfigSource
 from scopecat.records.run_request import RunRequest
+from scopecat.records.setup import (
+    ExecutableSetupSnapshot,
+    SetupRevisionRef,
+)
 from scopecat.sdk.instruments import (
     InstrumentConfiguredDefaultsApplyReceipt,
     InstrumentDescription,
@@ -313,7 +316,7 @@ def test_config_publish_receipt_binds_operation_entry_and_activation() -> None:
         )
 
 
-def test_instrument_inventory_migration_is_discriminated_closed_json() -> None:
+def test_setup_inventory_declarations_is_discriminated_closed_json() -> None:
     config = load_config()
     changes = (
         InstrumentInventoryRemoval(
@@ -332,46 +335,21 @@ def test_instrument_inventory_migration_is_discriminated_closed_json() -> None:
             to_exclusivity_key="rack-a/meter",
         ),
     )
-    command = InstrumentInventoryMigrationCommand(
-        config=config,
-        entry_id="inventory-v2",
+    setup = ExecutableSetupSnapshot.from_config(config)
+    command = SetupActivateCommand(
+        operation_id="activate-setup",
+        revision=SetupRevisionRef(
+            revision_id="inventory-v2", content_hash=setup.content_hash
+        ),
         changes=changes,
         actor="operator",
         expected_generation=1,
     )
-    entry = ConfigRegistryEntry(
-        id=command.entry_id,
-        config_ref="config-registry/entries/inventory-v2/config.json",
-        content_hash=config_content_hash(config),
-        source=DirectConfigRegistrySource(),
-        actor=command.actor,
-    )
-    receipt = InstrumentInventoryMigrationReceipt(
-        entry=entry,
-        activation=ConfigRegistryActivationRecord(
-            generation=2,
-            action="inventory_migration",
-            entry_id=entry.id,
-            entry_content_hash=entry.content_hash,
-            actor=command.actor,
-        ),
-        changes=changes,
-    )
-
-    restored = InstrumentInventoryMigrationCommand.model_validate_json(
-        command.model_dump_json()
-    )
-
+    restored = SetupActivateCommand.model_validate_json(command.model_dump_json())
     assert restored == command
     assert isinstance(restored.changes[0], InstrumentInventoryRemoval)
     assert isinstance(restored.changes[1], InstrumentInventoryRekey)
     assert isinstance(restored.changes[2], InstrumentInventoryRenameRekey)
-    assert (
-        InstrumentInventoryMigrationReceipt.model_validate_json(
-            receipt.model_dump_json()
-        )
-        == receipt
-    )
 
 
 def test_instrument_inventory_rekey_rejects_a_noop() -> None:
@@ -1093,8 +1071,9 @@ def test_instrument_session_open_requires_ordered_observed_state() -> None:
     receipt = InstrumentSessionOpenReceipt(
         session_id="session-1",
         actor="alice",
-        config_entry_id="baseline",
-        config_content_hash=f"sha256:{'0' * 64}",
+        setup=SetupRevisionRef(
+            revision_id="baseline", content_hash="sha256:" + "0" * 64
+        ),
         instrument_ids=instrument_ids,
         configured_default_instrument_ids=("source-b",),
         descriptions=descriptions,
@@ -1181,7 +1160,9 @@ def test_successful_configured_defaults_apply_requires_synchronized_state(
         session_id="session-1",
         operation_id="defaults.apply-1",
         instrument_id="source-a",
-        config_entry_id="baseline",
+        setup=SetupRevisionRef(
+            revision_id="baseline", content_hash="sha256:" + "0" * 64
+        ),
         status=status,
         state=state,
     )
@@ -1213,7 +1194,9 @@ def test_rejected_configured_defaults_apply_has_problem_without_state() -> None:
         session_id="session-1",
         operation_id="defaults.apply-1",
         instrument_id="source-a",
-        config_entry_id="baseline",
+        setup=SetupRevisionRef(
+            revision_id="baseline", content_hash="sha256:" + "0" * 64
+        ),
         status="rejected",
         problems=(_configured_defaults_problem(),),
     )

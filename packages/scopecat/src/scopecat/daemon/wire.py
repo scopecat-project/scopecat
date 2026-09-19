@@ -488,23 +488,6 @@ class SetupActivateCommand(_WireModel):
     changes: tuple[InstrumentInventoryChange, ...] = ()
 
 
-class InstrumentInventoryMigrationCommand(_WireModel):
-    """Publish a complete config through an explicitly drained migration."""
-
-    config: ConfigProfileSnapshot
-    entry_id: NonEmptyText
-    changes: tuple[InstrumentInventoryChange, ...] = Field(min_length=1)
-    actor: NonEmptyText
-    expected_generation: int = Field(ge=1)
-    note: str = ""
-
-
-class InstrumentInventoryMigrationReceipt(_WireModel):
-    entry: ConfigRegistryEntry
-    activation: ConfigRegistryActivationRecord
-    changes: tuple[InstrumentInventoryChange, ...] = Field(min_length=1)
-
-
 class ConfigEntryActivationCommand(_WireModel):
     """Select a saved revision with generation compare-and-swap."""
 
@@ -1459,8 +1442,6 @@ __all__ = [
     "InstrumentContractCatalogRequest",
     "InstrumentDriverProbeCommand",
     "InstrumentDriverProbeReceipt",
-    "InstrumentInventoryMigrationCommand",
-    "InstrumentInventoryMigrationReceipt",
     "InstrumentReleaseCommand",
     "InstrumentReleaseReceipt",
     "InstrumentSessionEndReceipt",
