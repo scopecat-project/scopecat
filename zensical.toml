@@ -27,6 +27,7 @@ nav = [
     { "Write an experiment" = "how-to/write-an-experiment.md" },
     { "Refresh author code" = "how-to/refresh-author-code.md" },
     { "Scans and grouped analysis" = "how-to/grouped-analysis.md" },
+    { "Register measurement targets" = "how-to/register-measurement-targets.md" },
     { "Keep experimental batches distinct" = "how-to/experimental-batches.md" },
     { "Select session context" = "how-to/select-session-context.md" },
     { "Number runs in collections" = "how-to/record-collections.md" },
