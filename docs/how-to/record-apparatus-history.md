@@ -13,7 +13,8 @@ Do not register an artificial sample just to store a line's notes.
 
 ## Register and find a line
 
-With an existing connected `LabClient` called `lab`:
+With an existing connected `LabClient` called `lab` (or use `session.apparatus`
+from `sc.notebook()`; it uses the selected session operator by default):
 
 ```python
 line = lab.apparatus.create(
