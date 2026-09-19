@@ -109,9 +109,8 @@ from scopecat.records.research_project import RunHistoryFilter
 page = session.list_runs(history=RunHistoryFilter(batch_id=batch.id))
 ```
 
-Schema **72** adds the batch catalog and an indexed run/batch association. The
-[explicit copy migration](migrate-data.md) preserves all old tables, payloads and
-run numbers. Historical batches remain unspecified; no event is guessed from a
-working-point name, directory or timestamp. Optional batch fields are omitted from
-old serialized identities, so existing content hashes and calibration keys remain
-unchanged.
+The current format stores the batch catalog and an indexed run/batch association.
+Unspecified batches remain unspecified; no event is guessed from a working-point
+name, directory or timestamp. Current-format [backup/restore](backup-and-restore.md)
+retains that evidence. Earlier development stores have no supported migration or
+read path in new builds; see the [data policy](../development/data-compatibility.md).

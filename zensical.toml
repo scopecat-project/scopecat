@@ -32,7 +32,6 @@ nav = [
     { "Select session context" = "how-to/select-session-context.md" },
     { "Number runs in collections" = "how-to/record-collections.md" },
     { "Organize research history" = "how-to/research-history.md" },
-    { "Migrate a data copy" = "how-to/migrate-data.md" },
     { "Control instruments" = "how-to/control-instruments.md" },
     { "Use measurement data" = "how-to/use-measurement-data.md" },
     { "Compare retained runs" = "how-to/retained-run-comparison.md" },
@@ -72,6 +71,7 @@ nav = [
   { "Development" = [
     "development/index.md",
     { "Repository map" = "development/repository-map.md" },
+    { "Data compatibility policy" = "development/data-compatibility.md" },
     { "Core workflow evaluations" = "development/workflow-evaluations.md" },
     { "Supervised laboratory pilot roadmap" = "development/lab-pilot-roadmap.md" },
     { "Pilot work slices and acceptance fixtures" = "development/pilot-work-slices.md" },

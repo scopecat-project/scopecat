@@ -235,13 +235,12 @@ content: render a diagram as PNG, or export a document as PDF before importing.
 Responses use fixed supported media types, `nosniff`, and a sandbox policy. PDF
 content is a download rather than an embedded viewer.
 
-Distribute an already populated project with the normal stopped-project snapshot
+Distribute a current-format project with the stopped-project snapshot
 and restore commands. Copying only source/configuration or a sample record does
 not deliver its immutable objects. Missing or corrupt stored bytes require the
 original complete snapshot, or a new explicit import and new sample revision;
-do not replace bytes under an existing digest. Unsupported old references remain
-readable and do not prevent snapshots, but are not silently turned into working
-links. No server-side remote fetch, local-path resolver, or URI execution is
+do not replace bytes under an existing digest. Unsupported URI schemes in current-format references remain visible and do not
+prevent snapshots, but are not silently turned into working links. No server-side remote fetch, local-path resolver, or URI execution is
 provided.
 
 The public `fixtures/core/sample_artifacts/diagram.png` and `notes.txt`, `document.pdf`, and `layout.json` form a

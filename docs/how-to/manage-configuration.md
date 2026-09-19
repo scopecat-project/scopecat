@@ -224,13 +224,12 @@ conservatively validate all rows of the imported column; use a concrete key for
 a single-sample probe. This slice adds no domain-aware lazy dependency discovery.
 Ordinary Python/dataclass consumers must check Optional values themselves.
 
-For maintainers: storage remains project schema 73 with absent cells representing
-unknowns. The wire adds `add_table` structure edits and permits `null` in keyed
-row **updates**, meaning clear that cell; snapshots do not store null atoms.
-New readers still read old snapshots and runs. Client and daemon must use the
-same current build; older clients cannot consume the new structure records or
-clear intents. This change rewrites no historical records and supplies no
-cross-version migration.
+For maintainers: the current format represents unknowns with absent cells.
+The wire supports `add_table` structure edits and permits `null` in keyed row
+**updates**, meaning clear that cell; snapshots do not store null atoms. Client
+and daemon use the same current build. There is no promise that new readers accept
+prebaseline snapshots or runs; preserve original files separately under the
+[data policy](../development/data-compatibility.md).
 
 ## Review configuration source changes
 
