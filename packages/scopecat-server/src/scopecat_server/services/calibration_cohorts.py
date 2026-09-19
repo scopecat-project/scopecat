@@ -32,7 +32,6 @@ from scopecat.automation.calibrations import (
     CalibrationCohort,
     CalibrationCohortMember,
     calibration_cohort_member_request_key,
-    calibration_target_sample_selectors,
 )
 from scopecat.config.registry.records import ContextConfigRegistrySource
 from scopecat.kernel.errors import DataIntegrityError, NotFound
@@ -203,11 +202,7 @@ class CalibrationCohortService:
                     definition=member_spec.procedure,
                     request_key=request_key,
                     intent=member_spec.intent,
-                    samples=(
-                        scope.sample_selectors()
-                        if isinstance(scope, WorkingPointCalibrationScope)
-                        else calibration_target_sample_selectors(member_spec.target)
-                    ),
+                    samples=scope.sample_selectors(),
                     expected_configuration=SetupContentFence(
                         content_hash=setup_content_hash(config)
                     ),
