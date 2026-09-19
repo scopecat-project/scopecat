@@ -1134,10 +1134,26 @@ class CalibrationPublicationFailure(_CalibrationModel):
         return _canonical_utc(value, field_name="failed_at")
 
 
+class CalibrationWorkingPointSupersession(_CalibrationModel):
+    kind: Literal["working_point_changed"] = "working_point_changed"
+    superseded_by: CalibrationConfigSourceRef
+
+
+class CalibrationSetupSupersession(_CalibrationModel):
+    kind: Literal["setup_changed"] = "setup_changed"
+    setup_content_hash: Sha256ContentHash
+
+
+type CalibrationSupersessionEvidence = Annotated[
+    CalibrationWorkingPointSupersession | CalibrationSetupSupersession,
+    Field(discriminator="kind"),
+]
+
+
 class CalibrationPublicationSupersession(_CalibrationModel):
     """Terminal base drift that makes this cohort unsafe to publish."""
 
-    superseded_by: CalibrationConfigSourceRef
+    evidence: CalibrationSupersessionEvidence
     superseded_at: datetime
 
     @field_validator("superseded_at")
@@ -1260,10 +1276,10 @@ class CalibrationCohortFinalization(_CalibrationModel):
         if self.supersession is None:
             raise ValueError("superseded publication requires audit detail")
         self._require_only_detail("supersession")
-        if (
-            self.supersession.superseded_by.scope != self.base_config_source.scope
-            or self.supersession.superseded_by.context_ref
-            == self.base_config_source.context_ref
+        evidence = self.supersession.evidence
+        if isinstance(evidence, CalibrationWorkingPointSupersession) and (
+            evidence.superseded_by.scope != self.base_config_source.scope
+            or evidence.superseded_by.context_ref == self.base_config_source.context_ref
         ):
             raise ValueError(
                 "publication supersession must name another head "
