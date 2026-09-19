@@ -7,6 +7,7 @@ from scopecat.api.procedures import LabProcedureContext
 from scopecat.automation import procedure
 from scopecat.kernel.frozen import thaw_json_value
 from scopecat.records.config import ConfigProfileSnapshot, config_content_hash
+from scopecat.records.config_context import ContextRunConfigSource
 from scopecat.records.run import ConfigRegistryRunConfigSource
 
 from reference_lab.workflows.drag_beta_analysis import drag_beta_analysis
@@ -23,7 +24,7 @@ from reference_lab.workflows.drag_beta_verification import (
 DRAG_BETA_PROCEDURE_ID = "reference-lab.drag-beta-calibration"
 DRAG_BETA_PROCEDURE_VERSION = "9"
 DRAG_BETA_VERIFICATION_PROCEDURE_ID = "reference-lab.drag-beta-verification"
-DRAG_BETA_VERIFICATION_PROCEDURE_VERSION = "8"
+DRAG_BETA_VERIFICATION_PROCEDURE_VERSION = "9"
 
 
 def drag_beta_calibration_request_key(
@@ -70,13 +71,13 @@ class DragBetaProcedureIntent(BaseModel):
 
 
 class DragBetaVerificationIntent(BaseModel):
-    """Exact target and active config for one verify-only calibration member."""
+    """Exact target and saved working point for a verify-only member."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     qubit: DragBetaQubit
     initial_config: ConfigProfileSnapshot
-    initial_config_source: ConfigRegistryRunConfigSource
+    initial_config_source: ContextRunConfigSource
     minimum_improvement: float = Field(
         default=DRAG_BETA_MINIMUM_IMPROVEMENT,
         ge=0.0,
@@ -90,10 +91,6 @@ class DragBetaVerificationIntent(BaseModel):
     @model_validator(mode="after")
     def validate_initial_registry_state(self) -> DragBetaVerificationIntent:
         source = self.initial_config_source
-        if source.selector != "active":
-            raise ValueError("calibration member requires the active config source")
-        if source.registry_generation is None:
-            raise ValueError("initial config source requires a registry generation")
         if source.content_hash != config_content_hash(self.initial_config):
             raise ValueError("initial config source hash does not match its snapshot")
         return self

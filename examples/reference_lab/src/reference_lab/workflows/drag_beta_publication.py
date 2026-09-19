@@ -35,6 +35,7 @@ from scopecat.kernel.entity import EntityRef
 from scopecat.kernel.python_source import python_source_identity
 from scopecat.kernel.value_identity import scalar_values_equal
 from scopecat.records.analysis import MeasurementAnalysisRecordInput
+from scopecat.records.calibration_scope import WorkingPointCalibrationScope
 from scopecat.records.config import ConfigProfileSnapshot, config_content_hash
 from scopecat.records.content import Sha256ContentHash
 from scopecat.records.parameter import (
@@ -63,7 +64,7 @@ from reference_lab.workflows.drag_beta_verification import (
 )
 
 DRAG_BETA_COMPOSITION_POLICY_ID = "reference-lab.drag-beta-cohort-composition"
-DRAG_BETA_COMPOSITION_POLICY_VERSION = "10"
+DRAG_BETA_COMPOSITION_POLICY_VERSION = "11"
 DRAG_BETA_VERIFICATION_EVIDENCE_STEP = "verification"
 DRAG_BETA_PUBLICATION_ACTOR = "reference-lab-drag-beta-finalizer"
 DRAG_BETA_PUBLICATION_NOTE = "publish verified q0/q1 DRAG calibration cohort"
@@ -415,14 +416,14 @@ def _drag_beta_member_material(
     intent = DragBetaVerificationIntent.model_validate(member.spec.intent)
     base = cohort.spec.config_source
     source = intent.initial_config_source
+    if not isinstance(base.scope, WorkingPointCalibrationScope):
+        raise ValueError("DRAG publication requires a saved working point")
     if (
         intent.qubit != qubit
         or intent.initial_config != base_config
-        or source.selector != "active"
-        or source.entry_id != base.entry_id
-        or source.config_ref != base.config_ref
+        or source.context != base.context_ref
         or source.content_hash != base.content_hash
-        or source.registry_generation != base.registry_generation
+        or source.sample != base.scope.sample
     ):
         raise ValueError("DRAG member intent does not match its exact cohort base")
     observed_inputs = drag_beta_semantic_freshness_inputs(

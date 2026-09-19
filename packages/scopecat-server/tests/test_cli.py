@@ -274,8 +274,8 @@ def test_automation_worker_cli_supports_once_and_resident_polling(
             calls.append(("calibration_finalizer",))
             return "calibration-finalizer"
 
-        def evaluator(self) -> object:
-            calls.append(("calibration_evaluator",))
+        def evaluator(self, *, working_point: str | None = None) -> object:
+            calls.append(("calibration_evaluator", working_point))
             return "calibration-evaluator"
 
     calibration_operations = FakeCalibrationOperations()
@@ -389,7 +389,15 @@ def test_automation_worker_cli_supports_once_and_resident_polling(
     )
     resident = runner.invoke(
         app,
-        ["automation", "work", str(tmp_path), "--poll-seconds", "2.5"],
+        [
+            "automation",
+            "work",
+            str(tmp_path),
+            "--poll-seconds",
+            "2.5",
+            "--working-point",
+            "chip-parked",
+        ],
     )
 
     assert once.exit_code == 0, once.output
@@ -408,6 +416,8 @@ def test_automation_worker_cli_supports_once_and_resident_polling(
     assert "publication_failures=1" in resident.output
     assert "procedure_conflicts=1" in resident.output
     assert ("run_forever", 2.5) in calls
+    assert ("calibration_evaluator", None) in calls
+    assert ("calibration_evaluator", "chip-parked") in calls
 
     class OutcomeFailureWorker:
         worker_id = "worker-outcome-failure"

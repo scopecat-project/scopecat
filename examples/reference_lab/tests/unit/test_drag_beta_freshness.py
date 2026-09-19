@@ -13,7 +13,9 @@ from scopecat.automation import (
 )
 from scopecat.config.drafts import ConfigDraft
 from scopecat.config.parameter_updates import ParameterUpdate
+from scopecat.records.calibration_scope import WorkingPointCalibrationScope
 from scopecat.records.config import ConfigProfileSnapshot, config_content_hash
+from scopecat.records.sample import SampleBinding
 
 from reference_lab.configuration import bootstrap_config
 from reference_lab.parameters import LoGroupParameters, QubitParameters
@@ -40,7 +42,7 @@ def test_drag_beta_freshness_ignores_registry_only_provenance_changes() -> None:
         entry_id="active-entry-2",
         generation=2,
     )
-    target = DRAG_BETA_CALIBRATION_TARGETS[0]
+    target = first.target(DRAG_BETA_CALIBRATION_TARGETS[0])
 
     first_observation = drag_beta_freshness_calibration.observe(first, target)
     reactivated_observation = drag_beta_freshness_calibration.observe(
@@ -48,7 +50,7 @@ def test_drag_beta_freshness_ignores_registry_only_provenance_changes() -> None:
         target,
     )
 
-    assert DRAG_BETA_CALIBRATION_VERSION == "9"
+    assert DRAG_BETA_CALIBRATION_VERSION == "10"
     assert first_observation.inputs == drag_beta_semantic_freshness_inputs(
         config,
         "q0",
@@ -67,9 +69,10 @@ def test_drag_beta_freshness_ignores_registry_only_provenance_changes() -> None:
 
     assert intent.qubit == "q0"
     assert intent.initial_config == config
-    assert intent.initial_config_source.entry_id == "active-entry-2"
-    assert intent.initial_config_source.config_ref == "active@2"
-    assert intent.initial_config_source.registry_generation == 2
+    assert intent.initial_config_source.context.entry_id == "active-entry-2"
+    assert intent.initial_config_source.context == reactivated.config_source.context_ref
+    assert isinstance(reactivated.config_source.scope, WorkingPointCalibrationScope)
+    assert intent.initial_config_source.sample == reactivated.config_source.scope.sample
 
 
 def test_drag_beta_freshness_ignores_profile_and_parameter_snapshot_ids() -> None:
@@ -292,6 +295,17 @@ def _planning_context(
             entry_id=entry_id,
             config_ref=f"active@{generation}",
             content_hash=content_hash,
-            registry_generation=generation,
+            scope=WorkingPointCalibrationScope(
+                workspace_id="reference-workspace",
+                sample=SampleBinding(
+                    role="sample",
+                    sample_id="reference-chip",
+                    revision=1,
+                    content_hash="sha256:" + "a" * 64,
+                    kind="synthetic",
+                    display_name="Reference chip",
+                    context_id="parked",
+                ),
+            ),
         ),
     )

@@ -18,10 +18,11 @@ from scopecat.automation import (
 )
 from scopecat.kernel.content_identity import stable_content_hash
 from scopecat.kernel.entity import EntityRef
+from scopecat.records.calibration_scope import WorkingPointCalibrationScope
 from scopecat.records.config import ConfigProfileSnapshot, config_content_hash
+from scopecat.records.config_context import ContextRunConfigSource
 from scopecat.records.content import Sha256ContentHash
 from scopecat.records.parameter import StoredParameterValue, TableParameterValue
-from scopecat.records.run import ConfigRegistryRunConfigSource
 
 from reference_lab.parameters import QubitParameters
 from reference_lab.workflows.drag_beta_experiment import DragBetaQubit
@@ -34,7 +35,7 @@ from reference_lab.workflows.drag_beta_verification import (
 )
 
 DRAG_BETA_CALIBRATION_ID = "reference-lab.drag-beta-freshness"
-DRAG_BETA_CALIBRATION_VERSION = "9"
+DRAG_BETA_CALIBRATION_VERSION = "10"
 DRAG_BETA_CALIBRATION_FANOUT_SCOPE = "reference-lab.quantum-chip"
 DRAG_BETA_CALIBRATION_TARGETS = tuple(
     CalibrationTargetRef(kind="logical_qubit", id=qubit) for qubit in ("q0", "q1")
@@ -124,7 +125,9 @@ def _observe_drag_beta_target(
     context: CalibrationPlanningContext,
     target: CalibrationTargetRef,
 ) -> CalibrationObservation[DragBetaFreshnessInputs]:
-    if target not in DRAG_BETA_CALIBRATION_TARGETS:
+    if (target.kind, target.id) not in {
+        (item.kind, item.id) for item in DRAG_BETA_CALIBRATION_TARGETS
+    }:
         raise ValueError(f"unsupported reference-lab DRAG target: {target}")
     content_hash = config_content_hash(context.config)
     if context.config_source.content_hash != content_hash:
@@ -169,17 +172,17 @@ def drag_beta_freshness_calibration(
     if inputs != expected_inputs:
         raise ValueError("DRAG freshness input does not match the planning config")
     source = context.config_source
+    if not isinstance(source.scope, WorkingPointCalibrationScope):
+        raise ValueError("DRAG calibration requires a saved working point")
     if source.content_hash != content_hash:
         raise ValueError("calibration planning config does not match its source hash")
     return DragBetaVerificationIntent(
         qubit=inputs.qubit,
         initial_config=context.config,
-        initial_config_source=ConfigRegistryRunConfigSource(
-            selector=source.selector,
-            entry_id=source.entry_id,
-            config_ref=source.config_ref,
+        initial_config_source=ContextRunConfigSource(
+            context=source.context_ref,
+            sample=source.scope.sample,
             content_hash=source.content_hash,
-            registry_generation=source.registry_generation,
         ),
         minimum_improvement=inputs.minimum_improvement,
     )
