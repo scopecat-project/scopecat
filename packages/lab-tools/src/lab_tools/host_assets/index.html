@@ -3,6 +3,7 @@
 <body><main><header><p class="eyebrow">SCOPECAT</p><h1>实验工作台</h1><p>启动并检查已登记的实验服务，再从链接打开新的工作台标签页。本页保留帮助、教学与服务管理。</p></header>
 <p id="notice" role="status" aria-live="polite">正在连接本机服务…</p>
 <section id="experiments"><h2>实验服务</h2><div id="services"></div><details><summary>登记已有实验项目</summary><p>在该项目的 Python 环境中运行 <code>scopecat app 项目目录</code>。也可以通过 <code>--python</code> 指定实验环境，源码部署使用 <code>--static-dir</code> 指定已构建的 GUI。</p><p>登记不启动设备。点击打开工作台才会按项目已有设置启动服务；测量仍需在工作台提交。</p></details></section>
+<section><h2>更新实验环境</h2><p>先结束测量并关闭 Notebook 连接，停止实验服务，再在原环境中更新软件。服务显示“未启动”后，点击“重新检查环境”；成功后再启动工作台。重新检查不会安装软件或启动服务。</p><p>检查失败时保留原登记，请查看操作日志，修复原环境后重试。若更换了解释器或 GUI 目录，请从可信的本机环境使用 <code>scopecat app 项目目录 --python 解释器 --static-dir GUI目录</code> 重新登记，并沿用原来的 <code>--home</code> 等管理入口参数。</p></section>
 <details id="help"><summary>帮助 · 教学与练习</summary><p>专题只使用合成数据；练习与真实实验服务分别管理。</p>
 <section><h2>开始一个专题</h2><div id="topics" class="topics"></div></section>
 <section><h2>我的练习</h2><p>重复打开继续当前练习。重置创建新副本，原来的修改仍然保留。</p><p>重置前关闭 Notebook 内核并停止该练习服务；旧副本由你选择删除。</p><div id="workspaces"></div></section>

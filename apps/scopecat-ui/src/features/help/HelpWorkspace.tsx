@@ -147,8 +147,12 @@ export function HelpWorkspace({
         <p>
           Finish active work and close Notebook connections before stopping a service or replacing
           its environment. Keep the installation's project and data locations recorded. After an
-          environment change, use the trusted local registration flow to check the interpreter and
-          GUI before reopening.
+          in-place environment update, use Recheck environment (重新检查环境) in the manager while
+          the service is stopped, then start it after a successful check. Rechecking updates the
+          registered identity without installing software or starting the service. If it fails, the
+          previous registration remains; inspect the operation log and fix the environment before
+          retrying. Moving to another interpreter or GUI directory still requires trusted local
+          registration with your original management-home arguments.
         </p>
         <p>
           Removing a service registration preserves project files and scientific records. Resetting
@@ -165,7 +169,7 @@ export function HelpWorkspace({
         </a>
         <a
           className="underline"
-          href={`${docs}development/architecture/application-host/`}
+          href={`${docs}how-to/maintain-application/`}
           target="_blank"
           rel="noopener noreferrer"
         >

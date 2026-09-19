@@ -16,7 +16,7 @@ afterEach(() => {
   document.body.innerHTML = "";
   sessionStorage.clear();
 });
-function mount() {
+function mount(serviceState = "running") {
   document.body.innerHTML = new DOMParser().parseFromString(markup, "text/html").body.innerHTML;
   const state = {
     topics: {},
@@ -29,8 +29,15 @@ function mount() {
           name: "Experiment service",
           root: "/lab",
           python: "/lab/python",
+          static_dir: "/lab/gui",
+          environment: {
+            prefix: "/lab/venv",
+            python: "3.14.0",
+            scopecat: "0.2.0",
+            server: "0.3.0",
+          },
         },
-        state: "running",
+        state: serviceState,
         url: "http://127.0.0.1:9001",
         detail: "",
       },
@@ -39,6 +46,7 @@ function mount() {
   const control = { failOperation: false, failState: false, state };
   let poll: () => Promise<unknown> = () => Promise.resolve(control.state);
   const assign = vi.fn();
+  const confirm = vi.fn(() => true);
   const requests: Array<{ path: string; body?: unknown }> = [];
   const fetch = vi.fn(async (path: string, options: RequestInit) => {
     if (path === "/api/state")
@@ -58,10 +66,12 @@ function mount() {
       state.operations = [operation];
       return Response.json(operation);
     }
+    if (path.endsWith("/log")) return Response.json({ text: "probe failure evidence" });
     throw new Error(`Unexpected manager request: ${path}`);
   });
   runInNewContext(script, {
     document,
+    confirm,
     URL,
     URLSearchParams,
     sessionStorage,
@@ -76,7 +86,7 @@ function mount() {
     clearInterval: vi.fn(),
     setTimeout,
   });
-  return { control, requests, assign, poll: () => poll() };
+  return { control, requests, assign, confirm, poll: () => poll() };
 }
 it("keeps manager open and reveals an isolated workbench link only after successful verification", async () => {
   const host = mount();
@@ -139,4 +149,77 @@ it.each([
   );
   expect(screen.queryByRole("link")).not.toBeInTheDocument();
   expect(host.assign).not.toHaveBeenCalled();
+});
+
+it("rechecks only the stopped registration ID after explicit confirmation, without starting it", async () => {
+  const host = mount("stopped");
+  fireEvent.click(await screen.findByRole("button", { name: "重新检查环境" }));
+  await waitFor(() => expect(host.requests).toHaveLength(1));
+  expect(host.confirm).toHaveBeenCalledWith(expect.stringContaining("不会安装软件或启动服务"));
+  expect(host.requests[0]?.body).toEqual({
+    action: "service_recheck",
+    service: "service-a",
+    id: "12345678123412341234123456789012",
+  });
+  await waitFor(() => expect(screen.getByRole("button", { name: "重新检查环境" })).toBeEnabled());
+  expect(screen.queryByRole("link")).not.toBeInTheDocument();
+  expect(host.control.state.services[0]!.state).toBe("stopped");
+});
+it.each(["running", "degraded", "stale", "unavailable"])(
+  "disables environment rechecking for %s service state",
+  async (state) => {
+    const host = mount(state);
+    const recheck = await screen.findByRole("button", { name: "重新检查环境" });
+    expect(recheck).toBeDisabled();
+    fireEvent.click(recheck);
+    expect(host.requests).toHaveLength(0);
+  },
+);
+it("disables rechecking during another management operation and honors cancellation", async () => {
+  const host = mount("stopped");
+  host.confirm.mockReturnValue(false);
+  fireEvent.click(await screen.findByRole("button", { name: "重新检查环境" }));
+  await waitFor(() => expect(host.confirm).toHaveBeenCalledOnce());
+  expect(host.requests).toHaveLength(0);
+  host.control.state.operations = [
+    { status: "running", command: { action: "service_start", service: "service-a" } },
+  ];
+  await host.poll();
+  expect(screen.getByRole("button", { name: "重新检查环境" })).toBeDisabled();
+});
+it("retains recheck failure evidence and the previously registered identity", async () => {
+  const host = mount("stopped");
+  host.control.failOperation = true;
+  fireEvent.click(await screen.findByRole("button", { name: "重新检查环境" }));
+  await waitFor(() =>
+    expect(document.getElementById("notice")).toHaveTextContent(
+      "environment mismatch retained in log",
+    ),
+  );
+  expect(screen.getByText("Experiment service · 重新检查环境 · 失败")).toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "查看日志" }));
+  await waitFor(() =>
+    expect(document.getElementById("log")).toHaveTextContent("probe failure evidence"),
+  );
+  expect(screen.getByText("0.2.0")).toBeInTheDocument();
+  expect(screen.queryByRole("link")).not.toBeInTheDocument();
+});
+it("labels the last registered paths and package identity as historical information using text", async () => {
+  const host = mount("stopped");
+  host.control.state.services[0]!.service.root = "<img src=x onerror=alert(1)>";
+  await host.poll();
+  await screen.findByText("以下信息来自最后一次成功登记或重新检查，不代表当前环境已经通过检查。");
+  const fields = {
+    项目目录: "<img src=x onerror=alert(1)>",
+    "Python 解释器": "/lab/python",
+    "GUI 目录": "/lab/gui",
+    环境前缀: "/lab/venv",
+    "Python 版本": "3.14.0",
+    "scopecat 版本": "0.2.0",
+    "scopecat-server 版本": "0.3.0",
+  };
+  for (const [label, value] of Object.entries(fields)) {
+    expect(screen.getByText(label, { selector: "dt" }).nextElementSibling).toHaveTextContent(value);
+  }
+  expect(document.querySelector("img")).not.toBeInTheDocument();
 });

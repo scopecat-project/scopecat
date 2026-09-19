@@ -121,12 +121,27 @@ async function refresh() {
       if (confirm(`停止 ${item.service.name} 的后台服务？\n这可能中断当前任务及 Notebook 连接。项目和已有科学记录保留，不会自动重启或恢复测量。`))
         return submit({ action: "service_stop", service: item.service.id });
     }, "secondary", disabled || item.state === "stopped" || item.state === "unavailable"));
+    row.append(button("重新检查环境", () => {
+      if (confirm(`重新检查 ${item.service.name} 已登记的环境？\n仅检查原有项目、解释器和 GUI，成功后更新最后登记的环境身份；不会安装软件或启动服务。`))
+        return submit({ action: "service_recheck", service: item.service.id });
+    }, "secondary", disabled || item.state !== "stopped"));
     row.append(button("移除登记", () => {
       if (confirm(`从列表移除 ${item.service.name}？\n只撤销登记，不删除项目目录、科学数据或操作日志。之后可用 scopecat app 重新登记。`))
         return submit({ action: "service_remove", service: item.service.id });
     }, "secondary", disabled || item.state !== "stopped"));
     const details = element("details");
-    details.append(element("summary", "项目与环境"), element("p", item.service.root, "meta"), element("p", item.service.python, "meta"));
+    details.append(element("summary", "项目与环境"), element("p", "以下信息来自最后一次成功登记或重新检查，不代表当前环境已经通过检查。"));
+    const identity = element("dl", undefined, "meta");
+    for (const [label, value] of [
+      ["项目目录", item.service.root],
+      ["Python 解释器", item.service.python],
+      ["GUI 目录", item.service.static_dir],
+      ["环境前缀", item.service.environment.prefix],
+      ["Python 版本", item.service.environment.python],
+      ["scopecat 版本", item.service.environment.scopecat],
+      ["scopecat-server 版本", item.service.environment.server],
+    ]) identity.append(element("dt", label), element("dd", value));
+    details.append(identity);
     row.append(details);
     services.append(row);
   }
@@ -170,7 +185,7 @@ async function refresh() {
   const operations = document.getElementById("operations");
   operations.replaceChildren();
   const states = { starting: "准备中", running: "进行中", succeeded: "已完成", failed: "失败", interrupted: "已中断" };
-  const actions = { open: "打开练习", verify: "自动验收", stop: "停止服务", delete: "删除旧副本", service_start: "打开工作台", service_stop: "停止实验服务", service_remove: "移除登记" };
+  const actions = { open: "打开练习", verify: "自动验收", stop: "停止服务", delete: "删除旧副本", service_start: "打开工作台", service_stop: "停止实验服务", service_remove: "移除登记", service_recheck: "重新检查环境" };
   for (const operation of state.operations.slice(0, 12)) {
     const row = element("article", undefined, "row");
     const topic = operation.command.topic || state.workspaces.find(item => item.id === operation.command.workspace)?.topic;
