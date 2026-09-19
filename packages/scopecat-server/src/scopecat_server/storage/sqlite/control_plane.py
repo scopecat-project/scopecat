@@ -30,6 +30,7 @@ from scopecat.control.models import (
     RunPage,
 )
 from scopecat.records.research_project import RunHistoryFilter
+from scopecat.records.setup import SetupRevisionRef
 
 from scopecat_server.storage.sqlite.connection import SQLiteDatabase
 
@@ -73,7 +74,7 @@ class SQLiteControlPlane:
         connection: sqlite3.Connection,
         admission: RunAdmissionRecord,
         *,
-        expected_config_generation: int,
+        expected_setup_generation: int,
     ) -> ControlRun:
         """Publish control admission through an existing daemon transaction."""
 
@@ -93,7 +94,7 @@ class SQLiteControlPlane:
             raise ControlPlaneConflict(
                 "submission id is already admitted with different content"
             )
-        self._require_config_generation(connection, expected_config_generation)
+        self._require_setup_generation(connection, expected_setup_generation)
         admitted_at = _timestamp(admission.admitted_at)
         try:
             cursor = connection.execute(
@@ -960,12 +961,11 @@ class SQLiteControlPlane:
         *,
         operation_id: str,
         actor: str,
-        config_entry_id: str,
-        config_content_hash: str,
+        setup: SetupRevisionRef,
         instrument_ids: tuple[str, ...],
         exclusivity_keys: tuple[str, ...],
         ttl: timedelta,
-        expected_config_generation: int | None,
+        expected_setup_generation: int | None,
         at: datetime | None = None,
     ) -> InstrumentSession:
         """Atomically reserve instruments for one direct-interaction session."""
@@ -975,10 +975,6 @@ class SQLiteControlPlane:
             raise ValueError("instrument session operation id must be non-empty")
         if not actor:
             raise ValueError("instrument session actor must be non-empty")
-        if not config_entry_id:
-            raise ValueError("instrument session config entry id must be non-empty")
-        if not config_content_hash:
-            raise ValueError("instrument session config hash must be non-empty")
         if not instrument_ids:
             raise ValueError("instrument session requires at least one instrument")
         if any(not instrument_id for instrument_id in instrument_ids):
@@ -1027,11 +1023,11 @@ class SQLiteControlPlane:
                         "instrument session open retry has expired"
                     )
                 return retry
-            if expected_config_generation is None:
+            if expected_setup_generation is None:
                 raise ValueError("new instrument session requires a config generation")
-            self._require_config_generation(
+            self._require_setup_generation(
                 connection,
-                expected_config_generation,
+                expected_setup_generation,
             )
             conflicts = tuple(
                 resource
@@ -1052,8 +1048,8 @@ class SQLiteControlPlane:
             connection.execute(
                 """
                 INSERT INTO instrument_sessions(
-                    session_id, open_operation_id, actor, config_entry_id,
-                    config_content_hash,
+                    session_id, open_operation_id, actor, setup_revision_id,
+                    setup_content_hash,
                     instrument_ids_json, exclusivity_keys_json, state, acquired_at,
                     renewed_at, expires_at,
                     attention_reason, active_operation_id,
@@ -1068,8 +1064,8 @@ class SQLiteControlPlane:
                     session_id,
                     operation_id,
                     actor,
-                    config_entry_id,
-                    config_content_hash,
+                    setup.revision_id,
+                    setup.content_hash,
                     json.dumps(
                         instrument_ids,
                         allow_nan=False,
@@ -1112,7 +1108,7 @@ class SQLiteControlPlane:
                         "operation_id": operation_id,
                         "actor": actor,
                         "instrument_ids": list(instrument_ids),
-                        "config_entry_id": config_entry_id,
+                        "setup_revision_id": setup.revision_id,
                     },
                     occurred_at=started_at,
                 ),
@@ -1681,7 +1677,7 @@ class SQLiteControlPlane:
         return existing if admission.is_retry_of(existing.admission) else None
 
     @staticmethod
-    def _require_config_generation(
+    def _require_setup_generation(
         connection: sqlite3.Connection,
         expected_generation: int,
     ) -> None:
@@ -1689,14 +1685,14 @@ class SQLiteControlPlane:
             connection.execute(
                 """
                 SELECT COALESCE(MAX(generation), 0) AS generation
-                FROM config_registry_activations
+                FROM setup_activations
                 """
             )
         )
         assert row is not None
         actual_generation = _integer(row, "generation")
         if actual_generation != expected_generation:
-            raise ControlPlaneConflict("active configuration changed")
+            raise ControlPlaneConflict("active setup changed")
 
     def _expire_one(
         self,
@@ -2200,8 +2196,10 @@ def _instrument_session(row: sqlite3.Row) -> InstrumentSession:
             "session_id": _text(row, "session_id"),
             "open_operation_id": _text(row, "open_operation_id"),
             "actor": _text(row, "actor"),
-            "config_entry_id": _text(row, "config_entry_id"),
-            "config_content_hash": _text(row, "config_content_hash"),
+            "setup": {
+                "revision_id": _text(row, "setup_revision_id"),
+                "content_hash": _text(row, "setup_content_hash"),
+            },
             "instrument_ids": _STRING_TUPLE.validate_json(
                 _text(row, "instrument_ids_json")
             ),

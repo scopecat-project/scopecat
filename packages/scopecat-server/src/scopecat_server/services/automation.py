@@ -84,7 +84,6 @@ from scopecat.records.scientific_binding import (
     RegisteredTargetSubject,
     ResolvedScientificBinding,
 )
-from scopecat.records.scientific_scope import setup_content_hash
 
 from scopecat_server.services.manual_previews import ManualPreviewService
 from scopecat_server.storage.sqlite.automation import (
@@ -113,6 +112,7 @@ from scopecat_server.storage.sqlite.manual_preview import (
 )
 from scopecat_server.storage.sqlite.run_repository import SQLiteRunRepository
 from scopecat_server.storage.sqlite.samples import SQLiteSampleStore
+from scopecat_server.storage.sqlite.setups import SQLiteSetupRepository
 
 from ..errors import BackendConflict, BackendNotFound
 from .resource_waits import ProcedureResourceWaits
@@ -1781,19 +1781,19 @@ def _require_configuration_authority(
     """Check exact science and selector freshness within parent admission."""
     if expected_configuration is not None or scientific_binding is not None:
         registry = SQLiteConfigRegistryRepository(connection)
+        active_setup = SQLiteSetupRepository(connection).read_current()
+        if active_setup is None:
+            raise AutomationConflict("executable setup has no current authority")
         activation = registry.read_latest_activation()
-        if activation is None:
-            raise AutomationConflict("executable setup has no active authority")
-        if (
-            isinstance(expected_configuration, ActiveConfigurationFence)
-            and activation.generation != expected_configuration.generation
+        if isinstance(expected_configuration, ActiveConfigurationFence) and (
+            activation is None
+            or activation.generation != expected_configuration.generation
         ):
             raise AutomationConflict("active configuration changed since preview")
         if scientific_binding is not None or isinstance(
             expected_configuration, SetupContentFence
         ):
-            entry = registry.read_entry(activation.entry_id)
-            current_setup = setup_content_hash(registry.read_config(entry.config_ref))
+            current_setup = active_setup.revision.setup.execution_content_hash
             if (
                 scientific_binding is not None
                 and scientific_binding.setup_content_hash != current_setup

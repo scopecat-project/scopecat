@@ -159,8 +159,8 @@ CREATE TABLE IF NOT EXISTS instrument_sessions (
     session_id TEXT PRIMARY KEY,
     open_operation_id TEXT NOT NULL UNIQUE,
     actor TEXT NOT NULL,
-    config_entry_id TEXT NOT NULL,
-    config_content_hash TEXT NOT NULL,
+    setup_revision_id TEXT NOT NULL,
+    setup_content_hash TEXT NOT NULL,
     instrument_ids_json TEXT NOT NULL,
     exclusivity_keys_json TEXT NOT NULL,
     state TEXT NOT NULL CHECK (

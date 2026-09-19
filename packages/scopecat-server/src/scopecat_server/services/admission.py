@@ -59,7 +59,7 @@ from scopecat.records.scientific_binding import (
     RegisteredTargetSubject,
     ResolvedScientificBinding,
 )
-from scopecat.records.scientific_scope import setup_content_hash
+from scopecat.records.setup import ActiveSetupView, ExecutableSetupSnapshot
 from scopecat.runs.admission import build_run_admission
 from scopecat.runs.refs import record_content_ref
 from scopecat.runs.repository import (
@@ -125,8 +125,8 @@ class AdmissionService:
                     "submitted run config does not match its source content hash"
                 )
             self._resolve_provenance_config(submission.config_source)
-            active = self._resolve_active_config()
-            active_config = active.config
+            active = self._resolve_active_setup()
+            active_config = active.revision.setup
             _require_authoritative_instrument_inventory(
                 submitted=submission.config,
                 authoritative=active_config,
@@ -136,8 +136,9 @@ class AdmissionService:
                     submitted=submission.config,
                     authoritative=active_config,
                 )
-            if submission.scientific_binding.setup_content_hash != setup_content_hash(
-                active.config
+            if (
+                submission.scientific_binding.setup_content_hash
+                != active.revision.setup.execution_content_hash
             ):
                 raise BackendConflict(
                     "run executable setup differs from current authority"
@@ -191,7 +192,7 @@ class AdmissionService:
                 run = self._control.admit_run_in_transaction(
                     connection,
                     admission,
-                    expected_config_generation=active.activation.generation,
+                    expected_setup_generation=active.activation.generation,
                 )
                 self._point_plans.initialize_admitted_in_transaction(connection, run)
                 if run.run_id == admission.run_id:
@@ -288,17 +289,14 @@ class AdmissionService:
             )
         return self._wire_admission(run)
 
-    def _resolve_active_config(
-        self,
-    ) -> config_registry_service.ActiveConfigRegistrySnapshot:
-        try:
-            return config_registry_service.load_active_config_registry_snapshot(
-                unit_of_work=self._services.config_registry
-            )
-        except ProblemFailure as error:
+    def _resolve_active_setup(self) -> ActiveSetupView:
+        with self._services.config_registry() as work:
+            active = work.setups.read_current()
+        if active is None:
             raise BackendConflict(
-                "run instrument inventory requires an active configuration"
-            ) from error
+                "run instrument inventory requires an executable setup"
+            )
+        return active
 
     def _resolve_provenance_config(
         self,
@@ -587,7 +585,7 @@ def _analysis_references_proposal(
 def _require_authoritative_instrument_inventory(
     *,
     submitted: ConfigProfileSnapshot,
-    authoritative: ConfigProfileSnapshot,
+    authoritative: ExecutableSetupSnapshot,
 ) -> None:
     submitted_inventory = _instrument_inventory(submitted)
     authoritative_inventory = _instrument_inventory(authoritative)
@@ -605,7 +603,7 @@ def _require_authoritative_instrument_inventory(
 
 
 def _instrument_inventory(
-    config: ConfigProfileSnapshot,
+    config: ConfigProfileSnapshot | ExecutableSetupSnapshot,
 ) -> dict[str, _InstrumentInventoryEntry]:
     return {
         instrument.id: _InstrumentInventoryEntry(
@@ -620,7 +618,7 @@ def _instrument_inventory(
 def _require_authoritative_domain_target(
     *,
     submitted: ConfigProfileSnapshot,
-    authoritative: ConfigProfileSnapshot,
+    authoritative: ExecutableSetupSnapshot,
 ) -> None:
     if submitted.domain_target != authoritative.domain_target:
         raise BackendConflict(

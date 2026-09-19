@@ -26,6 +26,7 @@ from scopecat.runtime_binding import load_runtime_binding
 
 from scopecat_server._startup_diagnostics import stage as startup_stage
 from scopecat_server.command_payloads import CommandPayloadService
+from scopecat_server.errors import BackendConflict, BackendNotFound
 from scopecat_server.services.active_measurements import ActiveMeasurementStore
 from scopecat_server.services.admission import AdmissionService
 from scopecat_server.services.analyses import AnalysisService
@@ -41,6 +42,7 @@ from scopecat_server.services.resource_waits import ProcedureResourceWaits
 from scopecat_server.services.reviews import ReviewService
 from scopecat_server.services.runs import RunService
 from scopecat_server.services.samples import SampleService
+from scopecat_server.services.setup import SetupService
 from scopecat_server.storage.sqlite.analysis_repository import SQLiteAnalysisRepository
 from scopecat_server.storage.sqlite.automation import SQLiteAutomationStore
 from scopecat_server.storage.sqlite.calibration_cohorts import (
@@ -208,6 +210,12 @@ class LocalDaemonRuntime:
                 automation=automation_store,
                 calibration_cohorts=calibration_cohort_store,
             )
+            setup_service = SetupService(
+                control=control,
+                config_registry=config_registry,
+                actors=instrument_actors,
+                calibration_cohorts=calibration_cohort_store,
+            )
             run_service = RunService(
                 control=control,
                 runs=runs,
@@ -232,7 +240,7 @@ class LocalDaemonRuntime:
             instruments = InstrumentService(
                 control=control,
                 runs=runs,
-                config=config_service,
+                setup=setup_service,
                 endpoint=instrument_endpoint,
                 payloads=payloads,
                 actors=instrument_actors,
@@ -261,6 +269,7 @@ class LocalDaemonRuntime:
                 deployment_id=deployment_id,
                 project_store=project_store,
                 config=config_service,
+                setup=setup_service,
                 analyses=analysis_service,
                 runs=run_service,
                 admission=admission,
@@ -286,6 +295,7 @@ class LocalDaemonRuntime:
                     _bootstrap_config_registry(
                         config_service,
                         bootstrap_source,
+                        setup_service,
                     )
                 startup_stage("config registry ready; starting application services")
                 application.start()
@@ -343,9 +353,20 @@ class LocalDaemonRuntime:
 def _bootstrap_config_registry(
     config_service: ConfigService,
     config: ConfigProfileSnapshot | BootstrapConfigFactory,
+    setup_service: SetupService,
 ) -> None:
     if config_service.get_config_registry().entries:
+        try:
+            setup_service.current()
+        except BackendNotFound as error:
+            raise BackendConflict(
+                "existing parameter registry has no setup authority"
+            ) from error
         return
+    if setup_service.list():
+        raise BackendConflict(
+            "initial parameter bootstrap requires an empty setup registry"
+        )
     # Resolve application-owned inputs only for a genuinely empty registry.
     selected = config() if callable(config) else config
     validated = validate_config_profile(selected)

@@ -124,6 +124,7 @@ from ..command_payloads import (
     session_payload_scope,
 )
 from ..errors import BackendConflict, BackendNotFound
+from ..services.setup import setup_config
 from ._runtime_state import (
     ApplyReplay,
     CollectFailureReplay,
@@ -187,7 +188,7 @@ from .costs import observe_operation
 
 if TYPE_CHECKING:
     from ..command_payloads import CommandPayloadScope, CommandPayloadService
-    from ..services.config import ConfigService
+    from ..services.setup import SetupService
 
 
 class InstrumentRuntime:
@@ -198,7 +199,7 @@ class InstrumentRuntime:
         *,
         control: SQLiteControlPlane,
         runs: SQLiteRunRepository,
-        config: ConfigService,
+        setup: SetupService,
         endpoint: InstrumentBackendEndpoint | None,
         payloads: CommandPayloadService,
         actors: InstrumentActorRegistry,
@@ -210,7 +211,7 @@ class InstrumentRuntime:
             raise ValueError("instrument session lease TTL must be positive")
         self._control = control
         self._runs = runs
-        self._config = config
+        self._setup = setup
         self._endpoint = endpoint
         self._payloads = payloads
         self._actors = actors
@@ -237,7 +238,7 @@ class InstrumentRuntime:
     ) -> InstrumentReleaseReceipt:
         """Retire connections behind an acquisition gate without stopping workers."""
         self._require_running()
-        registry = self._config.get_active_config().config.instrument_registry
+        registry = self._setup.current().revision.setup.instrument_registry
         specs = {item.id: item for item in registry.instruments}
         for instrument_id in command.instrument_ids:
             if instrument_id not in specs:
@@ -273,14 +274,15 @@ class InstrumentRuntime:
         return InstrumentReleaseReceipt(instrument_ids=command.instrument_ids)
 
     def list_instruments(self) -> InstrumentListView:
-        active = self._config.get_active_config()
-        catalog = self.resolve_instrument_contracts(active.config)
+        active = self._setup.current()
+        config = setup_config(active.revision)
+        catalog = self.resolve_instrument_contracts(config)
         descriptions = {
             description.instrument_id: description
             for description in catalog.instruments
         }
         global_problems, instrument_problems = scope_provider_problems(
-            active.config.instrument_registry.instruments,
+            config.instrument_registry.instruments,
             catalog.problems,
         )
         with self._control.read_transaction() as connection:
@@ -311,10 +313,10 @@ class InstrumentRuntime:
                 ),
                 problems=instrument_problems.get(spec.id, ()),
             )
-            for spec in active.config.instrument_registry.instruments
+            for spec in config.instrument_registry.instruments
         )
         return InstrumentListView(
-            config_entry_id=active.entry.id,
+            setup=active.revision.ref,
             items=items,
             problems=global_problems,
         )
@@ -2406,7 +2408,7 @@ class InstrumentRuntime:
         self,
         command: InstrumentSessionOpenCommand,
     ) -> InstrumentSessionOpenReceipt:
-        # Recover before reading active config so retries retain the first resolution.
+        # Recover before reading current setup so retries retain the first resolution.
         try:
             existing = self._control.get_instrument_session_by_open_operation_id(
                 command.operation_id
@@ -2416,17 +2418,16 @@ class InstrumentRuntime:
         else:
             return self._replay_session_open(command, existing)
 
-        active = self._config.get_active_config()
-        configured = {
-            spec.id: spec for spec in active.config.instrument_registry.instruments
-        }
+        active = self._setup.current()
+        config = setup_config(active.revision)
+        configured = {spec.id: spec for spec in config.instrument_registry.instruments}
         temporary = {binding.id: binding for binding in command.temporary_bindings}
         collisions = tuple(
             instrument_id for instrument_id in temporary if instrument_id in configured
         )
         if collisions:
             raise BackendConflict(
-                "temporary instrument ids already exist in the active config: "
+                "temporary instrument ids already exist in the current setup: "
                 + ", ".join(collisions)
             )
         missing = tuple(
@@ -2446,11 +2447,11 @@ class InstrumentRuntime:
         )
         descriptions: dict[str, InstrumentDescription] = {}
         if configured_ids:
-            catalog = self.resolve_instrument_contracts(active.config)
+            catalog = self.resolve_instrument_contracts(config)
             descriptions.update(
                 self._selected_descriptions(
                     catalog,
-                    config=active.config,
+                    config=config,
                     instrument_ids=configured_ids,
                 )
             )
@@ -2464,7 +2465,7 @@ class InstrumentRuntime:
                 )
             )
         selected_bindings = {
-            binding.id: binding for binding in instrument_bindings(active.config)
+            binding.id: binding for binding in instrument_bindings(config)
         }
         selected_bindings.update(temporary)
         selected_specs = dict(configured)
@@ -2481,14 +2482,13 @@ class InstrumentRuntime:
             session = self._control.open_instrument_session(
                 operation_id=command.operation_id,
                 actor=command.actor,
-                config_entry_id=active.entry.id,
-                config_content_hash=active.entry.content_hash,
+                setup=active.revision.ref,
                 instrument_ids=command.instrument_ids,
                 exclusivity_keys=tuple(
                     selected_specs[instrument_id].exclusivity_key
                     for instrument_id in command.instrument_ids
                 ),
-                expected_config_generation=active.activation.generation,
+                expected_setup_generation=active.activation.generation,
                 ttl=self._session_lease_ttl,
             )
         except ControlPlaneConflict as error:
@@ -2542,11 +2542,10 @@ class InstrumentRuntime:
             session = self._control.open_instrument_session(
                 operation_id=command.operation_id,
                 actor=command.actor,
-                config_entry_id=existing.config_entry_id,
-                config_content_hash=existing.config_content_hash,
+                setup=existing.setup,
                 instrument_ids=command.instrument_ids,
                 exclusivity_keys=existing.exclusivity_keys,
-                expected_config_generation=None,
+                expected_setup_generation=None,
                 ttl=self._session_lease_ttl,
             )
         except ControlPlaneConflict as error:
@@ -2864,7 +2863,7 @@ class InstrumentRuntime:
                         session_id=session_id,
                         operation_id=command.operation_id,
                         instrument_id=instrument_id,
-                        config_entry_id=session.config_entry_id,
+                        setup=session.setup,
                         status="unchanged",
                         state=observed,
                     ),
@@ -2915,7 +2914,7 @@ class InstrumentRuntime:
                         session_id=session_id,
                         operation_id=command.operation_id,
                         instrument_id=instrument_id,
-                        config_entry_id=session.config_entry_id,
+                        setup=session.setup,
                         status="rejected",
                         problems=driver_receipt.problems,
                     ),
@@ -2931,7 +2930,7 @@ class InstrumentRuntime:
                     session_id=session_id,
                     operation_id=command.operation_id,
                     instrument_id=instrument_id,
-                    config_entry_id=session.config_entry_id,
+                    setup=session.setup,
                     status="applied",
                     state=state,
                 ),
@@ -2962,7 +2961,7 @@ class InstrumentRuntime:
                 session_id=session.session_id,
                 operation_id=command.operation_id,
                 instrument_id=instrument_id,
-                config_entry_id=session.config_entry_id,
+                setup=session.setup,
                 status="rejected",
                 problems=problems,
             ),
@@ -4091,8 +4090,7 @@ class InstrumentRuntime:
         return InstrumentSessionOpenReceipt(
             session_id=session.session_id,
             actor=session.actor,
-            config_entry_id=session.config_entry_id,
-            config_content_hash=session.config_content_hash,
+            setup=session.setup,
             instrument_ids=session.instrument_ids,
             configured_default_instrument_ids=tuple(
                 instrument_id
@@ -4125,12 +4123,12 @@ class InstrumentRuntime:
         self,
         session: InstrumentSession,
     ) -> ConfigProfileSnapshot:
-        pinned = self._config.get_config_entry(session.config_entry_id)
-        if pinned.entry.content_hash != session.config_content_hash:
+        pinned = self._setup.get(session.setup.revision_id)
+        if pinned.ref != session.setup:
             raise BackendConflict(
-                "instrument session pinned config content does not match its entry"
+                "instrument session pinned setup content does not match its revision"
             )
-        return pinned.config
+        return setup_config(pinned)
 
     @staticmethod
     def _instrument_view(
