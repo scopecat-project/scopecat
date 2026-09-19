@@ -101,7 +101,16 @@ class AuthorProject(DaemonClient):
         timeout: float | httpx2.Timeout | None = 120,
         transport: httpx2.BaseTransport | None = None,
     ) -> None:
-        super().__init__(base_url, timeout=timeout, transport=transport)
+        from scopecat.author_workspaces import author_workspace_id
+
+        super().__init__(
+            base_url,
+            timeout=timeout,
+            transport=transport,
+            workspace_id=author_workspace_id(project_root)
+            if project_root is not None
+            else "legacy",
+        )
         self.receipts = receipts.resolve() if receipts is not None else None
         self.project_root = project_root.resolve() if project_root is not None else None
         self._source_project = source_project
@@ -449,6 +458,7 @@ class AuthorProject(DaemonClient):
             batch_id=batch,
             record_collection=record_collection,
             code_revision=catalog.code_revision,
+            workspace_id=catalog.workspace_id,
         )
         return AuthorPreparedLaunch(self, request, self.preview(request))
 
@@ -654,6 +664,7 @@ class AuthorProject(DaemonClient):
         analysis: str,
         *,
         code_revision: AuthorRevisionRef,
+        workspace_id: str | None = None,
         key: str | None = None,
         arguments: Mapping[str, AnalysisArgument] | None = None,
         grouping: AnalysisGrouping | None = None,
@@ -663,6 +674,7 @@ class AuthorProject(DaemonClient):
                 run_id=run_id,
                 analysis=analysis,
                 code_revision=code_revision,
+                workspace_id=workspace_id or self.workspace_id,
                 key=key,
                 grouping=grouping,
                 arguments=encode_arguments(analysis, arguments),
@@ -691,13 +703,26 @@ class AuthorProject(DaemonClient):
         revision = self._analysis_revision(run_id, source)
         try:
             receipt = self.analyze(
-                run_id, analysis, code_revision=revision, arguments=arguments, key=key
+                run_id,
+                analysis,
+                code_revision=revision,
+                workspace_id=self._analysis_workspace(run_id, source),
+                arguments=arguments,
+                key=key,
             )
         except httpx2.HTTPStatusError as error:
             error.add_note(error.response.text)
             raise
         publication = run.published_analysis(receipt.analysis_id)
         return AnalysisResult(publication.fact_as("result", schema), publication)
+
+    def _analysis_workspace(
+        self, run_id: str, source: Literal["original", "current"]
+    ) -> str | None:
+        if source == "current":
+            return self.workspace_id
+        value = self.run(run_id).request.metadata.get("author_workspace")
+        return value if isinstance(value, str) else "legacy"
 
     def _analysis_revision(
         self, run_id: str, source: Literal["original", "current"]
@@ -743,6 +768,7 @@ class AuthorProject(DaemonClient):
                 run_id,
                 analysis,
                 code_revision=self._analysis_revision(run_id, source),
+                workspace_id=self._analysis_workspace(run_id, source),
                 arguments=arguments,
                 key=key,
                 grouping=AnalysisGrouping(by=by, fitting=fitting, repeats=repeats),

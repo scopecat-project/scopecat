@@ -70,7 +70,9 @@ def client(state: AuthorRevisionState | None = None) -> TestClient:
                         project_root=Path.cwd(),
                         manual_previews=_manual_previews(),
                         author_revisions=SimpleNamespace(
+                            root=Path.cwd(),
                             state=lambda: state or AuthorRevisionState(),
+                            get=Mock(),
                             worker_binding=AuthorWorkerBinding(
                                 Path.cwd(), Path(sys.executable)
                             ),
@@ -193,7 +195,9 @@ def test_admission_survives_dispatch_failure(tmp_path: Path) -> None:
                     project_root=tmp_path,
                     automation=automation,
                     author_revisions=SimpleNamespace(
-                        state=lambda: AuthorRevisionState(), close=Mock()
+                        root=Path.cwd(),
+                        state=lambda: AuthorRevisionState(),
+                        close=Mock(),
                     ),
                     manual_previews=_manual_previews(),
                 ),
@@ -358,7 +362,9 @@ def test_http_lifespan_starts_and_stops_manager() -> None:
                             project_root=Path.cwd(),
                             manual_previews=_manual_previews(),
                             author_revisions=SimpleNamespace(
-                                state=lambda: AuthorRevisionState(), close=Mock()
+                                root=Path.cwd(),
+                                state=lambda: AuthorRevisionState(),
+                                close=Mock(),
                             ),
                         ),
                     ),

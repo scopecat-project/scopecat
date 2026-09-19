@@ -86,7 +86,14 @@ def test_upgrade_retains_scientific_results_and_separate_new_analysis(
         stop_project(project)
     _seed_retained_schema(project.runtime_binding.data_root / "control.sqlite3")
     receipt = migrate_copy(project, tmp_path / "upgrade")
-    assert receipt.plan.steps == ("68->69", "69->70", "70->71", "71->72", "72->73")
+    assert receipt.plan.steps == (
+        "68->69",
+        "69->70",
+        "70->71",
+        "71->72",
+        "72->73",
+        "73->74",
+    )
     upgraded = load_project(tmp_path / "upgrade/project/scopecat.toml")
     start_project(upgraded)
     try:

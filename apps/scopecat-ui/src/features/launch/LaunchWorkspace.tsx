@@ -19,13 +19,18 @@ export function LaunchWorkspace({
   useEffect(() => {
     void queryClient.invalidateQueries({ queryKey: ["config", "launch-context", projectId] });
   }, [projectId, queryClient]);
+  const workspaceId = handoff?.request.workspace_id ?? draft?.workspaceId ?? "legacy";
+  const codeRevision = handoff?.request.code_revision ?? draft?.codeRevision;
   const catalog = useQuery({
-    queryKey: ["experiment-launcher", projectId, draft?.codeRevision?.content_hash],
+    queryKey: ["experiment-launcher", projectId, workspaceId, codeRevision?.content_hash],
     enabled: Boolean(projectId),
     queryFn: async () => {
       const result = await apiData(
         apiClient.GET("/api/v1/experiment-launcher", {
-          params: { query: { code_revision: draft?.codeRevision?.content_hash } },
+          params: {
+            query: { code_revision: codeRevision?.content_hash },
+            header: { "X-Scopecat-Workspace": workspaceId },
+          },
         }),
       );
       return result.entries;
@@ -71,7 +76,7 @@ export function LaunchWorkspace({
   return (
     <section className="p-6 space-y-4">
       <h2 className="text-lg font-semibold">Experiments</h2>
-      <AuthorRefresh projectId={projectId} />
+      <AuthorRefresh projectId={projectId} workspaceId={draft?.workspaceId ?? "legacy"} />
       <PlanLibrary key={projectId} initializing={catalog.isPending && draft === undefined} />
       {handoffUnavailable && (
         <p role="alert">

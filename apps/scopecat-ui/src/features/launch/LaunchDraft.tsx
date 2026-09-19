@@ -29,6 +29,7 @@ export interface LaunchDraft {
   planDirty?: boolean;
   configuration?: PlanRevision["definition"]["configuration"];
   sampleBinding?: PlanRevision["definition"]["sample"];
+  workspaceId?: string | null;
   codeRevision?: PlanRevision["definition"]["code_revision"];
   definition: string;
   controlDefinition: string;
@@ -356,6 +357,7 @@ function ProjectDraft({
             batch: d.sample?.batch_id ?? undefined,
             collection: current?.collection,
             codeRevision: d.code_revision,
+            workspaceId: d.workspace_id,
             handoff: undefined,
             notice: `Opened ${plan.name}, revision ${plan.ref.revision}. Saved by ${plan.saved_by}; current operator is ${current?.actor ?? "operator"}. Fresh preview required.`,
           });

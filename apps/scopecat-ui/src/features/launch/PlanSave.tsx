@@ -39,6 +39,7 @@ export function PlanSave({
               version: request.version ?? "",
               definition_hash: preview.definition_hash,
               code_revision: preview.code_revision,
+              workspace_id: preview.workspace_id,
               inputs: request.inputs ?? {},
               scan_mode: request.scan_mode,
               parameter_sweeps: request.parameter_sweeps,
@@ -73,6 +74,7 @@ export function PlanSave({
           sampleBinding: saved.definition.sample,
           batch: saved.definition.sample?.batch_id ?? undefined,
           codeRevision: saved.definition.code_revision,
+          workspaceId: saved.definition.workspace_id,
         }));
       await cache.invalidateQueries({ queryKey: ["experiment-plans", projectId] });
     } catch (caught) {

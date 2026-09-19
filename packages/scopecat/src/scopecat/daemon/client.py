@@ -351,12 +351,15 @@ class DaemonClient:
         self,
         base_url: str,
         *,
+        workspace_id: str = "legacy",
         timeout: float | httpx2.Timeout | None = _DEFAULT_TIMEOUT,
         transport: httpx2.BaseTransport | None = None,
     ) -> None:
+        self.workspace_id = workspace_id
         self.base_url = base_url.rstrip("/")
         self._http = httpx2.Client(
             base_url=self.base_url,
+            headers={"X-Scopecat-Workspace": workspace_id},
             timeout=timeout,
             transport=transport,
         )

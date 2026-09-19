@@ -92,19 +92,64 @@ invented locations cannot detect that their SDKs address the same physical devic
 Do not put either directory inside an authored source root.
 
 Only one service owns a data space, and only one data space at a time owns a
-configured deployment. Another workspace cannot implicitly take over the mutable
-source or stop its service. Stop the selected workspace explicitly, then start the
-replacement. Do not edit bindings while its service or clients are running.
-Notebook endpoint overrides must match workspace, data and deployment paths.
-Opening a project does not install dependencies or start acquisition.
+configured deployment. Opening a project does not install dependencies or start
+acquisition. Notebook endpoint overrides must match the registered source owner,
+data space and deployment; a URL alone does not select another codebase.
 
 The store identity persists independently of paths; old runs, parameters and
-source hashes are retained. Refresh applies to the selected workspace. Original
-code execution still requires its recorded environment and maintained composition;
-retaining data does not promise execution of arbitrary old code in a new runtime.
-This is local execution, not an independent remote client/server environment.
+source hashes are retained. Original code execution still requires its recorded
+environment and maintained composition. Retaining data does not promise execution
+of arbitrary old code in a new runtime. This is local execution, not an independent
+remote client/server environment.
 
-The current schema is 69. Existing schema 68 and earlier data needs its matching reader;
-opening it performs no migration. Keep old evidence and environments. An explicit
-supported-baseline migration policy is tracked separately from this binding.
-See [backup and restore](../how-to/backup-and-restore.md) for relocation and receipts.
+The current schema is 74. Opening an older store performs no implicit migration.
+Use the documented [copy migration and restore workflow](../how-to/backup-and-restore.md)
+for supported source schemas, retaining the original evidence and matching reader.
+
+## Register another author workspace
+
+Use this when two codebases should publish and execute against the same local
+service and scientific records. Their maintained composition and Python environment
+must match; authored experiments may differ and use the same Python package names.
+Register from the service's installed environment while both deployments are stopped:
+
+```shell
+scopecat register-workspace /path/to/second --service /path/to/service
+```
+
+Replace the two paths with your source directories; quote paths containing spaces.
+The command writes the second workspace's local runtime binding and returns its
+stable workspace ID. It refuses to redirect a workspace with its own scientific
+store or a conflicting explicit binding. Keep starting, stopping, snapshotting and
+migrating the shared deployment from its service workspace.
+
+Open each codebase normally from its notebook:
+
+```python
+from scopecat.project import open_project
+
+project = open_project()
+session = project.authoring()
+```
+
+The source location selects its registered owner automatically. Refresh updates
+only that owner's publication head; prepared work and saved plans retain their
+exact source. Both sessions share the service's data and may select the same record
+collection. They do not need separate daemons. The workbench currently defaults to
+the service source and preserves a saved plan or analysis handoff's source owner;
+a general workspace selector is not included yet.
+
+Registration is local machine configuration, separate from retained scientific
+membership. Snapshots preserve source references and bundles but exclude local
+workspace paths. After a restore or move, read historical data without recreating
+those paths. To execute again from a new qualified location, stop the service and
+explicitly rebind an existing identity:
+
+```shell
+scopecat register-workspace /new/source/location --service /path/to/service --identity EXISTING_WORKSPACE_ID
+```
+
+Use the ID from the original registration. This keeps its publication history and
+revokes the old source location. Unknown IDs and the service owner's reserved
+`legacy` identity cannot be rebound this way. Portable multi-codebase installation
+bundles and different dependency environments require later qualification.

@@ -9,6 +9,7 @@ from pathlib import Path
 import httpx2
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
+from scopecat.author_workspaces import author_workspace_id
 from scopecat.daemon.health import DaemonHealth
 from scopecat.runtime_binding import load_runtime_binding
 
@@ -81,8 +82,7 @@ def resolve_daemon_endpoint(
             f"no daemon endpoint for {root}; start it with 'scopecat start'"
         )
     if (
-        record.project_root.resolve() != root
-        or record.data_root.resolve() != binding.data_root
+        record.data_root.resolve() != binding.data_root
         or record.deployment_root.resolve() != binding.deployment_root
     ):
         raise DaemonEndpointError(
@@ -101,7 +101,10 @@ def verify_daemon_binding(endpoint: str, root: Path) -> None:
             response.raise_for_status()
             health = DaemonHealth.model_validate(response.json())
         if (
-            Path(health.project_root).resolve() != root
+            (
+                Path(health.project_root).resolve() != root
+                and health.author_workspaces.get(str(root)) != author_workspace_id(root)
+            )
             or Path(health.data_root).resolve() != binding.data_root
             or Path(health.deployment_root).resolve() != binding.deployment_root
         ):

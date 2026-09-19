@@ -16,6 +16,7 @@ from scopecat.records.comparison import (
     ComparisonRequest,
     ComparisonSelection,
 )
+from scopecat.records.legacy_comparison import LegacyComparisonRequest
 
 if TYPE_CHECKING:
     from scopecat.api.analysis import Analysis, AnalysisContext
@@ -27,7 +28,11 @@ if TYPE_CHECKING:
 
 COMPARISON_REQUEST_FACT = "comparison-request"
 COMPARISON_REQUEST_SCHEMA = AnalysisFactSchema(
-    "scopecat.comparison-request.v1", ComparisonRequest
+    "scopecat.comparison-request.v2", ComparisonRequest
+)
+
+_LEGACY_COMPARISON_REQUEST_SCHEMA = AnalysisFactSchema(
+    "scopecat.comparison-request.v1", LegacyComparisonRequest
 )
 
 
@@ -65,13 +70,23 @@ def reopen_comparison(
     if not isinstance(output, AnalysisFactRecordOutput):
         raise ValueError("Saved analysis has no public comparison request")
     fact = output.content
-    if (
-        fact.schema_id != COMPARISON_REQUEST_SCHEMA.id
-        or fact.schema_codec != COMPARISON_REQUEST_SCHEMA.schema_codec
-        or fact.schema_hash != COMPARISON_REQUEST_SCHEMA.schema_hash
+    if (fact.schema_id, fact.schema_codec, fact.schema_hash) == (
+        COMPARISON_REQUEST_SCHEMA.id,
+        COMPARISON_REQUEST_SCHEMA.schema_codec,
+        COMPARISON_REQUEST_SCHEMA.schema_hash,
     ):
+        original = COMPARISON_REQUEST_SCHEMA.decode(fact.value)
+    elif (fact.schema_id, fact.schema_codec, fact.schema_hash) == (
+        _LEGACY_COMPARISON_REQUEST_SCHEMA.id,
+        _LEGACY_COMPARISON_REQUEST_SCHEMA.schema_codec,
+        _LEGACY_COMPARISON_REQUEST_SCHEMA.schema_hash,
+    ):
+        legacy = _LEGACY_COMPARISON_REQUEST_SCHEMA.decode(fact.value)
+        original = ComparisonRequest.model_validate(
+            {**legacy.model_dump(), "workspace_id": "legacy"}
+        )
+    else:
         raise ValueError("Saved comparison request schema is not supported")
-    original = COMPARISON_REQUEST_SCHEMA.decode(fact.value)
     if original.primary_run != source.run_id:
         raise ValueError("Saved comparison request does not belong to its primary run")
     return original.model_copy(

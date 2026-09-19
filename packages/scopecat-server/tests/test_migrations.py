@@ -72,6 +72,13 @@ def _legacy(root: Path, version: int = 68):
 
             connection.executescript(EXPERIMENTAL_BATCH_TABLES_SQL)
             connection.execute("UPDATE project_schema SET version=72")
+        if version >= 73:
+            from scopecat_server.storage.sqlite.target_schema import (
+                TARGET_CATALOG_TABLES_SQL,
+            )
+
+            connection.executescript(TARGET_CATALOG_TABLES_SQL)
+            connection.execute("UPDATE project_schema SET version=73")
         connection.commit()
     return load_project(root / "scopecat.toml")
 
@@ -84,7 +91,7 @@ def _hashes(root: Path) -> dict[str, str]:
     }
 
 
-@pytest.mark.parametrize("version", [68, 69, 70, 71, 72])
+@pytest.mark.parametrize("version", [68, 69, 70, 71, 72, 73])
 def test_upgrade_and_actual_restore_preserve_source_and_objects(
     tmp_path: Path, version: int
 ) -> None:
@@ -92,7 +99,7 @@ def test_upgrade_and_actual_restore_preserve_source_and_objects(
     original = _hashes(project.root)
     destination = tmp_path / "升级 副本"
     plan = plan_migration(project)
-    assert plan.steps == tuple(f"{v}->{v + 1}" for v in range(version, 73))
+    assert plan.steps == tuple(f"{v}->{v + 1}" for v in range(version, 74))
     receipt = migrate_copy(project, destination)
     assert receipt.plan == plan
     assert _hashes(project.root) == original
@@ -104,7 +111,7 @@ def test_upgrade_and_actual_restore_preserve_source_and_objects(
     assert upgraded.runtime_binding.data_root == destination / "project/.scopecat"
     assert (
         inspect_project_schema(upgraded.runtime_binding.data_root / "control.sqlite3")
-        == 73
+        == 74
     )
     with closing(
         sqlite3.connect(upgraded.runtime_binding.data_root / "control.sqlite3")
@@ -127,7 +134,7 @@ def test_upgrade_and_actual_restore_preserve_source_and_objects(
         )
         assert connection.execute("SELECT run_id FROM runs").fetchone() == ("retained",)
     result = CliRunner().invoke(app, ["migration", "plan", str(project.root)])
-    assert result.exit_code == 0 and "73" in result.output
+    assert result.exit_code == 0 and "74" in result.output
 
 
 def test_failed_or_busy_migration_does_not_publish_or_modify_original(

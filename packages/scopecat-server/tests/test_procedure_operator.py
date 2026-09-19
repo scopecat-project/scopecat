@@ -113,7 +113,9 @@ def _application(root: Path, *, attempt: int = 1) -> tuple[DaemonApplication, Mo
                 manual_previews=ManualPreviewService(
                     SQLiteDatabase(root / "store.sqlite3"), Mock(), Mock()
                 ),
-                author_revisions=SimpleNamespace(state=lambda: AuthorRevisionState()),
+                author_revisions=SimpleNamespace(
+                    root=root, state=lambda: AuthorRevisionState()
+                ),
                 automation=SimpleNamespace(
                     get=Mock(return_value=procedure),
                     running_step=Mock(return_value=step),

@@ -58,6 +58,7 @@ from scopecat.program.scans import AxisSpec
 from scopecat.program.values import MetadataValue
 from scopecat.project_sources import loading_revision
 from scopecat.records.author_revision import AuthorRevisionRef
+from scopecat.records.author_workspace import AuthorWorkspaceId, absent_workspace
 from scopecat.records.config import ConfigProfileSnapshot
 from scopecat.records.config_context import ConfigContextRef
 from scopecat.records.content import Sha256ContentHash
@@ -90,6 +91,9 @@ class AuthorLaunchIntent(BaseModel):
         default=None, exclude_if=_absent_collection
     )
     request_hash: Sha256ContentHash
+    workspace_id: AuthorWorkspaceId | None = Field(
+        default=None, exclude_if=absent_workspace
+    )
     code_revision: AuthorRevisionRef | None = None
 
 
@@ -312,7 +316,14 @@ class _AuthorProcedure:
             config_source=selected.config_source,
             operator=selected.actor,
             record_collection=selected.record_collection,
-            metadata=self.experiment.provenance,
+            metadata={
+                **self.experiment.provenance,
+                **(
+                    {"author_workspace": selected.workspace_id}
+                    if selected.workspace_id
+                    else {}
+                ),
+            },
         )
 
 
@@ -437,6 +448,7 @@ class AuthorExperiments:
                 manual_state=request.manual_state,
                 request_hash=request.request_hash,
                 code_revision=selected.code_revision,
+                workspace_id=request.workspace_id,
                 config_source=source,
                 point_count=preview.initial_point_count,
                 resources=preview.instrument_ids,
@@ -476,6 +488,7 @@ class AuthorExperiments:
                 manual_state=request.manual_state,
                 request_hash=request.request_hash,
                 code_revision=selected.code_revision,
+                workspace_id=request.workspace_id,
             ),
             request_key=request.request_key,
             sample=launch_sample_selection(request, source),

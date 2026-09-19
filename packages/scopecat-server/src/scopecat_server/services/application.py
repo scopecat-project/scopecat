@@ -27,7 +27,7 @@ from scopecat_server.storage.sqlite.target_catalog import TargetCatalogStore
 from ..command_payloads import CommandPayloadService
 from .admission import AdmissionService
 from .analyses import AnalysisService
-from .author_revisions import AuthorRevisionService
+from .author_workspaces import AuthorWorkspaceServices
 from .automation import AutomationService
 from .calibration_cohorts import CalibrationCohortService
 from .config import ConfigService
@@ -75,13 +75,16 @@ class DaemonApplication:
         self.project_id = project_id
         self.deployment_id = deployment_id
         self._project_store = project_store
-        self.author_revisions = AuthorRevisionService(self.project_root, project_store)
+        self.author_workspaces = AuthorWorkspaceServices(
+            self.project_root, project_store
+        )
+        self.author_revisions = self.author_workspaces.get("legacy")
         self.plans = ExperimentPlanService(
             ExperimentPlanRepository(project_store),
             config=config,
             samples=samples,
             runs=runs,
-            authors=self.author_revisions,
+            authors=self.author_workspaces,
         )
         self.config = config
         self.manual_previews = ManualPreviewService(project_store.sqlite, config, runs)
@@ -109,7 +112,7 @@ class DaemonApplication:
         self._lease_supervisor.start()
 
     def close(self) -> None:
-        self.author_revisions.close()
+        self.author_workspaces.close()
         self._lease_supervisor.request_stop()
         try:
             self.instruments.shutdown()
@@ -141,6 +144,7 @@ class DaemonApplication:
             project_id=self.project_id,
             deployment_id=self.deployment_id,
             project_name=self.project_root.name,
+            author_workspaces=self.author_workspaces.roots,
             project_root=str(self.project_root),
             data_root=str(self.binding.data_root),
             deployment_root=str(self.binding.deployment_root),

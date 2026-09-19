@@ -2769,6 +2769,8 @@ export interface components {
              * @default []
              */
             models: components["schemas"]["ComparisonModel"][];
+            /** Workspace Id */
+            workspace_id?: string | null;
         };
         /** ComparisonCurve */
         ComparisonCurve: {
@@ -2816,6 +2818,8 @@ export interface components {
             kind: "inspection";
             primary: components["schemas"]["ComparisonCurve"];
             secondary: components["schemas"]["ComparisonCurve"];
+            /** Workspace Id */
+            workspace_id?: string | null;
         };
         /** ComparisonModel */
         ComparisonModel: {
@@ -2919,6 +2923,11 @@ export interface components {
              * @default
              */
             secondary_run: string;
+            /**
+             * Workspace Id
+             * @default legacy
+             */
+            workspace_id: string;
         };
         ComparisonResult: components["schemas"]["ComparisonCatalog"] | components["schemas"]["ComparisonInspection"] | components["schemas"]["ComparisonPublication"] | components["schemas"]["ComparisonHandoff"];
         /** ComparisonSelection */
@@ -3860,6 +3869,10 @@ export interface components {
          * @description Daemon readiness and the one project owned by this process.
          */
         DaemonHealth: {
+            /** Author Workspaces */
+            author_workspaces?: {
+                [key: string]: string;
+            };
             /** Data Root */
             data_root: string;
             /** Deployment Id */
@@ -4189,6 +4202,8 @@ export interface components {
             source?: components["schemas"]["PlanAnalysisSource"] | null;
             /** Version */
             version: string;
+            /** Workspace Id */
+            workspace_id?: string | null;
         };
         /** ExperimentPlanDefinition */
         "ExperimentPlanDefinition-Output": {
@@ -4220,6 +4235,8 @@ export interface components {
             source?: components["schemas"]["PlanAnalysisSource"] | null;
             /** Version */
             version: string;
+            /** Workspace Id */
+            workspace_id?: string | null;
         };
         /** ExperimentPlanList */
         ExperimentPlanList: {
@@ -5197,6 +5214,8 @@ export interface components {
              * @default []
              */
             entries: components["schemas"]["LaunchCatalogEntry"][];
+            /** Workspace Id */
+            workspace_id?: string | null;
         };
         /** LaunchCatalogEntry */
         LaunchCatalogEntry: {
@@ -5391,6 +5410,8 @@ export interface components {
             sample_binding?: components["schemas"]["SampleBinding"] | null;
             /** Summary */
             summary: string;
+            /** Workspace Id */
+            workspace_id?: string | null;
         };
         /** LaunchRequest */
         "LaunchRequest-Input": {
@@ -5457,6 +5478,8 @@ export interface components {
              * @default
              */
             version: string;
+            /** Workspace Id */
+            workspace_id?: string | null;
         };
         /** LaunchRequest */
         "LaunchRequest-Output": {
@@ -5523,6 +5546,8 @@ export interface components {
              * @default
              */
             version: string;
+            /** Workspace Id */
+            workspace_id?: string | null;
         };
         /**
          * LaunchSubmission
@@ -9505,7 +9530,9 @@ export interface operations {
     author_preparations_api_v1_author_preparations_get: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-Scopecat-Workspace"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -9520,12 +9547,23 @@ export interface operations {
                     "application/json": components["schemas"]["AuthorPreparation"][];
                 };
             };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
     };
     start_author_preparation_api_v1_author_preparations_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-Scopecat-Workspace"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -9558,7 +9596,9 @@ export interface operations {
     author_preparation_api_v1_author_preparations__operation_id__get: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-Scopecat-Workspace"?: string;
+            };
             path: {
                 operation_id: string;
             };
@@ -9589,7 +9629,9 @@ export interface operations {
     cancel_author_preparation_api_v1_author_preparations__operation_id__cancel_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-Scopecat-Workspace"?: string;
+            };
             path: {
                 operation_id: string;
             };
@@ -9620,7 +9662,9 @@ export interface operations {
     author_revision_state_api_v1_author_revisions_get: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-Scopecat-Workspace"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -9633,6 +9677,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AuthorRevisionState"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -10051,7 +10104,9 @@ export interface operations {
             query?: {
                 code_revision?: string | null;
             };
-            header?: never;
+            header?: {
+                "X-Scopecat-Workspace"?: string;
+            };
             path?: never;
             cookie?: never;
         };

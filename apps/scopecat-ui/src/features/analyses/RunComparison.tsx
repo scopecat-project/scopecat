@@ -21,6 +21,7 @@ type Inspection = components["schemas"]["ComparisonInspection"];
 export type ComparisonHandoff = components["schemas"]["ComparisonHandoff"];
 async function call(request: Partial<Request> & Pick<Request, "action">) {
   const body: Request = {
+    workspace_id: "legacy",
     actor: "operator",
     reason: "",
     model_id: "",
@@ -165,6 +166,8 @@ export function RunComparison({
           : {};
       const result = await call({
         action,
+        workspace_id:
+          (action === "fit" ? inspection?.workspace_id : catalog.data?.workspace_id) ?? "legacy",
         code_revision: action === "fit" ? inspection?.code_revision : catalog.data?.code_revision,
         model_id: model?.id ?? "",
         model_version: model?.version ?? "",

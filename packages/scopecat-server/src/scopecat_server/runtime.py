@@ -13,6 +13,7 @@ from uuid import UUID, uuid4
 from fastapi import FastAPI
 from filelock import FileLock, Timeout
 from scopecat.application.bootstrap import BootstrapConfigFactory
+from scopecat.author_workspaces import author_workspace_id
 from scopecat.config.resolution import validate_config_profile
 from scopecat.daemon.wire import (
     ConfigPublishCommand,
@@ -92,6 +93,11 @@ class LocalDaemonRuntime:
                 "instrument_backend_spec and instrument_endpoint cannot be combined"
             )
         self.project_root = Path(project_root).resolve()
+        if author_workspace_id(self.project_root) != "legacy":
+            raise ValueError(
+                "Start the deployment from its service workspace, not "
+                "a registered author workspace"
+            )
         self.project_root.mkdir(parents=True, exist_ok=True)
         self.binding = load_runtime_binding(self.project_root)
         self.state_dir = self.binding.data_root

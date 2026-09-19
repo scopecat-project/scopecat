@@ -378,9 +378,23 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
 ) -> FastAPI:
     """Create transport routes around an already-composed daemon application."""
 
+    def authors(identity: str | None = None):
+        # The absent historical owner is fixed, never an app-wide selection.
+        if identity is None or identity == "legacy":
+            return application.author_revisions
+        try:
+            return application.author_workspaces.get(identity)
+        except ValueError as error:
+            raise HTTPException(422, str(error)) from error
+
+    def procedure_root(procedure_id: str) -> Path:
+        owner = application.automation.get(procedure_id).intent.get("workspace_id")
+        return authors(owner if isinstance(owner, str) else None).root
+
     project_workers = ProjectProcedureWorkers(
         lambda: application.project_root,
         lambda procedure_id: application.automation.worker_state(procedure_id),
+        resolve_root=procedure_root,
     )
 
     retained_workers = RevisionWorkers("scopecat_server.retained_worker")
@@ -427,16 +441,21 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
         return ref
 
     @app.get(f"{_API_PREFIX}/author-revisions")
-    def author_revision_state() -> AuthorRevisionState:
+    def author_revision_state(
+        workspace: Annotated[str, Header(alias="X-Scopecat-Workspace")] = "legacy",
+    ) -> AuthorRevisionState:
         try:
-            return application.author_revisions.state(initialize=False)
+            return authors(workspace).state(initialize=False)
         except ValueError as error:
             raise HTTPException(422, str(error)) from error
 
     @app.get(f"{_API_PREFIX}/author-revisions/{{content_hash}}")
-    def author_revision(content_hash: str) -> AuthorRevisionBundle:
+    def author_revision(
+        content_hash: str,
+        workspace: Annotated[str, Header(alias="X-Scopecat-Workspace")] = "legacy",
+    ) -> AuthorRevisionBundle:
         try:
-            return application.author_revisions.get(
+            return application.author_workspaces.repository(workspace).get(
                 AuthorRevisionRef(content_hash=content_hash)
             )
         except KeyError as error:
@@ -447,29 +466,38 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
     @app.post(f"{_API_PREFIX}/author-preparations")
     def start_author_preparation(
         command: AuthorPreparationRequest,
+        workspace: Annotated[str, Header(alias="X-Scopecat-Workspace")] = "legacy",
     ) -> AuthorPreparation:
         try:
-            return application.author_revisions.start(command)
+            return authors(workspace).start(command)
         except AuthorRevisionConflict as error:
             raise HTTPException(409, str(error)) from error
         except ValueError as error:
             raise HTTPException(422, str(error)) from error
 
     @app.get(f"{_API_PREFIX}/author-preparations")
-    def author_preparations() -> tuple[AuthorPreparation, ...]:
-        return application.author_revisions.repository.preparations()
+    def author_preparations(
+        workspace: Annotated[str, Header(alias="X-Scopecat-Workspace")] = "legacy",
+    ) -> tuple[AuthorPreparation, ...]:
+        return authors(workspace).repository.preparations()
 
     @app.get(f"{_API_PREFIX}/author-preparations/{{operation_id}}")
-    def author_preparation(operation_id: str) -> AuthorPreparation:
+    def author_preparation(
+        operation_id: str,
+        workspace: Annotated[str, Header(alias="X-Scopecat-Workspace")] = "legacy",
+    ) -> AuthorPreparation:
         try:
-            return application.author_revisions.repository.preparation(operation_id)
+            return authors(workspace).repository.preparation(operation_id)
         except KeyError as error:
             raise HTTPException(404, "Author preparation not found") from error
 
     @app.post(f"{_API_PREFIX}/author-preparations/{{operation_id}}/cancel")
-    def cancel_author_preparation(operation_id: str) -> AuthorPreparation:
+    def cancel_author_preparation(
+        operation_id: str,
+        workspace: Annotated[str, Header(alias="X-Scopecat-Workspace")] = "legacy",
+    ) -> AuthorPreparation:
         try:
-            return application.author_revisions.cancel(operation_id)
+            return authors(workspace).cancel(operation_id)
         except KeyError as error:
             raise HTTPException(404, "Author preparation not found") from error
 
@@ -477,9 +505,15 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
         command: AnalysisCall | ComparisonCall, response: Response, *, started: float
     ) -> str:
         operation = command.kind
+        service = authors(command.request.workspace_id)
+        if command.code_revision is not None:
+            try:
+                service.get(command.code_revision)
+            except ValueError as error:
+                raise HTTPException(422, str(error)) from error
         try:
             completed = retained_workers.call(
-                application.author_revisions.worker_binding, command, timeout=60
+                service.worker_binding, command, timeout=60
             )
         except subprocess.TimeoutExpired as error:
             stage, evidence = diagnostic_excerpt(error.stderr)
@@ -517,9 +551,12 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
 
     def launch_call(command: LaunchRequest, response: Response) -> str:
         started = time.perf_counter()
+        if command.workspace_id is None:
+            command = command.model_copy(update={"workspace_id": "legacy"})
         try:
             # Active selection is cheap and remains fresh across other sessions.
-            state = application.author_revisions.state()
+            service = authors(command.workspace_id)
+            state = service.state()
             if (
                 state.enabled
                 and command.action == "submit"
@@ -527,6 +564,8 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
             ):
                 raise ValueError("submit requires the preview's author code revision")
             ref = command.code_revision or state.active
+            if ref is not None:
+                service.get(ref)
         except ValueError as error:
             raise HTTPException(422, str(error)) from error
         if ref is not None:
@@ -539,8 +578,8 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
             if ref is not None and remaining <= 0:
                 raise subprocess.TimeoutExpired("author revision initialization", 60)
             completed = (
-                application.author_revisions.workers.call(
-                    application.author_revisions.worker_binding,
+                service.workers.call(
+                    service.worker_binding,
                     command,
                     timeout=remaining,
                 )
@@ -550,7 +589,7 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
                         sys.executable,
                         "-m",
                         "scopecat_server.launch_worker",
-                        str(application.project_root),
+                        str(service.root),
                     ],
                     input=command.model_dump_json(),
                     capture_output=True,
@@ -634,7 +673,7 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
             ):
                 command = command.model_copy(
                     update={
-                        "code_revision": application.author_revisions.state().active
+                        "code_revision": authors(command.workspace_id).state().active
                     }
                 )
             if command.code_revision is None:
@@ -649,7 +688,7 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
                         sys.executable,
                         "-m",
                         "scopecat_server.comparison_worker",
-                        str(application.project_root),
+                        str(authors(command.workspace_id).root),
                     ],
                     input=command.model_dump_json(),
                     capture_output=True,
@@ -676,12 +715,15 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
 
     @app.get(f"{_API_PREFIX}/experiment-launcher")
     def experiment_launch_catalog(
-        response: Response, code_revision: str | None = None
+        response: Response,
+        code_revision: str | None = None,
+        workspace: Annotated[str, Header(alias="X-Scopecat-Workspace")] = "legacy",
     ) -> LaunchCatalog:
         return LaunchCatalog.model_validate_json(
             launch_call(
                 LaunchRequest(
                     action="list",
+                    workspace_id=workspace,
                     code_revision=AuthorRevisionRef(content_hash=code_revision)
                     if code_revision
                     else None,

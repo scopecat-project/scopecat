@@ -22,15 +22,17 @@ class AuthorRevisionConflict(ValueError):
 
 
 class AuthorRevisionRepository:
-    def __init__(self, store: SQLiteProjectStore) -> None:
+    def __init__(self, store: SQLiteProjectStore, workspace_id: str = "legacy") -> None:
         self.store = store
+        self.workspace_id = workspace_id
 
     def state(self) -> AuthorRevisionState:
         with self.store.sqlite.read_connection() as connection:
             row = _one(
                 connection.execute(
-                    "SELECT generation, content_hash FROM author_revision_active "
-                    "WHERE singleton = 1"
+                    "SELECT generation, content_hash FROM author_workspace_heads "
+                    "WHERE workspace_id = ?",
+                    (self.workspace_id,),
                 )
             )
         if row is None:
@@ -45,8 +47,11 @@ class AuthorRevisionRepository:
         with self.store.sqlite.read_connection() as connection:
             row = _one(
                 connection.execute(
-                    "SELECT bundle_digest FROM author_revisions WHERE content_hash = ?",
-                    (ref.content_hash,),
+                    "SELECT r.bundle_digest FROM author_revisions r "
+                    "JOIN author_workspace_revisions w ON "
+                    "r.content_hash=w.content_hash "
+                    "WHERE w.workspace_id=? AND r.content_hash=?",
+                    (self.workspace_id, ref.content_hash),
                 )
             )
         if row is None:
@@ -70,7 +75,9 @@ class AuthorRevisionRepository:
         with self.store.sqlite.write_transaction() as connection:
             row = _one(
                 connection.execute(
-                    "SELECT generation FROM author_revision_active WHERE singleton = 1"
+                    "SELECT generation FROM author_workspace_heads WHERE "
+                    "workspace_id = ?",
+                    (self.workspace_id,),
                 )
             )
             generation = 0 if row is None else cast("int", row["generation"])
@@ -83,11 +90,15 @@ class AuthorRevisionRepository:
                 (ref.content_hash, digest),
             )
             connection.execute(
-                "INSERT INTO author_revision_active VALUES (1, ?, ?) "
-                "ON CONFLICT(singleton) DO UPDATE SET "
+                "INSERT INTO author_workspace_heads VALUES (?, ?, ?) "
+                "ON CONFLICT(workspace_id) DO UPDATE SET "
                 "generation = excluded.generation, "
                 "content_hash = excluded.content_hash",
-                (generation + 1, ref.content_hash),
+                (self.workspace_id, generation + 1, ref.content_hash),
+            )
+            connection.execute(
+                "INSERT OR IGNORE INTO author_workspace_revisions VALUES (?, ?)",
+                (self.workspace_id, ref.content_hash),
             )
             result = AuthorRevisionState(
                 enabled=True, generation=generation + 1, active=ref
@@ -102,9 +113,13 @@ class AuthorRevisionRepository:
                     }
                 )
                 connection.execute(
-                    "UPDATE author_preparations SET record_json = ? "
-                    "WHERE operation_id = ?",
-                    (completed.model_dump_json(), completed.operation_id),
+                    "UPDATE author_workspace_preparations SET record_json = ? "
+                    "WHERE workspace_id=? AND operation_id = ?",
+                    (
+                        completed.model_dump_json(),
+                        self.workspace_id,
+                        completed.operation_id,
+                    ),
                 )
         return result
 
@@ -112,9 +127,9 @@ class AuthorRevisionRepository:
         with self.store.sqlite.read_connection() as connection:
             row = _one(
                 connection.execute(
-                    "SELECT record_json FROM author_preparations "
-                    "WHERE operation_id = ?",
-                    (operation_id,),
+                    "SELECT record_json FROM author_workspace_preparations "
+                    "WHERE workspace_id=? AND operation_id = ?",
+                    (self.workspace_id, operation_id),
                 )
             )
         if row is None:
@@ -125,15 +140,22 @@ class AuthorRevisionRepository:
         self, *, pending_only: bool = False
     ) -> tuple[AuthorPreparation, ...]:
         query = (
-            "SELECT record_json FROM author_preparations "
-            "WHERE json_extract(record_json, '$.status') "
-            "IN ('queued','running','cancelling') ORDER BY rowid DESC"
-            if pending_only
-            else "SELECT record_json FROM author_preparations "
-            "ORDER BY rowid DESC LIMIT 100"
+            "SELECT record_json FROM author_workspace_preparations "
+            "WHERE workspace_id=? "
         )
+        if pending_only:
+            query += (
+                "AND json_extract(record_json, '$.status') IN "
+                "('queued','running','cancelling') "
+            )
+        query += "ORDER BY rowid DESC"
+        if not pending_only:
+            query += " LIMIT 100"
         with self.store.sqlite.read_connection() as connection:
-            rows = cast("list[sqlite3.Row]", connection.execute(query).fetchall())
+            rows = cast(
+                "list[sqlite3.Row]",
+                connection.execute(query, (self.workspace_id,)).fetchall(),
+            )
         return tuple(
             AuthorPreparation.model_validate_json(cast("str", row["record_json"]))
             for row in rows
@@ -143,10 +165,11 @@ class AuthorRevisionRepository:
         with self.store.sqlite.read_connection() as connection:
             row = _one(
                 connection.execute(
-                    "SELECT record_json FROM author_preparations "
-                    "WHERE json_extract(record_json, '$.expected_generation') = ? "
+                    "SELECT record_json FROM author_workspace_preparations "
+                    "WHERE workspace_id=? AND json_extract(record_json, "
+                    "'$.expected_generation') = ? "
                     "ORDER BY rowid DESC LIMIT 1",
-                    (generation,),
+                    (self.workspace_id, generation),
                 )
             )
         return (
@@ -158,10 +181,14 @@ class AuthorRevisionRepository:
     def save_preparation(self, operation: AuthorPreparation) -> None:
         with self.store.sqlite.write_transaction() as connection:
             connection.execute(
-                "INSERT INTO author_preparations VALUES (?, ?) "
-                "ON CONFLICT(operation_id) "
+                "INSERT INTO author_workspace_preparations VALUES (?, ?, ?) "
+                "ON CONFLICT(workspace_id, operation_id) "
                 "DO UPDATE SET record_json = excluded.record_json",
-                (operation.operation_id, operation.model_dump_json()),
+                (
+                    self.workspace_id,
+                    operation.operation_id,
+                    operation.model_dump_json(),
+                ),
             )
 
 
