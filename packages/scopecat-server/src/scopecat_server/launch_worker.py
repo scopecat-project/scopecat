@@ -10,7 +10,6 @@ import time
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
-import httpx2
 import scopecat as sc
 from pydantic import ValidationError
 from scopecat.application.authoring import AuthorLaunchProvider
@@ -35,7 +34,6 @@ from scopecat.records.launch_request import LaunchRequest
 from scopecat_server.author_worker import revision_project
 from scopecat_server.launch_response import LaunchRejection
 from scopecat_server.worker_diagnostics import (
-    AUTHOR_VALIDATION_TIMEOUT_EXIT,
     report_stage,
     report_validation_error,
 )
@@ -64,40 +62,12 @@ def main() -> None:
         return
     request = LaunchRequest.model_validate_json(sys.stdin.read())
     project = load_project(root / "scopecat.toml")
-    ref = request.code_revision
-    if project.source_roots or ref is not None:
-        report_stage("author revision initialization")
-        with DaemonClient(
-            resolve_daemon_endpoint(root), workspace_id=author_workspace_id(root)
-        ) as client:
-            try:
-                state = client.author_revision_state()
-            except httpx2.HTTPStatusError as error:
-                if error.response.status_code != 504:
-                    raise
-                payload = cast("object", error.response.json())
-                if not isinstance(payload, dict):
-                    raise
-                detail = cast("dict[str, object]", payload).get("detail")
-                if not isinstance(detail, str):
-                    raise
-                # Preserve this known validation failure across the existing
-                # process boundary, rather than the HTTP exception's last line.
-                print(" ".join(detail.splitlines())[:2048], file=sys.stderr)
-                raise SystemExit(AUTHOR_VALIDATION_TIMEOUT_EXIT) from None
-        ref = ref or state.active
-        if (
-            state.enabled
-            and request.action == "submit"
-            and request.code_revision is None
-        ):
-            raise ValueError("submit requires the preview's author code revision")
-        if ref is not None:
-            project = revision_project(root, ref)
+    # Transport owns workspace qualification and immutable revision selection.
+    # Only applications without an author baseline use this one-shot path.
     with contextlib.redirect_stdout(sys.stderr):
         report_stage("project application load")
         application = project.load_application()
-        result = launch(application, root, ref, request)
+        result = launch(application, root, None, request)
     print(result.model_dump_json())
 
 

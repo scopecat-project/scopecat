@@ -10,7 +10,6 @@ if TYPE_CHECKING:
     from pydantic import ValidationError
 
 DIAGNOSTIC_LIMIT = 8192
-AUTHOR_VALIDATION_TIMEOUT_EXIT = 75
 _STAGE_PREFIX = "Scopecat worker stage: "
 _STAGES = frozenset(
     {

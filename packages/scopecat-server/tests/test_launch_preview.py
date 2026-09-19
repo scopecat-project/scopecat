@@ -75,7 +75,11 @@ def _manual_previews() -> Mock:
     return service
 
 
-def client(state: AuthorRevisionState | None = None) -> TestClient:
+def client(
+    state: AuthorRevisionState | None = None,
+    *,
+    service: SimpleNamespace | None = None,
+) -> TestClient:
     return TestClient(
         create_app(
             cast(
@@ -85,7 +89,8 @@ def client(state: AuthorRevisionState | None = None) -> TestClient:
                     SimpleNamespace(
                         project_root=Path.cwd(),
                         manual_previews=_manual_previews(),
-                        author_revisions=SimpleNamespace(
+                        author_revisions=service
+                        or SimpleNamespace(
                             root=Path.cwd(),
                             state=lambda: state or AuthorRevisionState(),
                             get=Mock(),
@@ -519,56 +524,52 @@ def test_worker_rejects_undeclared_control_edits_before_provider_action(
     assert provider.call_args.args[1].action == "list"
 
 
-@pytest.mark.parametrize("padding", ["", "x" * 3000])
-def test_inner_validation_timeout_survives_worker_and_http_boundary(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-    padding: str,
-) -> None:
-    import io
-
-    import httpx2
-
-    from scopecat_server import launch_worker
-    from scopecat_server.worker_diagnostics import AUTHOR_VALIDATION_TIMEOUT_EXIT
-
-    detail = (
-        "Author source validation timed out during application import. "
-        "Inspect daemon.log."
-    ) + padding
-    response = httpx2.Response(
-        504,
-        json={"detail": detail},
-        request=httpx2.Request("GET", "http://localhost/api/v1/author-revisions"),
+def test_author_submit_requires_preview_revision_before_dispatch() -> None:
+    state = AuthorRevisionState(
+        enabled=True, active=AuthorRevisionRef(content_hash="sha256:" + "a" * 64)
     )
-    monkeypatch.setattr("sys.argv", ["launch_worker", str(tmp_path)])
-    monkeypatch.setattr("sys.stdin", io.StringIO('{"action":"list"}'))
     with (
-        patch.object(launch_worker, "load_project") as load,
-        patch.object(launch_worker, "resolve_daemon_endpoint"),
-        patch.object(launch_worker, "DaemonClient") as daemon,
+        patch("scopecat_server.http.transport.subprocess.run") as run,
+        patch("scopecat_server.http.transport.RevisionWorkers.call") as pooled,
     ):
-        load.return_value.source_roots = ("src",)
-        daemon.return_value.__enter__.return_value.author_revision_state.side_effect = (
-            httpx2.HTTPStatusError(
-                "generic HTTP failure", request=response.request, response=response
-            )
+        response = client(state).post(
+            "/api/v1/experiment-launcher/submit", json=_submission_request()
         )
-        with pytest.raises(SystemExit) as exited:
-            launch_worker.main()
-        assert exited.value.code == AUTHOR_VALIDATION_TIMEOUT_EXIT
-    captured = capsys.readouterr()
-    assert captured.out == ""
-    assert captured.err.splitlines()[-1] == detail[:2048]
-    with patch("scopecat_server.http.transport.subprocess.run") as run:
-        run.return_value = SimpleNamespace(
-            returncode=exited.value.code, stdout="", stderr=captured.err
-        )
-        outer = client().get("/api/v1/experiment-launcher")
-    assert outer.status_code == 504
-    assert outer.json()["detail"] == detail[:2048]
-    run.assert_called_once()
+    assert response.status_code == 422
+    assert (
+        "submit requires the preview's author code revision"
+        in response.json()["detail"]
+    )
+    run.assert_not_called()
+    pooled.assert_not_called()
+
+
+@pytest.mark.parametrize("failure", ["preparation", "revision_owner"])
+def test_source_selection_failure_does_not_dispatch(failure: str) -> None:
+    ref = AuthorRevisionRef(content_hash="sha256:" + "a" * 64)
+    service = SimpleNamespace(
+        state=Mock(return_value=AuthorRevisionState(enabled=True, active=ref)),
+        get=Mock(),
+    )
+    if failure == "preparation":
+        detail = "Author preparation failed during application import"
+        service.state.side_effect = ValueError(detail)
+    else:
+        detail = "Source revision does not belong to the selected author workspace"
+        service.get.side_effect = ValueError(detail)
+    with (
+        patch("scopecat_server.http.transport.subprocess.run") as run,
+        patch("scopecat_server.http.transport.RevisionWorkers.call") as pooled,
+    ):
+        response = client(service=service).get("/api/v1/experiment-launcher")
+    assert response.status_code == 422
+    assert response.json()["detail"] == detail
+    run.assert_not_called()
+    pooled.assert_not_called()
+    if failure == "preparation":
+        service.get.assert_not_called()
+    else:
+        service.get.assert_called_once_with(ref)
 
 
 def test_pinned_catalog_uses_pool_and_exposes_nested_timing() -> None:
