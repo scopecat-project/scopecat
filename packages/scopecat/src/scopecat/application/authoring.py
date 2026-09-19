@@ -56,7 +56,7 @@ from scopecat.program.controls import ControlScalar, ControlSet
 from scopecat.program.definitions import ExperimentInvocation
 from scopecat.program.scans import AxisSpec
 from scopecat.program.values import MetadataValue
-from scopecat.project_sources import loading_revision
+from scopecat.project_sources import loading_revision, loading_workspace
 from scopecat.records.author_revision import AuthorRevisionRef
 from scopecat.records.author_workspace import (
     SERVICE_AUTHOR_WORKSPACE,
@@ -111,6 +111,7 @@ class AuthorExperiment:
     code_revision: AuthorRevisionRef | None = field(
         default_factory=loading_revision.get
     )
+    workspace_id: str = field(default_factory=loading_workspace.get)
     fingerprint: Sha256ContentHash = field(init=False)
 
     @classmethod
@@ -119,6 +120,7 @@ class AuthorExperiment:
         declaration: Experiment[..., object],
         *,
         code_revision: AuthorRevisionRef | None = None,
+        workspace_id: str = SERVICE_AUTHOR_WORKSPACE,
     ) -> AuthorExperiment:
         """Use the same contract for discovery and imported Python requests."""
         return cls(
@@ -133,6 +135,7 @@ class AuthorExperiment:
             ),
             description=inspect.getdoc(declaration.__wrapped__) or declaration.id,
             code_revision=code_revision,
+            workspace_id=workspace_id,
         )
 
     def __post_init__(self) -> None:
@@ -209,7 +212,10 @@ class AuthorExperiment:
             if self.code_revision
             else "declaration-and-controls; not transitive helper identity",
             **(
-                {"author_code_revision": self.code_revision.content_hash}
+                {
+                    "author_code_revision": self.code_revision.content_hash,
+                    "author_workspace": self.workspace_id,
+                }
                 if self.code_revision
                 else {}
             ),
@@ -362,7 +368,9 @@ class AuthorExperiments:
                 try:
                     discovered.append(
                         AuthorExperiment.from_declaration(
-                            experiment, code_revision=loading_revision.get()
+                            experiment,
+                            code_revision=loading_revision.get(),
+                            workspace_id=loading_workspace.get(),
                         )
                     )
                 except (TypeError, ValueError) as error:

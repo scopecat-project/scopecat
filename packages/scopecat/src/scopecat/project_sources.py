@@ -17,6 +17,11 @@ from scopecat.records.author_revision import (
     AuthorRevisionManifest,
     AuthorRevisionRef,
 )
+from scopecat.records.author_workspace import SERVICE_AUTHOR_WORKSPACE
+
+loading_workspace: ContextVar[str] = ContextVar(
+    "loading_author_workspace", default=SERVICE_AUTHOR_WORKSPACE
+)
 
 loading_revision: ContextVar[AuthorRevisionRef | None] = ContextVar(
     "loading_author_revision", default=None
