@@ -21,8 +21,6 @@ from scopecat.control.models import (
 from scopecat.daemon.wire import SetupActivateCommand, SetupSaveCommand
 from scopecat.kernel.content_identity import sha256_json_hash
 from scopecat.kernel.errors import CheckFailed, Conflict, DataIntegrityError, NotFound
-from scopecat.records.config import ConfigProfileSnapshot, SystemSpec
-from scopecat.records.parameter import ParameterCatalog, ParameterSnapshot
 from scopecat.records.setup import ActiveSetupView, SetupRevision
 
 from scopecat_server.errors import BackendConflict, BackendNotFound
@@ -31,29 +29,12 @@ from scopecat_server.instruments.actors import (
     InstrumentActorRegistry,
     InstrumentActorShutdown,
 )
+from scopecat_server.setup_access import setup_config
 from scopecat_server.storage.sqlite.calibration_cohorts import (
     SQLiteCalibrationCohortStore,
 )
 from scopecat_server.storage.sqlite.config_registry import SQLiteConfigRegistryStore
 from scopecat_server.storage.sqlite.control_plane import SQLiteControlPlane
-
-
-def setup_config(revision: SetupRevision) -> ConfigProfileSnapshot:
-    """Adapt executable content to existing instrument-only config consumers."""
-    setup = revision.setup
-    return ConfigProfileSnapshot(
-        id=revision.id,
-        system=SystemSpec(
-            id=revision.id,
-            primary_entity_id=setup.primary_entity_id,
-            topology=setup.topology,
-            instrument_registry=setup.instrument_registry,
-            routing=setup.routing,
-            domain_target=setup.domain_target,
-            parameter_catalog=ParameterCatalog(id=revision.id),
-        ),
-        parameter_snapshot=ParameterSnapshot(id=revision.id),
-    )
 
 
 class SetupService:

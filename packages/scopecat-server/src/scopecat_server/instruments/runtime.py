@@ -124,7 +124,7 @@ from ..command_payloads import (
     session_payload_scope,
 )
 from ..errors import BackendConflict, BackendNotFound
-from ..services.setup import setup_config
+from ..setup_access import SetupReader, setup_config
 from ._runtime_state import (
     ApplyReplay,
     CollectFailureReplay,
@@ -188,7 +188,6 @@ from .costs import observe_operation
 
 if TYPE_CHECKING:
     from ..command_payloads import CommandPayloadScope, CommandPayloadService
-    from ..services.setup import SetupService
 
 
 class InstrumentRuntime:
@@ -199,7 +198,7 @@ class InstrumentRuntime:
         *,
         control: SQLiteControlPlane,
         runs: SQLiteRunRepository,
-        setup: SetupService,
+        setup: SetupReader,
         endpoint: InstrumentBackendEndpoint | None,
         payloads: CommandPayloadService,
         actors: InstrumentActorRegistry,
