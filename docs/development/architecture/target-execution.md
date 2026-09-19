@@ -273,7 +273,11 @@ does not introduce a second independently editable config source. Inline samples
 preserve existing multiple-role records without claiming assembly execution.
 
 The direct runner resolves sample revisions before submission and uses exact
-selectors as its runtime projection. Resume reuses retained evidence. Admission
+selectors as its runtime projection. Resume reuses retained evidence. Procedure
+admission also freezes inherited sample selectors in `resolved_samples`, while
+retaining the original selection for request-key identity. Reentering a child
+step therefore does not advance its inherited sample head; explicit per-step
+selection and the full target-bearing recipe contract remain follow-on work. Admission
 checks that evidence against local immutable catalog records, submitted config,
 setup and selectors before allocating a visible run or acquisition address. A
 dedicated repository reference is committed in the existing admission transaction;

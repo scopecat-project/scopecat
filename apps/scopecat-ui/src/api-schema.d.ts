@@ -7110,6 +7110,11 @@ export interface components {
             procedure_run_id: components["schemas"]["_NonEmptyText"];
             recovery?: components["schemas"]["ProcedureRecoverySource"] | null;
             request_key: components["schemas"]["_NonEmptyText"];
+            /**
+             * Resolved Samples
+             * @default []
+             */
+            resolved_samples: components["schemas"]["SampleSelector"][];
             resource_wait?: components["schemas"]["ProcedureResourceWait"] | null;
             /** Revision */
             revision: number;

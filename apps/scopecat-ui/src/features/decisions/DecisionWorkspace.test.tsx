@@ -150,6 +150,7 @@ function waitingProcedure(): ProcedureRun {
     intent_hash: hash,
     revision: 4,
     samples: [],
+    resolved_samples: [],
     state: "waiting_for_input",
   };
 }
