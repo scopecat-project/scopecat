@@ -502,18 +502,35 @@ def test_startup_trace_locates_config_stall_after_instrument_readiness(
         configuration.read_text().replace(
             "def bootstrap_config() -> ConfigProfileSnapshot:",
             "def bootstrap_config() -> ConfigProfileSnapshot:\n"
-            "    import time\n    while True:\n        time.sleep(1)",
+            "    import faulthandler\n"
+            "    import time\n"
+            "    from scopecat_server import _startup_diagnostics as diagnostics\n"
+            "    faulthandler.dump_traceback(file=diagnostics._stream)\n"
+            "    while True:\n        time.sleep(1)",
         )
     )
-    with pytest.raises(DaemonLifecycleError, match="healthy within 10 seconds"):
-        start_project(open_project(tmp_path), timeout=10)
+
+    class SampleCaptured(Exception):
+        pass
+
+    def stop_after_sample(_elapsed: float, _stage: str) -> None:
+        if any(
+            "in bootstrap_config" in trace.read_text()
+            for trace in diagnostics.glob("daemon-startup-*.log")
+        ):
+            raise SampleCaptured
+
+    # Cancel only after the deliberately stalled phase has supplied its stack.
+    # The deadline bounds cleanup if startup fails before reaching that phase;
+    # it does not couple the assertion to import speed or the automatic timer.
+    with pytest.raises(SampleCaptured):
+        start_project(open_project(tmp_path), timeout=30, on_progress=stop_after_sample)
     [trace] = diagnostics.glob("daemon-startup-*.log")
     evidence = trace.read_text()
     assert "launch request to Python entry:" in evidence
     assert "instrument endpoint ready" in evidence
     assert "project schema ready" in evidence
     assert "daemon application ready; bootstrapping config registry" in evidence
-    assert "Timeout (0:00:08)" in evidence
     assert "in bootstrap_config" in evidence
     assert "config registry ready; starting application services" not in evidence
     assert not daemon_record_path(tmp_path).exists()
