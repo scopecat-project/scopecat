@@ -27,6 +27,8 @@ from scopecat.records.experiment_plan import ExperimentPlanSave
 from scopecat.records.plan_ref import PlanAnalysisSource
 from scopecat.records.run_request import AxisValuesSourceRecord
 
+pytestmark = pytest.mark.usefixtures("reference_lab_daemon")
+
 
 def test_retained_analysis_plan_copy_revalidate_and_child_origin() -> None:
     endpoint = os.environ["SCOPECAT_DAEMON_URL"]

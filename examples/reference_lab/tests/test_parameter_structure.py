@@ -23,6 +23,8 @@ from reference_lab.configuration import EXAMPLE_ROOT
 from reference_lab.parameters import QubitParameters
 from reference_lab.workflows.exploratory_signal import exploratory_signal, response
 
+pytestmark = pytest.mark.usefixtures("reference_lab_daemon")
+
 
 class Quality(sc.ParameterModel, table="qubits"):
     qubit: sc.Param[sc.EntityRef] = sc.param(key=True, entity_kind="logical_qubit")

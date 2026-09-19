@@ -11,6 +11,8 @@ from scopecat.daemon.client import DaemonClient, DaemonNotFoundError
 from scopecat.records.config_context import ConfigContextRef, ContextRunConfigSource
 from scopecat.records.sample import SampleRevisionDraft
 
+pytestmark = pytest.mark.usefixtures("reference_lab_daemon")
+
 
 def test_session_selection_is_local_and_preparation_is_frozen(tmp_path: Path) -> None:
     endpoint = os.environ["SCOPECAT_DAEMON_URL"]

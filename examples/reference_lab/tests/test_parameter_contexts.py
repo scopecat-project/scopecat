@@ -19,6 +19,8 @@ from reference_lab.exploration import exploration_cases, exploration_config
 from reference_lab.parameters import QubitParameters
 from reference_lab.workflows.exploratory_signal import exploratory_signal
 
+pytestmark = pytest.mark.usefixtures("reference_lab_daemon")
+
 
 def test_contexts_select_parameters_and_preserve_sample_and_run_history(
     monkeypatch: pytest.MonkeyPatch,

@@ -21,6 +21,8 @@ from reference_lab.workflows.exploratory_signal import (
     exploratory_signal,
 )
 
+pytestmark = pytest.mark.usefixtures("reference_lab_daemon")
+
 
 def test_exploration_retains_distinct_contexts_and_reanalyzes() -> None:
     with create_application(EXAMPLE_ROOT).connect(

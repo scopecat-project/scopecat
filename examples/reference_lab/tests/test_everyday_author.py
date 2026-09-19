@@ -16,6 +16,8 @@ from reference_lab.workflows.exploratory_signal import (
     exploratory_signal,
 )
 
+pytestmark = pytest.mark.usefixtures("reference_lab_daemon")
+
 
 def test_everyday_author_retained_inputs_and_unknown_consumer() -> None:
     application = create_application(EXAMPLE_ROOT)
