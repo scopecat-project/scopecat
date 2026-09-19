@@ -15,6 +15,11 @@ from scopecat.config.changes import (
     load_parameter_change_proposal,
 )
 from scopecat.config.parameter_updates import ParameterUpdate
+from scopecat.config.registry.service import (
+    ConfigRevision,
+    DirectConfigRevisionSource,
+    publish_config_revision,
+)
 from scopecat.kernel.errors import CheckFailed, Conflict, DataIntegrityError
 from scopecat.kernel.quantity import Quantity
 from scopecat.records.parameter import ScalarParameterValue
@@ -241,6 +246,15 @@ def test_candidate_config_rejects_drifted_source_snapshot_before_publish(
 ) -> None:
     lab = _lab(tmp_path)
     run = lab.prepare(load_invocation()).run()
+    initial = publish_config_revision(
+        revision=ConfigRevision(
+            source=DirectConfigRevisionSource(run.config),
+            entry_id="initial",
+            actor="operator",
+        ),
+        unit_of_work=sqlite_config_registry_unit_of_work(tmp_path),
+        expected_generation=0,
+    )
     candidate = (
         run.analysis("stale fit")
         .result()
@@ -270,7 +284,8 @@ def test_candidate_config_rejects_drifted_source_snapshot_before_publish(
 
     assert error.value.problems[0].code == "run.config_provenance_mismatch"
     with sqlite_config_registry_unit_of_work(tmp_path)() as work:
-        assert work.registry.list_entries() == ()
+        assert work.registry.list_entries() == (initial.entry,)
+        assert work.registry.current_generation() == 1
 
 
 def test_parameter_change_proposal_round_trips_and_is_persisted(

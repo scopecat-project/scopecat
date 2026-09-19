@@ -175,6 +175,15 @@ def test_workflow_analysis_review_activate_and_rerun_active_config(
     tmp_path: Path,
 ) -> None:
     services = sqlite_project_services(tmp_path)
+    config_registry_service.publish_config_revision(
+        revision=config_registry_service.ConfigRevision(
+            source=config_registry_service.DirectConfigRevisionSource(load_config()),
+            entry_id="initial",
+            actor="operator",
+        ),
+        unit_of_work=services.config_registry,
+        expected_generation=0,
+    )
     run = execute_signal_run(
         config=load_config(),
         experiment=load_invocation(),
