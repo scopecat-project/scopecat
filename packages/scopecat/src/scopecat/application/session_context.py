@@ -1,4 +1,4 @@
-"""Client-local defaults; prepared launches retain their resolved wire requests."""
+"""Client-local selection; prepared launches retain their resolved evidence."""
 
 from enum import Enum
 from typing import TypedDict
@@ -6,9 +6,9 @@ from typing import TypedDict
 from pydantic import BaseModel, ConfigDict, Field
 
 from scopecat.records.config_context import ConfigContextRef
-from scopecat.records.experimental_batch import ExperimentalBatchId
 from scopecat.records.record_collection import RecordCollectionId
-from scopecat.records.sample import SampleId
+from scopecat.records.scientific_selection import ScientificSelection
+from scopecat.records.target_catalog import TargetRevisionRef
 
 
 class SessionDefault(Enum):
@@ -19,36 +19,15 @@ INHERIT = SessionDefault.INHERIT
 
 
 class SessionContext(BaseModel):
-    """Immutable selection snapshot, independent of daemon-wide active state."""
-
     model_config = ConfigDict(extra="forbid", frozen=True)
-    sample: SampleId | None = None
-    batch: ExperimentalBatchId | None = None
-    working_point: ConfigContextRef | None = None
+    science: ScientificSelection = Field(default_factory=ScientificSelection)
     collection: RecordCollectionId | None = None
     operator: str = Field(default="operator", min_length=1)
 
-    def scientific_scope(
-        self,
-        *,
-        context: ConfigContextRef | SessionDefault | None,
-        sample: str | SessionDefault | None,
-        explicit_parameters: bool,
-    ) -> tuple[ConfigContextRef | None, str | None]:
-        """Explicit scientific selections replace the inherited scope as a whole."""
-        if (
-            not explicit_parameters
-            and isinstance(context, SessionDefault)
-            and isinstance(sample, SessionDefault)
-        ):
-            return self.working_point, self.sample
-        return (
-            None if isinstance(context, SessionDefault) else context,
-            None if isinstance(sample, SessionDefault) else sample,
-        )
-
 
 class SessionContextUpdate(TypedDict, total=False):
+    selection: ScientificSelection
+    target: str | TargetRevisionRef | None
     sample: str | None
     batch: str | None
     working_point: ConfigContextRef | None
