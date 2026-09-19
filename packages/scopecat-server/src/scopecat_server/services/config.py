@@ -192,7 +192,11 @@ class ConfigService:
                 raise BackendConflict(str(error)) from error
 
     def rebind_setup(self, command: ConfigSetupRebindCommand) -> ConfigEntryView:
-        with self._mutation_lock, self._config_errors():
+        with (
+            self._mutation_lock,
+            self._config_errors(),
+            self._config_transaction() as (_, services),
+        ):
             try:
                 saved = config_registry_service.rebind_config_setup(
                     base=command.base,
@@ -200,7 +204,7 @@ class ConfigService:
                     entry_id=command.entry_id,
                     actor=command.actor,
                     note=command.note,
-                    unit_of_work=self._services.config_registry,
+                    unit_of_work=services.config_registry,
                 )
                 return ConfigEntryView(entry=saved.entry, config=saved.config)
             except KeyError as error:

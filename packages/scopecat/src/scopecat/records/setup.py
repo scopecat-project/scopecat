@@ -72,16 +72,24 @@ class ExecutableSetupSnapshot(_SetupModel):
     @property
     def execution_content_hash(self) -> Sha256ContentHash:
         """Execution identity preserves the existing scientific-scope codec."""
-        system = self.model_dump(
-            mode="json",
-            exclude={
-                "topology": {"entities": {"__all__": {"metadata"}}},
-                "routing": {"roles": {"__all__": {"description"}}},
-            },
-        )
-        return sha256_json_hash(
-            {"codec": "scopecat.setup-content.v1", "system": system}
-        )
+        return executable_setup_content_hash(self)
+
+
+def executable_setup_content_hash(
+    setup: ExecutableSetupSnapshot | ConfigProfileSnapshot,
+) -> Sha256ContentHash:
+    """Canonical executable projection shared by payloads and complete snapshots."""
+    source = setup.system if isinstance(setup, ConfigProfileSnapshot) else setup
+    system = source.model_dump(
+        mode="json",
+        exclude={
+            "id": True,
+            "parameter_catalog": True,
+            "topology": {"entities": {"__all__": {"metadata"}}},
+            "routing": {"roles": {"__all__": {"description"}}},
+        },
+    )
+    return sha256_json_hash({"codec": "scopecat.setup-content.v1", "system": system})
 
 
 class SetupRevisionRef(_SetupModel):

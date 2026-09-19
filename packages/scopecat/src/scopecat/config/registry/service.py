@@ -385,7 +385,7 @@ def _bootstrap_executable_setup(
             note=revision.note,
         )
     )
-    command = {
+    command: dict[str, object] = {
         "revision": saved.ref.model_dump(mode="json"),
         "expected_generation": 0,
         "actor": revision.actor,

@@ -15,6 +15,7 @@ from scopecat.records.config import ConfigProfileSnapshot
 from scopecat.records.content import Sha256ContentHash
 from scopecat.records.experimental_batch import ExperimentalBatchId
 from scopecat.records.sample import SampleBinding, SampleId
+from scopecat.records.setup import executable_setup_content_hash
 
 _NonEmpty = Annotated[str, Field(min_length=1)]
 
@@ -178,13 +179,4 @@ def setup_content_hash(config: ConfigProfileSnapshot) -> Sha256ContentHash:
     settings, lifecycle policy and domain configuration. Logical IDs still matter
     because current plans address them; this is not physical-device arbitration.
     """
-    system = config.system.model_dump(
-        mode="json",
-        exclude={
-            "id": True,
-            "parameter_catalog": True,
-            "topology": {"entities": {"__all__": {"metadata"}}},
-            "routing": {"roles": {"__all__": {"description"}}},
-        },
-    )
-    return sha256_json_hash({"codec": "scopecat.setup-content.v1", "system": system})
+    return executable_setup_content_hash(config)
