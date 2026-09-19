@@ -12,6 +12,8 @@ ApparatusObjectId = Annotated[
     str, Field(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9][A-Za-z0-9_.:-]*$")
 ]
 MAX_APPARATUS_ATTACHMENT_BYTES = 64 * 1024 * 1024
+_ShortText = Annotated[str, Field(min_length=1, max_length=200)]
+_ConditionText = Annotated[str, Field(max_length=4000)]
 
 
 class _HistoryModel(BaseModel):
@@ -21,7 +23,7 @@ class _HistoryModel(BaseModel):
 class ApparatusObjectContent(_HistoryModel):
     name: str = Field(min_length=1, max_length=200)
     kind: str = Field(min_length=1, max_length=100)
-    aliases: tuple[str, ...] = Field(default=(), max_length=64)
+    aliases: tuple[_ShortText, ...] = Field(default=(), max_length=64)
     description: str = Field(default="", max_length=8000)
 
     @property
@@ -76,11 +78,15 @@ class ApparatusObservationDraft(_HistoryModel):
     title: str = Field(min_length=1, max_length=200)
     actor: str = Field(min_length=1, max_length=200)
     observed_at: AwareDatetime | None = None
-    conditions: dict[str, str] = Field(default_factory=dict, max_length=64)
+    conditions: dict[_ShortText, _ConditionText] = Field(
+        default_factory=dict, max_length=64
+    )
     note: str = Field(default="", max_length=32000)
-    run_ids: tuple[str, ...] = Field(default=(), max_length=128)
+    run_ids: tuple[Annotated[str, Field(min_length=1, max_length=256)], ...] = Field(
+        default=(), max_length=128
+    )
     attachments: tuple[ApparatusAttachment, ...] = Field(default=(), max_length=32)
-    supersedes: str | None = None
+    supersedes: ApparatusObjectId | None = None
 
 
 class ApparatusObservationCreate(_HistoryModel):
