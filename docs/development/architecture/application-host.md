@@ -43,8 +43,14 @@ The service registration records an absolute interpreter path without resolving
 venv symlinks, its prefix/Python/package versions and selected GUI directory.
 Startup checks that identity and refuses a running daemon from another interpreter,
 an API-only service or a mismatched GUI. It leaves an existing service running so
-the maintainer can stop it explicitly. After changing an environment, finish active
-management operations, stop that service and register it again. This version check
+the maintainer can stop it explicitly. Before changing an environment, finish active management work and stop the service.
+After an in-place update, **Recheck environment** validates the existing registered
+interpreter, project and GUI and atomically updates its environment identity.
+It retains the deployment ID and paths, records the operation, and leaves the service
+stopped. A failed probe retains the old registration. Rechecking rejects any state
+other than stopped and shares the registration/operation lock; it cannot overlap
+re-registration or another management operation. New interpreter or GUI paths still
+require explicit trusted local registration. See the [maintenance guide](../../how-to/maintain-application.md). This version check
 is not a lockfile/content attestation of every dependency or editable source byte.
 Failed startup stays visible in the operation log; there is no fallback interpreter.
 

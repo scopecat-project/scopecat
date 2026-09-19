@@ -1,7 +1,7 @@
 # Platform status and remaining work
 
 This is the current integration map, including source selection (#657) and the
-bounded Help/navigation slice (#658), rather than another historical roadmap. The umbrella is [#610](https://github.com/scopecat-project/scopecat/issues/610).
+Help/navigation (#658) and stopped environment rechecks (#663), rather than another historical roadmap. The umbrella is [#610](https://github.com/scopecat-project/scopecat/issues/610).
 Earlier wave reports describe their own revisions; do not interpret their pending
 items as additional work when a later slice delivered them. Update this map when
 closing an ownership or product workflow, and keep implementation details in the
@@ -15,7 +15,7 @@ linked architecture documents.
 | Parameters and calibration | Independent working-point heads; verified publication and bounded automatic cohorts use exact owner/sample/batch/config evidence (#648, #652) | No executable apparatus subject or qualified cross-object dependency |
 | Executable setup | Immutable revisions, independent activation, explicit parameter rebinding and resource-generation fencing (#654) | One active setup per deployment; whole-setup content fence, not minimal experiment dependencies |
 | Author sources | Same-environment registered workspaces, scoped publication/workers and page-local code selection (#636, #657) | Different environments and portable multi-source installation are not qualified |
-| Application entry | Registered workbenches and lifecycle operations (#627, #633); workbench Help and manager-preserving navigation (#658) | Host still supervises separate services; not shared cross-service physical authority |
+| Application entry | Registered workbenches and lifecycle operations (#627, #633); workbench Help and manager-preserving navigation (#658); stopped environment revalidation (#663) | Host still supervises separate services; not shared cross-service physical authority |
 | Author/results | Direct callable compute, inferred scalar outputs, dict returns and validated native historical result rows (#584, #586) | Symbolic argument static typing remains broader than native calls |
 | Grouped analysis | Request sweeps and retained completed-run group analysis | No durable live-group completion/scheduling protocol |
 | Data recovery | Current-format backup/restore and non-mutating rejection of unsupported formats | No supported persistent baseline or selected-run exchange format |
@@ -36,8 +36,10 @@ See [configuration ownership](architecture/configuration-ownership.md),
    verifies source ownership before dispatch; pinned requests use revision workers,
    and the one-shot worker serves baseline-less maintained applications.
    Bounded Help/navigation is delivered by [#658](https://github.com/scopecat-project/scopecat/issues/658).
-   The remaining installation pairing and environment maintenance must keep
-   registration, execution and scientific context as separate actions.
+   Stopped environment rechecks (#663) reuse registered paths and retain deployment
+   identity without starting execution. Installation pairing, replacement-path
+   registration and installed lifecycle qualification remain separate work; package
+   installation is not performed by the manager.
    Record concrete replacement coverage before removing any reference fixture.
 2. **Qualify the resulting local application milestone** under
    [#616](https://github.com/scopecat-project/scopecat/issues/616).
