@@ -15,6 +15,7 @@ from scopecat.daemon.wire import (
 )
 from scopecat.runtime_binding import load_runtime_binding
 
+from scopecat_server.storage.sqlite.apparatus_history import ApparatusHistoryStore
 from scopecat_server.storage.sqlite.experiment_plan_repository import (
     ExperimentPlanRepository,
 )
@@ -81,6 +82,11 @@ class DaemonApplication:
         self.author_revisions = self.author_workspaces.get("legacy")
         self.targets = TargetCatalogStore(
             project_store.sqlite, catalog_id=project_store.identity()
+        )
+        self.apparatus_history = ApparatusHistoryStore(
+            project_store.sqlite,
+            catalog_id=project_store.identity(),
+            objects=project_store.objects,
         )
         self.plans = ExperimentPlanService(
             ExperimentPlanRepository(project_store),

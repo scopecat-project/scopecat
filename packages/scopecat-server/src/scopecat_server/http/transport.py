@@ -15,6 +15,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path, PurePosixPath
 from typing import Annotated, Literal, cast, override
+from urllib.parse import quote
 
 from fastapi import FastAPI, Header, HTTPException, Query, Request
 from fastapi import Path as ApiPath
@@ -238,6 +239,18 @@ from scopecat.daemon.wire import (
     TerminalRunCommitCommand,
 )
 from scopecat.planning.catalog import InstrumentContractCatalog
+from scopecat.records.apparatus_history import (
+    MAX_APPARATUS_ATTACHMENT_BYTES,
+    ApparatusAttachment,
+    ApparatusObjectCreate,
+    ApparatusObjectPage,
+    ApparatusObjectRef,
+    ApparatusObjectRevise,
+    ApparatusObjectRevision,
+    ApparatusObservation,
+    ApparatusObservationCreate,
+    ApparatusObservationPage,
+)
 from scopecat.records.author_revision import (
     AuthorAnalysisReceipt,
     AuthorAnalysisRequest,
@@ -931,6 +944,111 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
         command: ConfigEntryActivationCommand,
     ) -> ConfigActivationReceipt:
         return application.config.activate_config_entry(command)
+
+    @app.get(f"{_API_PREFIX}/apparatus-objects")
+    def list_apparatus_objects(
+        query: str = Query(default="", max_length=200),
+        limit: int = Query(default=100, ge=1, le=1000),
+        before: int | None = Query(default=None, ge=1),
+    ) -> ApparatusObjectPage:
+        return application.apparatus_history.list_objects(
+            query=query, limit=limit, before=before
+        )
+
+    @app.post(f"{_API_PREFIX}/apparatus-objects")
+    def create_apparatus_object(
+        command: ApparatusObjectCreate,
+    ) -> ApparatusObjectRevision:
+        return application.apparatus_history.create_object(command)
+
+    @app.post(f"{_API_PREFIX}/apparatus-objects/resolve")
+    def resolve_apparatus_object(ref: ApparatusObjectRef) -> ApparatusObjectRevision:
+        return application.apparatus_history.resolve_object(ref)
+
+    @app.post(f"{_API_PREFIX}/apparatus-objects/revisions")
+    def revise_apparatus_object(
+        command: ApparatusObjectRevise,
+    ) -> ApparatusObjectRevision:
+        return application.apparatus_history.revise_object(command)
+
+    @app.get(f"{_API_PREFIX}/apparatus-objects/{{object_id}}")
+    def get_apparatus_object(
+        object_id: str,
+        revision: int | None = Query(default=None, ge=1),
+    ) -> ApparatusObjectRevision:
+        return application.apparatus_history.get_object(object_id, revision=revision)
+
+    @app.get(f"{_API_PREFIX}/apparatus-objects/{{object_id}}/observations")
+    def apparatus_observations(
+        object_id: str,
+        limit: int = Query(default=100, ge=1, le=1000),
+        before: int | None = Query(default=None, ge=1),
+        run_id: str | None = None,
+    ) -> ApparatusObservationPage:
+        return application.apparatus_history.observations(
+            object_id, limit=limit, before=before, run_id=run_id
+        )
+
+    @app.post(f"{_API_PREFIX}/apparatus-observations")
+    def record_apparatus_observation(
+        command: ApparatusObservationCreate,
+    ) -> ApparatusObservation:
+        return application.apparatus_history.record_observation(command)
+
+    @app.get(f"{_API_PREFIX}/apparatus-observations/{{observation_id}}")
+    def get_apparatus_observation(observation_id: str) -> ApparatusObservation:
+        return application.apparatus_history.get_observation(observation_id)
+
+    @app.post(f"{_API_PREFIX}/apparatus-attachments")
+    async def import_apparatus_attachment(
+        request: Request,
+        filename: str = Query(min_length=1, max_length=255),
+    ) -> ApparatusAttachment:
+        content = bytearray()
+        async for chunk in request.stream():
+            if len(content) + len(chunk) > MAX_APPARATUS_ATTACHMENT_BYTES:
+                raise HTTPException(
+                    status_code=413, detail="Apparatus attachment exceeds 64 MiB"
+                )
+            content.extend(chunk)
+        if not content:
+            raise HTTPException(
+                status_code=422, detail="Apparatus attachment must not be empty"
+            )
+        return application.apparatus_history.import_attachment(bytes(content), filename)
+
+    @app.get(
+        f"{_API_PREFIX}/apparatus-observations/{{observation_id}}/attachments/{{content_hash}}"
+    )
+    def read_apparatus_attachment(observation_id: str, content_hash: str) -> Response:
+        observation = application.apparatus_history.get_observation(observation_id)
+        attachment = next(
+            (
+                item
+                for item in observation.draft.attachments
+                if item.content_hash == content_hash
+            ),
+            None,
+        )
+        if attachment is None:
+            raise HTTPException(
+                status_code=404,
+                detail="Attachment is not referenced by this observation",
+            )
+        content = application.apparatus_history.attachment_content(
+            observation_id, content_hash
+        )
+        filename = attachment.filename.replace("\\", "/").rsplit("/", 1)[-1]
+        return Response(
+            content,
+            media_type="application/octet-stream",
+            headers={
+                "Content-Disposition": (
+                    f"attachment; filename*=UTF-8''{quote(filename, safe='')}"
+                ),
+                "X-Content-Type-Options": "nosniff",
+            },
+        )
 
     @app.get(f"{_API_PREFIX}/measurement-targets")
     def list_targets(

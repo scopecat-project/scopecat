@@ -12,6 +12,7 @@ from scopecat.api._control import LabControlOperations
 from scopecat.api._remote import RemoteRunOperations
 from scopecat.api._runner import _DaemonRunner
 from scopecat.api.analysis import AnalysisContext, AnalysisStep
+from scopecat.api.apparatus_history import LabApparatusOperations
 from scopecat.api.calibration_planner import CalibrationPlanningContext
 from scopecat.api.calibration_policy import CalibrationPublicationPolicyRegistry
 from scopecat.api.calibrations import LabCalibrationOperations
@@ -186,6 +187,7 @@ class LabClient:
             self._client,
             operator=operator,
         )
+        self._apparatus = LabApparatusOperations(self._client, operator=operator)
         self._samples = LabSampleOperations(
             client=self._client,
             session=self,
@@ -266,6 +268,10 @@ class LabClient:
     @property
     def instruments(self) -> LabInstrumentOperations:
         return self._instruments
+
+    @property
+    def apparatus(self) -> LabApparatusOperations:
+        return self._apparatus
 
     @property
     def samples(self) -> LabSampleOperations:
