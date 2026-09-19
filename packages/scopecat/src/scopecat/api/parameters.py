@@ -90,6 +90,7 @@ from scopecat.records.parameter_structure import (
     RenameParameterColumn,
 )
 from scopecat.records.sample import SampleSelector
+from scopecat.records.scientific_scope import single_sample_applicability
 
 
 class ParameterWorkspaceOperations(Protocol):
@@ -668,7 +669,15 @@ class ParameterWorkspace(Mapping[str, "ParameterTable"]):
                 "Save or discard pending structure changes before rebasing"
             )
         selected = self._resolve(current)
-        if selected.config_source.sample != self._base.config_source.sample:
+        single_sample_applicability(
+            self._base.config_source.sample, self._base.config
+        ).require_same(
+            single_sample_applicability(selected.config_source.sample, selected.config)
+        )
+        if (
+            selected.config_source.sample.context_id
+            != self._base.config_source.sample.context_id
+        ):
             raise ValueError(
                 "rebase requires the same exact sample revision and workpoint"
             )

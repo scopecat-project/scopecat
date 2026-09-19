@@ -852,3 +852,36 @@ def test_save_retry_does_not_rewind_workspace_head(
     assert (
         ParameterWorkspace(operations, context="start", latest=True).version == newest
     )
+
+
+def test_rebase_rejects_changed_setup_without_touching_edits(
+    operations: RegistryOperations,
+) -> None:
+    params = ParameterWorkspace(operations, context="start")
+    params["qubits"]["q0"]["frequency"] = 5.4
+    before = params.diff()
+    config = operations.entry("lab").config.model_copy(deep=True)
+    config.system.instrument_registry.instruments[0].connection.options["channel"] = 2
+    revision = publish_config_revision(
+        revision=ConfigRevision(
+            source=DirectConfigRevisionSource(config),
+            entry_id="rewired-lab",
+            actor="operator",
+        ),
+        unit_of_work=operations.uow,
+        expected_generation=1,
+    )
+    changed = operations.save_context(
+        entry_id="rewired-point",
+        base=ConfigContextRef(
+            entry_id=revision.entry.id, content_hash=revision.entry.content_hash
+        ),
+        sample=SampleSelector(sample_id="sample", revision=1),
+        working_point_id="parked",
+        label="same chip after rewiring",
+    )
+    with pytest.raises(ValueError, match="same setup; explicitly copy estimates"):
+        params.rebase(current=changed.entry.id)
+    assert params.version.context.entry_id == "start"
+    assert params.diff() == before
+    assert params["qubits"]["q0"]["frequency"] == 5.4
