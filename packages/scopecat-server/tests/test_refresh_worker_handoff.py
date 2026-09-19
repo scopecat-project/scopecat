@@ -56,7 +56,7 @@ def test_refresh_hands_off_exact_application_and_closes_rejected_candidates(
         command = LaunchRequest(action="list", code_revision=first.active)
         # No daemon is running: a discarded validation process would require
         # revision_project's HTTP restore and this call would fail.
-        result = service.workers.call(tmp_path, command)
+        result = service.workers.call(service.worker_binding, command)
         assert result.returncode == 0, result.stderr
         assert (
             LaunchCatalog.model_validate_json(result.stdout).code_revision
@@ -69,10 +69,11 @@ def test_refresh_hands_off_exact_application_and_closes_rejected_candidates(
         second = service.refresh(expected_generation=1)
         assert second.active != first.active
         owners.append(psutil.Process(int(str(loads()[-1]["pid"]))))
-        assert service.workers.call(tmp_path, command).returncode == 0
+        assert service.workers.call(service.worker_binding, command).returncode == 0
         assert (
             service.workers.call(
-                tmp_path, command.model_copy(update={"code_revision": second.active})
+                service.worker_binding,
+                command.model_copy(update={"code_revision": second.active}),
             ).returncode
             == 0
         )
@@ -97,7 +98,7 @@ def test_refresh_hands_off_exact_application_and_closes_rejected_candidates(
         with pytest.raises(ValueError, match="SyntaxError"):
             service.refresh(expected_generation=3)
         assert service.repository.state() == unchanged
-        assert service.workers.call(tmp_path, command).returncode == 0
+        assert service.workers.call(service.worker_binding, command).returncode == 0
         source.write_text(text + "\n# third published revision\n")
         service.refresh(expected_generation=3)
         owners.append(psutil.Process(int(str(loads()[-1]["pid"]))))

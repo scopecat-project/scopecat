@@ -4,13 +4,13 @@ from __future__ import annotations
 
 import logging
 import subprocess
-import sys
 import tempfile
 import threading
 import time
 from collections import OrderedDict
 from collections.abc import Callable
 from contextlib import suppress
+from dataclasses import dataclass
 from pathlib import Path
 from queue import Empty, Queue
 from typing import Literal, TextIO, cast
@@ -24,9 +24,33 @@ from scopecat_server.validation_process import terminate_validation_process_tree
 from scopecat_server.worker_diagnostics import diagnostic_excerpt
 
 
+@dataclass(frozen=True)
+class AuthorWorkerBinding:
+    """Live connection owner and interpreter, independent of captured source.
+
+    The composition root supplies absolute paths. Do not resolve interpreter
+    symlinks: a virtual environment's executable is distinct from its base Python.
+    This is a local process binding, not a persistent workspace identity.
+    """
+
+    workspace: Path
+    python: Path
+
+
+@dataclass(frozen=True)
+class _WorkerKey:
+    binding: AuthorWorkerBinding
+    revision: str
+
+
 class _Worker:
     def __init__(
-        self, root: Path, revision: str, module: str, *, code_root: Path | None = None
+        self,
+        binding: AuthorWorkerBinding,
+        revision: str,
+        module: str,
+        *,
+        code_root: Path | None = None,
     ) -> None:
         self._diagnostics = tempfile.TemporaryDirectory(prefix="scopecat-author-")
         self.stderr: TextIO = (Path(self._diagnostics.name) / "stderr.log").open(
@@ -34,10 +58,10 @@ class _Worker:
         )
         self.process: subprocess.Popen[str] = subprocess.Popen(  # noqa: S603 - fixed internal worker, no shell
             [
-                sys.executable,
+                str(binding.python),
                 "-m",
                 module,
-                str(root),
+                str(binding.workspace),
                 *(
                     ["--serve", revision]
                     if code_root is None
@@ -153,7 +177,7 @@ class _ValidationWait:
 
 
 class RevisionWorkers:
-    """Serialize calls per revision and retain at most two isolated revisions.
+    """Serialize calls per binding/revision and retain at most two workers.
 
     Each invocation opens its own lab connection. A failed process is discarded;
     the caller receives the original failure, including ambiguous submissions.
@@ -166,14 +190,14 @@ class RevisionWorkers:
         ] = "scopecat_server.launch_worker",
     ) -> None:
         self._module = module
-        self._workers: OrderedDict[str, _Worker] = OrderedDict()
+        self._workers: OrderedDict[_WorkerKey, _Worker] = OrderedDict()
         self._condition = threading.Condition(threading.Lock())
-        self._busy: set[str] = set()
+        self._busy: set[_WorkerKey] = set()
         self._validation_lock = threading.Lock()
 
     def publish_validated(
         self,
-        root: Path,
+        binding: AuthorWorkerBinding,
         code_root: Path,
         ref: AuthorRevisionRef,
         publish: Callable[[], AuthorRevisionState],
@@ -196,7 +220,7 @@ class RevisionWorkers:
         try:
             wait.check("starting validation worker")
             candidate = _Worker(
-                root,
+                binding,
                 ref.content_hash,
                 "scopecat_server.validation_worker",
                 code_root=code_root,
@@ -229,7 +253,7 @@ class RevisionWorkers:
                 "publication queue",
             )
             try:
-                key = ref.content_hash
+                key = _WorkerKey(binding, ref.content_hash)
                 while not self._has_capacity(key):
                     wait.check("publication queue", result.stderr)
                     self._condition.wait(0.1)
@@ -252,13 +276,13 @@ class RevisionWorkers:
 
     def call(
         self,
-        root: Path,
+        binding: AuthorWorkerBinding,
         command: LaunchRequest | AnalysisCall | ComparisonCall,
         *,
         timeout: float = 60,
     ) -> subprocess.CompletedProcess[str]:
         assert command.code_revision is not None
-        key = command.code_revision.content_hash
+        key = _WorkerKey(binding, command.code_revision.content_hash)
         started = time.monotonic()
         if not self._condition.acquire(timeout=timeout):
             raise subprocess.TimeoutExpired("author worker queue", timeout)
@@ -271,7 +295,7 @@ class RevisionWorkers:
             worker = self._workers.get(key)
             if worker is None:
                 self._evict_idle()
-                worker = _Worker(root, key, self._module)
+                worker = _Worker(binding, key.revision, self._module)
                 self._workers[key] = worker
             self._workers.move_to_end(key)
             self._busy.add(key)
@@ -296,7 +320,7 @@ class RevisionWorkers:
                     self._busy.remove(key)
                     self._condition.notify_all()
 
-    def _has_capacity(self, key: str) -> bool:
+    def _has_capacity(self, key: _WorkerKey) -> bool:
         # Called with the pool lock held; busy slots remain owned through cleanup.
         return (
             key in self._workers

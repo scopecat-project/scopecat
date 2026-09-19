@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import subprocess
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 from typing import cast
@@ -16,12 +17,22 @@ from scopecat.records.comparison import ComparisonRequest
 from scopecat_server.http.transport import create_app
 from scopecat_server.retained_request import AnalysisCall, ComparisonCall
 from scopecat_server.services.application import DaemonApplication
+from scopecat_server.services.revision_workers import AuthorWorkerBinding
 
 
 @pytest.mark.parametrize("operation", ["analysis", "comparison"])
 def test_timeout_reports_unknown_publication_and_never_retries(operation: str) -> None:
     application = cast(
-        "DaemonApplication", cast("object", SimpleNamespace(project_root=Path.cwd()))
+        "DaemonApplication",
+        cast(
+            "object",
+            SimpleNamespace(
+                project_root=Path.cwd(),
+                author_revisions=SimpleNamespace(
+                    worker_binding=AuthorWorkerBinding(Path.cwd(), Path(sys.executable))
+                ),
+            ),
+        ),
     )
     ref = AuthorRevisionRef(content_hash="sha256:" + "a" * 64)
     command = (
@@ -49,6 +60,7 @@ def test_timeout_reports_unknown_publication_and_never_retries(operation: str) -
     assert "Publication outcome may be unknown" in response.json()["detail"]
     assert f"retained {operation}" in response.json()["detail"]
     assert call.call_count == 1
+    assert call.call_args.args[0] == application.author_revisions.worker_binding
     payload = call.call_args.args[1]
     assert isinstance(
         payload, AnalysisCall if operation == "analysis" else ComparisonCall
@@ -61,7 +73,16 @@ def test_analysis_failure_keeps_stack_in_daemon_log(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     application = cast(
-        "DaemonApplication", cast("object", SimpleNamespace(project_root=Path.cwd()))
+        "DaemonApplication",
+        cast(
+            "object",
+            SimpleNamespace(
+                project_root=Path.cwd(),
+                author_revisions=SimpleNamespace(
+                    worker_binding=AuthorWorkerBinding(Path.cwd(), Path(sys.executable))
+                ),
+            ),
+        ),
     )
     command = AuthorAnalysisRequest(
         code_revision=AuthorRevisionRef(content_hash="sha256:" + "a" * 64),

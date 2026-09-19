@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import sys
 import threading
 import time
 from concurrent.futures import Future, ThreadPoolExecutor
@@ -27,6 +28,7 @@ from scopecat.runtime_binding import load_runtime_binding
 
 from scopecat_server.services.revision_workers import (
     AuthorValidationCancelled,
+    AuthorWorkerBinding,
     RevisionWorkers,
 )
 from scopecat_server.storage.sqlite.author_revision_repository import (
@@ -40,6 +42,9 @@ _LOGGER = logging.getLogger(__name__)
 
 class AuthorRevisionService:
     def __init__(self, root: Path, store: SQLiteProjectStore) -> None:
+        self.worker_binding = AuthorWorkerBinding(
+            root.resolve(), Path(sys.executable).absolute()
+        )
         self.workers = RevisionWorkers()
         self.root = root
         self.repository = AuthorRevisionRepository(store)
@@ -187,7 +192,7 @@ class AuthorRevisionService:
                 bundle, load_runtime_binding(self.root).data_root / "code"
             )
             self.workers.publish_validated(
-                self.root,
+                self.worker_binding,
                 code_root,
                 bundle.manifest.ref,
                 publish,

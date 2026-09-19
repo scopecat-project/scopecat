@@ -17,7 +17,10 @@ from scopecat.records.launch_request import LaunchRequest
 from scopecat.records.run import ConfigRegistryRunConfigSource
 
 from scopecat_server.http.transport import create_app
-from scopecat_server.services.revision_workers import RevisionWorkers
+from scopecat_server.services.revision_workers import (
+    AuthorWorkerBinding,
+    RevisionWorkers,
+)
 
 
 def _submission_request() -> dict[str, object]:
@@ -68,6 +71,9 @@ def client(state: AuthorRevisionState | None = None) -> TestClient:
                         manual_previews=_manual_previews(),
                         author_revisions=SimpleNamespace(
                             state=lambda: state or AuthorRevisionState(),
+                            worker_binding=AuthorWorkerBinding(
+                                Path.cwd(), Path(sys.executable)
+                            ),
                             workers=RevisionWorkers(),
                             close=Mock(),
                         ),

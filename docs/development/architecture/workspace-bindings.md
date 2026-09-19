@@ -115,3 +115,23 @@ run by `verify_pilot_bundle.py` and the runtime-binding journey tests. It checks
 competing author/service bindings, A-to-B history and config, original/current
 analysis, receipts and restoration after removing the original directories.
 Scientific and physical-device qualification remains external to that fixture.
+
+## Revision worker binding
+
+Revision workers now receive an explicit `AuthorWorkerBinding`: the live workspace
+and the Python executable selected by the service composition. Pool ownership,
+serialization and validation-worker adoption are keyed by that binding **and** the
+immutable source revision. Two bindings with identical source hashes cannot reuse
+one another's interpreter, live endpoint or imported application. Launch and
+retained analysis/comparison pass the same binding. The executable path preserves
+virtual-environment symlinks; resolving it to the base interpreter would lose the
+selected environment.
+
+This is an internal local process contract, not a persistent workspace catalog.
+The current daemon still composes one workspace with its own interpreter, stores
+one active author head, and validates endpoint/data/deployment bindings. Existing
+environment qualification and deployment/data writer locks remain in force.
+Different dependency environments and simultaneous workspace admission require
+explicit runtime qualification and workspace-scoped publication before the public
+connection contract can admit them. Reading retained evidence remains independent
+of qualifying its original code for execution.
