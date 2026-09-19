@@ -1,3 +1,4 @@
+import { defaultSelection } from "./scientific-selection";
 import { describe, expect, it } from "vitest";
 import { importLaunchHandoff } from "./launch-handoff";
 import { controlEdits } from "./ControlFields";
@@ -35,7 +36,7 @@ const current: LaunchDraft = {
   definition: "old",
   values: { repetitions: "2" },
   controls: {},
-  sample: "",
+  selection: defaultSelection(),
   actor: "operator",
   revision: 1,
   pending: false,
@@ -57,7 +58,7 @@ const handoff: ComparisonHandoff = {
     version: "1",
     request_key: "",
     actor: "operator",
-    overrides: [],
+    selection: defaultSelection(),
     control_edits: { frequency: { mode: "fixed", value: { value: 4900, unit: "MHz" } } },
   },
 };

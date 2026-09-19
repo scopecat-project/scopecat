@@ -1,3 +1,4 @@
+import { selectedBatch, subjectLabel, subjectSample } from "./scientific-selection";
 import { useId, useState } from "react";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { getSamples } from "../samples/sample-api";
@@ -14,11 +15,9 @@ export function MeasurementContext({
   draft: LaunchDraft;
   selectedContext?: ConfigContextResolution;
   projectId?: string;
-  onChange: (
-    changes: Partial<Pick<LaunchDraft, "sample" | "actor" | "batch" | "collection">>,
-  ) => void;
+  onChange: (changes: Partial<Pick<LaunchDraft, "selection" | "actor" | "collection">>) => void;
 }) {
-  const [browse, setBrowse] = useState(Boolean(draft.batch || draft.collection));
+  const [browse, setBrowse] = useState(Boolean(selectedBatch(draft.selection) || draft.collection));
   const listId = useId();
   const samples = useInfiniteQuery({
     queryKey: ["context-samples", projectId],
@@ -27,7 +26,21 @@ export function MeasurementContext({
     queryFn: ({ pageParam, signal }) => getSamples(pageParam, signal),
     getNextPageParam: (page) => page.next_cursor ?? undefined,
   });
-  const binding = selectedContext?.config_source.sample ?? draft.sampleBinding;
+  const binding =
+    selectedContext?.config_source.sample ??
+    subjectSample(draft.plan?.definition.scientific_binding);
+  const subject = draft.selection.subject;
+  const selectedSample = subject.kind === "sample" ? subject.sample_id : "";
+  const batch = selectedBatch(draft.selection);
+  const subjectLocked = Boolean(binding) || subject.kind === "registered_target";
+  function changeSample(sample_id: string) {
+    onChange({
+      selection: {
+        ...draft.selection,
+        subject: sample_id ? { kind: "sample", sample_id } : { kind: "unbound" },
+      },
+    });
+  }
   return (
     <fieldset disabled={draft.pending} className="border border-line rounded p-3 space-y-3">
       <legend className="font-semibold">Measurement context · this page</legend>
@@ -37,9 +50,9 @@ export function MeasurementContext({
           <input
             aria-label="Sample ID"
             list={listId}
-            disabled={Boolean(binding)}
-            value={binding?.sample_id ?? draft.sample}
-            onChange={(event) => onChange({ sample: event.target.value })}
+            disabled={subjectLocked}
+            value={binding?.sample_id ?? selectedSample}
+            onChange={(event) => changeSample(event.target.value)}
             className="border rounded p-2"
           />
         </label>
@@ -62,6 +75,9 @@ export function MeasurementContext({
           />
         </label>
       </div>
+      {subject.kind === "registered_target" && (
+        <p>{subjectLabel(draft.selection)} · exact registered target retained.</p>
+      )}
       {binding && (
         <p>
           {binding.display_name} · revision {binding.revision}. Sample and batch are bound to this
@@ -77,20 +93,20 @@ export function MeasurementContext({
             Registered sample
             <select
               aria-label="Registered sample"
-              disabled={Boolean(binding)}
-              value={binding?.sample_id ?? draft.sample}
-              onChange={(event) => onChange({ sample: event.target.value })}
+              disabled={subjectLocked}
+              value={binding?.sample_id ?? selectedSample}
+              onChange={(event) => changeSample(event.target.value)}
               className="border rounded p-2"
             >
               <option value="">No sample selected</option>
-              {(binding?.sample_id ?? draft.sample) &&
+              {(binding?.sample_id ?? selectedSample) &&
                 !samples.data?.pages.some((page) =>
                   page.items.some(
-                    (sample) => sample.record.id === (binding?.sample_id ?? draft.sample),
+                    (sample) => sample.record.id === (binding?.sample_id ?? selectedSample),
                   ),
                 ) && (
-                  <option value={binding?.sample_id ?? draft.sample}>
-                    {binding?.display_name ?? draft.sample}
+                  <option value={binding?.sample_id ?? selectedSample}>
+                    {binding?.display_name ?? selectedSample}
                   </option>
                 )}
               {samples.data?.pages
@@ -123,9 +139,16 @@ export function MeasurementContext({
             <ScopeCatalog
               kind="batch"
               owner={projectId}
-              value={draft.batch}
-              disabled={Boolean(binding)}
-              onChange={(batch) => onChange({ batch })}
+              value={batch}
+              disabled={subjectLocked}
+              onChange={(id) =>
+                onChange({
+                  selection: {
+                    ...draft.selection,
+                    batch: id ? { kind: "declared", id } : { kind: "unscoped" },
+                  },
+                })
+              }
             />
             <ScopeCatalog
               kind="collection"
@@ -138,7 +161,7 @@ export function MeasurementContext({
       )}
       {!browse && (
         <p>
-          {draft.batch ? `Batch: ${draft.batch}` : "Batch unspecified"} ·{" "}
+          {batch ? `Batch: ${batch}` : "Batch unspecified"} ·{" "}
           {draft.collection ? `Collection: ${draft.collection}` : "Default record collection"}
         </p>
       )}

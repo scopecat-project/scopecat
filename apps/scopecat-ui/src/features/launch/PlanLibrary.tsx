@@ -1,3 +1,4 @@
+import { normalizeSelection, subjectLabel } from "./scientific-selection";
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient, apiData } from "../../api-client";
@@ -34,7 +35,12 @@ export function PlanLibrary({ initializing = false }: { initializing?: boolean }
     try {
       const catalog = await apiData(
         apiClient.GET("/api/v1/experiment-launcher", {
-          params: { query: { code_revision: plan.definition.code_revision?.content_hash } },
+          params: {
+            query: {
+              code_revision: plan.definition.code_revision?.content_hash,
+              workspace_id: plan.definition.workspace_id,
+            },
+          },
         }),
       );
       const entry = catalog.entries.find(
@@ -45,13 +51,15 @@ export function PlanLibrary({ initializing = false }: { initializing?: boolean }
         throw new Error(
           "The saved definition is unavailable. Its plan and history remain readable; restore its supported author revision before reopening.",
         );
-      const context = plan.definition.context
-        ? await apiData(
-            apiClient.POST("/api/v1/config-registry/contexts/resolve", {
-              body: { context: plan.definition.context, overrides: plan.definition.overrides },
-            }),
-          )
-        : undefined;
+      const configuration = normalizeSelection(plan.definition.selection).configuration;
+      const context =
+        configuration.kind === "working_point"
+          ? await apiData(
+              apiClient.POST("/api/v1/config-registry/contexts/resolve", {
+                body: { context: configuration.ref, overrides: configuration.overrides },
+              }),
+            )
+          : undefined;
       if (current()) openPlan(plan, entry, context);
     } catch (caught) {
       if (current()) setError(caught instanceof Error ? caught.message : String(caught));
@@ -160,10 +168,7 @@ export function PlanLibrary({ initializing = false }: { initializing?: boolean }
           </summary>
           <p>
             Experiment: {selected.definition.experiment}. Sample:{" "}
-            {selected.definition.sample
-              ? `${selected.definition.sample.display_name}, revision ${selected.definition.sample.revision}`
-              : "No sample"}
-            .
+            {subjectLabel(selected.definition.selection)}.
           </p>
           {selected.definition.source && (
             <a

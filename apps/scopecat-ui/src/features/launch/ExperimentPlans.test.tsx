@@ -1,3 +1,4 @@
+import { reviewedFixture } from "../../test/scientific-fixtures";
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
 import { useEffect } from "react";
@@ -36,13 +37,77 @@ function plan(id: string, name: string): PlanRevision {
       definition_hash: `sha256:${"c".repeat(64)}`,
       inputs: { note: name },
       control_edits: {},
-      configuration: { entry_id: "saved", content_hash: `sha256:${"d".repeat(64)}` },
-      overrides: [],
+      selection: {
+        subject: { kind: "unbound" },
+        configuration: {
+          kind: "saved",
+          ref: { entry_id: "saved", content_hash: `sha256:${"d".repeat(64)}` },
+        },
+        batch: { kind: "unscoped" },
+      },
+      scientific_binding: {
+        codec: "scopecat.scientific-binding.v1",
+        config_content_hash: `sha256:${"d".repeat(64)}`,
+        setup_content_hash: `sha256:${"e".repeat(64)}`,
+        subject: { kind: "unbound" },
+      },
     },
   };
 }
 const first = plan("a", "First plan");
 const second = plan("b", "Second plan");
+const targetPlan: PlanRevision = {
+  ...plan("c", "Target plan"),
+  definition: {
+    ...first.definition,
+    selection: {
+      ...first.definition.selection,
+      subject: {
+        kind: "registered_target",
+        ref: {
+          catalog_id: "test-project",
+          target_id: "device-target",
+          revision: 3,
+          content_hash: `sha256:${"f".repeat(64)}`,
+        },
+      },
+    },
+    scientific_binding: {
+      ...first.definition.scientific_binding,
+      subject: {
+        kind: "registered_target",
+        ref: {
+          catalog_id: "test-project",
+          target_id: "device-target",
+          revision: 3,
+          content_hash: `sha256:${"f".repeat(64)}`,
+        },
+        content: {
+          members: [
+            {
+              id: "device",
+              sample_id: "chip",
+              revision: 2,
+              content_hash: `sha256:${"a".repeat(64)}`,
+            },
+          ],
+          connections: [],
+        },
+        sample: {
+          role: "subject",
+          sample_id: "chip",
+          revision: 2,
+          content_hash: `sha256:${"a".repeat(64)}`,
+          kind: "chip",
+          display_name: "Chip",
+        },
+        projection: [
+          { target_entity: { member_id: "device", entity_id: "q0" }, runtime_entity_id: "q0" },
+        ],
+      },
+    },
+  },
+};
 function Harness({
   library = false,
   initialize = true,
@@ -60,6 +125,20 @@ function Harness({
       <button onClick={() => context.select(entry)}>Select current catalog</button>
       <button onClick={() => context.openPlan(first, entry)}>Open first</button>
       <button onClick={() => context.openPlan(second, entry)}>Open second</button>
+      <button onClick={() => context.openPlan(targetPlan, entry)}>Open target</button>
+      <button
+        onClick={() =>
+          context.update((current) => ({
+            ...current,
+            selection: {
+              ...current.selection,
+              batch: { kind: "declared", id: "previous-page-batch" },
+            },
+          }))
+        }
+      >
+        Select previous batch
+      </button>
       <button
         onClick={() =>
           context.update((draft) => ({
@@ -85,15 +164,14 @@ function Harness({
               request_key: "original-key",
               expected_request_hash: `sha256:${"a".repeat(64)}`,
               inputs: {},
-              overrides: [],
-              config_source: {
+              reviewed: reviewedFixture({
                 kind: "config_registry",
                 selector: "active",
                 entry_id: "saved",
                 config_ref: "saved",
                 content_hash: `sha256:${"d".repeat(64)}`,
                 registry_generation: 1,
-              },
+              }),
             },
             "original",
           )
@@ -256,4 +334,83 @@ it("waits for initial catalog readiness before allowing a saved plan to open", a
   fireEvent.click(open);
   await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
   expect(screen.queryByRole("status")).not.toBeInTheDocument();
+});
+
+it("preserves a registered target through reopening, preview, submission and plan save", async () => {
+  const reviewed = {
+    ...reviewedFixture({
+      kind: "config_registry",
+      selector: "saved",
+      entry_id: "saved",
+      config_ref: "saved",
+      content_hash: `sha256:${"d".repeat(64)}`,
+      registry_generation: 1,
+    }),
+    binding: targetPlan.definition.scientific_binding,
+  };
+  const posted: { path: string; body: Record<string, unknown> }[] = [];
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (request: Request) => {
+      const path = new URL(request.url).pathname;
+      if (request.method === "POST") {
+        posted.push({ path, body: await request.json() });
+        if (path.endsWith("/preview"))
+          return reply({
+            experiment_id: "signal",
+            workspace_id: "legacy",
+            definition_hash: first.definition.definition_hash,
+            request_hash: `sha256:${"a".repeat(64)}`,
+            reviewed,
+            point_count: 1,
+            summary: "Checked target",
+            resolved_inputs: {},
+            controls: [],
+            resources: [],
+            manual_state: {
+              event_id: 1,
+              binding: {
+                request_hash: `sha256:${"a".repeat(64)}`,
+                config_source_hash: `sha256:${"b".repeat(64)}`,
+              },
+            },
+          });
+        if (path.endsWith("/validity")) return reply({ valid: true, changes: [] });
+        if (path.endsWith("/submit")) return reply({ procedure_id: "target-procedure" });
+        if (path.endsWith("/experiment-plans")) return reply(targetPlan);
+      }
+      if (path.endsWith("/experiment-plans")) return reply({ items: [targetPlan] });
+      return reply({ activation: { generation: 1, entry_id: "saved" } });
+    }),
+  );
+  setup();
+  fireEvent.click(screen.getByText("Select previous batch"));
+  fireEvent.click(screen.getByText("Open target"));
+  expect(screen.getByText(/Registered target device-target, revision 3/)).toBeVisible();
+  expect(screen.getByLabelText("Sample ID")).toBeDisabled();
+  fireEvent.click(screen.getByRole("button", { name: "Preview" }));
+  await screen.findByText("Preview ready");
+  const start = screen.getByRole("button", { name: "Start acquisition" });
+  await waitFor(() => expect(start).toBeEnabled());
+  fireEvent.click(start);
+  await waitFor(() =>
+    expect(screen.getByLabelText("Original attempt")).toHaveTextContent("confirmed:"),
+  );
+  const preview = posted.find((item) => item.path.endsWith("/preview"))!.body;
+  const submit = posted.find((item) => item.path.endsWith("/submit"))!.body;
+  expect(preview.selection).toEqual(targetPlan.definition.selection);
+  expect(submit.selection).toEqual(targetPlan.definition.selection);
+  expect(submit.reviewed).toEqual(reviewed);
+  expect(submit).not.toHaveProperty("sample");
+  expect(submit).not.toHaveProperty("config_source");
+  fireEvent.click(screen.getByRole("button", { name: "Save new revision" }));
+  await waitFor(() =>
+    expect(posted.some((item) => item.path.endsWith("/experiment-plans"))).toBe(true),
+  );
+  expect(
+    posted.find((item) => item.path.endsWith("/experiment-plans"))!.body.definition,
+  ).toMatchObject({
+    selection: targetPlan.definition.selection,
+    scientific_binding: reviewed.binding,
+  });
 });

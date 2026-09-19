@@ -13,7 +13,6 @@ from scopecat.application.launch_config import (
     launch_config_generation,
     launch_preflight_configuration,
     launch_preflight_meaning,
-    launch_sample_selection,
 )
 from scopecat.automation import procedure
 from scopecat.planning.preflight import (
@@ -86,7 +85,8 @@ def control_launch(
         raise ValueError(
             "this experiment accepts declared control edits, not extra inputs"
         )
-    config, source = launch_config(lab, request)
+    resolved = launch_config(lab, request)
+    config, source = resolved.config, resolved.reviewed.config_source
     invocation = edit_controls(
         CONTROLS,
         frequency_amplitude.build(),
@@ -100,8 +100,10 @@ def control_launch(
         return LaunchPreview(
             experiment_id=CONTROL_ENTRY.id,
             manual_state=request.manual_state,
-            request_hash=request.request_hash,
-            config_source=source,
+            request_hash=request.model_copy(
+                update={"reviewed": resolved.reviewed}
+            ).request_hash,
+            reviewed=resolved.reviewed,
             point_count=preview.initial_point_count,
             resources=preview.instrument_ids,
             controls=control_values(CONTROLS, invocation, config=config),
@@ -131,12 +133,15 @@ def control_launch(
             initial_config=config,
             config_source=source,
             manual_state=request.manual_state,
-            request_hash=request.request_hash,
+            request_hash=request.model_copy(
+                update={"reviewed": resolved.reviewed}
+            ).request_hash,
             actor=request.actor,
             edits=request.control_edits,
         ),
         request_key=request.request_key,
-        sample=launch_sample_selection(request, source),
+        samples=resolved.reviewed.binding.sample_selectors(),
+        scientific_binding=resolved.reviewed.binding,
         expected_manual_preview=request.manual_state,
         expected_config_generation=launch_config_generation(source),
         plan_ref=request.plan_ref,

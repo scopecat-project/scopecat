@@ -78,7 +78,7 @@ def test_workspace_run_reopens_in_fresh_python(
         assert max(values) == 1.0
         snapshot = run.snapshot
         receipt = job.receipt
-        assert run.snapshot.config_source == prepared.preview.config_source
+        assert run.snapshot.config_source == prepared.preview.reviewed.config_source
         assert author.config.active() == active
     assert max(values) == 1.0
     assert snapshot.status == "completed"

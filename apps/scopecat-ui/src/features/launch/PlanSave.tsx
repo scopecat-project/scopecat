@@ -1,3 +1,5 @@
+import { normalizeSelection, subjectSample, reviewedForRequest } from "./scientific-selection";
+import type { PlanRevision } from "./experiment-plans";
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { apiClient, apiData } from "../../api-client";
@@ -24,10 +26,12 @@ export function PlanSave({
     setError("");
     try {
       const request = getRequest();
-      const source = preview.config_source;
+      const source = preview.reviewed.config_source;
+      const selection = normalizeSelection(request.selection);
+      const sample = subjectSample(preview.reviewed.binding);
       if (source.kind === "analysis_candidate")
         throw new Error("Save plans from a named parameter context, not an unaccepted candidate.");
-      const saved = await apiData(
+      const saved = await apiData<PlanRevision>(
         apiClient.POST("/api/v1/experiment-plans", {
           body: {
             name,
@@ -44,13 +48,21 @@ export function PlanSave({
               scan_mode: request.scan_mode,
               parameter_sweeps: request.parameter_sweeps,
               control_edits: request.control_edits ?? {},
-              configuration:
-                source.kind === "parameter_context"
-                  ? null
-                  : { entry_id: source.entry_id, content_hash: source.content_hash },
-              context: source.kind === "parameter_context" ? source.context : null,
-              overrides: source.kind === "parameter_context" ? source.overrides : [],
-              sample: preview.sample_binding,
+              selection: {
+                ...selection,
+                subject:
+                  selection.subject.kind === "sample" && sample
+                    ? { kind: "sample", sample_id: sample.sample_id, revision: sample.revision }
+                    : selection.subject,
+                configuration:
+                  source.kind === "config_registry"
+                    ? {
+                        kind: "saved",
+                        ref: { entry_id: source.entry_id, content_hash: source.content_hash },
+                      }
+                    : selection.configuration,
+              },
+              scientific_binding: reviewedForRequest(preview.reviewed).binding,
               source: draft.handoff
                 ? {
                     run_id: draft.handoff.source_run,
@@ -70,9 +82,7 @@ export function PlanSave({
           ),
           plan: saved,
           planDirty: false,
-          configuration: saved.definition.configuration,
-          sampleBinding: saved.definition.sample,
-          batch: saved.definition.sample?.batch_id ?? undefined,
+          selection: normalizeSelection(saved.definition.selection),
           codeRevision: saved.definition.code_revision,
           workspaceId: saved.definition.workspace_id,
         }));

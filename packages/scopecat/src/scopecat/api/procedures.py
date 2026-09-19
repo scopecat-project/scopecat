@@ -111,6 +111,7 @@ from scopecat.records.parameter_change import ParameterChangeProposal
 from scopecat.records.plan_ref import ExperimentPlanRef, ProcedureChildSubmission
 from scopecat.records.run import RunConfigSource
 from scopecat.records.sample import SampleSelector
+from scopecat.records.scientific_binding import ResolvedScientificBinding
 from scopecat.runs.selectors import RunSelector
 
 type ExperimentSpec = ExperimentInvocation | Experiment[...]
@@ -302,6 +303,10 @@ class LabProcedureContext:
     def procedure_run_id(self) -> str:
         return self._durable.procedure_run_id
 
+    @property
+    def scientific_binding(self) -> ResolvedScientificBinding | None:
+        return self._durable.scientific_binding
+
     def step[OutputT: ProcedureStepOutputRef](
         self,
         step_key: str,
@@ -363,6 +368,7 @@ class LabProcedureContext:
         *,
         config: ConfigProfileSnapshot | CandidateConfig,
         config_source: RunConfigSource | None = None,
+        scientific_binding: ResolvedScientificBinding | None = None,
         inputs: tuple[ProcedureStepOutputRef, ...] = (),
         name: str | None = None,
         tags: tuple[str, ...] = (),
@@ -390,6 +396,7 @@ class LabProcedureContext:
         planned = self._runner._plan(  # pyright: ignore[reportPrivateUsage]
             invocation,
             plan_ref=self._durable.plan_ref,
+            scientific_binding=scientific_binding or self._durable.scientific_binding,
             record_collection=record_collection,
             config=selected_config,
             config_source=selected_source,
@@ -417,9 +424,7 @@ class LabProcedureContext:
                     procedure_child=ProcedureChildSubmission(
                         procedure_run_id=self._durable.procedure_run_id,
                         step_key=step_key,
-                    )
-                    if self._durable.plan_ref is not None
-                    else None,
+                    ),
                     executor_id=operation_id,
                     wait_for_resources=True,
                 )
@@ -809,6 +814,7 @@ class LabProcedureOperations:
         expected_manual_preview: ManualPreviewFence | None = None,
         plan_ref: ExperimentPlanRef | None = None,
         plan_request: LaunchRequest | None = None,
+        scientific_binding: ResolvedScientificBinding | None = None,
         expected_config_generation: int | None = None,
         sample: str | SampleSelector | None = None,
         samples: tuple[SampleSelector, ...] = (),
@@ -825,6 +831,7 @@ class LabProcedureOperations:
                 expected_manual_preview=expected_manual_preview,
                 plan_ref=plan_ref,
                 plan_request=plan_request,
+                scientific_binding=scientific_binding,
                 expected_config_generation=expected_config_generation,
                 definition=selected.ref,
                 intent=selected.encode_intent(intent),
@@ -871,6 +878,7 @@ class LabProcedureOperations:
                 definition=destination.ref,
                 intent=destination.encode_intent(plan.intent),
                 samples=plan.samples,
+                scientific_binding=plan.scientific_binding,
                 recovery=plan.recovery,
             )
         )

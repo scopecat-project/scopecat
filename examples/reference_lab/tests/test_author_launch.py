@@ -26,6 +26,10 @@ from scopecat.records.control_edit import ControlEdit
 from scopecat.records.launch_request import LaunchRequest
 from scopecat.records.run_request import AxisValuesSourceRecord
 from scopecat.records.sample import SampleRevisionDraft
+from scopecat.records.scientific_selection import (
+    SampleSubjectChoice,
+    ScientificSelection,
+)
 from scopecat_server.author_worker import revision_project
 from scopecat_server.lifecycle import start_project, stop_project
 from scopecat_testkit.project_loading import isolated_project_imports
@@ -167,7 +171,9 @@ def test_copied_author_uses_shared_control_plan_and_real_retained_run(
                 control_edits={"frequency": edit},
                 inputs={"polarity": "negative"},
                 actor="ordinary-author",
-                sample=chip.id,
+                selection=ScientificSelection(
+                    subject=SampleSubjectChoice(sample_id=chip.id)
+                ),
                 record_collection="author-cooldown",
             )
             response = http.post(
@@ -190,7 +196,7 @@ def test_copied_author_uses_shared_control_plan_and_real_retained_run(
                     "action": "submit",
                     "request_key": f"author-{mode}",
                     "expected_request_hash": preview.request_hash,
-                    "config_source": preview.config_source,
+                    "reviewed": preview.reviewed,
                     "code_revision": preview.code_revision,
                     "manual_state": preview.manual_state,
                 }
@@ -331,10 +337,11 @@ def test_revision_aware_notebook_prepare_preserves_parameter_context(
                 "copied_signal", context=context, overrides=overrides
             )
             admitted = prepared.submit(request_key="notebook-context-launch")
-        assert prepared.request.context == context
-        assert prepared.request.overrides == overrides
+        assert prepared.request.selection.configuration.kind == "working_point"
+        assert prepared.request.selection.configuration.ref == context
+        assert prepared.request.selection.configuration.overrides == overrides
         assert prepared.preview.code_revision is not None
-        source = prepared.preview.config_source
+        source = prepared.preview.reviewed.config_source
         assert isinstance(source, ContextRunConfigSource)
         assert source == expected.config_source
         assert source.sample.sample_id == "notebook-context"

@@ -17,6 +17,7 @@ from scopecat.analysis.arguments import AnalysisArgument, encode_arguments
 from scopecat.analysis.facts import ordinary_result_schema
 from scopecat.api._config import LabConfigOperations
 from scopecat.api._remote import RemoteRunOperations
+from scopecat.api.lab import LabClient
 from scopecat.api.parameter_candidates import ParameterCandidate
 from scopecat.api.parameters import ParameterWorkspace
 from scopecat.api.published_analysis import (
@@ -34,6 +35,7 @@ from scopecat.application.launch import (
     LaunchPreview,
     LaunchSubmission,
 )
+from scopecat.application.launch_config import resolve_launch_config
 from scopecat.application.session_context import (
     INHERIT,
     SessionContext,
@@ -78,6 +80,17 @@ from scopecat.records.parameter_update import ParameterUpdate
 from scopecat.records.plan_ref import ExperimentPlanRef, PlanAnalysisSource
 from scopecat.records.run import AnalysisCandidateRunConfigSource
 from scopecat.records.run_request import AxisValuesSourceRecord
+from scopecat.records.scientific_scope import DeclaredBatch, UnscopedBatch
+from scopecat.records.scientific_selection import (
+    ActiveConfiguration,
+    CandidateConfiguration,
+    RegisteredTargetChoice,
+    SampleSubjectChoice,
+    ScientificSelection,
+    UnboundSubjectChoice,
+    WorkingPointConfiguration,
+)
+from scopecat.records.target_catalog import TargetRevisionRef
 
 if TYPE_CHECKING:
     from scopecat.application.live_experiment import LiveExperiment
@@ -124,46 +137,104 @@ class AuthorProject(DaemonClient):
     def use(self, **changes: Unpack[SessionContextUpdate]) -> SessionContext:
         """Validate and atomically update this client's defaults for future work.
 
-        Omitted fields stay selected; None clears an optional selection. An explicit
-        working point selects its sample unless a sample is supplied alongside it.
+        Collection/operator updates preserve scientific defaults. Choosing a new
+        sample or target starts a fresh scope; a working point supplies its exact
+        sample and batch unless an explicit subject is supplied alongside it.
         Selection never activates configuration or submits hardware operations.
         """
         if self.is_closed:
             raise SessionClosedError("Cannot select context on a closed session")
-        selected = SessionContext.model_validate(
-            {**self._selection.model_dump(), **changes}
+        scientific_changes = {
+            key: value
+            for key, value in changes.items()
+            if key not in ("collection", "operator")
+        }
+        science = self._select_science(self._selection.science, scientific_changes)
+        selected = SessionContext(
+            science=science,
+            collection=changes.get("collection", self._selection.collection),
+            operator=changes.get("operator", self._selection.operator),
         )
-        if selected.working_point is not None:
-            source = self.config.resolve_context(selected.working_point).config_source
-            if "working_point" in changes and "batch" not in changes:
-                selected = selected.model_copy(update={"batch": source.sample.batch_id})
-            require_batch_match(selected.batch, source.sample.batch_id)
-            selected = selected.model_copy(update={"batch": source.sample.batch_id})
-            if "working_point" in changes and "sample" not in changes:
-                selected = selected.model_copy(
-                    update={"sample": source.sample.sample_id}
-                )
-            elif (
-                selected.sample is not None
-                and selected.sample != source.sample.sample_id
-            ):
-                raise ValueError(
-                    "sample does not match the selected working point; "
-                    "select its working point or clear working_point=None"
-                )
-            else:
-                selected = selected.model_copy(
-                    update={"sample": source.sample.sample_id}
-                )
-        elif selected.sample is not None:
-            self.get_sample(selected.sample)
-        if selected.batch is not None:
-            self.experimental_batch(selected.batch)
-            if selected.sample is None:
-                raise ValueError("batch selection requires a sample or working point")
         if selected.collection is not None:
             self.record_collection(selected.collection)
         self._selection = selected
+        return selected
+
+    def _select_science(
+        self, base: ScientificSelection, changes: Mapping[str, object]
+    ) -> ScientificSelection:
+        if not changes:
+            return base
+        if "selection" in changes:
+            if len(changes) != 1:
+                raise ValueError(
+                    "selection cannot be combined with scientific convenience arguments"
+                )
+            selected = ScientificSelection.model_validate(changes["selection"])
+        else:
+            if "target" in changes and "sample" in changes:
+                raise ValueError("choose target or sample")
+            subject_changed = "target" in changes or "sample" in changes
+            selected = ScientificSelection() if subject_changed else base
+            subject = selected.subject
+            configuration = selected.configuration
+            batch = selected.batch
+            if "target" in changes:
+                target = changes["target"]
+                subject = (
+                    UnboundSubjectChoice()
+                    if target is None
+                    else RegisteredTargetChoice(
+                        ref=self.target(target).ref
+                        if isinstance(target, str)
+                        else TargetRevisionRef.model_validate(target)
+                    )
+                )
+            if "sample" in changes:
+                sample = changes["sample"]
+                subject = (
+                    UnboundSubjectChoice()
+                    if sample is None
+                    else SampleSubjectChoice(sample_id=str(sample))
+                )
+            if "working_point" in changes:
+                point = changes["working_point"]
+                if point is None:
+                    configuration = ActiveConfiguration()
+                else:
+                    ref = ConfigContextRef.model_validate(point)
+                    source = self.config.resolve_context(ref).config_source
+                    configuration = WorkingPointConfiguration(ref=ref)
+                    if not subject_changed:
+                        subject = SampleSubjectChoice(
+                            sample_id=source.sample.sample_id,
+                            revision=source.sample.revision,
+                        )
+                    batch = (
+                        UnscopedBatch()
+                        if source.sample.batch_id is None
+                        else DeclaredBatch(id=source.sample.batch_id)
+                    )
+            if "batch" in changes:
+                batch_id = changes["batch"]
+                batch = (
+                    UnscopedBatch()
+                    if batch_id is None
+                    else DeclaredBatch(id=str(batch_id))
+                )
+            selected = ScientificSelection(
+                subject=subject, configuration=configuration, batch=batch
+            )
+        # Validate before replacing session defaults. This performs no activation.
+        resolve_launch_config(
+            LabClient(self),
+            LaunchRequest(
+                action="preview",
+                experiment="selection",
+                version="1",
+                selection=selected,
+            ),
+        )
         return selected
 
     @property
@@ -293,6 +364,104 @@ class AuthorProject(DaemonClient):
         """Interactive sessions may select a source before creating a new preview."""
         return None
 
+    def _prepare_science(
+        self,
+        *,
+        selection: ScientificSelection | SessionDefault,
+        target: str | TargetRevisionRef | SessionDefault | None,
+        context: ConfigContextRef | SessionDefault | None,
+        sample: str | SessionDefault | None,
+        batch: str | SessionDefault | None,
+        parameters: ParameterWorkspace | None,
+        candidate: ParameterCandidate | CandidateConfig | None,
+        overrides: tuple[ParameterUpdate, ...],
+    ) -> ScientificSelection:
+        defaults = self._selection
+        changes: dict[str, object] = {}
+        for key, value in (
+            ("selection", selection),
+            ("target", target),
+            ("working_point", context),
+            ("sample", sample),
+            ("batch", batch),
+        ):
+            if not isinstance(value, SessionDefault):
+                changes[key] = value
+        if parameters is not None or candidate is not None:
+            if changes or overrides:
+                raise ValueError(
+                    "parameters/candidate already selects scientific context"
+                )
+            science = ScientificSelection()
+        else:
+            base = ScientificSelection() if context is None else defaults.science
+            science = self._select_science(base, changes)
+        if overrides:
+            if not isinstance(science.configuration, WorkingPointConfiguration):
+                raise ValueError("parameter overrides require a working point")
+            science = science.model_copy(
+                update={
+                    "configuration": science.configuration.model_copy(
+                        update={"overrides": overrides}
+                    )
+                }
+            )
+        if candidate is not None:
+            if parameters is not None:
+                raise ValueError("choose parameters or candidate")
+            selected_candidate = (
+                candidate.config
+                if isinstance(candidate, ParameterCandidate)
+                else candidate
+            )
+            _, candidate_source = self.config.resolve_with_source(selected_candidate)
+            assert isinstance(candidate_source, AnalysisCandidateRunConfigSource)
+            binding = self.get_run(
+                selected_candidate.source_run_id
+            ).snapshot.scientific_binding
+            if len(binding.samples) > 1:
+                raise ValueError("authored candidate requires at most one subject")
+            from scopecat.records.scientific_binding import RegisteredTargetSubject
+
+            if not binding.samples:
+                subject = UnboundSubjectChoice()
+                batch_scope = UnscopedBatch()
+            else:
+                frozen_sample = binding.samples[0]
+                subject = (
+                    RegisteredTargetChoice(ref=binding.subject.ref)
+                    if isinstance(binding.subject, RegisteredTargetSubject)
+                    else SampleSubjectChoice(
+                        sample_id=frozen_sample.sample_id,
+                        revision=frozen_sample.revision,
+                    )
+                )
+                batch_scope = (
+                    UnscopedBatch()
+                    if frozen_sample.batch_id is None
+                    else DeclaredBatch(id=frozen_sample.batch_id)
+                )
+            science = ScientificSelection(
+                subject=subject,
+                configuration=CandidateConfiguration(source=candidate_source),
+                batch=batch_scope,
+            )
+        if parameters is not None:
+            frozen = parameters.freeze()
+            source = frozen.config_source
+            science = ScientificSelection(
+                subject=SampleSubjectChoice(
+                    sample_id=source.sample.sample_id, revision=source.sample.revision
+                ),
+                configuration=WorkingPointConfiguration(
+                    ref=source.context, overrides=source.overrides
+                ),
+                batch=UnscopedBatch()
+                if source.sample.batch_id is None
+                else DeclaredBatch(id=source.sample.batch_id),
+            )
+        return science
+
     def prepare(
         self,
         experiment: str | ExperimentRequest[object, object],
@@ -304,6 +473,8 @@ class AuthorProject(DaemonClient):
         candidate: ParameterCandidate | CandidateConfig | None = None,
         code_revision: AuthorRevisionRef | None = None,
         inputs: dict[str, JsonValue] | None = None,
+        selection: ScientificSelection | SessionDefault = INHERIT,
+        target: str | TargetRevisionRef | SessionDefault | None = INHERIT,
         context: ConfigContextRef | SessionDefault | None = INHERIT,
         overrides: tuple[ParameterUpdate, ...] = (),
         sample: str | SessionDefault | None = INHERIT,
@@ -312,16 +483,20 @@ class AuthorProject(DaemonClient):
         record_collection: str | SessionDefault | None = INHERIT,
     ) -> AuthorPreparedLaunch:
         """Select the current declaration and retain a preview's exact submission."""
-        selection = self._selection
-        batch = selection.batch if isinstance(batch, SessionDefault) else batch
-        context, sample = selection.scientific_scope(
+        defaults = self._selection
+        science = self._prepare_science(
+            selection=selection,
+            target=target,
             context=context,
             sample=sample,
-            explicit_parameters=parameters is not None or candidate is not None,
+            batch=batch,
+            parameters=parameters,
+            candidate=candidate,
+            overrides=overrides,
         )
-        actor = selection.operator if isinstance(actor, SessionDefault) else actor
+        actor = defaults.operator if isinstance(actor, SessionDefault) else actor
         record_collection = (
-            selection.collection
+            defaults.collection
             if isinstance(record_collection, SessionDefault)
             else record_collection
         )
@@ -344,36 +519,6 @@ class AuthorProject(DaemonClient):
                     "request.values already selects inputs and scans; edit the request"
                 )
             experiment = draft.declaration.id
-        candidate_source = None
-        sample_binding = None
-        if candidate is not None:
-            if (
-                parameters is not None
-                or context is not None
-                or overrides
-                or sample is not None
-            ):
-                raise ValueError(
-                    "candidate selects its exact parameters, sample and workpoint"
-                )
-            selected = (
-                candidate.config
-                if isinstance(candidate, ParameterCandidate)
-                else candidate
-            )
-            _, candidate_source = self.config.resolve_with_source(selected)
-            assert isinstance(candidate_source, AnalysisCandidateRunConfigSource)
-            subjects = [
-                item
-                for item in self.run(selected.source_run_id).samples
-                if item.role == "subject"
-            ]
-            if len(subjects) != 1:
-                raise ValueError(
-                    "candidate requires one exact subject sample/workpoint"
-                )
-            sample_binding = subjects[0]
-            sample = sample_binding.sample_id
         catalog = self.catalog(
             code_revision=code_revision or self._default_request_revision()
         )
@@ -391,13 +536,6 @@ class AuthorProject(DaemonClient):
                     values=[_control_value(value) for value in values]
                 ),
             )
-        if parameters is not None:
-            if context is not None or overrides or sample is not None:
-                raise ValueError("parameters already selects the context and sample")
-            frozen = parameters.freeze()
-            context = frozen.config_source.context
-            overrides = frozen.config_source.overrides
-            sample = frozen.config_source.sample.sample_id
         entry = next((item for item in catalog.entries if item.id == experiment), None)
         if entry is None:
             raise ValueError(
@@ -449,18 +587,15 @@ class AuthorProject(DaemonClient):
             scan_mode=draft.scan_mode if draft else "cartesian",
             parameter_sweeps=draft.parameter_sweeps if draft else (),
             inputs=declared_inputs | (inputs or {}),
-            config_source=candidate_source,
-            sample_binding=sample_binding,
-            context=context,
-            overrides=overrides,
-            sample=sample,
+            selection=science,
             actor=actor,
-            batch_id=batch,
             record_collection=record_collection,
             code_revision=catalog.code_revision,
             workspace_id=catalog.workspace_id,
         )
-        return AuthorPreparedLaunch(self, request, self.preview(request))
+        preview = self.preview(request)
+        request = request.model_copy(update={"reviewed": preview.reviewed})
+        return AuthorPreparedLaunch(self, request, preview)
 
     def prepare_plan(
         self,
@@ -480,11 +615,17 @@ class AuthorProject(DaemonClient):
         request = plan_launch_request(
             self.experiment_plan(ref), actor=actor, record_collection=record_collection
         )
-        selected_batch = (
-            self._selection.batch if isinstance(batch, SessionDefault) else batch
-        )
-        require_batch_match(selected_batch, request.batch_id)
-        return AuthorPreparedLaunch(self, request, self.preview(request))
+        if not isinstance(batch, SessionDefault):
+            selected_batch = request.selection.batch
+            require_batch_match(
+                batch,
+                selected_batch.id
+                if isinstance(selected_batch, DeclaredBatch)
+                else None,
+            )
+        preview = self.preview(request)
+        request = request.model_copy(update={"reviewed": preview.reviewed})
+        return AuthorPreparedLaunch(self, request, preview)
 
     def state(self) -> AuthorRevisionState:
         return self.author_revision_state()
@@ -879,7 +1020,7 @@ class AuthorPreparedLaunch:
                 "action": "submit",
                 "request_key": request_key,
                 "expected_request_hash": self.preview.request_hash,
-                "config_source": self.preview.config_source,
+                "reviewed": self.preview.reviewed,
                 "code_revision": self.preview.code_revision,
                 "manual_state": self.preview.manual_state,
             }

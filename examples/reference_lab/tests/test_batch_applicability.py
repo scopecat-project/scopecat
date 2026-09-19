@@ -4,7 +4,6 @@ import os
 from pathlib import Path
 from uuid import uuid4
 
-import httpx2
 import pytest
 import scopecat as sc
 from scopecat.api.lab import LabClient
@@ -51,15 +50,16 @@ def test_new_batch_requires_its_own_working_point(tmp_path: Path) -> None:
             entry_id=saved.entry.id, content_hash=saved.entry.content_hash
         )
         session.use(working_point=ref, collection=collection.id)
-        assert session.selection.batch == first.id
+        assert session.selection.science.batch.kind == "declared"
+        assert session.selection.science.batch.id == first.id
         prepared = session.prepare("signal")
         plan = prepared.save_plan("Original cooldown recipe", saved_by="operator")
         original = prepared.run().wait(timeout=60).result()
         selection = session.selection
-        with pytest.raises(ValueError, match="batch does not match"):
+        with pytest.raises(ValueError, match="selected subject/batch differs"):
             session.use(batch=second.id)
         assert session.selection == selection
-        with pytest.raises(httpx2.HTTPStatusError, match="batch does not match"):
+        with pytest.raises(ValueError, match="selected subject/batch differs"):
             session.prepare("signal", context=ref, batch=second.id)
         # Explicit copying creates a new scoped estimate; advancing the old
         # workspace in place must never relabel its physical event.
@@ -84,15 +84,21 @@ def test_new_batch_requires_its_own_working_point(tmp_path: Path) -> None:
         )
         assert copied.config.parameter_snapshot == saved.config.parameter_snapshot
         session.use(working_point=copied_ref)
-        assert session.selection.batch == second.id
-        assert session.selection.sample == chip.id
+        assert session.selection.science.batch.kind == "declared"
+        assert session.selection.science.batch.id == second.id
+        assert session.selection.science.subject.kind == "sample"
+        assert session.selection.science.subject.sample_id == chip.id
+        reopened = session.prepare_plan(plan.ref)
+        assert reopened.request.selection.batch.kind == "declared"
+        assert reopened.request.selection.batch.id == first.id
         with pytest.raises(ValueError, match="batch does not match"):
-            session.prepare_plan(plan.ref)
+            session.prepare_plan(plan.ref, batch=second.id)
         assert (
-            session.prepare_plan(plan.ref, batch=first.id).request.batch_id == first.id
-        )
-        with pytest.raises(httpx2.HTTPStatusError, match="batch does not match"):
             session.prepare("signal", context=ref)
+            .preview.reviewed.binding.samples[0]
+            .batch_id
+            == first.id
+        )
         candidate = (
             original.analysis("Batch-scoped estimate")
             .result()
@@ -107,10 +113,14 @@ def test_new_batch_requires_its_own_working_point(tmp_path: Path) -> None:
             .save()
             .candidate_config()
         )
-        with pytest.raises(httpx2.HTTPStatusError, match="batch does not match"):
+        assert (
             session.prepare("signal", candidate=candidate)
+            .preview.reviewed.binding.samples[0]
+            .batch_id
+            == first.id
+        )
         with pytest.raises(
-            DaemonConflictError, match="original sample revisions and batch"
+            DaemonConflictError, match="original scientific subject and batch"
         ):
             lab.run(
                 signal,

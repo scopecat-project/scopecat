@@ -1,4 +1,4 @@
-"""Plan-to-launch projection; every execution still needs a fresh normal preview."""
+"""Plan-to-launch projection preserving exact scientific evidence."""
 
 from typing import cast
 
@@ -15,6 +15,11 @@ from scopecat.records.experiment_plan import (
 from scopecat.records.launch_request import LaunchRequest
 from scopecat.records.plan_ref import PlanAnalysisSource, PlanConfigRef
 from scopecat.records.run import AnalysisCandidateRunConfigSource
+from scopecat.records.scientific_selection import (
+    SampleSubjectChoice,
+    SavedConfiguration,
+    WorkingPointConfiguration,
+)
 
 
 def plan_launch_request(
@@ -31,12 +36,7 @@ def plan_launch_request(
         control_edits=dict(definition.control_edits),
         scan_mode=definition.scan_mode,
         parameter_sweeps=definition.parameter_sweeps,
-        configuration=definition.configuration,
-        context=definition.context,
-        overrides=definition.overrides,
-        sample_binding=definition.sample,
-        sample=definition.sample.sample_id if definition.sample else None,
-        batch_id=definition.sample.batch_id if definition.sample else None,
+        selection=definition.selection,
         code_revision=definition.code_revision,
         workspace_id=definition.workspace_id,
         plan_ref=plan.ref,
@@ -51,20 +51,22 @@ def validate_plan_launch(
         != plan.definition.definition_hash
     ):
         raise ValueError(
-            "saved plan definition changed; explicitly save a new "
-            "revision and preview it"
+            "saved plan definition changed; save a new revision and preview it"
         )
     expected = plan_launch_request(
         plan, actor=request.actor, record_collection=request.record_collection
     )
+    if request.reviewed is not None:
+        if request.reviewed.binding != plan.definition.scientific_binding:
+            raise ValueError("launch scientific evidence differs from immutable plan")
+        expected = expected.model_copy(update={"reviewed": request.reviewed})
     if (
         request.request_hash != expected.request_hash
         or request.workspace_id != expected.workspace_id
         or request.code_revision != expected.code_revision
     ):
         raise ValueError(
-            "launch differs from the immutable plan; save a new "
-            "revision or detach it before preview"
+            "launch differs from immutable plan; save a new revision or detach it"
         )
 
 
@@ -74,17 +76,31 @@ def plan_definition(
     *,
     source: PlanAnalysisSource | None = None,
 ) -> ExperimentPlanDefinition:
-    """Freeze a successful preview's selections, not its execution permission."""
-    if request.request_hash != preview.request_hash or preview.definition_hash is None:
+    frozen = request.model_copy(update={"reviewed": preview.reviewed})
+    if frozen.request_hash != preview.request_hash or preview.definition_hash is None:
         raise ValueError("plan requires the matching checked declaration preview")
-    if request.sample is not None and preview.sample_binding is None:
-        raise ValueError(
-            "preview must resolve the selected sample revision before saving"
-        )
-    config = preview.config_source
+    config = preview.reviewed.config_source
     if isinstance(config, AnalysisCandidateRunConfigSource):
         raise ValueError("Save plans from a named context, not an unaccepted candidate")
-    context = config if isinstance(config, ContextRunConfigSource) else None
+    selection = request.selection
+    configuration = (
+        WorkingPointConfiguration(ref=config.context, overrides=config.overrides)
+        if isinstance(config, ContextRunConfigSource)
+        else SavedConfiguration(
+            ref=PlanConfigRef(
+                entry_id=config.entry_id, content_hash=config.content_hash
+            )
+        )
+    )
+    subject = selection.subject
+    if isinstance(subject, SampleSubjectChoice):
+        samples = preview.reviewed.binding.samples
+        if len(samples) != 1:
+            raise ValueError("sample plan requires exact subject evidence")
+        subject = subject.model_copy(update={"revision": samples[0].revision})
+    selection = selection.model_copy(
+        update={"subject": subject, "configuration": configuration}
+    )
     return ExperimentPlanDefinition(
         experiment=request.experiment,
         version=request.version,
@@ -95,13 +111,7 @@ def plan_definition(
         control_edits=request.control_edits,
         scan_mode=request.scan_mode,
         parameter_sweeps=request.parameter_sweeps,
-        configuration=PlanConfigRef(
-            entry_id=config.entry_id, content_hash=config.content_hash
-        )
-        if not isinstance(config, ContextRunConfigSource)
-        else None,
-        context=context.context if context else None,
-        overrides=context.overrides if context else (),
-        sample=preview.sample_binding,
+        selection=selection,
+        scientific_binding=preview.reviewed.binding,
         source=source,
     )

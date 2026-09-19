@@ -23,6 +23,11 @@ from scopecat.kernel.content_identity import sha256_json_hash
 from scopecat.records.author_revision import AuthorRevisionState
 from scopecat.records.launch_request import LaunchRequest
 from scopecat.records.manual_preview import ManualPreviewBinding, ManualPreviewFence
+from scopecat.records.scientific_binding import (
+    ResolvedScientificBinding,
+    UnboundSubject,
+)
+from scopecat.records.scientific_selection import ReviewedScientificSelection
 
 from scopecat_server.http.procedure_operator import read_procedure_operator
 from scopecat_server.http.transport import create_app
@@ -168,22 +173,33 @@ def test_unknown_child_never_dispatches_including_exact_submission_retry(
     from scopecat.records.launch_request import LaunchRequest
     from scopecat.records.run import ConfigRegistryRunConfigSource
 
-    request = LaunchRequest(action="preview", experiment="diagnostic", version="1")
+    request = LaunchRequest(
+        action="preview",
+        experiment="diagnostic",
+        version="1",
+        reviewed=ReviewedScientificSelection(
+            binding=ResolvedScientificBinding(
+                subject=UnboundSubject(),
+                config_content_hash="sha256:" + "a" * 64,
+                setup_content_hash="sha256:" + "b" * 64,
+            ),
+            config_source=ConfigRegistryRunConfigSource(
+                selector="active",
+                entry_id="baseline",
+                config_ref="baseline",
+                content_hash="sha256:" + "a" * 64,
+                registry_generation=1,
+            ),
+        ),
+    )
     command = request.model_copy(
         update={
             "action": "submit",
             "request_key": "retained",
             "expected_request_hash": request.request_hash,
-            "config_source": ConfigRegistryRunConfigSource(
-                selector="active",
-                entry_id="baseline",
-                config_ref="baseline",
-                content_hash=HASH,
-                registry_generation=1,
-            ),
         }
     )
-    assert command.config_source is not None
+    assert command.reviewed is not None
     command = command.model_copy(
         update={
             "manual_state": ManualPreviewFence(
@@ -191,7 +207,7 @@ def test_unknown_child_never_dispatches_including_exact_submission_retry(
                 binding=ManualPreviewBinding(
                     request_hash=command.request_hash,
                     config_source_hash=sha256_json_hash(
-                        command.config_source.model_dump(mode="json")
+                        command.reviewed.config_source.model_dump(mode="json")
                     ),
                 ),
             )

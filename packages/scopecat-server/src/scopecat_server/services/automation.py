@@ -75,6 +75,10 @@ from scopecat.records.launch_request import LaunchRequest
 from scopecat.records.manual_preview import ManualPreviewFence
 from scopecat.records.plan_ref import ExperimentPlanRef
 from scopecat.records.sample import SampleSelector
+from scopecat.records.scientific_binding import (
+    RegisteredTargetSubject,
+    ResolvedScientificBinding,
+)
 
 from scopecat_server.services.manual_previews import ManualPreviewService
 from scopecat_server.storage.sqlite.automation import (
@@ -219,6 +223,7 @@ class AutomationService:
                 request_key=command.request_key,
                 intent=command.intent,
                 samples=command.samples,
+                scientific_binding=command.scientific_binding,
                 expected_manual_preview=command.expected_manual_preview,
                 expected_config_generation=command.expected_config_generation,
                 recovery=command.recovery,
@@ -535,6 +540,7 @@ class AutomationService:
         request_key: str,
         intent: ProcedureIntent,
         samples: tuple[SampleSelector, ...] = (),
+        scientific_binding: ResolvedScientificBinding | None = None,
         expected_manual_preview: ManualPreviewFence | None = None,
         expected_config_generation: int | None = None,
         recovery: ProcedureRecoverySource | None = None,
@@ -555,6 +561,7 @@ class AutomationService:
                 request_key=request_key,
                 intent=intent,
                 samples=samples,
+                scientific_binding=scientific_binding,
                 expected_manual_preview=expected_manual_preview,
                 expected_config_generation=expected_config_generation,
                 recovery=recovery,
@@ -570,6 +577,7 @@ class AutomationService:
         request_key: str,
         intent: ProcedureIntent,
         samples: tuple[SampleSelector, ...] = (),
+        scientific_binding: ResolvedScientificBinding | None = None,
         expected_manual_preview: ManualPreviewFence | None = None,
         expected_config_generation: int | None = None,
         recovery: ProcedureRecoverySource | None = None,
@@ -587,6 +595,7 @@ class AutomationService:
             definition,
             selected_intent,
             samples=samples,
+            scientific_binding=scientific_binding,
             recovery=recovery,
             plan_ref=plan_ref,
         )
@@ -607,48 +616,15 @@ class AutomationService:
             return existing
         require_batches(connection, (sample.batch_id for sample in samples))
         if plan_ref is not None:
-            if self._plans is None:
-                raise AutomationConflict("experiment plan storage is unavailable")
-            if (
-                plan_request is None
-                or plan_request.plan_ref != plan_ref
-                or plan_request.action != "submit"
-            ):
-                raise AutomationConflict(
-                    "plan admission requires the actual checked launch request"
-                )
-            if (
-                expected_manual_preview is None
-                or plan_request.manual_state != expected_manual_preview
-            ):
-                raise AutomationConflict("plan launch requires its checked preview")
-            try:
-                ManualPreviewService.require_binding(plan_request)
-            except ValueError as error:
-                raise AutomationConflict(str(error)) from error
-            plan = self._plans.get_in_transaction(connection, plan_ref)
-            expected_request = plan_launch_request(
-                plan,
-                actor=plan_request.actor,
-                record_collection=plan_request.record_collection,
+            self._require_plan_request(
+                connection,
+                plan_ref,
+                plan_request,
+                expected_manual_preview,
+                scientific_binding,
+                samples,
+                selected_intent,
             )
-            if (
-                plan_request.request_hash != expected_request.request_hash
-                or plan_request.code_revision != expected_request.code_revision
-            ):
-                raise AutomationConflict(
-                    "checked launch request differs from its immutable plan"
-                )
-            actor = selected_intent.get("actor")
-            if (
-                actor != plan_request.actor
-                or selected_intent.get("record_collection")
-                != plan_request.record_collection
-                or selected_intent.get("request_hash") != plan_request.request_hash
-            ):
-                raise AutomationConflict(
-                    "procedure intent does not match the saved plan launch"
-                )
         resolved_samples: tuple[SampleSelector, ...]
         if recovery is not None:
             source = self._store.read_run_in_transaction(
@@ -671,6 +647,8 @@ class AutomationService:
                 )
             try:
                 validate_recovery_source(recovery, source, attempts, retained)
+                if scientific_binding != source.scientific_binding:
+                    raise ValueError("recovery must preserve source scientific binding")
                 if samples != source.samples:
                     raise ValueError("recovery must preserve source sample bindings")
             except ValueError as error:
@@ -689,6 +667,13 @@ class AutomationService:
                     batch_id=binding.batch_id,
                 )
                 for binding in bindings
+            )
+        if (
+            scientific_binding is not None
+            and resolved_samples != scientific_binding.sample_selectors()
+        ):
+            raise AutomationConflict(
+                "procedure samples must match scientific binding exactly"
             )
         if expected_manual_preview is not None:
             try:
@@ -709,6 +694,7 @@ class AutomationService:
             intent=selected_intent,
             intent_hash=intent_hash,
             samples=samples,
+            scientific_binding=scientific_binding,
             resolved_samples=resolved_samples,
             recovery=recovery,
             plan_ref=plan_ref,
@@ -719,6 +705,75 @@ class AutomationService:
         )
         self._store.insert_run_in_transaction(connection, run)
         return run
+
+    def _require_plan_request(
+        self,
+        connection: sqlite3.Connection,
+        plan_ref: ExperimentPlanRef,
+        plan_request: LaunchRequest | None,
+        expected_manual_preview: ManualPreviewFence | None,
+        scientific_binding: ResolvedScientificBinding | None,
+        samples: tuple[SampleSelector, ...],
+        selected_intent: ProcedureIntent,
+    ) -> None:
+        if self._plans is None:
+            raise AutomationConflict("experiment plan storage is unavailable")
+        if (
+            plan_request is None
+            or plan_request.plan_ref != plan_ref
+            or plan_request.action != "submit"
+        ):
+            raise AutomationConflict(
+                "plan admission requires the actual checked launch request"
+            )
+        if (
+            expected_manual_preview is None
+            or plan_request.manual_state != expected_manual_preview
+        ):
+            raise AutomationConflict("plan launch requires its checked preview")
+        try:
+            ManualPreviewService.require_binding(plan_request)
+        except ValueError as error:
+            raise AutomationConflict(str(error)) from error
+        plan = self._plans.get_in_transaction(connection, plan_ref)
+        expected_request = plan_launch_request(
+            plan,
+            actor=plan_request.actor,
+            record_collection=plan_request.record_collection,
+        )
+        expected_request = expected_request.model_copy(
+            update={"reviewed": plan_request.reviewed}
+        )
+        if (
+            (
+                scientific_binding is not None
+                and scientific_binding != plan.definition.scientific_binding
+            )
+            or plan_request.reviewed is None
+            or plan_request.reviewed.binding != plan.definition.scientific_binding
+            or samples != plan.definition.scientific_binding.sample_selectors()
+            or (
+                scientific_binding is None
+                and isinstance(
+                    plan.definition.scientific_binding.subject, RegisteredTargetSubject
+                )
+            )
+            or plan_request.request_hash != expected_request.request_hash
+            or plan_request.code_revision != expected_request.code_revision
+        ):
+            raise AutomationConflict(
+                "checked launch request differs from its immutable plan"
+            )
+        actor = selected_intent.get("actor")
+        if (
+            actor != plan_request.actor
+            or selected_intent.get("record_collection")
+            != plan_request.record_collection
+            or selected_intent.get("request_hash") != plan_request.request_hash
+        ):
+            raise AutomationConflict(
+                "procedure intent does not match the saved plan launch"
+            )
 
     def get(self, procedure_run_id: str) -> ProcedureRun:
         with _translate_store_errors():

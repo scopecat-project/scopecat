@@ -159,7 +159,10 @@ def test_typed_candidates_retain_cells_and_independent_policy(
                 other.verify(check)
             verified = candidate.verify(check)
             next_prepared = author.prepare("signal", candidate=verified.select())
-            assert next_prepared.preview.config_source == prepared.preview.config_source
+            assert (
+                next_prepared.preview.reviewed.config_source
+                == prepared.preview.reviewed.config_source
+            )
             assert author.config.active() == baseline_default
             verified.publish_default(name="verified-carrier")
             assert author.config.active().entry.id == "verified-carrier"
@@ -177,7 +180,7 @@ def test_typed_candidates_retain_cells_and_independent_policy(
                 == procedures_before_stale
             )
             reviewed_again = author.prepare("signal", candidate=verified.select())
-            reviewed_source = reviewed_again.preview.config_source
+            reviewed_source = reviewed_again.preview.reviewed.config_source
             assert isinstance(reviewed_source, AnalysisCandidateRunConfigSource)
             assert (
                 reviewed_source.registry_generation

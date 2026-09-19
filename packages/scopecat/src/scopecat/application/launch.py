@@ -24,10 +24,10 @@ from scopecat.records.author_workspace import (
     AuthorWorkspaceId,
 )
 from scopecat.records.content import Sha256ContentHash
-from scopecat.records.launch_request import LaunchConfigSource, LaunchRequest
+from scopecat.records.launch_request import LaunchRequest
 from scopecat.records.manual_preview import ManualPreviewFence
 from scopecat.records.plan_ref import ExperimentPlanRef
-from scopecat.records.sample import SampleBinding
+from scopecat.records.scientific_selection import ReviewedScientificSelection
 
 if TYPE_CHECKING:
     from scopecat.api.lab import LabClient
@@ -97,10 +97,9 @@ class LaunchPreview(BaseModel):
     code_revision: AuthorRevisionRef | None = None
     plan_ref: ExperimentPlanRef | None = None
     definition_hash: Sha256ContentHash | None = None
-    sample_binding: SampleBinding | None = None
     experiment_id: str
     request_hash: Sha256ContentHash
-    config_source: LaunchConfigSource
+    reviewed: ReviewedScientificSelection
     point_count: int = Field(
         ge=0,
         description=(

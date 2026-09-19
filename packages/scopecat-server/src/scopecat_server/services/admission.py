@@ -18,7 +18,6 @@ from scopecat.config.changes import (
 from scopecat.config.contexts import apply_context_overrides
 from scopecat.config.registry import service as config_registry_service
 from scopecat.config.registry.records import ContextConfigRegistrySource
-from scopecat.config.scientific_binding import bind_scientific_evidence
 from scopecat.control.models import (
     ControlRun,
     ResourceKey,
@@ -57,7 +56,6 @@ from scopecat.records.run import (
 )
 from scopecat.records.sample import SampleBinding
 from scopecat.records.scientific_binding import (
-    InlineSamplesSubject,
     RegisteredTargetSubject,
     ResolvedScientificBinding,
 )
@@ -84,6 +82,7 @@ from scopecat_server.storage.sqlite.target_catalog import TargetCatalogStore
 from ..errors import BackendConflict, BackendNotFound
 from .point_plans import RunPointPlanService
 from .samples import SampleService
+from .scientific_binding import validate_scientific_binding
 
 
 class AdmissionService:
@@ -207,7 +206,7 @@ class AdmissionService:
                 )
                 self._point_plans.initialize_admitted_in_transaction(connection, run)
                 if run.run_id == admission.run_id:
-                    self._require_plan_child(connection, submission)
+                    self._require_procedure_child(connection, submission)
                     allocate_address(
                         connection,
                         run_id=run.run_id,
@@ -239,7 +238,7 @@ class AdmissionService:
         )
         return self._wire_admission(run)
 
-    def _require_plan_child(
+    def _require_procedure_child(
         self, connection: sqlite3.Connection, submission: RunSubmission
     ) -> None:
         source = submission.procedure_child
@@ -253,15 +252,28 @@ class AdmissionService:
         try:
             parent = store.read_run_in_transaction(connection, source.procedure_run_id)
         except AutomationNotFound as error:
-            raise BackendConflict(
-                "plan-derived parent procedure was not found"
-            ) from error
+            raise BackendConflict("parent procedure was not found") from error
         step = store.latest_step_attempt_in_transaction(
             connection, source.procedure_run_id, source.step_key
         )
         lease = store.read_lease_in_transaction(connection, source.procedure_run_id)
         if (
-            parent.plan_ref != submission.request.plan_ref
+            (
+                parent.scientific_binding is not None
+                and parent.scientific_binding != submission.scientific_binding
+            )
+            or (
+                parent.plan_ref is not None
+                and parent.scientific_binding is None
+                and (
+                    submission.scientific_binding.sample_selectors()
+                    != parent.resolved_samples
+                    or isinstance(
+                        submission.scientific_binding.subject, RegisteredTargetSubject
+                    )
+                )
+            )
+            or parent.plan_ref != submission.request.plan_ref
             or parent.state != "leased"
             or lease is None
             or lease.expires_at <= datetime.now(UTC)
@@ -272,9 +284,7 @@ class AdmissionService:
             or submission.submission_id
             != procedure_step_operation_id(source.procedure_run_id, source.step_key)
         ):
-            raise BackendConflict(
-                "plan-derived run does not match its live durable parent step"
-            )
+            raise BackendConflict("run does not match its live durable parent step")
 
     def _replay_admission(
         self,
@@ -401,43 +411,12 @@ class AdmissionService:
             raise BackendConflict(
                 "run sample selectors must match scientific binding exactly"
             )
-        try:
-            subject = binding.subject
-            if (
-                isinstance(subject, InlineSamplesSubject)
-                and subject.catalog_id != self._targets.catalog_id
-            ):
-                raise BackendConflict("scientific binding belongs to another catalog")
-            target = (
-                self._targets.resolve(subject.ref)
-                if isinstance(subject, RegisteredTargetSubject)
-                else None
-            )
-            samples = self._samples.resolve_bindings(binding.sample_selectors())
-            revisions = (
-                {
-                    (member.sample_id, member.revision): self._samples.revision(
-                        member.sample_id, member.revision
-                    )
-                    for member in target.content.members
-                }
-                if target is not None
-                else {}
-            )
-            expected = bind_scientific_evidence(
-                catalog_id=self._targets.catalog_id,
-                config=submission.config,
-                samples=samples,
-                target=target,
-                sample_revisions=revisions,
-            )
-            if expected != binding:
-                raise BackendConflict(
-                    "scientific binding does not match retained evidence"
-                )
-            return samples
-        except ValueError as error:
-            raise BackendConflict(str(error)) from error
+        return validate_scientific_binding(
+            binding,
+            submission.config,
+            sample_service=self._samples,
+            targets=self._targets,
+        )
 
     def _require_candidate_subject(
         self, source: RunConfigSource | None, binding: ResolvedScientificBinding

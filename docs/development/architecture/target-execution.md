@@ -292,3 +292,29 @@ payloads. The remaining slice must replace flat scientific selection in author
 sessions, previews, saved recipes and procedure children together before offering
 notebook or GUI target selection. Maintained setup and calibration applicability
 remain separate follow-on work.
+
+
+## Authored selection stage (#641)
+
+The public launch request now has one `ScientificSelection` and one checked
+`ReviewedScientificSelection` envelope. Preview resolves both configuration and
+subject together. Clients adopt the returned envelope before hashing, submitting
+or saving; the checked fence covers exact binding and configuration provenance.
+The previous flat launch sample/context/config-source fields have been removed.
+
+Notebook sessions accept a registered single-member target, resolving a target ID
+to an exact reference when selected. Refresh leaves it fixed. Saved plans contain
+that exact binding and reopen independently of the session's current scientific
+scope. The workbench consumes the same contract and preserves target-bearing
+plans; a dedicated target catalog picker remains follow-on work.
+
+Authored procedures carry the binding as a typed parent field and each durable
+child is checked against it and its claimed step intent. Generic multi-stage
+procedures may omit a fixed full binding because their configurations can change;
+their children still pass normal scientific admission and step checks. Maintained
+multi-stage reference workflows currently support inline sample selection.
+
+Schema 77 supersedes the preceding development format without conversion.
+Target-qualified setup/calibration applicability and assembly execution remain
+separate work. The earlier stage descriptions above record implementation order,
+not additional live APIs or compatibility promises.

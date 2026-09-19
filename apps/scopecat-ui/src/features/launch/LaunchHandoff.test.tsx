@@ -1,3 +1,4 @@
+import { defaultSelection } from "./scientific-selection";
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
@@ -33,7 +34,7 @@ const suggestion: ComparisonHandoff = {
     version: "1",
     actor: "operator",
     request_key: "",
-    overrides: [],
+    selection: defaultSelection(),
     inputs: {},
   },
 };
@@ -53,7 +54,7 @@ function Probe() {
               version: "1",
               actor: "operator",
               request_key: "unknown-original",
-              overrides: [],
+              selection: defaultSelection(),
             },
             "original-definition",
           )
@@ -64,7 +65,13 @@ function Probe() {
       <button
         onClick={async () => {
           state.select(entry);
-          state.update((current) => ({ ...current, sample: "old-sample" }));
+          state.update((current) => ({
+            ...current,
+            selection: {
+              ...current.selection,
+              subject: { kind: "sample", sample_id: "old-sample" },
+            },
+          }));
           state.selectContext(
             await resolveConfigContext({ entry_id: "old-context", content_hash: "old-hash" }),
           );
@@ -74,7 +81,11 @@ function Probe() {
       </button>
       <button onClick={() => state.importHandoff(entry, suggestion)}>Import</button>
       <output aria-label="Context">{state.selectedContext?.config_source.context.entry_id}</output>
-      <output aria-label="Sample">{state.draft?.sample}</output>
+      <output aria-label="Sample">
+        {state.draft?.selection.subject.kind === "sample"
+          ? state.draft.selection.subject.sample_id
+          : ""}
+      </output>
       <output aria-label="Attempt">
         {state.attempt?.status}:{state.attempt?.request.request_key}
       </output>
@@ -132,7 +143,7 @@ it("clears an unrelated sample and resolved context when importing inputs withou
           context: { entry_id: "old-context", content_hash: "old-hash" },
           content_hash: "effective-old",
           lab_generation: 1,
-          overrides: [],
+          selection: defaultSelection(),
           sample: { sample_id: "old-sample", revision: 1, context_id: "old-point" },
         },
       }),

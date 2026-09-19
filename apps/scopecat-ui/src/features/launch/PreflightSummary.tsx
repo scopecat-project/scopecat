@@ -44,11 +44,11 @@ export function PreflightSummary({
       <p>{preview.summary}</p>
       <p>
         {preview.point_count} initial points in the first experiment · Configuration{" "}
-        {preview.config_source.kind === "parameter_context"
-          ? preview.config_source.context.entry_id
-          : preview.config_source.kind === "analysis_candidate"
-            ? `Candidate ${preview.config_source.proposal_id}`
-            : preview.config_source.entry_id}
+        {preview.reviewed.config_source.kind === "parameter_context"
+          ? preview.reviewed.config_source.context.entry_id
+          : preview.reviewed.config_source.kind === "analysis_candidate"
+            ? `Candidate ${preview.reviewed.config_source.proposal_id}`
+            : preview.reviewed.config_source.entry_id}
       </p>
       <p>
         {entry.configuration_effect === "none"
@@ -166,11 +166,7 @@ export function PreflightSummary({
       <details>
         <summary>Resolved inputs and configuration</summary>
         <pre className="overflow-auto text-xs p-3">
-          {JSON.stringify(
-            { inputs: preview.resolved_inputs, config_source: preview.config_source },
-            null,
-            2,
-          )}
+          {JSON.stringify({ inputs: preview.resolved_inputs, reviewed: preview.reviewed }, null, 2)}
         </pre>
       </details>
     </div>

@@ -21,7 +21,6 @@ from scopecat.application.launch_config import (
     launch_config_generation,
     launch_preflight_configuration,
     launch_preflight_meaning,
-    launch_sample_selection,
 )
 from scopecat.automation import InterpretationRequest, procedure
 from scopecat.config.parameter_updates import materialize_parameter_updates
@@ -198,8 +197,17 @@ def launch_provider(lab: LabClient, request: LaunchRequest) -> LaunchResult:
     definition = (
         launch_temperature if entry.kind == "diagnostic" else launch_channel_timing
     )
+    resolved = launch_config(lab, request)
+    config, source = resolved.config, resolved.reviewed.config_source
+    if (
+        entry.kind != "diagnostic"
+        and resolved.reviewed.binding.subject.kind == "registered_target"
+    ):
+        raise ValueError(
+            "The multi-stage timing workflow requires a sample selection; "
+            "registered targets are supported by single-configuration experiments"
+        )
     if request.action == "preview":
-        config, source = launch_config(lab, request)
         preview = lab.preview_invocation(
             invocation, config=config, config_source=source
         )
@@ -283,8 +291,10 @@ def launch_provider(lab: LabClient, request: LaunchRequest) -> LaunchResult:
         return LaunchPreview(
             experiment_id=entry.id,
             manual_state=request.manual_state,
-            request_hash=request.request_hash,
-            config_source=source,
+            request_hash=request.model_copy(
+                update={"reviewed": resolved.reviewed}
+            ).request_hash,
+            reviewed=resolved.reviewed,
             point_count=preview.initial_point_count,
             resources=tuple(
                 sorted({item for stage in stages for item in stage.instrument_ids})
@@ -305,7 +315,6 @@ def launch_provider(lab: LabClient, request: LaunchRequest) -> LaunchResult:
             summary=entry.description,
             resolved_inputs=inputs.model_dump(mode="json"),
         )
-    config, source = launch_config(lab, request)
     intent = LaunchIntent(
         initial_config=config,
         config_source=source,
@@ -318,7 +327,10 @@ def launch_provider(lab: LabClient, request: LaunchRequest) -> LaunchResult:
         definition,
         intent,
         request_key=request.request_key,
-        sample=launch_sample_selection(request, source),
+        samples=resolved.reviewed.binding.sample_selectors(),
+        scientific_binding=resolved.reviewed.binding
+        if entry.kind == "diagnostic"
+        else None,
         expected_manual_preview=request.manual_state,
         expected_config_generation=launch_config_generation(source),
         plan_ref=request.plan_ref,

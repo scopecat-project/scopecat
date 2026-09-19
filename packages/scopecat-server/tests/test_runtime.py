@@ -5592,7 +5592,7 @@ def test_plan_origin_rejects_direct_run_and_transaction_replay_skips_new_child_g
         def closed_parent(*_args: object) -> None:
             raise AssertionError("an existing admission must not recheck its parent")
 
-        monkeypatch.setattr(AdmissionService, "_require_plan_child", closed_parent)
+        monkeypatch.setattr(AdmissionService, "_require_procedure_child", closed_parent)
         replayed = client.post("/api/v1/runs", json=plain.model_dump(mode="json"))
         assert replayed.status_code == 201, replayed.text
         assert replayed.json() == admitted.json()

@@ -11,6 +11,14 @@ from scopecat.records.experiment_plan import (
     ExperimentPlanSave,
 )
 from scopecat.records.plan_ref import PlanAnalysisSource, PlanConfigRef
+from scopecat.records.scientific_binding import (
+    ResolvedScientificBinding,
+    UnboundSubject,
+)
+from scopecat.records.scientific_selection import (
+    SavedConfiguration,
+    ScientificSelection,
+)
 
 from scopecat_server.errors import BackendConflict
 from scopecat_server.storage.sqlite.connection import SQLiteDatabase
@@ -29,9 +37,14 @@ def test_plan_revision_copy_hide_and_exact_reopen(tmp_path: Path) -> None:
         experiment="signal",
         version="1",
         definition_hash="sha256:" + "1" * 64,
-        configuration=PlanConfigRef(
-            entry_id="config-1", content_hash="sha256:" + "2" * 64
+        selection=ScientificSelection(
+            configuration=SavedConfiguration(
+                ref=PlanConfigRef(
+                    entry_id="config-1", content_hash="sha256:" + "2" * 64
+                )
+            )
         ),
+        scientific_binding=_binding(),
         control_edits={
             "frequency": ControlEdit(mode="fixed", value=Quantity(4.8, "GHz"))
         },
@@ -119,7 +132,7 @@ def test_schema_64_source_bytes_remain_unchanged(tmp_path: Path) -> None:
         connection.execute("INSERT INTO retained VALUES ('original')")
     before = {path.name: path.read_bytes() for path in tmp_path.iterdir()}
     store = SQLiteProjectStore(SQLiteDatabase(database), tmp_path / "objects")
-    with pytest.raises(SchemaVersionError, match="version: 64; expected 76"):
+    with pytest.raises(SchemaVersionError, match="version: 64; expected 77"):
         store.bootstrap()
     assert {path.name: path.read_bytes() for path in tmp_path.iterdir()} == before
 
@@ -146,9 +159,14 @@ def test_snapshot_retains_hidden_plan_object_and_hash(tmp_path: Path) -> None:
                 experiment="signal",
                 version="1",
                 definition_hash="sha256:" + "1" * 64,
-                configuration=PlanConfigRef(
-                    entry_id="config-1", content_hash="sha256:" + "2" * 64
+                selection=ScientificSelection(
+                    configuration=SavedConfiguration(
+                        ref=PlanConfigRef(
+                            entry_id="config-1", content_hash="sha256:" + "2" * 64
+                        )
+                    )
                 ),
+                scientific_binding=_binding(),
             ),
         )
     )
@@ -166,3 +184,11 @@ def test_snapshot_retains_hidden_plan_object_and_hash(tmp_path: Path) -> None:
     assert ExperimentPlanRepository(restored_store).get(saved.ref) == saved
     assert ExperimentPlanRepository(restored_store).list().items == ()
     restored_store.close()
+
+
+def _binding() -> ResolvedScientificBinding:
+    return ResolvedScientificBinding(
+        subject=UnboundSubject(),
+        config_content_hash="sha256:" + "2" * 64,
+        setup_content_hash="sha256:" + "4" * 64,
+    )

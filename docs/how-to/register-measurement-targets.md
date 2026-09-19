@@ -2,11 +2,10 @@
 
 A measurement target records which sample revisions participate and how their
 member-qualified entities connect. You can register and inspect single-sample or
-assembly targets through Python. **Registered targets are not yet selectable in notebook/session or GUI launches**: the current launch, working-point and calibration paths still use
-single-sample contracts. Registration does not claim an assembly is executable or
-its wiring is physically verified. The internal admission binding now validates
-exact single-member target evidence; the public selection and saved-recipe paths
-are still being connected, so continue using the documented sample launch workflow.
+assembly targets through Python. Notebook sessions can select an exact single-member
+target for authored experiments, previews and saved plans. Assembly execution and
+a graphical target picker remain pending. Registration alone does not claim that
+wiring is physically verified.
 
 Use an existing connected `LabClient` and registered sample. A member ID such as
 `A` is local to this target; `A/q0` and `B/q0` remain distinct.
@@ -90,3 +89,26 @@ The catalog is part of the current development format.
 independent writable clones do not gain a supported merge policy. New builds do
 not promise to read or migrate prebaseline target catalogs; see the
 [data policy](../development/data-compatibility.md).
+
+## Use a target in a notebook
+
+```python
+session.use(target=exact)
+prepared = session.prepare(rabi())
+plan = prepared.save_plan("Target check", saved_by="Li")
+run = prepared.run().wait().result()
+assert run.snapshot.scientific_binding == prepared.preview.reviewed.binding
+```
+
+`rabi` is an authored experiment in the connected workspace. A target ID string
+is also accepted by `use(target="chip-a-measurement")`; the client resolves it to
+an exact revision at selection time. Source refresh does not advance that target.
+Select it again explicitly to use a newer revision. A compatible saved working
+point can be supplied alongside `target`.
+
+Preview freezes the target reference, retained content, entity projection, sample
+revision, batch and exact configuration evidence. Submit and saved plans retain
+that binding. Reopening a plan does not substitute the notebook's current target.
+The existing workbench can reopen a target-bearing plan and display its target;
+it does not yet provide a catalog target picker. Multi-stage maintained reference
+workflows that change configurations still require a sample selection.

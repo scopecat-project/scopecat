@@ -21,6 +21,7 @@ from scopecat.automation.models import (
 )
 from scopecat.records.run import RunSnapshot
 from scopecat.records.sample import SampleSelector
+from scopecat.records.scientific_binding import ResolvedScientificBinding
 
 
 class ProcedureRecoveryPlan(BaseModel):
@@ -32,6 +33,7 @@ class ProcedureRecoveryPlan(BaseModel):
     intent: ProcedureIntent
     samples: tuple[SampleSelector, ...]
     recovery: ProcedureRecoverySource
+    scientific_binding: ResolvedScientificBinding | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -92,6 +94,7 @@ class ProcedureRecoveryAdapter[SourceIntent: BaseModel, TargetIntent: BaseModel]
             definition=self.destination.ref,
             intent=self.destination.encode_intent(intent),
             samples=source.samples,
+            scientific_binding=source.scientific_binding,
             recovery=recovery,
         )
 

@@ -1,9 +1,9 @@
+import { reviewedFixture } from "../../test/scientific-fixtures";
 import { expect, it } from "vitest";
 import { matchesSubmissionIntent, type SubmissionRequest } from "./launch-submission";
 
 it("matches an exact context admission without treating the active entry as its source", () => {
   const request: SubmissionRequest = {
-    overrides: [],
     workspace_id: "legacy",
     scan_mode: "cartesian",
     parameter_sweeps: [],
@@ -13,7 +13,7 @@ it("matches an exact context admission without treating the active entry as its 
     request_key: "retry",
     actor: "operator",
     expected_request_hash: `sha256:${"a".repeat(64)}`,
-    config_source: {
+    reviewed: reviewedFixture({
       kind: "parameter_context",
       context: { entry_id: "sample-a-parked", content_hash: `sha256:${"b".repeat(64)}` },
       content_hash: `sha256:${"c".repeat(64)}`,
@@ -28,18 +28,27 @@ it("matches an exact context admission without treating the active entry as its 
         context_id: "parked",
       },
       overrides: [],
-    },
+    }),
   };
-  if (request.config_source?.kind !== "parameter_context") throw new Error("Expected context");
+  if (request.reviewed?.config_source?.kind !== "parameter_context")
+    throw new Error("Expected context");
   const intent = {
     request_hash: request.expected_request_hash,
-    config_source: request.config_source,
+    config_source: request.reviewed?.config_source,
   };
-  expect(matchesSubmissionIntent(intent, request)).toBe(true);
+  expect(matchesSubmissionIntent(intent, request, request.reviewed?.binding)).toBe(true);
+  expect(matchesSubmissionIntent(intent, request, undefined)).toBe(false);
+  expect(
+    matchesSubmissionIntent(intent, request, {
+      ...request.reviewed.binding,
+      setup_content_hash: `sha256:${"f".repeat(64)}`,
+    }),
+  ).toBe(false);
   expect(
     matchesSubmissionIntent(
-      { ...intent, config_source: { ...request.config_source, lab_generation: 5 } },
+      { ...intent, config_source: { ...request.reviewed?.config_source, lab_generation: 5 } },
       request,
+      request.reviewed?.binding,
     ),
   ).toBe(false);
   expect(
@@ -47,11 +56,12 @@ it("matches an exact context admission without treating the active entry as its 
       {
         ...intent,
         config_source: {
-          ...request.config_source,
-          sample: { ...request.config_source.sample, revision: 3 },
+          ...request.reviewed?.config_source,
+          sample: { ...request.reviewed.config_source.sample, revision: 3 },
         },
       },
       request,
+      request.reviewed?.binding,
     ),
   ).toBe(false);
 });

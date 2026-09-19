@@ -1,3 +1,4 @@
+import type { MethodResponse } from "openapi-fetch";
 import { useEffect, useRef, useState } from "react";
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient, apiData } from "../../api-client";
@@ -18,7 +19,10 @@ import { errorMessage, formatDateTime } from "../../lib/presentation";
 
 type Request = components["schemas"]["ComparisonRequest"];
 type Inspection = components["schemas"]["ComparisonInspection"];
-export type ComparisonHandoff = components["schemas"]["ComparisonHandoff"];
+export type ComparisonHandoff = Extract<
+  MethodResponse<typeof apiClient, "post", "/api/v1/run-comparison">,
+  { kind: "handoff" }
+>;
 async function call(request: Partial<Request> & Pick<Request, "action">) {
   const body: Request = {
     workspace_id: "legacy",

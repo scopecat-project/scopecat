@@ -20,17 +20,19 @@ from scopecat.records.author_workspace import (
     SERVICE_AUTHOR_WORKSPACE,
     AuthorWorkspaceId,
 )
-from scopecat.records.config_context import ConfigContextRef
 from scopecat.records.content import Sha256ContentHash
 from scopecat.records.control_edit import ControlEdit
-from scopecat.records.parameter_update import ParameterUpdate
 from scopecat.records.plan_ref import (
     ExperimentPlanRef,
     PlanAnalysisSource,
-    PlanConfigRef,
 )
 from scopecat.records.request_sweep import ParameterSweep
-from scopecat.records.sample import SampleBinding
+from scopecat.records.scientific_binding import ResolvedScientificBinding
+from scopecat.records.scientific_selection import (
+    SavedConfiguration,
+    ScientificSelection,
+    WorkingPointConfiguration,
+)
 
 
 def _freeze_inputs(value: Mapping[str, JsonValue]) -> Mapping[str, JsonValue]:
@@ -72,18 +74,16 @@ class ExperimentPlanDefinition(BaseModel):
     control_edits: PlanControlEdits = Field(default_factory=dict)
     scan_mode: Literal["cartesian", "paired"] = "cartesian"
     parameter_sweeps: tuple[ParameterSweep, ...] = ()
-    configuration: PlanConfigRef | None = None
-    context: ConfigContextRef | None = None
-    overrides: tuple[ParameterUpdate, ...] = Field(default=(), max_length=256)
-    sample: SampleBinding | None = None
+    selection: ScientificSelection
+    scientific_binding: ResolvedScientificBinding
     source: PlanAnalysisSource | None = None
 
     @model_validator(mode="after")
     def exact_configuration(self) -> ExperimentPlanDefinition:
-        if (self.configuration is None) == (self.context is None):
-            raise ValueError("plan requires exactly one saved configuration or context")
-        if self.overrides and self.context is None:
-            raise ValueError("plan overrides require an explicit context")
+        if not isinstance(
+            self.selection.configuration, SavedConfiguration | WorkingPointConfiguration
+        ):
+            raise ValueError("plan requires a saved configuration or working point")
         return self
 
 

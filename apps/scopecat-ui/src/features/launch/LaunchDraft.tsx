@@ -1,3 +1,9 @@
+import {
+  contextSelection,
+  defaultSelection,
+  normalizeSelection,
+  type ScientificSelection,
+} from "./scientific-selection";
 import type { PlanRevision } from "./experiment-plans";
 import { importLaunchRequest, importLaunchHandoff } from "./launch-handoff";
 import type { ComparisonHandoff } from "../analyses/RunComparison";
@@ -27,8 +33,7 @@ export interface LaunchDraft {
   handoff?: ComparisonHandoff;
   plan?: PlanRevision;
   planDirty?: boolean;
-  configuration?: PlanRevision["definition"]["configuration"];
-  sampleBinding?: PlanRevision["definition"]["sample"];
+  selection: ScientificSelection;
   workspaceId?: string;
   codeRevision?: PlanRevision["definition"]["code_revision"];
   definition: string;
@@ -36,8 +41,6 @@ export interface LaunchDraft {
   experiment: string;
   values: Record<string, string>;
   controls: ControlDrafts;
-  sample: string;
-  batch?: string;
   collection?: string;
   actor: string;
   revision: number;
@@ -107,7 +110,7 @@ function initialDraft(entry: LaunchCatalogEntry, revision: number): LaunchDraft 
         ]),
     ),
     controls: initialControlDrafts(entry.controls),
-    sample: "",
+    selection: defaultSelection(),
     actor: "operator",
     revision,
     pending: false,
@@ -164,10 +167,10 @@ function ProjectDraft({
       alive.current = false;
     };
   }, []);
-  const source = draft?.preview?.config_source ?? attempt?.request.config_source;
+  const source = draft?.preview?.reviewed.config_source ?? attempt?.request.reviewed?.config_source;
   const configuration = useQuery({
     queryKey: ["config", "launch-context", projectId, source],
-    enabled: Boolean(projectId && (draft?.preview || attempt?.request.config_source)),
+    enabled: Boolean(projectId && (draft?.preview || attempt?.request.reviewed?.config_source)),
     queryFn: async ({ signal }) =>
       (
         await apiData(
@@ -198,10 +201,9 @@ function ProjectDraft({
       setDraft((current) => {
         if (!reset && current?.definition === definitionKey(entry)) return current;
         const next = initialDraft(entry, (current?.revision ?? 0) + 1);
-        next.sample = selectedContext?.config_source.sample.sample_id ?? current?.sample ?? "";
-        next.batch = selectedContext
-          ? (selectedContext.config_source.sample.batch_id ?? undefined)
-          : current?.batch;
+        next.selection =
+          current?.selection ??
+          (selectedContext ? contextSelection(selectedContext) : defaultSelection());
         next.collection = current?.collection;
         next.actor = current?.actor ?? "operator";
         if (!reset && current?.experiment === entry.id) {
@@ -292,12 +294,18 @@ function ProjectDraft({
                   {
                     ...current,
                     planDirty: Boolean(current.plan),
-                    configuration: undefined,
-                    sampleBinding: undefined,
-                    sample: resolved?.config_source.sample.sample_id ?? current.sample,
-                    batch: resolved
-                      ? (resolved.config_source.sample.batch_id ?? undefined)
-                      : current.batch,
+                    selection: resolved
+                      ? {
+                          ...contextSelection(resolved),
+                          subject:
+                            current.selection.subject.kind === "registered_target"
+                              ? current.selection.subject
+                              : contextSelection(resolved).subject,
+                        }
+                      : {
+                          ...current.selection,
+                          configuration: { kind: "active" },
+                        },
                   },
                   "Parameter context changed. Preview again before starting.",
                 )
@@ -313,7 +321,7 @@ function ProjectDraft({
           attempt?.definition === draft?.definition &&
           configuration.isSuccess &&
           !configuration.isFetching &&
-          matchesActive(attempt?.request.config_source, configuration.data),
+          matchesActive(attempt?.request.reviewed?.config_source, configuration.data),
         refreshConfiguration: () => {
           void queryClient.invalidateQueries({ queryKey: ["config", "launch-context", projectId] });
         },
@@ -323,10 +331,6 @@ function ProjectDraft({
           const next = initialDraft(entry, (current?.revision ?? 0) + 1);
           next.collection = current?.collection;
           const d = plan.definition;
-          if (current?.batch && current.batch !== d.sample?.batch_id)
-            throw new Error(
-              "This plan belongs to another batch. Select its original batch or clear the batch selection before opening it.",
-            );
           const imported = importLaunchRequest(
             next,
             entry,
@@ -340,10 +344,7 @@ function ProjectDraft({
               version: d.version,
               inputs: d.inputs,
               control_edits: d.control_edits,
-              context: d.context,
-              overrides: d.overrides,
-              sample: d.sample?.sample_id,
-              batch_id: d.sample?.batch_id,
+              selection: normalizeSelection(d.selection),
               actor: current?.actor ?? "operator",
             },
             context?.config_source,
@@ -353,9 +354,7 @@ function ProjectDraft({
             ...imported,
             plan,
             planDirty: false,
-            configuration: d.configuration,
-            sampleBinding: d.sample,
-            batch: d.sample?.batch_id ?? undefined,
+            selection: normalizeSelection(d.selection),
             collection: current?.collection,
             codeRevision: d.code_revision,
             workspaceId: d.workspace_id,
@@ -375,7 +374,10 @@ function ProjectDraft({
               handoff,
               selectedContext?.config_source,
             );
-            if (!handoff.request.context) setSelectedContext(undefined);
+            if (
+              normalizeSelection(handoff.request.selection).configuration.kind !== "working_point"
+            )
+              setSelectedContext(undefined);
             setDraft({ ...imported, actor: current?.actor ?? "operator" });
           } catch (error) {
             setDraft({
@@ -403,7 +405,7 @@ export function useLaunchDraft() {
 }
 
 function matchesActive(
-  source: LaunchPreview["config_source"] | null | undefined,
+  source: LaunchPreview["reviewed"]["config_source"] | null | undefined,
   activation: { generation: number; entry_id: string } | null | undefined,
 ) {
   if (source == null) return true;

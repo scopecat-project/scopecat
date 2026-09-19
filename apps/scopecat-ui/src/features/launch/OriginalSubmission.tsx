@@ -1,3 +1,4 @@
+import { subjectLabel } from "./scientific-selection";
 import { useLaunchDraft } from "./LaunchDraft";
 
 export function OriginalSubmission({
@@ -20,7 +21,7 @@ export function OriginalSubmission({
       </h3>
       <p>
         {attempt.request.experiment} · version {attempt.request.version} · {attempt.request.actor} ·
-        sample {attempt.request.sample ?? "none"}
+        {subjectLabel(attempt.request.selection)}
       </p>
       <p>
         Request key: <code>{attempt.request.request_key}</code>

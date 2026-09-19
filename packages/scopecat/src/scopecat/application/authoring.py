@@ -37,7 +37,6 @@ from scopecat.application.launch_config import (
     launch_config_generation,
     launch_preflight_configuration,
     launch_preflight_meaning,
-    launch_sample_selection,
     resolve_launch_config,
 )
 from scopecat.authoring.experiments import Experiment
@@ -310,6 +309,10 @@ class _AuthorProcedure:
         selected = self.validate_intent(intent)
         if selected.code_revision != self.experiment.code_revision:
             raise ValueError("procedure must load its admitted author revision")
+        if context.scientific_binding is None:
+            raise ValueError(
+                "authored procedure requires its reviewed scientific binding"
+            )
         context.run(
             "experiment",
             self.experiment.edit(
@@ -413,7 +416,10 @@ class AuthorExperiments:
             None,
         )
         if selected is None:
-            if request.record_collection is not None or request.batch_id is not None:
+            if (
+                request.record_collection is not None
+                or request.selection.batch.kind != "unscoped"
+            ):
                 raise LaunchRequestRejected(
                     "record collection or batch selection "
                     "requires an authored experiment"
@@ -436,7 +442,9 @@ class AuthorExperiments:
         inputs = cast("dict[str, JsonValue]", validated_inputs.model_dump(mode="json"))
         if request.record_collection is not None:
             lab.record_collection(request.record_collection)
-        config, source = resolve_launch_config(lab, request)
+        resolved = resolve_launch_config(lab, request)
+        config, source = resolved.config, resolved.reviewed.config_source
+        request = request.model_copy(update={"reviewed": resolved.reviewed})
         invocation = selected.edit(
             config=config,
             edits=request.control_edits,
@@ -454,7 +462,7 @@ class AuthorExperiments:
                 request_hash=request.request_hash,
                 code_revision=selected.code_revision,
                 workspace_id=request.workspace_id,
-                config_source=source,
+                reviewed=resolved.reviewed,
                 point_count=preview.initial_point_count,
                 resources=preview.instrument_ids,
                 controls=control_values(selected.controls, invocation, config=config),
@@ -496,7 +504,8 @@ class AuthorExperiments:
                 workspace_id=request.workspace_id,
             ),
             request_key=request.request_key,
-            sample=launch_sample_selection(request, source),
+            samples=resolved.reviewed.binding.sample_selectors(),
+            scientific_binding=resolved.reviewed.binding,
             expected_manual_preview=request.manual_state,
             expected_config_generation=launch_config_generation(source),
             plan_ref=request.plan_ref,

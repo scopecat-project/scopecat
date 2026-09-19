@@ -149,7 +149,9 @@ def test_retained_analysis_plan_copy_revalidate_and_child_origin() -> None:
             ),
         )
         frozen = saved.model_dump_json()
-        assert saved.definition.sample is None  # no synthetic working point required
+        assert (
+            not saved.definition.scientific_binding.samples
+        )  # no synthetic working point required
         assert run_count() == original_count
 
         # A new client proves the plan survives the original author session.
@@ -191,7 +193,7 @@ def test_retained_analysis_plan_copy_revalidate_and_child_origin() -> None:
                 previewed = reopened.prepare_plan(copied.ref, actor="carol")
                 assert previewed.preview.plan_ref == copied.ref
                 assert (
-                    previewed.preview.config_source.content_hash
+                    previewed.preview.reviewed.config_source.content_hash
                     == original_active.entry.content_hash
                 )
                 submitted = previewed.submit(request_key=f"{key}-target")
@@ -278,8 +280,8 @@ def test_plan_freezes_active_sample_and_named_context_without_activation() -> No
         plain = author.prepare("frequency-amplitude", sample=sample.id).save_plan(
             "Exact sample", saved_by="alice"
         )
-        assert plain.definition.sample is not None
-        assert plain.definition.sample.revision == 1
+        assert plain.definition.scientific_binding.samples
+        assert plain.definition.scientific_binding.samples[0].revision == 1
         context_entry = lab.config.save_context(
             entry_id=f"plan-context-{key}",
             base=ConfigContextRef(
@@ -303,12 +305,17 @@ def test_plan_freezes_active_sample_and_named_context_without_activation() -> No
         )
         for saved in (plain, contextual):
             reopened = author.prepare_plan(saved.ref, actor="bob")
-            assert reopened.preview.sample_binding == saved.definition.sample
-            assert reopened.preview.sample_binding is not None
-            assert reopened.preview.sample_binding.revision == 1
-        assert contextual.definition.context == context
-        assert contextual.definition.sample is not None
-        assert contextual.definition.sample.context_id == "bias-a"
+            assert (
+                reopened.preview.reviewed.binding == saved.definition.scientific_binding
+            )
+            assert reopened.preview.reviewed.binding.samples
+            assert reopened.preview.reviewed.binding.samples[0].revision == 1
+        assert contextual.definition.selection.configuration.kind == "working_point"
+        assert contextual.definition.selection.configuration.ref == context
+        assert contextual.definition.scientific_binding.samples
+        assert (
+            contextual.definition.scientific_binding.samples[0].context_id == "bias-a"
+        )
         assert lab.config.active().activation == active.activation
 
 
@@ -354,3 +361,44 @@ def test_authored_plan_freezes_default_structural_input_and_explicit_copy() -> N
             address = author.get_run(output.run_id).address
             assert address is not None and address.collection_id == collection.id
         assert lab.plans.get(saved.ref).definition.inputs == {"polarity": "positive"}
+
+
+def test_multi_stage_plan_retains_scope_while_candidate_changes_configuration() -> None:
+    from scopecat.records.sample import SampleRevisionDraft
+
+    from reference_lab.application import create_application
+    from reference_lab.configuration import EXAMPLE_ROOT
+
+    endpoint = os.environ["SCOPECAT_DAEMON_URL"]
+    with (
+        AuthorProject(endpoint) as author,
+        create_application(EXAMPLE_ROOT).connect(endpoint) as lab,
+    ):
+        sample = lab.samples.create(
+            f"timing-plan-{uuid4().hex}",
+            kind="synthetic",
+            content=SampleRevisionDraft(display_name="Timing chip"),
+        )
+        prepared = author.prepare("channel-timing", sample=sample.id)
+        plan = prepared.save_plan("Timing review", saved_by="alice")
+        reopened = author.prepare_plan(plan.ref)
+        receipt = reopened.submit(request_key=f"timing-plan-{uuid4().hex}")
+        handle = lab.procedures.get(receipt.procedure_id).resume()
+        assert handle.state == "waiting_for_input", handle.snapshot.attention_reason
+        source_output = handle.output("source")
+        candidate_output = handle.output("candidate")
+        assert source_output.kind == "run"
+        assert candidate_output.kind == "run"
+        source = lab.get_run(source_output.run_id)
+        candidate = lab.get_run(candidate_output.run_id)
+        assert source.snapshot.scientific_binding == plan.definition.scientific_binding
+        assert (
+            candidate.snapshot.scientific_binding.subject
+            == source.snapshot.scientific_binding.subject
+        )
+        assert (
+            candidate.snapshot.config_content_hash
+            != source.snapshot.config_content_hash
+        )
+        assert source.request.plan_ref == candidate.request.plan_ref == plan.ref
+        handle.cancel(actor="alice", reason="Plan execution evidence checked")

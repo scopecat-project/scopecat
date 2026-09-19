@@ -1,3 +1,4 @@
+import type { ScientificBinding } from "./scientific-selection";
 import { apiClient, apiData, ApiError } from "../../api-client";
 import type { components } from "../../api-schema";
 
@@ -10,57 +11,17 @@ export interface SubmissionAttempt {
   checking?: boolean;
   procedureId?: string;
 }
-function configBinding(value: unknown): string | undefined {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) return undefined;
-  const source = value as Record<string, unknown>;
-  if (source.kind === "parameter_context") {
-    if (
-      typeof source.content_hash !== "string" ||
-      typeof source.lab_generation !== "number" ||
-      typeof source.context !== "object" ||
-      source.context === null ||
-      typeof source.sample !== "object" ||
-      source.sample === null ||
-      !Array.isArray(source.overrides)
-    )
-      return undefined;
-    return canonical({
-      kind: source.kind,
-      context: source.context,
-      content_hash: source.content_hash,
-      lab_generation: source.lab_generation,
-      sample: source.sample,
-      overrides: source.overrides,
-    });
-  }
-  if (
-    source.kind !== "config_registry" ||
-    typeof source.selector !== "string" ||
-    typeof source.entry_id !== "string" ||
-    typeof source.config_ref !== "string" ||
-    typeof source.content_hash !== "string" ||
-    typeof source.registry_generation !== "number"
-  )
-    return undefined;
-  return JSON.stringify([
-    source.kind,
-    source.selector,
-    source.entry_id,
-    source.config_ref,
-    source.content_hash,
-    source.registry_generation,
-  ]);
-}
 export function matchesSubmissionIntent(
   intent: Record<string, unknown>,
   request: SubmissionRequest,
+  scientificBinding: ScientificBinding | null | undefined,
 ): boolean {
-  const binding = configBinding(request.config_source);
   return (
     typeof intent.request_hash === "string" &&
     intent.request_hash === request.expected_request_hash &&
-    binding !== undefined &&
-    configBinding(intent.config_source) === binding
+    request.reviewed != null &&
+    canonical(intent.config_source) === canonical(request.reviewed.config_source) &&
+    canonical(scientificBinding) === canonical(request.reviewed.binding)
   );
 }
 export const isKnownRejection = (error: unknown) =>
@@ -83,7 +44,7 @@ export async function findSubmittedProcedure(request: SubmissionRequest): Promis
       "Multiple procedures share this request key. Their identity is unconfirmed; inspect retained procedures.",
     );
   const procedure = page.items[0]!;
-  if (!matchesSubmissionIntent(procedure.intent, request))
+  if (!matchesSubmissionIntent(procedure.intent, request, procedure.scientific_binding))
     throw new Error(
       "The retained procedure does not confirm the original launch hash and configuration binding. The submission remains unconfirmed.",
     );

@@ -77,12 +77,12 @@ describe("shared reference-lab acceptance", () => {
                 ? {
                     activation: {
                       entry_id:
-                        fixtures.launch_preview.config_source.kind === "config_registry"
-                          ? fixtures.launch_preview.config_source.entry_id
+                        fixtures.launch_preview.reviewed.config_source.kind === "config_registry"
+                          ? fixtures.launch_preview.reviewed.config_source.entry_id
                           : undefined,
                       generation:
-                        fixtures.launch_preview.config_source.kind === "config_registry"
-                          ? fixtures.launch_preview.config_source.registry_generation
+                        fixtures.launch_preview.reviewed.config_source.kind === "config_registry"
+                          ? fixtures.launch_preview.reviewed.config_source.registry_generation
                           : undefined,
                     },
                     entries: [],
@@ -131,12 +131,12 @@ describe("shared reference-lab acceptance", () => {
           return Response.json({
             activation: {
               entry_id:
-                fixtures.controls_scan.config_source.kind === "config_registry"
-                  ? fixtures.controls_scan.config_source.entry_id
+                fixtures.controls_scan.reviewed.config_source.kind === "config_registry"
+                  ? fixtures.controls_scan.reviewed.config_source.entry_id
                   : undefined,
               generation:
-                fixtures.controls_scan.config_source.kind === "config_registry"
-                  ? fixtures.controls_scan.config_source.registry_generation
+                fixtures.controls_scan.reviewed.config_source.kind === "config_registry"
+                  ? fixtures.controls_scan.reviewed.config_source.registry_generation
                   : undefined,
             },
             entries: [],

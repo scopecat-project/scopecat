@@ -67,7 +67,7 @@ def test_two_retained_runs_fit_candidate_rejection_and_handoff() -> None:
                         "action": "submit",
                         "request_key": key,
                         "expected_request_hash": preview.request_hash,
-                        "config_source": preview.config_source,
+                        "reviewed": preview.reviewed,
                         "manual_state": preview.manual_state,
                         "code_revision": preview.code_revision,
                     }

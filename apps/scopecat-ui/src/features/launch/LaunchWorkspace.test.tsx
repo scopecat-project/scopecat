@@ -1,3 +1,5 @@
+import { defaultSelection } from "./scientific-selection";
+import { reviewedFixture } from "../../test/scientific-fixtures";
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
@@ -99,14 +101,14 @@ const previewResult = {
   experiment_id: "rabi",
   request_hash: "sha256:" + "a".repeat(64),
   point_count: 2,
-  config_source: {
+  reviewed: reviewedFixture({
     kind: "config_registry",
     selector: "active",
     entry_id: "baseline",
     config_ref: "baseline",
     content_hash: "sha256:" + "b".repeat(64),
     registry_generation: 1,
-  },
+  }),
   summary: "Configured pulse",
   resolved_inputs: {},
   controls: [],
@@ -157,9 +159,8 @@ it("previews a typed request and clears results after edits", async () => {
     request_key: "",
     experiment: "rabi",
     version: "1",
-    sample: null,
+    selection: defaultSelection(),
     inputs: { qubit: "Q12", amplitude_max: 0.4 },
-    overrides: [],
     control_edits: {},
   });
   fireEvent.change(screen.getByLabelText("Amplitude"), { target: { value: "0.3" } });

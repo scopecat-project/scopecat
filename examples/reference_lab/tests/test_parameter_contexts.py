@@ -228,6 +228,11 @@ def test_context_unknown_values_block_only_the_experiment_that_needs_them() -> N
 def test_context_launch_replay_preserves_reviewed_generation() -> None:
     from scopecat.application.launch import LaunchPreview, LaunchSubmission
     from scopecat.records.launch_request import LaunchRequest
+    from scopecat.records.scientific_selection import (
+        SampleSubjectChoice,
+        ScientificSelection,
+        WorkingPointConfiguration,
+    )
 
     application = create_application(EXAMPLE_ROOT)
     assert application.launch_provider is not None
@@ -254,7 +259,13 @@ def test_context_launch_replay_preserves_reviewed_generation() -> None:
             "context-replay", SampleRevisionDraft(display_name="Replay r2")
         )
         request = LaunchRequest(
-            action="preview", experiment="frequency-amplitude", version="1", context=ref
+            action="preview",
+            experiment="frequency-amplitude",
+            version="1",
+            selection=ScientificSelection(
+                subject=SampleSubjectChoice(sample_id="context-replay", revision=1),
+                configuration=WorkingPointConfiguration(ref=ref),
+            ),
         )
         preview = application.launch_provider(lab, request)
         assert isinstance(preview, LaunchPreview)
@@ -268,7 +279,7 @@ def test_context_launch_replay_preserves_reviewed_generation() -> None:
                 **request.model_dump(),
                 "action": "submit",
                 "request_key": "context-replay",
-                "config_source": preview.config_source,
+                "reviewed": preview.reviewed,
                 "manual_state": preview.manual_state,
                 "expected_request_hash": preview.request_hash,
             }

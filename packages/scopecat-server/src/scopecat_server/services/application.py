@@ -79,12 +79,16 @@ class DaemonApplication:
             self.project_root, project_store
         )
         self.author_revisions = self.author_workspaces.get("legacy")
+        self.targets = TargetCatalogStore(
+            project_store.sqlite, catalog_id=project_store.identity()
+        )
         self.plans = ExperimentPlanService(
             ExperimentPlanRepository(project_store),
             config=config,
             samples=samples,
             runs=runs,
             authors=self.author_workspaces,
+            targets=self.targets,
         )
         self.config = config
         self.manual_previews = ManualPreviewService(project_store.sqlite, config, runs)
@@ -103,9 +107,6 @@ class DaemonApplication:
         self.research = ResearchProjectStore(project_store.sqlite)
         self.record_collections = RecordCollectionStore(project_store.sqlite)
         self.experimental_batches = ExperimentalBatchStore(project_store.sqlite)
-        self.targets = TargetCatalogStore(
-            project_store.sqlite, catalog_id=project_store.identity()
-        )
         self._lease_supervisor = lease_supervisor
 
     def start(self) -> None:
