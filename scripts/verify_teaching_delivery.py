@@ -154,6 +154,21 @@ def verify(bundle: Path, destination: Path) -> None:
     assert not (current.parent / old_generation).exists()
     assert all(item.status == "succeeded" for item in manager.state().operations)
     manager.shutdown()
+    installed_python = receipts[0].parent / (
+        "Scripts/python.exe" if os.name == "nt" else "bin/python"
+    )
+    subprocess.run(  # noqa: S603 - retained delivery interpreter and fixed check
+        [
+            str(installed_python),
+            str(Path(__file__).with_name("verify_installed_application.py")),
+            str(home),
+            str(destination / "application"),
+            str(Path(receipt["bundle"]) / "gui"),
+        ],
+        cwd=destination,
+        env=env,
+        check=True,
+    )
     (destination / "acceptance.json").write_text(
         json.dumps(
             {
@@ -168,6 +183,7 @@ def verify(bundle: Path, destination: Path) -> None:
                 "reset": "passed",
                 "single_host": "passed",
                 "managed_cleanup": "passed",
+                "installed_application": "passed",
             },
             ensure_ascii=False,
             indent=2,

@@ -105,3 +105,38 @@ def test_http_boundary_and_managed_inventory(tmp_path: Path, monkeypatch) -> Non
     with pytest.raises(ValueError, match="未找到"):
         owned_workspace(tmp_path, key, "b" * 32)
     assert workspaces(tmp_path, key)[0].current
+
+
+def test_app_only_host_admits_environment_recheck(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(app_host, "teaching_key", lambda _: None)
+    record = HostRecord(
+        instance="test",
+        pid=1,
+        process_time=1,
+        url="http://127.0.0.1:8912",
+        token=secrets.token_urlsafe(32),
+        runtime="local",
+        python=sys.executable,
+    )
+    received = []
+
+    def launch(_home, _source, command):
+        received.append(command)
+        return Operation(command=command, status="starting")
+
+    monkeypatch.setattr(app_host, "launch", launch)
+    with TestClient(
+        app_host.application(tmp_path, None, record, lambda: None), base_url=record.url
+    ) as client:
+        client.headers["Authorization"] = f"Bearer {record.token}"
+        command = Command(action="service_recheck", service="a" * 32)
+        assert (
+            client.post("/api/operations", json=command.model_dump()).status_code == 200
+        )
+        assert received == [command]
+        assert (
+            client.post(
+                "/api/operations", json={"action": "open", "topic": "parameters"}
+            ).status_code
+            == 409
+        )
