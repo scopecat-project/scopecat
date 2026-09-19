@@ -123,7 +123,12 @@ def test_installed_launcher_routes_workbench_and_explicit_teaching(
     monkeypatch.setattr(bundle, "file_hash", lambda _: "a" * 64)
 
     def install(_bundle, environment):
+        import json
+
         environment.mkdir()
+        (environment / bundle.RECEIPT).write_text(
+            json.dumps({"bundle": str(_bundle), "manifest_sha256": "a" * 64})
+        )
         return environment
 
     monkeypatch.setattr(bundle, "install_bundle", install)
