@@ -581,6 +581,8 @@ def _matches_cohort_base(
         and source.context == base.context_ref
         and source.content_hash == base.content_hash
         and isinstance(base.scope, WorkingPointCalibrationScope)
+        and source.sample == base.scope.sample
+        and not source.overrides
         and snapshot.samples == (base.scope.sample,)
     )
 
