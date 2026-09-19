@@ -30,23 +30,23 @@ from reference_lab.workflows.drag_beta_verification import (
 )
 
 
-def test_drag_beta_freshness_ignores_registry_only_provenance_changes() -> None:
+def test_drag_beta_freshness_ignores_workspace_head_provenance_changes() -> None:
     config = bootstrap_config()
     first = _planning_context(
         config,
-        entry_id="active-entry-1",
-        generation=1,
+        entry_id="working-point-entry-1",
+        revision=1,
     )
-    reactivated = _planning_context(
+    advanced = _planning_context(
         config,
-        entry_id="active-entry-2",
-        generation=2,
+        entry_id="working-point-entry-2",
+        revision=2,
     )
     target = first.target(DRAG_BETA_CALIBRATION_TARGETS[0])
 
     first_observation = drag_beta_freshness_calibration.observe(first, target)
-    reactivated_observation = drag_beta_freshness_calibration.observe(
-        reactivated,
+    advanced_observation = drag_beta_freshness_calibration.observe(
+        advanced,
         target,
     )
 
@@ -55,24 +55,24 @@ def test_drag_beta_freshness_ignores_registry_only_provenance_changes() -> None:
         config,
         "q0",
     )
-    assert reactivated_observation.inputs == first_observation.inputs
+    assert advanced_observation.inputs == first_observation.inputs
     assert drag_beta_freshness_calibration.input_fingerprint(
-        reactivated_observation.inputs
+        advanced_observation.inputs
     ) == drag_beta_freshness_calibration.input_fingerprint(first_observation.inputs)
 
     intent = drag_beta_freshness_calibration.build_intent(
-        reactivated,
+        advanced,
         target,
-        reactivated_observation.inputs,
+        advanced_observation.inputs,
         (),
     )
 
     assert intent.qubit == "q0"
     assert intent.initial_config == config
-    assert intent.initial_config_source.context.entry_id == "active-entry-2"
-    assert intent.initial_config_source.context == reactivated.config_source.context_ref
-    assert isinstance(reactivated.config_source.scope, WorkingPointCalibrationScope)
-    assert intent.initial_config_source.sample == reactivated.config_source.scope.sample
+    assert intent.initial_config_source.context.entry_id == "working-point-entry-2"
+    assert intent.initial_config_source.context == advanced.config_source.context_ref
+    assert isinstance(advanced.config_source.scope, WorkingPointCalibrationScope)
+    assert intent.initial_config_source.sample == advanced.config_source.scope.sample
 
 
 def test_drag_beta_freshness_ignores_profile_and_parameter_snapshot_ids() -> None:
@@ -236,8 +236,8 @@ def test_drag_beta_candidate_projection_matches_merged_sibling_results() -> None
 def test_drag_beta_freshness_has_two_bounded_independent_targets() -> None:
     context = _planning_context(
         bootstrap_config(),
-        entry_id="active-entry",
-        generation=1,
+        entry_id="working-point-entry",
+        revision=1,
     )
 
     assert drag_beta_freshness_calibration.select_targets(context) == (
@@ -286,14 +286,14 @@ def _planning_context(
     config: ConfigProfileSnapshot,
     *,
     entry_id: str,
-    generation: int,
+    revision: int,
 ) -> CalibrationPlanningContext:
     content_hash = config_content_hash(config)
     return CalibrationPlanningContext(
         config=config,
         config_source=CalibrationConfigSourceRef(
             entry_id=entry_id,
-            config_ref=f"active@{generation}",
+            config_ref=f"working-point@{revision}",
             content_hash=content_hash,
             scope=WorkingPointCalibrationScope(
                 workspace_id="reference-workspace",

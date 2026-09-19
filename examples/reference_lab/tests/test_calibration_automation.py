@@ -145,21 +145,21 @@ def test_resident_automatic_publication_survives_restart_and_q0_only(
             assert published.calibrations.created_cohorts == 0
             assert published.procedures.dispatched == 0
 
-            active_published = lab.config.latest_context(working_point)
-            assert active_published.entry.id != saved.entry.id
+            published_head = lab.config.latest_context(working_point)
+            assert published_head.entry.id != saved.entry.id
             assert lab.config.active() == active_before
             finalized = lab.calibrations.publication_finalization(cohort.cohort_id)
             assert finalized.state == "published"
             assert finalized.publication is not None
             assert isinstance(
-                active_published.entry.source,
+                published_head.entry.source,
                 ContextConfigRegistrySource,
             )
             assert isinstance(
-                active_published.entry.source.publication,
+                published_head.entry.source.publication,
                 CalibrationCohortMergeRegistrySource,
             )
-            assert len(active_published.entry.source.publication.contributions) == 2
+            assert len(published_head.entry.source.publication.contributions) == 2
             calibration_keys = tuple(
                 member.spec.calibration_key for member in member_page.items
             )
@@ -183,7 +183,7 @@ def test_resident_automatic_publication_survives_restart_and_q0_only(
             assert lab.config.active() == active_before
 
             q0_inputs = drag_beta_semantic_freshness_inputs(
-                active_published.config,
+                published_head.config,
                 "q0",
             )
             workspace = lab.config.workspace(context="calibration-parked", latest=True)
@@ -227,8 +227,8 @@ def test_resident_automatic_publication_survives_restart_and_q0_only(
             assert q0_published.calibrations.admitted_members == 0
             assert q0_published.calibrations.created_cohorts == 0
             assert q0_published.procedures.dispatched == 0
-            active_q0_published = lab.config.latest_context(working_point)
-            assert active_q0_published.entry.id != external_q0.name
+            q0_published_head = lab.config.latest_context(working_point)
+            assert q0_published_head.entry.id != external_q0.name
             assert lab.config.active() == active_before
             q0_finalized = lab.calibrations.publication_finalization(
                 q0_cohort.cohort_id
@@ -236,14 +236,14 @@ def test_resident_automatic_publication_survives_restart_and_q0_only(
             assert q0_finalized.state == "published"
             assert q0_finalized.publication is not None
             assert isinstance(
-                active_q0_published.entry.source,
+                q0_published_head.entry.source,
                 ContextConfigRegistrySource,
             )
             assert isinstance(
-                active_q0_published.entry.source.publication,
+                q0_published_head.entry.source.publication,
                 CalibrationCohortMergeRegistrySource,
             )
-            assert len(active_q0_published.entry.source.publication.contributions) == 1
+            assert len(q0_published_head.entry.source.publication.contributions) == 1
             q0_statuses = {
                 status.calibration_key: status
                 for status in lab.calibrations.status(
