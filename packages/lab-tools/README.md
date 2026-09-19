@@ -8,6 +8,10 @@ experimental services. Register an existing project from its Python environment
 with `scopecat app PATH`; use `--python` for an explicit interpreter and
 `--static-dir` for a source-built GUI. Registration does not start devices.
 
+After updating an existing environment, stop the service and use **Recheck environment**
+in the manager to validate its registered paths without rebuilding a CLI command.
+See [application maintenance](../../docs/how-to/maintain-application.md).
+
 Teaching is under **Help**. `scopecat teach` opens that section directly;
 `python lab.py teach compute --verify` keeps tutorial automation explicit. Maintainers use the repository's `teach.cmd` or
 `teach.py` entry to build, verify and optionally install a fixed delivery.

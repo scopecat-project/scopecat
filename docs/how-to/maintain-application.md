@@ -1,0 +1,93 @@
+# Maintain a local application
+
+Use the application manager to inspect and maintain registered experiment services.
+Reopen the original installed `lab.cmd` on Windows or `python lab.py` from its
+installation directory. A source installation uses `scopecat app` with the same
+`--home` and `--source` options used when it was registered.
+
+The workbench's **Help and maintenance** page links to this guide. Returning to the
+manager does not change a notebook's scientific selection or start a measurement.
+
+## Identify the environment before changing it
+
+Expand **Project and environment (项目与环境)** on the service card. It shows the
+registered project directory, Python interpreter, GUI directory, environment prefix
+and package versions. These values come from the last successful registration or
+recheck; they are not a live package inventory. Keep the original installation
+launcher and these locations available to the next maintainer.
+
+| Location | What it identifies |
+|---|---|
+| Project directory | The existing experiment service and its deployment configuration |
+| Python interpreter | The environment used to execute that service; preserve its virtual-environment path |
+| GUI directory | The workbench assets selected for the service |
+| Manager home | The manager's service catalog and operation history, selected by its original launcher or `--home` |
+
+Scientific data may live outside the project directory. Check the workbench Help
+page and project configuration, and use the [backup guide](backup-and-restore.md)
+before maintenance that affects retained data.
+
+## Recheck after updating the existing environment
+
+1. Finish measurements and close notebook connections. In the manager choose
+   **Stop service (停止服务)** and wait for **Stopped (未启动)**.
+2. Update the environment using the installation's tested package or delivery
+   procedure. The manager does not install packages. Keep the same project,
+   interpreter and GUI paths for this recheck workflow.
+3. Choose **Recheck environment (重新检查环境)**. It probes the registered
+   interpreter, project and GUI, then records the validated environment identity.
+   The service number, name, directories and scientific records are retained.
+4. Wait for the operation to succeed. Inspect **Project and environment** and the
+   operation log. The service remains stopped.
+5. Choose **Start / check workbench (启动 / 检查工作台)** when ready, then open the
+   separate workbench tab. Starting may initialize configured instruments; it does
+   not replay a measurement. Preview new work before submitting it.
+
+Rechecking also works when nothing changed. It never starts the service, selects
+an executable setup, changes a working point or grants calibration acceptance.
+The version check does not attest every dependency or editable source file.
+
+## If the paths changed
+
+A new interpreter or GUI directory requires local registration with those explicit
+paths. Stop the old service first. Run the command in the manager's installed
+environment; the browser does not accept arbitrary filesystem paths.
+
+For example, in PowerShell:
+
+```powershell
+scopecat app "D:\Lab\experiment" --python "D:\Lab\runtime\Scripts\python.exe" --static-dir "D:\Lab\gui\dist" --home "D:\Scopecat-Lab" --name "Experiment service"
+```
+
+Replace each example location with the recorded local location; these are not
+universal Windows defaults. `--home` must select the original manager catalog.
+Use the existing display name with `--name`. Omit `--static-dir` only when the
+target environment provides the packaged GUI you intend to use. For a source
+manager, also retain its original `--source` option.
+
+Registering the same canonical project in the same manager home retains its
+service ID. Moving a project or choosing another manager home is a distinct
+registration, not an automatic installation transfer. Fixed tutorial deliveries
+retain their own launchers and environments; see
+[teaching sandboxes](../tutorials/teaching-sandboxes.md) for those disposable copies.
+
+## Resolve a failed check
+
+Open the failed operation's log before changing anything else. A failed recheck
+keeps the previous registration and files, and does not fall back to another
+interpreter.
+
+- **Service is running or its state is uncertain:** finish active work and resolve
+  the service lifecycle first. Rechecking only proceeds from a confirmed stopped
+  state; it does not kill or guess ownership of an unknown process.
+- **An update happened before stopping:** restore the original environment or use
+  its actual runtime to explicitly stop the service with `scopecat stop PROJECT`.
+  Then recheck. Do not remove the registration as a way to stop a process.
+- **Interpreter, project or GUI is missing:** restore the registered files, or use
+  local registration for the intended replacement paths once the service is stopped.
+- **Another management operation is active:** wait for its result and inspect its
+  log. Interrupted operations retain their evidence and are not replayed on restart.
+
+Removing a stopped registration only removes its manager entry. It does not delete
+the project, scientific records or operation history. No supported persistent-data
+upgrade baseline is implied by a successful environment check.

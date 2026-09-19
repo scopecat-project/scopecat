@@ -2,10 +2,12 @@
 
 import hashlib
 import secrets
+import sqlite3
 import subprocess
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import closing
 from pathlib import Path
 
 import httpx2
@@ -220,6 +222,32 @@ def test_registered_project_reuses_environment_and_real_workbench(
             for p in root.rglob("*")
             if p.is_file()
         }
+        # Model an in-place package update without installing into the test runner.
+        # The recheck still probes the real registered interpreter and GUI through
+        # its durable worker; only the retained pre-update version is a fixture.
+        previous = service.model_copy(
+            update={"environment": {**service.environment, "scopecat": "before-update"}}
+        )
+        with closing(sqlite3.connect(store.database)) as db, db:
+            db.execute(
+                "UPDATE services SET payload=? WHERE id=?",
+                (previous.model_dump_json(), service.id),
+            )
+        recheck = Command(action="service_recheck", service=service.id)
+        checked = finish(recheck)
+        assert store.get(service.id) == service
+        assert inspect_daemon(project).state == "stopped"
+        assert launch(home, None, recheck) == checked
+        log = (Operations(home).directory / f"{recheck.id}.log").read_text(
+            encoding="utf-8"
+        )
+        assert "before-update" in log
+        assert service.environment["scopecat"] in log
+        assert {
+            p.relative_to(root): hashlib.sha256(p.read_bytes()).hexdigest()
+            for p in root.rglob("*")
+            if p.is_file()
+        } == retained
         removal = Command(action="service_remove", service=service.id)
         removed = finish(removal)
         assert "没有删除" in removed.detail

@@ -2,6 +2,7 @@
 
 import runpy
 import sys
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -52,7 +53,9 @@ def test_registration_preserves_interpreter_and_rejects_live_rebinding(
     assert store.get(first.id) == first
 
 
-@pytest.mark.parametrize("action", ["service_start", "service_stop", "service_remove"])
+@pytest.mark.parametrize(
+    "action", ["service_start", "service_stop", "service_remove", "service_recheck"]
+)
 def test_http_command_only_accepts_registered_identity(tmp_path, action):
     with pytest.raises(ValidationError):
         Command(action=action, service="a" * 32, path="/arbitrary")
@@ -229,3 +232,130 @@ def test_runtime_failure_keeps_readable_reason(tmp_path, monkeypatch):
     monkeypatch.setattr(services.subprocess, "run", failure)
     with pytest.raises(ValueError, match="原服务保持运行"):
         services._run("registered-python", {"action": "stop"})
+
+
+@pytest.fixture
+def stopped_service(tmp_path, monkeypatch):
+    root = tmp_path / "project"
+    root.mkdir()
+    python = tmp_path / "python"
+    python.touch()
+    result = {
+        "root": str(root),
+        "static_dir": str(tmp_path / "gui"),
+        "environment": {"prefix": "same-env", "scopecat": "before"},
+    }
+    monkeypatch.setattr(services, "_run", lambda *_: result)
+    monkeypatch.setattr(services, "open_project", lambda _: None)
+    monkeypatch.setattr(
+        services, "inspect_daemon", lambda _: SimpleNamespace(state="stopped")
+    )
+    home = tmp_path / "home"
+    store = services.Services(home)
+    return home, store, store.register(root, python, name="实验台"), result
+
+
+def test_recheck_updates_only_identity_and_ignores_own_operation(
+    stopped_service, monkeypatch, capsys
+):
+    from lab_tools.host_operations import Operations, execute
+
+    home, store, registered, result = stopped_service
+    scientific_record = Path(registered.root) / "record.bin"
+    scientific_record.write_bytes(b"retained scientific evidence")
+    result["environment"] = {"prefix": "same-env", "scopecat": "after"}
+    received = []
+
+    def probe(python, request):
+        received.append((python, request))
+        return result
+
+    monkeypatch.setattr(services, "_run", probe)
+    command = Command(action="service_recheck", service=registered.id)
+    Operations(home).begin(command)
+    assert execute(home, None, command) is None
+    updated = store.get(registered.id)
+    assert updated.environment == result["environment"]
+    assert (
+        updated.model_copy(update={"environment": registered.environment}) == registered
+    )
+    assert received == [
+        (
+            registered.python,
+            {
+                "action": "probe",
+                "root": registered.root,
+                "static_dir": registered.static_dir,
+            },
+        )
+    ]
+    assert scientific_record.read_bytes() == b"retained scientific evidence"
+    log = capsys.readouterr().out
+    assert "before" in log and "after" in log
+
+
+def test_recheck_failed_probe_retains_registration(stopped_service, monkeypatch):
+    _, store, registered, _ = stopped_service
+
+    def fail(*_):
+        raise ValueError("GUI missing")
+
+    monkeypatch.setattr(services, "_run", fail)
+    with pytest.raises(ValueError, match="GUI missing"):
+        store.recheck(registered.id, operation_id="a" * 32)
+    assert store.get(registered.id) == registered
+
+
+@pytest.mark.parametrize("state", ["running", "degraded", "stale", "unavailable"])
+def test_recheck_requires_stopped(stopped_service, monkeypatch, state):
+    _, store, registered, _ = stopped_service
+    monkeypatch.setattr(
+        services, "inspect_daemon", lambda _: SimpleNamespace(state=state)
+    )
+    monkeypatch.setattr(services, "_run", lambda *_: pytest.fail("must not probe"))
+    with pytest.raises(ValueError, match="已停止"):
+        store.recheck(registered.id, operation_id="a" * 32)
+    assert store.get(registered.id) == registered
+
+
+def test_recheck_rejects_start_during_probe(stopped_service, monkeypatch):
+    _, store, registered, result = stopped_service
+    states = iter(["stopped", "running"])
+    monkeypatch.setattr(
+        services, "inspect_daemon", lambda _: SimpleNamespace(state=next(states))
+    )
+    result["environment"] = {"scopecat": "after"}
+    with pytest.raises(ValueError, match="已停止"):
+        store.recheck(registered.id, operation_id="a" * 32)
+    assert store.get(registered.id) == registered
+
+
+def test_recheck_serialization_and_operation_replay(stopped_service, monkeypatch):
+    from lab_tools import host_operations
+
+    home, store, registered, _ = stopped_service
+    command = Command(action="service_recheck", service=registered.id)
+    ledger = host_operations.Operations(home)
+    operation, _ = ledger.begin(command)
+    monkeypatch.setattr(
+        host_operations.subprocess,
+        "Popen",
+        lambda *_a, **_k: pytest.fail("replay spawned"),
+    )
+    assert launch(home, None, command) == operation
+    with pytest.raises(ValueError, match="另一项"):
+        launch(home, None, Command(action="service_start", service=registered.id))
+    with pytest.raises(ValueError, match="管理操作"):
+        store.recheck(registered.id, operation_id="b" * 32)
+    assert store.get(registered.id) == registered
+    operation.status = "succeeded"
+    ledger.save(operation)
+    assert launch(home, None, command) == operation
+
+
+def test_recheck_rejects_changed_probe_paths(stopped_service):
+    _, store, registered, result = stopped_service
+    result["root"] = "different-project"
+    with pytest.raises(ValueError, match="路径已改变"):
+        store.recheck(registered.id, operation_id="a" * 32)
+    assert store.get(registered.id) == registered
