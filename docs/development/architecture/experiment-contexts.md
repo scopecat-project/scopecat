@@ -45,7 +45,7 @@ sample features; they do not yet establish the complete target/setup model below
 | Applicability | Declared batch guards; shared target/batch/setup content comparison used by parameter rebase | Use resolved applicability in preparation, admission, working-point publication and calibration |
 | Working points | Exact single-sample scope, value provenance, explicit estimate copies and verified candidate publication with per-head conflicts | Bounded automated cohorts share working-point ownership; qualified cross-object dependencies remain future work |
 | Apparatus history | Descriptive object/revision and observation slice (#644); separate from executable target selection | Useful history navigation and explicit evidence links; no live wiring or calibration-validity claim |
-| Execution setup | Complete retained config; setup-content fences for fixed selections, separate from active-default freshness | Independent maintained setup revisions and one authoritative resolver; descriptive documentation is not required to be a complete wiring model |
+| Execution setup | Independent maintained setup revisions/selection; complete retained run config and setup-content fences | Concurrent incompatible deployments and qualified cross-object applicability |
 | Session and addressing | Per-page/kernel choices, frozen target plans, collection numbering and same-environment source-qualified workspace execution | Graphical workspace selection, heterogeneous environments and setup selection |
 | Application | Registered services open the experiment workbench; Help entry and local lifecycle controls | Further Help integration and server-enforced practice boundaries |
 

@@ -357,9 +357,10 @@ def _bootstrap_config_registry(
     if config_service.get_config_registry().entries:
         try:
             setup_service.current()
+            config_service.get_active_config()
         except BackendNotFound as error:
             raise BackendConflict(
-                "existing parameter registry has no setup authority"
+                "existing registry has incomplete setup/default initialization"
             ) from error
         return
     if setup_service.list():

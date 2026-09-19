@@ -7,7 +7,9 @@ ordinary dataclass and dictionary views described below.
 
 A project's `src/<package>/configuration.py` is ordinary version-controlled
 Python. The daemon owns the accepted configuration history; it does not watch or
-rewrite that source file.
+rewrite that source file. Executable setup has its own saved revisions and current
+selection; see [maintain executable setup](maintain-executable-setup.md). Parameter
+defaults and working points must match that authority before execution.
 
 ## Edit a saved working point in Python
 
