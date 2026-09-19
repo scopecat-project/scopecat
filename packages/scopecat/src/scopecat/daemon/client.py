@@ -177,6 +177,8 @@ from scopecat.daemon.wire import (
     ConfigEntryActivationCommand,
     ConfigPublishCommand,
     ConfigPublishReceipt,
+    ConfigSetupRebindCommand,
+    ConfigSetupRebindPreviewCommand,
     ExecutorHeartbeat,
     ExecutorLease,
     ExecutorStartRequest,
@@ -219,6 +221,9 @@ from scopecat.daemon.wire import (
     SampleCreateCommand,
     SampleMutationReceipt,
     SampleReviseCommand,
+    SetupActivateCommand,
+    SetupRevisionList,
+    SetupSaveCommand,
     TerminalRunCommitCommand,
 )
 from scopecat.kernel.content_identity import (
@@ -295,6 +300,7 @@ from scopecat.records.research_project import (
 from scopecat.records.run import RunSnapshot
 from scopecat.records.sample import SampleArtifactRef, SampleRevision
 from scopecat.records.sample_artifact import SampleArtifactPage
+from scopecat.records.setup import ActiveSetupView, SetupRevision
 from scopecat.records.target_catalog import (
     TargetCatalogPage,
     TargetCreateCommand,
@@ -1001,6 +1007,42 @@ class DaemonClient:
             self._procedure_path(command.procedure_run_id, "close"),
             command,
             ProcedureCloseReceipt,
+        )
+
+    def active_setup(self) -> ActiveSetupView:
+        return self._get_model(f"{_API_PREFIX}/setup/active", ActiveSetupView)
+
+    def setup_revision(self, revision_id: str) -> SetupRevision:
+        return self._get_model(
+            f"{_API_PREFIX}/setup/revisions/{quote(revision_id, safe='')}",
+            SetupRevision,
+        )
+
+    def setup_revisions(self) -> SetupRevisionList:
+        return self._get_model(f"{_API_PREFIX}/setup/revisions", SetupRevisionList)
+
+    def save_setup(self, command: SetupSaveCommand) -> SetupRevision:
+        return self._post_idempotent_model(
+            f"{_API_PREFIX}/setup/revisions", command, SetupRevision
+        )
+
+    def activate_setup(self, command: SetupActivateCommand) -> ActiveSetupView:
+        return self._post_idempotent_model(
+            f"{_API_PREFIX}/setup/activation-operations", command, ActiveSetupView
+        )
+
+    def rebind_setup(self, command: ConfigSetupRebindCommand) -> ConfigEntryView:
+        return self._post_idempotent_model(
+            f"{_API_PREFIX}/config-registry/setup-rebindings", command, ConfigEntryView
+        )
+
+    def preview_setup_rebind(
+        self, command: ConfigSetupRebindPreviewCommand
+    ) -> ConfigProfileSnapshot:
+        return self._post_model(
+            f"{_API_PREFIX}/config-registry/setup-rebindings/preview",
+            command,
+            ConfigProfileSnapshot,
         )
 
     def config_registry(

@@ -41,6 +41,7 @@ from .procedure_schedules import ProcedureScheduleService
 from .reviews import ReviewService
 from .runs import RunService
 from .samples import SampleService
+from .setup import SetupService
 
 if TYPE_CHECKING:
     from scopecat_server.instruments.service import InstrumentService
@@ -57,6 +58,7 @@ class DaemonApplication:
         deployment_id: str,
         project_store: SQLiteProjectStore,
         config: ConfigService,
+        setup: SetupService,
         analyses: AnalysisService,
         runs: RunService,
         admission: AdmissionService,
@@ -97,6 +99,7 @@ class DaemonApplication:
             targets=self.targets,
         )
         self.config = config
+        self.setup = setup
         self.manual_previews = ManualPreviewService(project_store.sqlite, config, runs)
         self.analyses = analyses
         self.runs = runs

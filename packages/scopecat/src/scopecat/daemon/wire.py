@@ -107,7 +107,11 @@ from scopecat.records.sample import (
     SampleSelector,
 )
 from scopecat.records.scientific_binding import ResolvedScientificBinding
-from scopecat.records.setup import ExecutableSetupSnapshot, SetupRevisionRef
+from scopecat.records.setup import (
+    ExecutableSetupSnapshot,
+    SetupRevision,
+    SetupRevisionRef,
+)
 from scopecat.sdk.instruments.contracts import InstrumentDescription
 from scopecat.sdk.instruments.execution import RunHardwareBatch
 
@@ -445,6 +449,23 @@ class CalibrationPublicationReceipt(_WireModel):
                     "merge success does not match its working-point receipt"
                 )
         return self
+
+
+class ConfigSetupRebindCommand(_WireModel):
+    base: ConfigContextRef
+    setup: SetupRevisionRef
+    entry_id: NonEmptyText
+    actor: NonEmptyText
+    note: str = ""
+
+
+class ConfigSetupRebindPreviewCommand(_WireModel):
+    base: ConfigContextRef
+    setup: SetupRevisionRef
+
+
+class SetupRevisionList(_WireModel):
+    items: tuple[SetupRevision, ...]
 
 
 class SetupSaveCommand(_WireModel):
@@ -1428,6 +1449,8 @@ __all__ = [
     "ConfigPublishReceipt",
     "ConfigPublishSource",
     "ConfigRevisionSource",
+    "ConfigSetupRebindCommand",
+    "ConfigSetupRebindPreviewCommand",
     "DirectConfigRevisionSource",
     "ExecutorHeartbeat",
     "ExecutorLease",
@@ -1477,6 +1500,7 @@ __all__ = [
     "SampleMutationReceipt",
     "SampleReviseCommand",
     "SetupActivateCommand",
+    "SetupRevisionList",
     "SetupSaveCommand",
     "TerminalModelWrite",
     "TerminalRunCommitCommand",
