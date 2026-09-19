@@ -28,10 +28,14 @@ from scopecat.automation.models import (
 )
 from scopecat.config.registry.records import ConfigCompositionPolicyRef
 from scopecat.kernel.content_identity import stable_content_hash
-from scopecat.records.config import ConfigContentHash
+from scopecat.records.calibration_scope import (
+    CalibrationConfigSourceRef,
+    CalibrationOwner,
+    CatalogCalibrationOwner,
+    WorkingPointCalibrationScope,
+)
 from scopecat.records.content import Sha256ContentHash
 from scopecat.records.experimental_batch import ExperimentalBatchId, absent_batch
-from scopecat.records.run import ConfigRegistryRunConfigSource
 from scopecat.records.sample import SampleId, SampleSelector
 
 type _NonEmptyText = Annotated[str, Field(min_length=1)]
@@ -49,9 +53,9 @@ type CalibrationCohortFinalizationState = Literal[
     "published",
 ]
 
-_CALIBRATION_KEY_CODEC = "scopecat.calibration-key.v1"
+_CALIBRATION_KEY_CODEC = "scopecat.calibration-key.v2"
 _CALIBRATION_FRESHNESS_CODEC = "scopecat.calibration-freshness.v2"
-_CALIBRATION_COHORT_SPEC_CODEC = "scopecat.calibration-cohort-spec.v4"
+_CALIBRATION_COHORT_SPEC_CODEC = "scopecat.calibration-cohort-spec.v5"
 _CALIBRATION_COHORT_MEMBER_REQUEST_CODEC = (
     "scopecat.calibration-cohort-member-request.v1"
 )
@@ -107,6 +111,7 @@ class CalibrationTargetRef(_CalibrationModel):
 
     kind: _NonEmptyText
     id: _NonEmptyText
+    owner: CalibrationOwner = Field(default_factory=CatalogCalibrationOwner)
     sample_id: SampleId | None = None
     context_id: _NonEmptyText | None = None
     batch_id: ExperimentalBatchId | None = Field(default=None, exclude_if=absent_batch)
@@ -125,6 +130,39 @@ class CalibrationTargetRef(_CalibrationModel):
         return self
 
 
+def scoped_calibration_target(
+    target: CalibrationTargetRef,
+    source: CalibrationConfigSourceRef,
+) -> CalibrationTargetRef:
+    """Resolve a definition's logical descriptor within one planning scope."""
+    scope = source.scope
+    if (
+        not isinstance(target.owner, CatalogCalibrationOwner)
+        and target.owner != scope.owner
+    ):
+        raise ValueError("calibration target belongs to another workspace")
+    if isinstance(scope, WorkingPointCalibrationScope):
+        sample = scope.sample
+        expected = (sample.sample_id, sample.context_id, sample.batch_id)
+        actual = (target.sample_id, target.context_id, target.batch_id)
+        if any(
+            given is not None and given != wanted
+            for given, wanted in zip(actual, expected, strict=True)
+        ):
+            raise ValueError("calibration target differs from the working-point scope")
+        return target.model_copy(
+            update={
+                "owner": scope.owner,
+                "sample_id": sample.sample_id,
+                "context_id": sample.context_id,
+                "batch_id": sample.batch_id,
+            }
+        )
+    if target.sample_id is not None:
+        raise ValueError("sample calibration requires an explicit working point")
+    return target.model_copy(update={"owner": scope.owner})
+
+
 def calibration_target_sample_selectors(
     target: CalibrationTargetRef,
 ) -> tuple[SampleSelector, ...]:
@@ -139,38 +177,6 @@ def calibration_target_sample_selectors(
             batch_id=target.batch_id,
         ),
     )
-
-
-class CalibrationConfigSourceRef(_CalibrationModel):
-    """Exact active configuration basis frozen into a cohort decision."""
-
-    kind: Literal["config_registry"] = "config_registry"
-    selector: Literal["active"] = "active"
-    entry_id: _NonEmptyText
-    config_ref: _NonEmptyText
-    content_hash: ConfigContentHash
-    registry_generation: int = Field(ge=1)
-
-    @field_validator("entry_id", "config_ref")
-    @classmethod
-    def validate_identity(cls, value: str) -> str:
-        return _non_blank(value, field_name="calibration config source identity")
-
-    @classmethod
-    def from_run_config_source(
-        cls,
-        source: ConfigRegistryRunConfigSource,
-    ) -> CalibrationConfigSourceRef:
-        if source.registry_generation is None:
-            raise ValueError("calibration config source requires registry generation")
-        if source.selector != "active":
-            raise ValueError("calibration config source must select active config")
-        return cls(
-            entry_id=source.entry_id,
-            config_ref=source.config_ref,
-            content_hash=source.content_hash,
-            registry_generation=source.registry_generation,
-        )
 
 
 def calibration_key(
@@ -367,11 +373,13 @@ class CalibrationSuccessRef(_CalibrationModel):
         if publication.published_at < self.succeeded_at:
             raise ValueError("calibration publication cannot precede its success")
         if (
-            publication.result_config_source.registry_generation
-            != self.base_config_source.registry_generation + 1
+            not isinstance(self.base_config_source.scope, WorkingPointCalibrationScope)
+            or publication.result_config_source.scope != self.base_config_source.scope
+            or publication.result_config_source.context_ref
+            == self.base_config_source.context_ref
         ):
             raise ValueError(
-                "calibration publication must activate the generation after its base"
+                "calibration publication must advance the same working point"
             )
         expected_freshness = calibration_freshness_fingerprint(
             definition=self.attempt.definition,
@@ -920,6 +928,10 @@ class CalibrationCohortSpec(_CalibrationModel):
 
     @model_validator(mode="after")
     def validate_spec(self) -> CalibrationCohortSpec:
+        if self.definition.success_policy == "published_result" and not isinstance(
+            self.config_source.scope, WorkingPointCalibrationScope
+        ):
+            raise ValueError("published calibration results require a working point")
         if (
             self.automatic_publication is not None
             and self.automatic_publication.calibration != self.definition
@@ -950,6 +962,11 @@ class CalibrationCohortSpec(_CalibrationModel):
             for observation in self.observations
         }
         for member in self.members:
+            if (
+                scoped_calibration_target(member.target, self.config_source)
+                != member.target
+            ):
+                raise ValueError("cohort member must match its exact calibration scope")
             if member.definition != self.definition:
                 raise ValueError(
                     "calibration cohort members must use its exact definition"
@@ -1120,7 +1137,7 @@ class CalibrationPublicationFailure(_CalibrationModel):
 class CalibrationPublicationSupersession(_CalibrationModel):
     """Terminal base drift that makes this cohort unsafe to publish."""
 
-    superseded_by_generation: int = Field(ge=1)
+    superseded_by: CalibrationConfigSourceRef
     superseded_at: datetime
 
     @field_validator("superseded_at")
@@ -1244,11 +1261,13 @@ class CalibrationCohortFinalization(_CalibrationModel):
             raise ValueError("superseded publication requires audit detail")
         self._require_only_detail("supersession")
         if (
-            self.supersession.superseded_by_generation
-            <= self.base_config_source.registry_generation
+            self.supersession.superseded_by.scope != self.base_config_source.scope
+            or self.supersession.superseded_by.context_ref
+            == self.base_config_source.context_ref
         ):
             raise ValueError(
-                "publication supersession must name a newer config generation"
+                "publication supersession must name another head "
+                "of the same working point"
             )
         if self.supersession.superseded_at != self.updated_at:
             raise ValueError(
