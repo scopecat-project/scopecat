@@ -7,6 +7,8 @@ import tomllib
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, replace
 from importlib import import_module
+from importlib.metadata import PackageNotFoundError
+from importlib.util import find_spec
 from pathlib import Path, PureWindowsPath
 from threading import RLock
 from typing import TYPE_CHECKING, cast
@@ -28,7 +30,7 @@ type LabApplicationFactory = Callable[[Path], LabApplication]
 
 _MANIFEST_NAME = "scopecat.toml"
 _LAB_KEYS = frozenset(
-    {"bootstrap", "application", "instrument_backend", "capabilities"}
+    {"bootstrap", "application", "instrument_backend", "capabilities", "adapter"}
 )
 
 
@@ -60,6 +62,7 @@ class Project:
     refresh_roots: tuple[str, ...] = ()
     installed_packages: tuple[tuple[str, str], ...] = ()
     dependencies: tuple[str, ...] | None = None
+    adapter_packages: tuple[tuple[str, str], ...] = ()
 
     @property
     def runtime_binding(self) -> RuntimeBinding:
@@ -73,9 +76,11 @@ class Project:
             from scopecat.application.bootstrap import LabBootstrap
 
             return LabBootstrap()
-        return load_bootstrap_factory(self.bootstrap_spec, self.code_root or self.root)(
-            self.root
-        )
+        return load_bootstrap_factory(
+            self.bootstrap_spec,
+            self.code_root or self.root,
+            installed_packages=self.adapter_packages,
+        )(self.root)
 
     def load_application(self) -> LabApplication:
         """Load the version-controlled composition declared by this project."""
@@ -97,7 +102,10 @@ class Project:
                 return compose_application(
                     self.capabilities,
                     lambda spec: load_project_symbol(
-                        spec, self.code_root or self.root, subject="lab capability"
+                        spec,
+                        self.code_root or self.root,
+                        subject="lab capability",
+                        installed_packages=self.adapter_packages,
                     ),
                     self._load_author_module,
                 )
@@ -110,27 +118,12 @@ class Project:
             loading_revision.reset(token)
 
     def _load_author_module(self, name: str) -> object:
-        distribution = dict(self.installed_packages).get(name.partition(".")[0])
-        if distribution is None:
-            return load_project_symbol(
-                name, self.code_root or self.root, subject="author module"
-            )
-        from scopecat.installed_authors import installed_module_path
-
-        root = self.code_root or self.root
-        with _project_import_lock:
-            _require_available_project(root)
-            expected = installed_module_path(name.partition(".")[0], distribution, name)
-            module = import_module(name)
-            filename = module.__file__
-            if filename is None or Path(filename).resolve() != expected.resolve():
-                raise ProjectCodeLoadError(
-                    f"installed author module {name!r} did not resolve to the "
-                    f"declared distribution {distribution!r}: expected {expected}"
-                )
-            global _loaded_project_code_root
-            _loaded_project_code_root = root
-            return module
+        return load_project_symbol(
+            name,
+            self.code_root or self.root,
+            subject="author module",
+            installed_packages=self.installed_packages,
+        )
 
     def authoring(self, daemon: str | None = None) -> AuthorProject:
         """Use complete author revisions from notebooks without module reload."""
@@ -166,7 +159,7 @@ class Project:
         return application.connect(endpoint, operator=operator)
 
 
-def open_project(start: str | Path = ".") -> Project:
+def open_project(start: str | Path = ".", *, resolve_adapter: bool = True) -> Project:
     """Find ``scopecat.toml`` at or above ``start`` and load its lab settings."""
 
     selected = Path(start).resolve()
@@ -175,16 +168,16 @@ def open_project(start: str | Path = ".") -> Project:
             raise ProjectManifestError(
                 f"project manifest must be named {_MANIFEST_NAME}"
             )
-        return load_project(selected)
+        return load_project(selected, resolve_adapter=resolve_adapter)
 
     for root in (selected, *selected.parents):
         manifest = root / _MANIFEST_NAME
         if manifest.is_file():
-            return load_project(manifest)
+            return load_project(manifest, resolve_adapter=resolve_adapter)
     raise ProjectManifestError(f"no {_MANIFEST_NAME} found at or above {selected}")
 
 
-def load_project(manifest: str | Path) -> Project:
+def load_project(manifest: str | Path, *, resolve_adapter: bool = True) -> Project:
     """Load the project contract shared by daemon and notebook tooling."""
 
     selected = Path(manifest).resolve()
@@ -206,6 +199,8 @@ def load_project(manifest: str | Path) -> Project:
     if unknown:
         fields = ", ".join(sorted(unknown))
         raise ProjectManifestError(f"unknown [lab] field(s): {fields}")
+
+    lab, adapter_packages = _expand_adapter(lab, resolve_adapter=resolve_adapter)
 
     bootstrap = _optional_text(lab, "bootstrap")
     application = _optional_text(lab, "application")
@@ -258,6 +253,13 @@ def load_project(manifest: str | Path) -> Project:
                 "and distribution names"
             )
         installed.append((module, distribution))
+    merged_packages = dict(adapter_packages)
+    for module, owner in installed:
+        if module in merged_packages and merged_packages[module] != owner:
+            raise ProjectManifestError(
+                f"conflicting distribution for module {module!r}"
+            )
+        merged_packages[module] = owner
     source_roots = _local_roots(authors.get("source_roots", []))
     refresh_roots = _local_roots(authors.get("refresh_roots", []))
     if bool(source_roots) != bool(refresh_roots):
@@ -278,14 +280,79 @@ def load_project(manifest: str | Path) -> Project:
         capabilities=capabilities,
         source_roots=source_roots,
         refresh_roots=refresh_roots,
-        installed_packages=tuple(sorted(installed)),
+        installed_packages=tuple(sorted(merged_packages.items())),
+        adapter_packages=adapter_packages,
         dependencies=dependencies,
     )
+
+
+def _expand_adapter(
+    lab: dict[str, object], *, resolve_adapter: bool
+) -> tuple[dict[str, object], tuple[tuple[str, str], ...]]:
+    adapter_packages: tuple[tuple[str, str], ...] = ()
+    if "adapter" in lab:
+        from scopecat.installed_adapter import (
+            load_installed_adapter,
+            parse_adapter_reference,
+        )
+
+        try:
+            reference = parse_adapter_reference(lab["adapter"])
+            local_capabilities = lab.get("capabilities", {})
+            if (
+                set(lab) - {"adapter", "capabilities"}
+                or not isinstance(local_capabilities, dict)
+                or set(cast("dict[str, object]", local_capabilities))
+                - {"author_modules"}
+            ):
+                raise ValueError(
+                    "adapter projects may only add lab.capabilities.author_modules"
+                )
+            additions = _parse_capabilities(
+                cast("dict[str, object]", local_capabilities)
+            ).author_modules
+            if resolve_adapter:
+                adapter = load_installed_adapter(reference)
+                adapter_packages = adapter.packages
+                lab = adapter.lab.copy()
+                declaration = _parse_capabilities(lab.get("capabilities", {}))
+                for field in ("bootstrap", "instrument_backend"):
+                    spec = _optional_text(lab, field)
+                    if spec is not None:
+                        _require_adapter_spec(spec, adapter_packages)
+                for spec in (
+                    *declaration.author_modules,
+                    *declaration.procedures,
+                    *declaration.procedure_schedules,
+                    declaration.experiment_system,
+                    declaration.calibrations,
+                    declaration.calibration_publications,
+                    declaration.launch_provider,
+                    declaration.comparison_provider,
+                ):
+                    if spec is not None:
+                        _require_adapter_spec(spec, adapter_packages)
+                merged = cast("dict[str, object]", lab.get("capabilities", {})).copy()
+                merged["author_modules"] = list(
+                    dict.fromkeys((*declaration.author_modules, *additions))
+                )
+                lab["capabilities"] = merged
+            else:
+                lab = cast(
+                    "dict[str, object]",
+                    {"capabilities": {"author_modules": list(additions)}},
+                )
+        except (OSError, ValueError, PackageNotFoundError) as error:
+            raise ProjectManifestError(f"invalid lab adapter: {error}") from error
+
+    return lab, adapter_packages
 
 
 def load_bootstrap_factory(
     spec: str,
     project_root: str | Path,
+    *,
+    installed_packages: tuple[tuple[str, str], ...] = (),
 ) -> LabBootstrapFactory:
     """Load the project factory for daemon and config bootstrap inputs."""
 
@@ -294,6 +361,7 @@ def load_bootstrap_factory(
         _load_project_factory(
             spec,
             project_root,
+            installed_packages=installed_packages,
             subject="lab bootstrap",
         ),
     )
@@ -318,6 +386,8 @@ def load_application_factory(
 def load_instrument_backend_factory(
     spec: str,
     project_root: str | Path,
+    *,
+    installed_packages: tuple[tuple[str, str], ...] = (),
 ) -> Callable[[Path], InstrumentBackend]:
     """Load a project-owned backend factory for the instrument worker."""
 
@@ -326,6 +396,7 @@ def load_instrument_backend_factory(
         _load_project_factory(
             spec,
             project_root,
+            installed_packages=installed_packages,
             subject="instrument backend",
         ),
     )
@@ -336,12 +407,17 @@ def _load_project_factory(
     project_root: str | Path,
     *,
     subject: str,
+    installed_packages: tuple[tuple[str, str], ...] = (),
 ) -> Callable[[Path], object]:
     module, separator, attribute = spec.partition(":")
     if not module or not separator or not attribute:
         raise ValueError(f"{subject} must use MODULE:CALLABLE")
     factory = load_project_symbol(
-        spec, project_root, subject=subject, require_callable=True
+        spec,
+        project_root,
+        subject=subject,
+        require_callable=True,
+        installed_packages=installed_packages,
     )
     return cast("Callable[[Path], object]", factory)
 
@@ -352,12 +428,18 @@ def load_project_symbol(
     *,
     subject: str,
     require_callable: bool = False,
+    installed_packages: tuple[tuple[str, str], ...] = (),
 ) -> object:
     module_name, separator, attribute_name = spec.partition(":")
     if not module_name or (separator and not attribute_name):
         raise ValueError(f"{subject} must use MODULE or MODULE:ATTRIBUTE")
 
     root = Path(project_root).resolve()
+    owner = dict(installed_packages).get(module_name.partition(".")[0])
+    if owner is not None:
+        return _load_installed_symbol(
+            spec, root, owner, require_callable=require_callable
+        )
     with _project_import_lock:
         _require_available_project(root)
         _require_unshadowed_module(module_name, root, subject=subject)
@@ -393,6 +475,48 @@ def load_project_symbol(
         _loaded_project_code_root = root
 
     return value
+
+
+def _require_adapter_spec(spec: str, packages: tuple[tuple[str, str], ...]) -> None:
+    from scopecat.installed_authors import installed_module_path
+
+    module = spec.partition(":")[0]
+    owner = dict(packages).get(module.partition(".")[0])
+    if owner is None:
+        raise ValueError(f"adapter symbol {spec!r} has no declared package owner")
+    installed_module_path(module.partition(".")[0], owner, module)
+
+
+def _load_installed_symbol(
+    spec: str, root: Path, owner: str, *, require_callable: bool
+) -> object:
+    from scopecat.installed_authors import installed_module_path
+
+    module_name, separator, attribute = spec.partition(":")
+    with _project_import_lock:
+        _require_available_project(root)
+        parts = module_name.split(".")
+        for index in range(1, len(parts) + 1):
+            name = ".".join(parts[:index])
+            expected = installed_module_path(parts[0], owner, name)
+            loaded = sys.modules.get(name)
+            origin = loaded.__file__ if loaded is not None else None
+            if loaded is None:
+                found = find_spec(name)
+                origin = None if found is None else found.origin
+            if origin is None or Path(origin).resolve() != expected.resolve():
+                raise ProjectCodeLoadError(
+                    f"installed module {name!r} did not resolve to the declared "
+                    f"distribution {owner!r}: expected {expected}"
+                )
+            import_module(name)
+        module = import_module(module_name)
+        value = cast("object", getattr(module, attribute)) if separator else module
+        if require_callable and not callable(value):
+            raise ProjectCodeLoadError(f"installed symbol {spec!r} is not callable")
+        global _loaded_project_code_root
+        _loaded_project_code_root = root
+        return value
 
 
 def _require_available_project(root: Path) -> None:
