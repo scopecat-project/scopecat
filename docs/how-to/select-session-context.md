@@ -145,3 +145,31 @@ configuration source. Ordinary users can keep using the short `sample`, `target`
 `working_point` and `batch` arguments. Clients constructing requests directly use
 `ScientificSelection`; do not combine it with those convenience arguments.
 A preview's reviewed evidence must be carried into submit or save requests.
+
+
+## Software execution scenarios
+
+An executable setup may now declare a software scenario. Its label, model identity,
+coverage, limitations, seed (when actually used) and settings form part of the setup
+identity. The ordinary starter declares its virtual temperature and analytic signal
+responses; laboratory adapters may declare their own bounded models. An absent
+scenario means **not declared**, not proof of physical execution.
+
+Inspect the current or selected revision in **Configuration → Executable setup**.
+The preview's `prepared.preview.reviewed.binding.scenario` is the frozen choice for
+that preparation; historical runs retain their own scientific binding. Changing
+setup or refreshing code does not rewrite that evidence. A software declaration
+rejects any non-virtual connection anywhere in the configured instrument registry.
+It is a contract for trusted providers, not an operating-system sandbox for arbitrary
+Python drivers, and it does not automatically emulate unsupported hardware.
+
+This first slice uses the existing service-wide setup selection and provider.
+It does not introduce a per-tab backend switch or hot-swap a laboratory adapter.
+Select a supported setup explicitly using normal setup activation; saved working
+points remain separate. Rebind a working point to the selected setup as a new copy
+before experimenting, leaving its original branch intact. Setup identity checks
+also prevent publishing a software result into a different executable setup.
+
+Model declarations describe the adapter's actual behavior. A seed or setting is
+not applied to an arbitrary driver merely by adding it to the declaration. Do not
+claim a physics model or deterministic random stream that the provider does not use.
