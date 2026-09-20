@@ -63,8 +63,8 @@ def _data_binding(project: Path, requested: str | None) -> str | None:
         raise ValueError("已有运行位置或数据，不能在首次接入时更改；请保留现有数据目录")
     if data.exists() or Path(requested).is_symlink():
         raise ValueError("新数据目录必须尚不存在；已有数据请从原代码目录接入")
-    if project.is_relative_to(data) or data.is_relative_to(project / ".scopecat"):
-        raise ValueError("数据目录不能包含代码目录或位于运行状态目录内")
+    if project.is_relative_to(data) or data.is_relative_to(project):
+        raise ValueError("自选数据目录必须与代码目录分开，不能互相包含")
     deployment = json.dumps(str(existing.deployment_root), ensure_ascii=False)
     return (
         "[runtime]\n"
@@ -105,6 +105,9 @@ def setup(
             staged = Path(temporary) / "project"
             staged.mkdir()
             write_project_scaffold(staged)
+            (staged / ".gitignore").write_text(
+                ".scopecat/\nscopecat.runtime.toml\n.venv/\n", encoding="utf-8"
+            )
             if binding is not None:
                 (staged / RUNTIME_BINDING_NAME).write_text(binding, encoding="utf-8")
             staged.rename(project)

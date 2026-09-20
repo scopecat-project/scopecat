@@ -164,12 +164,16 @@ def test_local_environment_is_selected_without_resolving_interpreter_symlink(tmp
     assert first_run.choose_python(tmp_path) == python
 
 
-@pytest.mark.parametrize("location", ["occupied", "ancestor"])
+@pytest.mark.parametrize("location", ["occupied", "ancestor", "source-child"])
 def test_invalid_data_destination_does_not_create_project(
     tmp_path, registration, location
 ):
     project = tmp_path / "lab"
-    data = tmp_path / "occupied" if location == "occupied" else tmp_path
+    data = {
+        "occupied": tmp_path / "occupied",
+        "ancestor": tmp_path,
+        "source-child": project / "src",
+    }[location]
     if location == "occupied":
         data.mkdir()
         (data / "retained").write_text("scientific evidence")
@@ -182,3 +186,24 @@ def test_invalid_data_destination_does_not_create_project(
         )
     assert not project.exists()
     assert registration == []
+
+
+def test_missing_declared_dependency_fails_before_startup(tmp_path):
+    project = tmp_path / "lab"
+    project.mkdir()
+    manifest = project / "scopecat.toml"
+    manifest.write_text(
+        '[lab]\nbootstrap="must_not_import:bootstrap"\n'
+        '[authors]\ndependencies=["scopecat-missing-first-run-fixture==1"]\n'
+    )
+    gui = tmp_path / "gui"
+    gui.mkdir()
+    (gui / "index.html").write_text("<html>public workbench</html>")
+    with pytest.raises(ValueError, match="dependency is not installed"):
+        first_run.setup(
+            tmp_path / "home",
+            first_run.SetupRequest(mode="connect", project=str(project)),
+            static_dir=gui,
+        )
+    assert list(project.iterdir()) == [manifest]
+    assert first_run.Services(tmp_path / "home").list() == []

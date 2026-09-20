@@ -1,12 +1,19 @@
 # Scopecat application and tutorial tools
 
-Public tooling for disposable tutorial workspaces, pinned kernels, offline
-installation, matching GUI assets and executable course verification.
+Public tooling for the experiment application, first-run connection, offline
+installation, tutorial workspaces and Notebook environments.
 
-Use `scopecat app` or the installed `lab.cmd` / `lab.py` entry to open registered
-experimental services. Register an existing project from its Python environment
-with `scopecat app PATH`; use `--python` for an explicit interpreter and
-`--static-dir` for a source-built GUI. Registration does not start devices.
+Use `scopecat app` or the installed `lab.cmd` / `lab.py` entry. First use offers
+creation of an ordinary experiment directory or connection to a trusted laboratory
+code directory. Data can be placed in a separate new location; existing bindings
+and records are preserved. The project `.venv` is used when present, otherwise the
+application environment is used. Missing declared dependencies are reported before
+service startup; setup does not install laboratory dependencies.
+
+Successful setup opens and remembers the primary workbench. Daily launch restores
+it directly; `--manage` opens maintenance. Starting can initialize devices according
+to laboratory policy, but never submits a measurement. Maintainers can still use
+`scopecat app PATH --python ... --static-dir ...` for explicit environment choices.
 
 After updating an existing environment, stop the service and use **Recheck environment**
 in the manager to validate its registered paths without rebuilding a CLI command.

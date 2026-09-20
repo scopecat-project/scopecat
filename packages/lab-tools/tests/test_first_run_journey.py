@@ -3,13 +3,15 @@
 import json
 import os
 import subprocess
+import time
 from pathlib import Path
 
 import httpx2
 
 from lab_tools import application
-from lab_tools.first_run import SetupRequest, setup
+from lab_tools.first_run import SetupRequest
 from lab_tools.host_client import ensure_host
+from lab_tools.host_operations import Command, Operations, launch
 from lab_tools.services import Services
 from scopecat.project import open_project
 from scopecat_server.lifecycle import inspect_daemon, stop_project
@@ -21,21 +23,32 @@ def test_create_external_data_run_and_reopen_primary_workbench(
     home = tmp_path / "application home"
     root = tmp_path / "实验代码"
     data = tmp_path / "实验数据"
-    gui = tmp_path / "gui"
-    gui.mkdir()
+    source = tmp_path / "public-source"
+    gui = source / "apps" / "scopecat-ui" / "dist"
+    gui.mkdir(parents=True)
     (gui / "index.html").write_text("<html>experiment workbench</html>")
-    service = setup(
-        home,
-        SetupRequest(
+    command = Command(
+        action="setup",
+        setup=SetupRequest(
             mode="create", project=str(root), data_root=str(data), name="实验台"
         ),
-        static_dir=gui,
     )
+    operation = launch(home, source, command)
+    operations = Operations(home)
+    deadline = time.monotonic() + 60
+    while operation.status in ("starting", "running"):
+        assert time.monotonic() < deadline, operation
+        time.sleep(0.05)
+        operation = operations.get(command.id)
+    assert operation.status == "succeeded", operation.detail
+    assert operation.service is not None and operation.workspace is None
+    assert launch(home, source, command) == operation
+    service = Services(home).get(operation.service)
     project = open_project(root)
     assert project.runtime_binding.data_root == data
     assert project.capabilities is not None
     assert (root / "src/scopecat_lab/authored/signal.py").is_file()
-    assert inspect_daemon(project).state == "stopped"
+    assert inspect_daemon(project).state == "running"
     store = Services(home)
     opened: list[str] = []
     monkeypatch.setattr(application.webbrowser, "open", opened.append)
@@ -62,8 +75,7 @@ with project.authoring() as author:
     environment = dict(os.environ)
     environment.pop("SCOPECAT_DAEMON_URL", None)
     try:
-        store.start(service.id)
-        store.remember(service.id)
+        assert store.preferred() == service
         completed = subprocess.run(  # noqa: S603 - fixed virtual experiment script
             [service.python, "-c", script, str(root)],
             env=environment,

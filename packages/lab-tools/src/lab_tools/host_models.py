@@ -8,11 +8,14 @@ from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from .first_run import SetupRequest
+
 
 class Command(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     id: str = Field(default_factory=lambda: uuid4().hex, pattern=r"^[0-9a-f]{32}$")
     action: Literal[
+        "setup",
         "open",
         "verify",
         "stop",
@@ -22,6 +25,7 @@ class Command(BaseModel):
         "service_remove",
         "service_recheck",
     ]
+    setup: SetupRequest | None = None
     topic: str | None = None
     workspace: str | None = Field(default=None, pattern=r"^[0-9a-f]{32}$")
     reset: bool = False
@@ -36,3 +40,4 @@ class Operation(BaseModel):
     process_time: float | None = None
     detail: str = ""
     workspace: str | None = None
+    service: str | None = None

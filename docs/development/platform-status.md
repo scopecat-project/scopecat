@@ -34,8 +34,9 @@ See [configuration ownership](architecture/configuration-ownership.md),
    feels like a teaching manager. Follow the
    [public application contract](architecture/public-application.md): standard
    laboratory capability declarations (#672), direct primary-workbench entry
-   (#673), then first-run laboratory connection and independent code/parameter
-   trial workflows. Native installation and shared device authority remain later
+   (#673). First-run source-directory creation/connection now opens an ordinary
+   workbench; independent adapter package/settings preparation and code/parameter
+   trial workflows remain next. Native installation and shared device authority remain later
    explicit contracts. The bounded installed/browser checks in #668 passed on
    Windows/Linux; broader qualification remains tracked in #616. Do not repeat
    tutorial acceptance as a substitute for the real laboratory connection journey.

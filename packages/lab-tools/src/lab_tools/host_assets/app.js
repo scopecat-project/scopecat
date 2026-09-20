@@ -227,7 +227,7 @@ document.getElementById("setup-mode").addEventListener("change", event => {
   setupVisited = true;
   const connect = event.target.value === "connect";
   document.getElementById("setup-description").textContent = connect ? "选择包含 scopecat.toml 的实验室代码文件夹。沿用已有设置；若依赖或环境需要处理，会在操作结果中说明。" : "创建可修改的基础实验项目。你的实验代码保存在此处，教学专题在帮助中单独提供。";
-  document.getElementById("setup-project-help").textContent = connect ? "填写实验室代码文件夹的完整路径。" : "填写本机完整路径；新项目需要使用空文件夹。";
+  document.getElementById("setup-project-help").textContent = connect ? "填写实验室代码文件夹的完整路径。" : "填写本机完整路径；填写尚不存在的新目录，应用会创建它。";
   document.getElementById("setup-data-help").textContent = connect ? "留空保留该项目已有的数据绑定。填写新目录不会迁移已有记录。" : "留空使用新项目的默认数据目录。";
   document.getElementById("setup-data").placeholder = connect ? "留空保留已有数据绑定" : "留空使用项目默认目录";
   document.getElementById("setup-submit").textContent = connect ? "连接并打开工作台" : "创建并打开工作台";

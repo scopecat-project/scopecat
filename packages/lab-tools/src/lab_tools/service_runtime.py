@@ -16,6 +16,7 @@ from typing import Literal
 import psutil
 from pydantic import BaseModel, Field
 
+from scopecat.execution_environment import execution_packages
 from scopecat.project import open_project
 from scopecat_server.cli import select_static_dir
 from scopecat_server.lifecycle import inspect_daemon, start_project, stop_project
@@ -31,6 +32,13 @@ class Request(BaseModel):
 def main() -> None:
     request = Request.model_validate_json(sys.argv[1])
     project = open_project(request.root)
+    if request.action == "probe":
+        execution_packages(
+            (
+                *(project.dependencies or ()),
+                *(name for _, name in project.installed_packages),
+            )
+        )
     gui = (
         None
         if request.action == "stop"
