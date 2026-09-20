@@ -116,6 +116,7 @@ from ._ir import (
     _QuantumParallelFragment,
     _QuantumRepeatFragment,
     _QuantumSequenceFragment,
+    _RecipeScopeFragment,
     _RepeatFragment,
     _SequenceFragment,
     _ShiftPhaseFragment,
@@ -331,6 +332,38 @@ def _bind_circuit_operation(
     )
 
 
+def _apply_recipe_scope(node: QuantumNode, scope: str) -> QuantumNode:
+    if isinstance(node, GateCall):
+        return replace(node, recipe_scope=node.recipe_scope or scope)
+    if isinstance(node, IrQuantumSequence):
+        return replace(
+            node,
+            operations=tuple(
+                _apply_recipe_scope(child, scope) for child in node.operations
+            ),
+        )
+    if isinstance(node, IrQuantumParallel):
+        return replace(
+            node,
+            branches=tuple(
+                _apply_recipe_scope(child, scope) for child in node.branches
+            ),
+        )
+    if isinstance(node, IrQuantumRepeat | IrQuantumParallelEach):
+        return replace(node, operation=_apply_recipe_scope(node.operation, scope))
+    if isinstance(node, IrQuantumConditional):
+        return replace(
+            node,
+            cases=tuple(
+                (state, _apply_recipe_scope(body, scope)) for state, body in node.cases
+            ),
+            default=None
+            if node.default is None
+            else _apply_recipe_scope(node.default, scope),
+        )
+    return node
+
+
 def _bind_quantum_fragment(
     fragment: QuantumFragment,
     bindings: Mapping[str, object],
@@ -339,6 +372,15 @@ def _bind_quantum_fragment(
     path: tuple[str, ...],
     acquisition_scope: tuple[str, ...] = (),
 ) -> QuantumNode:
+    if isinstance(fragment, _RecipeScopeFragment):
+        body = _bind_quantum_fragment(
+            fragment.body,
+            bindings,
+            element_bindings=element_bindings,
+            path=path,
+            acquisition_scope=acquisition_scope,
+        )
+        return _apply_recipe_scope(body, fragment.scope)
     if isinstance(fragment, _ExpandedFragment):
         return _bind_quantum_fragment(
             fragment.body,
@@ -599,6 +641,14 @@ def _bind_pulse_fragment(
     path: tuple[str, ...],
     acquisition_slot_id: AcquisitionSlotId | None = None,
 ) -> PulseInstruction:
+    if isinstance(fragment, _RecipeScopeFragment):
+        return _bind_pulse_fragment(
+            fragment.body,
+            bindings,
+            element_bindings=element_bindings,
+            path=path,
+            acquisition_slot_id=acquisition_slot_id,
+        )
     if isinstance(fragment, _ExpandedFragment):
         return _bind_pulse_fragment(
             fragment.body,
@@ -905,7 +955,7 @@ def _bound_gate_definitions(
 ) -> tuple[GateDefinition, ...]:
     """Derive the exact gate catalog from the point-bound fragment tree."""
 
-    if isinstance(fragment, _ExpandedFragment):
+    if isinstance(fragment, _ExpandedFragment | _RecipeScopeFragment):
         return _bound_gate_definitions(fragment.body, bindings)
     if isinstance(fragment, _FragmentCall):
         raise AssertionError("quantum fragment calls must expand before binding")

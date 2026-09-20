@@ -94,6 +94,7 @@ from ._ir import (
     _QuantumParallelFragment,
     _QuantumRepeatFragment,
     _QuantumSequenceFragment,
+    _RecipeScopeFragment,
     _RepeatFragment,
     _SequenceFragment,
     _ShiftPhaseFragment,
@@ -479,7 +480,9 @@ def _expanded_fragment_shape(fragment: QuantumFragment) -> _ExpandedFragmentShap
         | _ImplementedGateFragment,
     ):
         return _ExpandedFragmentShape(operation_count=1, depth=1)
-    if isinstance(fragment, _PulseTemplateCallFragment | _ExpandedFragment):
+    if isinstance(
+        fragment, _PulseTemplateCallFragment | _ExpandedFragment | _RecipeScopeFragment
+    ):
         return _expanded_fragment_shape(fragment.body)
     if isinstance(fragment, _FragmentCall):
         raise AssertionError("fragment calls must expand before shape analysis")
@@ -592,7 +595,7 @@ def _summarize_fragment(fragment: QuantumFragment) -> _FragmentFacts:
             ),
             gate_definitions=fragment.definition.envelope.gate_definitions,
         )
-    if isinstance(fragment, _ExpandedFragment):
+    if isinstance(fragment, _ExpandedFragment | _RecipeScopeFragment):
         return _summarize_fragment(fragment.body)
     if isinstance(fragment, _GateFragment):
         return _FragmentFacts(
@@ -803,7 +806,9 @@ def _validate_realtime_node(
     aggregate_results: bool,
     inside_conditional_branch: bool,
 ) -> dict[ProgramResult, _ResultAvailability]:
-    if isinstance(fragment, _ExpandedFragment | _PulseTemplateCallFragment):
+    if isinstance(
+        fragment, _ExpandedFragment | _PulseTemplateCallFragment | _RecipeScopeFragment
+    ):
         return _validate_realtime_node(
             fragment.body,
             available=available,

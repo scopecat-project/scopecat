@@ -110,6 +110,7 @@ from ._ir import (
     _QuantumParallelFragment,
     _QuantumRepeatFragment,
     _QuantumSequenceFragment,
+    _RecipeScopeFragment,
     _RepeatFragment,
     _SequenceFragment,
     _ShiftPhaseFragment,
@@ -503,6 +504,17 @@ def delay(signal: PlaySignal, duration: QuantumQuantity, /) -> PulseFragment:
 
     _require_quantity_expression(duration, field="duration", kind="time")
     return _DelayFragment(signal=signal, duration=duration)
+
+
+def recipe_scope(scope: str, operation: QuantumFragment) -> QuantumFragment:
+    """Select recipe parameters for unresolved gates in one subtree.
+
+    Nested scopes take precedence. Measurements and gates with explicit pulse
+    implementations retain their existing behavior.
+    """
+    if not scope.strip():
+        raise ValueError("recipe scope must be a non-empty string")
+    return _RecipeScopeFragment(scope=scope, body=operation)
 
 
 @overload
