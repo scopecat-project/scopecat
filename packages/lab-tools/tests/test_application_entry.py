@@ -25,6 +25,7 @@ def entry(tmp_path, monkeypatch):
             "root": request["root"],
             "static_dir": str(tmp_path / "gui"),
             "settings_identity": None,
+            "adapter_identity": None,
             "environment": {"python": python},
         },
     )

@@ -82,6 +82,7 @@ class LocalDaemonRuntime:
         *,
         bootstrap_config: ConfigProfileSnapshot | BootstrapConfigFactory | None = None,
         bootstrap_spec: str | None = None,
+        adapter_packages: tuple[tuple[str, str], ...] = (),
         instrument_backend_spec: str | None = None,
         instrument_endpoint: InstrumentBackendEndpoint | None = None,
         instrument_shutdown_grace: timedelta = _DEFAULT_INSTRUMENT_SHUTDOWN_GRACE,
@@ -145,12 +146,14 @@ class LocalDaemonRuntime:
                 bootstrap = load_bootstrap_factory(
                     bootstrap_spec,
                     self.project_root,
+                    installed_packages=adapter_packages,
                 )(self.project_root)
                 project_bootstrap = bootstrap.bootstrap_config
             if instrument_backend_spec is not None:
                 instrument_endpoint = SubprocessInstrumentBackendEndpoint(
                     self.project_root,
                     instrument_backend_spec,
+                    installed_packages=adapter_packages,
                 )
 
             startup_stage("project store ready; composing services")

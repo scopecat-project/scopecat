@@ -170,6 +170,7 @@ def serve_project(
         runtime = LocalDaemonRuntime(
             project.root,
             bootstrap_spec=project.bootstrap_spec,
+            adapter_packages=project.adapter_packages,
             instrument_backend_spec=project.instrument_backend_spec,
             lease_ttl=lease_ttl,
         )

@@ -74,7 +74,7 @@ def _runtime_binding(project: Path, request: SetupRequest) -> str | None:
 
 def _update_binding(project: Path, document: str, before: bytes | None) -> None:
     """Replace a sidecar atomically only while its daemon ownership is free."""
-    selected = load_project(project / "scopecat.toml")
+    selected = load_project(project / "scopecat.toml", resolve_adapter=False)
     binding = selected.runtime_binding
     destination = project / RUNTIME_BINDING_NAME
     try:
@@ -121,7 +121,7 @@ def setup(
     else:
         if not (project / "scopecat.toml").is_file():
             raise ValueError("请选择直接包含 scopecat.toml 的实验室代码目录")
-        load_project(project / "scopecat.toml")
+        load_project(project / "scopecat.toml", resolve_adapter=False)
     python = choose_python(project)
     location = project / RUNTIME_BINDING_NAME
     previous_binding = location.read_bytes() if location.exists() else None

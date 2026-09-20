@@ -21,8 +21,8 @@ A fresh installation opens **Set up the primary workbench (设置主要实验工
 Choose **Create** for an ordinary virtual experiment project, or **Connect** for
 an existing laboratory code directory containing `scopecat.toml`. The directory
 is the primary editable code source, including its laboratory capability declarations;
-it is not an independently installed adapter package. Use a trusted directory
-prepared by your laboratory.
+it may select an installed laboratory adapter through `[lab.adapter]`. Use a trusted
+directory and environment prepared by your laboratory.
 
 Enter the code directory and optionally a separate, new data directory. Leaving
 data blank uses the project's default location for creation and preserves the
@@ -46,6 +46,23 @@ Errors remain in **Recent operations** and its log. A failed registration or sta
 retains the created files; fix the reported environment and use **Connect** on the
 same directory, or restart its registered service. Reopening the page does not replay
 setup. To add another directory later, expand the setup form in management.
+
+## Installed laboratory adapters
+
+A laboratory may provide an installed wheel plus a small editable experiment
+directory. The directory selects the adapter and its own experiment modules; it
+does not need copied drivers, compiler code or an application factory. Place the
+prepared environment in its `.venv`, or install the adapter into the application
+environment before connecting. Setup checks the selected interpreter without
+importing drivers into the manager. It does not install missing packages.
+
+Local experiment edits use normal notebook refresh. To change the adapter, stop
+first, install the reviewed wheel into the same environment and recheck it in the
+manager. The registered content fingerprint detects even same-version file changes.
+Keep exact old wheels when retaining historical execution environments: scientific
+source capture records installed package identity but does not archive the wheel.
+If an adapter is missing or damaged, status and stop remain available; restore the
+package before rechecking or starting.
 
 ## Local laboratory settings
 

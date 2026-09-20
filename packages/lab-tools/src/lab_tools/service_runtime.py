@@ -17,6 +17,8 @@ import psutil
 from pydantic import BaseModel, Field
 
 from scopecat.execution_environment import execution_packages
+from scopecat.installed_authors import capture_installed_authors
+from scopecat.kernel.content_identity import sha256_json_hash
 from scopecat.lab_settings import lab_settings_identity
 from scopecat.project import open_project
 from scopecat_server.lifecycle import inspect_daemon, start_project, stop_project
@@ -29,14 +31,29 @@ class Request(BaseModel):
     static_dir: str | None
     environment: dict[str, str] = Field(default_factory=dict)
     settings_identity: str | None = None
+    adapter_identity: str | None = None
 
 
 def main() -> None:
     request = Request.model_validate_json(sys.argv[1])
-    project = open_project(request.root)
+    project = open_project(request.root, resolve_adapter=request.action != "stop")
     settings_identity = (
         None if request.action == "stop" else lab_settings_identity(project.root)
     )
+    adapter_identity = (
+        sha256_json_hash(
+            {
+                name: package.model_dump(mode="json")
+                for name, package in capture_installed_authors(
+                    project.adapter_packages
+                ).items()
+            }
+        )
+        if request.action != "stop" and project.adapter_packages
+        else None
+    )
+    if request.action == "start" and adapter_identity != request.adapter_identity:
+        raise ValueError("实验室适配包已改变；请先停止服务并复检登记，再重新启动")
     if request.action == "start" and settings_identity != request.settings_identity:
         raise ValueError("实验室设置已改变；请先停止服务并复检登记，再重新启动")
     if request.action == "probe":
@@ -101,6 +118,7 @@ def main() -> None:
                 "static_dir": str(gui),
                 "environment": environment,
                 "settings_identity": settings_identity,
+                "adapter_identity": adapter_identity,
             }
         ),
         encoding="utf-8",

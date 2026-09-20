@@ -672,7 +672,7 @@ def stop(
     from .lifecycle import DaemonLifecycleError, stop_project
 
     try:
-        selected = open_project(project)
+        selected = open_project(project, resolve_adapter=False)
         previous = stop_project(selected)
     except (DaemonLifecycleError, ProjectManifestError, OSError) as error:
         _fail(error)
@@ -696,7 +696,7 @@ def status(
     from .lifecycle import inspect_daemon
 
     try:
-        selected = open_project(project)
+        selected = open_project(project, resolve_adapter=False)
         observed = inspect_daemon(selected)
     except (ProjectManifestError, OSError) as error:
         _fail(error)

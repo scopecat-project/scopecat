@@ -762,7 +762,7 @@ def test_runtime_exclusively_owns_one_project(
 ) -> None:
     factory_calls = 0
 
-    def load_factory(_spec: str, _project_root: Path) -> Never:
+    def load_factory(_spec: str, _project_root: Path, **_kwargs: object) -> Never:
         nonlocal factory_calls
         factory_calls += 1
         raise AssertionError("factory must not run before project ownership")
@@ -848,6 +848,7 @@ def test_explicit_runtime_bootstrap_overrides_project_seed(
     def load_factory(
         _spec: str,
         _project_root: Path,
+        **_kwargs: object,
     ) -> object:
         return bootstrap_factory
 
