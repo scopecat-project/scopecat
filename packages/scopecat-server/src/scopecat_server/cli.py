@@ -13,6 +13,8 @@ from typing import Annotated, Never
 import typer
 from rich.console import Console
 
+from scopecat_server.static_assets import select_static_dir as select_static_dir
+
 app = typer.Typer(
     name="scopecat",
     help="Manage one local Scopecat lab project.",
@@ -37,7 +39,6 @@ console = Console()
 error_console = Console(stderr=True)
 
 _CURRENT_DIRECTORY = Path()
-_DEFAULT_STATIC_DIR = Path(__file__).with_name("static")
 _LOOPBACK_HOSTS = frozenset({"127.0.0.1", "::1", "localhost"})
 
 
@@ -651,24 +652,6 @@ def start(
     console.print(
         f"[green]running[/green] {record.base_url} [dim](pid {record.pid})[/dim]"
     )
-
-
-def select_static_dir(
-    *,
-    static_dir: Path | None,
-    api_only: bool,
-) -> Path | None:
-    if api_only:
-        if static_dir is not None:
-            raise ValueError("--api-only and --static-dir cannot be used together")
-        return None
-    selected = _DEFAULT_STATIC_DIR if static_dir is None else static_dir.resolve()
-    if not (selected / "index.html").is_file():
-        raise ValueError(
-            "GUI bundle is not installed; pass its directory with --static-dir "
-            "or use --api-only"
-        )
-    return selected
 
 
 def _lease_ttl(seconds: float | None) -> timedelta | None:

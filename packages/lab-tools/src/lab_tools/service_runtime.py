@@ -18,8 +18,8 @@ from pydantic import BaseModel, Field
 
 from scopecat.execution_environment import execution_packages
 from scopecat.project import open_project
-from scopecat_server.cli import select_static_dir
 from scopecat_server.lifecycle import inspect_daemon, start_project, stop_project
+from scopecat_server.static_assets import select_static_dir
 
 
 class Request(BaseModel):

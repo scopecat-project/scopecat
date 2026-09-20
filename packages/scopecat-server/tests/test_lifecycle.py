@@ -445,7 +445,7 @@ def test_cli_start_explains_missing_source_gui_bundle(
 ) -> None:
     initialize_project(tmp_path)
     monkeypatch.setattr(
-        "scopecat_server.cli._DEFAULT_STATIC_DIR",
+        "scopecat_server.static_assets._DEFAULT_STATIC_DIR",
         tmp_path / "missing-ui",
     )
 

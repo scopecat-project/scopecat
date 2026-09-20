@@ -3,12 +3,26 @@
 from __future__ import annotations
 
 import time
+from pathlib import Path
 from typing import Literal
 from uuid import uuid4
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from .first_run import SetupRequest
+
+class SetupRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    mode: Literal["create", "connect"]
+    project: str
+    data_root: str | None = None
+    name: str | None = Field(default=None, min_length=1, max_length=200)
+
+    @field_validator("project", "data_root")
+    @classmethod
+    def absolute_path(cls, value: str | None) -> str | None:
+        if value is not None and (not value.strip() or not Path(value).is_absolute()):
+            raise ValueError("请选择完整的绝对目录路径")
+        return value
 
 
 class Command(BaseModel):

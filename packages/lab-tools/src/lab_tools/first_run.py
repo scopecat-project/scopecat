@@ -6,31 +6,14 @@ import json
 import sys
 import tempfile
 from pathlib import Path
-from typing import Literal
-
-from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from scopecat.project import load_project
 from scopecat.runtime_binding import RUNTIME_BINDING_NAME, load_runtime_binding
-from scopecat_server.cli import select_static_dir
 from scopecat_server.scaffold import write_project_scaffold
+from scopecat_server.static_assets import select_static_dir
 
+from .host_models import SetupRequest as SetupRequest
 from .services import Service, Services
-
-
-class SetupRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True)
-    mode: Literal["create", "connect"]
-    project: str
-    data_root: str | None = None
-    name: str | None = Field(default=None, min_length=1, max_length=200)
-
-    @field_validator("project", "data_root")
-    @classmethod
-    def absolute_path(cls, value: str | None) -> str | None:
-        if value is not None and (not value.strip() or not Path(value).is_absolute()):
-            raise ValueError("请选择完整的绝对目录路径")
-        return value
 
 
 def choose_python(project: Path) -> Path:
