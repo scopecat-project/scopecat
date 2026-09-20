@@ -126,6 +126,7 @@ class LocalDaemonRuntime:
         database = self.state_dir / "control.sqlite3"
         objects = self.state_dir / "objects"
         project_bootstrap: BootstrapConfigFactory | None = None
+        configuration_templates = ()
         sqlite: SQLiteDatabase | None = None
 
         try:
@@ -149,6 +150,8 @@ class LocalDaemonRuntime:
                     installed_packages=adapter_packages,
                 )(self.project_root)
                 project_bootstrap = bootstrap.bootstrap_config
+                if bootstrap.configuration_templates is not None:
+                    configuration_templates = bootstrap.configuration_templates()
             if instrument_backend_spec is not None:
                 instrument_endpoint = SubprocessInstrumentBackendEndpoint(
                     self.project_root,
@@ -213,6 +216,7 @@ class LocalDaemonRuntime:
                 calibration_cohorts=calibration_cohort_store,
             )
             setup_service = SetupService(
+                templates=configuration_templates,
                 control=control,
                 config_registry=config_registry,
                 actors=instrument_actors,

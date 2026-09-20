@@ -6,6 +6,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 from scopecat.records.config import ConfigProfileSnapshot
+from scopecat.records.configuration_template import ConfigurationTemplate
 
 type BootstrapConfigFactory = Callable[[], ConfigProfileSnapshot]
 
@@ -21,6 +22,9 @@ class LabBootstrap:
     """
 
     bootstrap_config: BootstrapConfigFactory | None = None
+    configuration_templates: Callable[[], tuple[ConfigurationTemplate, ...]] | None = (
+        None
+    )
 
 
 __all__ = ["BootstrapConfigFactory", "LabBootstrap"]

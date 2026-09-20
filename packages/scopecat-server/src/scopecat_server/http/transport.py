@@ -198,6 +198,9 @@ from scopecat.daemon.wire import (
     ConfigPublishReceipt,
     ConfigSetupRebindCommand,
     ConfigSetupRebindPreviewCommand,
+    ConfigurationTemplateImportCommand,
+    ConfigurationTemplateImportResult,
+    ConfigurationTemplateList,
     ExecutorHeartbeat,
     ExecutorLease,
     ExecutorStartRequest,
@@ -871,6 +874,16 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
             expected_content_hash=f"sha256:{hexdigest}",
             declared_size_bytes=_request_content_length(request),
         )
+
+    @app.get(f"{_API_PREFIX}/setup/templates")
+    def configuration_templates() -> ConfigurationTemplateList:
+        return ConfigurationTemplateList(items=application.setup.templates())
+
+    @app.post(f"{_API_PREFIX}/setup/template-imports")
+    def import_configuration_template(
+        command: ConfigurationTemplateImportCommand,
+    ) -> ConfigurationTemplateImportResult:
+        return application.setup.import_template(command)
 
     @app.get(f"{_API_PREFIX}/setup/active")
     def active_setup() -> ActiveSetupView:

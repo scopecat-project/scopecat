@@ -5,7 +5,13 @@ from uuid import uuid4
 
 from scopecat.config.inventory import InstrumentInventoryChange
 from scopecat.daemon.client import DaemonClient
-from scopecat.daemon.wire import SetupActivateCommand, SetupSaveCommand
+from scopecat.daemon.wire import (
+    ConfigurationTemplateImportCommand,
+    ConfigurationTemplateImportResult,
+    ConfigurationTemplateView,
+    SetupActivateCommand,
+    SetupSaveCommand,
+)
 from scopecat.records.config import ConfigProfileSnapshot
 from scopecat.records.setup import (
     ActiveSetupView,
@@ -19,6 +25,28 @@ from scopecat.records.setup import (
 class LabSetupOperations:
     client: DaemonClient
     operator: str
+
+    def templates(self) -> tuple[ConfigurationTemplateView, ...]:
+        """Discover fixed recipes offered by this service's installed adapter."""
+        return self.client.configuration_templates().items
+
+    def import_template(
+        self, template: ConfigurationTemplateView, *, name: str, note: str = ""
+    ) -> ConfigurationTemplateImportResult:
+        """Save reviewed setup and complete parameters, without activating either.
+
+        Use a stable name to retry. Select the returned setup explicitly and use
+        configuration.entry.id as the saved configuration for later experiments.
+        """
+        return self.client.import_configuration_template(
+            ConfigurationTemplateImportCommand(
+                template_id=template.id,
+                content_hash=template.content_hash,
+                entry_id=name,
+                actor=self.operator,
+                note=note,
+            )
+        )
 
     def active(self) -> ActiveSetupView:
         """Read the daemon's independently selected executable setup."""

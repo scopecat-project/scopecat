@@ -47,6 +47,7 @@ from scopecat.config.registry.records import (
 )
 from scopecat.config.structure import ParameterStructurePlan
 from scopecat.control.models import RunPlanSummary
+from scopecat.daemon.views import ConfigEntryView
 from scopecat.kernel.content_identity import stable_content_hash
 from scopecat.kernel.problems import Problem
 from scopecat.kernel.run_outcome import RunOutcome
@@ -76,6 +77,7 @@ from scopecat.records.config import (
     InstrumentBindingSpec,
 )
 from scopecat.records.config_context import ConfigContextRef
+from scopecat.records.configuration_template import ConfigurationTemplate
 from scopecat.records.content import ContentEntry, Sha256ContentHash
 from scopecat.records.execution import (
     DomainJobInvocationTransition,
@@ -93,7 +95,7 @@ from scopecat.records.parameter_change import (
     ParameterChangeProposal,
     ParameterValueDelta,
 )
-from scopecat.records.plan_ref import ProcedureChildSubmission
+from scopecat.records.plan_ref import PlanConfigRef, ProcedureChildSubmission
 from scopecat.records.run import (
     RunConfigSource,
     RunSnapshot,
@@ -107,6 +109,10 @@ from scopecat.records.sample import (
     SampleSelector,
 )
 from scopecat.records.scientific_binding import ResolvedScientificBinding
+from scopecat.records.scientific_selection import (
+    SavedConfiguration,
+    ScientificSelection,
+)
 from scopecat.records.setup import (
     ExecutableSetupSnapshot,
     SetupRevision,
@@ -462,6 +468,55 @@ class ConfigSetupRebindCommand(_WireModel):
 class ConfigSetupRebindPreviewCommand(_WireModel):
     base: ConfigContextRef
     setup: SetupRevisionRef
+
+
+class ConfigurationTemplateView(_WireModel):
+    id: NonEmptyText
+    label: NonEmptyText
+    description: str
+    config: ConfigProfileSnapshot
+    content_hash: Sha256ContentHash
+
+    @classmethod
+    def from_template(
+        cls, template: ConfigurationTemplate
+    ) -> ConfigurationTemplateView:
+        return cls(
+            id=template.id,
+            label=template.label,
+            description=template.description,
+            config=template.config,
+            content_hash=template.content_hash,
+        )
+
+
+class ConfigurationTemplateList(_WireModel):
+    items: tuple[ConfigurationTemplateView, ...]
+
+
+class ConfigurationTemplateImportCommand(_WireModel):
+    template_id: NonEmptyText
+    content_hash: Sha256ContentHash
+    entry_id: NonEmptyText
+    actor: NonEmptyText
+    note: str = ""
+
+
+class ConfigurationTemplateImportResult(_WireModel):
+    setup: SetupRevision
+    configuration: ConfigEntryView
+
+    @property
+    def selection(self) -> ScientificSelection:
+        entry = self.configuration.entry
+        return ScientificSelection(
+            configuration=SavedConfiguration(
+                ref=PlanConfigRef(
+                    entry_id=entry.id,
+                    content_hash=entry.content_hash,
+                )
+            )
+        )
 
 
 class SetupRevisionList(_WireModel):
@@ -1434,6 +1489,10 @@ __all__ = [
     "ConfigRevisionSource",
     "ConfigSetupRebindCommand",
     "ConfigSetupRebindPreviewCommand",
+    "ConfigurationTemplateImportCommand",
+    "ConfigurationTemplateImportResult",
+    "ConfigurationTemplateList",
+    "ConfigurationTemplateView",
     "DirectConfigRevisionSource",
     "ExecutorHeartbeat",
     "ExecutorLease",

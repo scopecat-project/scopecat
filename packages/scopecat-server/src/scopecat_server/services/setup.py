@@ -18,10 +18,22 @@ from scopecat.control.models import (
     InventoryMigrationBlocker,
     ResourceKey,
 )
-from scopecat.daemon.wire import SetupActivateCommand, SetupSaveCommand
+from scopecat.daemon.views import ConfigEntryView
+from scopecat.daemon.wire import (
+    ConfigurationTemplateImportCommand,
+    ConfigurationTemplateImportResult,
+    ConfigurationTemplateView,
+    SetupActivateCommand,
+    SetupSaveCommand,
+)
 from scopecat.kernel.content_identity import sha256_json_hash
 from scopecat.kernel.errors import CheckFailed, Conflict, DataIntegrityError, NotFound
-from scopecat.records.setup import ActiveSetupView, SetupRevision
+from scopecat.records.configuration_template import ConfigurationTemplate
+from scopecat.records.setup import (
+    ActiveSetupView,
+    ExecutableSetupSnapshot,
+    SetupRevision,
+)
 
 from scopecat_server.errors import BackendConflict, BackendNotFound
 from scopecat_server.instruments.actors import (
@@ -45,12 +57,67 @@ class SetupService:
         config_registry: SQLiteConfigRegistryStore,
         actors: InstrumentActorRegistry,
         calibration_cohorts: SQLiteCalibrationCohortStore,
+        templates: tuple[ConfigurationTemplate, ...] = (),
     ) -> None:
         self._control = control
         self._registry = config_registry
         self._actors = actors
         self._cohorts = calibration_cohorts
         self._mutation_lock = Lock()
+        if len({template.id for template in templates}) != len(templates):
+            raise ValueError("configuration template IDs must be unique")
+        self._templates = {
+            template.id: template.model_copy(deep=True) for template in templates
+        }
+
+    def templates(self) -> tuple[ConfigurationTemplateView, ...]:
+        return tuple(
+            ConfigurationTemplateView.from_template(template)
+            for template in self._templates.values()
+        )
+
+    def import_template(
+        self, command: ConfigurationTemplateImportCommand
+    ) -> ConfigurationTemplateImportResult:
+        with self._errors():
+            template = self._templates.get(command.template_id)
+            if template is None:
+                raise BackendNotFound(
+                    "configuration template is not provided by this adapter"
+                )
+            if template.content_hash != command.content_hash:
+                raise BackendConflict("configuration template changed; review it again")
+            setup = ExecutableSetupSnapshot.from_config(template.config)
+            note = f"Template {template.id} ({template.content_hash})\n{command.note}"
+            revision = SetupRevision(
+                id=f"template-setup:{command.entry_id}",
+                content_hash=setup.content_hash,
+                setup=setup,
+                actor=command.actor,
+                note=note,
+            )
+            with self._control.write_transaction() as connection:
+                with self._registry.borrowed_unit_of_work(connection) as work:
+                    retained = work.setups.save_revision(revision)
+                result = config_registry_service.save_config_revision(
+                    revision=config_registry_service.ConfigRevision(
+                        entry_id=command.entry_id,
+                        actor=command.actor,
+                        note=note,
+                        source=config_registry_service.DirectConfigRevisionSource(
+                            config=template.config
+                        ),
+                    ),
+                    unit_of_work=lambda: self._registry.borrowed_unit_of_work(
+                        connection
+                    ),
+                )
+            return ConfigurationTemplateImportResult(
+                setup=retained,
+                configuration=ConfigEntryView(
+                    entry=result.entry, config=template.config
+                ),
+            )
 
     def current(self) -> ActiveSetupView:
         with self._errors(), self._registry.read_unit_of_work() as work:
