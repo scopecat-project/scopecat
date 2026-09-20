@@ -1,3 +1,4 @@
+import { problemLocationLabel } from "../../lib/problem-location";
 import type { LaunchRejection } from "../../api-client";
 import { ExecutionScenario } from "../../ui/ExecutionScenario";
 
@@ -15,10 +16,13 @@ export function LaunchRejectionDetails({ rejection }: { rejection: LaunchRejecti
             <p>
               <code>{problem.code}</code>: {problem.message}
             </p>
-            {problem.details?.dimension === "capability" && <p>Declared capability limit</p>}
+            {typeof problem.details === "object" &&
+              problem.details !== null &&
+              "dimension" in problem.details &&
+              problem.details.dimension === "capability" && <p>Declared capability limit</p>}
             {problem.location && (
               <p>
-                Location: <code>{JSON.stringify(problem.location)}</code>
+                Location: <code>{problemLocationLabel(problem.location)}</code>
               </p>
             )}
           </li>

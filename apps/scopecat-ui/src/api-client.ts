@@ -91,7 +91,7 @@ function isLaunchRejection(value: unknown): value is LaunchRejection {
         isObject(problem) &&
         typeof problem.code === "string" &&
         typeof problem.message === "string" &&
-        (problem.location == null || isObject(problem.location)) &&
+        (problem.location == null || isReadableLocation(problem.location)) &&
         (problem.details == null || isObject(problem.details)),
     )
   )
@@ -108,5 +108,16 @@ function isLaunchRejection(value: unknown): value is LaunchRejection {
       [scenario.capabilities, scenario.limitations].every(
         (items) => Array.isArray(items) && items.every((item) => typeof item === "string"),
       ))
+  );
+}
+
+function isReadableLocation(value: unknown): boolean {
+  return (
+    isObject(value) &&
+    typeof value.kind === "string" &&
+    (!("root" in value) || typeof value.root === "string") &&
+    (!("path" in value) ||
+      (Array.isArray(value.path) &&
+        value.path.every((item) => typeof item === "string" || typeof item === "number")))
   );
 }

@@ -525,7 +525,7 @@ it("shows typed rejection evidence and clears it after the request changes", asy
         code: "sample_rate_limit",
         phase: "validation",
         message: "Choose a supported rate",
-        location: { kind: "model", root: "request", path: ["sample_rate"] },
+        location: { kind: "model", root: "target_compile_entry", path: ["sample_rate"] },
         details: { dimension: "capability" },
       },
     ],
@@ -547,7 +547,7 @@ it("shows typed rejection evidence and clears it after the request changes", asy
   fireEvent.click(screen.getByRole("button", { name: "Preview" }));
   await screen.findByText("sample_rate_limit");
   expect(screen.getByText("Declared capability limit")).toBeVisible();
-  expect(screen.getByText(/sample_rate.*\]/)).toBeVisible();
+  expect(screen.getByText("target_compile_entry.sample_rate")).toBeVisible();
   expect(screen.getByText("Does not model device heating")).toBeVisible();
   expect(screen.queryByText("Preview ready")).not.toBeInTheDocument();
   fireEvent.change(screen.getByLabelText("Amplitude"), { target: { value: "0.5" } });
