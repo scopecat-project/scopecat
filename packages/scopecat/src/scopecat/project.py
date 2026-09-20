@@ -117,15 +117,20 @@ class Project:
             )
         from scopecat.installed_authors import installed_module_path
 
-        expected = installed_module_path(name.partition(".")[0], distribution, name)
-        module = import_module(name)
-        filename = module.__file__
-        if filename is None or Path(filename).resolve() != expected.resolve():
-            raise ProjectCodeLoadError(
-                f"installed author module {name!r} did not resolve to the "
-                f"declared distribution {distribution!r}: expected {expected}"
-            )
-        return module
+        root = self.code_root or self.root
+        with _project_import_lock:
+            _require_available_project(root)
+            expected = installed_module_path(name.partition(".")[0], distribution, name)
+            module = import_module(name)
+            filename = module.__file__
+            if filename is None or Path(filename).resolve() != expected.resolve():
+                raise ProjectCodeLoadError(
+                    f"installed author module {name!r} did not resolve to the "
+                    f"declared distribution {distribution!r}: expected {expected}"
+                )
+            global _loaded_project_code_root
+            _loaded_project_code_root = root
+            return module
 
     def authoring(self, daemon: str | None = None) -> AuthorProject:
         """Use complete author revisions from notebooks without module reload."""

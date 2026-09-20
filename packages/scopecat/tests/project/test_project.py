@@ -473,6 +473,11 @@ def test_declared_author_modules_accept_only_explicit_installed_distribution(
     )
     try:
         assert load_project(manifest).load_application().authors is not None
+        other = tmp_path / "other" / "scopecat.toml"
+        other.parent.mkdir()
+        other.write_text(manifest.read_text())
+        with pytest.raises(ProjectCodeLoadError, match="already loaded project code"):
+            load_project(other).load_application()
         manifest.write_text(
             '[lab.capabilities]\nauthor_modules=["installed_lab_methods"]\n'
         )
