@@ -10,6 +10,7 @@ from contextlib import ExitStack, suppress
 from dataclasses import dataclass
 from hashlib import sha256
 from pathlib import Path
+from typing import Literal
 from uuid import uuid4
 
 import psutil
@@ -122,11 +123,11 @@ def prepare_environment(project: Path, bundle: Path, home: Path) -> PreparedEnvi
             attempt = _Attempt(token=uuid4().hex, project=str(project))
             _save(attempt_file, attempt)
 
-            def process_started(pid: int | None) -> None:
+            def process_started(pid: int | Literal["not-started"] | None) -> None:
                 attempt.launching = pid is None
-                attempt.pid = pid
+                attempt.pid = pid if isinstance(pid, int) else None
                 attempt.created = None
-                if pid is not None:
+                if isinstance(pid, int):
                     with suppress(psutil.NoSuchProcess):
                         attempt.created = psutil.Process(pid).create_time()
                 _save(attempt_file, attempt)

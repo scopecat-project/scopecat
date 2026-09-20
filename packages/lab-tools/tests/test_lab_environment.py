@@ -10,6 +10,7 @@ import pytest
 from filelock import FileLock
 
 from lab_tools import bundle, lab_environment
+from lab_tools.bundle import install_bundle as offline_install
 
 
 @pytest.fixture
@@ -200,3 +201,27 @@ def test_completed_environment_mismatch_is_retained(
     assert len(installer) == 1
     assert (project / ".venv" / bundle.RECEIPT).is_file()
     assert not list(project.glob(".venv-failed-*"))
+
+
+def test_failed_spawn_clears_launch_intent_and_allows_owned_retry(
+    project, delivery, tmp_path, monkeypatch, installer
+):
+    home = tmp_path / "home"
+
+    def spawn_failed(*_args, **_kwargs):
+        raise OSError("installer could not start")
+
+    with monkeypatch.context() as failed:
+        failed.setattr(bundle, "install_bundle", offline_install)
+        failed.setattr(bundle.shutil, "which", lambda _name: "uv")
+        failed.setattr(bundle.subprocess, "Popen", spawn_failed)
+        with pytest.raises(OSError, match="installer could not start"):
+            lab_environment.prepare_environment(project, delivery, home)
+    attempt_file = next((home / "environment-attempts").glob("*.json"))
+    attempt = json.loads(attempt_file.read_text())
+    assert attempt["launching"] is False
+    assert attempt["pid"] is None
+    prepared = lab_environment.prepare_environment(project, delivery, home)
+    assert prepared.python.is_file()
+    assert len(list(project.glob(".venv-failed-*"))) == 1
+    assert installer == [project / ".venv"]

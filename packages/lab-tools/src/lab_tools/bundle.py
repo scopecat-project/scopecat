@@ -23,7 +23,7 @@ import uuid
 from collections.abc import Callable, Generator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Protocol, TypedDict, cast
+from typing import Literal, Protocol, TypedDict, cast
 
 MANIFEST = "bundle.json"
 RECEIPT = "scopecat-lab-delivery.json"
@@ -140,7 +140,8 @@ def verify_bundle(root: Path, *, gui_only: bool = False) -> Bundle:
 
 
 def _run_install(
-    command: list[str], on_process: Callable[[int | None], None] | None
+    command: list[str],
+    on_process: Callable[[int | Literal["not-started"] | None], None] | None,
 ) -> None:
     if on_process is None:
         _ = subprocess.run(command, check=True)  # noqa: S603 - fixed installer command
@@ -148,7 +149,14 @@ def _run_install(
     # Persist the launch intent before spawning: an interrupted unrecorded launch
     # must never be mistaken for proof that no installer is still writing.
     on_process(None)
-    with subprocess.Popen(command) as process:  # noqa: S603 - fixed installer command
+    try:
+        process = subprocess.Popen(command)  # noqa: S603 - fixed installer command
+    except OSError:
+        # Popen did not return a child: unlike an interrupted launch, this is
+        # positive evidence that this command has no process still writing.
+        on_process("not-started")
+        raise
+    with process:
         on_process(process.pid)
         if process.wait() != 0:
             raise subprocess.CalledProcessError(process.returncode, command)
@@ -159,7 +167,7 @@ def install_bundle(
     destination: Path,
     *,
     ownership_token: str | None = None,
-    on_process: Callable[[int | None], None] | None = None,
+    on_process: Callable[[int | Literal["not-started"] | None], None] | None = None,
 ) -> Path:
     root = root.resolve()
     destination = destination.resolve()
