@@ -44,6 +44,7 @@ from scopecat.automation.definition import RegisteredProcedure
 from scopecat.automation.models import ProcedureDefinitionRef, procedure_intent_hash
 from scopecat.daemon.views import ConfigContextResolution
 from scopecat.kernel.content_identity import sha256_json_hash
+from scopecat.kernel.errors import CheckFailed
 from scopecat.kernel.frozen import thaw_json_value
 from scopecat.kernel.python_source import python_source_identity
 from scopecat.planning.preflight import (
@@ -433,48 +434,57 @@ class AuthorExperiments:
         resolved = resolve_launch_config(lab, request)
         config, source = resolved.config, resolved.reviewed.config_source
         request = request.model_copy(update={"reviewed": resolved.reviewed})
-        invocation = selected.edit(
-            config=config,
-            edits=request.control_edits,
-            inputs=inputs,
-            scan_mode=request.scan_mode,
-            parameter_sweeps=request.parameter_sweeps,
-        )
-        if request.action == "preview":
-            preview = lab.preview_invocation(
-                invocation, config=config, config_source=source
+        try:
+            invocation = selected.edit(
+                config=config,
+                edits=request.control_edits,
+                inputs=inputs,
+                scan_mode=request.scan_mode,
+                parameter_sweeps=request.parameter_sweeps,
             )
-            return LaunchPreview(
-                experiment_id=selected.entry.id,
-                manual_state=request.manual_state,
-                request_hash=request.request_hash,
-                code_revision=selected.code_revision,
-                workspace_id=request.workspace_id,
-                reviewed=resolved.reviewed,
-                point_count=preview.initial_point_count,
-                resources=preview.instrument_ids,
-                controls=control_values(selected.controls, invocation, config=config),
-                summary=selected.description,
-                inspection=LaunchInspection.from_preview(preview),
-                preflight=PreflightSummary(
-                    stages=(
-                        summarize_preflight(
-                            preview,
-                            stage_id="experiment",
-                            label=selected.title,
-                            configuration=launch_preflight_configuration(source),
-                            executions=ExactQuantity(
-                                value=1,
-                                unit="runs",
-                                basis="One authored experiment",
-                            ),
-                            config_content_hash=source.content_hash,
-                            configuration_meaning=launch_preflight_meaning(source),
-                        ),
+            if request.action == "preview":
+                preview = lab.preview_invocation(
+                    invocation, config=config, config_source=source
+                )
+                return LaunchPreview(
+                    experiment_id=selected.entry.id,
+                    manual_state=request.manual_state,
+                    request_hash=request.request_hash,
+                    code_revision=selected.code_revision,
+                    workspace_id=request.workspace_id,
+                    reviewed=resolved.reviewed,
+                    point_count=preview.initial_point_count,
+                    resources=preview.instrument_ids,
+                    controls=control_values(
+                        selected.controls, invocation, config=config
                     ),
-                    scope_basis="One authored run; all selected points.",
-                ),
-            )
+                    summary=selected.description,
+                    inspection=LaunchInspection.from_preview(preview),
+                    preflight=PreflightSummary(
+                        stages=(
+                            summarize_preflight(
+                                preview,
+                                stage_id="experiment",
+                                label=selected.title,
+                                configuration=launch_preflight_configuration(source),
+                                executions=ExactQuantity(
+                                    value=1,
+                                    unit="runs",
+                                    basis="One authored experiment",
+                                ),
+                                config_content_hash=source.content_hash,
+                                configuration_meaning=launch_preflight_meaning(source),
+                            ),
+                        ),
+                        scope_basis="One authored run; all selected points.",
+                    ),
+                )
+        except CheckFailed as error:
+            raise LaunchRequestRejected(
+                "Experiment preparation failed its checks",
+                problems=error.problems,
+                scenario=config.system.scenario,
+            ) from error
         admitted = lab.procedures.submit(
             _AuthorProcedure(selected),
             AuthorLaunchIntent(

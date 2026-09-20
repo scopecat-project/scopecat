@@ -206,3 +206,18 @@ def test_target_compilation_error_carries_stably_ordered_structured_issues() -> 
     error = TargetCompilationError((later, earlier))
 
     assert error.issues == (earlier, later)
+    from scopecat.kernel.errors import CheckFailed
+    from scopecat.kernel.problems import ProblemPhase, model_location
+
+    assert isinstance(error, CheckFailed)
+    assert [problem.code for problem in error.problems] == [
+        "duration_limit",
+        "unsupported_instruction",
+    ]
+    assert [problem.details["dimension"] for problem in error.problems] == [
+        "capability",
+        "program",
+    ]
+    assert error.problems[0].phase == ProblemPhase.PLANNING
+    assert error.problems[0].location == model_location("target_compile_entry", "a")
+    assert "duration_limit" in str(error)

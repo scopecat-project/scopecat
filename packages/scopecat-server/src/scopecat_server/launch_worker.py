@@ -32,7 +32,6 @@ from scopecat.records.author_revision import AuthorRevisionRef
 from scopecat.records.launch_request import LaunchRequest
 
 from scopecat_server.author_worker import revision_project
-from scopecat_server.launch_response import LaunchRejection
 from scopecat_server.worker_diagnostics import (
     report_stage,
     report_validation_error,
@@ -67,8 +66,13 @@ def main() -> None:
     with contextlib.redirect_stdout(sys.stderr):
         report_stage("project application load")
         application = project.load_application()
-        result = launch(application, root, None, request)
-    print(result.model_dump_json())
+        try:
+            result = launch(application, root, None, request)
+        except LaunchRequestRejected as error:
+            encoded = error.diagnostic.model_dump_json()
+        else:
+            encoded = result.model_dump_json()
+    print(encoded)
 
 
 def run_project_procedure(root: Path, procedure_id: str) -> None:
@@ -195,7 +199,7 @@ def serve(
             try:
                 result = launch(application, root, ref, request)
             except LaunchRequestRejected as error:
-                encoded = LaunchRejection(detail=str(error)).model_dump_json()
+                encoded = error.diagnostic.model_dump_json()
             else:
                 encoded = result.model_dump_json()
             phases["provider"] = time.perf_counter() - provider_started

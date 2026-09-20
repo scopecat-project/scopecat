@@ -137,7 +137,9 @@ def test_serve_rejects_request_without_reloading_application() -> None:
     replies = [json.loads(line) for line in output.getvalue().splitlines()]
     assert replies[0] == {
         "kind": "launch_rejection",
-        "detail": "unknown control 'amplitudes'",
+        "message": "unknown control 'amplitudes'",
+        "problems": [],
+        "scenario": None,
     }
     assert replies[1]["entries"] == []
     assert all(call.args[0] is application for call in launch.call_args_list)
@@ -162,3 +164,55 @@ def test_serve_does_not_hide_author_code_failure() -> None:
             command.code_revision,
             application=cast("LabApplication", object()),
         )
+
+
+def test_serve_preserves_structured_check_and_keeps_worker_ready() -> None:
+    import io
+
+    from scopecat.application.launch import LaunchCatalog, LaunchRequestRejected
+    from scopecat.kernel.problems import ProblemPhase, model_location, problem
+    from scopecat.records.execution_scenario import SoftwareExecutionScenario
+    from scopecat.records.launch_rejection import LaunchRejection
+
+    from scopecat_server.launch_worker import serve
+
+    command = request()
+    assert command.code_revision is not None
+    finding = problem(
+        "instrument_operation_unsupported",
+        "No response readback",
+        phase=ProblemPhase.PLANNING,
+        location=model_location("operation", "read"),
+        details={"instrument": "source"},
+    )
+    scenario = SoftwareExecutionScenario(
+        id="software",
+        label="Software",
+        model_id="test",
+        model_version="1",
+        capabilities=("writes",),
+    )
+    output = io.StringIO()
+    with (
+        patch("sys.stdin", io.StringIO((command.model_dump_json() + "\n") * 2)),
+        patch("sys.stdout", output),
+        patch(
+            "scopecat_server.launch_worker.launch",
+            side_effect=[
+                LaunchRequestRejected(
+                    "Preparation failed", problems=(finding,), scenario=scenario
+                ),
+                LaunchCatalog(),
+            ],
+        ),
+    ):
+        serve(
+            Path.cwd(),
+            command.code_revision,
+            application=cast("LabApplication", object()),
+        )
+    first, second = output.getvalue().splitlines()
+    diagnostic = LaunchRejection.model_validate_json(first)
+    assert diagnostic.problems == (finding,)
+    assert diagnostic.scenario == scenario
+    assert json.loads(second)["entries"] == []

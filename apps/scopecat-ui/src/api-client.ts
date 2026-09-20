@@ -1,5 +1,7 @@
 import createClient from "openapi-fetch";
-import type { paths } from "./api-schema";
+import type { components, paths } from "./api-schema";
+
+export type LaunchRejection = components["schemas"]["LaunchRejection"];
 
 export class ApiError extends Error {
   constructor(
@@ -9,6 +11,10 @@ export class ApiError extends Error {
   ) {
     super(message);
     this.name = "ApiError";
+  }
+
+  get launchRejection(): LaunchRejection | undefined {
+    return this.status === 422 && isLaunchRejection(this.detail) ? this.detail : undefined;
   }
 }
 
@@ -68,4 +74,50 @@ export async function apiData<T>(pending: ApiResponse<T>): Promise<Exclude<T, un
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
+}
+
+function isLaunchRejection(value: unknown): value is LaunchRejection {
+  if (
+    !isObject(value) ||
+    value.kind !== "launch_rejection" ||
+    typeof value.message !== "string" ||
+    !Array.isArray(value.problems) ||
+    !value.problems.length
+  )
+    return false;
+  if (
+    !value.problems.every(
+      (problem) =>
+        isObject(problem) &&
+        typeof problem.code === "string" &&
+        typeof problem.message === "string" &&
+        (problem.location == null || isReadableLocation(problem.location)) &&
+        (problem.details == null || isObject(problem.details)),
+    )
+  )
+    return false;
+  const scenario = value.scenario;
+  return (
+    scenario == null ||
+    (isObject(scenario) &&
+      scenario.kind === "software" &&
+      ["id", "label", "model_id", "model_version"].every(
+        (key) => typeof scenario[key] === "string",
+      ) &&
+      (scenario.seed == null || typeof scenario.seed === "number") &&
+      [scenario.capabilities, scenario.limitations].every(
+        (items) => Array.isArray(items) && items.every((item) => typeof item === "string"),
+      ))
+  );
+}
+
+function isReadableLocation(value: unknown): boolean {
+  return (
+    isObject(value) &&
+    typeof value.kind === "string" &&
+    (!("root" in value) || typeof value.root === "string") &&
+    (!("path" in value) ||
+      (Array.isArray(value.path) &&
+        value.path.every((item) => typeof item === "string" || typeof item === "number")))
+  );
 }

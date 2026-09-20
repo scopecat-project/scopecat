@@ -5793,6 +5793,33 @@ export interface components {
              */
             workspace_id: string;
         };
+        /** LaunchRejection */
+        LaunchRejection: {
+            /**
+             * Kind
+             * @default launch_rejection
+             * @constant
+             */
+            kind: "launch_rejection";
+            /** Message */
+            message: string;
+            /**
+             * Problems
+             * @default []
+             */
+            problems: components["schemas"]["Problem-Output"][];
+            scenario?: components["schemas"]["SoftwareExecutionScenario"] | null;
+        };
+        /**
+         * LaunchRejectionResponse
+         * @description HTTP detail also permits existing textual and request-validation failures.
+         */
+        LaunchRejectionResponse: {
+            /** Detail */
+            detail: components["schemas"]["LaunchRejection"] | string | {
+                [key: string]: components["schemas"]["pydantic__types__JsonValue"];
+            }[];
+        };
         /** LaunchRequest */
         "LaunchRequest-Input": {
             /**
@@ -10987,13 +11014,13 @@ export interface operations {
                     "application/json": components["schemas"]["LaunchPreview"];
                 };
             };
-            /** @description Validation Error */
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["LaunchRejectionResponse"];
                 };
             };
         };
@@ -11020,13 +11047,13 @@ export interface operations {
                     "application/json": components["schemas"]["LaunchSubmission"];
                 };
             };
-            /** @description Validation Error */
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["LaunchRejectionResponse"];
                 };
             };
         };

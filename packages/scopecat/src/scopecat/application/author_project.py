@@ -75,6 +75,7 @@ from scopecat.records.config_context import ConfigContextRef
 from scopecat.records.control_edit import ControlEdit
 from scopecat.records.experiment_plan import ExperimentPlanRevision, ExperimentPlanSave
 from scopecat.records.experimental_batch import require_batch_match
+from scopecat.records.launch_rejection import AuthorLaunchRejected, LaunchRejection
 from scopecat.records.launch_request import LaunchRequest
 from scopecat.records.measurement import MeasurementRecord
 from scopecat.records.parameter_update import ParameterUpdate
@@ -355,15 +356,34 @@ class AuthorProject(DaemonClient):
                 "Author session is closed. Open project.authoring() again, then "
                 "job.reconnect(session) or session.run(run_id) for retained data."
             )
-        return super()._request(
-            method,
-            path,
-            params=params,
-            json=json,
-            content=content,
-            headers=headers,
-            timeout=timeout,
-        )
+        try:
+            return super()._request(
+                method,
+                path,
+                params=params,
+                json=json,
+                content=content,
+                headers=headers,
+                timeout=timeout,
+            )
+        except httpx2.HTTPStatusError as error:
+            if error.response.status_code == 422 and path.startswith(
+                "/api/v1/experiment-launcher"
+            ):
+                try:
+                    payload = TypeAdapter(dict[str, object]).validate_json(
+                        error.response.content
+                    )
+                    detail = TypeAdapter(dict[str, object]).validate_python(
+                        payload.get("detail")
+                    )
+                    if detail.get("kind") != "launch_rejection":
+                        raise error from None
+                    diagnostic = LaunchRejection.model_validate(detail)
+                except ValueError:
+                    raise error from None
+                raise AuthorLaunchRejected(diagnostic) from None
+            raise
 
     def _default_request_revision(self) -> AuthorRevisionRef | None:
         """Interactive sessions may select a source before creating a new preview."""

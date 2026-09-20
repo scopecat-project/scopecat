@@ -1,3 +1,4 @@
+import { problemLocationLabel } from "../../lib/problem-location";
 import { useMemo, useRef, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { AlertTriangle, CheckCircle2, Eye, LoaderCircle, Pencil, X } from "lucide-react";
@@ -466,15 +467,6 @@ function draftCommand(draft: PendingConfigDraft): ConfigDraftCommand {
   const [first, ...rest] = draft.updates;
   if (!first) throw new Error("A config draft requires at least one update.");
   return { ...draft, updates: [first, ...rest] };
-}
-
-function problemLocationLabel(
-  location: NonNullable<ConfigDraftPreview["problems"][number]["location"]>,
-): string {
-  const prefix = "root" in location ? location.root : location.kind;
-  return "path" in location && location.path.length > 0
-    ? `${prefix}.${location.path.join(".")}`
-    : prefix;
 }
 
 function draftErrorMessage(error: unknown): string {

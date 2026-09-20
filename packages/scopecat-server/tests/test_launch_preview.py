@@ -471,7 +471,7 @@ with (
 
 
 def test_worker_rejects_undeclared_control_edits_before_provider_action(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     import io
 
@@ -518,8 +518,13 @@ def test_worker_rejects_undeclared_control_edits_before_provider_action(
             launch_provider=provider,
             connect=Mock(return_value=contextlib.nullcontext(None)),
         )
-        with pytest.raises(ValueError, match="unknown control"):
-            launch_worker.main()
+        launch_worker.main()
+    from scopecat.records.launch_rejection import LaunchRejection
+
+    rejection = LaunchRejection.model_validate_json(capsys.readouterr().out)
+    assert "unknown control" in rejection.message
+    assert rejection.problems == ()
+    assert rejection.scenario is None
     assert provider.call_count == 1
     assert provider.call_args.args[1].action == "list"
 
@@ -592,13 +597,13 @@ def test_pinned_catalog_uses_pool_and_exposes_nested_timing() -> None:
 
 
 def test_request_rejection_is_reported_as_422() -> None:
-    from scopecat_server.launch_response import LaunchRejection
+    from scopecat.records.launch_rejection import LaunchRejection
 
     with patch("scopecat_server.http.transport.subprocess.run") as run:
         run.return_value = SimpleNamespace(
             returncode=0,
             stdout=LaunchRejection(
-                detail="unknown control 'amplitudes'"
+                message="unknown control 'amplitudes'"
             ).model_dump_json(),
             stderr="",
         )

@@ -1,3 +1,4 @@
+import { scenarioFixture } from "./test/scenario-fixture";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { getHealth } from "./data/project-api";
 import { ApiError } from "./api-client";
@@ -94,4 +95,29 @@ it("keeps actionable validation locations and raw diagnostics", async () => {
     message: "body.drive.q0.frequency: Use a frequency unit",
     detail,
   });
+});
+
+it("recognizes structured preview rejection only from the declared HTTP contract", () => {
+  const detail = {
+    kind: "launch_rejection",
+    message: "Preview rejected",
+    problems: [
+      {
+        code: "unsupported_sample_rate",
+        message: "Model requires a lower rate",
+        phase: "validation",
+        location: { kind: "model", root: "request", path: ["sample_rate"] },
+        details: { dimension: "capability" },
+      },
+    ],
+    scenario: scenarioFixture,
+  };
+  expect(new ApiError(detail.message, 422, detail).launchRejection).toEqual(detail);
+  expect(new ApiError(detail.message, 500, detail).launchRejection).toBeUndefined();
+  expect(
+    new ApiError("unsupported internal crash", 422, "unsupported internal crash").launchRejection,
+  ).toBeUndefined();
+  expect(
+    new ApiError("bad detail", 422, { ...detail, problems: [null] }).launchRejection,
+  ).toBeUndefined();
 });

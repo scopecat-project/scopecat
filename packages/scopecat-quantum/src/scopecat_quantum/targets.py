@@ -20,6 +20,9 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Protocol, runtime_checkable
 
+from scopecat.kernel.errors import CheckFailed
+from scopecat.kernel.problems import Problem, ProblemPhase, model_location
+
 from scopecat_quantum._ids import (
     AcquisitionSlotId,
     TargetArtifactId,
@@ -122,7 +125,7 @@ class TargetCompilationIssue:
         _require_text(self.message, field="target compilation issue message")
 
 
-class TargetCompilationError(ValueError):
+class TargetCompilationError(CheckFailed):
     """Aggregate deterministic rejection from a target compiler."""
 
     def __init__(self, issues: tuple[TargetCompilationIssue, ...]) -> None:
@@ -140,7 +143,24 @@ class TargetCompilationError(ValueError):
                 ),
             )
         )
-        super().__init__("; ".join(issue.message for issue in self.issues))
+        super().__init__(
+            tuple(
+                Problem(
+                    code=issue.code,
+                    phase=ProblemPhase.PLANNING,
+                    message=issue.message,
+                    location=(
+                        None
+                        if issue.entry_id is None
+                        else model_location(
+                            "target_compile_entry", issue.entry_id.value
+                        )
+                    ),
+                    details={"dimension": issue.dimension.value},
+                )
+                for issue in self.issues
+            )
+        )
 
 
 @runtime_checkable

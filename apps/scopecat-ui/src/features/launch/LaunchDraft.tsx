@@ -18,7 +18,7 @@ import {
   type ReactNode,
 } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { apiClient, apiData } from "../../api-client";
+import { apiClient, apiData, type LaunchRejection } from "../../api-client";
 import { initialControlDrafts, type ControlDrafts } from "./ControlFields";
 import { canRenderField, type FormField } from "./launch-fields";
 import {
@@ -31,6 +31,7 @@ import type { ConfigContextResolution } from "../config/config-api";
 import type { LaunchCatalogEntry, LaunchPreview } from "./launch-api";
 
 export interface LaunchDraft {
+  rejection?: LaunchRejection;
   handoff?: ComparisonHandoff;
   plan?: PlanRevision;
   planDirty?: boolean;
@@ -134,6 +135,7 @@ export function invalidateDraft(draft: LaunchDraft, notice: string): LaunchDraft
     requestKey: undefined,
     pending: false,
     error: "",
+    rejection: undefined,
     notice,
   };
 }
