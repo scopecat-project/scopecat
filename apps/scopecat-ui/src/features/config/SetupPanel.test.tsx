@@ -8,6 +8,7 @@ import type { ConfigProfileSnapshot } from "../../api-contract";
 import { SetupPanel } from "./SetupPanel";
 import {
   activateSetup,
+  getConfigurationTemplates,
   getActiveSetup,
   getSetupRevisions,
   saveSetupFromConfig,
@@ -16,6 +17,8 @@ import {
 } from "./setup-api";
 vi.mock("./setup-api", () => ({
   activateSetup: vi.fn(),
+  getConfigurationTemplates: vi.fn(),
+  importConfigurationTemplate: vi.fn(),
   getActiveSetup: vi.fn(),
   getSetupRevisions: vi.fn(),
   saveSetupFromConfig: vi.fn(),
@@ -57,6 +60,7 @@ const config: ConfigProfileSnapshot = {
 };
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.mocked(getConfigurationTemplates).mockResolvedValue({ items: [] });
   vi.mocked(getActiveSetup).mockResolvedValue(active);
   vi.mocked(getSetupRevisions).mockResolvedValue({ items: [revision, next] });
 });

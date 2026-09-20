@@ -36,3 +36,13 @@ export function saveSetupFromConfig(config: ConfigProfileSnapshot, name: string,
 export function activateSetup(command: SetupActivateCommand) {
   return apiData(apiClient.POST("/api/v1/setup/activation-operations", { body: command }));
 }
+
+export type ConfigurationTemplateImportCommand =
+  components["schemas"]["ConfigurationTemplateImportCommand"];
+export type { ConfigurationTemplateImportResult } from "../../api-contract";
+export function getConfigurationTemplates(signal?: AbortSignal) {
+  return apiData(apiClient.GET("/api/v1/setup/templates", { signal }));
+}
+export function importConfigurationTemplate(command: ConfigurationTemplateImportCommand) {
+  return apiData(apiClient.POST("/api/v1/setup/template-imports", { body: command }));
+}

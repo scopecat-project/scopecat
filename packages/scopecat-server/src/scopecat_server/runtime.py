@@ -22,6 +22,7 @@ from scopecat.daemon.wire import (
 from scopecat.project import load_bootstrap_factory
 from scopecat.project_state import ProjectStateServices
 from scopecat.records.config import ConfigProfileSnapshot, config_content_hash
+from scopecat.records.configuration_template import ConfigurationTemplate
 from scopecat.runtime_binding import load_runtime_binding
 
 from scopecat_server._startup_diagnostics import stage as startup_stage
@@ -126,6 +127,9 @@ class LocalDaemonRuntime:
         database = self.state_dir / "control.sqlite3"
         objects = self.state_dir / "objects"
         project_bootstrap: BootstrapConfigFactory | None = None
+        configuration_templates: (
+            Callable[[], tuple[ConfigurationTemplate, ...]] | None
+        ) = None
         sqlite: SQLiteDatabase | None = None
 
         try:
@@ -149,6 +153,7 @@ class LocalDaemonRuntime:
                     installed_packages=adapter_packages,
                 )(self.project_root)
                 project_bootstrap = bootstrap.bootstrap_config
+                configuration_templates = bootstrap.configuration_templates
             if instrument_backend_spec is not None:
                 instrument_endpoint = SubprocessInstrumentBackendEndpoint(
                     self.project_root,
@@ -299,6 +304,12 @@ class LocalDaemonRuntime:
                         bootstrap_source,
                         setup_service,
                     )
+                if configuration_templates is not None:
+                    startup_stage(
+                        "config registry ready; loading configuration templates"
+                    )
+                    setup_service.initialize_templates(configuration_templates())
+                    startup_stage("configuration templates ready")
                 startup_stage("config registry ready; starting application services")
                 application.start()
                 startup_stage("application services started")

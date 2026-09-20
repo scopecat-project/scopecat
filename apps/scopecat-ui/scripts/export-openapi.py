@@ -17,6 +17,8 @@ _OPERATIONS = {
     ("/api/v1/measurement-targets", "get"),
     ("/api/v1/measurement-targets/resolve", "post"),
     ("/api/v1/setup/active", "get"),
+    ("/api/v1/setup/templates", "get"),
+    ("/api/v1/setup/template-imports", "post"),
     ("/api/v1/setup/revisions", "get"),
     ("/api/v1/setup/revisions", "post"),
     ("/api/v1/setup/revisions/{revision_id}", "get"),

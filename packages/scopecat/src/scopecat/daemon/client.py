@@ -179,6 +179,9 @@ from scopecat.daemon.wire import (
     ConfigPublishReceipt,
     ConfigSetupRebindCommand,
     ConfigSetupRebindPreviewCommand,
+    ConfigurationTemplateImportCommand,
+    ConfigurationTemplateImportResult,
+    ConfigurationTemplateList,
     ExecutorHeartbeat,
     ExecutorLease,
     ExecutorStartRequest,
@@ -1005,6 +1008,20 @@ class DaemonClient:
             self._procedure_path(command.procedure_run_id, "close"),
             command,
             ProcedureCloseReceipt,
+        )
+
+    def configuration_templates(self) -> ConfigurationTemplateList:
+        return self._get_model(
+            f"{_API_PREFIX}/setup/templates", ConfigurationTemplateList
+        )
+
+    def import_configuration_template(
+        self, command: ConfigurationTemplateImportCommand
+    ) -> ConfigurationTemplateImportResult:
+        return self._post_idempotent_model(
+            f"{_API_PREFIX}/setup/template-imports",
+            command,
+            ConfigurationTemplateImportResult,
         )
 
     def active_setup(self) -> ActiveSetupView:

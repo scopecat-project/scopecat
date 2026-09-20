@@ -240,7 +240,11 @@ export function LaunchForm({
       />
       {draft.selection.configuration.kind === "saved" && (
         <p>
-          Using the plan's exact saved configuration. It is not replaced by the current lab default.
+          Using exact saved configuration {draft.selection.configuration.ref.entry_id}. It is not
+          replaced by the current lab default.{" "}
+          <button type="button" onClick={() => selectContext()}>
+            Use lab default
+          </button>
         </p>
       )}
       {selectedContext ? (

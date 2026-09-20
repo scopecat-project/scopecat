@@ -331,6 +331,17 @@ def _check_manual_config_draft_locked(
     )
 
 
+def save_config_revision(
+    *,
+    revision: ConfigRevision,
+    unit_of_work: ConfigRegistryUnitOfWorkFactory,
+) -> ConfigRegistryMutationResult:
+    """Save immutable parameter inputs without selecting a global default."""
+    _validate_config_revision(revision)
+    with unit_of_work() as work:
+        return _save_config_revision_locked(revision=revision, work=work)
+
+
 def publish_config_revision(
     *,
     revision: ConfigRevision,
@@ -1444,6 +1455,7 @@ __all__ = [
     "preview_manual_config_draft",
     "publish_config_revision",
     "resolve_config_registry_config_source",
+    "save_config_revision",
 ]
 
 

@@ -720,11 +720,15 @@ function ContextConfigWorkspace({
   onOpenRun: (id: string) => void;
   onSelected: () => void;
 }) {
-  const { selectContext } = useLaunchDraft();
+  const { selectContext, selectConfiguration } = useLaunchDraft();
   return (
     <ConfigWorkspace
       daemonUnavailable={daemonUnavailable}
       onOpenRun={onOpenRun}
+      onSelectConfiguration={(ref) => {
+        selectConfiguration(ref);
+        onSelected();
+      }}
       onSelectContext={(resolved) => {
         selectContext(resolved);
         onSelected();

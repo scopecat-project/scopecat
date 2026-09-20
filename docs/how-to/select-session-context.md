@@ -173,3 +173,46 @@ also prevent publishing a software result into a different executable setup.
 Model declarations describe the adapter's actual behavior. A seed or setting is
 not applied to an arbitrary driver merely by adding it to the declaration. Do not
 claim a physics model or deterministic random stream that the provider does not use.
+
+
+## Start from an adapter configuration template
+
+In the workbench's configuration view, **Configuration templates** lists complete
+recipes offered by the current laboratory adapter. Read the description and any
+software model coverage before importing. Import saves a new immutable setup and
+its parameter configuration together; it does not select either as a global
+default. A template is an initial recipe, not evidence of calibration validity.
+
+Review and activate the imported setup, then use its parameters for a launch.
+Setup activation changes the entire service, including other pages' and notebooks'
+future preparations. Existing previews retain their original setup and cannot be
+submitted against a different setup. The application still enforces device ownership
+and requires explicit inventory changes where applicable.
+
+Notebook clients use the same operations. With `lab` connected to the current
+service and `session` its author session:
+
+```python
+templates = lab.setup.templates()
+for template in templates:
+    print(template.id, template.label, template.description)
+
+chosen = templates[0]  # Choose after inspecting the available recipes.
+imported = lab.setup.import_template(chosen, name="software-trial")
+current = lab.setup.active()
+lab.setup.activate(imported.setup, expected_generation=current.activation.generation)
+session.use(selection=imported.selection)
+prepared = session.prepare(experiment())
+```
+
+`imported.selection` contains the exact saved parameter reference. It does not
+invent a sample or working point. To apply parameters from an existing working
+point to another setup, use the explicit setup rebind workflow instead. Source
+refresh preserves this selection. Importing again with the same name and intent
+returns the same records; changing the template or import intent requires a new
+name. Previously imported configurations remain in the normal configuration history.
+
+Only templates declared by the running adapter are offered. Selecting a software
+label does not replace the instrument backend or make physical connections virtual.
+An adapter without templates simply has no recipes to offer. Local installation
+settings remain deployment inputs, not the daily scenario selector.
