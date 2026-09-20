@@ -28,6 +28,7 @@ class Service(BaseModel):
     python: str
     static_dir: str
     environment: dict[str, str]
+    settings_identity: str | None = None
 
 
 class ServiceView(BaseModel):
@@ -167,6 +168,7 @@ class Services:
                 python=str(python),
                 static_dir=cast("str", result["static_dir"]),
                 environment=cast("dict[str, str]", result["environment"]),
+                settings_identity=cast("str | None", result["settings_identity"]),
             )
             if existing and existing != service:
                 from .host_store import Operations
@@ -228,7 +230,12 @@ class Services:
             ):
                 raise ValueError("登记路径已改变；请从本机 CLI 重新登记，原登记保留")
             updated = service.model_copy(
-                update={"environment": cast("dict[str, str]", result["environment"])}
+                update={
+                    "environment": cast("dict[str, str]", result["environment"]),
+                    "settings_identity": cast(
+                        "str | None", result["settings_identity"]
+                    ),
+                }
             )
             # A trusted local CLI could start the daemon while the probe runs.
             self._require_stopped(service)
@@ -276,6 +283,7 @@ class Services:
                 "root": service.root,
                 "static_dir": service.static_dir,
                 "environment": service.environment,
+                "settings_identity": service.settings_identity,
             },
         )
 

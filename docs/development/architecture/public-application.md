@@ -42,7 +42,8 @@ remain separately loaded in their owning process. A custom application is an
 explicit alternative, never combined with declarations by hidden precedence.
 This is an initial standard composition contract, not yet an installable adapter
 package manifest or dependency installer. First-run setup currently connects this
-source-manifest boundary, not a separate adapter/settings directory.
+source-manifest boundary, with an optional explicit local settings JSON file;
+it does not independently install adapter packages.
 
 Private should progressively become laboratory capability packages plus editable
 experiment code and local machine settings. Vendor SDK locations, device addresses
@@ -50,6 +51,22 @@ and deployment authority must not be duplicated merely by copying experiments.
 Source checkouts of public remain a framework development option, not a deployment
 prerequisite. Required dependency versions and supported capability boundaries must
 be explicit before independent environments are admitted.
+
+## Local settings boundary
+
+`runtime.settings_file` selects optional adapter-owned JSON. Public provides
+`read_lab_settings(project_root, SettingsModel)` for typed, single-read bootstrap
+settings and records path/content identity at host registration. Startup checks
+that identity; a stopped service can accept changes through explicit recheck.
+Stop never requires reading the settings file. Registration validates JSON without
+importing adapter code; adapter field validation occurs at bootstrap loading.
+
+The private consumer now selects its initial configuration recipe through this
+file instead of an ambient shell profile. Persisted scientific configuration
+remains authoritative for existing stores. SDK location, provider/worker injection
+and runtime qualification are still separate work: they have not been moved into
+this initial settings contract. Keep local settings outside captured source roots;
+this API does not automatically redact files placed in source directories.
 
 ## Working copies and version ownership
 

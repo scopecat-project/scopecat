@@ -32,6 +32,7 @@ def test_registration_preserves_interpreter_and_rejects_live_rebinding(
         return {
             "root": str(root),
             "static_dir": str(tmp_path / "gui"),
+            "settings_identity": None,
             "environment": {"prefix": str(python.parent)},
         }
 
@@ -95,6 +96,7 @@ def test_concurrent_registration_and_pending_start_keep_one_binding(
         lambda *_: {
             "root": str(root),
             "static_dir": str(tmp_path / "gui"),
+            "settings_identity": None,
             "environment": {"prefix": "env"},
         },
     )
@@ -184,6 +186,7 @@ def test_stop_rejects_foreign_interpreter_without_loading_gui(
         "action": "stop",
         "root": str(tmp_path),
         "static_dir": None,
+        "settings_identity": None,
         "environment": {
             "prefix": sys.prefix,
             "python": sys.version,
@@ -208,7 +211,12 @@ def test_pending_service_operation_blocks_removal(tmp_path, monkeypatch):
     monkeypatch.setattr(
         services,
         "_run",
-        lambda *_: {"root": str(root), "static_dir": "gui", "environment": {}},
+        lambda *_: {
+            "root": str(root),
+            "static_dir": "gui",
+            "settings_identity": None,
+            "environment": {},
+        },
     )
     monkeypatch.setattr(services, "open_project", lambda _: None)
     monkeypatch.setattr(
@@ -248,6 +256,7 @@ def stopped_service(tmp_path, monkeypatch):
     result = {
         "root": str(root),
         "static_dir": str(tmp_path / "gui"),
+        "settings_identity": None,
         "environment": {"prefix": "same-env", "scopecat": "before"},
     }
     monkeypatch.setattr(services, "_run", lambda *_: result)
@@ -269,6 +278,7 @@ def test_recheck_updates_only_identity_and_ignores_own_operation(
     scientific_record = Path(registered.root) / "record.bin"
     scientific_record.write_bytes(b"retained scientific evidence")
     result["environment"] = {"prefix": "same-env", "scopecat": "after"}
+    result["settings_identity"] = "sha256:new-settings"
     received = []
 
     def probe(python, request):
@@ -281,8 +291,15 @@ def test_recheck_updates_only_identity_and_ignores_own_operation(
     assert execute(home, None, command) is None
     updated = store.get(registered.id)
     assert updated.environment == result["environment"]
+    assert updated.settings_identity == result["settings_identity"]
     assert (
-        updated.model_copy(update={"environment": registered.environment}) == registered
+        updated.model_copy(
+            update={
+                "environment": registered.environment,
+                "settings_identity": registered.settings_identity,
+            }
+        )
+        == registered
     )
     assert received == [
         (
