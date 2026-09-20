@@ -16,9 +16,10 @@ afterEach(() => {
   document.body.innerHTML = "";
   sessionStorage.clear();
 });
-function mount(serviceState = "running") {
+function mount(serviceState = "running", fresh = false) {
   document.body.innerHTML = new DOMParser().parseFromString(markup, "text/html").body.innerHTML;
   const state = {
+    setup_defaults: { project: "/home/experiments/main", data_root: "/home/data" },
     topics: {},
     workspaces: [],
     operations: [] as object[],
@@ -43,6 +44,8 @@ function mount(serviceState = "running") {
       },
     ],
   };
+  const initialService = state.services[0]!;
+  if (fresh) state.services = [];
   const control = { failOperation: false, failState: false, state };
   let poll: () => Promise<unknown> = () => Promise.resolve(control.state);
   const assign = vi.fn();
@@ -55,10 +58,12 @@ function mount(serviceState = "running") {
         : Response.json(state);
     if (path === "/api/operations") {
       if (typeof options.body !== "string") throw new Error("Expected a JSON command");
-      const command: unknown = JSON.parse(options.body);
+      const command = JSON.parse(options.body) as { action: string };
+      if (command.action === "setup" && !control.failOperation) state.services = [initialService];
       requests.push({ path, body: command });
       const operation = {
         command,
+        service: command.action === "setup" ? "service-a" : null,
         status: control.failOperation ? "failed" : "succeeded",
         detail: control.failOperation ? "environment mismatch retained in log" : "ready",
         created: 0,
@@ -222,4 +227,73 @@ it("labels the last registered paths and package identity as historical informat
     expect(screen.getByText(label, { selector: "dt" }).nextElementSibling).toHaveTextContent(value);
   }
   expect(document.querySelector("img")).not.toBeInTheDocument();
+});
+
+it("shows first-run setup, preserves edits during polling, and enters the created workbench", async () => {
+  const host = mount("running", true);
+  const project = await screen.findByLabelText("主要代码文件夹");
+  await waitFor(() => expect(project).toHaveValue("/home/experiments/main"));
+  expect(document.getElementById("setup-panel")).toHaveAttribute("open");
+  fireEvent.input(project, { target: { value: "D:\\实验代码" } });
+  fireEvent.input(screen.getByLabelText("数据保存目录（可选）"), {
+    target: { value: "E:\\科学记录" },
+  });
+  await host.poll();
+  expect(project).toHaveValue("D:\\实验代码");
+  fireEvent.submit(document.getElementById("setup-form")!);
+  await waitFor(() => expect(host.assign).toHaveBeenCalledWith("http://127.0.0.1:9001/"));
+  expect(host.requests[0]?.body).toEqual({
+    id: "12345678123412341234123456789012",
+    action: "setup",
+    setup: { mode: "create", project: "D:\\实验代码", data_root: "E:\\科学记录", name: null },
+  });
+});
+it("connects an existing code folder without replacing its data binding and retains failure evidence", async () => {
+  const host = mount("running", true);
+  await waitFor(() =>
+    expect(screen.getByLabelText("主要代码文件夹")).toHaveValue("/home/experiments/main"),
+  );
+  fireEvent.change(screen.getByLabelText("接入方式"), { target: { value: "connect" } });
+  fireEvent.input(screen.getByLabelText("主要代码文件夹"), { target: { value: "/existing/lab" } });
+  expect(
+    screen.getByText("留空保留该项目已有的数据绑定。填写新目录不会迁移已有记录。"),
+  ).toBeVisible();
+  host.control.failOperation = true;
+  fireEvent.submit(document.getElementById("setup-form")!);
+  await waitFor(() =>
+    expect(document.getElementById("notice")).toHaveTextContent(
+      "environment mismatch retained in log",
+    ),
+  );
+  expect(host.requests[0]?.body).toMatchObject({
+    action: "setup",
+    setup: { mode: "connect", project: "/existing/lab", data_root: null, name: null },
+  });
+  expect(host.assign).not.toHaveBeenCalled();
+  expect(screen.getByLabelText("主要代码文件夹")).toHaveValue("/existing/lab");
+  expect(screen.getByRole("button", { name: "查看日志" })).toBeVisible();
+});
+it("keeps setup secondary for registered services and disables it during durable work", async () => {
+  const host = mount();
+  await screen.findByRole("button", { name: "启动 / 检查工作台" });
+  expect(document.getElementById("setup-panel")).not.toHaveAttribute("open");
+  host.control.state.operations = [
+    { status: "running", command: { action: "setup", setup: { project: "/new" } } },
+  ];
+  await host.poll();
+  expect(document.getElementById("setup-fields")).toBeDisabled();
+  fireEvent.submit(document.getElementById("setup-form")!);
+  expect(host.requests).toHaveLength(0);
+});
+it("does not redirect after setup if fresh service state cannot be verified", async () => {
+  const host = mount("running", true);
+  await waitFor(() =>
+    expect(screen.getByLabelText("主要代码文件夹")).toHaveValue("/home/experiments/main"),
+  );
+  host.control.failState = true;
+  fireEvent.submit(document.getElementById("setup-form")!);
+  await waitFor(() =>
+    expect(document.getElementById("notice")).toHaveTextContent("manager unavailable"),
+  );
+  expect(host.assign).not.toHaveBeenCalled();
 });
