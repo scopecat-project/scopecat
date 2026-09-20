@@ -25,3 +25,5 @@ directions to Scopecat contributors:
 Architecture is an implementation choice rather than a product requirement.
 Change it decisively when demonstrated workflows reveal a clearer design, while
 preserving user-facing concepts that still deliver value.
+
+- [Quantum compiler and device adapter boundary](quantum-adapters.md)
