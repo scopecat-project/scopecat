@@ -54,7 +54,8 @@ setup. To add another directory later, expand the setup form in management.
 
 A laboratory may provide an installed wheel plus a small editable experiment
 directory. The directory selects the adapter and its own experiment modules; it
-does not need copied drivers, compiler code or an application factory. Select the maintainer's complete offline delivery during setup to prepare `.venv`,
+does not need copied drivers, compiler code or an application factory. Select the
+maintainer's complete offline delivery during setup to prepare `.venv`,
 or use an already prepared environment. Setup checks the selected interpreter
 without importing drivers into the manager. It does not search the internet for
 missing packages.
@@ -66,6 +67,35 @@ Keep exact old wheels when retaining historical execution environments: scientif
 source capture records installed package identity but does not archive the wheel.
 If an adapter is missing or damaged, status and stop remain available; restore the
 package before rechecking or starting.
+
+## Build a laboratory delivery
+
+Maintainers can use `python -m lab_tools.delivery OUTPUT --recipe RECIPE.toml`
+from their locked build environment. Build on the recipient platform and Python
+ABI; `OUTPUT` must not exist. The recipe has one `[delivery]` table:
+
+```toml
+[delivery]
+lock_project = "."
+public_source = "scopecat"
+dependency_group = "lab-delivery"
+include_project = true
+packages = [".", "packages/shared-methods", "scopecat/packages/scopecat",
+  "scopecat/packages/scopecat-server", "scopecat/packages/scopecat-instruments",
+  "scopecat/packages/lab-teaching", "scopecat/packages/lab-tools"]
+```
+
+Paths resolve inside the recipe directory. List all local wheel distributions,
+including any additional framework extensions your adapter uses. The selected
+lock project supplies dependencies and build constraints; `include_project = true`
+includes its runtime dependencies as well as the named dependency group. The public
+checkout supplies the installer, GUI and locked download toolchain. The builder
+rejects duplicate distributions and records recipe identity in the delivery.
+
+The build needs network access and, unless `--gui DIRECTORY` supplies an already
+built matching GUI, pnpm. Verify an offline installation and representative virtual
+experiment before distributing the result. A built wheel inventory alone does not
+prove the laboratory's runtime dependencies are complete.
 
 ## Retry an initial environment installation
 
@@ -160,7 +190,7 @@ selected delivery while old copies retain their own environment.
 1. Finish measurements and close notebook connections. In the manager choose
    **Stop service (停止服务)** and wait for **Stopped (未启动)**.
 2. Update the environment using the installation's tested package or delivery
-   procedure. The manager does not install packages. Keep the same project,
+   procedure. Initial setup does not upgrade a completed environment. Keep the same project,
    interpreter and GUI paths for this recheck workflow.
 3. Choose **Recheck environment (重新检查环境)**. It probes the registered
    interpreter, project and GUI, then records the validated environment identity.
