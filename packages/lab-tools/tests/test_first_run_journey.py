@@ -57,17 +57,37 @@ def test_create_external_data_run_and_reopen_primary_workbench(
 import json, sys
 from pathlib import Path
 import scopecat as sc
+from scopecat.application import LabApplication
 project = sc.open_project(Path(sys.argv[1]))
 project.load_application()
 from scopecat_lab.authored.signal import Summary, signal
 request = signal(center=0.0)
 request.values['position'] = sc.Scan([-1.0, 0.0, 1.0])
-with project.authoring() as author:
+from scopecat_server.lifecycle import inspect_daemon
+record = inspect_daemon(project).record
+assert record is not None
+with LabApplication().connect(record.base_url) as lab, project.authoring() as author:
+    original_default = lab.config.active()
+    original_setup = lab.setup.active()
+    templates = lab.setup.templates()
+    assert len(templates) == 1 and templates[0].id == 'starter-software'
+    imported = lab.setup.import_template(templates[0], name='fresh-software-parameters')
+    assert lab.setup.import_template(
+        templates[0], name='fresh-software-parameters'
+    ) == imported
+    assert lab.config.active() == original_default
+    assert lab.setup.active() == original_setup
+    lab.setup.activate(
+        imported.setup, expected_generation=original_setup.activation.generation
+    )
+    author.use(selection=imported.selection)
     job = author.prepare(request).run()
     run = job.wait(timeout=60).result()
     scenario = run.snapshot.scientific_binding.scenario
     assert scenario is not None and scenario.id == 'starter-software'
     assert scenario.model_id == 'scopecat.starter.responses'
+    assert run.snapshot.config_source.entry_id == imported.configuration.entry.id
+    assert lab.config.active() == original_default
     report = author.analyze_as(
         run.id, 'scopecat_lab.authored.signal:summarize', Summary
     )

@@ -135,6 +135,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from scopecat.application import LabBootstrap
+from scopecat.records.configuration_template import ConfigurationTemplate
 
 from .configuration import bootstrap_config
 
@@ -142,7 +143,20 @@ from .configuration import bootstrap_config
 def create_bootstrap(_project_root: Path) -> LabBootstrap:
     """Expose only config construction to the daemon process."""
 
-    return LabBootstrap(bootstrap_config=bootstrap_config)
+    return LabBootstrap(
+        bootstrap_config=bootstrap_config,
+        configuration_templates=lambda: (
+            ConfigurationTemplate(
+                id="starter-software",
+                label="Software experiment bench",
+                description=(
+                    "Virtual temperature readings and analytic signal scans. "
+                    "Import fresh parameters without changing existing defaults."
+                ),
+                config=bootstrap_config(),
+            ),
+        ),
+    )
 
 
 __all__ = ["create_bootstrap"]
