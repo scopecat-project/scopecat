@@ -1779,6 +1779,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/setup/template-imports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Import Configuration Template */
+        post: operations["import_configuration_template_api_v1_setup_template_imports_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/setup/templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Configuration Templates */
+        get: operations["configuration_templates_api_v1_setup_templates_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -3963,6 +3997,37 @@ export interface components {
         };
         "ConfigurationChoice-Input": components["schemas"]["ActiveConfiguration"] | components["schemas"]["SavedConfiguration"] | components["schemas"]["WorkingPointConfiguration-Input"] | components["schemas"]["CandidateConfiguration"];
         "ConfigurationChoice-Output": components["schemas"]["ActiveConfiguration"] | components["schemas"]["SavedConfiguration"] | components["schemas"]["WorkingPointConfiguration-Output"] | components["schemas"]["CandidateConfiguration"];
+        /** ConfigurationTemplateImportCommand */
+        ConfigurationTemplateImportCommand: {
+            actor: components["schemas"]["NonEmptyText"];
+            content_hash: components["schemas"]["Sha256ContentHash"];
+            entry_id: components["schemas"]["NonEmptyText"];
+            /**
+             * Note
+             * @default
+             */
+            note: string;
+            template_id: components["schemas"]["NonEmptyText"];
+        };
+        /** ConfigurationTemplateImportResult */
+        ConfigurationTemplateImportResult: {
+            configuration: components["schemas"]["ConfigEntryView"];
+            setup: components["schemas"]["SetupRevision"];
+        };
+        /** ConfigurationTemplateList */
+        ConfigurationTemplateList: {
+            /** Items */
+            items: components["schemas"]["ConfigurationTemplateView"][];
+        };
+        /** ConfigurationTemplateView */
+        ConfigurationTemplateView: {
+            config: components["schemas"]["ConfigProfileSnapshot"];
+            content_hash: components["schemas"]["Sha256ContentHash"];
+            /** Description */
+            description: string;
+            id: components["schemas"]["NonEmptyText"];
+            label: components["schemas"]["NonEmptyText"];
+        };
         /**
          * ConfigValueOrigin
          * @description Origin of one scalar or one keyed table cell in an effective snapshot.
@@ -13676,6 +13741,59 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    import_configuration_template_api_v1_setup_template_imports_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConfigurationTemplateImportCommand"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConfigurationTemplateImportResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    configuration_templates_api_v1_setup_templates_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConfigurationTemplateList"];
                 };
             };
         };
