@@ -11,6 +11,7 @@ from scopecat.records.setup import ExecutableSetupSnapshot, SetupRevision
 from scopecat_testkit.config_registry import load_config
 from scopecat_testkit.server.runtime import SQLiteTestRunRepository
 
+from scopecat_server.setup_access import setup_config
 from scopecat_server.snapshots import create_snapshot, restore_snapshot
 from scopecat_server.storage.sqlite.config_registry import SQLiteConfigRegistryStore
 from scopecat_server.storage.sqlite.connection import SQLiteDatabase
@@ -276,3 +277,10 @@ def test_reopened_setup_retains_software_model_inputs(tmp_path: Path) -> None:
     assert retained == revision
     assert retained.setup.scenario == scenario
     assert retained.setup.compose(config).system.scenario == scenario
+    projected = setup_config(retained)
+    assert projected.system.scenario == scenario
+    assert setup_content_hash(projected) == retained.setup.execution_content_hash
+    assert (
+        ExecutableSetupSnapshot.from_config(projected).content_hash
+        == retained.content_hash
+    )
