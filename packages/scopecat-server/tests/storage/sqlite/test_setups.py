@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 from scopecat.kernel.content_identity import sha256_json_hash
 from scopecat.project import load_project
+from scopecat.records.execution_scenario import SoftwareExecutionScenario
 from scopecat.records.scientific_scope import setup_content_hash
 from scopecat.records.setup import ExecutableSetupSnapshot, SetupRevision
 from scopecat_testkit.config_registry import load_config
@@ -244,3 +245,34 @@ def test_initial_config_does_not_repair_partial_setup_state(tmp_path: Path) -> N
         assert len(work.setups.list_revisions()) == 1
         assert work.setups.read_current() is None
         assert work.registry.list_entries() == ()
+
+
+def test_reopened_setup_retains_software_model_inputs(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    scenario = SoftwareExecutionScenario(
+        id="noise",
+        label="Noisy protocol",
+        model_id="protocol",
+        model_version="1",
+        seed=19,
+        settings={"noise": 0.02},
+        capabilities=("capture",),
+        limitations=("No physical device",),
+    )
+    config = load_config()
+    config.system.scenario = scenario
+    setup = ExecutableSetupSnapshot.from_config(config)
+    revision = SetupRevision(
+        id="software",
+        content_hash=setup.content_hash,
+        setup=setup,
+        actor="maintainer",
+    )
+    with store.write_unit_of_work() as work:
+        work.setups.save_revision(revision)
+    reopened = _store(tmp_path)
+    with reopened.write_unit_of_work() as work:
+        retained = work.setups.read_revision("software")
+    assert retained == revision
+    assert retained.setup.scenario == scenario
+    assert retained.setup.compose(config).system.scenario == scenario

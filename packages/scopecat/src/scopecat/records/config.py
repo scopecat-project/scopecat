@@ -18,6 +18,7 @@ from pydantic import (
 from scopecat.kernel.entity import EntityRef
 from scopecat.kernel.interface_identity import InterfaceId
 from scopecat.kernel.state import StateValue
+from scopecat.records.execution_scenario import SoftwareExecutionScenario
 from scopecat.records.instrument import (
     InstrumentStateSetting,
     state_member_identity,
@@ -504,12 +505,20 @@ class SystemSpec(BaseModel):
     primary_entity_id: str
     topology: Topology
     instrument_registry: InstrumentRegistry
+    scenario: SoftwareExecutionScenario | None = None
     routing: RoutingGraph = Field(default_factory=RoutingGraph)
     domain_target: DomainTargetBinding | None
     parameter_catalog: ParameterCatalog
 
     @model_validator(mode="after")
     def validate_domain_target_members(self) -> SystemSpec:
+        if self.scenario is not None:
+            for instrument in self.instrument_registry.instruments:
+                if not isinstance(instrument.connection, VirtualInstrumentConnection):
+                    raise ValueError(
+                        "software scenario requires virtual connection: "
+                        f"{instrument.id}"
+                    )
         target = self.domain_target
         if target is None:
             return self

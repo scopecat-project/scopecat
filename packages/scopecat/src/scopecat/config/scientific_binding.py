@@ -71,6 +71,7 @@ def bind_scientific_evidence(
         subject = UnboundSubject()
     return ResolvedScientificBinding(
         subject=subject,
+        scenario=config.system.scenario,
         config_content_hash=config_content_hash(config),
         setup_content_hash=setup_content_hash(config),
     )
