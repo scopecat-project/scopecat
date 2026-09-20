@@ -301,3 +301,53 @@ def test_settings_change_cannot_race_daemon_owner(tmp_path, registration):
         )
     assert not (project / RUNTIME_BINDING_NAME).exists()
     assert registration == []
+
+
+def test_delivery_preparation_uses_final_project_and_matching_gui(
+    tmp_path, monkeypatch, registration
+):
+    from types import SimpleNamespace
+
+    project = tmp_path / "experiment"
+    delivery = tmp_path / "delivery"
+    retained_gui = tmp_path / "retained/gui"
+    interpreter = project / ".venv/bin/python"
+    checked = []
+    monkeypatch.setattr(first_run, "verify_bundle", checked.append)
+
+    def prepare(root, selected, home):
+        assert root == project and root.is_dir()
+        assert (root / "scopecat.toml").is_file()
+        assert selected == delivery
+        assert home == tmp_path / "home"
+        return SimpleNamespace(python=interpreter, gui=retained_gui)
+
+    monkeypatch.setattr(first_run, "prepare_environment", prepare)
+    first_run.setup(
+        tmp_path / "home",
+        first_run.SetupRequest(
+            mode="create", project=str(project), environment_bundle=str(delivery)
+        ),
+    )
+    assert checked == [delivery]
+    assert registration[0][1] == interpreter
+    assert registration[0][2]["static_dir"] == retained_gui
+
+
+def test_invalid_delivery_does_not_publish_project(tmp_path, monkeypatch, registration):
+    def invalid(_):
+        raise ValueError("交付不匹配")
+
+    monkeypatch.setattr(first_run, "verify_bundle", invalid)
+    project = tmp_path / "experiment"
+    with pytest.raises(ValueError, match="交付不匹配"):
+        first_run.setup(
+            tmp_path / "home",
+            first_run.SetupRequest(
+                mode="create",
+                project=str(project),
+                environment_bundle=str(tmp_path / "delivery"),
+            ),
+        )
+    assert not project.exists()
+    assert not registration

@@ -23,9 +23,10 @@ identify their code folder and share the application's execution authority.
 
 The first-run UI now creates an ordinary source project or connects a prepared
 laboratory code directory and enters its workbench. It can place new data separately
-and reuses a local `.venv` or the application environment. Native installers,
-automatic adapter-package installation and dependency/environment preparation
-remain future work; connecting a source directory does not implement those contracts.
+and reuses a local `.venv` or the application environment. A verified offline
+laboratory delivery can prepare a fresh project environment and matching GUI.
+Native installers, Python provisioning and updates of existing environments remain
+future work.
 
 ## Standard composition
 
@@ -42,8 +43,8 @@ remain separately loaded in their owning process. A custom application is an
 explicit alternative, never combined with declarations by hidden precedence.
 An independently installed adapter can instead own this composition in a package
 resource. First-run connects a prepared author directory and its environment, with
-an optional explicit local settings JSON file. It does not install packages or
-resolve an environment.
+an optional explicit local settings JSON file. An optional fixed delivery installs its locked wheels offline; setup does not
+resolve a new dependency graph.
 
 Private should progressively become laboratory capability packages plus editable
 experiment code and local machine settings. Vendor SDK locations, device addresses
@@ -89,6 +90,13 @@ Registration probes the selected experiment interpreter, not the host interprete
 and records adapter content identity. Startup checks it; changing the adapter
 requires stopping and rechecking. Status and stop parse only the local manifest
 and runtime binding, so removal of an adapter cannot disable service recovery.
+Laboratory maintainers can build that fixed artifact through a TOML delivery
+recipe selecting the reviewed lock project, group and local packages. This reuses
+the public builder, inventory/hash checks and installer rather than introducing
+an adapter-specific installation script. First-run uses an installer-owned attempt
+record, process identity and locks to retain/retry only its own incomplete `.venv`.
+The created environment stays at its final path; the retained artifact owns its GUI.
+
 This is a same-runtime package contract, not shared device authority across
 heterogeneous environments or a native installation system.
 

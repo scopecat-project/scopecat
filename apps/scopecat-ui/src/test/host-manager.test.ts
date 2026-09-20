@@ -250,6 +250,7 @@ it("shows first-run setup, preserves edits during polling, and enters the create
       project: "D:\\实验代码",
       data_root: "E:\\科学记录",
       settings_file: null,
+      environment_bundle: null,
       name: null,
     },
   });
@@ -271,6 +272,9 @@ it("connects an existing code folder without replacing its data binding and reta
   expect(screen.getByLabelText("实验室本机设置 JSON 文件（可选）")).toHaveValue(
     "/machine/lab.json",
   );
+  fireEvent.input(screen.getByLabelText("实验室离线交付目录（可选）"), {
+    target: { value: "/delivery/runtime" },
+  });
   host.control.failOperation = true;
   fireEvent.submit(document.getElementById("setup-form")!);
   await waitFor(() =>
@@ -285,6 +289,7 @@ it("connects an existing code folder without replacing its data binding and reta
       project: "/existing/lab",
       data_root: null,
       settings_file: "/machine/lab.json",
+      environment_bundle: "/delivery/runtime",
       name: null,
     },
   });

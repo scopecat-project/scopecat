@@ -16,9 +16,10 @@ class SetupRequest(BaseModel):
     project: str
     data_root: str | None = None
     settings_file: str | None = None
+    environment_bundle: str | None = None
     name: str | None = Field(default=None, min_length=1, max_length=200)
 
-    @field_validator("project", "data_root", "settings_file")
+    @field_validator("project", "data_root", "settings_file", "environment_bundle")
     @classmethod
     def absolute_path(cls, value: str | None) -> str | None:
         if value is not None and (not value.strip() or not Path(value).is_absolute()):
