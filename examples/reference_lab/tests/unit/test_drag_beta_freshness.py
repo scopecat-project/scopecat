@@ -50,7 +50,7 @@ def test_drag_beta_freshness_ignores_workspace_head_provenance_changes() -> None
         target,
     )
 
-    assert DRAG_BETA_CALIBRATION_VERSION == "10"
+    assert DRAG_BETA_CALIBRATION_VERSION == "11"
     assert first_observation.inputs == drag_beta_semantic_freshness_inputs(
         config,
         "q0",

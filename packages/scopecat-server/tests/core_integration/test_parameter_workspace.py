@@ -37,6 +37,7 @@ from scopecat.kernel.value_types import (
 )
 from scopecat.records.config import config_content_hash
 from scopecat.records.config_context import ConfigContextRef, ContextRunConfigSource
+from scopecat.records.execution_scenario import SoftwareExecutionScenario
 from scopecat.records.parameter import (
     ParameterCatalog,
     ParameterDefinition,
@@ -886,3 +887,57 @@ def test_rebase_rejects_changed_setup_without_touching_edits(
     assert params.version.context.entry_id == "start"
     assert params.diff() == before
     assert params["qubits"]["q0"]["frequency"] == 5.4
+
+
+def test_software_setup_rebind_keeps_physical_workspace_and_default(
+    operations: RegistryOperations,
+) -> None:
+    physical = ParameterWorkspace(operations, context="start")
+    base = physical.version.context
+    config = operations.entry("lab").config.model_copy(deep=True)
+    config.system.scenario = SoftwareExecutionScenario(
+        id="software",
+        label="Software",
+        model_id="test",
+        model_version="1",
+        capabilities=("protocol",),
+    )
+    setup = ExecutableSetupSnapshot.from_config(config)
+    with operations.uow() as work:
+        revision = work.setups.save_revision(
+            SetupRevision(
+                id="software-setup",
+                content_hash=setup.content_hash,
+                setup=setup,
+                actor="operator",
+            )
+        )
+    branched = rebind_config_setup(
+        entry_id="software-point",
+        base=base,
+        setup=revision.ref,
+        actor="operator",
+        note="Software rehearsal",
+        unit_of_work=operations.uow,
+    )
+    assert isinstance(branched.entry.source, ContextConfigRegistrySource)
+    assert branched.entry.source.context.workspace_id == "software-point"
+    assert operations.latest_context(base).entry.id == "start"
+    simulated = ParameterWorkspace(operations, context="software-point")
+    simulated["qubits"]["q0"]["frequency"] = 5.8
+    saved = simulated.save()
+    assert saved.context.entry_id != "software-point"
+    assert operations.latest_context(base).entry.id == "start"
+    with pytest.raises(Conflict, match="does not match the active setup"):
+        publish_config_revision(
+            revision=ConfigRevision(
+                entry_id="software-default",
+                actor="operator",
+                source=DirectConfigRevisionSource(config=branched.config),
+            ),
+            unit_of_work=operations.uow,
+            expected_generation=1,
+        )
+    active = load_active_config_registry_snapshot(unit_of_work=operations.uow)
+    assert active.entry.id == "lab"
+    assert active.config.system.scenario is None

@@ -4395,6 +4395,7 @@ export interface components {
             /** Primary Entity Id */
             primary_entity_id: string;
             routing: components["schemas"]["RoutingGraph"];
+            scenario?: components["schemas"]["SoftwareExecutionScenario"] | null;
             topology: components["schemas"]["Topology"];
         };
         /** ExperimentalBatch */
@@ -7807,11 +7808,12 @@ export interface components {
         ResolvedScientificBinding: {
             /**
              * Codec
-             * @default scopecat.scientific-binding.v1
+             * @default scopecat.scientific-binding.v2
              * @constant
              */
-            codec: "scopecat.scientific-binding.v1";
+            codec: "scopecat.scientific-binding.v2";
             config_content_hash: components["schemas"]["Sha256ContentHash"];
+            scenario?: components["schemas"]["SoftwareExecutionScenario"] | null;
             setup_content_hash: components["schemas"]["Sha256ContentHash"];
             subject: components["schemas"]["ResolvedSubject"];
         };
@@ -9577,6 +9579,39 @@ export interface components {
             setup: components["schemas"]["ExecutableSetupSnapshot"];
         };
         Sha256ContentHash: string;
+        /**
+         * SoftwareExecutionScenario
+         * @description A software model, not a promise of physical accuracy or OS sandboxing.
+         */
+        SoftwareExecutionScenario: {
+            /** Capabilities */
+            capabilities: string[];
+            /** Id */
+            id: string;
+            /**
+             * Kind
+             * @default software
+             * @constant
+             */
+            kind: "software";
+            /** Label */
+            label: string;
+            /**
+             * Limitations
+             * @default []
+             */
+            limitations: string[];
+            /** Model Id */
+            model_id: string;
+            /** Model Version */
+            model_version: string;
+            /** Seed */
+            seed?: number | null;
+            /** Settings */
+            settings?: {
+                [key: string]: components["schemas"]["pydantic__types__JsonValue"];
+            };
+        };
         StateLiteral: boolean | number | string | components["schemas"]["scopecat__kernel__quantity__Quantity"] | components["schemas"]["PayloadRef"];
         StateMemberTarget: components["schemas"]["InterfaceStateMemberTarget"] | components["schemas"]["DeviceStateMemberTarget"];
         /**
@@ -9712,6 +9747,7 @@ export interface components {
             /** Primary Entity Id */
             primary_entity_id: string;
             routing?: components["schemas"]["RoutingGraph"];
+            scenario?: components["schemas"]["SoftwareExecutionScenario"] | null;
             topology: components["schemas"]["Topology"];
         };
         /**

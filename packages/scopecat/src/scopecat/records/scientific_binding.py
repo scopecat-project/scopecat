@@ -5,6 +5,7 @@ from typing import Annotated, Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from scopecat.records.content import Sha256ContentHash
+from scopecat.records.execution_scenario import SoftwareExecutionScenario
 from scopecat.records.sample import SampleBinding, SampleSelector
 from scopecat.records.scientific_scope import MeasurementTarget, TargetEntity
 from scopecat.records.target_catalog import TargetRevisionRef
@@ -44,8 +45,9 @@ type ResolvedSubject = Annotated[
 
 
 class ResolvedScientificBinding(_BindingModel):
-    codec: Literal["scopecat.scientific-binding.v1"] = "scopecat.scientific-binding.v1"
+    codec: Literal["scopecat.scientific-binding.v2"] = "scopecat.scientific-binding.v2"
     subject: ResolvedSubject
+    scenario: SoftwareExecutionScenario | None = None
     config_content_hash: Sha256ContentHash
     setup_content_hash: Sha256ContentHash
 

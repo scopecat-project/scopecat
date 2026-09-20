@@ -40,6 +40,7 @@ from scopecat.records.config import (
     VirtualInstrumentConnection,
     snapshot_config_profile,
 )
+from scopecat.records.execution_scenario import SoftwareExecutionScenario
 from scopecat.records.parameter import (
     ParameterCatalog,
     ParameterDefinition,
@@ -57,6 +58,17 @@ def bootstrap_config() -> ConfigProfileSnapshot:
         profile_id="default",
         system=SystemSpec(
             id="default-system",
+            scenario=SoftwareExecutionScenario(
+                id="starter-software",
+                label="Software experiment bench",
+                model_id="scopecat.starter.responses",
+                model_version="1",
+                capabilities=("Virtual temperature readings", "Analytic signal scans"),
+                limitations=(
+                    "Synthetic responses, not a model of a physical sample.",
+                    "No physical instrument connections.",
+                ),
+            ),
             primary_entity_id="subject",
             topology=Topology(
                 entities=[EntityRef(id="subject", kind="logical_subject")],

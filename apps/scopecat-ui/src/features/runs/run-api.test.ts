@@ -1,3 +1,4 @@
+import { scenarioFixture } from "../../test/scenario-fixture";
 import { readFileSync } from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
@@ -744,3 +745,19 @@ function liveArrowResponse(receivedRecordCount: number, durableRecordCount: numb
     },
   });
 }
+
+it("reads a retained run scenario from its frozen binding", async () => {
+  const summary = runSummary("historical-run", "queued");
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () =>
+      Response.json({
+        ...summary,
+        snapshot: { ...summary.snapshot, scientific_binding: { scenario: scenarioFixture } },
+        resources: [],
+      }),
+    ),
+  );
+  const run = await getRun("historical-run");
+  expect(run.scenario).toEqual(scenarioFixture);
+});

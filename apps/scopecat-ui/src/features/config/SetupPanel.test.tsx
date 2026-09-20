@@ -1,7 +1,8 @@
+import { scenarioFixture } from "../../test/scenario-fixture";
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { ConfigProfileSnapshot } from "../../api-contract";
 import { SetupPanel } from "./SetupPanel";
@@ -109,4 +110,30 @@ it("keeps the reviewed generation through refresh and retries exact failed selec
   fireEvent.click(screen.getByRole("button", { name: "Confirm setup selection" }));
   await waitFor(() => expect(activateSetup).toHaveBeenCalledTimes(2));
   expect(vi.mocked(activateSetup).mock.calls[1]?.[0]).toEqual(first);
+});
+
+it("distinguishes the current setup from a selected scenario revision without activating it", async () => {
+  vi.mocked(getSetupRevisions).mockResolvedValue({
+    items: [
+      revision,
+      {
+        ...next,
+        setup: { ...next.setup, scenario: scenarioFixture },
+      },
+    ],
+  });
+  renderPanel();
+  await screen.findByRole("option", { name: "setup-B" });
+  expect(
+    within(screen.getByRole("region", { name: "Current setup scenario" })).getByText(
+      "No execution scenario declared.",
+    ),
+  ).toBeVisible();
+  fireEvent.change(screen.getByLabelText("Saved setup"), { target: { value: "setup-B" } });
+  expect(
+    within(screen.getByRole("region", { name: "Selected revision scenario" })).getByText(
+      "Synthetic resonance",
+    ),
+  ).toBeVisible();
+  expect(activateSetup).not.toHaveBeenCalled();
 });

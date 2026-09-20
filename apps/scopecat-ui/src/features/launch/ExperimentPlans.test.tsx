@@ -46,7 +46,7 @@ function plan(id: string, name: string): PlanRevision {
         batch: { kind: "unscoped" },
       },
       scientific_binding: {
-        codec: "scopecat.scientific-binding.v1",
+        codec: "scopecat.scientific-binding.v2",
         config_content_hash: `sha256:${"d".repeat(64)}`,
         setup_content_hash: `sha256:${"e".repeat(64)}`,
         subject: { kind: "unbound" },

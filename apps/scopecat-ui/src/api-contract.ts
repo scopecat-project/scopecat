@@ -13,6 +13,8 @@ type PostResponse<Path extends ClientPathsWithMethod<typeof apiClient, "post">> 
   Path
 >;
 
+export type SoftwareExecutionScenario = components["schemas"]["SoftwareExecutionScenario"];
+
 export type RunControlView = components["schemas"]["RunControlView"];
 export type ConfigActivationRecord = components["schemas"]["ConfigRegistryActivationRecord"];
 export type ConfigDraftCommand = components["schemas"]["ConfigDraftCommand"];

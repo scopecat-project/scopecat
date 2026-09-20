@@ -64,7 +64,7 @@ from reference_lab.workflows.drag_beta_verification import (
 )
 
 DRAG_BETA_COMPOSITION_POLICY_ID = "reference-lab.drag-beta-cohort-composition"
-DRAG_BETA_COMPOSITION_POLICY_VERSION = "11"
+DRAG_BETA_COMPOSITION_POLICY_VERSION = "12"
 DRAG_BETA_VERIFICATION_EVIDENCE_STEP = "verification"
 DRAG_BETA_PUBLICATION_ACTOR = "reference-lab-drag-beta-finalizer"
 DRAG_BETA_PUBLICATION_NOTE = "publish verified q0/q1 DRAG calibration cohort"

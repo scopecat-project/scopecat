@@ -65,6 +65,9 @@ request.values['position'] = sc.Scan([-1.0, 0.0, 1.0])
 with project.authoring() as author:
     job = author.prepare(request).run()
     run = job.wait(timeout=60).result()
+    scenario = run.snapshot.scientific_binding.scenario
+    assert scenario is not None and scenario.id == 'starter-software'
+    assert scenario.model_id == 'scopecat.starter.responses'
     report = author.analyze_as(
         run.id, 'scopecat_lab.authored.signal:summarize', Summary
     )
@@ -96,6 +99,9 @@ with project.authoring() as author:
             records = before.json()["items"]
             assert len(records) == 1
             assert records[0]["snapshot"]["run_id"] == result["run"]
+            scenario = records[0]["snapshot"]["scientific_binding"]["scenario"]
+            assert scenario["id"] == "starter-software"
+            assert scenario["limitations"]
         store.stop(service.id)
         # Daily entry has no project path, teaching topic, or management step.
         application.main(["--home", str(home)])

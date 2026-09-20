@@ -16,6 +16,7 @@ from scopecat.records.config import (
     Topology,
 )
 from scopecat.records.content import Sha256ContentHash
+from scopecat.records.execution_scenario import SoftwareExecutionScenario
 from scopecat.records.parameter import ParameterCatalog
 
 
@@ -29,6 +30,7 @@ class ExecutableSetupSnapshot(_SetupModel):
     instrument_registry: InstrumentRegistry
     routing: RoutingGraph
     domain_target: DomainTargetBinding | None
+    scenario: SoftwareExecutionScenario | None = None
 
     @model_validator(mode="after")
     def validate_structure(self) -> ExecutableSetupSnapshot:
@@ -39,6 +41,7 @@ class ExecutableSetupSnapshot(_SetupModel):
             instrument_registry=self.instrument_registry,
             routing=self.routing,
             domain_target=self.domain_target,
+            scenario=self.scenario,
             parameter_catalog=ParameterCatalog(id="setup-validation"),
         )
         return self
@@ -64,7 +67,7 @@ class ExecutableSetupSnapshot(_SetupModel):
         """Exact payload identity, including descriptive metadata."""
         return sha256_json_hash(
             {
-                "codec": "scopecat.setup-revision.v1",
+                "codec": "scopecat.setup-revision.v2",
                 "setup": self.model_dump(mode="json"),
             }
         )
@@ -89,7 +92,7 @@ def executable_setup_content_hash(
             "routing": {"roles": {"__all__": {"description"}}},
         },
     )
-    return sha256_json_hash({"codec": "scopecat.setup-content.v1", "system": system})
+    return sha256_json_hash({"codec": "scopecat.setup-content.v2", "system": system})
 
 
 class SetupRevisionRef(_SetupModel):

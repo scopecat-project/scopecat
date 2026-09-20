@@ -1,3 +1,4 @@
+import { ExecutionScenario } from "../../ui/ExecutionScenario";
 import { RunPlanOrigin } from "../launch/PlanOrigin";
 import { ComparisonLink } from "../analyses/ComparisonLink";
 import { AlertTriangle, Boxes, ChevronRight, Unlock } from "lucide-react";
@@ -122,6 +123,7 @@ export function RunDetail({
     <>
       <ComparisonLink runId={run.runId} />
       <RunPlanOrigin runId={run.runId} />
+      <ExecutionScenario scenario={run.scenario} label="Retained execution scenario" />
       <header
         className="flex items-start justify-between gap-7 border-b border-line px-0.5 pb-[17px] max-[680px]:block"
         data-testid="run-detail-header"

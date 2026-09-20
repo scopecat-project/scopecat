@@ -543,6 +543,7 @@ export function normalizeRun(
     createdAt: admission.admitted_at,
     updatedAt: control.updated_at,
     configHash: snapshot.config_content_hash,
+    scenario: snapshot.scientific_binding?.scenario ?? undefined,
     attentionReason: control.attention_reason ?? undefined,
     cancellationRequestedAt: control.cancellation_requested_at ?? undefined,
     result: outcome?.result,
