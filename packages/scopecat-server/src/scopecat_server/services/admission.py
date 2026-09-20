@@ -250,7 +250,12 @@ class AdmissionService:
         if (
             (
                 parent.scientific_binding is not None
-                and parent.scientific_binding != submission.scientific_binding
+                and (
+                    parent.scientific_binding.subject
+                    != submission.scientific_binding.subject
+                    or parent.scientific_binding.setup_content_hash
+                    != submission.scientific_binding.setup_content_hash
+                )
             )
             or (
                 parent.plan_ref is not None

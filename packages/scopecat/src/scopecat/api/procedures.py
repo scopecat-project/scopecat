@@ -113,6 +113,7 @@ from scopecat.records.plan_ref import ExperimentPlanRef, ProcedureChildSubmissio
 from scopecat.records.run import RunConfigSource
 from scopecat.records.sample import SampleSelector
 from scopecat.records.scientific_binding import ResolvedScientificBinding
+from scopecat.records.scientific_scope import setup_content_hash
 from scopecat.runs.selectors import RunSelector
 
 type ExperimentSpec = ExperimentInvocation | Experiment[...]
@@ -380,7 +381,12 @@ class LabProcedureContext:
         samples: tuple[SampleSelector, ...] = (),
         record_collection: str | None = None,
     ) -> RunOutputRef:
-        """Plan and execute one exactly identified child run."""
+        """Plan and execute one exactly identified child run.
+
+        Parameter changes inherit the procedure's exact subject and setup while
+        recording the child's configuration. A bound procedure cannot change its
+        subject or setup; explicit child evidence is still checked at admission.
+        """
 
         selected_config, inferred_source = self._config.resolve_with_source(config)
         if inferred_source is not None and config_source is not None:
@@ -393,11 +399,23 @@ class LabProcedureContext:
             and selected_source.content_hash != config_content_hash(selected_config)
         ):
             raise ValueError("config_source content hash does not match config")
+        if scientific_binding is None and self._durable.scientific_binding is not None:
+            inherited = self._durable.scientific_binding
+            if setup_content_hash(selected_config) != inherited.setup_content_hash:
+                raise ValueError(
+                    "child run changes the procedure setup; "
+                    "submit a new procedure for that setup"
+                )
+            scientific_binding = ResolvedScientificBinding(
+                subject=inherited.subject,
+                config_content_hash=config_content_hash(selected_config),
+                setup_content_hash=inherited.setup_content_hash,
+            )
         invocation = _experiment_invocation(experiment)
         planned = self._runner._plan(  # pyright: ignore[reportPrivateUsage]
             invocation,
             plan_ref=self._durable.plan_ref,
-            scientific_binding=scientific_binding or self._durable.scientific_binding,
+            scientific_binding=scientific_binding,
             record_collection=record_collection,
             config=selected_config,
             config_source=selected_source,
