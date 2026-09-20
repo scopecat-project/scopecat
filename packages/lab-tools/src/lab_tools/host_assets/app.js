@@ -240,7 +240,7 @@ setupForm.addEventListener("submit", event => {
   if (!value("setup-project")) { message("请填写主要代码文件夹的完整路径。", true); return; }
   submit({ action: "setup", setup: {
     mode: value("setup-mode"), project: value("setup-project"),
-    data_root: value("setup-data") || null, settings_file: value("setup-settings") || null, name: value("setup-name") || null,
+    data_root: value("setup-data") || null, settings_file: value("setup-settings") || null, environment_bundle: value("setup-bundle") || null, name: value("setup-name") || null,
   } }).catch(error => message(error.message, true));
 });
 document.getElementById("shutdown").addEventListener("click", async () => {

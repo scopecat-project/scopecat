@@ -1,4 +1,4 @@
-"""Build a platform-specific offline teaching delivery from this checkout."""
+"""Build a locked platform-specific offline application or laboratory delivery."""
 
 from __future__ import annotations
 
@@ -7,10 +7,14 @@ import json
 import shutil
 import subprocess
 import sys
+import tomllib
 import zipfile
+from dataclasses import dataclass
 from email.parser import BytesParser
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import Protocol, cast
+
+from packaging.utils import canonicalize_name
 
 from lab_tools.bundle import MANIFEST, file_hash, inventory, target_identity
 from scopecat.kernel.content_identity import sha256_content_hash, sha256_json_hash
@@ -27,8 +31,140 @@ class BuildArguments(Protocol):
     destination: Path
     release: bool
     notebook: bool
-    source: Path
+    source: Path | None
     gui: Path | None
+    recipe: Path | None
+
+
+@dataclass(frozen=True, slots=True)
+class DeliveryRecipe:
+    lock_project: Path
+    public_source: Path
+    dependency_group: str
+    include_project: bool
+    packages: tuple[Path, ...]
+
+
+def load_recipe(path: Path) -> DeliveryRecipe:
+    """Resolve a maintained recipe without evaluating Python or shell commands."""
+    path = path.resolve()
+    document = cast(
+        "dict[str, object]", tomllib.loads(path.read_text(encoding="utf-8"))
+    )
+    if set(document) != {"delivery"} or not isinstance(document["delivery"], dict):
+        raise ValueError("recipe requires only a [delivery] table")
+    table = cast("dict[str, object]", document["delivery"])
+    if set(table) != {
+        "lock_project",
+        "public_source",
+        "dependency_group",
+        "include_project",
+        "packages",
+    }:
+        raise ValueError(
+            "delivery recipe requires lock_project, public_source, dependency_group, "
+            "include_project and packages"
+        )
+
+    def directory(value: object) -> Path:
+        if (
+            not isinstance(value, str)
+            or not value.strip()
+            or Path(value).is_absolute()
+            or PureWindowsPath(value).drive
+            or "\\" in value
+            or ".." in Path(value).parts
+        ):
+            raise ValueError(
+                "recipe paths must be relative directories within the recipe folder"
+            )
+        selected = (path.parent / value).resolve()
+        if (
+            not selected.is_relative_to(path.parent)
+            or not (selected / "pyproject.toml").is_file()
+        ):
+            raise ValueError(
+                f"recipe package/project lacks a local pyproject.toml: {value}"
+            )
+        return selected
+
+    group = table["dependency_group"]
+    include = table["include_project"]
+    packages = table["packages"]
+    if not isinstance(group, str) or not group.strip() or group.startswith("-"):
+        raise ValueError("dependency_group must name a locked dependency group")
+    if not isinstance(include, bool):
+        raise ValueError("include_project must be a boolean")
+    if not isinstance(packages, list) or not packages:
+        raise ValueError("packages must list the local packages to build")
+    result = DeliveryRecipe(
+        directory(table["lock_project"]),
+        directory(table["public_source"]),
+        group,
+        include,
+        tuple(directory(item) for item in cast("list[object]", packages)),
+    )
+    if len(set(result.packages)) != len(result.packages):
+        raise ValueError("recipe packages contains duplicate directories")
+    if (
+        not (result.lock_project / "uv.lock").is_file()
+        or not (result.public_source / "uv.lock").is_file()
+    ):
+        raise ValueError("recipe projects require retained uv.lock files")
+    return result
+
+
+def _default_recipe(repository: Path, notebook: bool) -> DeliveryRecipe:
+    return DeliveryRecipe(
+        repository,
+        repository,
+        "delivery-notebook" if notebook else "delivery",
+        False,
+        tuple(
+            repository / "packages" / name
+            for name in (
+                "scopecat",
+                "scopecat-server",
+                "scopecat-instruments",
+                "lab-teaching",
+                "lab-tools",
+            )
+        ),
+    )
+
+
+def _package_names(packages: tuple[Path, ...]) -> set[str]:
+    names: set[str] = set()
+    for package in packages:
+        metadata = cast(
+            "dict[str, object]",
+            tomllib.loads((package / "pyproject.toml").read_text(encoding="utf-8")),
+        )
+        project = metadata.get("project")
+        name = (
+            cast("dict[str, object]", project).get("name")
+            if isinstance(project, dict)
+            else None
+        )
+        if not isinstance(name, str) or not name.strip():
+            raise ValueError(f"local package must declare project.name: {package}")
+        normalized = canonicalize_name(name)
+        if normalized in names:
+            raise ValueError(f"recipe builds duplicate distribution {normalized}")
+        names.add(normalized)
+    return names
+
+
+def _unique_wheels(wheels: Path) -> dict[str, tuple[Path, str]]:
+    selected: dict[str, tuple[Path, str]] = {}
+    for path in sorted(wheels.glob("*.whl")):
+        name, version = wheel_metadata(path)
+        # Distribution names normalize runs of -, _ and . to a hyphen.
+        normalized = canonicalize_name(name)
+        if normalized in selected:
+            raise ValueError(f"multiple wheels for distribution {normalized}")
+        selected[normalized] = (path, version)
+    return selected
 
 
 def run(command: list[str], *, cwd: Path) -> None:
@@ -52,19 +188,33 @@ def build_delivery(
     notebook: bool = False,
     source: Path | None = None,
     gui: Path | None = None,
+    recipe: Path | None = None,
 ) -> Path:
-    repository = (source or REPOSITORY).resolve()
+    if recipe is not None and (source is not None or notebook):
+        raise ValueError("recipe cannot be combined with source or notebook overrides")
+    plan = (
+        load_recipe(recipe)
+        if recipe is not None
+        else _default_recipe((source or REPOSITORY).resolve(), notebook)
+    )
+    public = plan.public_source
+    repository = plan.lock_project
+    sources_repositories = (
+        (("public", public),)
+        if public == repository
+        else (("public", public), ("lab", repository))
+    )
     destination = destination.resolve()
+    local_names = _package_names(plan.packages)
     if release:
-        for repo in (repository,):
+        for _, repo in sources_repositories:
             if subprocess.check_output(
                 ["git", "status", "--porcelain"],  # noqa: S607 - standard maintainer tool
                 cwd=repo,
                 text=True,
             ).strip():
-                raise ValueError("正式发布要求 public 工作目录均干净")
+                raise ValueError("正式发布要求 public 和实验室锁定仓库工作目录均干净")
     destination.mkdir(parents=True, exist_ok=False)
-    public = repository
     ui = public / "apps/scopecat-ui"
     pnpm = shutil.which("pnpm")
     if pnpm is None and gui is None:
@@ -84,8 +234,12 @@ def build_delivery(
             "uv",
             "export",
             "--locked",
-            "--only-group",
-            "delivery-notebook" if notebook else "delivery",
+            *(
+                ["--no-default-groups", "--group"]
+                if plan.include_project
+                else ["--only-group"]
+            ),
+            plan.dependency_group,
             "--no-emit-local",
             "--format",
             "requirements-txt",
@@ -94,13 +248,7 @@ def build_delivery(
         ],
         cwd=repository,
     )
-    packages = (
-        public / "packages/scopecat",
-        public / "packages/scopecat-server",
-        repository / "packages/lab-teaching",
-        repository / "packages/lab-tools",
-    )
-    for package in packages:
+    for package in plan.packages:
         run(
             [
                 "uv",
@@ -134,14 +282,14 @@ def build_delivery(
             "-r",
             str(dependency_lock),
         ],
-        cwd=repository,
+        cwd=public,
     )
-    release_version = next(
-        version
-        for wheel in wheels.glob("*.whl")
-        for name, version in (wheel_metadata(wheel),)
-        if name.replace("_", "-").lower() == "scopecat-lab-tools"
-    )
+    selected_wheels = _unique_wheels(wheels)
+    if missing := local_names - selected_wheels.keys():
+        raise ValueError(f"local package wheels missing: {sorted(missing)}")
+    if "scopecat-lab-tools" not in selected_wheels:
+        raise ValueError("交付缺少 scopecat-lab-tools wheel")
+    release_version = selected_wheels["scopecat-lab-tools"][1]
     _ = shutil.copyfile(repository / "uv.lock", destination / "build.lock")
     runtime: dict[str, object] = {}
     requirements: list[str] = []
@@ -171,7 +319,7 @@ def build_delivery(
     )
     # Copy the maintained stdlib-only installer; no second installer implementation.
     _ = shutil.copyfile(
-        repository / "packages/lab-tools/src/lab_tools/bundle.py",
+        public / "packages/lab-tools/src/lab_tools/bundle.py",
         destination / "install.py",
     )
     files = inventory(destination, ("gui", "wheels"))
@@ -192,9 +340,9 @@ def build_delivery(
             cwd=repo,
             text=True,
         ).strip()
-        for name, repo in (("public", public),)
+        for name, repo in sources_repositories
     }
-    for name, repo in (("public", public),):
+    for name, repo in sources_repositories:
         if subprocess.check_output(
             ["git", "status", "--porcelain"],  # noqa: S607 - standard maintainer tool
             cwd=repo,
@@ -225,6 +373,9 @@ def build_delivery(
                 },
                 "target": target_identity(),
                 "sources": sources,
+                "recipe_sha256": file_hash(recipe.resolve())
+                if recipe is not None
+                else None,
                 "runtime": runtime,
                 "files": files,
             },
@@ -246,7 +397,8 @@ def main() -> None:
     _ = parser.add_argument("destination", type=Path)
     _ = parser.add_argument("--release", action="store_true")
     _ = parser.add_argument("--notebook", action="store_true")
-    _ = parser.add_argument("--source", type=Path, default=Path.cwd())
+    _ = parser.add_argument("--source", type=Path)
+    _ = parser.add_argument("--recipe", type=Path)
     _ = parser.add_argument("--gui", type=Path)
     args = cast("BuildArguments", cast("object", parser.parse_args()))
     print(
@@ -256,6 +408,7 @@ def main() -> None:
             notebook=args.notebook,
             source=args.source,
             gui=args.gui,
+            recipe=args.recipe,
         )
     )
 

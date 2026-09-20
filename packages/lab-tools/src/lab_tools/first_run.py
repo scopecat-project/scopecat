@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
 import sys
 import tempfile
 from contextlib import ExitStack
@@ -18,7 +19,9 @@ from scopecat_server.lifecycle import inspect_daemon
 from scopecat_server.scaffold import write_project_scaffold
 from scopecat_server.static_assets import select_static_dir
 
+from .bundle import verify_bundle
 from .host_models import SetupRequest as SetupRequest
+from .lab_environment import prepare_environment
 from .services import Service, Services
 
 
@@ -111,7 +114,17 @@ def setup(
     unpublished staging folder contains no scientific state. After publication,
     failures preserve the user's folder; reconnecting is the explicit retry path.
     """
-    gui = select_static_dir(static_dir=static_dir, api_only=False)
+    delivery = (
+        Path(request.environment_bundle).resolve()
+        if request.environment_bundle
+        else None
+    )
+    if delivery is not None:
+        verify_bundle(delivery)
+    gui = select_static_dir(
+        static_dir=delivery / "gui" if delivery is not None else static_dir,
+        api_only=False,
+    )
     project = Path(request.project).resolve()
     if request.mode == "create":
         if project.exists() or Path(request.project).is_symlink():
@@ -122,7 +135,7 @@ def setup(
         if not (project / "scopecat.toml").is_file():
             raise ValueError("请选择直接包含 scopecat.toml 的实验室代码目录")
         load_project(project / "scopecat.toml", resolve_adapter=False)
-    python = choose_python(project)
+    python = choose_python(project) if delivery is None else None
     location = project / RUNTIME_BINDING_NAME
     previous_binding = location.read_bytes() if location.exists() else None
     binding = _runtime_binding(project, request)
@@ -145,9 +158,13 @@ def setup(
     elif binding is not None:
         _update_binding(project, binding, previous_binding)
     try:
+        if delivery is not None:
+            prepared = prepare_environment(project, delivery, home)
+            python, gui = prepared.python, prepared.gui
+        assert python is not None
         return Services(home).register(project, python, name=name, static_dir=gui)
-    except (OSError, ValueError) as error:
+    except (OSError, ValueError, subprocess.SubprocessError) as error:
         raise ValueError(
-            f"代码和数据位置已保留在 {project}。接入检查失败：{error}。"
+            f"代码和数据位置已保留在 {project}。环境准备或接入检查失败：{error}。"
             "修复环境后选择接入已有实验室重试；尚未启动实验服务。"
         ) from error

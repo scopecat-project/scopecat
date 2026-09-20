@@ -36,11 +36,14 @@ in the same tab. Starting a laboratory deployment may initialize instruments;
 no measurement is submitted or resumed. Successful setup remembers the primary
 workbench for the next ordinary launch.
 
-A project `.venv` is used when present; a broken one is an error. Without it, setup
-uses the installed application's environment. This flow does not install laboratory
-dependencies or choose vendor SDK versions. The laboratory must prepare those
-requirements and any adapter-specific settings. GUI assets come from the public
-installation; a source host uses its built `apps/scopecat-ui/dist`.
+Without a delivery selection, an existing project `.venv` is used; a broken one
+is an error. Without it, setup uses the installed application environment.
+Alternatively, select the laboratory's **offline delivery directory**: setup
+verifies its files and Python/platform ABI, retains a copy in the application home,
+and installs the locked packages offline into the project's final `.venv`. It uses
+the matching GUI from that delivery. Python and uv must already be available;
+this does not download Python or choose vendor SDK versions. Local laboratory
+settings still come from the maintainer.
 
 Errors remain in **Recent operations** and its log. A failed registration or startup
 retains the created files; fix the reported environment and use **Connect** on the
@@ -51,10 +54,11 @@ setup. To add another directory later, expand the setup form in management.
 
 A laboratory may provide an installed wheel plus a small editable experiment
 directory. The directory selects the adapter and its own experiment modules; it
-does not need copied drivers, compiler code or an application factory. Place the
-prepared environment in its `.venv`, or install the adapter into the application
-environment before connecting. Setup checks the selected interpreter without
-importing drivers into the manager. It does not install missing packages.
+does not need copied drivers, compiler code or an application factory. Select the
+maintainer's complete offline delivery during setup to prepare `.venv`,
+or use an already prepared environment. Setup checks the selected interpreter
+without importing drivers into the manager. It does not search the internet for
+missing packages.
 
 Local experiment edits use normal notebook refresh. To change the adapter, stop
 first, install the reviewed wheel into the same environment and recheck it in the
@@ -63,6 +67,50 @@ Keep exact old wheels when retaining historical execution environments: scientif
 source capture records installed package identity but does not archive the wheel.
 If an adapter is missing or damaged, status and stop remain available; restore the
 package before rechecking or starting.
+
+## Build a laboratory delivery
+
+Maintainers can use `python -m lab_tools.delivery OUTPUT --recipe RECIPE.toml`
+from their locked build environment. Build on the recipient platform and Python
+ABI; `OUTPUT` must not exist. The recipe has one `[delivery]` table:
+
+```toml
+[delivery]
+lock_project = "."
+public_source = "scopecat"
+dependency_group = "lab-delivery"
+include_project = true
+packages = [".", "packages/shared-methods", "scopecat/packages/scopecat",
+  "scopecat/packages/scopecat-server", "scopecat/packages/scopecat-instruments",
+  "scopecat/packages/lab-teaching", "scopecat/packages/lab-tools"]
+```
+
+Paths resolve inside the recipe directory. List all local wheel distributions,
+including any additional framework extensions your adapter uses. The selected
+lock project supplies dependencies and build constraints; `include_project = true`
+includes its runtime dependencies as well as the named dependency group. The public
+checkout supplies the installer, GUI and locked download toolchain. The builder
+rejects duplicate distributions and records recipe identity in the delivery.
+
+The build needs network access and, unless `--gui DIRECTORY` supplies an already
+built matching GUI, pnpm. Verify an offline installation and representative virtual
+experiment before distributing the result. A built wheel inventory alone does not
+prove the laboratory's runtime dependencies are complete.
+
+## Retry an initial environment installation
+
+Reconnect the same experiment directory and select the same delivery. A completed,
+matching installation is reused and checked. A failed installation that belongs
+to this installer is retained as failure evidence, then rebuilt at the original
+`.venv` path. A still-running installation blocks retries. A working virtual
+environment is never moved; another completed delivery or an unrelated `.venv`
+is not overwritten. Scientific records and author files are preserved.
+
+Once setup succeeds, the retained delivery supplies the GUI and receipt; ordinary
+launch no longer needs the original copied delivery folder. Keep the original
+artifact for maintenance and reinstall. This initial preparation is separate from
+updating an existing deployment: use the stopped maintenance workflow below for
+intentional environment updates.
 
 ## Local laboratory settings
 
@@ -142,7 +190,7 @@ selected delivery while old copies retain their own environment.
 1. Finish measurements and close notebook connections. In the manager choose
    **Stop service (停止服务)** and wait for **Stopped (未启动)**.
 2. Update the environment using the installation's tested package or delivery
-   procedure. The manager does not install packages. Keep the same project,
+   procedure. Initial setup does not upgrade a completed environment. Keep the same project,
    interpreter and GUI paths for this recheck workflow.
 3. Choose **Recheck environment (重新检查环境)**. It probes the registered
    interpreter, project and GUI, then records the validated environment identity.

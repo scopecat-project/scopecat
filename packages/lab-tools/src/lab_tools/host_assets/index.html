@@ -8,6 +8,7 @@
 <label for="setup-mode">接入方式</label><select id="setup-mode" name="mode"><option value="create">创建新的实验代码文件夹</option><option value="connect">连接实验室提供的代码文件夹</option></select>
 <p id="setup-description">创建可修改的基础实验项目。你的实验代码保存在此处，教学专题在帮助中单独提供。</p>
 <label for="setup-project">主要代码文件夹</label><input id="setup-project" name="project" required autocomplete="off" spellcheck="false"><small id="setup-project-help">填写本机完整路径；填写尚不存在的新目录，应用会创建它。</small>
+<label for="setup-bundle">实验室离线交付目录（可选）</label><input id="setup-bundle" name="environment_bundle" autocomplete="off" spellcheck="false"><small>选择维护者提供的交付目录，应用会准备所需软件；留空使用已有环境。已有环境不会被覆盖。</small>
 <label for="setup-settings">实验室本机设置 JSON 文件（可选）</label><input id="setup-settings" name="settings_file" autocomplete="off" spellcheck="false"><small>选择维护者提供的文件，留空保留已有设置。初始配置只用于新数据目录；更改文件不会切换已有记录的配置或芯片。</small>
 <label for="setup-data">数据保存目录（可选）</label><input id="setup-data" name="data_root" autocomplete="off" spellcheck="false"><small id="setup-data-help">留空使用新项目的默认数据目录。</small>
 <label for="setup-name">工作台名称（可选）</label><input id="setup-name" name="name" autocomplete="off">
