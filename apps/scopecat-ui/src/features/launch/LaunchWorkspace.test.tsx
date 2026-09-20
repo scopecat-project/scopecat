@@ -515,3 +515,63 @@ it("shows the preview's frozen scenario and clears it when inputs change", async
   fireEvent.change(screen.getByLabelText("Amplitude"), { target: { value: "0.5" } });
   await waitFor(() => expect(screen.queryByText("Synthetic resonance")).not.toBeInTheDocument());
 });
+
+it("shows typed rejection evidence and clears it after the request changes", async () => {
+  const diagnostic = {
+    kind: "launch_rejection",
+    message: "Preview rejected by software model",
+    problems: [
+      {
+        code: "sample_rate_limit",
+        phase: "validation",
+        message: "Choose a supported rate",
+        location: { kind: "model", root: "request", path: ["sample_rate"] },
+        details: { dimension: "capability" },
+      },
+    ],
+    scenario: scenarioFixture,
+  };
+  vi.stubGlobal(
+    "fetch",
+    vi
+      .fn()
+      .mockResolvedValueOnce(Response.json({ entries: [entry] }))
+      .mockResolvedValueOnce(Response.json(previewResult))
+      .mockResolvedValueOnce(Response.json({ detail: diagnostic }, { status: 422 })),
+  );
+  mount();
+  fireEvent.change(await screen.findByLabelText("Qubit"), { target: { value: "Q12" } });
+  fireEvent.change(screen.getByLabelText("Amplitude"), { target: { value: "0.4" } });
+  fireEvent.click(screen.getByRole("button", { name: "Preview" }));
+  await screen.findByText("Preview ready");
+  fireEvent.click(screen.getByRole("button", { name: "Preview" }));
+  await screen.findByText("sample_rate_limit");
+  expect(screen.getByText("Declared capability limit")).toBeVisible();
+  expect(screen.getByText(/sample_rate.*\]/)).toBeVisible();
+  expect(screen.getByText("Does not model device heating")).toBeVisible();
+  expect(screen.queryByText("Preview ready")).not.toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText("Amplitude"), { target: { value: "0.5" } });
+  await waitFor(() =>
+    expect(screen.queryByRole("alert", { name: "Preview rejection" })).not.toBeInTheDocument(),
+  );
+});
+it("keeps internal failures ordinary even when their text mentions unsupported capabilities", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi
+      .fn()
+      .mockResolvedValueOnce(Response.json({ entries: [entry] }))
+      .mockResolvedValueOnce(
+        Response.json({ detail: "internal unsupported capability bug" }, { status: 500 }),
+      ),
+  );
+  mount();
+  fireEvent.change(await screen.findByLabelText("Qubit"), { target: { value: "Q12" } });
+  fireEvent.change(screen.getByLabelText("Amplitude"), { target: { value: "0.4" } });
+  fireEvent.click(screen.getByRole("button", { name: "Preview" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("internal unsupported capability bug");
+  expect(screen.queryByText("Declared capability limit")).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole("region", { name: "Rejected preview scenario" }),
+  ).not.toBeInTheDocument();
+});

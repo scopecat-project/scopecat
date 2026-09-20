@@ -1,8 +1,9 @@
+import { LaunchRejectionDetails } from "./LaunchRejectionDetails";
 import { ExecutionScenario } from "../../ui/ExecutionScenario";
 import { reviewedForRequest } from "./scientific-selection";
 import { useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { apiClient, apiData } from "../../api-client";
+import { apiClient, apiData, ApiError } from "../../api-client";
 import type { LaunchCatalogEntry, LaunchPreview } from "./launch-api";
 import { ControlFields, ControlSummary, controlEdits } from "./ControlFields";
 import { invalidateDraft, useLaunchDraft, type LaunchDraft } from "./LaunchDraft";
@@ -118,7 +119,7 @@ export function LaunchForm({
     event.preventDefault();
     if (!entry.actions.includes("preview") || !supported || !catalogReady) return;
     const revision = draft.revision;
-    update((current) => ({ ...current, pending: true, error: "" }));
+    update((current) => ({ ...current, pending: true, error: "", rejection: undefined }));
     try {
       const next = await apiData<LaunchPreview>(
         apiClient.POST("/api/v1/experiment-launcher/preview", {
@@ -158,6 +159,9 @@ export function LaunchForm({
         update((current) => ({
           ...current,
           error: caught instanceof Error ? caught.message : String(caught),
+          rejection: caught instanceof ApiError ? caught.launchRejection : undefined,
+          preview: undefined,
+          requestKey: undefined,
         }));
     } finally {
       if (isCurrent(revision)) update((current) => ({ ...current, pending: false }));
@@ -168,7 +172,13 @@ export function LaunchForm({
     if (!source) return;
     const revision = draft.revision;
     const requestKey = draft.requestKey ?? crypto.randomUUID();
-    update((current) => ({ ...current, requestKey, pending: true, error: "" }));
+    update((current) => ({
+      ...current,
+      requestKey,
+      pending: true,
+      error: "",
+      rejection: undefined,
+    }));
     try {
       const procedureId = await submit(
         {
@@ -396,7 +406,12 @@ export function LaunchForm({
             : "Checking relevant instrument changes…"}
         </p>
       )}
-      {error && <p role="alert">{error}</p>}
+      {error &&
+        (draft.rejection ? (
+          <LaunchRejectionDetails rejection={draft.rejection} />
+        ) : (
+          <p role="alert">{error}</p>
+        ))}
       {result && (
         <>
           <ExecutionScenario
