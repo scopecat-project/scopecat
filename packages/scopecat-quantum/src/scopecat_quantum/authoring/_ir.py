@@ -461,6 +461,12 @@ class _PulseTemplateCallFragment(PulseFragment):
 
 
 @dataclass(frozen=True, slots=True)
+class _RecipeScopeFragment(QuantumFragment):
+    scope: str
+    body: QuantumFragment
+
+
+@dataclass(frozen=True, slots=True)
 class _QuantumSequenceFragment(QuantumFragment):
     operations: tuple[QuantumFragment, ...]
 

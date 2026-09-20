@@ -67,6 +67,7 @@ from ._ir import (
     _QuantumParallelFragment,
     _QuantumRepeatFragment,
     _QuantumSequenceFragment,
+    _RecipeScopeFragment,
     _RepeatFragment,
     _SequenceFragment,
     _ShiftPhaseFragment,
@@ -157,6 +158,11 @@ def _draw_inspection_children(
 
 
 def _inspection_node(fragment: QuantumFragment) -> _InspectionNode:
+    if isinstance(fragment, _RecipeScopeFragment):
+        return _InspectionNode(
+            f"recipe_scope {fragment.scope!r}",
+            children=(_inspection_node(fragment.body),),
+        )
     if isinstance(fragment, _GateFragment):
         return _InspectionNode(f"gate {_inspection_gate_call(fragment)}")
     if isinstance(fragment, Measurement):

@@ -34,7 +34,9 @@ class RecipeTargetCompiler[ParametersT]:
     """Compile points against one recipe profile and selected parameter snapshot.
 
     Create one instance per compilation batch. Parameters must remain unchanged
-    during its lifetime. Device encoding, payload limits and execution stay with
+    during its lifetime, including named scoped snapshots. Scopes select gate
+    recipe rows only; measurement recipes continue to use the baseline.
+    Device encoding, payload limits and execution stay with
     the target adapter; recipe resolution and lowering stay in the framework.
     """
 
@@ -44,9 +46,11 @@ class RecipeTargetCompiler[ParametersT]:
         parameters: ParametersT,
         *,
         max_expanded_operations: int | None = None,
+        scoped_parameters: Mapping[str, ParametersT] | None = None,
     ) -> None:
         self._profile = profile
         self._parameters = parameters
+        self._scoped_parameters = dict(scoped_parameters or {})
         self._max_expanded_operations = max_expanded_operations
         self._cache = PulseRecipeMaterializationCache()
 
@@ -64,6 +68,7 @@ class RecipeTargetCompiler[ParametersT]:
             self._parameters,
             bound.verified,
             cache=self._cache,
+            scoped_parameters=self._scoped_parameters,
             max_expanded_operations=self._max_expanded_operations,
         )
         entry = prepare_quantum_target_entry(

@@ -109,3 +109,4 @@ class GateCall:
     gate_id: GateId
     qubits: tuple[QubitId, ...]
     arguments: tuple[GateArgument, ...] = ()
+    recipe_scope: str | None = None

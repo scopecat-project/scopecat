@@ -6,7 +6,7 @@ from __future__ import annotations
 import inspect
 from collections.abc import Callable, Mapping
 from collections.abc import Sequence as SequenceCollection
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import (
     cast,
 )
@@ -75,6 +75,7 @@ from ._ir import (
     _QuantumParallelFragment,
     _QuantumRepeatFragment,
     _QuantumSequenceFragment,
+    _RecipeScopeFragment,
     _ShiftPhaseFragment,
 )
 
@@ -660,6 +661,15 @@ def _substitute_pulse_fragment(
         ProgramInput, Quantity | int | float | ProgramInput | QuantityExpression
     ],
 ) -> QuantumFragment:
+    if isinstance(fragment, _RecipeScopeFragment):
+        return replace(
+            fragment,
+            body=_substitute_pulse_fragment(
+                fragment.body,
+                element_bindings=element_bindings,
+                input_bindings=input_bindings,
+            ),
+        )
     if isinstance(fragment, _PlayFragment):
         return _PlayFragment(
             signal=cast(

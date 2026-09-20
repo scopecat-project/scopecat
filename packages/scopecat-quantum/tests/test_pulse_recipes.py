@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 import pytest
 from scopecat import Quantity
@@ -344,3 +344,39 @@ def test_profile_rejects_duplicate_recipe_identity() -> None:
 
     with pytest.raises(ValueError, match="recipe ids must be unique"):
         PulseRecipeProfile[_Parameters](mapping, mapping)
+
+
+def test_scope_keys_separate_candidates_and_leave_readout_on_baseline() -> None:
+    baseline = _parameters()
+    candidate = _parameters(q0_amplitude=0.6)
+    scoped = replace(_x_call("candidate", "q0"), recipe_scope="candidate")
+    circuit = _circuit(_x_call("baseline", "q0"), scoped, _measurement("iq", "q0"))
+    cache = PulseRecipeMaterializationCache()
+    resolved = _PROFILE.materialize(
+        baseline, circuit, cache=cache, scoped_parameters={"candidate": candidate}
+    )
+    by_scope = {entry.key.recipe_scope: entry for entry in resolved.gates}
+    assert set(by_scope) == {None, "candidate"}
+    amplitudes = {}
+    for scope, entry in by_scope.items():
+        leaf = next(iter_pulse_leaves(entry.pulse_template.body))
+        assert isinstance(leaf, Play)
+        assert isinstance(leaf.envelope, Constant)
+        amplitudes[scope] = leaf.envelope.amplitude
+    assert amplitudes == {None: Quantity(0.2, "arb"), "candidate": Quantity(0.6, "arb")}
+    reference = _PROFILE.materialize(
+        baseline, circuit=_circuit(_measurement("iq", "q0"))
+    )
+    assert resolved.measurements == reference.measurements
+    changed = _PROFILE.materialize(
+        baseline,
+        circuit,
+        cache=cache,
+        scoped_parameters={"candidate": _parameters(q0_amplitude=0.8)},
+    )
+    changed_by_scope = {entry.key.recipe_scope: entry for entry in changed.gates}
+    assert changed_by_scope[None] is by_scope[None]
+    assert (
+        changed_by_scope["candidate"].fingerprint != by_scope["candidate"].fingerprint
+    )
+    assert _parameters() == baseline

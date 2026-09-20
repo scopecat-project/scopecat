@@ -33,6 +33,7 @@ from ._ir import (
     _QuantumParallelFragment,
     _QuantumRepeatFragment,
     _QuantumSequenceFragment,
+    _RecipeScopeFragment,
 )
 
 
@@ -55,7 +56,7 @@ def _expand_fragment_calls(
         )
         _validate_expanded_fragment(value, expanded)
         return _ExpandedFragment(definition_id=definition.id, body=expanded)
-    if isinstance(value, _ExpandedFragment):
+    if isinstance(value, _ExpandedFragment | _RecipeScopeFragment):
         return replace(
             value,
             body=_expand_fragment_calls(value.body, bindings, stack=stack),

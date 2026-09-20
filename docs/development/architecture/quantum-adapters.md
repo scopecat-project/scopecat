@@ -13,7 +13,10 @@ It should not assemble an independent binding, recipe-resolution and lowering pi
 Construct one compiler per batch with the selected recipe profile and immutable parameter
 snapshot. Its result includes the bound program for domain-specific provenance and the
 prepared target entry for encoding. New compiler instances own separate caches; this
-is not an API for mutable global calibration or operation-local candidate overrides.
+does not mutate global calibration. Named immutable `scoped_parameters` snapshots
+select candidate recipe rows for gates wrapped in authored `recipe_scope` subtrees.
+The exact implementation key includes the scope; measurements remain on baseline
+and explicit pulse implementations retain their authored pulses. Missing names fail.
 
 Device adapters retain payload-size batching, physical lane addressing, device timing
 constraints, instruction encoding, upload and execution receipts. Scheduling and waveform
@@ -24,8 +27,9 @@ than copied general-purpose schedulers.
 ## Remaining framework work
 
 This entry point centralizes existing orchestration; it does not implement automatic
-parameter dependency tracking. Typed recipe row access, diagnostics, provenance and
-candidate scopes still need a coherent framework design. In particular, distinguish:
+parameter dependency tracking. Typed recipe row access, dependency diagnostics and
+the experiment-level binding of candidate table updates into scoped snapshots remain
+open. The compiler now distinguishes:
 
 - a working-point snapshot shared by the program;
 - a candidate implementation applied to a whole program;
@@ -34,7 +38,7 @@ candidate scopes still need a coherent framework design. In particular, distingu
 Unit-bearing operation parameters use the core `QuantityType` contract through binding
 and recipe resolution. Compatible linear units share a canonical call/implementation
 identity. This avoids undocumented float units; it does not itself provide calibration
-overlays or operation-local candidate scopes.
+overlays. Recipe scopes select complete snapshots separately from gate arguments.
 
 ## Native infrastructure direction
 
