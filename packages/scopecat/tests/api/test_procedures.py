@@ -1461,3 +1461,92 @@ def test_summary_reads_one_bounded_page_and_exposes_closure(
     assert summary.reason == ("test failure" if closure == "failed" else None)
     assert summary.next_cursor == 17
     assert calls == [("snapshot", "p1"), ("steps", "p1", 3, None)]
+
+
+@pytest.mark.parametrize("explicit", [False, True])
+def test_child_run_binds_parameter_changes_without_replacing_subject(
+    monkeypatch: pytest.MonkeyPatch, explicit: bool
+) -> None:
+    from scopecat.config.scientific_binding import bind_scientific_evidence
+    from scopecat.records.sample import SampleBinding
+    from scopecat.records.scientific_binding import ResolvedScientificBinding
+
+    initial = load_config()
+    candidate = (
+        ConfigDraft(initial)
+        .replace_scalar("drive_frequency", Quantity(value=5.1, unit="GHz"))
+        .check()
+        .candidate
+    )
+    assert candidate is not None
+    binding = bind_scientific_evidence(
+        catalog_id="test-catalog",
+        config=initial,
+        samples=(
+            SampleBinding(
+                role="subject",
+                sample_id="chip",
+                revision=1,
+                content_hash="sha256:" + "1" * 64,
+                kind="synthetic",
+                display_name="Chip",
+                context_id="bias-a",
+            ),
+        ),
+        sample_revisions={},
+    )
+    supplied = binding if explicit else None
+    durable = _ImmediateProcedureContext()
+    monkeypatch.setattr(durable, "scientific_binding", binding)
+    monkeypatch.setattr(durable, "samples", binding.sample_selectors())
+    captured: list[ResolvedScientificBinding] = []
+
+    def plan(_self: object, _experiment: object, **kwargs: object) -> object:
+        selected = kwargs["scientific_binding"]
+        assert isinstance(selected, ResolvedScientificBinding)
+        captured.append(selected)
+        raise RuntimeError("planning captured")
+
+    monkeypatch.setattr(_TransportFailingRunner, "_plan", plan)
+    context = LabProcedureContext(
+        cast("ProcedureContext", cast("object", durable)),
+        runner=cast("_DaemonRunner", cast("object", _TransportFailingRunner(object()))),
+        config=cast("LabConfigOperations", cast("object", _DirectConfig())),
+        session=cast("ProcedureLabSession", object()),
+    )
+    with pytest.raises(RuntimeError, match="planning captured"):
+        context.run(
+            "child", load_invocation(), config=candidate, scientific_binding=supplied
+        )
+    selected = captured[0]
+    assert selected.subject == binding.subject
+    assert selected.setup_content_hash == binding.setup_content_hash
+    if explicit:
+        # Explicit evidence is not silently repaired; admission validates it.
+        assert selected is supplied
+    else:
+        assert selected.config_content_hash == config_content_hash(candidate)
+        assert selected.config_content_hash != binding.config_content_hash
+
+
+def test_child_run_requires_explicit_binding_when_setup_changes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from scopecat.config.scientific_binding import bind_scientific_evidence
+
+    config = load_config()
+    binding = bind_scientific_evidence(
+        catalog_id="", config=config, samples=(), sample_revisions={}
+    )
+    changed = config.model_copy(deep=True)
+    changed.system.instrument_registry.instruments[0].driver_id = "another-driver"
+    durable = _ImmediateProcedureContext()
+    monkeypatch.setattr(durable, "scientific_binding", binding)
+    context = LabProcedureContext(
+        cast("ProcedureContext", cast("object", durable)),
+        runner=cast("_DaemonRunner", object()),
+        config=cast("LabConfigOperations", cast("object", _DirectConfig())),
+        session=cast("ProcedureLabSession", object()),
+    )
+    with pytest.raises(ValueError, match="changes the procedure setup"):
+        context.run("child", load_invocation(), config=changed)
