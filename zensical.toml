@@ -31,6 +31,7 @@ nav = [
     { "Record apparatus history" = "how-to/record-apparatus-history.md" },
     { "Keep experimental batches distinct" = "how-to/experimental-batches.md" },
     { "Select session context" = "how-to/select-session-context.md" },
+    { "Collect diagnostics" = "how-to/collect-diagnostics.md" },
     { "Number runs in collections" = "how-to/record-collections.md" },
     { "Organize research history" = "how-to/research-history.md" },
     { "Control instruments" = "how-to/control-instruments.md" },
