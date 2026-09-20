@@ -382,6 +382,45 @@ units for stable call and implementation identity. Recipes should convert units
 explicitly when inspecting numeric values. Nonlinear units are not conflated
 (e.g. dBm and W are not interchangeable by this API).
 
-This supplies operation parameters, not calibration-table overrides or an
-operation-local candidate scope. A laboratory recipe still decides which values
+This supplies operation parameters, not calibration-table overrides. A laboratory recipe still decides which values
 come from its selected parameter row and which are explicit research inputs.
+
+
+## Selecting candidate recipe parameters
+
+Use `q.recipe_scope("candidate", fragment)` to select a named parameter snapshot
+for the logical gates in a subtree. For interleaved RB, wrap only the inserted
+gate; for a whole candidate gate set, wrap the entire RB body:
+
+```python
+# The reference gates still use the baseline recipe rows.
+body = q.sequence(reference_body, q.recipe_scope("candidate", X(target)))
+
+# All logical gates in this body use the candidate rows.
+candidate_body = q.recipe_scope("candidate", rb_body)
+```
+
+The target adapter supplies immutable snapshots to the shared compiler:
+
+```python
+from scopecat_quantum.compilation import RecipeTargetCompiler
+
+compiler = RecipeTargetCompiler(
+    profile,
+    baseline_parameters,
+    scoped_parameters={"candidate": candidate_parameters},
+)
+```
+
+A snapshot is a complete selection for that scope, not an implicit patch or a
+write to the active working point. Missing scope names fail rather than falling
+back to baseline. Nested scopes use the nearest name. Repeated and mapped gates
+retain the selection; unwrapped siblings remain on baseline. Scope names are
+part of exact implementation identity, so identical logical gates may use
+different recipe rows in the same program without colliding in the cache.
+
+Scopes apply only to unresolved logical gates. Measurement recipes always use
+the baseline snapshot, and explicit pulse implementations keep their authored
+pulses. Logical inspection records each gate's scope. Experiment-level APIs for
+turning candidate table updates into these snapshots are a separate integration
+step; this API does not add a calibration-table mutation workflow.

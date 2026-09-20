@@ -351,6 +351,8 @@ def _logical_layer_index(
                 kind = "gate"
                 entity_ids = tuple(qubit.value for qubit in node.qubits)
                 label = f"{node.gate_id.value}({', '.join(entity_ids)})"
+                if node.recipe_scope is not None:
+                    facts = (CompiledInspectionFact("recipe_scope", node.recipe_scope),)
             elif isinstance(node, Measure):
                 kind = "measure"
                 entity_ids = (node.qubit.value,)

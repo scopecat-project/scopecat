@@ -6,6 +6,7 @@ from scopecat import EntityRef, Quantity
 from scopecat_quantum import authoring as q
 from scopecat_quantum._ids import QubitId, TargetCompileEntryId
 from scopecat_quantum.compilation import RecipeTargetCompiler
+from scopecat_quantum.gates import GateCall
 from scopecat_quantum.pulse_recipes import (
     PulseRecipeProfile,
     gate_pulse_recipe,
@@ -73,4 +74,69 @@ def test_budget_rejects_work_before_recipe_invocation() -> None:
             sequence,
             {"target": EntityRef(id="q0", kind="logical_qubit")},
             entry_id=TargetCompileEntryId("too-large"),
+        )
+
+
+def test_candidate_scope_selects_only_inserted_gates_and_preserves_inspection() -> None:
+    @q.program
+    def interleaved(target: q.Qubit) -> q.QuantumFragment:
+        return q.sequence(X(target), q.recipe_scope("candidate", X(target)), X(target))
+
+    compiler = RecipeTargetCompiler(
+        PROFILE,
+        (Row(QubitId("q0"), Quantity(16, "ns")),),
+        scoped_parameters={"candidate": (Row(QubitId("q0"), Quantity(24, "ns")),)},
+    )
+    result = compiler.compile(
+        interleaved,
+        {"target": EntityRef(id="q0", kind="logical_qubit")},
+        entry_id=TargetCompileEntryId("interleaved"),
+        inspect=True,
+    )
+    assert isinstance(result.entry.program.body, ScheduledBlock)
+    assert float(result.entry.program.body.program.duration_seconds) == pytest.approx(
+        56e-9
+    )
+    assert [
+        op.recipe_scope
+        for op in result.bound.verified.logical_operations
+        if isinstance(op, GateCall)
+    ] == [
+        None,
+        "candidate",
+        None,
+    ]
+    assert result.inspection is not None
+    logical = next(layer for layer in result.inspection.layers if layer.id == "logical")
+    assert [
+        fact.value
+        for ordinal in range(logical.nodes.node_count)
+        for fact in logical.nodes.node_at(ordinal, None).facts
+        if fact.id == "recipe_scope"
+    ] == ["candidate"]
+    # The same compiler/cache must still compile an entirely baseline point.
+    reference = compiler.compile(
+        sequence,
+        {"target": EntityRef(id="q0", kind="logical_qubit")},
+        entry_id=TargetCompileEntryId("reference"),
+    )
+    assert isinstance(reference.entry.program.body, ScheduledBlock)
+    assert float(
+        reference.entry.program.body.program.duration_seconds
+    ) == pytest.approx(32e-9)
+
+
+def test_missing_candidate_scope_fails_instead_of_using_baseline() -> None:
+    @q.program
+    def candidate(target: q.Qubit) -> q.QuantumFragment:
+        return q.recipe_scope("candidate", X(target))
+
+    compiler = RecipeTargetCompiler(PROFILE, (Row(QubitId("q0"), Quantity(16, "ns")),))
+    with pytest.raises(
+        ValueError, match="no pulse recipe parameters for scope 'candidate'"
+    ):
+        compiler.compile(
+            candidate,
+            {"target": EntityRef(id="q0", kind="logical_qubit")},
+            entry_id=TargetCompileEntryId("missing"),
         )

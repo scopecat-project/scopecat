@@ -72,6 +72,7 @@ class GatePulseImplementationKey:
     gate_id: GateId
     operands: tuple[QubitId, ...]
     arguments: tuple[GatePulseImplementationArgument, ...] = ()
+    recipe_scope: str | None = None
 
     def __post_init__(self) -> None:
         if not self.operands:
@@ -95,6 +96,7 @@ class GatePulseImplementationKey:
     def from_call(cls, call: GateCall) -> GatePulseImplementationKey:
         return cls(
             gate_id=call.gate_id,
+            recipe_scope=call.recipe_scope,
             operands=call.qubits,
             arguments=tuple(
                 GatePulseImplementationArgument(id=argument.id, value=argument.value)
