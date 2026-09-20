@@ -248,7 +248,9 @@ def test_scientific_ref_failure_rolls_back_admission_and_address(
         assert runtime.application.runs.get_run(accepted.run_id).address is not None
 
 
-@pytest.mark.parametrize("mode", ["fixed", "generic", "wrong-subject", "wrong-step"])
+@pytest.mark.parametrize(
+    "mode", ["fixed", "generic", "parameter-change", "wrong-subject", "wrong-step"]
+)
 def test_every_durable_child_checks_step_and_declared_parent_binding(
     tmp_path: Path, mode: str
 ) -> None:
@@ -305,10 +307,21 @@ def test_every_durable_child_checks_step_and_declared_parent_binding(
                 expected_run_revision=parent.revision,
             )
         )
-        child = (
-            _submission(runtime, config, changed)
-            if mode == "wrong-subject"
-            else original
+        child_config = config
+        if mode == "parameter-change":
+            from scopecat.config.drafts import ConfigDraft
+            from scopecat.kernel.quantity import Quantity
+
+            candidate = (
+                ConfigDraft(config)
+                .replace_scalar("drive_frequency", Quantity(value=5.1, unit="GHz"))
+                .check()
+                .candidate
+            )
+            assert candidate is not None
+            child_config = candidate
+        child = _submission(
+            runtime, child_config, changed if mode == "wrong-subject" else target
         ).model_copy(
             update={
                 "submission_id": procedure_step_operation_id(
@@ -337,7 +350,16 @@ def test_every_durable_child_checks_step_and_declared_parent_binding(
             assert _counts(tmp_path) == before
         else:
             admitted = runtime.application.submit_run(child)
-            assert admitted.snapshot.scientific_binding == original.scientific_binding
+            assert admitted.snapshot.scientific_binding == child.scientific_binding
+            assert (
+                admitted.snapshot.scientific_binding.subject
+                == original.scientific_binding.subject
+            )
+            if mode == "parameter-change":
+                assert (
+                    admitted.snapshot.scientific_binding.config_content_hash
+                    != original.scientific_binding.config_content_hash
+                )
             assert runtime.application.submit_run(child).run_id == admitted.run_id
 
 

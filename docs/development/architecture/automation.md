@@ -59,9 +59,10 @@ key with different content is a conflict and does not execute an effect.
 A `context.run(...)` child inherits the procedure's exact scientific subject and
 setup when no explicit child binding is supplied. Parameter candidates retain that
 subject and setup but record their own configuration content hash; candidate source
-provenance remains independently checked. Changing the setup requires an explicit
-child scientific binding. Explicit bindings are never repaired to fit the supplied
-configuration, and daemon admission still validates retained target/sample evidence.
+provenance remains independently checked. A bound procedure cannot change its
+subject or setup; start a new procedure for a different setup. Explicit bindings
+are never repaired to fit the supplied configuration, and daemon admission still
+validates retained target/sample evidence and the parent's exact subject/setup.
 
 The daemon derives a stable operation ID from the procedure run, step key, and
 attempt. A child run uses it as both the run submission ID and executor intent.

@@ -384,8 +384,8 @@ class LabProcedureContext:
         """Plan and execute one exactly identified child run.
 
         Parameter changes inherit the procedure's exact subject and setup while
-        recording the child's configuration. A different setup needs an explicit
-        child scientific binding, validated at admission.
+        recording the child's configuration. A bound procedure cannot change its
+        subject or setup; explicit child evidence is still checked at admission.
         """
 
         selected_config, inferred_source = self._config.resolve_with_source(config)
@@ -404,7 +404,7 @@ class LabProcedureContext:
             if setup_content_hash(selected_config) != inherited.setup_content_hash:
                 raise ValueError(
                     "child run changes the procedure setup; "
-                    "provide an explicit scientific_binding for that setup"
+                    "submit a new procedure for that setup"
                 )
             scientific_binding = ResolvedScientificBinding(
                 subject=inherited.subject,
