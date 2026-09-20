@@ -42,6 +42,29 @@ _CURRENT_DIRECTORY = Path()
 _LOOPBACK_HOSTS = frozenset({"127.0.0.1", "::1", "localhost"})
 
 
+@app.command("diagnose", context_settings={"ignore_unknown_options": True})
+def diagnose(
+    command: Annotated[list[str], typer.Argument(help="Explicit command after --.")],
+    output: Annotated[Path, typer.Option(help="Fresh evidence directory.")],
+    timeout: Annotated[
+        float, typer.Option(min=0.001, help="Whole-command watchdog in seconds.")
+    ] = 300,
+    cwd: Annotated[
+        Path,
+        typer.Option(exists=True, file_okay=False, help="Command working directory."),
+    ] = _CURRENT_DIRECTORY,
+) -> None:
+    """Capture a command's logs, timings and failure evidence locally."""
+    from .diagnostic_command import diagnose_command
+
+    try:
+        passed = diagnose_command(command, output=output, cwd=cwd, timeout=timeout)
+    except (OSError, ValueError) as error:
+        _fail(error)
+    if not passed:
+        raise typer.Exit(1)
+
+
 @snapshot_app.command("create")
 def snapshot_create(
     project: Annotated[Path, typer.Argument(help="Stopped project directory.")],

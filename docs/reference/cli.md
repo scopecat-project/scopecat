@@ -72,3 +72,10 @@ procedure counters and exits nonzero for recorded deterministic failures.
 Use `scopecat COMMAND --help` as the authority for all current options. See the
 [configuration how-to](../how-to/manage-configuration.md) for the intended
 review workflow.
+
+## Local command diagnostics
+
+`scopecat diagnose --output NEW_DIRECTORY -- COMMAND...` captures an explicit
+command with a bounded watchdog and local evidence archive. See
+[collecting diagnostics](../how-to/collect-diagnostics.md) for arguments, failure
+semantics and workload instrumentation.
