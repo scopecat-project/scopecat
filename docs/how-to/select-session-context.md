@@ -216,3 +216,32 @@ Only templates declared by the running adapter are offered. Selecting a software
 label does not replace the instrument backend or make physical connections virtual.
 An adapter without templates simply has no recipes to offer. Local installation
 settings remain deployment inputs, not the daily scenario selector.
+
+
+## Understand a rejected preview
+
+Expected compilation and configuration checks retain their problem codes,
+messages and locations through the author worker. The workbench shows these
+findings with the selected software scenario's model and limitations. An explicit
+capability finding means the selected setup cannot satisfy that operation; it does
+not prove the instrument family or framework can never support it. For example,
+a setup without a flux route needs a matching route or a different experiment.
+
+Notebook clients receive `AuthorLaunchRejected` with the same typed diagnostic:
+
+```python
+from scopecat.records.launch_rejection import AuthorLaunchRejected
+
+try:
+    prepared = session.prepare(experiment())
+except AuthorLaunchRejected as error:
+    print(error)
+    for problem in error.diagnostic.problems:
+        print(problem.code, problem.location, problem.details)
+```
+
+A rejected preview does not submit an acquisition. Fix the inputs or select a
+suitable setup, then prepare again; an expected check failure does not require
+restarting the author worker. The UI clears an earlier successful preview when a
+new preview fails. Ordinary Python bugs and uncertain submission failures retain
+their existing diagnostics and are not relabelled as unsupported model capabilities.
