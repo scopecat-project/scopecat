@@ -12,6 +12,7 @@ it.each([scenarioFixture, null])(
       system: {
         id: "system",
         primary_entity_id: "q0",
+        domain_target: null,
         topology: { entities: [] },
         instrument_registry: { instruments: [] },
         parameter_catalog: { id: "params", definitions: [] },
