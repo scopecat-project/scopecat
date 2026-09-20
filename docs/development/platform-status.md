@@ -37,8 +37,9 @@ See [configuration ownership](architecture/configuration-ownership.md),
    (#673). First-run source-directory creation/connection now opens an ordinary
    workbench. Explicit local settings selection and stopped-service rechecks (#681)
    replace ambient bootstrap profiles without changing existing scientific config.
-   Independent adapter packages, SDK/runtime preparation and code/parameter
-   trial workflows remain next. Native installation and shared device authority remain later
+   Installed adapter manifests and independently editable experiment folders (#683)
+   now use recorded package content identity. Automatic package installation,
+   SDK/runtime preparation and code/parameter trial workflows remain next. Native installation and shared device authority remain later
    explicit contracts. The bounded installed/browser checks in #668 passed on
    Windows/Linux; broader qualification remains tracked in #616. Do not repeat
    tutorial acceptance as a substitute for the real laboratory connection journey.

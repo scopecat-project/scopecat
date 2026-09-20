@@ -8,6 +8,8 @@ import sys
 import sysconfig
 from pathlib import Path
 
+import pytest
+
 from lab_tools.first_run import SetupRequest, setup
 from lab_tools.services import Services
 from scopecat_server.scaffold import write_project_scaffold
@@ -70,8 +72,6 @@ bootstrap = "test_lab.application:create_bootstrap"
 instrument_backend = "test_lab.backend:create_backend"
 [lab.capabilities]
 author_modules = ["test_lab.authored"]
-[authors]
-dependencies = ["scopecat-instruments"]
 [authors.packages]
 test_lab = "test-lab-adapter"
 """)
@@ -264,6 +264,15 @@ dependencies = []
             cwd=project,
             environment=environment,
         )
+        resource = site / "test_lab/configuration.py"
+        original = resource.read_bytes()
+        try:
+            resource.write_bytes(original + b"\n# same-version installation changed\n")
+            with pytest.raises(ValueError, match="适配包已改变"):
+                services.start(service.id)
+            assert services.views()[0].state == "running"
+        finally:
+            resource.write_bytes(original)
         # Removing the adapter must not make a live worker impossible to stop.
         shutil.rmtree(site / "test_lab")
         shutil.rmtree(site / "test_lab_adapter-1.0.0.dist-info")

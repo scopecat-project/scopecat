@@ -24,7 +24,7 @@ identify their code folder and share the application's execution authority.
 The first-run UI now creates an ordinary source project or connects a prepared
 laboratory code directory and enters its workbench. It can place new data separately
 and reuses a local `.venv` or the application environment. Native installers,
-independent adapter-package installation and dependency/environment preparation
+automatic adapter-package installation and dependency/environment preparation
 remain future work; connecting a source directory does not implement those contracts.
 
 ## Standard composition
@@ -40,10 +40,10 @@ manifest. Public resolves them only when loading execution code, under its exact
 workspace/revision identity. Bootstrap remains lightweight; instrument backends
 remain separately loaded in their owning process. A custom application is an
 explicit alternative, never combined with declarations by hidden precedence.
-This is an initial standard composition contract, not yet an installable adapter
-package manifest or dependency installer. First-run setup currently connects this
-source-manifest boundary, with an optional explicit local settings JSON file;
-it does not independently install adapter packages.
+An independently installed adapter can instead own this composition in a package
+resource. First-run connects a prepared author directory and its environment, with
+an optional explicit local settings JSON file. It does not install packages or
+resolve an environment.
 
 Private should progressively become laboratory capability packages plus editable
 experiment code and local machine settings. Vendor SDK locations, device addresses
@@ -51,6 +51,46 @@ and deployment authority must not be duplicated merely by copying experiments.
 Source checkouts of public remain a framework development option, not a deployment
 prerequisite. Required dependency versions and supported capability boundaries must
 be explicit before independent environments are admitted.
+
+## Installed laboratory adapters
+
+A prepared author directory may select one installed distribution-owned manifest:
+
+```toml
+[lab.adapter]
+distribution = "example-lab"
+manifest = "example_lab/adapter.toml"
+
+[lab.capabilities]
+author_modules = ["my_experiments"]
+
+[authors]
+source_roots = ["src"]
+refresh_roots = ["src"]
+dependencies = []
+```
+
+The adapter resource declares its bootstrap, instrument backend and shared
+capabilities, plus `[authors.packages]` mapping its implementation modules and
+shared laboratory dependencies to installed distributions. The project can add
+local author modules; it cannot override adapter singletons or collection providers.
+Discovery reads distribution metadata and owned files without importing adapter
+code. Execution resolves each adapter symbol from its declared installed module.
+Editable installs are rejected: laboratory implementation updates use a rebuilt
+wheel, while ordinary experiment edits use source refresh.
+
+Installed code and package resources use the existing installed-author content
+identity. A same-version file change is still a changed implementation. Revision
+workers validate that identity before resolving current package declarations.
+Captured local source remains available; historical adapter wheels must be retained
+and restored separately. Recording identity does not archive or reinstall wheels.
+
+Registration probes the selected experiment interpreter, not the host interpreter,
+and records adapter content identity. Startup checks it; changing the adapter
+requires stopping and rechecking. Status and stop parse only the local manifest
+and runtime binding, so removal of an adapter cannot disable service recovery.
+This is a same-runtime package contract, not shared device authority across
+heterogeneous environments or a native installation system.
 
 ## Local settings boundary
 

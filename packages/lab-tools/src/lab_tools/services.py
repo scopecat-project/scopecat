@@ -29,6 +29,7 @@ class Service(BaseModel):
     static_dir: str
     environment: dict[str, str]
     settings_identity: str | None = None
+    adapter_identity: str | None = None
 
 
 class ServiceView(BaseModel):
@@ -169,6 +170,7 @@ class Services:
                 static_dir=cast("str", result["static_dir"]),
                 environment=cast("dict[str, str]", result["environment"]),
                 settings_identity=cast("str | None", result["settings_identity"]),
+                adapter_identity=cast("str | None", result["adapter_identity"]),
             )
             if existing and existing != service:
                 from .host_store import Operations
@@ -178,7 +180,9 @@ class Services:
                     and item.status in ("starting", "running")
                     for item in Operations(self.database.parent.parent).list()
                 )
-                if pending or inspect_daemon(open_project(root)).state in (
+                if pending or inspect_daemon(
+                    open_project(root, resolve_adapter=False)
+                ).state in (
                     "running",
                     "degraded",
                 ):
@@ -232,6 +236,7 @@ class Services:
             updated = service.model_copy(
                 update={
                     "environment": cast("dict[str, str]", result["environment"]),
+                    "adapter_identity": cast("str | None", result["adapter_identity"]),
                     "settings_identity": cast(
                         "str | None", result["settings_identity"]
                     ),
@@ -250,14 +255,19 @@ class Services:
 
     @staticmethod
     def _require_stopped(service: Service) -> None:
-        if inspect_daemon(open_project(service.root)).state != "stopped":
+        if (
+            inspect_daemon(open_project(service.root, resolve_adapter=False)).state
+            != "stopped"
+        ):
             raise ValueError("请先确认实验服务已停止，再复检环境；原登记保留")
 
     def views(self) -> list[ServiceView]:
         result: list[ServiceView] = []
         for service in self.list():
             try:
-                status = inspect_daemon(open_project(service.root))
+                status = inspect_daemon(
+                    open_project(service.root, resolve_adapter=False)
+                )
                 result.append(
                     ServiceView(
                         service=service,
@@ -284,10 +294,11 @@ class Services:
                 "static_dir": service.static_dir,
                 "environment": service.environment,
                 "settings_identity": service.settings_identity,
+                "adapter_identity": service.adapter_identity,
             },
         )
 
-        status = inspect_daemon(open_project(service.root))
+        status = inspect_daemon(open_project(service.root, resolve_adapter=False))
         if status.record is None or status.state != "running":
             raise ValueError("实验服务尚未就绪，请查看操作日志")
         with httpx2.Client(timeout=10, trust_env=False) as client:
@@ -313,7 +324,10 @@ class Services:
                     "environment": service.environment,
                 },
             )
-            if inspect_daemon(open_project(service.root)).state != "stopped":
+            if (
+                inspect_daemon(open_project(service.root, resolve_adapter=False)).state
+                != "stopped"
+            ):
                 raise ValueError("实验服务尚未停止；登记与数据保留，请查看操作日志")
 
     def remove(self, identity: str, *, operation_id: str) -> None:
@@ -331,6 +345,9 @@ class Services:
                 for item in operations.list()
             ):
                 raise ValueError("实验服务还有管理操作未完成，不能移除登记")
-            if inspect_daemon(open_project(service.root)).state != "stopped":
+            if (
+                inspect_daemon(open_project(service.root, resolve_adapter=False)).state
+                != "stopped"
+            ):
                 raise ValueError("请先停止实验服务，再移除登记；项目和数据不会删除")
             db.execute("DELETE FROM services WHERE id=?", (identity,))

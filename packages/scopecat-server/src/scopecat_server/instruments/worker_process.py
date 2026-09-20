@@ -15,6 +15,7 @@ def run_instrument_worker(
     project_root: str,
     instrument_backend_spec: str,
     generation: str,
+    installed_packages: tuple[tuple[str, str], ...] = (),
 ) -> None:
     """Load the driver RPC runtime only after the spawned process is ready."""
 
@@ -29,10 +30,12 @@ def run_instrument_worker(
             worker = import_module("scopecat_server.instruments.worker")
             stage("RPC runtime imported")
             worker_main = cast(
-                "Callable[[object, str, str], None]",
+                "Callable[[object, str, str, tuple[tuple[str, str], ...]], None]",
                 worker._instrument_worker_main,
             )
-            worker_main(connection, project_root, instrument_backend_spec)
+            worker_main(
+                connection, project_root, instrument_backend_spec, installed_packages
+            )
     finally:
         finish()
 
