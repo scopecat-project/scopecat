@@ -64,6 +64,12 @@ class SetupService:
         self._actors = actors
         self._cohorts = calibration_cohorts
         self._mutation_lock = Lock()
+        self.initialize_templates(templates)
+
+    def initialize_templates(
+        self, templates: tuple[ConfigurationTemplate, ...]
+    ) -> None:
+        """Capture adapter recipes during startup, before serving any requests."""
         if len({template.id for template in templates}) != len(templates):
             raise ValueError("configuration template IDs must be unique")
         self._templates = {
