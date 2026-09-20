@@ -12,9 +12,11 @@ if TYPE_CHECKING:
         BootstrapConfigFactory,
         LabBootstrap,
     )
+    from scopecat.application.capabilities import LabCapabilities
     from scopecat.application.lab import LabApplication
 
 _EXPORTS = {
+    "LabCapabilities": ("scopecat.application.capabilities", "LabCapabilities"),
     "BootstrapConfigFactory": (
         "scopecat.application.bootstrap",
         "BootstrapConfigFactory",

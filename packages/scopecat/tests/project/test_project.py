@@ -368,3 +368,86 @@ def test_missing_application_attribute_is_not_reported_as_dependency(
     source.write_text("# Application callable is absent.\n")
     with pytest.raises(AttributeError, match="create"):
         load_application_factory("pilot_lab:create", tmp_path)
+
+
+@pytest.mark.parametrize(
+    "declaration, message",
+    [
+        (
+            '[lab]\napplication="demo:create"\n[lab.capabilities]\n',
+            "mutually exclusive",
+        ),
+        ('[lab.capabilities]\nunknown="demo:value"\n', "unknown"),
+        ('[lab.capabilities]\nprocedures="demo:value"\n', "list of import names"),
+        ('[lab.capabilities]\nexperiment_system="demo"\n', "invalid"),
+        ('[lab.capabilities]\nauthor_modules=["demo:value"]\n', "invalid"),
+    ],
+)
+def test_capability_manifest_rejects_ambiguous_or_invalid_declarations(
+    tmp_path: Path, declaration: str, message: str
+) -> None:
+    manifest = tmp_path / "scopecat.toml"
+    manifest.write_text(declaration)
+    with pytest.raises(ProjectManifestError, match=message):
+        load_project(manifest)
+
+
+def test_declared_capabilities_compose_only_when_execution_is_loaded(
+    tmp_path: Path,
+) -> None:
+    from scopecat.author_workspaces import author_workspace_id
+    from scopecat.project_sources import loading_workspace
+
+    package = tmp_path / "src" / "declared_lab"
+    package.mkdir(parents=True)
+    (package / "__init__.py").write_text("")
+    (package / "execution.py").write_text(
+        "from pydantic import BaseModel\n"
+        "from scopecat.automation import procedure, CalibrationRegistry\n"
+        "from scopecat.project_sources import loading_workspace\n"
+        "WORKSPACE = loading_workspace.get()\n"
+        "class Intent(BaseModel, frozen=True): pass\n"
+        "@procedure(id='declared.test', version='1', intent=Intent)\n"
+        "def run(context: object, intent: Intent) -> None: pass\n"
+        "CALIBRATIONS = CalibrationRegistry()\n"
+        "def build(config, catalog): return (config, catalog)\n"
+    )
+    (tmp_path / "scopecat.toml").write_text(
+        "[lab.capabilities]\n"
+        'author_modules=["declared_lab.execution"]\n'
+        'experiment_system="declared_lab.execution:build"\n'
+        'procedures=["declared_lab.execution:run"]\n'
+        'calibrations="declared_lab.execution:CALIBRATIONS"\n'
+    )
+    project = open_project(tmp_path)
+    project.load_bootstrap()
+    assert "declared_lab.execution" not in sys.modules
+    prior_workspace = loading_workspace.get()
+    application = project.load_application()
+    module = sys.modules["declared_lab.execution"]
+    assert application.build_experiment_system is module.build
+    assert application.calibrations is module.CALIBRATIONS
+    assert tuple(application.procedures.values()) == (module.run,)
+    assert author_workspace_id(tmp_path) == module.WORKSPACE
+    assert loading_workspace.get() == prior_workspace
+
+
+def test_declared_capabilities_resolve_from_captured_code_root(tmp_path: Path) -> None:
+    from dataclasses import replace
+
+    live = tmp_path / "live"
+    captured = tmp_path / "captured"
+    for directory in (live, captured):
+        (directory / "src").mkdir(parents=True)
+        (directory / "scopecat.toml").write_text(
+            '[lab.capabilities]\nexperiment_system="captured_lab:build"\n'
+        )
+    (live / "src" / "captured_lab.py").write_text("raise RuntimeError('live code')\n")
+    (captured / "src" / "captured_lab.py").write_text(
+        "def build(config, catalog): return (config, catalog)\n"
+    )
+    application = replace(open_project(live), code_root=captured).load_application()
+    assert application.build_experiment_system is not None
+    filename = sys.modules["captured_lab"].__file__
+    assert filename is not None
+    assert Path(filename).is_relative_to(captured)
