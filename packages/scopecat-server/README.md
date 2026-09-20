@@ -19,41 +19,36 @@ validates its bootstrap source without starting a daemon or writing project
 state. Configuration reconciliation commands and the complete runnable
 walkthrough live in the [repository README](../../README.md).
 
-Each `scopecat.toml` names a lightweight daemon bootstrap, the full project
-worker application, and, when devices are configured, an instrument backend:
+Each `scopecat.toml` names a lightweight daemon bootstrap, declarative worker
+capabilities and, when devices are configured, an instrument backend:
 
 ```toml
 [lab]
 bootstrap = "my_lab.application:create_bootstrap"
-application = "my_lab.application:create_application"
 instrument_backend = "my_lab.backend:create_backend"
+
+[lab.capabilities]
+author_modules = ["my_lab.experiments"]
+experiment_system = "my_lab.system:build_experiment_system"
 ```
+
+The system builder is optional: the generated starter uses the default system.
+When supplied, it accepts the accepted configuration and instrument contract
+catalog as positional arguments and returns an `ExperimentSystem`. Other optional
+capabilities declare procedure and schedule symbols, calibration registries,
+publication policies and launch/comparison providers. These are existing values
+or callables, not project-root factories.
 
 ```python
 from pathlib import Path
 
 from scopecat.application import LabBootstrap
-from my_lab import build_initial_config
+from my_lab.configuration import build_initial_config
 
 
 def create_bootstrap(project: Path) -> LabBootstrap:
     return LabBootstrap(
         bootstrap_config=lambda: build_initial_config(project),
-    )
-
-
-def create_application(project: Path):
-    from scopecat.application import LabApplication
-    from my_lab import build_experiment_system
-
-    return LabApplication(
-        build_experiment_system=lambda accepted_config, instrument_catalog: (
-            build_experiment_system(
-                accepted_config,
-                instrument_catalog=instrument_catalog,
-                project=project,
-            )
-        ),
     )
 ```
 
@@ -68,10 +63,12 @@ def create_backend(project: Path) -> InstrumentBackend:
     return InstrumentBackend(provider=LabProvider.from_project(project))
 ```
 
-All factories accept the resolved project `Path`. The bootstrap config is a
-lazy seed used only for an empty registry. Keep procedure, calibration, and
-other execution imports inside `create_application`; the daemon loads only
-`create_bootstrap`. Notebook planning receives the accepted snapshot and the
+Bootstrap and backend factories accept the resolved project `Path`. The bootstrap
+config is a lazy seed used only for an empty registry. Capability symbols are
+resolved in the notebook or project worker; the daemon loads only
+`create_bootstrap`. A custom `lab.application` factory remains available for special
+composition and cannot be combined with `[lab.capabilities]`.
+Notebook planning receives the accepted snapshot and the
 daemon-resolved contract catalog. Backend code, transports, codecs, and drivers
 are imported and constructed only in the long-lived instrument worker.
 

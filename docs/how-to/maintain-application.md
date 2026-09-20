@@ -1,9 +1,16 @@
 # Maintain a local application
 
 Use the application manager to inspect and maintain registered experiment services.
-Reopen the original installed `lab.cmd` on Windows or `python lab.py` from its
-installation directory. A source installation uses `scopecat app` with the same
+Run `lab.cmd --manage` on Windows or `python lab.py --manage` from the original
+installation directory. A source installation uses `scopecat app --manage` with the same
 `--home` and `--source` options used when it was registered.
+
+Ordinary launch opens the last successfully selected experiment workbench (or the
+sole service before the first choice), starting/checking its existing runtime.
+It can initialize configured instruments, but never submits or resumes a measurement.
+Use `--manage` for maintenance without starting a service. Explicit `scopecat app
+PROJECT` selects a different primary workbench after a successful check. An absent
+remembered registration returns to management instead of selecting another service.
 
 The workbench's **Help and maintenance** page links to this guide. Returning to the
 manager does not change a notebook's scientific selection or start a measurement.
@@ -88,7 +95,7 @@ environment; the browser does not accept arbitrary filesystem paths.
 For example, in PowerShell:
 
 ```powershell
-scopecat app "D:\Lab\experiment" --python "D:\Lab\runtime\Scripts\python.exe" --static-dir "D:\Lab\gui\dist" --home "D:\Scopecat-Lab" --name "Experiment service"
+scopecat app "D:\Lab\experiment" --manage --python "D:\Lab\runtime\Scripts\python.exe" --static-dir "D:\Lab\gui\dist" --home "D:\Scopecat-Lab" --name "Experiment service"
 ```
 
 Replace each example location with the recorded local location; these are not
@@ -96,6 +103,9 @@ universal Windows defaults. `--home` must select the original manager catalog.
 Use the existing display name with `--name`. Omit `--static-dir` only when the
 target environment provides the packaged GUI you intend to use. For a source
 manager, also retain its original `--source` option.
+
+The `--manage` option in this example leaves the service stopped after registration.
+Omitting it starts/checks the registered service and opens its workbench.
 
 Registering the same canonical project in the same manager home retains its
 service ID. Moving a project or choosing another manager home is a distinct

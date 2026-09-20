@@ -26,6 +26,32 @@ def test_tools_check_preserves_store_and_detects_same_version_change(
     assert not (root / ".scopecat-notebook").exists()
 
 
+@pytest.mark.parametrize("topic", [None, "parameters"])
+def test_generated_project_declares_capabilities_without_application_factory(
+    tmp_path, monkeypatch, topic
+):
+    import tomllib
+
+    monkeypatch.setattr(cli, "environment_identity", dict)
+    root = tmp_path / "course"
+    cli.create_project(root, topic=topic)
+    manifest = tomllib.loads((root / "scopecat.toml").read_text())
+    assert manifest["lab"]["capabilities"] == {"author_modules": ["my_experiment"]}
+    assert "application" not in manifest["lab"]
+    assert "create_application" not in (root / "src/workspace_app.py").read_text()
+    assert cli.check_project(root) == root
+
+    # Teaching admission must not accept a user-edited device backend.
+    text = (
+        (root / "scopecat.toml")
+        .read_text()
+        .replace("[lab]", '[lab]\ninstrument_backend = "drivers:create_backend"')
+    )
+    (root / "scopecat.toml").write_text(text)
+    with pytest.raises(ValueError, match="无设备"):
+        cli.check_project(root)
+
+
 def test_installed_notebook_uses_project_python_without_source_injection(
     tmp_path, monkeypatch
 ):

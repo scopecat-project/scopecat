@@ -24,16 +24,24 @@ On Windows the interpreter is typically `environment\Scripts\python.exe`.
 The paths are trusted local CLI inputs. The browser only submits a registered
 service ID; it cannot register an arbitrary path or interpreter. Registration
 validates the actual project root, environment and GUI without starting its
-daemon. Starting/checking the workbench runs the existing startup lifecycle in
-that environment. After successful startup and a fresh matching running-service
+daemon. Normal CLI entry then starts/checks the workbench through a durable
+`service_start` operation in that environment and opens the qualified service URL.
+Use `--manage` to register without starting and open maintenance instead; use
+`--no-browser` to retain registration plus state output without service startup or
+changing the remembered selection. Starting/checking uses the existing startup lifecycle. After successful startup and a fresh matching running-service
 check, an explicit **Open workbench (new tab)** link opens the service GUI while
 keeping the authenticated manager page available. The link carries no manager
 credential and isolates opener/referrer state. Startup may initialize the project's configured
 instruments; it does not submit a measurement. Existing hardware startup policy
 remains the project's responsibility.
 
-`scopecat app` without a project reopens the manager. Installed `lab.cmd` / `lab.py`
-launchers use this entry. **Help** contains managed teaching exercises;
+`scopecat app` without a project reopens the last successfully selected deployment,
+or the sole registered deployment before a choice has been saved. Explicit project
+entry selects and remembers that deployment only after successful startup and a
+fresh matching running-service check. With no registrations, multiple unselected
+registrations or a removed remembered ID, entry opens the manager without selecting
+another service. `scopecat app --manage` always opens maintenance without starting
+a service. Installed `lab.cmd` / `lab.py` launchers use this entry. **Help** contains managed teaching exercises;
 `scopecat teach` opens it directly. Explicit installed tutorial automation uses
 `python lab.py teach compute --verify`. A normal installation without a tutorial
 delivery can still manage experiment services; Help reports teaching unavailable.
@@ -71,12 +79,15 @@ maintenance error, rather than guessing that its process is safe to forget.
 The experiment GUI has a **Help and maintenance** page. It uses the existing health
 response to identify the current service and provides supported documentation,
 teaching and maintenance directions. Reopen the original installed `lab.cmd` /
-`lab.py` entry to return to that installation's manager; a qualified source
-installation can use `scopecat app` with its original host-home options. Help does
+`lab.py` entry with `--manage` to return to that installation's manager; a qualified
+source installation can use `scopecat app --manage` with its original host-home options. Help does
 not register directories or start another service merely by being opened.
 
-There is no automatic reopening of the last selected service or authenticated
-one-click return to a particular manager. The daemon is not paired with an
+Failed startup or a changed registration opens maintenance with retained operation
+logs and leaves the previous remembered selection unchanged; it never chooses a
+replacement runtime. Normal reopening can initialize instruments through the same
+startup contract, but does not replay measurements or interrupted operations.
+There is no authenticated one-click return from a workbench to a particular manager. The daemon is not paired with an
 installation host: deployment/source identities do not identify its manager port,
 home or credentials. Do not expose `host.json`, infer a manager address from a
 project path, or add an unauthenticated cross-origin management endpoint to make

@@ -11,6 +11,7 @@ from pathlib import Path, PureWindowsPath
 from threading import RLock
 from typing import TYPE_CHECKING, cast
 
+from scopecat.application.capabilities import LabCapabilities
 from scopecat.runtime_binding import RuntimeBinding, load_runtime_binding
 
 if TYPE_CHECKING:
@@ -26,7 +27,9 @@ type LabBootstrapFactory = Callable[[Path], LabBootstrap]
 type LabApplicationFactory = Callable[[Path], LabApplication]
 
 _MANIFEST_NAME = "scopecat.toml"
-_LAB_KEYS = frozenset({"bootstrap", "application", "instrument_backend"})
+_LAB_KEYS = frozenset(
+    {"bootstrap", "application", "instrument_backend", "capabilities"}
+)
 
 
 class ProjectManifestError(ValueError):
@@ -50,6 +53,7 @@ class Project:
     bootstrap_spec: str | None
     application_spec: str | None
     instrument_backend_spec: str | None
+    capabilities: LabCapabilities | None = None
     code_root: Path | None = None
     code_revision: AuthorRevisionRef | None = None
     source_roots: tuple[str, ...] = ()
@@ -76,7 +80,7 @@ class Project:
     def load_application(self) -> LabApplication:
         """Load the version-controlled composition declared by this project."""
 
-        if self.application_spec is None:
+        if self.application_spec is None and self.capabilities is None:
             from scopecat.application.lab import LabApplication
 
             return LabApplication()
@@ -87,12 +91,46 @@ class Project:
         token = loading_revision.set(self.code_revision)
         workspace_token = loading_workspace.set(workspace)
         try:
+            if self.capabilities is not None:
+                from scopecat.application.composition import compose_application
+
+                return compose_application(
+                    self.capabilities,
+                    lambda spec: load_project_symbol(
+                        spec, self.code_root or self.root, subject="lab capability"
+                    ),
+                    self._load_author_module,
+                )
+            assert self.application_spec is not None
             return load_application_factory(
                 self.application_spec, self.code_root or self.root
             )(self.root)
         finally:
             loading_workspace.reset(workspace_token)
             loading_revision.reset(token)
+
+    def _load_author_module(self, name: str) -> object:
+        distribution = dict(self.installed_packages).get(name.partition(".")[0])
+        if distribution is None:
+            return load_project_symbol(
+                name, self.code_root or self.root, subject="author module"
+            )
+        from scopecat.installed_authors import installed_module_path
+
+        root = self.code_root or self.root
+        with _project_import_lock:
+            _require_available_project(root)
+            expected = installed_module_path(name.partition(".")[0], distribution, name)
+            module = import_module(name)
+            filename = module.__file__
+            if filename is None or Path(filename).resolve() != expected.resolve():
+                raise ProjectCodeLoadError(
+                    f"installed author module {name!r} did not resolve to the "
+                    f"declared distribution {distribution!r}: expected {expected}"
+                )
+            global _loaded_project_code_root
+            _loaded_project_code_root = root
+            return module
 
     def authoring(self, daemon: str | None = None) -> AuthorProject:
         """Use complete author revisions from notebooks without module reload."""
@@ -172,6 +210,13 @@ def load_project(manifest: str | Path) -> Project:
     bootstrap = _optional_text(lab, "bootstrap")
     application = _optional_text(lab, "application")
     instrument_backend = _optional_text(lab, "instrument_backend")
+    capabilities = (
+        _parse_capabilities(lab["capabilities"]) if "capabilities" in lab else None
+    )
+    if application is not None and capabilities is not None:
+        raise ProjectManifestError(
+            "lab.application and lab.capabilities are mutually exclusive"
+        )
     authors = document.get("authors", {})
     if not isinstance(authors, dict):
         raise ProjectManifestError("[authors] must be a table")
@@ -230,6 +275,7 @@ def load_project(manifest: str | Path) -> Project:
         bootstrap_spec=bootstrap,
         application_spec=application,
         instrument_backend_spec=instrument_backend,
+        capabilities=capabilities,
         source_roots=source_roots,
         refresh_roots=refresh_roots,
         installed_packages=tuple(sorted(installed)),
@@ -291,9 +337,25 @@ def _load_project_factory(
     *,
     subject: str,
 ) -> Callable[[Path], object]:
-    module_name, separator, attribute_name = spec.partition(":")
-    if not separator or not module_name or not attribute_name:
+    module, separator, attribute = spec.partition(":")
+    if not module or not separator or not attribute:
         raise ValueError(f"{subject} must use MODULE:CALLABLE")
+    factory = load_project_symbol(
+        spec, project_root, subject=subject, require_callable=True
+    )
+    return cast("Callable[[Path], object]", factory)
+
+
+def load_project_symbol(
+    spec: str,
+    project_root: str | Path,
+    *,
+    subject: str,
+    require_callable: bool = False,
+) -> object:
+    module_name, separator, attribute_name = spec.partition(":")
+    if not module_name or (separator and not attribute_name):
+        raise ValueError(f"{subject} must use MODULE or MODULE:ATTRIBUTE")
 
     root = Path(project_root).resolve()
     with _project_import_lock:
@@ -315,8 +377,10 @@ def _load_project_factory(
                     f"project {subject} module {module_name!r} resolved outside "
                     f"project {root}: {_module_locations_text(module)}"
                 )
-            factory = cast("object", getattr(module, attribute_name))
-            if not callable(factory):
+            value = (
+                cast("object", getattr(module, attribute_name)) if separator else module
+            )
+            if require_callable and not callable(value):
                 raise ProjectCodeLoadError(
                     f"project {subject} {spec!r} does not name a callable"
                 )
@@ -328,7 +392,7 @@ def _load_project_factory(
         global _loaded_project_code_root
         _loaded_project_code_root = root
 
-    return cast("Callable[[Path], object]", factory)
+    return value
 
 
 def _require_available_project(root: Path) -> None:
@@ -438,6 +502,64 @@ def _local_roots(value: object) -> tuple[str, ...]:
             )
         selected.append(item)
     return tuple(selected)
+
+
+def _parse_capabilities(value: object) -> LabCapabilities:
+    if not isinstance(value, dict):
+        raise ProjectManifestError("[lab.capabilities] must be a table")
+    table = cast("dict[str, object]", value)
+    sequence_fields = {"author_modules", "procedures", "procedure_schedules"}
+    object_fields = {
+        "experiment_system",
+        "calibrations",
+        "calibration_publications",
+        "launch_provider",
+        "comparison_provider",
+    }
+    unknown = set(table) - sequence_fields - object_fields
+    if unknown:
+        raise ProjectManifestError(
+            f"unknown [lab.capabilities] field(s): {', '.join(sorted(unknown))}"
+        )
+    sequences: dict[str, tuple[str, ...]] = {}
+    for name in sequence_fields:
+        items = table.get(name, [])
+        if not isinstance(items, list) or not all(
+            isinstance(item, str) and item.strip()
+            for item in cast("list[object]", items)
+        ):
+            raise ProjectManifestError(
+                f"lab.capabilities.{name} must be a list of import names"
+            )
+        sequences[name] = tuple(cast("list[str]", items))
+    objects = {name: _optional_text(table, name) for name in object_fields}
+    for name, specs in (
+        *((name, values) for name, values in sequences.items()),
+        *((name, (spec,)) for name, spec in objects.items() if spec is not None),
+    ):
+        for spec in specs:
+            module, separator, attribute = spec.partition(":")
+            if (
+                not all(part.isidentifier() for part in module.split("."))
+                or (
+                    name != "author_modules"
+                    and (not separator or not attribute.isidentifier())
+                )
+                or (name == "author_modules" and separator)
+            ):
+                raise ProjectManifestError(
+                    f"invalid lab.capabilities.{name} import name: {spec!r}"
+                )
+    return LabCapabilities(
+        author_modules=sequences["author_modules"],
+        procedures=sequences["procedures"],
+        procedure_schedules=sequences["procedure_schedules"],
+        experiment_system=objects["experiment_system"],
+        calibrations=objects["calibrations"],
+        calibration_publications=objects["calibration_publications"],
+        launch_provider=objects["launch_provider"],
+        comparison_provider=objects["comparison_provider"],
+    )
 
 
 def _optional_text(table: dict[str, object], field: str) -> str | None:

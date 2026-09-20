@@ -96,11 +96,10 @@ def test_installed_experiments_are_discovered_alongside_local_declarations(
     manifest.write_text(
         manifest.read_text() + '\n[authors.packages]\nlab_methods="lab-methods"\n'
     )
-    application = root / "src/scopecat_lab/application.py"
-    application.write_text(
-        application.read_text().replace(
-            'author_modules=("scopecat_lab.authored",)',
-            'author_modules=("lab_methods", "scopecat_lab.authored")',
+    manifest.write_text(
+        manifest.read_text().replace(
+            'author_modules = ["scopecat_lab.authored"]',
+            'author_modules = ["lab_methods", "scopecat_lab.authored"]',
         )
     )
     monkeypatch.setenv(

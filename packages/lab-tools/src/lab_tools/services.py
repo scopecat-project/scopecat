@@ -89,6 +89,36 @@ class Services:
                 "(id TEXT PRIMARY KEY, root TEXT UNIQUE NOT NULL, "
                 "payload TEXT NOT NULL)"
             )
+            db.execute(
+                "CREATE TABLE IF NOT EXISTS preference "
+                "(singleton INTEGER PRIMARY KEY CHECK(singleton=1), "
+                "service TEXT NOT NULL)"
+            )
+
+    def preferred(self) -> Service | None:
+        """Select the saved deployment, or a sole deployment before first choice."""
+        with closing(sqlite3.connect(self.database)) as db:
+            row = cast(
+                "tuple[str] | None",
+                db.execute(
+                    "SELECT service FROM preference WHERE singleton=1"
+                ).fetchone(),
+            )
+        records = self.list()
+        if row is not None:
+            # Retain a removed ID as a tombstone: never silently select a replacement.
+            return next((item for item in records if item.id == row[0]), None)
+        return records[0] if len(records) == 1 else None
+
+    def remember(self, identity: str) -> None:
+        """Remember only a still-registered deployment after successful startup."""
+        with self.lock, closing(sqlite3.connect(self.database)) as db, db:
+            self.get(identity)
+            db.execute(
+                "INSERT INTO preference VALUES (1, ?) "
+                "ON CONFLICT(singleton) DO UPDATE SET service=excluded.service",
+                (identity,),
+            )
 
     def list(self) -> list[Service]:
         with closing(sqlite3.connect(self.database)) as db:
