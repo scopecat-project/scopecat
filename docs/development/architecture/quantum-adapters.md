@@ -27,9 +27,11 @@ than copied general-purpose schedulers.
 ## Remaining framework work
 
 This entry point centralizes existing orchestration; it does not implement automatic
-parameter dependency tracking. Typed recipe row access, dependency diagnostics and
-the experiment-level binding of candidate table updates into scoped snapshots remain
-open. The compiler now distinguishes:
+parameter dependency tracking. Typed recipe row access and dependency diagnostics
+remain open. Call-level `with_recipe_parameters` binds scanned cell values through
+existing typed compiler inputs; `resolve_recipe_parameters` uses the core transient
+context-update implementation to build snapshots and provenance. Adapters translate
+those snapshots to laboratory recipe rows and retain the returned evidence. The compiler now distinguishes:
 
 - a working-point snapshot shared by the program;
 - a candidate implementation applied to a whole program;

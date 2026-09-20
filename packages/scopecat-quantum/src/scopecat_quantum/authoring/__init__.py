@@ -9,6 +9,7 @@ from scopecat_quantum.acquisitions import (
     QuantumResultDimension,
     raw_trace_result,
 )
+from scopecat_quantum.recipe_parameters import recipe_parameter
 
 from ._analysis import (
     program_port_type,
@@ -192,6 +193,7 @@ __all__ = [
     "qubit",
     "raw_trace_result",
     "readout",
+    "recipe_parameter",
     "recipe_scope",
     "repeat",
     "scalar_input",

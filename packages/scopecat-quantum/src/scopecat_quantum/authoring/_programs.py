@@ -47,6 +47,11 @@ from scopecat_quantum._ids import (
     QuantumProgramId,
 )
 from scopecat_quantum.acquisitions import QuantumResultDimension
+from scopecat_quantum.recipe_parameters import (
+    RecipeParameter,
+    RecipeParameterBinding,
+    recipe_parameter_input_ids,
+)
 
 from ._analysis import (
     _summarize_fragment,
@@ -116,12 +121,70 @@ class QuantumProgramCall:
     def with_compiler_inputs(self, **inputs: ComputeInput) -> QuantumProgramCall:
         """Bind typed lowering-only values without changing the Program ABI."""
 
-        compiler_inputs = dict(inputs)
+        recipe_ids = recipe_parameter_input_ids(self.program)
+        if recipe_ids & inputs.keys():
+            raise ValueError(
+                "recipe parameter inputs are owned by with_recipe_parameters"
+            )
+        compiler_inputs = {
+            name: value for name, value in self.compiler_arguments if name in recipe_ids
+        } | dict(inputs)
         return _program_call(
             self.program,
             self.domain_call.id,
             inputs=dict(self.arguments),
             compiler_inputs=compiler_inputs,
+            shots=self.shots,
+            key=self.domain_call.key,
+        )
+
+    def with_recipe_parameters(
+        self,
+        scope: str,
+        *parameters: RecipeParameter,
+    ) -> QuantumProgramCall:
+        """Bind point-local edits to gates inside the named recipe scope."""
+        if not scope.strip():
+            raise ValueError("recipe parameter scope must be non-empty")
+        bindings = list(self.program.recipe_parameter_bindings)
+        inputs = dict(self.compiler_arguments)
+        for parameter in parameters:
+            if any(
+                (item.scope, item.table, item.column, item.key)
+                == (scope, parameter.table, parameter.column, parameter.key)
+                for item in bindings
+            ):
+                raise ValueError("duplicate recipe parameter cell in scope " + scope)
+            input_id = f"__recipe_parameter_{len(bindings)}"
+            if input_id in inputs:
+                raise ValueError("compiler input uses reserved recipe parameter name")
+            bindings.append(
+                RecipeParameterBinding(
+                    scope,
+                    parameter.table,
+                    parameter.column,
+                    parameter.key,
+                    parameter.value_type,
+                    input_id,
+                )
+            )
+            inputs[input_id] = _normalize_compiler_input(input_id, parameter.value)
+        # ProgramDefinition has a custom constructor; copy only its closed IR.
+        program = Program(
+            ir_id=self.program.ir_id,
+            body=self.program.body,
+            elements=self.program.elements,
+            entity_sets=self.program.entity_sets,
+            inputs=self.program.inputs,
+            results=self.program.results,
+            description=self.program.description,
+            recipe_parameter_bindings=tuple(bindings),
+        )
+        return _program_call(
+            program,
+            self.domain_call.id,
+            inputs=dict(self.arguments),
+            compiler_inputs=inputs,
             shots=self.shots,
             key=self.domain_call.key,
         )
@@ -170,6 +233,7 @@ class Program:
     inputs: tuple[ProgramInput, ...]
     results: ProgramResults
     description: str | None = None
+    recipe_parameter_bindings: tuple[RecipeParameterBinding, ...] = ()
 
     @property
     def id(self) -> str:
@@ -216,6 +280,7 @@ class ProgramDefinition(Program):
             inputs=declaration.inputs,
             results=declaration.results,
             description=declaration.description,
+            recipe_parameter_bindings=declaration.recipe_parameter_bindings,
         )
         self._definition = definition
         self._contract = contract
