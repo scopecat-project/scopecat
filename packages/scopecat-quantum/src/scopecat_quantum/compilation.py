@@ -61,14 +61,19 @@ class RecipeTargetCompiler[ParametersT]:
         *,
         entry_id: TargetCompileEntryId,
         inspect: bool = False,
+        scoped_parameters: Mapping[str, ParametersT] | None = None,
     ) -> CompiledRecipeEntry:
-        """Bind, resolve recipes and lower one point with a common work budget."""
+        """Bind, resolve recipes and lower one point with a common work budget.
+
+        Point-local snapshots override named batch defaults for this call only.
+        Both remain immutable; the cache keys retain the actual selected rows.
+        """
         bound = quantum.bind(program, bindings)
         implementations = self._profile.materialize_quantum(
             self._parameters,
             bound.verified,
             cache=self._cache,
-            scoped_parameters=self._scoped_parameters,
+            scoped_parameters={**self._scoped_parameters, **(scoped_parameters or {})},
             max_expanded_operations=self._max_expanded_operations,
         )
         entry = prepare_quantum_target_entry(

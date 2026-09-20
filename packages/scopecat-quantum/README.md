@@ -421,6 +421,32 @@ different recipe rows in the same program without colliding in the cache.
 
 Scopes apply only to unresolved logical gates. Measurement recipes always use
 the baseline snapshot, and explicit pulse implementations keep their authored
-pulses. Logical inspection records each gate's scope. Experiment-level APIs for
-turning candidate table updates into these snapshots are a separate integration
-step; this API does not add a calibration-table mutation workflow.
+pulses. Logical inspection records each gate's scope. Use the call-level parameter bindings below to supply scanned cell values.
+This API does not add a calibration-table mutation workflow.
+
+### Scanning a candidate table field
+
+A program call can bind literal or scanned values to cells identified by the same
+parameter declarations used by `parameter_ref`:
+
+```python
+call = rb_program(qubit=target, seed=seed, length=length).with_recipe_parameters(
+    "candidate",
+    q.recipe_parameter(Drive.pi_amplitude, target, amplitude),
+)
+```
+
+`amplitude` may be an experiment input or scan value. Keys are concrete parameter
+row keys; values use the field's type, units and range. The program body determines
+which gates belong to `candidate` using `recipe_scope`. Unchanged cells inherit
+the selected baseline. Each point and each scope starts from that same baseline;
+no edit is applied to the active working point. A candidate equal to baseline is
+valid. Changing shots or adding device compiler inputs preserves these bindings.
+
+Adapters use `recipe_parameter_input_ids(program)` to separate these generated
+inputs from their own ABI, and `resolve_recipe_parameters(program, values,
+catalog=catalog, base=snapshot)` to resolve point-local snapshots. Pass their
+recipe-row representations to `RecipeTargetCompiler.compile(scoped_parameters=...)`.
+The result's evidence includes the baseline snapshot identity, content fingerprints,
+scopes and exact cell values; retain it in target intent and artifact provenance.
+Explicit pulse implementations and measurements remain outside recipe scopes.

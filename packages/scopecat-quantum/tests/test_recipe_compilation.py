@@ -140,3 +140,28 @@ def test_missing_candidate_scope_fails_instead_of_using_baseline() -> None:
             {"target": EntityRef(id="q0", kind="logical_qubit")},
             entry_id=TargetCompileEntryId("missing"),
         )
+
+
+def test_point_scopes_reuse_compiler_without_leaking_into_later_points() -> None:
+    @q.program
+    def candidate(target: q.Qubit) -> q.QuantumFragment:
+        return q.sequence(X(target), q.recipe_scope("candidate", X(target)))
+
+    compiler = RecipeTargetCompiler(
+        PROFILE,
+        (Row(QubitId("q0"), Quantity(16, "ns")),),
+        scoped_parameters={"candidate": (Row(QubitId("q0"), Quantity(20, "ns")),)},
+    )
+    for duration in (24, 32, None):
+        result = compiler.compile(
+            candidate,
+            {"target": EntityRef(id="q0", kind="logical_qubit")},
+            entry_id=TargetCompileEntryId(f"point-{duration}"),
+            scoped_parameters=None
+            if duration is None
+            else {"candidate": (Row(QubitId("q0"), Quantity(duration, "ns")),)},
+        )
+        assert isinstance(result.entry.program.body, ScheduledBlock)
+        assert float(
+            result.entry.program.body.program.duration_seconds
+        ) == pytest.approx((16 + (20 if duration is None else duration)) * 1e-9)
