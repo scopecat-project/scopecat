@@ -19,7 +19,7 @@
 | `pyproject.toml` | 本地实验包的声明；环境由交付工具准备 |
 | `.vscode/` | 扩展推荐、解释器提示、首次准备与服务任务 |
 | `.venv/` | 本项目的 Python 环境，不手工复制到别的项目 |
-| `src/workspace_app.py`、`scopecat.toml` | 维护者的应用装配和源码捕获范围 |
+| `src/workspace_app.py`、`scopecat.toml` | 初始配置、声明式实验能力和源码捕获范围 |
 | `.scopecat/` | 参数历史、run 与来源证据，不手工编辑 |
 | `author-environment.json` | 交付软件身份记录 |
 

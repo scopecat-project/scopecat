@@ -155,11 +155,10 @@ def _installed_journey(bundle: Path) -> None:
         project_manifest.read_text()
         + '\n[authors.packages]\npilot_methods = "scopecat-pilot-methods"\n'
     )
-    application = project_root / "src/scopecat_lab/application.py"
-    application.write_text(
-        application.read_text().replace(
-            'author_modules=("scopecat_lab.authored",)',
-            'author_modules=("pilot_methods", "scopecat_lab.authored")',
+    project_manifest.write_text(
+        project_manifest.read_text().replace(
+            'author_modules = ["scopecat_lab.authored"]',
+            'author_modules = ["pilot_methods", "scopecat_lab.authored"]',
         )
     )
     local = project_root / "src/scopecat_lab/authored/signal.py"

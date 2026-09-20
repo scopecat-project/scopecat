@@ -7,7 +7,9 @@ from pathlib import Path
 
 MANIFEST = """[lab]
 bootstrap = "workspace_app:create_bootstrap"
-application = "workspace_app:create_application"
+
+[lab.capabilities]
+author_modules = ["my_experiment"]
 
 [authors]
 source_roots = ["src"]
@@ -18,17 +20,13 @@ dependencies = []
 lab_teaching = "scopecat-lab-teaching"
 """
 
-APPLICATION = '''"""Maintainer composition; edit my_experiment for daily work."""
+APPLICATION = '''"""Initial configuration; edit my_experiment for daily work."""
 from pathlib import Path
 from lab_teaching import application
 
 
 def create_bootstrap(root: Path):
     return application.create_bootstrap(root)
-
-
-def create_application(root: Path):
-    return application.create_application(root)
 '''
 
 

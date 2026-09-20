@@ -34,27 +34,32 @@ read or migrate earlier development stores.
 
 ## Manifest
 
-`scopecat.toml` identifies daemon bootstrap, project application, and instrument
-backend factories:
+`scopecat.toml` identifies daemon bootstrap, declared execution capabilities,
+and the instrument backend:
 
 ```toml
 [lab]
 bootstrap = "scopecat_lab.application:create_bootstrap"
-application = "scopecat_lab.application:create_application"
 instrument_backend = "scopecat_lab.backend:create_backend"
+
+[lab.capabilities]
+author_modules = ["scopecat_lab.authored"]
 
 [authors]
 source_roots = ["src"]
 refresh_roots = ["src/scopecat_lab/authored"]
 ```
 
-The three factory values use `MODULE:CALLABLE` syntax. Project discovery searches at or above
+Bootstrap and backend factories use `MODULE:CALLABLE` syntax. Capability symbols
+use `MODULE:SYMBOL`; `author_modules` lists discoverable Python modules.
+Project discovery searches at or above
 the supplied path and makes the project's `src` directory importable.
 
 ## Source ownership
 
-- `application.py` exports a lightweight bootstrap factory for the daemon and a
-  separate full application factory for notebooks and the project worker.
+- `application.py` exports the lightweight initial configuration bootstrap.
+- `[lab.capabilities]` declares notebook and worker execution capabilities without
+  requiring a custom application factory.
 - `backend.py` composes worker-only instrument providers and drivers.
 - `configuration.py` builds the bootstrap configuration used only while the
   daemon registry is empty.
@@ -67,9 +72,12 @@ version them with the rest of the lab project. Use the
 [configuration review workflow](../how-to/manage-configuration.md) to publish
 configuration changes explicitly.
 
-Keep procedure, schedule, calibration, publication, and system-builder imports
-inside the full application factory. Importing the bootstrap factory must not
-load those user execution callbacks into the daemon process.
+Declare procedure, schedule, calibration, publication, and system-builder symbols
+in `[lab.capabilities]`. They are resolved in the notebook or project worker, not
+while the daemon loads its bootstrap. Importing the bootstrap factory must not
+load user execution callbacks. A custom `lab.application` factory remains an
+alternative for special composition; it cannot be combined with the capabilities
+table.
 
 ## Bind a workspace to persistent local data
 

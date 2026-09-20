@@ -75,7 +75,8 @@ def check_project(project: Path) -> Path:
         ),
     )
     if (
-        manifest["lab"].get("application") != "workspace_app:create_application"
+        manifest["lab"].get("capabilities") != {"author_modules": ["my_experiment"]}
+        or "application" in manifest["lab"]
         or "instrument_backend" in manifest["lab"]
     ):
         raise ValueError("此入口只用于无设备的最小教学项目")

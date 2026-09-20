@@ -8,8 +8,10 @@ _PROJECT_FILES = {
     "scopecat.toml": """\
 [lab]
 bootstrap = "scopecat_lab.application:create_bootstrap"
-application = "scopecat_lab.application:create_application"
 instrument_backend = "scopecat_lab.backend:create_backend"
+
+[lab.capabilities]
+author_modules = ["scopecat_lab.authored"]
 
 [authors]
 dependencies = ["scopecat-instruments"]
@@ -114,19 +116,15 @@ def bootstrap_config() -> ConfigProfileSnapshot:
 __all__ = ["bootstrap_config"]
 ''',
     "src/scopecat_lab/application.py": '''\
-"""Daemon bootstrap and project-worker composition for this project."""
+"""Initial configuration bootstrap for this project."""
 
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 from scopecat.application import LabBootstrap
 
 from .configuration import bootstrap_config
-
-if TYPE_CHECKING:
-    from scopecat.application import LabApplication
 
 
 def create_bootstrap(_project_root: Path) -> LabBootstrap:
@@ -135,15 +133,7 @@ def create_bootstrap(_project_root: Path) -> LabBootstrap:
     return LabBootstrap(bootstrap_config=bootstrap_config)
 
 
-def create_application(_project_root: Path) -> LabApplication:
-    """Compose notebook and project-worker execution capabilities."""
-
-    from scopecat.application import LabApplication
-
-    return LabApplication(author_modules=("scopecat_lab.authored",))
-
-
-__all__ = ["create_application", "create_bootstrap"]
+__all__ = ["create_bootstrap"]
 ''',
     "src/scopecat_lab/backend.py": '''\
 """Worker-only instrument backend composition for this project."""

@@ -3,7 +3,7 @@
 from pathlib import Path
 
 import scopecat as sc
-from scopecat.application import LabApplication, LabBootstrap
+from scopecat.application import LabBootstrap
 from scopecat.records.config import (
     ConfigProfileSnapshot,
     InstrumentRegistry,
@@ -37,7 +37,3 @@ def bootstrap_config() -> ConfigProfileSnapshot:
 
 def create_bootstrap(_project_root: Path) -> LabBootstrap:
     return LabBootstrap(bootstrap_config=bootstrap_config)
-
-
-def create_application(_project_root: Path) -> LabApplication:
-    return LabApplication(author_modules=("my_experiment",))
