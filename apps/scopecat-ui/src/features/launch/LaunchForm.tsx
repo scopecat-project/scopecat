@@ -1,3 +1,4 @@
+import { ExecutionScenario } from "../../ui/ExecutionScenario";
 import { reviewedForRequest } from "./scientific-selection";
 import { useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -394,6 +395,10 @@ export function LaunchForm({
       {error && <p role="alert">{error}</p>}
       {result && (
         <>
+          <ExecutionScenario
+            scenario={result.reviewed.binding.scenario}
+            label="Reviewed execution scenario"
+          />
           <PreflightSummary entry={entry} preview={result} />
           <ControlSummary fields={entry.controls} values={result.controls} />
         </>

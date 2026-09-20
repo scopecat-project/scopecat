@@ -1,3 +1,4 @@
+import type { SoftwareExecutionScenario } from "./api-contract";
 import type {
   AdaptiveRegion,
   AnalysisArtifactReference,
@@ -74,6 +75,7 @@ export interface RunPointPlanProgress {
 }
 
 export interface ProjectRun {
+  scenario?: SoftwareExecutionScenario;
   sequence?: number;
   runId: string;
   experimentId: string;

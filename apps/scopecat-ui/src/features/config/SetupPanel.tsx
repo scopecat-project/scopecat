@@ -1,3 +1,4 @@
+import { ExecutionScenario } from "../../ui/ExecutionScenario";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ConfigProfileSnapshot } from "../../api-contract";
@@ -72,6 +73,12 @@ export function SetupPanel({
         topology, routing, instrument identities and configured defaults. Parameter defaults and
         saved working points are selected separately.
       </p>
+      {current.data && (
+        <ExecutionScenario
+          scenario={current.data.revision.setup.scenario}
+          label="Current setup scenario"
+        />
+      )}
       <div className="flex flex-wrap items-center gap-2">
         <label>
           Setup revision name{" "}
@@ -157,6 +164,9 @@ export function SetupPanel({
           Review setup selection
         </button>
       </div>
+      {candidate && (
+        <ExecutionScenario scenario={candidate.setup.scenario} label="Selected revision scenario" />
+      )}
       {review && candidate && (
         <div
           role="region"

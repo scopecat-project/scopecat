@@ -1,3 +1,4 @@
+import { scenarioFixture } from "../../test/scenario-fixture";
 import { serviceWorkspaceCatalog } from "../../test/scientific-fixtures";
 import { defaultSelection } from "./scientific-selection";
 import { reviewedFixture } from "../../test/scientific-fixtures";
@@ -488,4 +489,29 @@ it("parses numeric and boolean author choices before preview", async () => {
   await screen.findByText("Preview ready");
   const request = fetcher.mock.calls[1]?.[0] as Request;
   expect((await request.json()).inputs).toEqual({ shots: 8, enabled: false });
+});
+
+it("shows the preview's frozen scenario and clears it when inputs change", async () => {
+  const fetcher = vi
+    .fn()
+    .mockResolvedValueOnce(Response.json({ entries: [entry] }))
+    .mockResolvedValueOnce(
+      Response.json({
+        ...previewResult,
+        reviewed: {
+          ...previewResult.reviewed,
+          binding: { ...previewResult.reviewed.binding, scenario: scenarioFixture },
+        },
+      }),
+    );
+  vi.stubGlobal("fetch", fetcher);
+  mount();
+  fireEvent.change(await screen.findByLabelText("Qubit"), { target: { value: "Q12" } });
+  fireEvent.change(screen.getByLabelText("Amplitude"), { target: { value: "0.4" } });
+  fireEvent.click(screen.getByRole("button", { name: "Preview" }));
+  await screen.findByText("Preview ready");
+  expect(screen.getByRole("region", { name: "Reviewed execution scenario" })).toBeVisible();
+  expect(screen.getByText("Synthetic resonance")).toBeVisible();
+  fireEvent.change(screen.getByLabelText("Amplitude"), { target: { value: "0.5" } });
+  await waitFor(() => expect(screen.queryByText("Synthetic resonance")).not.toBeInTheDocument());
 });

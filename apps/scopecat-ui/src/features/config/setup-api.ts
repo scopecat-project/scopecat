@@ -13,7 +13,7 @@ export function getSetupRevisions(signal?: AbortSignal) {
   return apiData(apiClient.GET("/api/v1/setup/revisions", { signal }));
 }
 export function saveSetupFromConfig(config: ConfigProfileSnapshot, name: string, actor: string) {
-  const { primary_entity_id, topology, instrument_registry, routing, domain_target } =
+  const { primary_entity_id, topology, instrument_registry, routing, domain_target, scenario } =
     config.system;
   return apiData(
     apiClient.POST("/api/v1/setup/revisions", {
@@ -27,6 +27,7 @@ export function saveSetupFromConfig(config: ConfigProfileSnapshot, name: string,
           instrument_registry,
           routing: routing ?? { roles: [], routes: [] },
           domain_target: domain_target ?? null,
+          scenario: scenario ?? null,
         },
       },
     }),
