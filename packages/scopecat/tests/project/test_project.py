@@ -451,3 +451,32 @@ def test_declared_capabilities_resolve_from_captured_code_root(tmp_path: Path) -
     filename = sys.modules["captured_lab"].__file__
     assert filename is not None
     assert Path(filename).is_relative_to(captured)
+
+
+def test_declared_author_modules_accept_only_explicit_installed_distribution(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    site = tmp_path / "site"
+    module = site / "installed_lab_methods"
+    module.mkdir(parents=True)
+    (module / "__init__.py").write_text("")
+    metadata = site / "lab_methods-1.0.dist-info"
+    metadata.mkdir()
+    (metadata / "METADATA").write_text("Name: lab-methods\nVersion: 1.0\n")
+    (metadata / "RECORD").write_text("installed_lab_methods/__init__.py,,\n")
+    monkeypatch.setattr(sys, "path", [str(site), *sys.path])
+    manifest = tmp_path / "project" / "scopecat.toml"
+    manifest.parent.mkdir()
+    manifest.write_text(
+        '[lab.capabilities]\nauthor_modules=["installed_lab_methods"]\n'
+        '[authors.packages]\ninstalled_lab_methods="lab-methods"\n'
+    )
+    try:
+        assert load_project(manifest).load_application().authors is not None
+        manifest.write_text(
+            '[lab.capabilities]\nauthor_modules=["installed_lab_methods"]\n'
+        )
+        with pytest.raises(ProjectCodeLoadError, match="outside this project"):
+            load_project(manifest).load_application()
+    finally:
+        sys.modules.pop("installed_lab_methods", None)

@@ -21,12 +21,14 @@ if TYPE_CHECKING:
 
 
 def compose_application(
-    declaration: LabCapabilities, resolve: Callable[[str], object]
+    declaration: LabCapabilities,
+    resolve: Callable[[str], object],
+    load_author_module: Callable[[str], object],
 ) -> LabApplication:
     """Resolve declared values inside the caller's revision/workspace context."""
 
     for module in declaration.author_modules:
-        resolve(module)
+        load_author_module(module)
     return LabApplication(
         author_modules=declaration.author_modules,
         build_experiment_system=(
