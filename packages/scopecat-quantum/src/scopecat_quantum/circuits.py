@@ -8,6 +8,7 @@ from collections.abc import Sequence as SequenceCollection
 from dataclasses import dataclass, replace
 
 from scopecat import Quantity
+from scopecat.kernel.value_types import Quantity as QuantityType
 
 from scopecat_quantum._ids import (
     AcquisitionSlotId,
@@ -25,6 +26,9 @@ from scopecat_quantum.gates import (
     GateParameterDefinition,
     GateParameterKind,
     canonical_angle_value,
+    canonical_gate_quantity,
+    gate_parameter_label,
+    quantity_argument_matches,
 )
 
 
@@ -332,7 +336,7 @@ def _verify_gate_call(
                     code="circuit_gate_argument_type_mismatch",
                     message=(
                         f"gate call {call.id.value!r} argument {parameter.id!r} "
-                        f"does not satisfy {parameter.kind.value!r}"
+                        f"does not satisfy {gate_parameter_label(parameter.kind)!r}"
                     ),
                     path=(*path, "arguments", parameter.id),
                 )
@@ -357,6 +361,12 @@ def _canonical_gate_argument(
 ) -> GateArgument:
     """Normalize equivalent values before exact implementation binding."""
 
+    if isinstance(parameter.kind, QuantityType) and isinstance(
+        argument.value, Quantity
+    ):
+        if quantity_argument_matches(argument.value, parameter.kind):
+            return replace(argument, value=canonical_gate_quantity(argument.value))
+        return argument
     if parameter.kind is not GateParameterKind.ANGLE:
         return argument
     if not _argument_matches(parameter, argument):
@@ -375,6 +385,8 @@ def _argument_matches(
     argument: GateArgument,
 ) -> bool:
     value = argument.value
+    if isinstance(parameter.kind, QuantityType):
+        return quantity_argument_matches(value, parameter.kind)
     if parameter.kind is GateParameterKind.INTEGER:
         return isinstance(value, int) and not isinstance(value, bool)
     if parameter.kind is GateParameterKind.NUMBER:

@@ -6,6 +6,10 @@ from dataclasses import dataclass
 from enum import StrEnum
 
 from scopecat import Quantity
+from scopecat.kernel.units import UNIT_KINDS, UNIT_SCALE_TO_BASE
+from scopecat.kernel.value_types import Quantity as QuantityType
+from scopecat.kernel.value_types import Scalar
+from scopecat.kernel.value_validation import ValueValidationError, coerce_literal
 
 from scopecat_quantum._ids import CircuitOperationId, GateId, QubitId
 
@@ -23,12 +27,38 @@ class GateParameterDefinition:
     """One named parameter in a gate definition."""
 
     id: str
-    kind: GateParameterKind
+    kind: GateParameterKind | QuantityType
 
     def __post_init__(self) -> None:
         if not self.id.strip():
             msg = "gate parameter id must be a non-empty string"
             raise ValueError(msg)
+
+
+def gate_parameter_label(kind: GateParameterKind | QuantityType) -> str:
+    return kind.value if isinstance(kind, GateParameterKind) else repr(kind)
+
+
+def quantity_argument_matches(value: object, kind: QuantityType) -> bool:
+    if not isinstance(value, Quantity):
+        return False
+    try:
+        coerce_literal(Scalar(kind), value, path=())
+    except ValueValidationError:
+        return False
+    return True
+
+
+def canonical_gate_quantity(value: Quantity) -> Quantity:
+    """Normalize linear units before recipe and exact implementation identity."""
+    if value.unit not in UNIT_SCALE_TO_BASE:
+        return value
+    base = next(
+        unit
+        for unit, scale in UNIT_SCALE_TO_BASE.items()
+        if scale == 1 and UNIT_KINDS[unit] == UNIT_KINDS[value.unit]
+    )
+    return value.to(base)
 
 
 @dataclass(frozen=True, slots=True)

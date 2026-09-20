@@ -19,7 +19,7 @@ from scopecat_quantum.circuits import Measure, VerifiedCircuitOperations
 from scopecat_quantum.gates import (
     GateArgumentValue,
     GateCall,
-    canonical_angle_value,
+    canonical_gate_quantity,
 )
 from scopecat_quantum.measurement_implementations import (
     MeasurementPulseImplementation,
@@ -55,7 +55,7 @@ class GatePulseImplementationArgument:
         else:
             if math.isfinite(value.value):
                 try:
-                    canonical = canonical_angle_value(value)
+                    canonical = canonical_gate_quantity(value)
                 except ValueError:
                     pass
                 else:

@@ -355,3 +355,33 @@ physical placement constraints without receiving the complete expanded tree.
 The [scalability benchmarks](../../docs/development/scalability.md) cover
 multi-run calibration, shot-heavy acquisition, structured traces, and dense
 spectroscopy.
+
+### Unit-bearing operation parameters
+
+Gate declarations also accept the core `QuantityType` contract. Keep time,
+frequency and amplitude values as quantities when passing them to recipes:
+
+```python
+from scopecat import QuantityType
+from scopecat_quantum import authoring as q
+
+probe = q.single_qubit_gate(
+    "lab.drive-probe",
+    parameters={
+        "duration": QuantityType(unit="ns", minimum=0),
+        "amplitude": QuantityType(unit="arb", minimum=0, maximum=1),
+    },
+)
+```
+
+A program port can use `Annotated[Quantity, QuantityType(...)]` with a compatible
+contract. Literal values and symbolic inputs are checked for dimensions and
+ranges; a bare float is not accepted for a quantity parameter. Recipe functions
+receive `Quantity` arguments, with equivalent linear units normalized to base
+units for stable call and implementation identity. Recipes should convert units
+explicitly when inspecting numeric values. Nonlinear units are not conflated
+(e.g. dBm and W are not interchangeable by this API).
+
+This supplies operation parameters, not calibration-table overrides or an
+operation-local candidate scope. A laboratory recipe still decides which values
+come from its selected parameter row and which are explicit research inputs.
