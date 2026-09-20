@@ -286,3 +286,39 @@ def test_registered_project_reuses_environment_and_real_workbench(
         assert Operations(home).get(removal.id) == removed
     finally:
         stop_project(project)
+
+
+def test_daily_entry_opens_registered_workbench_without_replaying_runs(
+    tmp_path: Path, monkeypatch
+) -> None:
+    from lab_tools import application
+
+    root = tmp_path / "实验代码"
+    project = initialize_project(root)
+    gui = tmp_path / "gui"
+    gui.mkdir()
+    (gui / "index.html").write_text("<html>daily workbench</html>")
+    home = tmp_path / "home"
+    opened = []
+    monkeypatch.setattr(application.webbrowser, "open", opened.append)
+    try:
+        application.main([str(root), "--static-dir", str(gui), "--home", str(home)])
+        status = inspect_daemon(project)
+        assert status.state == "running" and status.record is not None
+        assert opened == [status.record.base_url]
+        client = ensure_host(home, None)
+        assert len(client.state().operations) == 1
+        assert client.state().operations[0].status == "succeeded"
+        application.main(["--home", str(home)])
+        assert inspect_daemon(project).record == status.record
+        assert opened == [status.record.base_url, status.record.base_url]
+        with httpx2.Client(trust_env=False) as http:
+            response = http.get(status.record.base_url + "/api/v1/runs")
+            assert response.status_code == 200
+            assert response.json()["items"] == []
+        application.main(["--home", str(home), "--manage"])
+        assert len(client.state().operations) == 2
+        assert opened[-1].startswith(client.record.url + "/#token=")
+    finally:
+        stop_project(project)
+        ensure_host(home, None).shutdown()
