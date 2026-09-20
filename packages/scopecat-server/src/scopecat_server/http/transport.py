@@ -290,6 +290,7 @@ from scopecat.records.instrument import (
     InstrumentStateReadback,
     InstrumentStateSnapshot,
 )
+from scopecat.records.launch_rejection import LaunchRejectionResponse
 from scopecat.records.launch_request import LaunchRequest
 from scopecat.records.manual_preview import ManualPreviewFence, ManualPreviewValidity
 from scopecat.records.measurement_recording import MeasurementDatasetReceipt
@@ -664,12 +665,17 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
             raise HTTPException(
                 422, detail[-1] if detail else "Experiment preview failed"
             )
-        from scopecat_server.launch_response import LaunchRejection
+        from scopecat.records.launch_rejection import LaunchRejection
 
         payload = cast("dict[str, object]", json.loads(completed.stdout))
         if payload.get("kind") == "launch_rejection":
             rejection = LaunchRejection.model_validate(payload)
-            raise HTTPException(422, rejection.detail)
+            raise HTTPException(
+                422,
+                rejection.model_dump(mode="json")
+                if rejection.problems
+                else rejection.message,
+            )
         return completed.stdout
 
     @app.post(f"{_API_PREFIX}/run-comparison")
@@ -751,7 +757,10 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
             )
         )
 
-    @app.post(f"{_API_PREFIX}/experiment-launcher/preview")
+    @app.post(
+        f"{_API_PREFIX}/experiment-launcher/preview",
+        responses={422: {"model": LaunchRejectionResponse}},
+    )
     def experiment_launch_preview(
         command: LaunchRequest, response: Response
     ) -> LaunchPreview:
@@ -786,7 +795,10 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
             )
         return LaunchSubmission(procedure_id=procedure_id)
 
-    @app.post(f"{_API_PREFIX}/experiment-launcher/submit")
+    @app.post(
+        f"{_API_PREFIX}/experiment-launcher/submit",
+        responses={422: {"model": LaunchRejectionResponse}},
+    )
     def experiment_launch_submit(
         command: LaunchRequest, response: Response
     ) -> LaunchSubmission:

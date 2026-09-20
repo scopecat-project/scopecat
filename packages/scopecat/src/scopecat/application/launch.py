@@ -17,6 +17,7 @@ from pydantic import (
 from scopecat.application.controls import LaunchControl, LaunchControlValue
 from scopecat.application.inspection import LaunchInspection
 from scopecat.automation.interpretations import InterpretationRequest
+from scopecat.kernel.problems import Problem
 from scopecat.planning.preflight import PreflightSummary
 from scopecat.records.author_revision import AuthorRevisionRef
 from scopecat.records.author_workspace import (
@@ -24,6 +25,8 @@ from scopecat.records.author_workspace import (
     AuthorWorkspaceId,
 )
 from scopecat.records.content import Sha256ContentHash
+from scopecat.records.execution_scenario import SoftwareExecutionScenario
+from scopecat.records.launch_rejection import LaunchRejection
 from scopecat.records.launch_request import LaunchRequest
 from scopecat.records.manual_preview import ManualPreviewFence
 from scopecat.records.plan_ref import ExperimentPlanRef
@@ -129,7 +132,19 @@ type LaunchProvider = Callable[[LabClient, LaunchRequest], LaunchResult]
 
 
 class LaunchRequestRejected(ValueError):
-    """Invalid request rejected before executing author experiment code."""
+    """Expected request or preparation rejection, before run admission."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        problems: tuple[Problem, ...] = (),
+        scenario: SoftwareExecutionScenario | None = None,
+    ) -> None:
+        self.diagnostic = LaunchRejection(
+            message=message, problems=problems, scenario=scenario
+        )
+        super().__init__(message)
 
 
 def validate_launch_control_edits(

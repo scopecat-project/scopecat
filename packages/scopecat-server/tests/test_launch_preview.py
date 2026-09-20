@@ -592,13 +592,13 @@ def test_pinned_catalog_uses_pool_and_exposes_nested_timing() -> None:
 
 
 def test_request_rejection_is_reported_as_422() -> None:
-    from scopecat_server.launch_response import LaunchRejection
+    from scopecat.records.launch_rejection import LaunchRejection
 
     with patch("scopecat_server.http.transport.subprocess.run") as run:
         run.return_value = SimpleNamespace(
             returncode=0,
             stdout=LaunchRejection(
-                detail="unknown control 'amplitudes'"
+                message="unknown control 'amplitudes'"
             ).model_dump_json(),
             stderr="",
         )
