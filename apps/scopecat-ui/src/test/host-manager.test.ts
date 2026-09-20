@@ -245,7 +245,13 @@ it("shows first-run setup, preserves edits during polling, and enters the create
   expect(host.requests[0]?.body).toEqual({
     id: "12345678123412341234123456789012",
     action: "setup",
-    setup: { mode: "create", project: "D:\\实验代码", data_root: "E:\\科学记录", name: null },
+    setup: {
+      mode: "create",
+      project: "D:\\实验代码",
+      data_root: "E:\\科学记录",
+      settings_file: null,
+      name: null,
+    },
   });
 });
 it("connects an existing code folder without replacing its data binding and retains failure evidence", async () => {
@@ -258,6 +264,13 @@ it("connects an existing code folder without replacing its data binding and reta
   expect(
     screen.getByText("留空保留该项目已有的数据绑定。填写新目录不会迁移已有记录。"),
   ).toBeVisible();
+  fireEvent.input(screen.getByLabelText("实验室本机设置 JSON 文件（可选）"), {
+    target: { value: "/machine/lab.json" },
+  });
+  await host.poll();
+  expect(screen.getByLabelText("实验室本机设置 JSON 文件（可选）")).toHaveValue(
+    "/machine/lab.json",
+  );
   host.control.failOperation = true;
   fireEvent.submit(document.getElementById("setup-form")!);
   await waitFor(() =>
@@ -267,7 +280,13 @@ it("connects an existing code folder without replacing its data binding and reta
   );
   expect(host.requests[0]?.body).toMatchObject({
     action: "setup",
-    setup: { mode: "connect", project: "/existing/lab", data_root: null, name: null },
+    setup: {
+      mode: "connect",
+      project: "/existing/lab",
+      data_root: null,
+      settings_file: "/machine/lab.json",
+      name: null,
+    },
   });
   expect(host.assign).not.toHaveBeenCalled();
   expect(screen.getByLabelText("主要代码文件夹")).toHaveValue("/existing/lab");

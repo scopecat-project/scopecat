@@ -38,14 +38,36 @@ workbench for the next ordinary launch.
 
 A project `.venv` is used when present; a broken one is an error. Without it, setup
 uses the installed application's environment. This flow does not install laboratory
-dependencies, choose vendor SDK versions, or supply private machine settings. The
-laboratory must prepare those requirements. GUI assets come from the public
+dependencies or choose vendor SDK versions. The laboratory must prepare those
+requirements and any adapter-specific settings. GUI assets come from the public
 installation; a source host uses its built `apps/scopecat-ui/dist`.
 
 Errors remain in **Recent operations** and its log. A failed registration or startup
 retains the created files; fix the reported environment and use **Connect** on the
 same directory, or restart its registered service. Reopening the page does not replay
 setup. To add another directory later, expand the setup form in management.
+
+## Local laboratory settings
+
+The setup form can select a laboratory-provided JSON settings file. Leaving it
+blank preserves the current selection; a new project without one uses adapter
+defaults. Its path is stored in `scopecat.runtime.toml`, separately from scientific
+data and deployment directories. Keep this file outside captured source roots and
+version control. Registration checks JSON structure without importing laboratory
+bootstrap or instrument drivers; the adapter validates its own typed fields when
+loading its bootstrap. Registration alone does not prove hardware readiness.
+
+The registered settings identity includes the resolved path and exact file bytes.
+After editing settings, stop the service and **Recheck environment**, then start
+again. A changed or missing file prevents startup but never prevents stopping.
+To select a different file, stop first and reconnect the same code directory with
+the new file selected. Existing data and deployment locations are retained.
+
+An adapter may use settings to choose the initial configuration recipe for a new
+store. Rechecking or restarting does not replace an existing scientific
+configuration. Review and apply scientific changes through the configuration
+workflow; this is not a live simulator/physical mode switch. Settings selection
+does not install an adapter, SDK or Python environment.
 
 ## Identify the environment before changing it
 

@@ -24,6 +24,7 @@ def entry(tmp_path, monkeypatch):
         lambda python, request: {
             "root": request["root"],
             "static_dir": str(tmp_path / "gui"),
+            "settings_identity": None,
             "environment": {"python": python},
         },
     )

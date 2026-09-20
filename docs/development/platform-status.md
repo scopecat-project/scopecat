@@ -35,7 +35,9 @@ See [configuration ownership](architecture/configuration-ownership.md),
    [public application contract](architecture/public-application.md): standard
    laboratory capability declarations (#672), direct primary-workbench entry
    (#673). First-run source-directory creation/connection now opens an ordinary
-   workbench; independent adapter package/settings preparation and code/parameter
+   workbench. Explicit local settings selection and stopped-service rechecks (#681)
+   replace ambient bootstrap profiles without changing existing scientific config.
+   Independent adapter packages, SDK/runtime preparation and code/parameter
    trial workflows remain next. Native installation and shared device authority remain later
    explicit contracts. The bounded installed/browser checks in #668 passed on
    Windows/Linux; broader qualification remains tracked in #616. Do not repeat

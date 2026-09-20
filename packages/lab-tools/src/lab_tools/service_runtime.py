@@ -17,6 +17,7 @@ import psutil
 from pydantic import BaseModel, Field
 
 from scopecat.execution_environment import execution_packages
+from scopecat.lab_settings import lab_settings_identity
 from scopecat.project import open_project
 from scopecat_server.lifecycle import inspect_daemon, start_project, stop_project
 from scopecat_server.static_assets import select_static_dir
@@ -27,11 +28,17 @@ class Request(BaseModel):
     root: str
     static_dir: str | None
     environment: dict[str, str] = Field(default_factory=dict)
+    settings_identity: str | None = None
 
 
 def main() -> None:
     request = Request.model_validate_json(sys.argv[1])
     project = open_project(request.root)
+    settings_identity = (
+        None if request.action == "stop" else lab_settings_identity(project.root)
+    )
+    if request.action == "start" and settings_identity != request.settings_identity:
+        raise ValueError("实验室设置已改变；请先停止服务并复检登记，再重新启动")
     if request.action == "probe":
         execution_packages(
             (
@@ -93,6 +100,7 @@ def main() -> None:
                 "root": str(project.root),
                 "static_dir": str(gui),
                 "environment": environment,
+                "settings_identity": settings_identity,
             }
         ),
         encoding="utf-8",
