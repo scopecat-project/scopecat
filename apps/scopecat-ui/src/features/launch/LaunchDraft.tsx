@@ -1,3 +1,4 @@
+import type { components } from "../../api-schema";
 import {
   contextSelection,
   defaultSelection,
@@ -60,6 +61,7 @@ interface DraftContext {
   authorRefreshed: (workspaceId: string) => void;
   selectedContext: ConfigContextResolution | undefined;
   selectContext: (resolution?: ConfigContextResolution) => void;
+  selectConfiguration: (ref: components["schemas"]["PlanConfigRef"]) => void;
   draft: LaunchDraft | undefined;
   openPlan: (
     plan: PlanRevision,
@@ -159,6 +161,8 @@ function ProjectDraft({
   const [draft, setDraft] = useState<LaunchDraft>();
   const [workspaceId, setWorkspaceId] = useState("legacy");
   const currentWorkspace = useRef("legacy");
+  const [selectedConfiguration, setSelectedConfiguration] =
+    useState<components["schemas"]["PlanConfigRef"]>();
   const [selectedContext, setSelectedContext] = useState<ConfigContextResolution>();
   const [attempt, setAttempt] = useState<SubmissionAttempt>();
   const queryClient = useQueryClient();
@@ -237,7 +241,14 @@ function ProjectDraft({
         next.codeRevision = current?.workspaceId === owner ? current.codeRevision : undefined;
         next.selection =
           current?.selection ??
-          (selectedContext ? contextSelection(selectedContext) : defaultSelection());
+          (selectedContext
+            ? contextSelection(selectedContext)
+            : selectedConfiguration
+              ? {
+                  ...defaultSelection(),
+                  configuration: { kind: "saved", ref: selectedConfiguration },
+                }
+              : defaultSelection());
         next.collection = current?.collection;
         next.actor = current?.actor ?? "operator";
         if (!reset && current?.workspaceId === owner && current.experiment === entry.id) {
@@ -260,7 +271,7 @@ function ProjectDraft({
         return next;
       });
     },
-    [selectedContext, workspaceId],
+    [selectedContext, selectedConfiguration, workspaceId],
   );
   async function submit(request: SubmissionRequest, definition: string) {
     const wasUnknown = attempt?.status === "unknown";
@@ -335,9 +346,27 @@ function ProjectDraft({
               : current,
           ),
         selectedContext,
+        selectConfiguration: (ref) => {
+          if (!alive.current) return;
+          setSelectedContext(undefined);
+          setSelectedConfiguration(ref);
+          setDraft((current) =>
+            current
+              ? invalidateDraft(
+                  {
+                    ...current,
+                    planDirty: Boolean(current.plan),
+                    selection: { ...current.selection, configuration: { kind: "saved", ref } },
+                  },
+                  "Saved configuration selected. Preview again before starting.",
+                )
+              : current,
+          );
+        },
         selectContext: (resolved) => {
           if (!alive.current) return;
           setSelectedContext(resolved);
+          setSelectedConfiguration(undefined);
           setDraft((current) =>
             current
               ? invalidateDraft(

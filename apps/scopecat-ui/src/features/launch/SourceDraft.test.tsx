@@ -139,3 +139,42 @@ it("invalidates same-definition current-source preview keys only for the refresh
   act(() => state.authorRefreshed("workspace-B"));
   expect(state.draft?.requestKey).toBe("pinned-request");
 });
+
+it("selects an exact saved configuration before a draft without changing lab defaults", () => {
+  mount();
+  const ref = { entry_id: "imported-config", content_hash: "sha256:imported" };
+  act(() => state.selectConfiguration(ref));
+  expect(state.draft).toBeUndefined();
+  act(() => state.select(entry));
+  expect(state.draft?.selection.configuration).toEqual({ kind: "saved", ref });
+  act(() => state.selectContext());
+  expect(state.draft?.selection.configuration).toEqual({ kind: "active" });
+});
+it("changes only a running draft's parameter selection and invalidates its old preview", () => {
+  mount();
+  act(() => state.select(entry));
+  act(() =>
+    state.update((draft) => ({
+      ...draft,
+      actor: "Ada",
+      collection: "records",
+      requestKey: "old-key",
+      selection: {
+        ...draft.selection,
+        subject: { kind: "sample", sample_id: "chip" },
+        batch: { kind: "declared", id: "cooldown" },
+      },
+    })),
+  );
+  const original = state.draft!;
+  const ref = { entry_id: "imported-config", content_hash: "sha256:imported" };
+  act(() => state.selectConfiguration(ref));
+  expect(state.draft?.selection).toEqual({
+    ...original.selection,
+    configuration: { kind: "saved", ref },
+  });
+  expect(state.draft?.actor).toBe("Ada");
+  expect(state.draft?.collection).toBe("records");
+  expect(state.draft?.requestKey).toBeUndefined();
+  expect(state.selectedContext).toBeUndefined();
+});

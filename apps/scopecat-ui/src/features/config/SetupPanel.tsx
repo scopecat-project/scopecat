@@ -1,3 +1,5 @@
+import type { components } from "../../api-schema";
+import { ConfigurationTemplatesPanel } from "./ConfigurationTemplatesPanel";
 import { ExecutionScenario } from "../../ui/ExecutionScenario";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -16,9 +18,11 @@ import {
 export function SetupPanel({
   config,
   operator,
+  onSelectConfiguration,
 }: {
   config: ConfigProfileSnapshot | undefined;
   operator: string;
+  onSelectConfiguration?: (ref: components["schemas"]["PlanConfigRef"]) => void;
 }) {
   const cache = useQueryClient();
   const current = useQuery({
@@ -68,6 +72,16 @@ export function SetupPanel({
       className="grid gap-3 rounded-lg border border-line bg-panel p-3.5"
     >
       <h3>Executable setup</h3>
+      <ConfigurationTemplatesPanel
+        actor={operator}
+        activeSetupHash={current.data?.revision.content_hash}
+        onSelectConfiguration={onSelectConfiguration}
+        onImported={async (result) => {
+          setSelected(result.setup.id);
+          setReview(undefined);
+          await Promise.all([refresh(), cache.invalidateQueries({ queryKey: ["config"] })]);
+        }}
+      />
       <p>
         Current setup: <strong>{current.data?.revision.id ?? "Loading…"}</strong>. Setup selects
         topology, routing, instrument identities and configured defaults. Parameter defaults and
@@ -179,8 +193,10 @@ export function SetupPanel({
             {candidate.setup.primary_entity_id}.
           </p>
           <p>
-            Existing configurations retain their original setup. Rebind parameters explicitly before
-            running them with a different setup. Ongoing device ownership can block selection.
+            This changes the setup for the entire experiment service, including other pages and
+            notebooks. Parameter defaults remain unchanged. Existing configurations retain their
+            original setup. Rebind parameters explicitly before running them with a different setup.
+            Ongoing device ownership can block selection.
           </p>
           <p>
             Removing or rekeying physical instruments requires explicit declarations through

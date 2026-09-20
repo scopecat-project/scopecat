@@ -1,3 +1,4 @@
+import type { components } from "../../api-schema";
 import { useRef, useState } from "react";
 import { Menu } from "@base-ui/react/menu";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -38,10 +39,12 @@ export function ConfigWorkspace({
   daemonUnavailable,
   onOpenRun,
   onSelectContext,
+  onSelectConfiguration,
 }: {
   daemonUnavailable: boolean;
   onOpenRun?: (runId: string) => void;
   onSelectContext?: (context: ConfigContextResolution) => void;
+  onSelectConfiguration?: (ref: components["schemas"]["PlanConfigRef"]) => void;
 }) {
   const queryClient = useQueryClient();
   const fileInput = useRef<HTMLInputElement>(null);
@@ -223,7 +226,11 @@ export function ConfigWorkspace({
         experiment code, not saved parameters.
       </p>
 
-      <SetupPanel config={registry.entryDetailQuery.data?.config} operator={workflow.operator} />
+      <SetupPanel
+        config={registry.entryDetailQuery.data?.config}
+        operator={workflow.operator}
+        onSelectConfiguration={onSelectConfiguration}
+      />
 
       <ConfigSummary
         overview={overview}
@@ -279,6 +286,19 @@ export function ConfigWorkspace({
                 >
                   Save working point copy
                 </button>
+                {selectedEntry.source.kind !== "parameter_context" && onSelectConfiguration && (
+                  <button
+                    className={secondaryButton}
+                    onClick={() =>
+                      onSelectConfiguration({
+                        entry_id: selectedEntry.id,
+                        content_hash: selectedEntry.content_hash,
+                      })
+                    }
+                  >
+                    Use for next experiment
+                  </button>
+                )}
                 {selectedEntry.source.kind === "parameter_context" && (
                   <button
                     className={secondaryButton}
