@@ -140,3 +140,41 @@ def test_app_only_host_admits_environment_recheck(tmp_path: Path, monkeypatch) -
             ).status_code
             == 409
         )
+
+
+def test_first_run_is_available_without_teaching(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(app_host, "teaching_key", lambda _: None)
+    record = HostRecord(
+        instance="first-run",
+        pid=1,
+        process_time=1,
+        url="http://127.0.0.1:8912",
+        token=secrets.token_urlsafe(32),
+        runtime="local",
+        python=sys.executable,
+    )
+    received = []
+
+    def launch(_home, _source, command):
+        received.append(command)
+        return Operation(command=command, status="starting")
+
+    monkeypatch.setattr(app_host, "launch", launch)
+    request = {
+        "action": "setup",
+        "setup": {"mode": "connect", "project": str(tmp_path / "lab")},
+    }
+    with TestClient(
+        app_host.application(tmp_path, None, record, lambda: None), base_url=record.url
+    ) as client:
+        assert client.post("/api/operations", json=request).status_code == 401
+        assert received == []
+        client.headers["Authorization"] = f"Bearer {record.token}"
+        state = client.get("/api/state").json()
+        assert state["topics"] == {}
+        assert state["setup_defaults"]["project"] == str(tmp_path / "main")
+        assert client.post("/api/operations", json=request).status_code == 200
+        assert len(received) == 1
+        assert received[0].action == "setup"
+        assert received[0].setup.project == str(tmp_path / "lab")
+        assert not (tmp_path / "lab").exists()

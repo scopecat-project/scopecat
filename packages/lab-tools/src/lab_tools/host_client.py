@@ -42,6 +42,7 @@ class HostState(BaseModel):
     workspaces: list[Workspace]
     operations: list[Operation]
     services: list[ServiceView]
+    setup_defaults: dict[str, str] = Field(default_factory=dict)
 
 
 def teaching_key(source: Path | None) -> str | None:

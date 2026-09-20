@@ -3,16 +3,33 @@
 from __future__ import annotations
 
 import time
+from pathlib import Path
 from typing import Literal
 from uuid import uuid4
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+
+class SetupRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    mode: Literal["create", "connect"]
+    project: str
+    data_root: str | None = None
+    name: str | None = Field(default=None, min_length=1, max_length=200)
+
+    @field_validator("project", "data_root")
+    @classmethod
+    def absolute_path(cls, value: str | None) -> str | None:
+        if value is not None and (not value.strip() or not Path(value).is_absolute()):
+            raise ValueError("请选择完整的绝对目录路径")
+        return value
 
 
 class Command(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     id: str = Field(default_factory=lambda: uuid4().hex, pattern=r"^[0-9a-f]{32}$")
     action: Literal[
+        "setup",
         "open",
         "verify",
         "stop",
@@ -22,6 +39,7 @@ class Command(BaseModel):
         "service_remove",
         "service_recheck",
     ]
+    setup: SetupRequest | None = None
     topic: str | None = None
     workspace: str | None = Field(default=None, pattern=r"^[0-9a-f]{32}$")
     reset: bool = False
@@ -36,3 +54,4 @@ class Operation(BaseModel):
     process_time: float | None = None
     detail: str = ""
     workspace: str | None = None
+    service: str | None = None

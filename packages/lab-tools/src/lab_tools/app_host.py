@@ -44,6 +44,7 @@ def _require_teaching(key: str | None) -> str:
 
 def _validate_command_capability(key: str | None, command: Command) -> None:
     if command.action not in (
+        "setup",
         "service_start",
         "service_stop",
         "service_remove",
@@ -120,6 +121,9 @@ def application(
             workspaces=workspaces(home, key) if key is not None else [],
             operations=store.list(),
             services=Services(home).views(),
+            setup_defaults={
+                "project": str(home / "main"),
+            },
         )
 
     @app.post("/api/operations")

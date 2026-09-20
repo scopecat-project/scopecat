@@ -81,6 +81,7 @@ def owned_workspace(home: Path, key: str, identity: str) -> Workspace:
 
 def launch(home: Path, source: Path | None, command: Command) -> Operation:
     if command.action in (
+        "setup",
         "service_start",
         "service_stop",
         "service_remove",
@@ -100,7 +101,18 @@ def _launch(home: Path, source: Path | None, command: Command) -> Operation:
         if previous.command != command:
             raise ValueError("同一操作编号不能用于不同请求")
         return previous
-    if command.action in (
+    if command.action == "setup":
+        if (
+            command.setup is None
+            or command.service is not None
+            or command.topic is not None
+            or command.workspace is not None
+            or command.reset
+        ):
+            raise ValueError("请选择创建或接入实验目录")
+    elif command.setup is not None:
+        raise ValueError("只有首次接入操作可以指定实验目录")
+    elif command.action in (
         "service_start",
         "service_stop",
         "service_remove",
@@ -153,6 +165,20 @@ def execute(home: Path, source: Path | None, command: Command) -> str | None:
     from .notebook import project_python
     from .sandboxes import run
 
+    if command.action == "setup":
+        from .first_run import setup
+        from .services import Services
+
+        assert command.setup is not None
+        service = setup(
+            home,
+            command.setup,
+            static_dir=source / "apps" / "scopecat-ui" / "dist" if source else None,
+        )
+        services = Services(home)
+        services.start(service.id)
+        services.remember(service.id)
+        return service.id
     if command.action in (
         "service_start",
         "service_stop",

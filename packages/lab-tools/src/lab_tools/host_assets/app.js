@@ -9,6 +9,10 @@ const token = sessionStorage.getItem("scopecat-token") || "";
 const notice = document.getElementById("notice");
 let busy = false, stopped = false, polling;
 let renderedState = "";
+let setupInitialized = false, setupVisited = false, managerRunning = false;
+const setupForm = document.getElementById("setup-form");
+const setupPanel = document.getElementById("setup-panel");
+const setupFields = document.getElementById("setup-fields");
 const readyServices = new Map();
 function message(text, error = false) {
   notice.textContent = text;
@@ -52,8 +56,9 @@ function forgetReadyLinks() {
   document.querySelectorAll("[data-workbench-link]").forEach(link => link.remove());
 }
 async function submit(command) {
-  if (busy) return;
+  if (busy || managerRunning) return;
   busy = true;
+  setupFields.disabled = true;
   if (command.service) {
     readyServices.delete(command.service);
     document.querySelectorAll("[data-workbench-link]").forEach(link => {
@@ -71,11 +76,17 @@ async function submit(command) {
     }
     if (operation.status !== "succeeded") throw new Error(operation.detail);
     message(operation.detail || "已完成。");
-    if (command.action === "service_start") {
+    if (["service_start", "setup"].includes(command.action)) {
       const state = await api("/api/state");
-      const service = state.services.find(item => item.service.id === command.service);
+      const identity = command.action === "setup" ? operation.service : command.service;
+      const service = state.services.find(item => item.service.id === identity);
       if (service?.state !== "running" || !service.url) throw new Error("实验服务尚未就绪，请查看日志。");
-      readyServices.set(command.service, workbenchUrl(service.url));
+      const url = workbenchUrl(service.url);
+      if (command.action === "setup") {
+        location.assign(url);
+        return;
+      }
+      readyServices.set(identity, url);
       message("实验服务已就绪。点击“打开工作台（新标签页）”；本管理页面会保留，方便返回帮助、教学和服务管理。");
     }
     if (command.action === "open" && operation.workspace) await openEditor(operation.workspace);
@@ -95,13 +106,23 @@ async function refresh() {
     if (service?.state !== "running" || !service.url || service.url.replace(/\/$/, "") !== url.replace(/\/$/, "")) readyServices.delete(identity);
   }
   const running = state.operations.some(op => ["starting", "running"].includes(op.status));
+  managerRunning = running;
   const disabled = busy || running;
+  setupFields.disabled = disabled;
+  if (!setupInitialized) {
+    setupInitialized = true;
+    setupPanel.open = !state.services.length;
+    document.getElementById("setup-title").textContent = state.services.length ? "接入另一个实验工作台" : "设置主要实验工作台";
+    const project = document.getElementById("setup-project");
+    if (!setupVisited && !project.value) project.value = state.setup_defaults?.project || "";
+    document.getElementById("setup-data").placeholder = "留空使用项目默认目录";
+  }
   const signature = JSON.stringify([state, disabled, [...readyServices]]);
   if (signature === renderedState) return;
   renderedState = signature;
   const services = document.getElementById("services");
   services.replaceChildren();
-  if (!state.services.length) services.append(element("p", "尚未登记实验服务。请展开下方指引，连接已有项目；教学练习在帮助中。"));
+  if (!state.services.length) services.append(element("p", "尚未接入实验服务。使用上方表单创建项目或连接实验室的代码文件夹。"));
   const serviceStates = { running: "运行中", stopped: "未启动", stale: "记录待检查", degraded: "需要处理", unavailable: "不可用" };
   for (const item of state.services) {
     const row = element("article", undefined, "row");
@@ -126,7 +147,7 @@ async function refresh() {
         return submit({ action: "service_recheck", service: item.service.id });
     }, "secondary", disabled || item.state !== "stopped"));
     row.append(button("移除登记", () => {
-      if (confirm(`从列表移除 ${item.service.name}？\n只撤销登记，不删除项目目录、科学数据或操作日志。之后可用 scopecat app 重新登记。`))
+      if (confirm(`从列表移除 ${item.service.name}？\n只撤销登记，不删除项目目录、科学数据或操作日志。之后可通过本页重新连接。`))
         return submit({ action: "service_remove", service: item.service.id });
     }, "secondary", disabled || item.state !== "stopped"));
     const details = element("details");
@@ -185,11 +206,11 @@ async function refresh() {
   const operations = document.getElementById("operations");
   operations.replaceChildren();
   const states = { starting: "准备中", running: "进行中", succeeded: "已完成", failed: "失败", interrupted: "已中断" };
-  const actions = { open: "打开练习", verify: "自动验收", stop: "停止服务", delete: "删除旧副本", service_start: "打开工作台", service_stop: "停止实验服务", service_remove: "移除登记", service_recheck: "重新检查环境" };
+  const actions = { setup: "接入工作台", open: "打开练习", verify: "自动验收", stop: "停止服务", delete: "删除旧副本", service_start: "打开工作台", service_stop: "停止实验服务", service_remove: "移除登记", service_recheck: "重新检查环境" };
   for (const operation of state.operations.slice(0, 12)) {
     const row = element("article", undefined, "row");
     const topic = operation.command.topic || state.workspaces.find(item => item.id === operation.command.workspace)?.topic;
-    const target = state.services.find(item => item.service.id === operation.command.service)?.service.name || state.topics[topic] || operation.command.workspace?.slice(0, 8) || operation.command.service?.slice(0, 8) || "";
+    const target = state.services.find(item => item.service.id === (operation.service || operation.command.service))?.service.name || operation.command.setup?.name || operation.command.setup?.project || state.topics[topic] || operation.command.workspace?.slice(0, 8) || operation.command.service?.slice(0, 8) || "";
     row.append(element("strong", `${target} · ${actions[operation.command.action]} · ${states[operation.status]}`));
     row.append(element("p", operation.detail));
     row.append(button("查看日志", async () => {
@@ -201,6 +222,25 @@ async function refresh() {
   }
   document.getElementById("shutdown").disabled = disabled;
 }
+setupForm.addEventListener("input", () => { setupVisited = true; });
+document.getElementById("setup-mode").addEventListener("change", event => {
+  setupVisited = true;
+  const connect = event.target.value === "connect";
+  document.getElementById("setup-description").textContent = connect ? "选择包含 scopecat.toml 的实验室代码文件夹。沿用已有设置；若依赖或环境需要处理，会在操作结果中说明。" : "创建可修改的基础实验项目。你的实验代码保存在此处，教学专题在帮助中单独提供。";
+  document.getElementById("setup-project-help").textContent = connect ? "填写实验室代码文件夹的完整路径。" : "填写本机完整路径；填写尚不存在的新目录，应用会创建它。";
+  document.getElementById("setup-data-help").textContent = connect ? "留空保留该项目已有的数据绑定。填写新目录不会迁移已有记录。" : "留空使用新项目的默认数据目录。";
+  document.getElementById("setup-data").placeholder = connect ? "留空保留已有数据绑定" : "留空使用项目默认目录";
+  document.getElementById("setup-submit").textContent = connect ? "连接并打开工作台" : "创建并打开工作台";
+});
+setupForm.addEventListener("submit", event => {
+  event.preventDefault();
+  const value = id => document.getElementById(id).value.trim();
+  if (!value("setup-project")) { message("请填写主要代码文件夹的完整路径。", true); return; }
+  submit({ action: "setup", setup: {
+    mode: value("setup-mode"), project: value("setup-project"),
+    data_root: value("setup-data") || null, name: value("setup-name") || null,
+  } }).catch(error => message(error.message, true));
+});
 document.getElementById("shutdown").addEventListener("click", async () => {
   try {
     const result = await api("/api/shutdown", {});
@@ -211,6 +251,6 @@ document.getElementById("shutdown").addEventListener("click", async () => {
     message(result.detail + "。再次打开 Scopecat 安装入口可启动管理服务。");
   } catch (error) { message(error.message, true); }
 });
-refresh().then(() => message("已连接本机 Scopecat。选择实验服务打开工作台。"))
+refresh().then(() => message("已连接本机 Scopecat。接入实验代码，或打开已有工作台。"))
   .catch(error => message(error.message, true));
 polling = setInterval(() => refresh().catch(error => message(`连接暂不可用：${error.message}。请从 Scopecat 安装入口重新打开。`, true)), 2500);

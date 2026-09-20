@@ -24,9 +24,14 @@ def main() -> None:
     store = Operations(args.home)
     operation = store.claim(args.operation)
     try:
-        operation.workspace = execute(args.home, args.source, operation.command)
+        result = execute(args.home, args.source, operation.command)
+        if operation.command.action == "setup":
+            operation.service = result
+        else:
+            operation.workspace = result
         operation.status = "succeeded"
         operation.detail = {
+            "setup": "实验项目已连接，将打开工作台；没有自动提交测量。",
             "service_stop": (
                 "实验服务已停止。项目和科学记录保留；重新测量前请打开工作台。"
             ),

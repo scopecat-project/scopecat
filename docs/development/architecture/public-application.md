@@ -21,9 +21,11 @@ measurement. Starting an explicitly selected service still follows its device
 initialization policy; this is distinct from submission. Notebook connections
 identify their code folder and share the application's execution authority.
 
-Native installers and this first-run connection UI are not implemented by the
-initial capability/entry slices. Their acceptance must demonstrate an ordinary
-laboratory experiment, not only a teaching exercise.
+The first-run UI now creates an ordinary source project or connects a prepared
+laboratory code directory and enters its workbench. It can place new data separately
+and reuses a local `.venv` or the application environment. Native installers,
+independent adapter-package installation and dependency/environment preparation
+remain future work; connecting a source directory does not implement those contracts.
 
 ## Standard composition
 
@@ -39,7 +41,8 @@ workspace/revision identity. Bootstrap remains lightweight; instrument backends
 remain separately loaded in their owning process. A custom application is an
 explicit alternative, never combined with declarations by hidden precedence.
 This is an initial standard composition contract, not yet an installable adapter
-package manifest, dependency installer or OOBE.
+package manifest or dependency installer. First-run setup currently connects this
+source-manifest boundary, not a separate adapter/settings directory.
 
 Private should progressively become laboratory capability packages plus editable
 experiment code and local machine settings. Vendor SDK locations, device addresses

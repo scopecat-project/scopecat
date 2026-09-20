@@ -15,6 +15,38 @@ remembered registration returns to management instead of selecting another servi
 The workbench's **Help and maintenance** page links to this guide. Returning to the
 manager does not change a notebook's scientific selection or start a measurement.
 
+## First use
+
+A fresh installation opens **Set up the primary workbench (设置主要实验工作台)**.
+Choose **Create** for an ordinary virtual experiment project, or **Connect** for
+an existing laboratory code directory containing `scopecat.toml`. The directory
+is the primary editable code source, including its laboratory capability declarations;
+it is not an independently installed adapter package. Use a trusted directory
+prepared by your laboratory.
+
+Enter the code directory and optionally a separate, new data directory. Leaving
+data blank uses the project's default location for creation and preserves the
+existing binding for connection. Setup never relocates a retained store or replaces
+an existing code directory. The generated project includes a virtual instrument
+example and an authored signal experiment, not a teaching sandbox.
+
+Choose **Create / connect and open**. Setup checks the GUI and selected environment,
+registers the directory, starts its existing service policy, and opens the workbench
+in the same tab. Starting a laboratory deployment may initialize instruments;
+no measurement is submitted or resumed. Successful setup remembers the primary
+workbench for the next ordinary launch.
+
+A project `.venv` is used when present; a broken one is an error. Without it, setup
+uses the installed application's environment. This flow does not install laboratory
+dependencies, choose vendor SDK versions, or supply private machine settings. The
+laboratory must prepare those requirements. GUI assets come from the public
+installation; a source host uses its built `apps/scopecat-ui/dist`.
+
+Errors remain in **Recent operations** and its log. A failed registration or startup
+retains the created files; fix the reported environment and use **Connect** on the
+same directory, or restart its registered service. Reopening the page does not replay
+setup. To add another directory later, expand the setup form in management.
+
 ## Identify the environment before changing it
 
 Expand **Project and environment (项目与环境)** on the service card. It shows the
@@ -90,7 +122,8 @@ The version check does not attest every dependency or editable source file.
 
 A new interpreter or GUI directory requires local registration with those explicit
 paths. Stop the old service first. Run the command in the manager's installed
-environment; the browser does not accept arbitrary filesystem paths.
+environment. The setup form selects a code directory and optional initial data
+location; explicit interpreter and GUI overrides remain a maintainer CLI operation.
 
 For example, in PowerShell:
 
