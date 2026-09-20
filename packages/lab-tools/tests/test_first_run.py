@@ -207,3 +207,97 @@ def test_missing_declared_dependency_fails_before_startup(tmp_path):
         )
     assert list(project.iterdir()) == [manifest]
     assert first_run.Services(tmp_path / "home").list() == []
+
+
+def test_connect_settings_preserves_data_and_updates_sidecar_atomically(
+    tmp_path, registration
+):
+    project = tmp_path / "lab"
+    project.mkdir()
+    (project / "scopecat.toml").write_text("[lab]\n")
+    sidecar = project / RUNTIME_BINDING_NAME
+    sidecar.write_text('[runtime]\ndata_root="../data"\ndeployment_root="../runtime"\n')
+    data = tmp_path / "data"
+    data.mkdir()
+    evidence = data / "evidence"
+    evidence.write_text("retained")
+    settings = tmp_path / "lab.json"
+    settings.write_text('{"initial_configuration":"physical"}')
+    first_run.setup(
+        tmp_path / "home",
+        first_run.SetupRequest(
+            mode="connect", project=str(project), settings_file=str(settings)
+        ),
+    )
+    binding = load_runtime_binding(project)
+    assert binding.data_root == data
+    assert binding.deployment_root == tmp_path / "runtime"
+    assert binding.settings_file == settings
+    assert evidence.read_text() == "retained"
+    assert not list(project.glob(".runtime-*"))
+    before = sidecar.read_bytes()
+    first_run.setup(
+        tmp_path / "home", first_run.SetupRequest(mode="connect", project=str(project))
+    )
+    assert sidecar.read_bytes() == before
+
+
+def test_settings_change_requires_stopped_daemon(tmp_path, registration, monkeypatch):
+    from types import SimpleNamespace
+
+    project = tmp_path / "lab"
+    project.mkdir()
+    (project / "scopecat.toml").write_text("[lab]\n")
+    settings = tmp_path / "lab.json"
+    settings.write_text("{}")
+    monkeypatch.setattr(
+        first_run, "inspect_daemon", lambda _: SimpleNamespace(state="running")
+    )
+    with pytest.raises(ValueError, match="停止实验服务"):
+        first_run.setup(
+            tmp_path / "home",
+            first_run.SetupRequest(
+                mode="connect", project=str(project), settings_file=str(settings)
+            ),
+        )
+    assert not (project / RUNTIME_BINDING_NAME).exists()
+    assert registration == []
+
+
+def test_invalid_settings_fail_before_project_creation(tmp_path, registration):
+    settings = tmp_path / "lab.json"
+    settings.write_text("[]")
+    project = tmp_path / "lab"
+    with pytest.raises(ValueError, match="JSON object"):
+        first_run.setup(
+            tmp_path / "home",
+            first_run.SetupRequest(
+                mode="create", project=str(project), settings_file=str(settings)
+            ),
+        )
+    assert not project.exists()
+    assert registration == []
+
+
+def test_settings_change_cannot_race_daemon_owner(tmp_path, registration):
+    from filelock import FileLock
+
+    project = tmp_path / "lab"
+    project.mkdir()
+    (project / "scopecat.toml").write_text("[lab]\n")
+    state = project / ".scopecat"
+    state.mkdir()
+    settings = tmp_path / "lab.json"
+    settings.write_text("{}")
+    with (
+        FileLock(state / "deployment.lock", timeout=0),
+        pytest.raises(ValueError, match="停止实验服务"),
+    ):
+        first_run.setup(
+            tmp_path / "home",
+            first_run.SetupRequest(
+                mode="connect", project=str(project), settings_file=str(settings)
+            ),
+        )
+    assert not (project / RUNTIME_BINDING_NAME).exists()
+    assert registration == []

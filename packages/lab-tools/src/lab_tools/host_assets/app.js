@@ -157,6 +157,7 @@ async function refresh() {
       ["项目目录", item.service.root],
       ["Python 解释器", item.service.python],
       ["GUI 目录", item.service.static_dir],
+      ["本机设置登记指纹", item.service.settings_identity || "未选择"],
       ["环境前缀", item.service.environment.prefix],
       ["Python 版本", item.service.environment.python],
       ["scopecat 版本", item.service.environment.scopecat],
@@ -238,7 +239,7 @@ setupForm.addEventListener("submit", event => {
   if (!value("setup-project")) { message("请填写主要代码文件夹的完整路径。", true); return; }
   submit({ action: "setup", setup: {
     mode: value("setup-mode"), project: value("setup-project"),
-    data_root: value("setup-data") || null, name: value("setup-name") || null,
+    data_root: value("setup-data") || null, settings_file: value("setup-settings") || null, name: value("setup-name") || null,
   } }).catch(error => message(error.message, true));
 });
 document.getElementById("shutdown").addEventListener("click", async () => {

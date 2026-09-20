@@ -31,8 +31,10 @@ class _SettingsDocument:
 
 def _load_document(project_root: str | Path) -> _SettingsDocument | None:
     path = load_runtime_binding(project_root).settings_file
-    if path is None:
-        return None
+    return None if path is None else _read_document(path)
+
+
+def _read_document(path: Path) -> _SettingsDocument:
     try:
         content = path.read_bytes()
         value = cast("object", json.loads(content))
@@ -70,4 +72,14 @@ def lab_settings_identity(project_root: str | Path) -> str | None:
     return None if document is None else document.identity
 
 
-__all__ = ["LabSettingsError", "lab_settings_identity", "read_lab_settings"]
+def validate_lab_settings_file(path: str | Path) -> Path:
+    """Validate a selected JSON object before saving its local binding."""
+    return _read_document(Path(path).resolve()).path
+
+
+__all__ = [
+    "LabSettingsError",
+    "lab_settings_identity",
+    "read_lab_settings",
+    "validate_lab_settings_file",
+]
