@@ -1,3 +1,4 @@
+from collections.abc import Sequence
 from typing import Annotated
 
 import pytest
@@ -30,7 +31,7 @@ def snapshot():
     return parameter_snapshot("baseline", tables={Drive: [Drive(qubit="q0")]})
 
 
-def resolve(call, values):
+def resolve(call: q.QuantumProgramCall, values: Sequence[object]):
     return resolve_recipe_parameters(
         call.program,
         dict(zip(recipe_parameter_input_ids(call.program), values, strict=True)),
@@ -128,11 +129,13 @@ def test_symbolic_candidate_survives_experiment_graph():
     built = compile_invocation(experiment.build(sc.Quantity(24, "ns")))
     [execution] = built.program.program.domain_executions
     assert len(execution.compiler_inputs) == 1
-    assert execution.program.body.recipe_parameter_bindings[0].table == "drive"
+    body = execution.program.body
+    assert isinstance(body, q.Program)
+    assert body.recipe_parameter_bindings[0].table == "drive"
 
 
 @pytest.mark.parametrize("value", [sc.Quantity(-1, "ns"), sc.Quantity(1, "GHz")])
-def test_candidate_rejects_invalid_units_or_ranges(value):
+def test_candidate_rejects_invalid_units_or_ranges(value: sc.Quantity):
     with pytest.raises(ValueError, match=r"convert|minimum|least|greater"):
         q.recipe_parameter(Drive.duration, "q0", value)
     call = acquire("q0").with_recipe_parameters(
