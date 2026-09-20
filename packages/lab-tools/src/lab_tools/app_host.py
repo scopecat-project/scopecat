@@ -123,7 +123,6 @@ def application(
             services=Services(home).views(),
             setup_defaults={
                 "project": str(home / "main"),
-                "data_root": str(home / "data" / "main"),
             },
         )
 

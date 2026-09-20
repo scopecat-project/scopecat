@@ -115,7 +115,7 @@ async function refresh() {
     document.getElementById("setup-title").textContent = state.services.length ? "接入另一个实验工作台" : "设置主要实验工作台";
     const project = document.getElementById("setup-project");
     if (!setupVisited && !project.value) project.value = state.setup_defaults?.project || "";
-    document.getElementById("setup-data").placeholder = state.setup_defaults?.data_root || "留空使用项目默认目录";
+    document.getElementById("setup-data").placeholder = "留空使用项目默认目录";
   }
   const signature = JSON.stringify([state, disabled, [...readyServices]]);
   if (signature === renderedState) return;
