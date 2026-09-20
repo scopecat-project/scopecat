@@ -31,9 +31,10 @@ candidate scopes still need a coherent framework design. In particular, distingu
 - a candidate implementation applied to a whole program;
 - a candidate applied only to an inserted operation, leaving reference gates unchanged.
 
-Unit-bearing operation parameters must retain dimensions through binding and recipe
-resolution. The current foundational gate vocabulary admits numbers, integers and angles;
-encoding a duration as an undocumented float is not the intended extension mechanism.
+Unit-bearing operation parameters use the core `QuantityType` contract through binding
+and recipe resolution. Compatible linear units share a canonical call/implementation
+identity. This avoids undocumented float units; it does not itself provide calibration
+overlays or operation-local candidate scopes.
 
 ## Native infrastructure direction
 

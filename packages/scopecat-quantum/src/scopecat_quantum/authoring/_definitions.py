@@ -22,6 +22,7 @@ from scopecat_quantum._ids import (
 from scopecat_quantum.gates import (
     GateDefinition,
     GateParameterDefinition,
+    gate_parameter_label,
 )
 from scopecat_quantum.pulses import (
     AcquireSignal,
@@ -220,14 +221,15 @@ def _author_gate_call(
             if not _program_input_matches_kind(value, parameter.kind):
                 msg = (
                     f"gate {gate_handle.id!r} parameter {parameter.id!r} requires "
-                    f"{parameter.kind.value!r}, but input {value.id!r} declares "
+                    f"{gate_parameter_label(parameter.kind)!r}, "
+                    f"but input {value.id!r} declares "
                     f"{value.value_type!r}"
                 )
                 raise TypeError(msg)
         elif not _argument_matches_kind(value, parameter.kind):
             msg = (
                 f"gate {gate_handle.id!r} parameter {parameter.id!r} requires "
-                f"{parameter.kind.value!r}"
+                f"{gate_parameter_label(parameter.kind)!r}"
             )
             raise TypeError(msg)
         ordered_arguments.append((parameter.id, value))

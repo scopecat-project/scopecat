@@ -22,6 +22,7 @@ from scopecat.authoring import (
     ScalarType,
 )
 from scopecat.kernel.entity import EntityRef
+from scopecat.kernel.value_type_compatibility import is_assignable
 from scopecat.program.value_types import (
     Bool as BoolType,
 )
@@ -50,6 +51,7 @@ from scopecat_quantum.acquisitions import AcquisitionKind
 from scopecat_quantum.gates import (
     GateDefinition,
     GateParameterKind,
+    quantity_argument_matches,
 )
 from scopecat_quantum.pulses import (
     AnalyticEnvelope,
@@ -131,8 +133,10 @@ def _pulse_envelope_parts(
 
 
 def _core_input_type(
-    kind: GateParameterKind,
+    kind: GateParameterKind | QuantityType,
 ) -> ScalarType:
+    if isinstance(kind, QuantityType):
+        return ScalarType(kind)
     if kind is GateParameterKind.INTEGER:
         return ScalarType(IntType())
     if kind is GateParameterKind.NUMBER:
@@ -1064,7 +1068,11 @@ def _envelope_inputs(
     )
 
 
-def _argument_matches_kind(value: object, kind: GateParameterKind) -> bool:
+def _argument_matches_kind(
+    value: object, kind: GateParameterKind | QuantityType
+) -> bool:
+    if isinstance(kind, QuantityType):
+        return quantity_argument_matches(value, kind)
     if kind is GateParameterKind.INTEGER:
         return isinstance(value, int) and not isinstance(value, bool)
     if kind is GateParameterKind.NUMBER:
@@ -1085,8 +1093,10 @@ def _argument_matches_kind(value: object, kind: GateParameterKind) -> bool:
 
 def _program_input_matches_kind(
     value: ProgramInput | QuantityExpression,
-    kind: GateParameterKind,
+    kind: GateParameterKind | QuantityType,
 ) -> bool:
+    if isinstance(kind, QuantityType):
+        return is_assignable(value.value_type, ScalarType(kind))
     atom = value.value_type.atom
     if kind is GateParameterKind.INTEGER:
         return isinstance(atom, IntType)

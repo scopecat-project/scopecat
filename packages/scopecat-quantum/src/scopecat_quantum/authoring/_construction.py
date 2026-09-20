@@ -15,6 +15,7 @@ from typing import (
 )
 
 from scopecat.authoring import (
+    QuantityType,
     ScalarType,
 )
 
@@ -34,6 +35,7 @@ from scopecat_quantum.gates import (
     GateDefinition,
     GateParameterDefinition,
     GateParameterKind,
+    gate_parameter_label,
 )
 from scopecat_quantum.pulses import (
     AcquireSignal,
@@ -154,7 +156,7 @@ def input(id: str, value_type: ScalarType) -> ProgramInput:
 def single_qubit_gate(
     id: str,
     *,
-    parameters: Mapping[str, GateParameterKind] | None = None,
+    parameters: Mapping[str, GateParameterKind | QuantityType] | None = None,
 ) -> SingleQubitGate:
     """Declare one hardware-independent single-qubit gate semantic."""
 
@@ -166,7 +168,7 @@ def single_qubit_gate(
 def two_qubit_gate(
     id: str,
     *,
-    parameters: Mapping[str, GateParameterKind] | None = None,
+    parameters: Mapping[str, GateParameterKind | QuantityType] | None = None,
 ) -> TwoQubitGate:
     """Declare one hardware-independent two-qubit gate semantic."""
 
@@ -180,7 +182,7 @@ def gate(
     id: str,
     *,
     arity: Literal[1],
-    parameters: Mapping[str, GateParameterKind] | None = None,
+    parameters: Mapping[str, GateParameterKind | QuantityType] | None = None,
 ) -> SingleQubitGate: ...
 
 
@@ -189,7 +191,7 @@ def gate(
     id: str,
     *,
     arity: Literal[2],
-    parameters: Mapping[str, GateParameterKind] | None = None,
+    parameters: Mapping[str, GateParameterKind | QuantityType] | None = None,
 ) -> TwoQubitGate: ...
 
 
@@ -197,11 +199,13 @@ def gate(
     id: str,
     *,
     arity: Literal[1, 2],
-    parameters: Mapping[str, GateParameterKind] | None = None,
+    parameters: Mapping[str, GateParameterKind | QuantityType] | None = None,
 ) -> Gate:
     """Declare one hardware-independent one- or two-qubit gate semantic."""
 
-    selected: Mapping[str, GateParameterKind] = {} if parameters is None else parameters
+    selected: Mapping[str, GateParameterKind | QuantityType] = (
+        {} if parameters is None else parameters
+    )
     if any(not name.strip() for name in selected):
         msg = "gate parameter ids must be non-empty strings"
         raise ValueError(msg)
@@ -1119,7 +1123,7 @@ def _gate_implementation_contract[**P](
         if not _program_input_matches_kind(input_handle, parameter.kind):
             raise TypeError(
                 f"implementation for gate {gate.id!r} parameter "
-                f"{parameter.id!r} requires {parameter.kind.value!r}"
+                f"{parameter.id!r} requires {gate_parameter_label(parameter.kind)!r}"
             )
     return _GateImplementationContract(
         signature=inspect.signature(template),

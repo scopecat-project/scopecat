@@ -403,7 +403,6 @@ def test_resolved_implementation_ids_are_unique_across_keys() -> None:
         float("nan"),
         float("inf"),
         Quantity(float("nan"), "rad"),
-        Quantity(1, "V"),
     ],
 )
 def test_implementation_argument_rejects_invalid_values(
