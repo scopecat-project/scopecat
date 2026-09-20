@@ -28,20 +28,17 @@ See [configuration ownership](architecture/configuration-ownership.md),
 
 ## Near-term sequence
 
-1. **Qualify the delivered local application milestone** under
-   [#616](https://github.com/scopecat-project/scopecat/issues/616).
-   The entry/lifecycle scope of [#614](https://github.com/scopecat-project/scopecat/issues/614)
-   is complete. Help/navigation (#658), launcher convergence (#659), stopped
-   environment rechecks (#663) and retryable fixed delivery publication (#665)
-   are delivered implementation, not pending development tasks.
-   Qualify installed Windows/Linux preparation, repeat installation, manager
-   reuse/restart, registered virtual-service lifecycle and environment recheck.
-   Preserve separate evidence for notebook/browser source flows, current-format
-   recovery and failed-operation cleanup. Use an explicit revision and report each
-   result; fast PR gates do not establish installed acceptance. The short
-   [Windows human trial](windows-application-trial.md) covers OS-facing entry and
-   maintenance clarity without repeating the tutorial curriculum. Its delivery
-   handoff remains pending until an artifact and automated results are available.
+1. **Make public the ordinary experiment application** under
+   [#671](https://github.com/scopecat-project/scopecat/issues/671).
+   The Windows trial confirmed the installation path works but the product still
+   feels like a teaching manager. Follow the
+   [public application contract](architecture/public-application.md): standard
+   laboratory capability declarations (#672), direct primary-workbench entry
+   (#673), then first-run laboratory connection and independent code/parameter
+   trial workflows. Native installation and shared device authority remain later
+   explicit contracts. The bounded installed/browser checks in #668 passed on
+   Windows/Linux; broader qualification remains tracked in #616. Do not repeat
+   tutorial acceptance as a substitute for the real laboratory connection journey.
 2. **Remove demonstrated consumer and fixture debt** under
    [#615](https://github.com/scopecat-project/scopecat/issues/615).
    Frequency/amplitude and temperature already use authored discovery; channel
