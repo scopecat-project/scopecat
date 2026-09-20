@@ -179,3 +179,5 @@ export type SampleView = GetResponse<"/api/v1/samples/{sample_id}">;
 export type StoredParameterValue = components["schemas"]["StoredParameterValue"];
 export type TableParameterType = Extract<ParameterValueType, { shape: "table" }>;
 export type TableParameterValue = Extract<StoredParameterValue, { shape: "table" }>;
+
+export type ConfigurationTemplateImportResult = PostResponse<"/api/v1/setup/template-imports">;

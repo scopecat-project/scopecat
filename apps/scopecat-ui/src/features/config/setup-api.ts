@@ -39,8 +39,7 @@ export function activateSetup(command: SetupActivateCommand) {
 
 export type ConfigurationTemplateImportCommand =
   components["schemas"]["ConfigurationTemplateImportCommand"];
-export type ConfigurationTemplateImportResult =
-  components["schemas"]["ConfigurationTemplateImportResult"];
+export type { ConfigurationTemplateImportResult } from "../../api-contract";
 export function getConfigurationTemplates(signal?: AbortSignal) {
   return apiData(apiClient.GET("/api/v1/setup/templates", { signal }));
 }
