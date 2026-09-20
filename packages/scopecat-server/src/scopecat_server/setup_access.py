@@ -27,6 +27,7 @@ def setup_config(revision: SetupRevision) -> ConfigProfileSnapshot:
             instrument_registry=setup.instrument_registry,
             routing=setup.routing,
             domain_target=setup.domain_target,
+            scenario=setup.scenario,
             parameter_catalog=ParameterCatalog(id=revision.id),
         ),
         parameter_snapshot=ParameterSnapshot(id=revision.id),
