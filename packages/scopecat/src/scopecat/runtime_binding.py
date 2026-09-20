@@ -19,6 +19,7 @@ class RuntimeBinding:
     workspace: Path
     data_root: Path
     deployment_root: Path
+    settings_file: Path | None = None
 
 
 def load_runtime_binding(root: str | Path) -> RuntimeBinding:
@@ -39,8 +40,12 @@ def load_runtime_binding(root: str | Path) -> RuntimeBinding:
     if set(document) != {"runtime"} or not isinstance(value, dict):
         raise RuntimeBindingError("runtime binding requires only a [runtime] table")
     table = cast("dict[str, object]", value)
-    if set(table) != {"data_root", "deployment_root"}:
-        raise RuntimeBindingError("[runtime] requires data_root and deployment_root")
+    required = {"data_root", "deployment_root"}
+    if not required <= set(table) or set(table) - required - {"settings_file"}:
+        raise RuntimeBindingError(
+            "[runtime] requires data_root and deployment_root; "
+            "only settings_file is optional"
+        )
 
     def location(name: str) -> Path:
         item = table[name]
@@ -51,4 +56,16 @@ def load_runtime_binding(root: str | Path) -> RuntimeBinding:
             raise RuntimeBindingError(f"runtime.{name} cannot contain the workspace")
         return selected
 
-    return RuntimeBinding(workspace, location("data_root"), location("deployment_root"))
+    settings_file = table.get("settings_file")
+    if settings_file is not None and (
+        not isinstance(settings_file, str) or not settings_file.strip()
+    ):
+        raise RuntimeBindingError("runtime.settings_file must be a nonempty path")
+    return RuntimeBinding(
+        workspace,
+        location("data_root"),
+        location("deployment_root"),
+        (workspace / settings_file).resolve()
+        if isinstance(settings_file, str)
+        else None,
+    )
