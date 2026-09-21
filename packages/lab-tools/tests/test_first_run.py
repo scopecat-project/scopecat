@@ -351,3 +351,21 @@ def test_invalid_delivery_does_not_publish_project(tmp_path, monkeypatch, regist
         )
     assert not project.exists()
     assert not registration
+
+
+def test_connect_rejects_author_only_before_writing_binding(tmp_path, registration):
+    project = tmp_path / "authors"
+    project.mkdir()
+    manifest = project / "scopecat.toml"
+    manifest.write_text('[authors]\nmodules=["experiments"]\n')
+    data = tmp_path / "new-data"
+    with pytest.raises(ValueError, match="这是作者代码目录"):
+        first_run.setup(
+            tmp_path / "home",
+            first_run.SetupRequest(
+                mode="connect", project=str(project), data_root=str(data)
+            ),
+        )
+    assert tuple(project.iterdir()) == (manifest,)
+    assert not data.exists()
+    assert not (tmp_path / "home").exists()
