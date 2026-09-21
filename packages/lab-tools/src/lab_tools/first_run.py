@@ -134,7 +134,12 @@ def setup(
     else:
         if not (project / "scopecat.toml").is_file():
             raise ValueError("请选择直接包含 scopecat.toml 的实验室代码目录")
-        load_project(project / "scopecat.toml", resolve_adapter=False)
+        selected = load_project(project / "scopecat.toml", resolve_adapter=False)
+        if selected.author_only:
+            raise ValueError(
+                "这是作者代码目录，请先登记到已有实验室，再使用 "
+                "scopecat app --workspace 打开；不能作为新实验室接入"
+            )
     python = choose_python(project) if delivery is None else None
     location = project / RUNTIME_BINDING_NAME
     previous_binding = location.read_bytes() if location.exists() else None

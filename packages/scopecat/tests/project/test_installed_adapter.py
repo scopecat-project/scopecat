@@ -168,3 +168,67 @@ def test_manifest_must_belong_to_declared_distribution(
     record.write_text(record.read_text().replace("test_lab_adapter/adapter.toml,,", ""))
     with pytest.raises(ProjectManifestError, match="manifest is not owned"):
         open_project(root)
+
+
+def test_author_only_capture_pins_laboratory_without_copying_live_manifest(
+    adapter: tuple[Path, Path],
+) -> None:
+    import json
+
+    from scopecat.author_workspaces import (
+        LocalAuthorWorkspace,
+        LocalAuthorWorkspaces,
+        author_bindings_path,
+    )
+    from scopecat.project import load_captured_project
+    from scopecat.project_sources import materialize_sources
+
+    owner, _ = adapter
+    (owner / "scopecat.toml").write_text(
+        '[lab.adapter]\ndistribution="test-lab-adapter"\n'
+        'manifest="test_lab_adapter/adapter.toml"\n'
+    )
+    source = owner.parent / "author"
+    (source / "src").mkdir(parents=True)
+    (source / "src/experiment.py").write_text("value = 1\n")
+    manifest = source / "scopecat.toml"
+    manifest.write_text(
+        '[authors]\nmodules=["experiment"]\nsource_roots=["src"]\n'
+        'refresh_roots=["src"]\ndependencies=[]\n'
+    )
+    assert open_project(source, resolve_adapter=False).author_only
+    with pytest.raises(ValueError, match="not registered"):
+        open_project(source)
+    binding = owner / ".scopecat"
+    (source / "scopecat.runtime.toml").write_text(
+        f"[runtime]\ndata_root={json.dumps(str(binding))}\n"
+        f"deployment_root={json.dumps(str(binding))}\n"
+    )
+    binding.mkdir()
+    author_bindings_path(owner).write_text(
+        LocalAuthorWorkspaces(
+            service_root=owner,
+            items=(
+                LocalAuthorWorkspace(
+                    id="author",
+                    name="Author",
+                    root=source,
+                    python=Path(sys.executable),
+                ),
+            ),
+        ).model_dump_json()
+    )
+    project = open_project(source)
+    bundle = capture_sources(project)
+    archive = materialize_sources(bundle, source.parent / "archive")
+    # Retained composition does not follow later edits to the live owner.
+    (owner / "scopecat.toml").write_text("[lab]\n")
+    with pytest.raises(ValueError, match=r"only \[lab.adapter\]"):
+        open_project(source)
+    retained = load_captured_project(archive)
+    assert retained.author_only and retained.lab_adapter == project.lab_adapter
+    assert retained.bootstrap_spec == "test_lab_adapter.bootstrap:create"
+    assert (archive / "scopecat.toml").read_bytes() == manifest.read_bytes()
+    (archive / "scopecat.laboratory.toml").unlink()
+    with pytest.raises(ValueError, match="missing its laboratory declaration"):
+        load_captured_project(archive)

@@ -37,6 +37,10 @@ class Request(BaseModel):
 def main() -> None:
     request = Request.model_validate_json(sys.argv[1])
     project = open_project(request.root, resolve_adapter=request.action != "stop")
+    if request.action != "stop" and project.author_only:
+        raise ValueError(
+            "作者目录不能登记为实验服务；请使用 scopecat app --workspace 打开所属实验室"
+        )
     settings_identity = (
         None if request.action == "stop" else lab_settings_identity(project.root)
     )

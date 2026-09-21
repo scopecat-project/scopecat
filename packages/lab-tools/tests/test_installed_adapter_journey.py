@@ -115,7 +115,9 @@ with project.authoring() as author:
     signal = author.load_experiment(signal)
     request = signal(center=0.0)
     request.values["position"] = sc.Scan([-1.0, 0.0, 1.0])
-    original = author.prepare(request).run().wait(timeout=60).result()
+    prepared = author.prepare(request)
+    plan = prepared.save_plan("Retained source-only experiment", saved_by="test")
+    original = prepared.run().wait(timeout=60).result()
     source = project.root / "src/local_experiments.py"
     source.write_text(source.read_text().replace("return 1.0 /", "return 2.0 /"))
     signal = author.refresh(signal)
@@ -125,13 +127,17 @@ with project.authoring() as author:
     changed = author.prepare(refreshed).run().wait(timeout=60).result()
     assert tuple(original.measurements()["result"].require_values()) == (0.5, 1.0, 0.5)
     assert tuple(changed.measurements()["result"].require_values()) == (1.0, 2.0, 1.0)
+    replay = author.prepare_plan(plan.ref).run().wait(timeout=60).result()
+    assert tuple(replay.measurements()["result"].require_values()) == (0.5, 1.0, 0.5)
     import local_experiments
     historical = author.analyze_as(
         original.id, "local_experiments:summarize", local_experiments.Summary
     )
     assert historical.value.mean == 2 / 3
     assert historical.value.points == 3
-    identity = capture_sources(project).manifest.model_dump_json()
+    bundle = capture_sources(project)
+    assert "scopecat.laboratory.toml" in bundle.files
+    identity = bundle.manifest.model_dump_json()
     (project.root / "retained-identity.json").write_text(identity)
     print(json.dumps({"original": original.id, "changed": changed.id}))
 """
@@ -162,6 +168,39 @@ require_environment(manifest)
 """
 
 
+_RECOVERY_CHECK = """
+import sys
+from pathlib import Path
+from scopecat.project import open_project, load_captured_project
+from scopecat.project_sources import materialize_sources, require_environment
+from scopecat.records.author_revision import AuthorRevisionManifest
+from scopecat.daemon.client import DaemonClient
+from scopecat.daemon.endpoint import resolve_daemon_endpoint
+from scopecat_server.lifecycle import start_project, stop_project
+from scopecat_server.snapshots import create_snapshot, restore_snapshot
+owner, source, snapshot, destination = map(Path, sys.argv[1:5])
+identity = AuthorRevisionManifest.model_validate_json(
+    (source / "retained-identity.json").read_text()
+)
+create_snapshot(open_project(owner), snapshot)
+restore_snapshot(snapshot, destination)
+restored = open_project(destination)
+start_project(restored, timeout=60)
+try:
+    with DaemonClient(
+        resolve_daemon_endpoint(destination), workspace_id=sys.argv[5]
+    ) as client:
+        bundle = client.author_revision(identity.ref)
+    require_environment(bundle.manifest)
+    archive = materialize_sources(bundle, destination / "retained")
+    archived = load_captured_project(archive)
+    assert archived.author_only
+    assert archived.lab_adapter.distribution == "test-lab-adapter"
+finally:
+    stop_project(restored)
+"""
+
+
 def test_installed_adapter_wheel_local_refresh_and_missing_adapter_stop(
     tmp_path: Path, monkeypatch
 ) -> None:
@@ -176,17 +215,21 @@ def test_installed_adapter_wheel_local_refresh_and_missing_adapter_stop(
     (project / "src/local_experiments.py").write_text(
         (tmp_path / "scaffold/src/scopecat_lab/authored/signal.py").read_text()
     )
-    (project / "scopecat.toml").write_text("""[lab.adapter]
-distribution = "test-lab-adapter"
-manifest = "test_lab/adapter.toml"
-[lab.capabilities]
-author_modules = ["local_experiments"]
-[authors]
+    (project / "scopecat.toml").write_text("""[authors]
+modules = ["local_experiments"]
 source_roots = ["src"]
 refresh_roots = ["src"]
 dependencies = []
 """)
-    virtualenv = project / ".venv"
+    laboratory = tmp_path / "laboratory"
+    laboratory.mkdir()
+    (laboratory / "scopecat.toml").write_text("""[lab.adapter]
+distribution = "test-lab-adapter"
+manifest = "test_lab/adapter.toml"
+[authors]
+dependencies = []
+""")
+    virtualenv = laboratory / ".venv"
     run(
         [sys.executable, "-m", "venv", "--without-pip", str(virtualenv)],
         cwd=tmp_path,
@@ -233,9 +276,32 @@ dependencies = []
     services = Services(tmp_path / "home")
     service = setup(
         tmp_path / "home",
-        SetupRequest(mode="connect", project=str(project), name="installed adapter"),
+        SetupRequest(mode="connect", project=str(laboratory), name="installed adapter"),
         static_dir=gui,
     )
+    run(
+        [
+            str(python),
+            "-c",
+            (
+                "import sys; from pathlib import Path; "
+                "from scopecat_server.author_registration "
+                "import register_author_workspace; "
+                "register_author_workspace(Path(sys.argv[1]), Path(sys.argv[2]))"
+            ),
+            str(laboratory),
+            str(project),
+        ],
+        cwd=tmp_path,
+        environment=environment,
+    )
+    selected_service, workspace_id = services.for_workspace(project)
+    assert selected_service.id == service.id and workspace_id != "legacy"
+    with pytest.raises(ValueError, match="作者目录不能登记为实验服务"):
+        services.register(
+            project, python, name="Not a second laboratory", static_dir=gui
+        )
+    assert len(services.list()) == 1
     assert not trace.exists(), "registration imported or invoked adapter code"
     try:
         services.start(service.id)
@@ -264,6 +330,22 @@ dependencies = []
             cwd=project,
             environment=environment,
         )
+        services.stop(service.id)
+        run(
+            [
+                str(python),
+                "-c",
+                _RECOVERY_CHECK,
+                str(laboratory),
+                str(project),
+                str(tmp_path / "snapshot"),
+                str(tmp_path / "restored"),
+                workspace_id,
+            ],
+            cwd=tmp_path,
+            environment=environment,
+        )
+        services.start(service.id)
         resource = site / "test_lab/configuration.py"
         original = resource.read_bytes()
         try:

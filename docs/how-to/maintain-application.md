@@ -41,9 +41,64 @@ opening a source is page-local. Subsequent launch without `--workspace` opens th
 laboratory with its normal default code selection.
 
 This reuses [registered same-environment sources](../development/architecture/workspace-bindings.md).
-It does not yet install an environment, register a source automatically, or separate
-an author-only manifest from maintained composition. Independent deployments still
+It does not yet install an environment or register a source automatically.
+Independent deployments still
 have separate hardware authorities; this entry does not merge them.
+
+## Separate author code from an installed laboratory
+
+A laboratory using an installed adapter can bind author folders that contain no
+`[lab]` declaration. The maintained laboratory directory holds the runtime and its
+adapter selection:
+
+```toml
+[lab.adapter]
+distribution = "my-laboratory-adapter"
+manifest = "my_lab/adapter.toml"
+
+[authors]
+dependencies = []
+```
+
+An independent author folder needs only its source and `scopecat.toml`:
+
+```toml
+[authors]
+modules = ["experiments"]
+source_roots = ["src"]
+refresh_roots = ["src"]
+dependencies = []
+```
+
+Put experiment and analysis code in `src/experiments.py` or `src/experiments/`.
+List any additional author dependencies in `dependencies`; the selected adapter's
+packages are inherited automatically. Use the laboratory's installed environment
+for both registration and Notebook execution. Stop its service, then register:
+
+```shell
+scopecat register-workspace "/path/to/author code" --service "/path/to/laboratory"
+scopecat app --workspace "/path/to/author code" --home "/path/to/application home"
+```
+
+Registration writes only the local runtime binding and source membership. It does
+not copy laboratory declarations into author code or install packages. The source
+cannot be registered as another application service. In a Notebook opened in that
+folder, `session = sc.notebook()` uses the same bound laboratory.
+
+This form requires the laboratory's `[lab]` table to contain only `adapter`:
+maintained capabilities belong in the installed adapter. Projects with local
+bootstrap/driver trees continue to use their combined project declaration. Author
+sources can have different source boundaries and dependencies, qualified against
+the same interpreter; they cannot select another adapter or execution environment.
+
+Each source revision captures the selected adapter declaration as
+`scopecat.laboratory.toml` alongside the original author manifest and exact installed
+package identity. This file is internal snapshot content, not a file authors must
+maintain. Execution and validation load that captured declaration. Missing pins or
+changed installed artifacts fail rather than following the current laboratory.
+Current-format backup retains this evidence; restore still requires explicit local
+source registration before executing its code. Adapter artifacts must remain
+available separately: the snapshot does not archive installed wheels.
 
 ## First use
 

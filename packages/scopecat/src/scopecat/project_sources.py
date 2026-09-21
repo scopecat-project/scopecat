@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import json
 import platform
 import shutil
 import tempfile
@@ -10,8 +11,9 @@ import tomllib
 from contextvars import ContextVar
 from importlib.metadata import PackageNotFoundError, distributions, version
 from pathlib import Path
-from typing import Protocol, cast
+from typing import TYPE_CHECKING, Protocol, cast
 
+from scopecat.author_workspaces import LABORATORY_MANIFEST_NAME
 from scopecat.kernel.content_identity import (
     content_fingerprint,
     sha256_content_hash,
@@ -23,6 +25,10 @@ from scopecat.records.author_revision import (
     AuthorRevisionRef,
 )
 from scopecat.records.author_workspace import SERVICE_AUTHOR_WORKSPACE
+
+if TYPE_CHECKING:
+    from scopecat.installed_adapter import AdapterReference
+
 
 loading_workspace: ContextVar[str] = ContextVar(
     "loading_author_workspace", default=SERVICE_AUTHOR_WORKSPACE
@@ -60,11 +66,26 @@ class SourceProject(Protocol):
     def installed_packages(self) -> tuple[tuple[str, str], ...]: ...
     @property
     def dependencies(self) -> tuple[str, ...] | None: ...
+    @property
+    def author_only(self) -> bool: ...
+    @property
+    def lab_adapter(self) -> AdapterReference | None: ...
+    @property
+    def adapter_packages(self) -> tuple[tuple[str, str], ...]: ...
 
 
 def capture_sources(project: SourceProject) -> AuthorRevisionBundle:
     """Snapshot all declared roots, including helpers, analysis and local resources."""
     files: dict[str, bytes] = {"scopecat.toml": project.manifest.read_bytes()}
+    if project.author_only:
+        adapter = project.lab_adapter
+        if adapter is None:
+            raise ValueError("Author-only source capture requires a bound laboratory")
+        files[LABORATORY_MANIFEST_NAME] = (
+            "[lab.adapter]\n"
+            f"distribution = {json.dumps(adapter.distribution)}\n"
+            f"manifest = {json.dumps(adapter.manifest)}\n"
+        ).encode()
     for name in (
         ()
         if project.dependencies is not None
@@ -212,3 +233,26 @@ def materialize_sources(bundle: AuthorRevisionBundle, directory: Path) -> Path:
         return target
     finally:
         shutil.rmtree(staged, ignore_errors=True)
+
+
+def require_shared_composition(
+    owner: SourceProject,
+    source: SourceProject,
+    baseline: AuthorRevisionBundle,
+    candidate: AuthorRevisionBundle,
+) -> None:
+    """Compare shared laboratory ownership separately from author-local maintenance."""
+    if source.author_only:
+        from scopecat.author_workspaces import laboratory_adapter
+
+        if (
+            source.lab_adapter != owner.lab_adapter
+            or owner.lab_adapter != laboratory_adapter(owner.root)
+        ) or any(
+            candidate.manifest.installed_authors.get(module)
+            != baseline.manifest.installed_authors[module]
+            for module, _ in owner.adapter_packages
+        ):
+            raise ValueError("Author workspace uses a different laboratory adapter")
+    elif candidate.manifest.maintenance_hash != baseline.manifest.maintenance_hash:
+        raise ValueError("Author workspaces must use the same maintained composition")

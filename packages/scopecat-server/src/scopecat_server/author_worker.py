@@ -31,8 +31,11 @@ def revision_project(root: Path, ref: AuthorRevisionRef) -> Project:
     """Read original identity before importing any project implementation."""
     from scopecat.daemon.client import DaemonClient
     from scopecat.daemon.endpoint import resolve_daemon_endpoint
-    from scopecat.project import load_project
-    from scopecat.project_sources import materialize_sources, require_environment
+    from scopecat.project import load_captured_project
+    from scopecat.project_sources import (
+        materialize_sources,
+        require_environment,
+    )
 
     with DaemonClient(
         resolve_daemon_endpoint(root), workspace_id=author_workspace_id(root)
@@ -43,7 +46,7 @@ def revision_project(root: Path, ref: AuthorRevisionRef) -> Project:
         bundle, load_runtime_binding(root).data_root / "code"
     )
     return replace(
-        load_project(code_root / "scopecat.toml"),
+        load_captured_project(code_root),
         root=root,
         code_root=code_root,
         code_revision=ref,
@@ -84,11 +87,11 @@ def validate(
     try:
         report_stage("framework imports")
         from scopecat.daemon.endpoint import DAEMON_URL_ENV
-        from scopecat.project import load_project
+        from scopecat.project import load_captured_project
 
         os.environ.pop(DAEMON_URL_ENV, None)
         project = replace(
-            load_project(code_root / "scopecat.toml"),
+            load_captured_project(code_root),
             root=root,
             code_root=code_root,
             code_revision=ref,

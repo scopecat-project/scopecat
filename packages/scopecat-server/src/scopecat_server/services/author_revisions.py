@@ -81,7 +81,8 @@ class AuthorRevisionService:
         self.project = load_project(manifest) if manifest.is_file() else None
         self.baseline = (
             capture_sources(self.project)
-            if self.project is not None and self.project.source_roots
+            if self.project is not None
+            and (self.project.source_roots or self.project.adapter_packages)
             else None
         )
 
