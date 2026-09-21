@@ -47,6 +47,7 @@ from scopecat_quantum.program_results import (
     QuantumTargetEntryPointBinding,
     QuantumTargetResultAddress,
     QuantumTargetResultUseBinding,
+    map_quantum_target_results,
     seal_quantum_target_result_mapping,
 )
 from scopecat_quantum.program_targets import (
@@ -186,9 +187,11 @@ def _preparation(
     return DomainPreparationBuilder(request)
 
 
-def _prepared(entry_id: str, source_program_id: str):
+def _prepared(
+    entry_id: str, source_program_id: str, *, result_id: str = "template-result"
+):
     slot = AcquisitionSlot(
-        id=AcquisitionSlotId("template-result"),
+        id=AcquisitionSlotId(result_id),
         contract=INTEGRATED_IQ_RESULT,
         signal=AcquireSignal(Q0),
     )
@@ -298,6 +301,42 @@ def _compile(
         capability_fingerprint="capabilities:v1",
     )
     return compiler.compile(request)
+
+
+def test_named_mapping_preserves_explicit_point_assignment() -> None:
+    preparation = _preparation()
+    batch = prepare_quantum_target_batch(
+        tuple(
+            _prepared(entry_id, entry_id, result_id="result")
+            for entry_id in ("entry-b", "entry-a")
+        ),
+        repetitions=11,
+    )
+    points = preparation.context.points
+    mapping = map_quantum_target_results(
+        preparation,
+        batch,
+        (
+            QuantumTargetEntryPointBinding(batch.entries[0].id, points[1]),
+            QuantumTargetEntryPointBinding(batch.entries[1].id, points[0]),
+        ),
+    )
+    assert tuple(result.result_address.entry_id for result in mapping.results) == (
+        batch.entries[1].id,
+        batch.entries[0].id,
+    )
+    assert tuple(result.point for result in mapping.results) == points
+    assert {
+        address
+        for result in mapping.results
+        for address in result.result_address.acquisitions
+    } == set(batch.acquisition_addresses)
+
+
+def test_named_mapping_rejects_unmatched_logical_result() -> None:
+    preparation, batch, entry_bindings, _ = _valid_inputs()
+    with pytest.raises(ValueError, match="require acquisitions"):
+        map_quantum_target_results(preparation, batch, entry_bindings)
 
 
 def test_mapping_preserves_logical_order_and_acquisition_addresses() -> None:
