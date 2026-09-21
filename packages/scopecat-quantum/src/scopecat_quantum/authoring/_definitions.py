@@ -67,6 +67,7 @@ from ._ir import (
     QubitSet,
     RepeatCount,
     _DelayFragment,
+    _FlatTopWindowFragment,
     _FragmentCall,
     _GateFragment,
     _ImplementedGateFragment,
@@ -661,6 +662,24 @@ def _substitute_pulse_fragment(
         ProgramInput, Quantity | int | float | ProgramInput | QuantityExpression
     ],
 ) -> QuantumFragment:
+    if isinstance(fragment, _FlatTopWindowFragment):
+        return replace(
+            fragment,
+            signal=cast(
+                "PlaySignal", _substitute_signal(fragment.signal, element_bindings)
+            ),
+            body=_substitute_pulse_fragment(
+                fragment.body,
+                element_bindings=element_bindings,
+                input_bindings=input_bindings,
+            ),
+            amplitude=substitute_expression(fragment.amplitude, input_bindings),
+            rise_duration=substitute_expression(fragment.rise_duration, input_bindings),
+            fall_duration=substitute_expression(fragment.fall_duration, input_bindings),
+            settle_duration=substitute_expression(
+                fragment.settle_duration, input_bindings
+            ),
+        )
     if isinstance(fragment, _RecipeScopeFragment):
         return replace(
             fragment,
@@ -679,9 +698,7 @@ def _substitute_pulse_fragment(
         )
     if isinstance(fragment, _DelayFragment):
         return _DelayFragment(
-            signal=cast(
-                "PlaySignal", _substitute_signal(fragment.signal, element_bindings)
-            ),
+            signal=_substitute_signal(fragment.signal, element_bindings),
             duration=cast(
                 "QuantumQuantity",
                 _substitute_template_value(fragment.duration, input_bindings),

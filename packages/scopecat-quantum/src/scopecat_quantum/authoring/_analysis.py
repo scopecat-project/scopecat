@@ -82,6 +82,7 @@ from ._ir import (
     _ConditionalFragment,
     _DelayFragment,
     _ExpandedFragment,
+    _FlatTopWindowFragment,
     _FragmentCall,
     _GateFragment,
     _ImplementedGateFragment,
@@ -481,9 +482,13 @@ def _expanded_fragment_shape(fragment: QuantumFragment) -> _ExpandedFragmentShap
     ):
         return _ExpandedFragmentShape(operation_count=1, depth=1)
     if isinstance(
-        fragment, _PulseTemplateCallFragment | _ExpandedFragment | _RecipeScopeFragment
+        fragment,
+        _PulseTemplateCallFragment | _ExpandedFragment | _RecipeScopeFragment,
     ):
         return _expanded_fragment_shape(fragment.body)
+    if isinstance(fragment, _FlatTopWindowFragment):
+        body = _expanded_fragment_shape(fragment.body)
+        return _ExpandedFragmentShape(body.operation_count + 1, max(1, body.depth))
     if isinstance(fragment, _FragmentCall):
         raise AssertionError("fragment calls must expand before shape analysis")
     if isinstance(
@@ -595,6 +600,23 @@ def _summarize_fragment(fragment: QuantumFragment) -> _FragmentFacts:
             ),
             gate_definitions=fragment.definition.envelope.gate_definitions,
         )
+    if isinstance(fragment, _FlatTopWindowFragment):
+        body = _summarize_fragment(fragment.body)
+        window = _FragmentFacts(
+            pulse_owners=(_signal_owner(fragment.signal),),
+            element_uses=(_signal_element(fragment.signal),),
+            inputs=tuple(
+                handle
+                for value in (
+                    fragment.amplitude,
+                    fragment.rise_duration,
+                    fragment.fall_duration,
+                    fragment.settle_duration,
+                )
+                for handle in expression_inputs(value)
+            ),
+        )
+        return _merge_fragment_facts((window, body), carries_pulse_structure=True)
     if isinstance(fragment, _ExpandedFragment | _RecipeScopeFragment):
         return _summarize_fragment(fragment.body)
     if isinstance(fragment, _GateFragment):
@@ -807,7 +829,11 @@ def _validate_realtime_node(
     inside_conditional_branch: bool,
 ) -> dict[ProgramResult, _ResultAvailability]:
     if isinstance(
-        fragment, _ExpandedFragment | _PulseTemplateCallFragment | _RecipeScopeFragment
+        fragment,
+        _ExpandedFragment
+        | _PulseTemplateCallFragment
+        | _RecipeScopeFragment
+        | _FlatTopWindowFragment,
     ):
         return _validate_realtime_node(
             fragment.body,
