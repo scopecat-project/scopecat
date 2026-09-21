@@ -15,10 +15,15 @@ from scopecat.author_workspaces import (
     LocalAuthorWorkspaces,
     author_bindings_path,
     author_workspace_id,
+    laboratory_adapter,
     local_author_workspaces,
 )
-from scopecat.project import open_project
-from scopecat.project_sources import capture_sources, require_environment
+from scopecat.project import load_project, open_project
+from scopecat.project_sources import (
+    capture_sources,
+    require_environment,
+    require_shared_composition,
+)
 from scopecat.runtime_binding import RUNTIME_BINDING_NAME
 
 
@@ -30,7 +35,11 @@ def register_author_workspace(
     identity: str | None = None,
 ) -> LocalAuthorWorkspace:
     owner = open_project(service)
-    project = open_project(workspace)
+    project = open_project(workspace, resolve_adapter=False)
+    project = load_project(
+        project.manifest,
+        lab_adapter=laboratory_adapter(owner.root) if project.author_only else None,
+    )
     if author_workspace_id(owner.root) != "legacy":
         raise ValueError("Registration requires the deployment service workspace")
     if owner.root == project.root:
@@ -54,13 +63,7 @@ def register_author_workspace(
             baseline = capture_sources(owner)
             candidate = capture_sources(project)
             require_environment(candidate.manifest)
-            if (
-                candidate.manifest.maintenance_hash
-                != baseline.manifest.maintenance_hash
-            ):
-                raise ValueError(
-                    "Author workspaces must use the same maintained composition"
-                )
+            require_shared_composition(owner, project, baseline, candidate)
             location = project.root / RUNTIME_BINDING_NAME
             if location.exists() and (
                 project.runtime_binding.data_root != binding.data_root

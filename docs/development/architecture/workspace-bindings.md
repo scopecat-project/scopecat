@@ -10,7 +10,9 @@ and [current-format restore](../../how-to/backup-and-restore.md#separately-locat
 ## Current ownership contract
 
 1. **Workspace:** the source directory discovered by `open_project()`. Its location
-   supplies maintained composition and authored code; it is not scientific identity.
+   supplies authored code; combined projects also supply maintained composition.
+   An author-only folder inherits an explicitly registered installed laboratory;
+   its location is not scientific identity.
 2. **Data space:** SQLite, immutable objects, retained source bundles and durable
    receipts share one persistent identity independent of paths. One writer owns it.
 3. **Execution deployment:** one configured owner of backend composition/device
@@ -224,3 +226,23 @@ and incompatible-environment/maintenance rejection cases. Existing shared-device
 claims remain enforced; this slice does not qualify cross-deployment physical-device
 aliases or multiple maintained apparatus compositions. Keep full installed/Windows
 and recovery acceptance in the integration closeout tracked by the parent issue.
+
+## Author-only installed-laboratory binding
+
+A manifest with `[authors]` and no `[lab]` is an author-only folder. Discovery without
+adapter resolution can inspect it before registration. Loading or capturing it for
+execution requires explicit registration with a laboratory whose `[lab]` contains
+only an installed adapter reference. It cannot become a second application service.
+
+Source registration and daemon startup compare the laboratory adapter reference
+and installed adapter content, rather than requiring identical source manifests.
+Each author's maintenance hash still covers its own source boundaries, dependency
+requirements, installed content and non-refreshable files. The service's interpreter,
+data binding and deployment binding remain shared and explicitly checked.
+
+Captured sources include an internal `scopecat.laboratory.toml` containing the exact
+adapter reference. Qualified workers load it from the verified revision, never from
+current local source registration. Installed artifact hashes and environment checks
+remain required. Changing adapter selection requires stopped maintenance/restart;
+old revisions cannot execute under a different maintained baseline. The existing
+combined-project contract remains for project-local bootstrap and driver code.

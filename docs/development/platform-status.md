@@ -123,5 +123,8 @@ Milestone acceptance remains explicit; private Actions stay disabled.
 laboratory capabilities (#708). Different registered folders may select different
 catalogs; revisions retain the exact declaration. Source/refresh boundaries,
 package ownership, dependency requirements and lab capabilities remain maintained.
-This is a prerequisite for source-only author manifests, not their completion:
-registered folders still carry matching laboratory declarations.
+Author-only manifests are now supported for laboratories whose `[lab]` contains
+only an installed adapter reference (#710). Registration binds the folder to that
+laboratory; revisions capture its adapter declaration and installed artifact
+identity. Local driver/bootstrap projects still use the combined declaration.
+Environment installation and updates remain separate work.

@@ -286,7 +286,7 @@ def test_preloaded_application_module_from_outside_project_is_rejected(
 @pytest.mark.parametrize(
     "content, message",
     [
-        ("", r"requires a \[lab\] table"),
+        ("", r"requires a \[lab\] or \[authors\] table"),
         (
             '[lab]\nbootstrap-config = "config/initial.json"\n',
             r"unknown \[lab\] field",

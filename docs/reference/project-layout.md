@@ -1,5 +1,12 @@
 # Project layout and manifest
 
+For an installed laboratory, author code can live in a separate folder whose
+`scopecat.toml` contains only `[authors]`. Register it with the existing laboratory;
+it inherits the adapter and shared runtime without copying `[lab]` or drivers.
+See [separate author code from an installed laboratory](../how-to/maintain-application.md#separate-author-code-from-an-installed-laboratory).
+The combined layout below remains the form for laboratory-owned local composition.
+
+
 `scopecat init my-lab` creates this minimal project:
 
 ```text

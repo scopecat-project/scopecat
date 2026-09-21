@@ -1,11 +1,19 @@
 """Machine-local author bindings; registration is a trusted maintenance action."""
 
+import tomllib
 from pathlib import Path
+from typing import TYPE_CHECKING, cast
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from scopecat.records.author_workspace import SERVICE_AUTHOR_WORKSPACE
 from scopecat.runtime_binding import load_runtime_binding
+
+if TYPE_CHECKING:
+    from scopecat.installed_adapter import AdapterReference
+
+
+LABORATORY_MANIFEST_NAME = "scopecat.laboratory.toml"
 
 
 class LocalAuthorWorkspace(BaseModel):
@@ -48,3 +56,35 @@ def author_workspace_id(root: Path) -> str:
     raise ValueError(
         "This location is not registered with the deployment service workspace"
     )
+
+
+def laboratory_adapter(root: Path) -> AdapterReference:
+    """Require an installed laboratory without project-local composition additions."""
+    from scopecat.installed_adapter import parse_adapter_reference
+
+    document = tomllib.loads((root / "scopecat.toml").read_text(encoding="utf-8"))
+    lab = document.get("lab")
+    if not isinstance(lab, dict) or set(cast("dict[str, object]", lab)) != {"adapter"}:
+        raise ValueError(
+            "Author-only folders require a laboratory with only [lab.adapter]; "
+            "move maintained capabilities into the installed adapter"
+        )
+    return parse_adapter_reference(cast("dict[str, object]", lab)["adapter"])
+
+
+def bound_lab_adapter(root: Path) -> AdapterReference:
+    """Resolve only an explicitly registered author's laboratory declaration."""
+    path = author_bindings_path(root)
+    if not path.is_file():
+        raise ValueError("Author-only folder is not registered with a laboratory")
+    registry = LocalAuthorWorkspaces.model_validate_json(path.read_bytes())
+    if not any(item.root == root for item in registry.items):
+        raise ValueError("Author-only folder is not registered with this laboratory")
+    owner = load_runtime_binding(registry.service_root)
+    source = load_runtime_binding(root)
+    if (owner.data_root, owner.deployment_root) != (
+        source.data_root,
+        source.deployment_root,
+    ):
+        raise ValueError("Author and laboratory runtime bindings differ")
+    return laboratory_adapter(registry.service_root)
