@@ -117,7 +117,35 @@ The domain-independent query lives in `scopecat.authoring.parameter_queries`.
 `projection.resolve(snapshot, context)` returns values plus snapshot ID, table,
 resolved key and output-to-column mapping for inspection. This is transient evidence,
 not automatic durable provenance. Current selection scans keys without building row
-objects. It has no query optimizer, cross-table expression algebra or index cache yet.
+objects. It has no query optimizer or index cache yet.
+
+Use `lookup["field"]` for a required field expression and `sc.parameter_inputs` to
+combine tables or derive named inputs:
+
+```python
+gate = sc.parameter_table(CalibratedGate).lookup(qubit=recipe_operand())
+shape = sc.parameter_table(Shape).lookup(name=gate["shape"])
+inputs = recipe_parameter_inputs(
+    sc.parameter_inputs(
+        width=shape["width"],
+        plateau=shape["flat"],
+        amplitude=gate["scale"] * gate["correction"],
+    )
+)
+```
+
+A dependent key resolves against the same effective snapshot as its selected fields.
+`parameter_inputs(...).resolve(snapshot, context)` returns per-output source records;
+each source includes `key_sources` for fields that determined a dependent lookup's key.
+The expression objects retain the declared arithmetic, while source records retain the
+resolved values. These are inspectable in memory, not automatically stored with runs.
+Repeated field expressions may repeat lookups; do not assume common-subexpression caching.
+
+Arithmetic supports `+`, `-`, `*`, `/` using existing `Quantity` semantics: compatible
+quantities add/subtract with unit conversion, numeric scaling preserves units, and
+supported quantity ratios/products yield dimensionless values. Arbitrary compound-unit
+algebra is not implemented. Invalid dimensions, unknown fields and division by zero fail
+with the named output; there are no implicit defaults or writes to parameter tables.
 Custom resolver callbacks remain available for computations outside this vocabulary.
 
 ## Circuit transformation contract
