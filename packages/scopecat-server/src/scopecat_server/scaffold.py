@@ -10,10 +10,8 @@ _PROJECT_FILES = {
 bootstrap = "scopecat_lab.application:create_bootstrap"
 instrument_backend = "scopecat_lab.backend:create_backend"
 
-[lab.capabilities]
-author_modules = ["scopecat_lab.authored"]
-
 [authors]
+modules = ["scopecat_lab.authored"]
 dependencies = ["scopecat-instruments"]
 source_roots = ["src"]
 refresh_roots = ["src/scopecat_lab/authored"]

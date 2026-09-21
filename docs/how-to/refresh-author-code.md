@@ -167,6 +167,7 @@ The maintainer configures these paths once in `scopecat.toml`:
 
 ```toml
 [authors]
+modules = ["reference_lab.workflows.authored"]
 source_roots = ["src", "config"]
 refresh_roots = [
   "src/reference_lab/workflows/authored",
@@ -177,12 +178,22 @@ refresh_roots = [
 
 `source_roots` archives the complete local dependency tree, including helper,
 analysis and local resource files. `refresh_roots` identifies the subset ordinary
-authors may change without restarting. These paths are separate from
-`LabApplication(author_modules=(... ,))`, which selects discoverable experiment
-modules using the existing decorator and controls. A project without `[authors]`
-retains its existing initial-load behavior and has no refresh button.
+authors may change without restarting. `modules` selects discoverable experiment modules or packages using the existing
+decorators and controls. It composes with standard modules provided by
+`lab.capabilities.author_modules` or the installed adapter. Use `authors.modules`
+for author-owned selection: adding or changing this list can be refreshed, and
+registered author folders may choose different lists while sharing the maintained
+laboratory composition. Keep the selected local modules inside refresh roots.
+The exact selection is retained in each revision, so old plans and runs keep their
+original catalog. Custom `lab.application` factories cannot be combined with
+`authors.modules`; use declarative capabilities for this composition.
+A project without `[authors]` retains its existing initial-load behavior and has
+no refresh button.
 
 Files outside the refresh roots form the maintained composition identity.
+Manifest settings other than `authors.modules` remain maintained; changing source
+boundaries, package ownership or dependencies still requires maintenance.
+Formatting and comments do not change the manifest maintenance identity.
 Compiler, driver, bootstrap, dependency declaration or other maintained source
 changes require a matching maintainer restart; they cannot be smuggled into an
 author refresh. All local Python dependencies must belong to declared source

@@ -57,8 +57,7 @@ def adapter(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Path, Path
     (project / "src" / "experiments.py").write_text("value = 2\n")
     (project / "scopecat.toml").write_text(
         '[lab.adapter]\ndistribution="test-lab-adapter"\nmanifest="test_lab_adapter/adapter.toml"\n'
-        '[lab.capabilities]\nauthor_modules=["experiments"]\n'
-        '[authors]\nsource_roots=["src"]\nrefresh_roots=["src"]\ndependencies=[]\n'
+        '[authors]\nmodules=["experiments"]\nsource_roots=["src"]\nrefresh_roots=["src"]\ndependencies=[]\n'
     )
     return project, module
 
@@ -139,8 +138,8 @@ def test_project_cannot_override_adapter_capabilities(
     manifest = root / "scopecat.toml"
     manifest.write_text(
         manifest.read_text().replace(
-            "[lab.capabilities]",
-            '[lab.capabilities]\nexperiment_system="experiments:build"',
+            "[authors]",
+            '[lab.capabilities]\nexperiment_system="experiments:build"\n[authors]',
         )
     )
     with pytest.raises(ProjectManifestError, match="only add"):

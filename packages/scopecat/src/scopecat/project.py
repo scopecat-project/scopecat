@@ -217,13 +217,36 @@ def load_project(manifest: str | Path, *, resolve_adapter: bool = True) -> Proje
         raise ProjectManifestError("[authors] must be a table")
     authors = cast("dict[str, object]", authors)
     if set(authors) - {
+        "modules",
         "source_roots",
         "refresh_roots",
         "packages",
         "dependencies",
     }:
         raise ProjectManifestError(
-            "[authors] accepts source_roots, refresh_roots, packages and dependencies"
+            "[authors] accepts modules, source_roots, refresh_roots, packages "
+            "and dependencies"
+        )
+    if "modules" in authors:
+        if application is not None:
+            raise ProjectManifestError(
+                "authors.modules requires declarative lab capabilities, "
+                "not lab.application"
+            )
+        try:
+            modules = _parse_capabilities(
+                {"author_modules": authors["modules"]}
+            ).author_modules
+        except ProjectManifestError as error:
+            raise ProjectManifestError(
+                str(error).replace("lab.capabilities.author_modules", "authors.modules")
+            ) from error
+        declaration = capabilities or LabCapabilities()
+        capabilities = replace(
+            declaration,
+            author_modules=tuple(
+                dict.fromkeys((*declaration.author_modules, *modules))
+            ),
         )
     dependencies_value = authors.get("dependencies")
     dependencies: tuple[str, ...] | None = None

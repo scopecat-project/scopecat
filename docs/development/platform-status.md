@@ -116,3 +116,12 @@ server-enforced resource and publication boundaries.
 
 Fast public CI, self-review and squash merging remain the integration gate.
 Milestone acceptance remains explicit; private Actions stay disabled.
+
+### Author catalog declaration
+
+`authors.modules` selects author-owned experiments separately from maintained
+laboratory capabilities (#708). Different registered folders may select different
+catalogs; revisions retain the exact declaration. Source/refresh boundaries,
+package ownership, dependency requirements and lab capabilities remain maintained.
+This is a prerequisite for source-only author manifests, not their completion:
+registered folders still carry matching laboratory declarations.
