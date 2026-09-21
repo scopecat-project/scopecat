@@ -163,6 +163,14 @@ their durable representation; removing Python handles does not migrate storage.
 
 ## Read effective snapshots in adapters
 
+For recipe bindings that only need a keyed projection, use
+`sc.parameter_table(Drive).lookup(qubit="q0").select("amplitude")` (with your model's
+complete key). Creating the query reads no snapshot. Its `resolve(snapshot, {})`
+returns required values with declared units and their source key/fields. Zero or
+multiple matching rows and unknown selected cells are errors. Column aliases use
+`.select(output_name="column_name")`. See [declarative recipe inputs](../development/architecture/quantum-adapters.md#declarative-calibration-inputs)
+for operation-dependent keys.
+
 `sc.parameter_rows(effective_snapshot, Drive)` returns detached `Drive` rows using
 that declaration's units. It reads the selected table through the normal schema
 validation path, without invoking constructors or filling unknown cells from

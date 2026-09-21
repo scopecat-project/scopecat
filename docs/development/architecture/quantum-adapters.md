@@ -84,6 +84,42 @@ classified states have separate contracts. Typed snapshot reads
 are available through `sc.parameter_rows`; a binding should select the required row
 before consuming its required fields, so unrelated unknown calibration does not block it.
 
+## Declarative calibration inputs
+
+For keyed parameter tables, prefer a projection over a handwritten resolver:
+
+```python
+from scopecat_quantum.recipe_queries import (
+    recipe_operand,
+    recipe_operation,
+    recipe_parameter_inputs,
+)
+
+inputs = recipe_parameter_inputs(
+    sc.parameter_table(Rotation)
+    .lookup(qubit=recipe_operand(), operation=recipe_operation())
+    .select("width", "plateau", "amplitude", "beta", "detuning")
+)
+binding = bind_gate_pulse_recipe(of=X90, build=drag_rotation, inputs=inputs)
+```
+
+`Rotation` is the author's schema and `drag_rotation` their chosen pulse function.
+The query is deferred until compilation selects a call and effective snapshot.
+`recipe_operand(index)` supplies a logical-qubit entity; `recipe_operation()` supplies
+the gate ID. Measurements support operand zero and literal keys, not a gate ID.
+Units come from the selected field declarations. `.select(duration="width")` aliases
+a source column without losing its unit. Complete primary keys and exactly one row
+are required; missing, duplicate and unknown selected values report their source.
+Unselected non-key values are neither materialized nor validated by the query;
+normal workspace admission still validates stored tables.
+
+The domain-independent query lives in `scopecat.authoring.parameter_queries`.
+`projection.resolve(snapshot, context)` returns values plus snapshot ID, table,
+resolved key and output-to-column mapping for inspection. This is transient evidence,
+not automatic durable provenance. Current selection scans keys without building row
+objects. It has no query optimizer, cross-table expression algebra or index cache yet.
+Custom resolver callbacks remain available for computations outside this vocabulary.
+
 ## Circuit transformation contract
 
 Current compilation binds, resolves implementations and lowers authored operations. It
