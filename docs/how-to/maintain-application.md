@@ -145,9 +145,9 @@ or use an already prepared environment. Setup checks the selected interpreter
 without importing drivers into the manager. It does not search the internet for
 missing packages.
 
-Local experiment edits use normal notebook refresh. To change the adapter, stop
-first, install the reviewed wheel into the same environment and recheck it in the
-manager. The registered content fingerprint detects even same-version file changes.
+Local experiment edits use normal notebook refresh. To change the adapter, use
+the stopped delivery update below. A maintainer who intentionally changes packages
+in place must stop first and recheck the existing environment afterward. The registered content fingerprint detects even same-version file changes.
 Keep exact old wheels when retaining historical execution environments: scientific
 source capture records installed package identity but does not archive the wheel.
 If an adapter is missing or damaged, status and stop remain available; restore the
@@ -270,6 +270,40 @@ Their registered interpreter and GUI paths remain authoritative. Use the workflo
 below when intentionally updating those environments; new tutorial copies use the
 selected delivery while old copies retain their own environment.
 
+## Update a laboratory from a delivery
+
+1. Finish measurements, close Notebook kernels and stop the laboratory service.
+2. On its service card expand **Update laboratory environment (更新实验室环境)**.
+   Enter the absolute path to the matching laboratory delivery and choose
+   **Validate and update (验证并更新环境)**.
+3. Wait for success in **Recent operations**. The application retains the delivery,
+   prepares a separate environment in its home, and checks the laboratory and every
+   registered author folder with that interpreter before switching registration.
+4. Read the new interpreter path in **Project and environment**. Select it in your
+   Notebook editor and restart the kernel. An existing kernelspec pointing to the
+   old environment does not change automatically.
+5. Explicitly start the workbench when ready. Preview new work before submitting it.
+
+The laboratory ID, data/deployment paths, settings selection and author folder IDs
+stay unchanged. Author interpreter bindings move together with the laboratory.
+The operation log records the old/new registration and retained delivery path.
+The service stays stopped: updating never starts instruments or resumes measurements.
+
+Preparation or qualification failure leaves the previous registration intact. Correct
+its cause and select the same delivery to retry; a completed candidate is reused.
+If switching the source bindings and service registration is interrupted, ordinary
+application startup is blocked. Repeat the **same delivery** update to complete that
+switch; do not bypass it by starting through a lower-level CLI.
+
+Old environments, failed candidates and retained deliveries are not automatically
+removed. Existing scientific records are not rewritten. This is an environment
+replacement, not a scientific-data migration or a promise that historical plans run
+with a changed adapter. Keep matching old artifacts/environments for archival use.
+
+This action accepts an already built delivery. Building a delivery incrementally
+from public/private checkouts and selecting the new Notebook interpreter remain
+separate steps; the complete development update workflow is tracked in #712.
+
 ## Recheck after updating the existing environment
 
 1. Finish measurements and close notebook connections. In the manager choose
@@ -292,8 +326,8 @@ The version check does not attest every dependency or editable source file.
 
 ## If the paths changed
 
-A new interpreter or GUI directory requires local registration with those explicit
-paths. Stop the old service first. Run the command in the manager's installed
+For externally prepared environments outside the delivery workflow, a new
+interpreter or GUI directory requires local registration with those explicit paths. Stop the old service first. Run the command in the manager's installed
 environment. The setup form selects a code directory and optional initial data
 location; explicit interpreter and GUI overrides remain a maintainer CLI operation.
 

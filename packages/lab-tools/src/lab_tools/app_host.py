@@ -49,6 +49,7 @@ def _validate_command_capability(key: str | None, command: Command) -> None:
         "service_stop",
         "service_remove",
         "service_recheck",
+        "service_update",
     ):
         _require_teaching(key)
 

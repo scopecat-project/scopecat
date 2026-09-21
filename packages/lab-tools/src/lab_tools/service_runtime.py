@@ -32,6 +32,7 @@ class Request(BaseModel):
     environment: dict[str, str] = Field(default_factory=dict)
     settings_identity: str | None = None
     adapter_identity: str | None = None
+    qualify_sources: bool = False
 
 
 def main() -> None:
@@ -61,6 +62,28 @@ def main() -> None:
     if request.action == "start" and settings_identity != request.settings_identity:
         raise ValueError("实验室设置已改变；请先停止服务并复检登记，再重新启动")
     if request.action == "probe":
+        if request.qualify_sources:
+            from scopecat.author_workspaces import local_author_workspaces
+            from scopecat.project_sources import (
+                capture_sources,
+                require_environment,
+                require_shared_composition,
+            )
+
+            baseline = capture_sources(project)
+            for item in local_author_workspaces(project.root):
+                source = open_project(item.root)
+                binding = source.runtime_binding
+                owner = project.runtime_binding
+                if (binding.data_root, binding.deployment_root) != (
+                    owner.data_root,
+                    owner.deployment_root,
+                ):
+                    raise ValueError(f"作者目录运行绑定已改变: {item.root}")
+                candidate = capture_sources(source)
+                require_shared_composition(project, source, baseline, candidate)
+                require_environment(candidate.manifest)
+                print(f"已验证作者环境: {item.name} ({item.root})", flush=True)
         execution_packages(
             (
                 *(project.dependencies or ()),

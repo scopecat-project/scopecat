@@ -6,6 +6,7 @@ import os
 import subprocess
 import sys
 import tempfile
+from collections.abc import Callable
 from contextlib import ExitStack, suppress
 from dataclasses import dataclass
 from hashlib import sha256
@@ -69,16 +70,25 @@ def _require_finished(attempt: _Attempt) -> None:
         pass
 
 
-def prepare_environment(project: Path, bundle: Path, home: Path) -> PreparedEnvironment:
+def prepare_environment(
+    project: Path,
+    bundle: Path,
+    home: Path,
+    *,
+    environment: Path | None = None,
+    activate: Callable[[PreparedEnvironment], None] | None = None,
+) -> PreparedEnvironment:
     """Prepare only our environment; retain interrupted attempts without deletion."""
     project = project.resolve()
     selected = load_project(project / "scopecat.toml", resolve_adapter=False)
+    if selected.author_only:
+        raise ValueError("请更新所属实验室的运行环境，不要为作者目录另装环境")
     home = home.resolve()
     attempts = home / "environment-attempts"
     attempts.mkdir(parents=True, exist_ok=True)
-    key = sha256(str(project).encode("utf-8")).hexdigest()
+    key = sha256(str(environment or project).encode("utf-8")).hexdigest()
     attempt_file = attempts / f"{key}.json"
-    environment = project / ".venv"
+    environment = environment or project / ".venv"
     try:
         with ExitStack() as stack:
             stack.enter_context(FileLock(attempts / f"{key}.lock", timeout=0))
@@ -116,8 +126,13 @@ def prepare_environment(project: Path, bundle: Path, home: Path) -> PreparedEnvi
                 receipt = environment / delivery.RECEIPT
                 if receipt.exists():
                     delivery.check_receipt(environment, retained)
-                    return _prepared(environment, retained)
-                failed = project / f".venv-failed-{uuid4().hex}"
+                    prepared = _prepared(environment, retained)
+                    if activate is not None:
+                        activate(prepared)
+                    return prepared
+                failed = environment.with_name(
+                    f"{environment.name}-failed-{uuid4().hex}"
+                )
                 environment.rename(failed)
                 print(f"已保留上次未完成的实验环境: {failed}", flush=True)
             attempt = _Attempt(token=uuid4().hex, project=str(project))
@@ -132,6 +147,7 @@ def prepare_environment(project: Path, bundle: Path, home: Path) -> PreparedEnvi
                         attempt.created = psutil.Process(pid).create_time()
                 _save(attempt_file, attempt)
 
+            environment.parent.mkdir(parents=True, exist_ok=True)
             delivery.install_bundle(
                 retained,
                 environment,
@@ -139,11 +155,25 @@ def prepare_environment(project: Path, bundle: Path, home: Path) -> PreparedEnvi
                 on_process=process_started,
             )
             delivery.check_receipt(environment, retained)
-            return _prepared(environment, retained)
+            prepared = _prepared(environment, retained)
+            if activate is not None:
+                activate(prepared)
+            return prepared
     except Timeout as error:
         raise ValueError(
             "环境准备或实验服务正在运行；请完成操作并停止服务后重试"
         ) from error
+
+
+def environment_switch_path(home: Path, identity: str) -> Path:
+    return delivery.managed_path(
+        home, home / "environment-switches" / f"{identity}.json"
+    )
+
+
+def require_completed_update(home: Path, identity: str) -> None:
+    if environment_switch_path(home, identity).exists():
+        raise ValueError("环境切换未完成；请再次选择同一交付目录完成更新后再启动")
 
 
 def _prepared(environment: Path, retained: Path) -> PreparedEnvironment:

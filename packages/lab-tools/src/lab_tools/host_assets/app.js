@@ -14,6 +14,7 @@ const setupForm = document.getElementById("setup-form");
 const setupPanel = document.getElementById("setup-panel");
 const setupFields = document.getElementById("setup-fields");
 const readyServices = new Map();
+const updateDrafts = new Map();
 function message(text, error = false) {
   notice.textContent = text;
   notice.classList.toggle("error", error);
@@ -146,6 +147,23 @@ async function refresh() {
       if (confirm(`重新检查 ${item.service.name} 已登记的环境？\n仅检查原有项目、解释器和 GUI，成功后更新最后登记的环境身份；不会安装软件或启动服务。`))
         return submit({ action: "service_recheck", service: item.service.id });
     }, "secondary", disabled || item.state !== "stopped"));
+    const draft = updateDrafts.get(item.service.id) || { path: "", open: false };
+    updateDrafts.set(item.service.id, draft);
+    const update = element("details");
+    update.open = draft.open;
+    update.addEventListener("toggle", () => { draft.open = update.open; });
+    update.append(element("summary", "更新实验室环境"), element("p", "先停止服务并关闭 Notebook。选择新的完整交付目录；原数据、作者目录和旧环境保留，成功后将 Notebook 切换到新解释器并重启内核。"));
+    const delivery = element("input");
+    delivery.placeholder = "完整交付目录路径";
+    delivery.value = draft.path;
+    delivery.disabled = disabled;
+    delivery.addEventListener("input", () => { draft.path = delivery.value; });
+    delivery.setAttribute("aria-label", `${item.service.name} 的更新交付目录`);
+    update.append(delivery, button("验证并更新环境", () => submit({
+      action: "service_update", service: item.service.id,
+      environment_bundle: delivery.value.trim(),
+    }), "secondary", disabled || item.state !== "stopped"));
+    row.append(update);
     row.append(button("移除登记", () => {
       if (confirm(`从列表移除 ${item.service.name}？\n只撤销登记，不删除项目目录、科学数据或操作日志。之后可通过本页重新连接。`))
         return submit({ action: "service_remove", service: item.service.id });
@@ -208,7 +226,7 @@ async function refresh() {
   const operations = document.getElementById("operations");
   operations.replaceChildren();
   const states = { starting: "准备中", running: "进行中", succeeded: "已完成", failed: "失败", interrupted: "已中断" };
-  const actions = { setup: "接入工作台", open: "打开练习", verify: "自动验收", stop: "停止服务", delete: "删除旧副本", service_start: "打开工作台", service_stop: "停止实验服务", service_remove: "移除登记", service_recheck: "重新检查环境" };
+  const actions = { setup: "接入工作台", open: "打开练习", verify: "自动验收", stop: "停止服务", delete: "删除旧副本", service_start: "打开工作台", service_stop: "停止实验服务", service_remove: "移除登记", service_recheck: "重新检查环境", service_update: "更新实验室环境" };
   for (const operation of state.operations.slice(0, 12)) {
     const row = element("article", undefined, "row");
     const topic = operation.command.topic || state.workspaces.find(item => item.id === operation.command.workspace)?.topic;

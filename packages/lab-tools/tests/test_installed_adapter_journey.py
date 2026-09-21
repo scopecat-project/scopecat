@@ -101,6 +101,52 @@ module-name = "test_lab"
     return next(wheels.glob("*.whl"))
 
 
+def install_adapter_environment(
+    virtualenv: Path, wheel: Path, environment: dict[str, str], tmp_path: Path
+) -> tuple[Path, Path]:
+    run(
+        [sys.executable, "-m", "venv", "--without-pip", str(virtualenv)],
+        cwd=tmp_path,
+        environment=environment,
+    )
+    python = virtualenv / (
+        "Scripts/python.exe" if sys.platform == "win32" else "bin/python"
+    )
+    site = Path(
+        run(
+            [
+                str(python),
+                "-c",
+                "import sysconfig; print(sysconfig.get_path('purelib'))",
+            ],
+            cwd=tmp_path,
+            environment=environment,
+        ).strip()
+    )
+    # Share only already-installed framework dependencies; the adapter belongs
+    # exclusively to this disposable environment and is installed from its wheel.
+    (site / "framework-test-dependencies.pth").write_text(
+        f"import site; site.addsitedir({sysconfig.get_path('purelib')!r})\n"
+    )
+    uv = shutil.which("uv")
+    assert uv is not None
+    run(
+        [
+            uv,
+            "pip",
+            "install",
+            "--offline",
+            "--no-deps",
+            "--python",
+            str(python),
+            str(wheel),
+        ],
+        cwd=tmp_path,
+        environment=environment,
+    )
+    return python, site
+
+
 _AUTHOR_JOURNEY = """
 import json, sys
 from pathlib import Path
@@ -202,7 +248,7 @@ finally:
 
 
 def test_installed_adapter_wheel_local_refresh_and_missing_adapter_stop(
-    tmp_path: Path, monkeypatch
+    tmp_path: Path, monkeypatch, delivery: Path
 ) -> None:
     environment = dict(os.environ)
     environment.pop("SCOPECAT_DAEMON_URL", None)
@@ -230,46 +276,7 @@ manifest = "test_lab/adapter.toml"
 dependencies = []
 """)
     virtualenv = laboratory / ".venv"
-    run(
-        [sys.executable, "-m", "venv", "--without-pip", str(virtualenv)],
-        cwd=tmp_path,
-        environment=environment,
-    )
-    python = virtualenv / (
-        "Scripts/python.exe" if sys.platform == "win32" else "bin/python"
-    )
-    site = Path(
-        run(
-            [
-                str(python),
-                "-c",
-                "import sysconfig; print(sysconfig.get_path('purelib'))",
-            ],
-            cwd=tmp_path,
-            environment=environment,
-        ).strip()
-    )
-    # Share only already-installed framework dependencies; the adapter belongs
-    # exclusively to this disposable environment and is installed from its wheel.
-    (site / "framework-test-dependencies.pth").write_text(
-        f"import site; site.addsitedir({sysconfig.get_path('purelib')!r})\n"
-    )
-    uv = shutil.which("uv")
-    assert uv is not None
-    run(
-        [
-            uv,
-            "pip",
-            "install",
-            "--offline",
-            "--no-deps",
-            "--python",
-            str(python),
-            str(wheel),
-        ],
-        cwd=tmp_path,
-        environment=environment,
-    )
+    python, site = install_adapter_environment(virtualenv, wheel, environment, tmp_path)
     gui = tmp_path / "gui"
     gui.mkdir()
     (gui / "index.html").write_text("<html>installed laboratory</html>")
@@ -345,7 +352,67 @@ dependencies = []
             cwd=tmp_path,
             environment=environment,
         )
+        # Use a real replacement interpreter and installed private wheel. The small
+        # delivery fixture avoids rebuilding every public wheel in this runtime test;
+        # installation receipts/GUI verification have dedicated delivery tests.
+        from lab_tools import bundle, lab_environment
+
+        def install(source, destination, *, ownership_token, on_process):
+            install_adapter_environment(destination, wheel, environment, tmp_path)
+            (destination / bundle.OWNERSHIP).write_text(ownership_token)
+            (destination / bundle.RECEIPT).write_text(
+                json.dumps(
+                    {
+                        "bundle": str(source),
+                        "manifest_sha256": bundle.file_hash(source / bundle.MANIFEST),
+                    }
+                )
+            )
+            return destination
+
+        def prepared(destination, retained):
+            return lab_environment.PreparedEnvironment(
+                python=destination
+                / ("Scripts/python.exe" if sys.platform == "win32" else "bin/python"),
+                gui=retained / "gui",
+            )
+
+        with monkeypatch.context() as update_patch:
+            update_patch.setattr(bundle, "install_bundle", install)
+            update_patch.setattr(lab_environment, "_prepared", prepared)
+            updated = services.update_environment(
+                service.id, delivery, operation_id="journey"
+            )
+        assert updated.id == service.id and updated.root == service.root
+        assert updated.python != service.python and Path(service.python).is_file()
+        assert services.for_workspace(project) == (updated, workspace_id)
+        service = updated
+        python = Path(updated.python)
+        site = Path(
+            run(
+                [
+                    str(python),
+                    "-c",
+                    "import sysconfig; print(sysconfig.get_path('purelib'))",
+                ],
+                cwd=tmp_path,
+                environment=environment,
+            ).strip()
+        )
         services.start(service.id)
+        # Stored source evidence remains readable in the replacement environment.
+        run(
+            [
+                str(python),
+                "-c",
+                _IDENTITY_CHECK,
+                str(project / "retained-identity.json"),
+            ],
+            cwd=project,
+            environment=environment,
+        )
+        origins = [json.loads(line) for line in trace.read_text().splitlines()]
+        assert Path(origins[-1]["file"]).is_relative_to(site)
         resource = site / "test_lab/configuration.py"
         original = resource.read_bytes()
         try:
