@@ -40,7 +40,15 @@ class Command(BaseModel):
         "service_stop",
         "service_remove",
         "service_recheck",
+        "service_update",
     ]
+    environment_bundle: str | None = None
+
+    @field_validator("environment_bundle")
+    @classmethod
+    def delivery_path(cls, value: str | None) -> str | None:
+        return SetupRequest.absolute_path(value)
+
     setup: SetupRequest | None = None
     topic: str | None = None
     workspace: str | None = Field(default=None, pattern=r"^[0-9a-f]{32}$")

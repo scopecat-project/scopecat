@@ -244,7 +244,7 @@ def gui_directory(bundle_root: Path | None, runtime: dict[str, object]) -> Path:
     return bundle_root.resolve() / "gui"
 
 
-def _managed_path(home: Path, path: Path) -> Path:
+def managed_path(home: Path, path: Path) -> Path:
     """Managed destinations must not redirect writes outside this installation."""
     current = home
     for part in path.relative_to(home).parts:
@@ -257,7 +257,7 @@ def _managed_path(home: Path, path: Path) -> Path:
 @contextmanager
 def _installation_lock(home: Path) -> Generator[None]:
     # OS locks are released on process exit, including interrupted installation.
-    path = _managed_path(home, home / ".install.lock")
+    path = managed_path(home, home / ".install.lock")
     with path.open("a+b") as stream:
         if sys.platform == "win32":
             import msvcrt
@@ -329,9 +329,9 @@ def retain_bundle(root: Path, home: Path) -> Path:
 def _retain_bundle_locked(root: Path, home: Path) -> Path:
     manifest_hash = file_hash(root / MANIFEST)
     key = manifest_hash[:16]
-    release = _managed_path(home, home / "releases" / key)
+    release = managed_path(home, home / "releases" / key)
     release.mkdir(parents=True, exist_ok=True)
-    bundle = _managed_path(home, release / "bundle")
+    bundle = managed_path(home, release / "bundle")
     if not bundle.exists():
         staged = release / f"bundle-staging-{uuid.uuid4().hex}"
         # Retain interrupted copies for diagnosis; retries use a new staging path.
@@ -350,8 +350,8 @@ def _install_home_locked(root: Path, home: Path) -> Path:
     bundle = _retain_bundle_locked(root, home)
     release = bundle.parent
     key = release.name
-    environment = _managed_path(home, release / "runtime")
-    receipt = _managed_path(home, environment / RECEIPT)
+    environment = managed_path(home, release / "runtime")
+    receipt = managed_path(home, environment / RECEIPT)
     if environment.exists() and not receipt.is_file():
         # Only unfinished installer-owned runtime is moved. Completed venvs must
         # stay at their creation path because their scripts contain absolute paths.
@@ -388,7 +388,7 @@ def _install_home_locked(root: Path, home: Path) -> Path:
     pending: list[Path] = []
     try:
         for name, content in (("lab.cmd", command_text), ("lab.py", launcher_text)):
-            _ = _managed_path(home, home / name)
+            _ = managed_path(home, home / name)
             with tempfile.NamedTemporaryFile(
                 mode="w", encoding="utf-8", dir=home, prefix=f".{name}-", delete=False
             ) as stream:

@@ -86,6 +86,7 @@ def launch(home: Path, source: Path | None, command: Command) -> Operation:
         "service_stop",
         "service_remove",
         "service_recheck",
+        "service_update",
     ):
         from .services import Services
 
@@ -101,6 +102,8 @@ def _launch(home: Path, source: Path | None, command: Command) -> Operation:
         if previous.command != command:
             raise ValueError("同一操作编号不能用于不同请求")
         return previous
+    if (command.action == "service_update") != (command.environment_bundle is not None):
+        raise ValueError("只有环境更新操作需要指定交付目录")
     if command.action == "setup":
         if (
             command.setup is None
@@ -117,6 +120,7 @@ def _launch(home: Path, source: Path | None, command: Command) -> Operation:
         "service_stop",
         "service_remove",
         "service_recheck",
+        "service_update",
     ):
         from .services import Services
 
@@ -184,6 +188,7 @@ def execute(home: Path, source: Path | None, command: Command) -> str | None:
         "service_stop",
         "service_remove",
         "service_recheck",
+        "service_update",
     ):
         from .services import Services
 
@@ -193,6 +198,13 @@ def execute(home: Path, source: Path | None, command: Command) -> str | None:
             services.start(command.service)
         elif command.action == "service_stop":
             services.stop(command.service)
+        elif command.action == "service_update":
+            assert command.environment_bundle is not None
+            services.update_environment(
+                command.service,
+                Path(command.environment_bundle),
+                operation_id=command.id,
+            )
         elif command.action == "service_recheck":
             services.recheck(command.service, operation_id=command.id)
         else:

@@ -321,3 +321,22 @@ it("does not redirect after setup if fresh service state cannot be verified", as
   );
   expect(host.assign).not.toHaveBeenCalled();
 });
+
+it("updates the selected stopped laboratory without opening or creating another service", async () => {
+  const host = mount("stopped");
+  const panel = await screen.findByText("更新实验室环境");
+  (panel.parentElement as HTMLDetailsElement).open = true;
+  const field = screen.getByRole("textbox", { name: "Experiment service 的更新交付目录" });
+  fireEvent.input(field, { target: { value: "/delivery/new" } });
+  await host.poll();
+  expect(field).toHaveValue("/delivery/new");
+  fireEvent.click(screen.getByRole("button", { name: "验证并更新环境" }));
+  await waitFor(() => expect(host.requests).toHaveLength(1));
+  expect(host.requests[0]?.body).toMatchObject({
+    action: "service_update",
+    service: "service-a",
+    environment_bundle: "/delivery/new",
+  });
+  expect(host.assign).not.toHaveBeenCalled();
+  expect(screen.queryByRole("link", { name: "打开工作台（新标签页）" })).not.toBeInTheDocument();
+});

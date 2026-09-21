@@ -287,6 +287,134 @@ class Services:
             )
             return updated
 
+    def update_environment(
+        self,
+        identity: str,
+        bundle: Path,
+        *,
+        operation_id: str,
+    ) -> Service:
+        """Switch a stopped service while preserving scientific and source identity."""
+        from .bundle import MANIFEST, file_hash, managed_path, retain_bundle
+        from .host_store import Operations
+        from .lab_environment import (
+            PreparedEnvironment,
+            environment_switch_path,
+            prepare_environment,
+        )
+
+        home = self.database.parent.parent.resolve()
+        with self.lock:
+            service = self.get(identity)
+            operations = Operations(home)
+            operations.reconcile()
+            if any(
+                item.command.id != operation_id
+                and item.status in ("starting", "running")
+                for item in operations.list()
+            ):
+                raise ValueError("还有管理操作未完成，不能更新实验环境")
+            self._require_stopped(service)
+            retained = retain_bundle(bundle, home)
+            digest = file_hash(retained / MANIFEST)
+            marker = environment_switch_path(home, identity)
+            intent = {"root": service.root, "delivery": digest}
+            if (
+                marker.exists()
+                and json.loads(marker.read_text(encoding="utf-8")) != intent
+            ):
+                raise ValueError("上次环境切换未完成；请先使用上次的同一交付目录重试")
+            environment = managed_path(
+                home,
+                home / "laboratory-environments" / identity / digest,
+            )
+            updated: Service | None = None
+
+            def activate(prepared: PreparedEnvironment) -> None:
+                nonlocal updated
+                result = _run(
+                    str(prepared.python),
+                    {
+                        "action": "probe",
+                        "root": service.root,
+                        "static_dir": str(prepared.gui),
+                        "qualify_sources": True,
+                    },
+                )
+                if result["root"] != service.root:
+                    raise ValueError("实验室目录身份改变；保留原登记")
+                registry_path = author_bindings_path(Path(service.root))
+                registry = None
+                if registry_path.is_file():
+                    registry = LocalAuthorWorkspaces.model_validate_json(
+                        registry_path.read_bytes()
+                    )
+                    if registry.service_root != Path(service.root):
+                        raise ValueError("作者登记不属于此实验室；保留原登记")
+                    registry = registry.model_copy(
+                        update={
+                            "items": tuple(
+                                item.model_copy(update={"python": prepared.python})
+                                for item in registry.items
+                            )
+                        }
+                    )
+                updated = service.model_copy(
+                    update={
+                        "python": str(prepared.python),
+                        "static_dir": str(prepared.gui),
+                        "environment": cast("dict[str, str]", result["environment"]),
+                        "adapter_identity": cast(
+                            "str | None", result["adapter_identity"]
+                        ),
+                        "settings_identity": cast(
+                            "str | None", result["settings_identity"]
+                        ),
+                    }
+                )
+                # Installation and this switch share deployment/data locks. The marker
+                # fences ordinary starts if the process exits between the two stores.
+                marker.parent.mkdir(parents=True, exist_ok=True)
+                staged = marker.with_suffix(".tmp")
+                staged.write_text(json.dumps(intent), encoding="utf-8")
+                staged.replace(marker)
+                if registry is not None:
+                    staged_registry = registry_path.with_suffix(".tmp")
+                    staged_registry.write_text(
+                        registry.model_dump_json(indent=2), encoding="utf-8"
+                    )
+                    staged_registry.replace(registry_path)
+                with closing(sqlite3.connect(self.database)) as db, db:
+                    self._save(db, updated)
+                marker.unlink()
+                print(
+                    "环境更新完成；服务保持停止。"
+                    "请将 Notebook 切换到新解释器并重启内核，再显式启动工作台。",
+                    flush=True,
+                )
+                print(
+                    json.dumps(
+                        {
+                            "before": service.model_dump(mode="json"),
+                            "after": updated.model_dump(mode="json"),
+                            "delivery": str(retained),
+                        },
+                        ensure_ascii=False,
+                        indent=2,
+                    ),
+                    flush=True,
+                )
+
+            prepare_environment(
+                Path(service.root),
+                retained,
+                home,
+                environment=environment,
+                activate=activate,
+            )
+            assert updated is not None
+            return updated
+
     @staticmethod
     def _require_stopped(service: Service) -> None:
         if (
@@ -319,6 +447,9 @@ class Services:
         return result
 
     def start(self, identity: str) -> None:
+        from .lab_environment import require_completed_update
+
+        require_completed_update(self.database.parent.parent, identity)
         service = self.get(identity)
         _run(
             service.python,

@@ -73,8 +73,11 @@ and installation boundaries, with installed qualification tracked in #616.
 simpler replacement-environment workflow need a separately bounded design; they
 are not implicit unfinished requirements of that closed issue. The current
 [maintenance guide](../how-to/maintain-application.md) documents explicit local
-registration when paths change. The manager does not install packages or redirect
-registered service runtimes when its own delivery changes.
+registration when paths change. Changing the manager delivery does not redirect registered runtimes. An explicit
+stopped laboratory update now prepares a separate delivery environment, qualifies
+registered sources and switches their interpreter bindings while retaining IDs and
+data paths (#713). The combined public/private development build and Notebook
+interpreter selection workflow remains #712.
 
 ## Debt and evidence boundaries
 

@@ -14,43 +14,6 @@ from lab_tools.bundle import install_bundle as offline_install
 
 
 @pytest.fixture
-def delivery(tmp_path: Path) -> Path:
-    root = tmp_path / "delivery"
-    (root / "gui").mkdir(parents=True)
-    (root / "wheels").mkdir()
-    (root / "gui/index.html").write_text("<html>current GUI</html>")
-    (root / "wheels/example.whl").write_bytes(b"wheel fixture")
-    (root / "requirements.lock").write_text("example==1\n")
-    (root / "dependencies.lock").write_text("example==1\n")
-    (root / "build.lock").write_text("version = 1\n")
-    (root / "install.py").write_text("# installer fixture\n")
-    files = bundle.inventory(root, ("gui", "wheels"))
-    files.update(
-        {
-            name: bundle.file_hash(root / name)
-            for name in (
-                "requirements.lock",
-                "dependencies.lock",
-                "build.lock",
-                "install.py",
-            )
-        }
-    )
-    (root / bundle.MANIFEST).write_text(
-        json.dumps(
-            {
-                "format": 1,
-                "target": bundle.target_identity(),
-                "sources": {},
-                "runtime": {"scopecat": "current"},
-                "files": files,
-            }
-        )
-    )
-    return root
-
-
-@pytest.fixture
 def project(tmp_path):
     root = tmp_path / "experiment"
     root.mkdir()
@@ -225,3 +188,162 @@ def test_failed_spawn_clears_launch_intent_and_allows_owned_retry(
     assert prepared.python.is_file()
     assert len(list(project.glob(".venv-failed-*"))) == 1
     assert installer == [project / ".venv"]
+
+
+@pytest.fixture
+def registered_lab(project, tmp_path, monkeypatch):
+    from lab_tools import services
+    from scopecat.author_workspaces import LocalAuthorWorkspace, LocalAuthorWorkspaces
+
+    old = tmp_path / "old-environment"
+    old.mkdir()
+    python = old / "python"
+    python.touch()
+    (old / "keep").write_text("original environment")
+
+    def probe(executable, request):
+        return {
+            "root": str(project),
+            "static_dir": request["static_dir"],
+            "environment": {"prefix": str(Path(executable).parent)},
+            "adapter_identity": None,
+            "settings_identity": None,
+        }
+
+    monkeypatch.setattr(services, "_run", probe)
+    store = services.Services(tmp_path / "home")
+    service = store.register(project, python, name="Lab", static_dir=tmp_path / "gui")
+    store.remember(service.id)
+    data = project / ".scopecat"
+    data.mkdir()
+    (data / "evidence").write_text("retained scientific data")
+    registry = data / "author-workspaces.json"
+    registry.write_text(
+        LocalAuthorWorkspaces(
+            service_root=project,
+            items=(
+                LocalAuthorWorkspace(
+                    id="author", name="Author", root=tmp_path / "author", python=python
+                ),
+            ),
+        ).model_dump_json()
+    )
+    return store, service, registry
+
+
+def test_delivery_update_preserves_scientific_and_source_identity(
+    registered_lab,
+    delivery,
+    installer,
+):
+    from scopecat.author_workspaces import LocalAuthorWorkspaces
+
+    store, original, registry = registered_lab
+    before = LocalAuthorWorkspaces.model_validate_json(registry.read_bytes())
+    updated = store.update_environment(original.id, delivery, operation_id="test")
+    assert updated.id == original.id and updated.root == original.root
+    assert store.preferred() == updated
+    assert Path(updated.python).is_relative_to(
+        store.database.parent.parent / "laboratory-environments"
+    )
+    after = LocalAuthorWorkspaces.model_validate_json(registry.read_bytes())
+    assert after.items[0].id == before.items[0].id
+    assert after.items[0].root == before.items[0].root
+    assert after.items[0].python == Path(updated.python)
+    assert (registry.parent / "evidence").read_text() == "retained scientific data"
+    assert (Path(original.python).parent / "keep").read_text() == "original environment"
+    assert (
+        store.update_environment(original.id, delivery, operation_id="retry") == updated
+    )
+    assert len(installer) == 1
+
+
+def test_update_qualification_failure_preserves_registration_and_can_retry(
+    registered_lab,
+    delivery,
+    installer,
+    monkeypatch,
+):
+    from lab_tools import services
+
+    store, original, registry = registered_lab
+    before = registry.read_bytes()
+    probe = services._run
+
+    def failed_probe(*_):
+        raise ValueError("missing adapter")
+
+    monkeypatch.setattr(services, "_run", failed_probe)
+    with pytest.raises(ValueError, match="missing adapter"):
+        store.update_environment(original.id, delivery, operation_id="test")
+    assert store.get(original.id) == original and registry.read_bytes() == before
+    monkeypatch.setattr(services, "_run", probe)
+    store.update_environment(original.id, delivery, operation_id="retry")
+    assert len(installer) == 1
+
+
+def test_interrupted_switch_blocks_start_and_same_delivery_completes_it(
+    registered_lab,
+    delivery,
+    installer,
+    monkeypatch,
+):
+    store, original, registry = registered_lab
+    save = store._save
+
+    def interrupted_save(*_):
+        raise OSError("interrupted switch")
+
+    monkeypatch.setattr(store, "_save", interrupted_save)
+    with pytest.raises(OSError, match="interrupted switch"):
+        store.update_environment(original.id, delivery, operation_id="test")
+    assert store.get(original.id) == original
+    assert lab_environment.environment_switch_path(
+        store.database.parent.parent, original.id
+    ).is_file()
+    with pytest.raises(ValueError, match="环境切换未完成"):
+        store.start(original.id)
+    monkeypatch.setattr(store, "_save", save)
+    updated = store.update_environment(original.id, delivery, operation_id="retry")
+    assert updated.python != original.python
+    assert json.loads(registry.read_text())["items"][0]["python"] == updated.python
+    assert not lab_environment.environment_switch_path(
+        store.database.parent.parent, original.id
+    ).exists()
+    assert len(installer) == 1
+
+
+def test_update_activation_keeps_both_runtime_locks(
+    project, delivery, tmp_path, installer
+):
+    from filelock import Timeout
+
+    def activate(_prepared):
+        for name in ("deployment.lock", "daemon.lock"):
+            with (
+                pytest.raises(Timeout),
+                FileLock(project / ".scopecat" / name, timeout=0),
+            ):
+                pass
+
+    lab_environment.prepare_environment(
+        project, delivery, tmp_path / "home", activate=activate
+    )
+
+
+def test_pending_switch_rejects_a_different_delivery(
+    registered_lab, delivery, installer
+):
+    store, original, registry = registered_lab
+    before = registry.read_bytes()
+    marker = lab_environment.environment_switch_path(
+        store.database.parent.parent, original.id
+    )
+    marker.parent.mkdir(parents=True)
+    marker.write_text(
+        json.dumps({"root": original.root, "delivery": "previous artifact"})
+    )
+    with pytest.raises(ValueError, match="上次的同一交付目录"):
+        store.update_environment(original.id, delivery, operation_id="test")
+    assert store.get(original.id) == original and registry.read_bytes() == before
+    assert installer == []

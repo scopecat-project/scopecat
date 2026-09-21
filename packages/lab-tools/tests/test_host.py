@@ -107,7 +107,10 @@ def test_http_boundary_and_managed_inventory(tmp_path: Path, monkeypatch) -> Non
     assert workspaces(tmp_path, key)[0].current
 
 
-def test_app_only_host_admits_environment_recheck(tmp_path: Path, monkeypatch) -> None:
+@pytest.mark.parametrize("action", ["service_recheck", "service_update"])
+def test_app_only_host_admits_environment_maintenance(
+    tmp_path: Path, monkeypatch, action
+) -> None:
     monkeypatch.setattr(app_host, "teaching_key", lambda _: None)
     record = HostRecord(
         instance="test",
@@ -129,7 +132,13 @@ def test_app_only_host_admits_environment_recheck(tmp_path: Path, monkeypatch) -
         app_host.application(tmp_path, None, record, lambda: None), base_url=record.url
     ) as client:
         client.headers["Authorization"] = f"Bearer {record.token}"
-        command = Command(action="service_recheck", service="a" * 32)
+        command = Command(
+            action=action,
+            service="a" * 32,
+            environment_bundle=str(tmp_path / "delivery")
+            if action == "service_update"
+            else None,
+        )
         assert (
             client.post("/api/operations", json=command.model_dump()).status_code == 200
         )
@@ -178,3 +187,26 @@ def test_first_run_is_available_without_teaching(tmp_path: Path, monkeypatch) ->
         assert received[0].action == "setup"
         assert received[0].setup.project == str(tmp_path / "lab")
         assert not (tmp_path / "lab").exists()
+
+
+@pytest.mark.parametrize(
+    "action,path", [("service_update", None), ("service_start", "/delivery")]
+)
+def test_delivery_update_command_requires_explicit_action_and_path(
+    tmp_path, action, path
+):
+    from lab_tools.host_operations import launch
+
+    with pytest.raises(ValueError, match="只有环境更新操作"):
+        launch(
+            tmp_path,
+            None,
+            Command(action=action, service="a" * 32, environment_bundle=path),
+        )
+
+
+def test_delivery_update_rejects_relative_path():
+    with pytest.raises(ValueError, match="绝对目录"):
+        Command(
+            action="service_update", service="a" * 32, environment_bundle="delivery"
+        )
