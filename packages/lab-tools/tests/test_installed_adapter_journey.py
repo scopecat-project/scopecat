@@ -307,39 +307,72 @@ refresh_roots = ["src"]
 dependencies = []
 """)
     laboratory = tmp_path / "laboratory"
-    laboratory.mkdir()
-    (laboratory / "scopecat.toml").write_text("""[lab.adapter]
-distribution = "test-lab-adapter"
-manifest = "test_lab/adapter.toml"
-[authors]
-dependencies = []
-""")
-    virtualenv = laboratory / ".venv"
-    python, site = install_adapter_environment(virtualenv, wheel, environment, tmp_path)
-    gui = tmp_path / "gui"
-    gui.mkdir()
-    (gui / "index.html").write_text("<html>installed laboratory</html>")
     services = Services(tmp_path / "home")
-    service = setup(
-        tmp_path / "home",
-        SetupRequest(mode="connect", project=str(laboratory), name="installed adapter"),
-        static_dir=gui,
-    )
-    run(
-        [
-            str(python),
-            "-c",
-            (
-                "import sys; from pathlib import Path; "
-                "from scopecat_server.author_registration "
-                "import register_author_workspace; "
-                "register_author_workspace(Path(sys.argv[1]), Path(sys.argv[2]))"
+    # Use a real replacement interpreter and installed private wheel. The small
+    # delivery fixture avoids rebuilding every public wheel in this runtime test;
+    # installation receipts/GUI verification have dedicated delivery tests.
+    from lab_tools import bundle, lab_environment
+
+    def install(source, destination, *, ownership_token, on_process):
+        install_adapter_environment(destination, wheel, environment, tmp_path)
+        (destination / bundle.OWNERSHIP).write_text(ownership_token)
+        (destination / bundle.RECEIPT).write_text(
+            json.dumps(
+                {
+                    "bundle": str(source),
+                    "manifest_sha256": bundle.file_hash(source / bundle.MANIFEST),
+                }
+            )
+        )
+        return destination
+
+    def prepared(destination, retained):
+        return lab_environment.PreparedEnvironment(
+            python=destination
+            / ("Scripts/python.exe" if sys.platform == "win32" else "bin/python"),
+            gui=retained / "gui",
+        )
+
+    with monkeypatch.context() as setup_patch:
+        setup_patch.setattr(bundle, "install_bundle", install)
+        setup_patch.setattr(lab_environment, "_prepared", prepared)
+        service = setup(
+            tmp_path / "home",
+            SetupRequest(
+                mode="adapter",
+                project=str(laboratory),
+                name="installed adapter",
+                adapter_distribution="test-lab-adapter",
+                adapter_manifest="test_lab/adapter.toml",
+                environment_bundle=str(delivery),
+                author_workspace=str(project),
             ),
-            str(laboratory),
-            str(project),
-        ],
-        cwd=tmp_path,
-        environment=environment,
+        )
+        original_binding = services.for_workspace(project)
+        retried = setup(
+            tmp_path / "home",
+            SetupRequest(
+                mode="connect",
+                project=str(laboratory),
+                name="installed adapter",
+                environment_bundle=str(delivery),
+                author_workspace=str(project),
+            ),
+        )
+        assert retried == service
+        assert services.for_workspace(project) == original_binding
+    python = Path(service.python)
+    gui = Path(service.static_dir)
+    site = Path(
+        run(
+            [
+                str(python),
+                "-c",
+                "import sysconfig; print(sysconfig.get_path('purelib'))",
+            ],
+            cwd=tmp_path,
+            environment=environment,
+        ).strip()
     )
     selected_service, workspace_id = services.for_workspace(project)
     assert selected_service.id == service.id and workspace_id != "legacy"
@@ -391,31 +424,6 @@ dependencies = []
             cwd=tmp_path,
             environment=environment,
         )
-        # Use a real replacement interpreter and installed private wheel. The small
-        # delivery fixture avoids rebuilding every public wheel in this runtime test;
-        # installation receipts/GUI verification have dedicated delivery tests.
-        from lab_tools import bundle, lab_environment
-
-        def install(source, destination, *, ownership_token, on_process):
-            install_adapter_environment(destination, wheel, environment, tmp_path)
-            (destination / bundle.OWNERSHIP).write_text(ownership_token)
-            (destination / bundle.RECEIPT).write_text(
-                json.dumps(
-                    {
-                        "bundle": str(source),
-                        "manifest_sha256": bundle.file_hash(source / bundle.MANIFEST),
-                    }
-                )
-            )
-            return destination
-
-        def prepared(destination, retained):
-            return lab_environment.PreparedEnvironment(
-                python=destination
-                / ("Scripts/python.exe" if sys.platform == "win32" else "bin/python"),
-                gui=retained / "gui",
-            )
-
         with monkeypatch.context() as update_patch:
             update_patch.setattr(bundle, "install_bundle", install)
             update_patch.setattr(lab_environment, "_prepared", prepared)

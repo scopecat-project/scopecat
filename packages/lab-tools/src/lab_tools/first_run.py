@@ -126,7 +126,7 @@ def setup(
         api_only=False,
     )
     project = Path(request.project).resolve()
-    if request.mode == "create":
+    if request.mode in ("create", "adapter"):
         if project.exists() or Path(request.project).is_symlink():
             raise ValueError("新代码目录必须尚不存在；已有目录请选择接入实验室")
         if not project.parent.is_dir():
@@ -140,6 +140,11 @@ def setup(
                 "这是作者代码目录，请先登记到已有实验室，再使用 "
                 "scopecat app --workspace 打开；不能作为新实验室接入"
             )
+    if request.author_workspace is not None:
+        author = Path(request.author_workspace).resolve()
+        selected_author = load_project(author / "scopecat.toml", resolve_adapter=False)
+        if author == project or not selected_author.author_only:
+            raise ValueError("请选择独立的纯作者目录，其 manifest 只声明 [authors]")
     python = choose_python(project) if delivery is None else None
     location = project / RUNTIME_BINDING_NAME
     previous_binding = location.read_bytes() if location.exists() else None
@@ -147,13 +152,22 @@ def setup(
     name = request.name.strip() if request.name else project.name
     if not name:
         raise ValueError("请填写实验室名称")
-    if request.mode == "create":
+    if request.mode in ("create", "adapter"):
         with tempfile.TemporaryDirectory(
             prefix=".scopecat-setup-", dir=project.parent
         ) as temporary:
             staged = Path(temporary) / "project"
             staged.mkdir()
-            write_project_scaffold(staged)
+            if request.mode == "adapter":
+                (staged / "scopecat.toml").write_text(
+                    "[lab.adapter]\n"
+                    f"distribution = {json.dumps(request.adapter_distribution)}\n"
+                    f"manifest = {json.dumps(request.adapter_manifest)}\n"
+                    "\n[authors]\ndependencies = []\n",
+                    encoding="utf-8",
+                )
+            else:
+                write_project_scaffold(staged)
             (staged / ".gitignore").write_text(
                 ".scopecat/\nscopecat.runtime.toml\n.venv/\n", encoding="utf-8"
             )
@@ -167,7 +181,11 @@ def setup(
             prepared = prepare_environment(project, delivery, home)
             python, gui = prepared.python, prepared.gui
         assert python is not None
-        return Services(home).register(project, python, name=name, static_dir=gui)
+        services = Services(home)
+        service = services.register(project, python, name=name, static_dir=gui)
+        if request.author_workspace is not None:
+            services.register_source(service.id, Path(request.author_workspace))
+        return service
     except (OSError, ValueError, subprocess.SubprocessError) as error:
         raise ValueError(
             f"代码和数据位置已保留在 {project}。环境准备或接入检查失败：{error}。"

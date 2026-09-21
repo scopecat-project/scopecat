@@ -26,13 +26,14 @@ from scopecat_server.static_assets import select_static_dir
 
 
 class Request(BaseModel):
-    action: Literal["probe", "start", "stop"]
+    action: Literal["probe", "start", "stop", "register_source"]
     root: str
     static_dir: str | None
     environment: dict[str, str] = Field(default_factory=dict)
     settings_identity: str | None = None
     adapter_identity: str | None = None
     qualify_sources: bool = False
+    workspace: str | None = None
 
 
 def main() -> None:
@@ -57,9 +58,15 @@ def main() -> None:
         if request.action != "stop" and project.adapter_packages
         else None
     )
-    if request.action == "start" and adapter_identity != request.adapter_identity:
+    if (
+        request.action in ("start", "register_source")
+        and adapter_identity != request.adapter_identity
+    ):
         raise ValueError("实验室适配包已改变；请先停止服务并复检登记，再重新启动")
-    if request.action == "start" and settings_identity != request.settings_identity:
+    if (
+        request.action in ("start", "register_source")
+        and settings_identity != request.settings_identity
+    ):
         raise ValueError("实验室设置已改变；请先停止服务并复检登记，再重新启动")
     if request.action == "probe":
         if request.qualify_sources:
@@ -104,6 +111,14 @@ def main() -> None:
         "scopecat": version("scopecat"),
         "server": version("scopecat-server"),
     }
+    source_id: str | None = None
+    if request.action == "register_source":
+        from scopecat_server.author_registration import register_author_workspace
+
+        if environment != request.environment:
+            raise ValueError("登记的 Python 环境已改变；请先复检实验室环境")
+        assert request.workspace is not None
+        source_id = register_author_workspace(project.root, Path(request.workspace)).id
     if request.action in ("start", "stop"):
         if environment != request.environment:
             raise ValueError(
@@ -142,6 +157,7 @@ def main() -> None:
         json.dumps(
             {
                 "root": str(project.root),
+                "source_id": source_id,
                 "static_dir": str(gui),
                 "environment": environment,
                 "settings_identity": settings_identity,

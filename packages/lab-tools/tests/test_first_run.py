@@ -369,3 +369,98 @@ def test_connect_rejects_author_only_before_writing_binding(tmp_path, registrati
     assert tuple(project.iterdir()) == (manifest,)
     assert not data.exists()
     assert not (tmp_path / "home").exists()
+
+
+def test_adapter_setup_requires_delivery_and_valid_package_resource(tmp_path):
+    with pytest.raises(ValidationError, match="完整交付目录"):
+        first_run.SetupRequest(mode="adapter", project=str(tmp_path / "lab"))
+    with pytest.raises(ValidationError, match="relative TOML"):
+        first_run.SetupRequest(
+            mode="adapter",
+            project=str(tmp_path / "lab"),
+            environment_bundle=str(tmp_path / "delivery"),
+            adapter_distribution="my-lab",
+            adapter_manifest="../escape.toml",
+        )
+
+
+def test_source_admission_failure_retains_created_laboratory_for_connect_retry(
+    tmp_path, registration, monkeypatch, delivery
+):
+    from types import SimpleNamespace
+
+    project = tmp_path / "lab"
+    source = tmp_path / "source"
+    source.mkdir()
+    (source / "scopecat.toml").write_text("[authors]\nmodules = []\n")
+    monkeypatch.setattr(
+        first_run,
+        "prepare_environment",
+        lambda *_: SimpleNamespace(
+            python=Path(sys.executable),
+            gui=tmp_path / "gui",
+        ),
+    )
+    service = SimpleNamespace(id="retained")
+    monkeypatch.setattr(
+        first_run.Services, "register", lambda *_args, **_kwargs: service
+    )
+
+    def fail(*_args):
+        raise ValueError("author dependency unavailable")
+
+    monkeypatch.setattr(first_run.Services, "register_source", fail)
+    with pytest.raises(ValueError, match="author dependency unavailable"):
+        first_run.setup(
+            tmp_path / "home",
+            first_run.SetupRequest(
+                mode="adapter",
+                environment_bundle=str(delivery),
+                adapter_distribution="test-lab",
+                adapter_manifest="test_lab/adapter.toml",
+                project=str(project),
+                author_workspace=str(source),
+            ),
+        )
+    before = (project / "scopecat.toml").read_bytes()
+    bound = []
+    monkeypatch.setattr(
+        first_run.Services,
+        "register_source",
+        lambda _, identity, root: bound.append((identity, root)),
+    )
+    assert (
+        first_run.setup(
+            tmp_path / "home",
+            first_run.SetupRequest(
+                mode="connect",
+                project=str(project),
+                author_workspace=str(source),
+            ),
+        )
+        is service
+    )
+    assert (project / "scopecat.toml").read_bytes() == before
+    assert bound == [(service.id, source)]
+
+
+def test_invalid_author_directory_does_not_create_laboratory(
+    tmp_path, registration, delivery
+):
+    source = tmp_path / "not-author-code"
+    source.mkdir()
+    (source / "scopecat.toml").write_text("[lab]\n")
+    project = tmp_path / "lab"
+    with pytest.raises(ValueError, match="纯作者目录"):
+        first_run.setup(
+            tmp_path / "home",
+            first_run.SetupRequest(
+                mode="adapter",
+                environment_bundle=str(delivery),
+                adapter_distribution="test-lab",
+                adapter_manifest="test_lab/adapter.toml",
+                project=str(project),
+                author_workspace=str(source),
+            ),
+        )
+    assert not project.exists() and registration == []

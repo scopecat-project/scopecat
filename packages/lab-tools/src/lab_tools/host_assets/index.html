@@ -5,10 +5,12 @@
 <details id="setup-panel" open><summary id="setup-title">设置主要实验工作台</summary>
 <form id="setup-form" class="setup-card">
 <fieldset id="setup-fields"><legend>开始使用 Scopecat</legend>
-<label for="setup-mode">接入方式</label><select id="setup-mode" name="mode"><option value="create">创建新的实验代码文件夹</option><option value="connect">连接实验室提供的代码文件夹</option></select>
+<label for="setup-mode">接入方式</label><select id="setup-mode" name="mode"><option value="create">创建新的实验代码文件夹</option><option value="connect">连接实验室提供的代码文件夹</option><option value="adapter">使用已安装适配包创建实验室</option></select>
 <p id="setup-description">创建可修改的基础实验项目。你的实验代码保存在此处，教学专题在帮助中单独提供。</p>
 <label for="setup-project">主要代码文件夹</label><input id="setup-project" name="project" required autocomplete="off" spellcheck="false"><small id="setup-project-help">填写本机完整路径；填写尚不存在的新目录，应用会创建它。</small>
 <label for="setup-bundle">实验室离线交付目录（可选）</label><input id="setup-bundle" name="environment_bundle" autocomplete="off" spellcheck="false"><small>选择维护者提供的交付目录，应用会准备所需软件；留空使用已有环境。已有环境不会被覆盖。</small>
+<div id="setup-adapter-fields" hidden><label for="setup-adapter-distribution">适配包名称</label><input id="setup-adapter-distribution" autocomplete="off" spellcheck="false"><label for="setup-adapter-manifest">包内声明路径</label><input id="setup-adapter-manifest" placeholder="my_lab/adapter.toml" autocomplete="off" spellcheck="false"><small>填写实验室维护者提供的安装包名称与声明路径。</small></div>
+<div id="setup-author-fields" hidden><label for="setup-author">独立作者代码目录（可选）</label><input id="setup-author" autocomplete="off" spellcheck="false"><small>选择已有的纯作者目录（包含声明 [authors] 的 scopecat.toml）。使用实验室环境登记后展示该目录的实验列表；留空不添加来源。</small></div>
 <label for="setup-settings">实验室本机设置 JSON 文件（可选）</label><input id="setup-settings" name="settings_file" autocomplete="off" spellcheck="false"><small>选择维护者提供的文件，留空保留已有设置。初始配置只用于新数据目录；更改文件不会切换已有记录的配置或芯片。</small>
 <label for="setup-data">数据保存目录（可选）</label><input id="setup-data" name="data_root" autocomplete="off" spellcheck="false"><small id="setup-data-help">留空使用新项目的默认数据目录。</small>
 <label for="setup-name">工作台名称（可选）</label><input id="setup-name" name="name" autocomplete="off">
@@ -16,7 +18,7 @@
 <button id="setup-submit" type="submit">创建并打开工作台</button>
 </fieldset></form></details>
 <section id="experiments"><h2>实验服务</h2><div id="services"></div></section>
-<section><h2>更新实验环境</h2><p>先结束测量并关闭 Notebook 连接，停止实验服务，再在原环境中更新软件。服务显示“未启动”后，点击“重新检查环境”；成功后再启动工作台。重新检查不会安装软件或启动服务。</p><p>检查失败时保留原登记，请查看操作日志，修复原环境后重试。若更换了解释器或 GUI 目录，请从可信的本机环境使用 <code>scopecat app 项目目录 --python 解释器 --static-dir GUI目录</code> 重新登记，并沿用原来的 <code>--home</code> 等管理入口参数。</p></section>
+<section><h2>更新实验环境</h2><p>先结束测量、关闭 Notebook 服务和内核，再停止实验服务。在服务卡片中选择“更新实验室环境”，填写新的交付目录或固定构建目录；应用会准备新环境并保留原数据与旧环境。成功后重新打开工作台，并从作者目录运行 <code>scopecat notebook</code>；其他编辑器需选用新解释器。</p><p>只有维护者自行更改原环境或本机设置时才使用“重新检查环境”。失败和中断的处理方式见操作日志与帮助中的维护指南。</p></section>
 <details id="help"><summary>帮助 · 教学与练习</summary><p>专题只使用合成数据；练习与真实实验服务分别管理。</p>
 <section><h2>开始一个专题</h2><div id="topics" class="topics"></div></section>
 <section><h2>我的练习</h2><p>重复打开继续当前练习。重置创建新副本，原来的修改仍然保留。</p><p>重置前关闭 Notebook 内核并停止该练习服务；旧副本由你选择删除。</p><div id="workspaces"></div></section>

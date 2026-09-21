@@ -27,6 +27,13 @@ def main() -> None:
         result = execute(args.home, args.source, operation.command)
         if operation.command.action == "setup":
             operation.service = result
+            setup = operation.command.setup
+            if setup is not None and setup.author_workspace is not None:
+                from .services import Services
+
+                _, operation.workspace = Services(args.home).for_workspace(
+                    Path(setup.author_workspace)
+                )
         else:
             operation.workspace = result
         operation.status = "succeeded"

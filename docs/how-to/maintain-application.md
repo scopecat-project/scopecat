@@ -135,7 +135,9 @@ This entry does not supervise Notebook processes in the application manager.
 
 A fresh installation opens **Set up the primary workbench (设置主要实验工作台)**.
 Choose **Create** for an ordinary virtual experiment project, or **Connect** for
-an existing laboratory code directory containing `scopecat.toml`. The directory
+an existing laboratory code directory containing `scopecat.toml`. Choose **Installed
+adapter (使用已安装适配包创建实验室)** for the separated laboratory/author setup
+below. In the create/connect forms, the directory
 is the primary editable code source, including its laboratory capability declarations;
 it may select an installed laboratory adapter through `[lab.adapter]`. Use a trusted
 directory and environment prepared by your laboratory.
@@ -165,6 +167,45 @@ Errors remain in **Recent operations** and its log. A failed registration or sta
 retains the created files; fix the reported environment and use **Connect** on the
 same directory, or restart its registered service. Reopening the page does not replay
 setup. To add another directory later, expand the setup form in management.
+
+## Create an installed laboratory and bind author code
+
+In first-use setup, choose **使用已安装适配包创建实验室**. Supply:
+
+- A new **laboratory runtime directory**, separate from the author's code folder.
+- A verified **delivery directory** or fixed build home containing the adapter.
+- The adapter's distribution name and package-relative TOML resource path, supplied
+  by the laboratory maintainer (for example `my-laboratory-adapter` and
+  `my_lab/adapter.toml`).
+- Optionally, an existing **author code directory** containing a source-only
+  `[authors]` manifest, and the local settings file / new scientific-data directory.
+
+The application generates the minimal `[lab.adapter]` laboratory manifest,
+installs the delivery environment, registers the laboratory, and registers the
+selected author directory through that same interpreter. It does not copy author
+code, drivers or application factories. Registration verifies source composition
+and dependencies before startup. The final **Create and open** action starts the
+laboratory (which may initialize instruments) and opens the workbench with the
+registered author's catalog selected; it never submits a measurement.
+
+The author directory must already exist. The separate basic-project **Create**
+option still generates its own example code; it cannot bind a source-only folder
+to that local-driver example. Source-only folders require the installed-adapter
+laboratory described above.
+
+If environment preparation or source registration fails, files and any completed
+registration are retained, and setup has not started the service. Correct the
+reported cause, choose **Connect**, select the same laboratory and author directories,
+and retry with the same delivery. Existing service/source IDs are preserved. Do not
+repeat **Installed adapter** with a different runtime directory to work around the
+failure. Connect can also add an author folder to a stopped installed laboratory;
+leave the author field blank when no new source registration is needed.
+
+After setup, `scopecat app --workspace AUTHOR --home HOME` and
+`scopecat notebook AUTHOR --home HOME` use that binding. Notebook extras must be
+included in the delivery. This removes manual laboratory-manifest authoring and a
+separate register-workspace command for this setup path; building the adapter and
+preparing its author examples still belong to laboratory maintenance.
 
 ## Installed laboratory adapters
 

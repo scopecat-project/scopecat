@@ -65,7 +65,9 @@ def _run(python: str, request: dict[str, object]) -> dict[str, object]:
                 check=True,
                 env=_environment(),
                 # Service startup follows the existing progress/cancellation contract.
-                timeout=30 if request["action"] == "probe" else None,
+                timeout=30
+                if request["action"] in ("probe", "register_source")
+                else None,
             )
         except subprocess.CalledProcessError as error:
             failure = (
@@ -448,6 +450,30 @@ class Services:
                     ServiceView(service=service, state="unavailable", detail=str(error))
                 )
         return result
+
+    def register_source(self, identity: str, workspace: Path) -> str:
+        """Bind author code in the registered interpreter, without starting it."""
+        from .lab_environment import require_completed_update
+
+        with self.lock:
+            service = self.get(identity)
+            require_completed_update(self.database.parent.parent, identity)
+            self._require_stopped(service)
+            result = _run(
+                service.python,
+                {
+                    "action": "register_source",
+                    "root": service.root,
+                    "static_dir": service.static_dir,
+                    "workspace": str(workspace.resolve()),
+                    "environment": service.environment,
+                    "adapter_identity": service.adapter_identity,
+                    "settings_identity": service.settings_identity,
+                },
+            )
+            selected = cast("str", result["source_id"])
+            print(f"已登记作者目录: {workspace} ({selected})", flush=True)
+            return selected
 
     def start(self, identity: str) -> None:
         from .lab_environment import require_completed_update
