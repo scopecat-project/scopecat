@@ -140,7 +140,7 @@ if TYPE_CHECKING:
         parameter_update,
         quantity,
     )
-    from scopecat.authoring.parameter_queries import parameter_table
+    from scopecat.authoring.parameter_queries import parameter_inputs, parameter_table
     from scopecat.automation import (
         CalibrationDefinition,
         CalibrationDependencyEvidence,
@@ -330,6 +330,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     ),
     "parameter_rows": ("scopecat.authoring.parameter_models", "parameter_rows"),
     "parameter_table": ("scopecat.authoring.parameter_queries", "parameter_table"),
+    "parameter_inputs": ("scopecat.authoring.parameter_queries", "parameter_inputs"),
     "parameter_snapshot": ("scopecat.authoring.parameter_models", "parameter_snapshot"),
     "parameter_table_ref": (
         "scopecat.authoring.parameter_models",

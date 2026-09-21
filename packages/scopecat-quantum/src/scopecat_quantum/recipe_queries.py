@@ -3,7 +3,11 @@
 from collections.abc import Mapping
 from dataclasses import dataclass
 
-from scopecat.authoring.parameter_queries import ParameterProjection, QueryInput
+from scopecat.authoring.parameter_queries import (
+    ParameterInputs,
+    ParameterProjection,
+    QueryInput,
+)
 from scopecat.kernel.entity import EntityRef
 from scopecat.records.parameter import ParameterSnapshot
 
@@ -25,7 +29,7 @@ def recipe_operation() -> QueryInput:
 
 @dataclass(frozen=True, slots=True)
 class RecipeParameterInputs:
-    projection: ParameterProjection
+    projection: ParameterProjection | ParameterInputs
 
     def __call__(
         self, snapshot: ParameterSnapshot, call: GateCall | Measure
@@ -40,6 +44,8 @@ class RecipeParameterInputs:
         return self.projection.resolve(snapshot, context).values
 
 
-def recipe_parameter_inputs(projection: ParameterProjection) -> RecipeParameterInputs:
+def recipe_parameter_inputs(
+    projection: ParameterProjection | ParameterInputs,
+) -> RecipeParameterInputs:
     """Adapt a declarative projection to a recipe's named input boundary."""
     return RecipeParameterInputs(projection)
