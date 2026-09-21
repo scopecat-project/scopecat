@@ -135,16 +135,19 @@ class _Driver:
             while not release.exists():
                 time.sleep(0.01)
         programs: list[_DecodedProgram] = []
+        content_hashes: list[str] = []
         for argument in request.arguments.values():
             if isinstance(argument, DriverPayload):
                 assert isinstance(argument.value, _DecodedProgram)
                 programs.append(argument.value)
+                content_hashes.append(argument.content_hash)
         content = b"".join(program.content for program in programs)
         return DriverSuccess(
             None,
             metadata={
                 "payload_hex": content.hex(),
                 "payload_types": [type(program).__name__ for program in programs],
+                "payload_hashes": list(content_hashes),
                 "worker_pid": os.getpid(),
             },
         )

@@ -208,7 +208,7 @@ def decode_driver_operation(
     request: BackendInvokeRequest,
     payload_codecs: PayloadCodecRegistry,
 ) -> DriverOperation:
-    decoded_payloads: dict[str, object] = {}
+    decoded_payloads: dict[str, DriverPayload] = {}
     arguments: dict[str, DriverArgument] = {}
     for argument in request.arguments:
         value = argument.value.root
@@ -217,14 +217,12 @@ def decode_driver_operation(
             continue
         payload = request.payloads[value.payload_id]
         if value.payload_id not in decoded_payloads:
-            decoded_payloads[value.payload_id] = payload_codecs.decode_content(
-                payload,
-                payload.content,
+            decoded_payloads[value.payload_id] = DriverPayload(
+                schema_id=payload.schema_id,
+                content_hash=payload.content.content_hash(),
+                value=payload_codecs.decode_content(payload, payload.content),
             )
-        arguments[argument.id] = DriverPayload(
-            schema_id=payload.schema_id,
-            value=decoded_payloads[value.payload_id],
-        )
+        arguments[argument.id] = decoded_payloads[value.payload_id]
     return DriverOperation(
         target=OperationRef(
             request.interface_id,

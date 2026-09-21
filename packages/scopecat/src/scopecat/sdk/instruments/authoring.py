@@ -133,9 +133,15 @@ class DriverStatePatch:
 
 @dataclass(frozen=True, slots=True)
 class DriverPayload:
-    """One opaque operation payload decoded before implementation dispatch."""
+    """Decoded value with the identity of the exact received codec content.
+
+    ``content_hash`` covers the original bytes or attachment bundle, not a
+    re-encoding of ``value``. It identifies content, not an execution attempt,
+    and does not by itself establish that an instrument ran the program.
+    """
 
     schema_id: str
+    content_hash: str
     value: object = field(repr=False)
 
 

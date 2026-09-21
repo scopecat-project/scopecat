@@ -44,6 +44,19 @@ the existing residency contract from the built artifact outside the checkout.
 `scopecat_testkit.paths` and the repository test-selection CLI are workspace-only
 utilities, not installed adapter APIs.
 
+## Driver payload identity
+
+Worker decoding supplies `DriverPayload.content_hash` alongside `schema_id` and
+the decoded `value`. The hash identifies the exact received codec bytes or
+attachment bundle. Drivers can attach it to readback metadata without encoding
+the decoded object again; codecs need not round-trip to identical bytes.
+Aliases of one payload ID share one decode and content identity.
+
+This is content correlation, not execution identity or proof of acquisition.
+The host still owns execution keys, reservation and durable invocation records.
+Adapters should prepare a command payload once and reuse it for the recorded
+intent and actual submission.
+
 ## Installed author package boundary
 
 `fixtures/installed_author_lab` is a tiny wheel-only consumer fixture, not another

@@ -177,6 +177,7 @@ def test_invoke_command_lowers_with_opaque_payload() -> None:
     assert operation.arguments == {
         "program": DriverPayload(
             schema_id=payload.schema_id,
+            content_hash=payload.content_hash,
             value={"program": b"\x00\xffprogram"},
         )
     }
@@ -236,6 +237,8 @@ def test_driver_invoke_decode_materializes_each_payload_id_once() -> None:
     assert isinstance(program, DriverPayload)
     assert isinstance(mirror, DriverPayload)
     assert program.schema_id == payload.schema_id
+    assert program.content_hash == payload.content.content_hash()
+    assert program is mirror
     assert program.value is mirror.value
     assert decoded == [payload.content.require_bytes()]
 

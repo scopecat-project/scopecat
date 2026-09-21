@@ -174,6 +174,7 @@ def test_opaque_payload_crosses_http_and_spawned_worker_boundary(
             assert receipt.metadata == {
                 "payload_hex": _PAYLOAD_BYTES.hex(),
                 "payload_types": ["_DecodedProgram"],
+                "payload_hashes": [payload.content_hash],
                 "worker_pid": endpoint.worker_pid,
             }
             assert receipt.readback is None
