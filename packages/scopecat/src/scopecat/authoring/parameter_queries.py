@@ -5,7 +5,9 @@ from __future__ import annotations
 import math
 from collections.abc import Mapping
 from dataclasses import dataclass, field
-from typing import cast
+from typing import Annotated, cast
+
+from pydantic import AfterValidator, SerializerFunctionWrapHandler, WrapSerializer
 
 from scopecat.authoring.parameter_fields import (
     ResolvedParameterField,
@@ -45,6 +47,23 @@ def _value(
     )
 
 
+def _freeze_query_mapping(value: Mapping[str, object]) -> Mapping[str, object]:
+    return FrozenMapping(value.items())
+
+
+def _serialize_query_mapping(
+    value: Mapping[str, object], handler: SerializerFunctionWrapHandler
+) -> object:
+    return cast("object", handler(dict(value)))
+
+
+type QueryMapping[T] = Annotated[
+    Mapping[str, T],
+    AfterValidator(_freeze_query_mapping),
+    WrapSerializer(_serialize_query_mapping),
+]
+
+
 @dataclass(frozen=True, slots=True)
 class QueryInput:
     """A named value supplied by the execution context, not a table column."""
@@ -58,9 +77,9 @@ class ParameterQueryResult:
 
     snapshot_id: str
     table: str
-    key: Mapping[str, ParameterAtomValue]
-    fields: Mapping[str, str]
-    values: Mapping[str, ParameterAtomValue]
+    key: QueryMapping[ParameterAtomValue]
+    fields: QueryMapping[str]
+    values: QueryMapping[ParameterAtomValue]
     key_sources: tuple[ParameterQueryResult, ...] = ()
 
 

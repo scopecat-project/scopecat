@@ -153,13 +153,24 @@ algebra is not implemented. Invalid dimensions, unknown fields and division by z
 with the named output; there are no implicit defaults or writes to parameter tables.
 Custom resolver callbacks remain available for computations outside this vocabulary.
 
-The next provenance boundary is explicit: `RecipeParameterInputs.__call__` currently
-returns values only, and `CompiledRecipeEntry` carries the lowered program and optional
-inspection, not parameter-source evidence. Durable integration must first carry the
-actual resolution evidence (including candidate scope and dependent lookup keys) through
-materialization into the compiled entry, then persist it alongside the target adapter's
-point-effective preparation/measurement records. Do not recover provenance afterward by
-re-running queries or assume an in-memory source list has already been recorded.
+`CompiledRecipeEntry.parameter_evidence` retains actual declarative resolutions through
+materialization, independently of optional visual inspection. Each entry identifies its
+recipe, implementation ID/fingerprint, selected scope and snapshot, resolved input values
+and per-output source fields (including dependent lookup keys). Readout records baseline
+scope. Pulse cache hits still receive the current resolution; evidence is not cached with
+the reusable pulse body. Repeated operations with the same implementation key share one
+evidence entry, rather than claiming a separate resolution for each shot or operation.
+
+`RecipeParameterInputs` returns a mapping-compatible `ResolvedRecipeInputs`; ordinary
+callback mappings and older row recipes have no automatically inferred source evidence.
+An empty evidence tuple must not be interpreted as a complete dependency inventory.
+`TypeAdapter(tuple[RecipeInputEvidence, ...])` supports current-format JSON round trips,
+preserving quantities, entities and nested key sources. This is parameter evidence, not
+code-version provenance or a designated persistent-data compatibility baseline.
+
+The remaining boundary is to persist this evidence alongside the new target adapter's
+point-effective device preparation and measurement records. Do not recover provenance
+afterward by re-running queries or assume a serializable in-memory field is already saved.
 
 ## Circuit transformation contract
 

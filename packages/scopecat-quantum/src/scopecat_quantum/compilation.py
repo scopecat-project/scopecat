@@ -19,6 +19,7 @@ from scopecat_quantum.pulse_recipes import (
     PulseRecipeProfile,
 )
 from scopecat_quantum.realtime import ScheduledBlock
+from scopecat_quantum.recipe_evidence import RecipeInputEvidence
 
 
 @dataclass(frozen=True, slots=True)
@@ -28,6 +29,7 @@ class CompiledRecipeEntry:
     bound: quantum.BoundProgram
     entry: PreparedQuantumTargetEntry
     inspection: QuantumProgramInspectionSnapshot | None
+    parameter_evidence: tuple[RecipeInputEvidence, ...] = ()
 
 
 class RecipeTargetCompiler[ParametersT]:
@@ -94,4 +96,6 @@ class RecipeTargetCompiler[ParametersT]:
                 scheduled=body.program if isinstance(body, ScheduledBlock) else None,
                 snapshot_id=entry_id.value,
             )
-        return CompiledRecipeEntry(bound, entry, inspection)
+        return CompiledRecipeEntry(
+            bound, entry, inspection, implementations.parameter_evidence
+        )
