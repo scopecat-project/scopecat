@@ -39,7 +39,9 @@ See [configuration ownership](architecture/configuration-ownership.md),
    replace ambient bootstrap profiles without changing existing scientific config.
    Installed adapter manifests and independently editable experiment folders (#683)
    now use recorded package content identity. A selected fixed offline delivery can prepare a new ordinary project environment
-   (#685). SDK ownership, Python provisioning, environment updates and code/parameter
+   (#685). Already registered author code can open its existing laboratory with
+   `scopecat app --workspace PATH`, using the registered environment and selecting
+   page-local code without creating another service (#706). SDK ownership, Python provisioning, environment updates and code/parameter
    trial workflows remain next. Native installation and shared device authority remain later
    explicit contracts. The bounded installed/browser checks in #668 passed on
    Windows/Linux; broader qualification remains tracked in #616. Do not repeat

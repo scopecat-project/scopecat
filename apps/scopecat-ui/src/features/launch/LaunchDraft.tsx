@@ -161,8 +161,10 @@ function ProjectDraft({
   children: ReactNode;
 }) {
   const [draft, setDraft] = useState<LaunchDraft>();
-  const [workspaceId, setWorkspaceId] = useState("legacy");
-  const currentWorkspace = useRef("legacy");
+  const [workspaceId, setWorkspaceId] = useState(
+    () => new URLSearchParams(window.location.search).get("workspace") || "legacy",
+  );
+  const currentWorkspace = useRef(workspaceId);
   const [selectedConfiguration, setSelectedConfiguration] =
     useState<components["schemas"]["PlanConfigRef"]>();
   const [selectedContext, setSelectedContext] = useState<ConfigContextResolution>();
