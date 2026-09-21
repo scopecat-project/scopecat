@@ -34,9 +34,7 @@ from scopecat_quantum.inspection import build_quantum_program_inspection_snapsho
 from scopecat_quantum.program_results import (
     MappedQuantumTarget,
     QuantumTargetEntryPointBinding,
-    QuantumTargetResultAddress,
-    QuantumTargetResultUseBinding,
-    seal_quantum_target_result_mapping,
+    map_quantum_target_results,
 )
 from scopecat_quantum.program_targets import (
     PreparedQuantumTargetBatch,
@@ -300,21 +298,12 @@ class QuantumLabCompiler:
         preparation = DomainPreparationBuilder(request)
         entries = artifact.entries
         batch = artifact.batch
-        mapping = seal_quantum_target_result_mapping(
+        mapping = map_quantum_target_results(
             preparation,
             batch,
             tuple(
                 QuantumTargetEntryPointBinding(entry.id, point)
                 for entry, point in zip(entries, request.points, strict=True)
-            ),
-            tuple(
-                QuantumTargetResultUseBinding(
-                    _result_address(entry, result),
-                    product_use,
-                )
-                for entry in entries
-                for result in _measurement_results(artifact.program)
-                for product_use in request.call.result(result.id).product_uses
             ),
         )
         mapped_target = MappedQuantumTarget(
@@ -602,29 +591,6 @@ def _retarget_target_entries(
             )
         )
     return tuple(selected)
-
-
-def _result_address(
-    entry: PreparedQuantumTargetEntry,
-    result: quantum.MeasurementResult,
-) -> QuantumTargetResultAddress:
-    addresses = tuple(
-        address
-        for address in entry.acquisition_addresses
-        if address.slot_id.local_id == result.id
-    )
-    expected_count = 1 if result.entity_set is None else None
-    if not addresses or (
-        expected_count is not None and len(addresses) != expected_count
-    ):
-        raise ValueError("quantum lab results must cover their acquisitions")
-    return QuantumTargetResultAddress(addresses)
-
-
-def _measurement_results(
-    program: quantum.Program,
-) -> tuple[quantum.MeasurementResult, ...]:
-    return tuple(program.results)
 
 
 def _realize(

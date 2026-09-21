@@ -84,6 +84,39 @@ class MappedQuantumTarget[ArtifactT: TargetArtifact]:
         )
 
 
+def map_quantum_target_results(
+    preparation: DomainPreparationBuilder,
+    batch: PreparedQuantumTargetBatch,
+    entry_bindings: Sequence[QuantumTargetEntryPointBinding],
+) -> DomainResultMapping[QuantumTargetResultAddress]:
+    """Map acquisitions whose local slot names are logical result IDs.
+
+    Recipe lowering preserves those names, including entity-qualified slots.
+    Grouped acquisitions retain target order. Adapters still explicitly bind
+    entries to points; no positional correspondence is assumed. Targets that
+    rename or otherwise regroup results can use the explicit sealing API.
+    """
+
+    bindings = tuple(
+        QuantumTargetResultUseBinding(
+            QuantumTargetResultAddress(
+                tuple(
+                    address
+                    for address in entry.acquisition_addresses
+                    if address.slot_id.local_id == result.id
+                )
+            ),
+            product_use,
+        )
+        for entry in batch.entries
+        for result in preparation.context.call.results
+        for product_use in result.product_uses
+    )
+    return seal_quantum_target_result_mapping(
+        preparation, batch, entry_bindings, bindings
+    )
+
+
 def seal_quantum_target_result_mapping(
     preparation: DomainPreparationBuilder,
     batch: PreparedQuantumTargetBatch,

@@ -28,6 +28,7 @@ from scopecat_quantum.program_results import (
     QuantumTargetEntryPointBinding,
     QuantumTargetResultAddress,
     QuantumTargetResultUseBinding,
+    map_quantum_target_results,
     seal_quantum_target_result_mapping,
 )
 from scopecat_quantum.program_targets import (
@@ -285,6 +286,12 @@ def test_bounded_result_dimensions_cross_authoring_target_and_result_mapping() -
         ),
     )
     [mapped] = mapping.results
+    inferred = map_quantum_target_results(
+        preparation,
+        target_batch,
+        (QuantumTargetEntryPointBinding(target_entry.id, request.points[0]),),
+    )
+    assert inferred.results == mapping.results
     assert mapped.product == product
     assert [axis.kind for axis in mapped.product.axes] == [
         "entity",

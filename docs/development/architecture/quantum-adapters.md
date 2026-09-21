@@ -241,6 +241,22 @@ A zero waveform delta means return to the selected baseline, not necessarily zer
 physical output. These semantics do not establish physical equivalence between a
 smooth edge and an older stepped implementation.
 
+## Mapping compiled acquisitions to experiment outputs
+
+For recipe-lowered targets, use
+`scopecat_quantum.program_results.map_quantum_target_results(preparation, batch,
+entry_bindings)`. The adapter supplies `QuantumTargetEntryPointBinding` values
+to associate each compiled entry with its logical scan point. The framework
+matches acquisition slot local names to logical result IDs, groups entity-qualified
+slots in target order, and associates all product uses. It checks exact acquisition
+coverage and the point-bound result dtype, unit, entity, shot and local dimensions
+before execution. Reordered entries do not imply reordered scan points.
+
+Targets that rename or deliberately regroup acquisitions can still provide explicit
+`QuantumTargetResultUseBinding` values to `seal_quantum_target_result_mapping`.
+Both paths enforce the same contracts. Neither performs instrument readback,
+normalization or scientific unit conversion; those remain explicit target operations.
+
 ## Remaining framework work
 
 This entry point centralizes existing orchestration; it does not implement automatic
