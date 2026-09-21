@@ -168,6 +168,20 @@ def application_command(context: typer.Context) -> None:
 
 
 @app.command(
+    "notebook",
+    context_settings={"allow_extra_args": True, "ignore_unknown_options": True},
+)
+def notebook_command(context: typer.Context) -> None:
+    """Open author code with its registered laboratory's Notebook environment."""
+    try:
+        from lab_tools.author_notebook import main as notebook_main
+    except ImportError as error:
+        _fail(RuntimeError("Install scopecat-lab-tools or use the Scopecat delivery."))
+        raise AssertionError("unreachable") from error
+    notebook_main(context.args)
+
+
+@app.command(
     "teach", context_settings={"allow_extra_args": True, "ignore_unknown_options": True}
 )
 def teach_command(context: typer.Context) -> None:

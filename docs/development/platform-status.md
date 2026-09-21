@@ -142,3 +142,13 @@ manual output numbering; it does not automatically update a runtime or certify a
 installation. Builds remain wheel-based and use ordinary tool caches. Source-aware
 artifact reuse, the full checkout/setup flow and Notebook environment selection
 remain #712 work.
+
+
+### Registered Notebook entry
+
+`scopecat notebook [WORKSPACE] --home HOME` resolves a bound author folder to the
+laboratory's current interpreter (#717). It preflights Notebook extras, uses a
+per-session kernelspec and does not start an experiment service. Relaunch after a
+stopped environment update to select the replacement interpreter. Existing kernels
+and external editors are not redirected; close them before updating. This is a
+foreground local entry, not manager-owned Notebook lifecycle supervision.

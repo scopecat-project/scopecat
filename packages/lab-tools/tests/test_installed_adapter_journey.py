@@ -247,6 +247,45 @@ finally:
 """
 
 
+def check_notebook_kernel(project: Path, python: Path, kernel_home: Path) -> None:
+    from jupyter_client import KernelManager
+    from jupyter_client.kernelspec import KernelSpecManager
+
+    from lab_tools.notebook import kernel_command
+
+    _, environment = kernel_command(
+        project, python=str(python), source_path=False, kernel_home=kernel_home
+    )
+    for name in ("PYTHONHOME", "PYTHONPATH", "SCOPECAT_DAEMON_URL"):
+        environment.pop(name, None)
+    manager = KernelManager(
+        kernel_name="scopecat-lab",
+        kernel_spec_manager=KernelSpecManager(
+            kernel_dirs=[str(kernel_home / "kernels")],
+            ensure_native_kernel=False,
+        ),
+    )
+    manager.start_kernel(cwd=str(project), env=environment)
+    client = manager.blocking_client()
+    client.start_channels()
+    try:
+        client.wait_for_ready(timeout=30)
+        response = client.execute_interactive(
+            "import sys\nfrom pathlib import Path\n"
+            "from scopecat.project import open_project\n"
+            f"assert Path(sys.executable) == Path({str(python)!r})\n"
+            f"assert Path.cwd() == Path({str(project)!r})\n"
+            "project = open_project(Path.cwd())\n"
+            "assert project.author_only\n"
+            "assert project.lab_adapter.distribution == 'test-lab-adapter'\n",
+            timeout=30,
+        )
+        assert response["content"]["status"] == "ok", response
+    finally:
+        client.stop_channels()
+        manager.shutdown_kernel(now=True)
+
+
 def test_installed_adapter_wheel_local_refresh_and_missing_adapter_stop(
     tmp_path: Path, monkeypatch, delivery: Path
 ) -> None:
@@ -388,6 +427,7 @@ dependencies = []
         assert services.for_workspace(project) == (updated, workspace_id)
         service = updated
         python = Path(updated.python)
+        check_notebook_kernel(project, python, tmp_path / "notebook-kernels")
         site = Path(
             run(
                 [

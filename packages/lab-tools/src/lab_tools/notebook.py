@@ -7,17 +7,24 @@ from pathlib import Path
 
 
 def kernel_command(
-    project: Path, *, python: str = sys.executable, source_path: bool = True
+    project: Path,
+    *,
+    python: str = sys.executable,
+    source_path: bool = True,
+    kernel_home: Path | None = None,
 ) -> tuple[list[str], dict[str, str]]:
     """Pin the notebook kernel to the launcher interpreter, not a global kernel."""
     project = project.resolve()
-    kernel_root = project / ".scopecat-notebook" / "kernels" / "scopecat-lab"
+    kernel_root = (
+        (kernel_home or project / ".scopecat-notebook") / "kernels" / "scopecat-lab"
+    )
     kernel_root.mkdir(parents=True, exist_ok=True)
     _ = (kernel_root / "kernel.json").write_text(
         json.dumps(
             {
                 "argv": [
                     python,
+                    *(["-I"] if kernel_home is not None else []),
                     "-m",
                     "ipykernel_launcher",
                     "-f",
@@ -48,11 +55,21 @@ def kernel_command(
     )
     return [
         python,
+        *(["-I"] if kernel_home is not None else []),
         "-m",
         "jupyterlab",
         f"--ServerApp.root_dir={project}",
         "--MappingKernelManager.default_kernel_name=scopecat-lab",
         "--KernelSpecManager.allowed_kernelspecs=scopecat-lab",
+        *(
+            [
+                "--KernelSpecManager.kernel_dirs="
+                + json.dumps([str(kernel_root.parent)]),
+                "--KernelSpecManager.ensure_native_kernel=False",
+            ]
+            if kernel_home is not None
+            else []
+        ),
     ], env
 
 
