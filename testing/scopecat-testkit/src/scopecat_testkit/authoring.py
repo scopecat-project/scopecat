@@ -6,7 +6,6 @@ import scopecat.authoring as authoring
 from scopecat.authoring import Experiment, axis
 from scopecat.compiler.bind import BoundPlan, bind_program
 from scopecat.compiler.frontend.resolution import compile_invocation
-from scopecat.config.documents import load_config_snapshot_document
 from scopecat.config.environment import build_config_environment
 from scopecat.config.parameter_resolution import resolve_config_parameters
 from scopecat.kernel.entity import EntityRef
@@ -14,7 +13,7 @@ from scopecat.kernel.quantity import Quantity
 from scopecat.records.config import ConfigProfileSnapshot
 from scopecat.sdk.instruments import InterfaceRef
 
-from scopecat_testkit.paths import CORE_FIXTURE_DIR as EXAMPLE_DIR
+from scopecat_testkit.config_fixtures import simple_scan_config
 
 _SET_FREQUENCY = InterfaceRef("test.set_frequency/v1")
 _SET_FREQUENCY_VALUE = _SET_FREQUENCY.property("frequency")
@@ -23,7 +22,7 @@ _SCALAR_SIGNAL_VALUE = _SCALAR_SIGNAL.acquisition("sample").result("signal")
 
 
 def load_config() -> ConfigProfileSnapshot:
-    return load_config_snapshot_document(EXAMPLE_DIR / "config-snapshot.json")
+    return simple_scan_config()
 
 
 def parameters():

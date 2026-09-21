@@ -7,7 +7,6 @@ from scopecat.authoring import (
     axis,
     parameter,
 )
-from scopecat.config.documents import load_config_snapshot_document
 from scopecat.kernel.quantity import Quantity
 from scopecat.records.config import ConfigProfileSnapshot
 
@@ -17,11 +16,11 @@ from scopecat_testkit.authoring import (
     simple_experiment,
 )
 from scopecat_testkit.bound_program import ProgramFixture
-from scopecat_testkit.paths import CORE_FIXTURE_DIR as WORKFLOW_FIXTURE_DIR
+from scopecat_testkit.config_fixtures import simple_scan_config
 
 
 def load_config() -> ConfigProfileSnapshot:
-    return load_config_snapshot_document(WORKFLOW_FIXTURE_DIR / "config-snapshot.json")
+    return simple_scan_config()
 
 
 def load_experiment() -> ProgramFixture:

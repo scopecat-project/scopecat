@@ -30,6 +30,20 @@ No private package may become a prerequisite for public CI or the installed
 starter. Shared test helpers belong in testkit only when independently reused;
 reference_lab is not a production library to install on physical benches.
 
+## Installed adapter qualification
+
+The `scopecat-testkit` wheel supports the shared authoring, instrument and
+workflow configuration helpers and `connection_residency` qualification contract.
+They use the self-contained `config_fixtures.simple_scan_config()` preset, returning
+a fresh synthetic snapshot on each call. No checkout paths or copied fixture
+directories are required. Install the `server` extra for the execution helpers.
+
+The repository's simple-scan JSON remains a configuration-document fixture;
+a focused test keeps its content aligned with the preset. The wheel test runs
+the existing residency contract from the built artifact outside the checkout.
+`scopecat_testkit.paths` and the repository test-selection CLI are workspace-only
+utilities, not installed adapter APIs.
+
 ## Installed author package boundary
 
 `fixtures/installed_author_lab` is a tiny wheel-only consumer fixture, not another

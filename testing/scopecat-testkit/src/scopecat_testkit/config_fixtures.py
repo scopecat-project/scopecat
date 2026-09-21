@@ -1,0 +1,91 @@
+"""Self-contained configuration presets for installed adapter qualification."""
+
+from scopecat.records.config import ConfigProfileSnapshot
+
+
+def simple_scan_config() -> ConfigProfileSnapshot:
+    """Build a fresh synthetic profile without repository files."""
+    return ConfigProfileSnapshot.model_validate(
+        {
+            "id": "simple-scan-profile",
+            "system": {
+                "id": "simple-scan-system",
+                "primary_entity_id": "q0",
+                "topology": {
+                    "entities": [
+                        {"id": "q0", "kind": "logical_device"},
+                        {"id": "drive-q0", "kind": "drive_channel"},
+                        {"id": "readout-q0", "kind": "readout_channel"},
+                    ]
+                },
+                "instrument_registry": {
+                    "instruments": [
+                        {
+                            "id": "source-0",
+                            "exclusivity_key": "source-0",
+                            "driver_id": "tests.signal_instrument",
+                            "connection": {"kind": "virtual"},
+                            "run_start": "preserve",
+                            "success_action": "release",
+                            "failure_action": "abort_and_release",
+                        }
+                    ]
+                },
+                "domain_target": {
+                    "id": "tests.domain.target",
+                    "kind": "tests.domain",
+                    "instrument_ids": [],
+                },
+                "parameter_catalog": {
+                    "id": "example-parameter-definitions-catalog",
+                    "definitions": [
+                        {
+                            "id": "drive_frequency",
+                            "value_type": {
+                                "shape": "scalar",
+                                "atom": {
+                                    "type": "quantity",
+                                    "unit": "GHz",
+                                    "minimum": 4,
+                                    "maximum": 6,
+                                },
+                            },
+                            "description": "Example drive frequency.",
+                        }
+                    ],
+                },
+                "routing": {
+                    "roles": [],
+                    "routes": [
+                        {
+                            "id": "source-0",
+                            "instrument_id": "source-0",
+                            "entity_ids": ["q0"],
+                            "endpoints": [
+                                {
+                                    "interface_id": "test.set_frequency/v1",
+                                    "entity_id": "q0",
+                                    "channel_id": "drive-q0",
+                                },
+                                {
+                                    "interface_id": "test.scalar_signal/v1",
+                                    "entity_id": "q0",
+                                    "channel_id": "readout-q0",
+                                },
+                            ],
+                        }
+                    ],
+                },
+            },
+            "parameter_snapshot": {
+                "id": "simple-scan-parameter-snapshot",
+                "values": [
+                    {
+                        "id": "drive_frequency",
+                        "value": {"value": 5, "unit": "GHz"},
+                        "shape": "scalar",
+                    }
+                ],
+            },
+        }
+    )
