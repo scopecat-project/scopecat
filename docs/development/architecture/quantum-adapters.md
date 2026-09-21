@@ -139,7 +139,12 @@ A dependent key resolves against the same effective snapshot as its selected fie
 each source includes `key_sources` for fields that determined a dependent lookup's key.
 The expression objects retain the declared arithmetic, while source records retain the
 resolved values. These are inspectable in memory, not automatically stored with runs.
-Repeated field expressions may repeat lookups; do not assume common-subexpression caching.
+Each `resolve` owns a short-lived evaluation context. Fields with the same model and
+normalized key reuse a selected row, and reused expression objects evaluate once.
+Source evidence remains attached to each output and dependent key. This is not global
+structural-expression deduplication or a full table index. Nothing is cached across
+resolve calls, snapshot changes or operation contexts; equal snapshot IDs do not imply
+equal contents. Quantity key matching retains the existing scientific comparison.
 
 Arithmetic supports `+`, `-`, `*`, `/` using existing `Quantity` semantics: compatible
 quantities add/subtract with unit conversion, numeric scaling preserves units, and
@@ -147,6 +152,14 @@ supported quantity ratios/products yield dimensionless values. Arbitrary compoun
 algebra is not implemented. Invalid dimensions, unknown fields and division by zero fail
 with the named output; there are no implicit defaults or writes to parameter tables.
 Custom resolver callbacks remain available for computations outside this vocabulary.
+
+The next provenance boundary is explicit: `RecipeParameterInputs.__call__` currently
+returns values only, and `CompiledRecipeEntry` carries the lowered program and optional
+inspection, not parameter-source evidence. Durable integration must first carry the
+actual resolution evidence (including candidate scope and dependent lookup keys) through
+materialization into the compiled entry, then persist it alongside the target adapter's
+point-effective preparation/measurement records. Do not recover provenance afterward by
+re-running queries or assume an in-memory source list has already been recorded.
 
 ## Circuit transformation contract
 

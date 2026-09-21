@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import cast
 
 from scopecat.authoring.parameter_fields import (
@@ -19,7 +19,11 @@ from scopecat.authoring.parameter_models import (
 )
 from scopecat.kernel.frozen import FrozenMapping
 from scopecat.kernel.quantity import Quantity
-from scopecat.kernel.value_identity import scalar_values_equal
+from scopecat.kernel.value_identity import (
+    ScalarIdentity,
+    scalar_identity,
+    scalar_values_equal,
+)
 from scopecat.kernel.value_validation import coerce_literal
 from scopecat.records.parameter import (
     ParameterAtomValue,
@@ -60,35 +64,36 @@ class ParameterQueryResult:
     key_sources: tuple[ParameterQueryResult, ...] = ()
 
 
-@dataclass(frozen=True, slots=True)
-class ParameterProjection:
-    model: type[ParameterModel]
-    keys: Mapping[str, object]
-    fields: Mapping[str, str]
+@dataclass(slots=True)
+class _Evaluation:
+    """One resolve call owns reuse; nothing survives a snapshot/context change."""
 
-    def resolve(
-        self, snapshot: ParameterSnapshot, context: Mapping[str, object]
-    ) -> ParameterQueryResult:
-        table = parameter_table_name(self.model)
-        declarations = {field.name: field for field in parameter_fields(self.model)}
-        key: dict[str, ParameterAtomValue] = {}
-        key_sources: list[ParameterQueryResult] = []
-        for name, source in self.keys.items():
-            if isinstance(source, ParameterExpression):
-                evaluated = source.resolve(snapshot, context)
-                source = evaluated.value
-                key_sources.extend(evaluated.sources)
-            if isinstance(source, QueryInput):
-                if source.name not in context:
-                    raise ValueError(f"{table}: missing query input {source.name!r}")
-                source = context[source.name]
-            key[name] = _value(source, declarations[name], table)
-        stored = snapshot.get(table)
+    snapshot: ParameterSnapshot
+    context: Mapping[str, object]
+    rows: dict[
+        tuple[type[ParameterModel], tuple[ScalarIdentity, ...]],
+        Mapping[str, ParameterAtomValue],
+    ] = field(default_factory=dict)
+    expressions: dict[int, ParameterExpressionResult] = field(default_factory=dict)
+
+    def row(
+        self, model: type[ParameterModel], key: Mapping[str, ParameterAtomValue]
+    ) -> Mapping[str, ParameterAtomValue]:
+        identity = (
+            model,
+            tuple(scalar_identity(key[name]) for name in parameter_key(model)),
+        )
+        cached = self.rows.get(identity)
+        if cached is not None:
+            return cached
+        table = parameter_table_name(model)
+        declarations = {item.name: item for item in parameter_fields(model)}
+        stored = self.snapshot.get(table)
         if not isinstance(stored, TableParameterValue):
             raise ValueError(
-                f"{table}: parameter table missing from snapshot {snapshot.id!r}"
+                f"{table}: parameter table missing from snapshot {self.snapshot.id!r}"
             )
-        # Only keys are read during selection. Unused non-key cells need not be known.
+        # Keep the existing scientific comparison, including quantity tolerance.
         matches = [
             row
             for row in stored.rows
@@ -103,7 +108,37 @@ class ParameterProjection:
             raise ValueError(
                 f"{table}: lookup {key!r} expected one row, found {len(matches)}"
             )
-        selected = matches[0]
+        self.rows[identity] = matches[0]
+        return matches[0]
+
+
+@dataclass(frozen=True, slots=True)
+class ParameterProjection:
+    model: type[ParameterModel]
+    keys: Mapping[str, object]
+    fields: Mapping[str, str]
+
+    def resolve(
+        self, snapshot: ParameterSnapshot, context: Mapping[str, object]
+    ) -> ParameterQueryResult:
+        return self._resolve(_Evaluation(snapshot, context))
+
+    def _resolve(self, evaluation: _Evaluation) -> ParameterQueryResult:
+        table = parameter_table_name(self.model)
+        declarations = {field.name: field for field in parameter_fields(self.model)}
+        key: dict[str, ParameterAtomValue] = {}
+        key_sources: list[ParameterQueryResult] = []
+        for name, source in self.keys.items():
+            if isinstance(source, ParameterExpression):
+                evaluated = source._resolve(evaluation)  # pyright: ignore[reportPrivateUsage] - shared internal evaluation
+                source = evaluated.value
+                key_sources.extend(evaluated.sources)
+            if isinstance(source, QueryInput):
+                if source.name not in evaluation.context:
+                    raise ValueError(f"{table}: missing query input {source.name!r}")
+                source = evaluation.context[source.name]
+            key[name] = _value(source, declarations[name], table)
+        selected = evaluation.row(self.model, key)
         values: dict[str, ParameterAtomValue] = {}
         for output, name in self.fields.items():
             value = selected.get(name)
@@ -113,7 +148,7 @@ class ParameterProjection:
                 )
             values[output] = _value(value, declarations[name], table)
         return ParameterQueryResult(
-            snapshot.id,
+            evaluation.snapshot.id,
             table,
             FrozenMapping(key.items()),
             self.fields,
@@ -247,13 +282,24 @@ class ParameterExpression:
     def resolve(
         self, snapshot: ParameterSnapshot, context: Mapping[str, object]
     ) -> ParameterExpressionResult:
+        return self._resolve(_Evaluation(snapshot, context))
+
+    def _resolve(self, evaluation: _Evaluation) -> ParameterExpressionResult:
+        cached = evaluation.expressions.get(id(self))
+        if cached is not None:
+            return cached
+        result = self._evaluate(evaluation)
+        evaluation.expressions[id(self)] = result
+        return result
+
+    def _evaluate(self, evaluation: _Evaluation) -> ParameterExpressionResult:
         if self.projection is not None:
             assert self.field is not None
-            result = self.projection.resolve(snapshot, context)
+            result = self.projection._resolve(evaluation)  # pyright: ignore[reportPrivateUsage] - shared internal evaluation
             return ParameterExpressionResult(result.values[self.field], (result,))
         assert self.operation is not None
-        left = _expression_value(self.left, snapshot, context)
-        right = _expression_value(self.right, snapshot, context)
+        left = _expression_value(self.left, evaluation)
+        right = _expression_value(self.right, evaluation)
         value = _calculate(self.operation, left.value, right.value)
         if isinstance(value, float) and not math.isfinite(value):
             raise ValueError("parameter arithmetic produced a non-finite value")
@@ -262,11 +308,10 @@ class ParameterExpression:
 
 def _expression_value(
     value: ParameterExpression | ParameterAtomValue,
-    snapshot: ParameterSnapshot,
-    context: Mapping[str, object],
+    evaluation: _Evaluation,
 ) -> ParameterExpressionResult:
     return (
-        value.resolve(snapshot, context)
+        value._resolve(evaluation)  # pyright: ignore[reportPrivateUsage] - shared internal evaluation
         if isinstance(value, ParameterExpression)
         else ParameterExpressionResult(value, ())
     )
@@ -287,9 +332,10 @@ class ParameterInputs:
     ) -> ParameterInputsResult:
         values: dict[str, ParameterAtomValue] = {}
         sources: dict[str, tuple[ParameterQueryResult, ...]] = {}
+        evaluation = _Evaluation(snapshot, context)
         for name, expression in self.expressions.items():
             try:
-                result = _expression_value(expression, snapshot, context)
+                result = _expression_value(expression, evaluation)
             except (TypeError, ValueError, ZeroDivisionError) as error:
                 raise ValueError(f"parameter input {name!r}: {error}") from error
             values[name], sources[name] = result.value, result.sources
