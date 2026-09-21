@@ -74,6 +74,7 @@ def test_collect_receipt_keeps_numeric_arrays_out_of_json_header() -> None:
 
 def test_run_hardware_receipt_round_trips_arrays_and_unavailable_values() -> None:
     receipt = RunHardwareBatchReceipt(
+        completed_effect_ids=("invoke-1", "collect-1"),
         operation_id="batch-1",
         state_actions=(
             RunHardwareStateActionReceipt(
@@ -121,6 +122,7 @@ def test_run_hardware_receipt_round_trips_arrays_and_unavailable_values() -> Non
     restored = decode_run_hardware_receipt(encode_run_hardware_receipt(receipt))
 
     assert restored.operation_id == receipt.operation_id
+    assert restored.completed_effect_ids == receipt.completed_effect_ids
     assert restored.state_actions == receipt.state_actions
     assert restored.values[0].point_index == 3
     assert restored.values[0].evidence == receipt.values[0].evidence

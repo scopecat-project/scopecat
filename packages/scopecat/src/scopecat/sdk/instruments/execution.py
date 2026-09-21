@@ -145,6 +145,8 @@ class RunHardwareStateActionReceipt(InstrumentStateActionEvidence):
 
 class RunHardwareBatchReceipt(_HardwareModel):
     operation_id: str = Field(min_length=1)
+    # Ordered prefix acknowledged before a rejection or uncertain action.
+    completed_effect_ids: tuple[str, ...] = ()
     values: tuple[RunHardwareValue, ...] = ()
     state_actions: tuple[RunHardwareStateActionReceipt, ...] = Field(
         default=(),

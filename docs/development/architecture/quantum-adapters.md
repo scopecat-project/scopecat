@@ -272,6 +272,26 @@ Targets that rename or deliberately regroup acquisitions can still provide expli
 Both paths enforce the same contracts. Neither performs instrument readback,
 normalization or scientific unit conversion; those remain explicit target operations.
 
+## Synchronous hardware batches
+
+Inside a target's `DomainJobRuntime.start`, use `execute_domain_batch` from
+`scopecat.sdk.domain` to execute one `RunHardwareBatch` through the host's reserved
+instrument channel. Supply the execution key, artifact fingerprint, logical result
+count and a `decode_result(values)` callback. The callback checks device-specific
+content identity and shapes and returns a structurally fingerprintable result;
+scientific scaling remains explicit adapter policy.
+
+The helper checks the batch identity and acknowledged action prefix, decodes only
+a completely successful batch, and constructs correlated terminal result evidence.
+`RunHardwareBatchReceipt.completed_effect_ids` records the ordered successful
+prefix. A rejection with no completed action is `not_executed`; a rejection after
+an acknowledged action or any indeterminate outcome is `unknown`. A definite
+rejection of collection does not prove that a preceding trigger never ran.
+Receipt inconsistencies and decoding exceptions reach the existing domain failure
+boundary. The helper does not retry or establish new reservations, persistence,
+cleanup or cancellation machinery. Multi-batch and resumable runtimes retain the
+existing `DomainJobRuntime` protocol.
+
 ## Remaining framework work
 
 This entry point centralizes existing orchestration; it does not implement automatic

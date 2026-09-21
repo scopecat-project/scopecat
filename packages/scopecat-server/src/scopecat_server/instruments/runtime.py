@@ -1053,6 +1053,7 @@ class InstrumentRuntime:
             receipt = RunHardwareBatchReceipt(
                 operation_id=canonical_request.batch.operation_id,
                 values=tuple(values),
+                completed_effect_ids=tuple(completed_effect_ids),
                 state_actions=tuple(state_actions),
                 problems=tuple(problems),
                 indeterminate=indeterminate_reason is not None,

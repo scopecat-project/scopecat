@@ -126,6 +126,7 @@ type _FailAction = (
         "reject_apply",
         "invoke",
         "reject_invoke",
+        "reject_collect",
         "unknown_collect_receipt",
         "abort",
         "disconnect",
@@ -210,6 +211,17 @@ class _Driver(SignalInstrumentDriver):
         self,
         request: DriverAcquisition,
     ) -> DriverOutcome[DriverReadback]:
+        if self.fail_action == "reject_collect":
+            self.collect_requests.append(request)
+            return DriverRejected(
+                problems=(
+                    problem(
+                        "collect_rejected",
+                        "collection refused",
+                        phase=ProblemPhase.EXECUTION,
+                    ),
+                )
+            )
         if self.fail_action == "unknown_collect_receipt":
             self.collect_requests.append(request)
             return DriverUnknown(
@@ -732,6 +744,7 @@ def test_batch_reconciles_state_collects_values_and_replays_once(
         before_collect = datetime.now(UTC)
         receipt = instruments.execute_run_hardware(run_id, command)
         after_collect = datetime.now(UTC)
+        assert receipt.completed_effect_ids == ("apply-1", "collect-1")
         assert instruments.execute_run_hardware(run_id, command) == receipt
         assert [(value.value_id, value.value) for value in receipt.values] == [
             (
@@ -1696,6 +1709,36 @@ def test_unknown_action_audit_failure_still_discards_runtime(
                 limit=100, after=None, run_id=run_id
             ).items
         )
+
+
+def test_collect_rejection_retains_acknowledged_invoke(tmp_path: Path) -> None:
+    provider = _Provider(fail_action="reject_collect")
+    with _runtime(tmp_path, provider) as runtime:
+        run_id, lease_id = _start_run(runtime, load_config())
+        instruments = runtime.application.instruments
+        instruments.provision_run(run_id, _provision(lease_id))
+        payload = command_payload_from_bytes(
+            id="program",
+            schema_id="pulse_program",
+            codec_id="tests.canonical-json",
+            codec_version=1,
+            media_type="application/json",
+            content=b'{"samples":[0.0]}',
+        )
+        command = _batch_command(
+            lease_id,
+            "partial-batch",
+            _invoke_action("source-0", effect_id="invoke", payload=payload),
+            _collect_action("source-0", effect_id="collect"),
+        )
+        receipt = instruments.execute_run_hardware(run_id, command)
+        assert receipt.completed_effect_ids == ("invoke",)
+        assert not receipt.indeterminate
+        assert receipt.problems[0].code == "collect_rejected"
+        assert instruments.execute_run_hardware(run_id, command) == receipt
+        [driver] = provider.drivers
+        assert len(driver.invoked) == 1
+        assert len(driver.collect_requests) == 1
 
 
 def test_unknown_collect_receipt_preserves_driver_diagnostics(

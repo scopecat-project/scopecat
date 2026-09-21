@@ -157,6 +157,7 @@ class TestRunInstrumentHost:
         return self._baseline_state
 
     def execute(self, batch: RunHardwareBatch) -> RunHardwareBatchReceipt:
+        completed_effect_ids: list[str] = []
         values: list[RunHardwareValue] = []
         state_actions: list[RunHardwareStateActionReceipt] = []
         problems: list[Problem] = []
@@ -179,6 +180,7 @@ class TestRunInstrumentHost:
                             status="unchanged",
                         )
                     )
+                    completed_effect_ids.append(action.effect_id)
                     continue
                 command = InstrumentStateCommand(
                     command_id=action.effect_id,
@@ -232,6 +234,7 @@ class TestRunInstrumentHost:
                         metadata=dict(receipt.metadata),
                     )
                 )
+                completed_effect_ids.append(action.effect_id)
                 continue
             if isinstance(action, RunHardwareInvoke):
                 command = InvokeCommand(
@@ -267,6 +270,7 @@ class TestRunInstrumentHost:
                     driver,
                     self._descriptions[action.instrument_id],
                 )
+                completed_effect_ids.append(action.effect_id)
                 continue
             assert isinstance(action, RunHardwareCollect)
             command = CollectCommand(
@@ -319,8 +323,10 @@ class TestRunInstrumentHost:
                 for request_id, value in receipt.readback.values.items()
                 for value_id in bindings[request_id]
             )
+            completed_effect_ids.append(action.effect_id)
         return RunHardwareBatchReceipt(
             operation_id=batch.operation_id,
+            completed_effect_ids=tuple(completed_effect_ids),
             values=tuple(values),
             state_actions=tuple(state_actions),
             problems=tuple(problems),

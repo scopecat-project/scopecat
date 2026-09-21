@@ -60,6 +60,7 @@ if TYPE_CHECKING:
         DomainSetup,
         ResumableDomainJobRuntime,
     )
+    from scopecat.sdk.domain.synchronous import execute_domain_batch
     from scopecat.sdk.domain.view import (
         DomainCallView,
         DomainInputPortView,
@@ -130,6 +131,7 @@ _VIEW_EXPORTS = (
     "DomainResultPortView",
 )
 _EXPORTS = {
+    "execute_domain_batch": ("scopecat.sdk.domain.synchronous", "execute_domain_batch"),
     **{name: ("scopecat.sdk.domain.batch", name) for name in _BATCH_EXPORTS},
     **{name: ("scopecat.sdk.domain.execution", name) for name in _EXECUTION_EXPORTS},
     **{name: ("scopecat.sdk.domain.evidence", name) for name in _EVIDENCE_EXPORTS},
@@ -224,4 +226,5 @@ __all__ = [
     "DomainTransitionPolicy",
     "PreparedDomainExecution",
     "ResumableDomainJobRuntime",
+    "execute_domain_batch",
 ]
