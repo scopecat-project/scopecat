@@ -1,5 +1,6 @@
 import pytest
 import scopecat as sc
+from pydantic import TypeAdapter
 
 from scopecat_quantum import authoring as q
 from scopecat_quantum._ids import TargetCompileEntryId
@@ -11,6 +12,7 @@ from scopecat_quantum.recipe_bindings import (
     bind_gate_pulse_recipe,
     bind_measurement_pulse_recipe,
 )
+from scopecat_quantum.recipe_evidence import RecipeInputEvidence
 from scopecat_quantum.recipe_queries import (
     recipe_operand,
     recipe_operation,
@@ -50,6 +52,12 @@ def experiment(target: q.Qubit) -> q.QuantumFragment:
 
 
 def test_declarative_inputs_resolve_operation_context_and_scope() -> None:
+    builds: list[sc.Quantity] = []
+
+    def tracked_drive(target: q.Qubit, *, duration: sc.Quantity) -> q.QuantumFragment:
+        builds.append(duration)
+        return drive(target, duration=duration)
+
     target = sc.EntityRef(id="q0", kind="logical_qubit")
     baseline = sc.parameter_snapshot(
         "baseline",
@@ -72,7 +80,7 @@ def test_declarative_inputs_resolve_operation_context_and_scope() -> None:
     profile = PulseRecipeProfile(
         bind_gate_pulse_recipe(
             of=X90,
-            build=drive,
+            build=tracked_drive,
             inputs=recipe_parameter_inputs(
                 sc.parameter_table(Calibration)
                 .lookup(target=recipe_operand(), operation=recipe_operation())
@@ -89,10 +97,45 @@ def test_declarative_inputs_resolve_operation_context_and_scope() -> None:
             ),
         ),
     )
-    result = RecipeTargetCompiler(
+    compiler = RecipeTargetCompiler(
         profile, baseline, scoped_parameters={"candidate": candidate}
-    ).compile(experiment, {"target": target}, entry_id=TargetCompileEntryId("point"))
+    )
+    result = compiler.compile(
+        experiment, {"target": target}, entry_id=TargetCompileEntryId("point")
+    )
     assert isinstance(result.entry.program.body, ScheduledBlock)
     assert float(result.entry.program.body.program.duration_seconds) == pytest.approx(
         72e-9
+    )
+    gate, measurement = result.parameter_evidence
+    assert gate.scope == "candidate"
+    assert gate.resolution.snapshot_id == "candidate"
+    assert gate.resolution.inputs == {"duration": sc.Quantity(32, "ns")}
+    assert measurement.scope is None
+    assert measurement.resolution.snapshot_id == "baseline"
+    assert measurement.resolution.inputs == {"duration": sc.Quantity(40, "ns")}
+    assert gate.resolution.sources["duration"][0].fields == {"duration": "length"}
+    updated = compiler.compile(
+        experiment,
+        {"target": target},
+        entry_id=TargetCompileEntryId("next"),
+        scoped_parameters={
+            "candidate": candidate.model_copy(update={"id": "next-snapshot"})
+        },
+    )
+    assert builds == [sc.Quantity(32, "ns")]
+    assert (
+        updated.parameter_evidence[0].implementation_fingerprint
+        == gate.implementation_fingerprint
+    )
+    assert updated.parameter_evidence[0].resolution.snapshot_id == "next-snapshot"
+    assert (
+        updated.parameter_evidence[0].resolution.sources["duration"][0].snapshot_id
+        == "next-snapshot"
+    )
+    assert gate.resolution.snapshot_id == "candidate"
+    codec = TypeAdapter(tuple[RecipeInputEvidence, ...])
+    assert (
+        codec.validate_json(codec.dump_json(updated.parameter_evidence))
+        == updated.parameter_evidence
     )

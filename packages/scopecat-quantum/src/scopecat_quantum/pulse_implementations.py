@@ -30,6 +30,7 @@ from scopecat_quantum.pulses import (
     PulseProgram,
     pulse_leaf_owners,
 )
+from scopecat_quantum.recipe_evidence import RecipeInputEvidence
 
 
 @dataclass(frozen=True, slots=True)
@@ -186,6 +187,7 @@ class ResolvedPulseImplementations:
 
     gates: tuple[GatePulseImplementation, ...] = ()
     measurements: tuple[MeasurementPulseImplementation, ...] = ()
+    parameter_evidence: tuple[RecipeInputEvidence, ...] = ()
 
     def __post_init__(self) -> None:
         gates = tuple(self.gates)

@@ -1,18 +1,20 @@
 """Quantum call context for public parameter projections."""
 
-from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from scopecat.authoring.parameter_queries import (
     ParameterInputs,
     ParameterProjection,
+    ParameterQueryResult,
     QueryInput,
 )
 from scopecat.kernel.entity import EntityRef
+from scopecat.kernel.frozen import FrozenMapping
 from scopecat.records.parameter import ParameterSnapshot
 
 from scopecat_quantum.circuits import Measure
 from scopecat_quantum.gates import GateCall
+from scopecat_quantum.recipe_evidence import ResolvedRecipeInputs
 
 
 def recipe_operand(index: int = 0) -> QueryInput:
@@ -33,7 +35,7 @@ class RecipeParameterInputs:
 
     def __call__(
         self, snapshot: ParameterSnapshot, call: GateCall | Measure
-    ) -> Mapping[str, object]:
+    ) -> ResolvedRecipeInputs:
         qubits = call.qubits if isinstance(call, GateCall) else (call.qubit,)
         context: dict[str, object] = {
             f"operand:{index}": EntityRef(id=qubit.value, kind="logical_qubit")
@@ -41,7 +43,25 @@ class RecipeParameterInputs:
         }
         if isinstance(call, GateCall):
             context["operation"] = call.gate_id.value
-        return self.projection.resolve(snapshot, context).values
+        result = self.projection.resolve(snapshot, context)
+        sources = (
+            FrozenMapping(
+                (
+                    name,
+                    (
+                        replace(
+                            result,
+                            fields=FrozenMapping(((name, result.fields[name]),)),
+                            values=FrozenMapping(((name, value),)),
+                        ),
+                    ),
+                )
+                for name, value in result.values.items()
+            )
+            if isinstance(result, ParameterQueryResult)
+            else result.sources
+        )
+        return ResolvedRecipeInputs(snapshot.id, result.values, sources)
 
 
 def recipe_parameter_inputs(

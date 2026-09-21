@@ -36,6 +36,7 @@ from scopecat_quantum.pulse_implementations import (
 from scopecat_quantum.pulse_recipes import (
     PulseRecipeMaterializationCache,
 )
+from scopecat_quantum.recipe_evidence import RecipeInputEvidence, ResolvedRecipeInputs
 
 
 @dataclass(frozen=True, slots=True)
@@ -115,6 +116,7 @@ class GateRecipeBinding[ParametersT]:
         scoped_parameters: Mapping[str, ParametersT] | None = None,
     ) -> ResolvedPulseImplementations:
         implementations: list[GatePulseImplementation] = []
+        evidence: list[RecipeInputEvidence] = []
         seen: set[GatePulseImplementationKey] = set()
         scopes: Mapping[str, ParametersT] = (
             {} if scoped_parameters is None else scoped_parameters
@@ -143,7 +145,8 @@ class GateRecipeBinding[ParametersT]:
                 f" scope {call.recipe_scope!r}"
             )
             try:
-                inputs = deepcopy(dict(self.inputs(selected, call)))
+                resolved_inputs = self.inputs(selected, call)
+                inputs = deepcopy(dict(resolved_inputs))
                 resources = (
                     () if self.resources is None else self.resources(selected, call)
                 )
@@ -177,9 +180,21 @@ class GateRecipeBinding[ParametersT]:
                 )
             )
             implementations.append(implementation)
+            if isinstance(resolved_inputs, ResolvedRecipeInputs):
+                evidence.append(
+                    RecipeInputEvidence(
+                        self.id,
+                        implementation.id.value,
+                        implementation.fingerprint,
+                        call.recipe_scope,
+                        resolved_inputs,
+                    )
+                )
             seen.add(key)
         return ResolvedPulseImplementations(
-            gates=tuple(implementations), measurements=()
+            gates=tuple(implementations),
+            measurements=(),
+            parameter_evidence=tuple(evidence),
         )
 
     def _materialize(
@@ -282,6 +297,7 @@ class MeasurementRecipeBinding[ParametersT]:
         # Measurements deliberately use baseline parameters, independent of gate scopes.
         del gate_definition, scoped_parameters
         implementations: list[MeasurementPulseImplementation] = []
+        evidence: list[RecipeInputEvidence] = []
         seen: set[MeasurementPulseImplementationKey] = set()
         for measurement in operations:
             if (
@@ -294,7 +310,8 @@ class MeasurementRecipeBinding[ParametersT]:
                 continue
             label = f"measurement recipe {self.id!r} for {measurement.qubit.value!r}"
             try:
-                inputs = deepcopy(dict(self.inputs(parameters, measurement)))
+                resolved_inputs = self.inputs(parameters, measurement)
+                inputs = deepcopy(dict(resolved_inputs))
                 bound = self._signature.bind(qubit(measurement.qubit.value), **inputs)
                 bound.apply_defaults()
             except (KeyError, TypeError, ValueError) as error:
@@ -311,9 +328,21 @@ class MeasurementRecipeBinding[ParametersT]:
                 )
             )
             implementations.append(implementation)
+            if isinstance(resolved_inputs, ResolvedRecipeInputs):
+                evidence.append(
+                    RecipeInputEvidence(
+                        self.id,
+                        implementation.id.value,
+                        implementation.fingerprint,
+                        None,
+                        resolved_inputs,
+                    )
+                )
             seen.add(key)
         return ResolvedPulseImplementations(
-            gates=(), measurements=tuple(implementations)
+            gates=(),
+            measurements=tuple(implementations),
+            parameter_evidence=tuple(evidence),
         )
 
     def _materialize(

@@ -606,6 +606,9 @@ class PulseRecipeProfile[ParametersT]:
                 for mapping in resolved
                 for implementation in mapping.measurements
             ),
+            parameter_evidence=tuple(
+                item for mapping in resolved for item in mapping.parameter_evidence
+            ),
         )
 
     def materialize_quantum(
@@ -642,6 +645,9 @@ class PulseRecipeProfile[ParametersT]:
                 implementation
                 for mapping in resolved
                 for implementation in mapping.measurements
+            ),
+            parameter_evidence=tuple(
+                item for mapping in resolved for item in mapping.parameter_evidence
             ),
         )
 
