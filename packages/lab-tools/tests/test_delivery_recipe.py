@@ -145,3 +145,93 @@ def test_duplicate_wheel_distribution_is_rejected(tmp_path):
             wheel.writestr("same.dist-info/METADATA", f"Name: {name}\nVersion: 1\n")
     with pytest.raises(ValueError, match="multiple wheels"):
         delivery._unique_wheels(tmp_path)
+
+
+def test_managed_build_retains_previous_success_on_failure_and_then_advances(
+    recipe, tmp_path, build_tools, monkeypatch
+):
+    from lab_tools.bundle import CURRENT_DELIVERY, resolve_delivery, retain_bundle
+
+    gui = tmp_path / "gui"
+    gui.mkdir()
+    (gui / "index.html").write_text("<html>first</html>")
+    home = tmp_path / "output"
+    first = delivery.build_managed_delivery(home, recipe=recipe, gui=gui)
+    selected = (home / CURRENT_DELIVERY).read_bytes()
+    assert resolve_delivery(home) == first
+    run = delivery.run
+
+    def fail(*args, **kwargs):
+        raise OSError("build failed")
+
+    monkeypatch.setattr(delivery, "run", fail)
+    with pytest.raises(OSError, match="build failed"):
+        delivery.build_managed_delivery(home, recipe=recipe, gui=gui)
+    assert (home / CURRENT_DELIVERY).read_bytes() == selected
+    assert len(list((home / "builds").iterdir())) == 2
+    assert resolve_delivery(home) == first
+    monkeypatch.setattr(delivery, "run", run)
+    (gui / "index.html").write_text("<html>second</html>")
+    second = delivery.build_managed_delivery(home, recipe=recipe, gui=gui)
+    assert second != first and first.is_dir()
+    assert resolve_delivery(home) == second
+    retained = retain_bundle(home, tmp_path / "application")
+    assert (retained / "gui/index.html").read_text() == "<html>second</html>"
+    # Explicit old artifacts remain selectable regardless of the moving pointer.
+    assert resolve_delivery(first) == first
+
+
+def test_managed_build_busy_fails_before_build(recipe, tmp_path, build_tools):
+    from filelock import FileLock
+
+    home = tmp_path / "output"
+    home.mkdir()
+    with (
+        FileLock(home / ".build.lock"),
+        pytest.raises(ValueError, match="构建正在进行"),
+    ):
+        delivery.build_managed_delivery(home, recipe=recipe)
+    assert not (home / "builds").exists() and build_tools == []
+
+
+def test_managed_selection_binds_manifest_and_rejects_escape(tmp_path, delivery):
+    import shutil
+
+    from lab_tools.bundle import CURRENT_DELIVERY, resolve_delivery
+
+    home = tmp_path / "output"
+    identity = "a" * 32
+    artifact = home / "builds" / identity
+    shutil.copytree(delivery, artifact)
+    pointer = home / CURRENT_DELIVERY
+    selection = {"format": 1, "build": identity, "manifest_sha256": "b" * 64}
+    pointer.write_text(json.dumps(selection))
+    with pytest.raises(ValueError, match="清单与构建选择不符"):
+        resolve_delivery(home)
+    selection["build"] = "../" + "a" * 29
+    pointer.write_text(json.dumps(selection))
+    with pytest.raises(ValueError, match="无效的当前交付"):
+        resolve_delivery(home)
+
+
+def test_unverified_completed_build_does_not_replace_current(
+    recipe, tmp_path, build_tools, monkeypatch
+):
+    from lab_tools.bundle import resolve_delivery
+
+    gui = tmp_path / "gui"
+    gui.mkdir()
+    (gui / "index.html").write_text("<html>workbench</html>")
+    home = tmp_path / "output"
+    first = delivery.build_managed_delivery(home, recipe=recipe, gui=gui)
+    build = delivery.build_delivery
+
+    def damaged(*args, **kwargs):
+        result = build(*args, **kwargs)
+        (result / "gui/index.html").write_text("damaged")
+        return result
+
+    monkeypatch.setattr(delivery, "build_delivery", damaged)
+    with pytest.raises(ValueError, match="交付文件缺失、被修改"):
+        delivery.build_managed_delivery(home, recipe=recipe, gui=gui)
+    assert resolve_delivery(home) == first
