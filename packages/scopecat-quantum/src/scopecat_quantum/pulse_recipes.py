@@ -12,6 +12,7 @@ from urllib.parse import quote
 from scopecat.kernel.content_identity import content_fingerprint, stable_content_hash
 
 from scopecat_quantum._ids import CouplerId, GateId, PulseImplementationId, QubitId
+from scopecat_quantum._recipe_identity import gate_implementation_id
 from scopecat_quantum.acquisitions import AcquisitionKind
 from scopecat_quantum.authoring import (
     Coupler,
@@ -57,17 +58,11 @@ class PulseRecipeMaterializationCache:
     """Exact pulse implementations retained for one compilation request.
 
     A cache binds to the first profile that uses it and rejects reuse by another
-    profile. Row fingerprints keep point-dependent calibration values in the key;
-    object-identity memoization only avoids re-fingerprinting the same immutable
-    compiler-parameter row within the request.
+    profile. Content fingerprints keep resolved calibration values in the key.
+    Mutable source identity is never used as a substitute for input content.
     """
 
     _profile_token: object | None = field(default=None, init=False, repr=False)
-    _row_fingerprints: dict[int, tuple[object, str]] = field(
-        default_factory=dict,
-        init=False,
-        repr=False,
-    )
     _gates: dict[_GateRecipeCacheKey, GatePulseImplementation] = field(
         default_factory=dict,
         init=False,
@@ -84,15 +79,6 @@ class PulseRecipeMaterializationCache:
         elif self._profile_token is not profile_token:
             raise ValueError("pulse recipe cache cannot be shared across profiles")
 
-    def _row_fingerprint(self, row: object) -> str:
-        identity = id(row)
-        retained = self._row_fingerprints.get(identity)
-        if retained is not None and retained[0] is row:
-            return retained[1]
-        fingerprint = stable_content_hash(content_fingerprint(row))
-        self._row_fingerprints[identity] = (row, fingerprint)
-        return fingerprint
-
     def materialize_gate(
         self,
         recipe_id: str,
@@ -103,7 +89,12 @@ class PulseRecipeMaterializationCache:
     ) -> GatePulseImplementation:
         """Return or create one exact gate implementation."""
 
-        cache_key = (recipe_id, self._row_fingerprint(row), key, resources)
+        cache_key = (
+            recipe_id,
+            stable_content_hash(content_fingerprint(row)),
+            key,
+            resources,
+        )
         implementation = self._gates.get(cache_key)
         if implementation is None:
             implementation = build()
@@ -119,7 +110,7 @@ class PulseRecipeMaterializationCache:
     ) -> MeasurementPulseImplementation:
         """Return or create one exact measurement implementation."""
 
-        cache_key = (recipe_id, self._row_fingerprint(row), key)
+        cache_key = (recipe_id, stable_content_hash(content_fingerprint(row)), key)
         implementation = self._measurements.get(cache_key)
         if implementation is None:
             implementation = build()
@@ -129,23 +120,6 @@ class PulseRecipeMaterializationCache:
 
 def _gate_definition(target: _GateRecipeTarget) -> GateDefinition:
     return target if isinstance(target, GateDefinition) else target.definition
-
-
-def _encoded_operands(operands: tuple[QubitId, ...]) -> str:
-    return ",".join(quote(operand.value, safe="-._~") for operand in operands)
-
-
-def _gate_implementation_id(
-    recipe_id: str,
-    key: GatePulseImplementationKey,
-) -> PulseImplementationId:
-    suffix = f"[{_encoded_operands(key.operands)}]"
-    if key.arguments:
-        argument_hash = stable_content_hash(content_fingerprint(key.arguments))
-        suffix = f"{suffix}[{argument_hash}]"
-    if key.recipe_scope is not None:
-        suffix = f"{suffix}[scope={quote(key.recipe_scope, safe='-._~')}]"
-    return PulseImplementationId(f"{recipe_id}{suffix}")
 
 
 def _gate_recipe_resource_count(
@@ -248,7 +222,7 @@ class GatePulseRecipe[RowT]:
     ) -> PulseImplementationId:
         """Derive the stable implementation identity for one exact call key."""
 
-        return _gate_implementation_id(
+        return gate_implementation_id(
             self.id,
             GatePulseImplementationKey(
                 gate_id=self.gate.id,
@@ -274,7 +248,7 @@ class GatePulseRecipe[RowT]:
                 f"{self._resource_count} coupler resources"
             )
         key = GatePulseImplementationKey.from_call(call)
-        implementation_id = _gate_implementation_id(self.id, key)
+        implementation_id = gate_implementation_id(self.id, key)
         arguments = {argument.id: argument.value for argument in call.arguments}
         body = self.build(
             row,

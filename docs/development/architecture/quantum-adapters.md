@@ -14,7 +14,7 @@ Construct one compiler per batch with the selected recipe profile and immutable 
 snapshot. Its result includes the bound program for domain-specific provenance and the
 prepared target entry for encoding. New compiler instances own separate caches; this
 does not mutate global calibration. Named immutable `scoped_parameters` snapshots
-select candidate recipe rows for gates wrapped in authored `recipe_scope` subtrees.
+select candidate recipe inputs for gates wrapped in authored `recipe_scope` subtrees.
 The exact implementation key includes the scope; measurements remain on baseline
 and explicit pulse implementations retain their authored pulses. Missing names fail.
 
@@ -23,6 +23,72 @@ constraints, instruction encoding, upload and execution receipts. Scheduling and
 planning already available in the quantum package remain framework responsibilities.
 Hardware-specific constraints belong in explicit capabilities or encoding rules, rather
 than copied general-purpose schedulers.
+
+## Pulse functions and parameter-source bindings
+
+A recipe is an implementation rule for an operation, not a table schema. Prefer
+`bind_gate_pulse_recipe` from `scopecat_quantum.recipe_bindings` for new gate
+implementations. A pulse function receives Qubit operands, optional Coupler resources,
+and keyword-only inputs. No row model, decorator or mirror calibration dataclass is
+required. Operation arguments and calibration inputs remain separate:
+
+```python
+from scopecat import Quantity
+from scopecat_quantum import authoring as q
+from scopecat_quantum.recipe_bindings import bind_gate_pulse_recipe
+from scopecat_quantum.pulse_recipes import PulseRecipeProfile
+from scopecat_quantum.standard_gates import X90
+
+
+def half_turn(target: q.Qubit, *, duration: Quantity, amplitude: Quantity):
+    return q.play(q.drive(target), q.constant(duration=duration, amplitude=amplitude))
+
+
+def resolve(parameters, call):
+    # This binding owns source layout. It may join tables or compute inputs.
+    calibration = parameters[call.qubits[0].value]
+    return {"duration": calibration["duration"], "amplitude": calibration["amplitude"]}
+
+
+profile = PulseRecipeProfile(
+    bind_gate_pulse_recipe(of=X90, build=half_turn, inputs=resolve)
+)
+```
+
+The constant envelope here only illustrates the interface; it is not a calibrated
+physical X90. The framework cannot prove that a chosen waveform realizes a gate.
+
+Bindings resolve only matching gate calls and their selected scopes. Repeated identical
+calls resolve once per materialization. Missing gate arguments, input-name collisions
+and resolver failures report the implementation, operands and scope. An omitted ID is
+derived from function identity and gate ID; explicit IDs are available for catalog use.
+Resources have a separate resolver and are passed as Coupler handles, not table rows.
+
+Resolved calibration inputs are copied and fingerprinted by content before invoking the
+pulse function. A later edit to the source does not change a prepared pulse program.
+Cache entries do not retain every source object merely to memoize its identity. Keep
+request snapshots fixed during a batch and keep resolvers/builders pure. Construct a new
+profile/compiler after changing their code or function defaults; caches are never shared
+across profiles. This is transient cache identity, not persisted code-version provenance.
+
+Row maps remain a convenience for existing consumers. They are not the required adapter
+boundary. Measurement bindings currently retain their existing API. Typed snapshot reads
+are available through `sc.parameter_rows`; a binding should select the required row
+before consuming its required fields, so unrelated unknown calibration does not block it.
+
+## Circuit transformation contract
+
+Current compilation binds, resolves implementations and lowers authored operations. It
+does not automatically cancel gates, optimize circuits or remap physical objects. Recipe
+selection is distinct from circuit decomposition and from device encoding.
+
+Future transformation passes must distinguish mandatory legalization from explicitly
+requested optimization/routing, preserve measurement identities and produce inspectable
+before/after evidence. Explicit pulses, timing and candidate scopes must be preserved
+unless a pass declares and checks a stronger contract. Ideal-unitary equivalence alone
+cannot justify removing pulses in a calibration, echo or benchmarking experiment.
+External circuit optimizers may be integrated at the logical circuit boundary; this
+change does not add a pass manager or promise Qiskit-level optimization coverage.
 
 ## Windows around calibrated operations
 
@@ -55,11 +121,11 @@ smooth edge and an older stepped implementation.
 ## Remaining framework work
 
 This entry point centralizes existing orchestration; it does not implement automatic
-parameter dependency tracking. Typed recipe row access and dependency diagnostics
+parameter dependency tracking. Selected-input dependency diagnostics and durable binding provenance
 remain open. Call-level `with_recipe_parameters` binds scanned cell values through
 existing typed compiler inputs; `resolve_recipe_parameters` uses the core transient
-context-update implementation to build snapshots and provenance. Adapters translate
-those snapshots to laboratory recipe rows and retain the returned evidence. The compiler now distinguishes:
+context-update implementation to build snapshots and provenance. Bindings resolve
+selected calibration inputs from those snapshots; adapters retain the returned evidence. The compiler now distinguishes:
 
 - a working-point snapshot shared by the program;
 - a candidate implementation applied to a whole program;
