@@ -159,3 +159,18 @@ laboratory declarations use `ParameterModel`. The former `parameter_field`,
 `parameter_schema`, field/key/assignment/row/cell handles have been removed after
 migrating their readers and writers. Existing snapshots and retained runs keep
 their durable representation; removing Python handles does not migrate storage.
+
+
+## Read effective snapshots in adapters
+
+`sc.parameter_rows(effective_snapshot, Drive)` returns detached `Drive` rows using
+that declaration's units. It reads the selected table through the normal schema
+validation path, without invoking constructors or filling unknown cells from
+field defaults. Missing required cells fail when read; optional unknowns are
+`None`. A missing table is an error, while an explicitly empty table returns `()`.
+
+Use the effective snapshot supplied for the current request/point, including its
+parameter-cell overrides. Editing these detached rows cannot change that snapshot
+or the saved working point. Before retaining values in a compiler cache, freeze
+the fields the recipe consumes into immutable compiler parameters; these rows are
+editable values, not live workspace bindings or immutable cache keys.
