@@ -72,7 +72,15 @@ profile/compiler after changing their code or function defaults; caches are neve
 across profiles. This is transient cache identity, not persisted code-version provenance.
 
 Row maps remain a convenience for existing consumers. They are not the required adapter
-boundary. Measurement bindings currently retain their existing API. Typed snapshot reads
+boundary. `bind_measurement_pulse_recipe(kind=..., build=..., inputs=...)` provides the
+same named-input boundary for readout. Its pulse function takes one `Qubit` and
+keyword-only inputs; its resolver receives the effective baseline parameters and a
+`Measure`. Only used objects and acquisition kinds resolve inputs. Gate candidate
+scopes do not change readout calibration. The pulse body must provide one matching
+acquisition contract and explicitly schedule its delay relative to the readout pulse.
+Repeated measurements retain separate result addresses while reusing an implementation.
+Integrated IQ is unclassified complex IQ, not raw ADC time samples; raw traces and
+classified states have separate contracts. Typed snapshot reads
 are available through `sc.parameter_rows`; a binding should select the required row
 before consuming its required fields, so unrelated unknown calibration does not block it.
 
