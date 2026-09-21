@@ -241,6 +241,21 @@ A zero waveform delta means return to the selected baseline, not necessarily zer
 physical output. These semantics do not establish physical equivalence between a
 smooth edge and an older stepped implementation.
 
+## Retaining prepared points across host batch splits
+
+`DomainBatchCandidate.from_points(request, prepared_points, retained_bytes=...,
+compile_batch=...)` supports candidates whose points are all compatible. Prepare
+one value per requested point, then let core select exact subranges. The callback
+receives the final request and the original prepared values in that request's order;
+it does not repeat lowering or copy waveform buffers. The reference compiler uses
+this path to retain lowered points and entries across host-state boundaries.
+
+The compiler still declares initial point and memory limits before core resolves
+inputs. Report all retained bulk bytes, including encoded content and callback
+captures; the callback must not accumulate more retained buffers. This helper does
+not estimate device capacity or memory. Targets that accept only a compatible
+prefix or retain batch-wide packing can use the direct candidate constructor.
+
 ## Mapping compiled acquisitions to experiment outputs
 
 For recipe-lowered targets, use

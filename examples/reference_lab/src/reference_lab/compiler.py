@@ -16,7 +16,6 @@ from scopecat.kernel.json_types import JsonValue
 from scopecat.sdk.domain import (
     DomainBatchCandidate,
     DomainBatchInputs,
-    DomainBatchPreparationCost,
     DomainBatchPreparationLimits,
     DomainBatchRequest,
     DomainCallView,
@@ -220,23 +219,18 @@ class QuantumLabCompiler:
             points,
             max_expanded_operations=self._target.max_program_event_count,
         )
-        source_indices = {
-            point_ordinal: index
-            for index, point_ordinal in enumerate(request.point_ordinals)
-        }
 
         def compile_exact(
             exact_request: DomainBatchRequest,
+            selected: tuple[
+                tuple[_CompiledQuantumPoint, PreparedQuantumTargetEntry], ...
+            ],
         ) -> PreparedDomainExecution:
-            selected_indices = tuple(
-                source_indices[point_ordinal]
-                for point_ordinal in exact_request.point_ordinals
-            )
-            selected_points = tuple(points[index] for index in selected_indices)
+            selected_points = tuple(point for point, _ in selected)
             selected_entries = _retarget_target_entries(
                 program,
                 selected_points,
-                tuple(entries[index] for index in selected_indices),
+                tuple(entry for _, entry in selected),
             )
             return self._compile_prepared_batch(
                 exact_request,
@@ -246,13 +240,11 @@ class QuantumLabCompiler:
                 shots=shots,
             )
 
-        return DomainBatchCandidate(
-            compatible_point_count=len(request.points),
-            preparation_cost=DomainBatchPreparationCost(
-                analyzed_point_count=len(request.points),
-                retained_bytes=0,
-            ),
-            _compile=compile_exact,
+        return DomainBatchCandidate.from_points(
+            request,
+            tuple(zip(points, entries, strict=True)),
+            retained_bytes=0,
+            compile_batch=compile_exact,
         )
 
     def _compile_target_artifact(

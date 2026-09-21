@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -23,6 +24,8 @@ from scopecat.program.domain import domain_program
 from scopecat.program.measurement_types import MeasurementDType
 from scopecat.program.products import ModuleProductDecl, ProductValueSpec
 from scopecat.sdk.domain import (
+    DomainBatchCandidate,
+    DomainBatchInputs,
     DomainBatchRequest,
     DomainPreparationBuilder,
     DomainResidencyAddress,
@@ -157,6 +160,61 @@ def _valid_mapping_inputs(
         for point in context.points
         for product_use in context.product_uses
     )
+
+
+def test_point_candidate_reuses_prepared_buffers_across_subranges(
+    tmp_path: Path,
+) -> None:
+    request = _preparation_context(tmp_path, namespace="retained-points")
+    buffers = [bytearray(b"first"), bytearray(b"second")]
+    seen: list[tuple[DomainBatchRequest, tuple[bytearray, ...]]] = []
+
+    class CompilationReached(Exception):
+        pass
+
+    def compile_batch(
+        selected: DomainBatchRequest, prepared: tuple[bytearray, ...]
+    ) -> PreparedDomainExecution:
+        seen.append((selected, prepared))
+        raise CompilationReached
+
+    candidate = DomainBatchCandidate.from_points(
+        request,
+        buffers,
+        retained_bytes=sum(map(len, buffers)),
+        compile_batch=compile_batch,
+    )
+    assert candidate.compatible_point_count == 2
+    assert candidate.preparation_cost.analyzed_point_count == 2
+    assert candidate.preparation_cost.retained_bytes == 11
+    assert seen == []
+
+    # Host splitting can start after the first prepared point and reuse a prefix.
+    for index in (1, 0, 1):
+        selected = replace(
+            request,
+            points=(request.points[index],),
+            legal_cut_offsets=(1,),
+            inputs=DomainBatchInputs(
+                program=tuple(
+                    (name, (values[index],)) for name, values in request.inputs.program
+                ),
+                compiler=(),
+            ),
+        )
+        with pytest.raises(CompilationReached):
+            candidate.compile(selected)
+        actual_request, (actual_buffer,) = seen[-1]
+        assert actual_request is selected
+        assert actual_buffer is buffers[index]
+
+    with pytest.raises(ValueError, match="zip"):
+        DomainBatchCandidate.from_points(
+            request,
+            buffers[:1],
+            retained_bytes=5,
+            compile_batch=compile_batch,
+        )
 
 
 def test_map_measurements_closes_exact_product_cover(

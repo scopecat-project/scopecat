@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from typing import Protocol
 
@@ -53,6 +53,44 @@ class DomainBatchCandidate:
         """Close one exact subrange of the compatible prefix."""
 
         return self._compile(request)
+
+    @classmethod
+    def from_points[PointT](
+        cls,
+        request: DomainBatchRequest,
+        prepared_points: Sequence[PointT],
+        *,
+        retained_bytes: int,
+        compile_batch: Callable[
+            [DomainBatchRequest, tuple[PointT, ...]], PreparedDomainExecution
+        ],
+    ) -> DomainBatchCandidate:
+        """Retain one prepared value per point for a fully compatible candidate.
+
+        Host-selected subranges receive the original values in request order,
+        without repeating point preparation or copying bulk buffers. The caller
+        must account for all retained bulk data, including callback captures, and
+        must not grow that working set inside ``compile_batch``. Initial limits
+        still belong to the compiler. Use the direct constructor when analysis
+        accepts only a prefix or retains batch-wide packing rather than points.
+        """
+
+        by_ordinal = dict(zip(request.point_ordinals, prepared_points, strict=True))
+
+        def compile_exact(selected: DomainBatchRequest) -> PreparedDomainExecution:
+            return compile_batch(
+                selected,
+                tuple(by_ordinal[ordinal] for ordinal in selected.point_ordinals),
+            )
+
+        return cls(
+            compatible_point_count=len(request.points),
+            preparation_cost=DomainBatchPreparationCost(
+                analyzed_point_count=len(request.points),
+                retained_bytes=retained_bytes,
+            ),
+            _compile=compile_exact,
+        )
 
 
 class DomainCompiler(Protocol):
