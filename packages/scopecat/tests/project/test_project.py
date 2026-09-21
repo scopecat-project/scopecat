@@ -485,3 +485,34 @@ def test_declared_author_modules_accept_only_explicit_installed_distribution(
             load_project(manifest).load_application()
     finally:
         sys.modules.pop("installed_lab_methods", None)
+
+
+def test_author_modules_extend_lab_catalog_without_importing(tmp_path: Path) -> None:
+    manifest = tmp_path / "scopecat.toml"
+    manifest.write_text(
+        '[lab.capabilities]\nauthor_modules=["lab.standard"]\n'
+        'experiment_system="lab.system:build"\n'
+        '[authors]\nmodules=["experiments.rabi", "lab.standard"]\n'
+    )
+    project = load_project(manifest)
+    assert project.capabilities is not None
+    assert project.capabilities.author_modules == ("lab.standard", "experiments.rabi")
+    assert project.capabilities.experiment_system == "lab.system:build"
+    assert "experiments.rabi" not in sys.modules
+
+
+@pytest.mark.parametrize("modules", ['"experiments"', '["experiments:run"]'])
+def test_invalid_author_module_selection(tmp_path: Path, modules: str) -> None:
+    manifest = tmp_path / "scopecat.toml"
+    manifest.write_text(f"[lab]\n[authors]\nmodules={modules}\n")
+    with pytest.raises(ProjectManifestError, match=r"authors\.modules"):
+        load_project(manifest)
+
+
+def test_author_modules_reject_custom_application_factory(tmp_path: Path) -> None:
+    manifest = tmp_path / "scopecat.toml"
+    manifest.write_text(
+        '[lab]\napplication="lab:create"\n[authors]\nmodules=["experiments"]\n'
+    )
+    with pytest.raises(ProjectManifestError, match=r"not lab\.application"):
+        load_project(manifest)

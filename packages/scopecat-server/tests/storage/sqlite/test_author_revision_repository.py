@@ -130,3 +130,29 @@ def test_windows_drive_paths_are_rejected_on_every_platform(
     manifest.write_text(f'[lab]\n[authors]\nsource_roots=["{name}"]\n')
     with pytest.raises(ProjectManifestError, match="relative subdirectories"):
         load_project(manifest)
+
+
+def test_author_catalog_selection_is_retained_but_not_shared_maintenance(
+    tmp_path: Path,
+) -> None:
+    manifest = tmp_path / "scopecat.toml"
+    original = (
+        '[lab.capabilities]\nexperiment_system="lab:build"\n'
+        '[authors]\nmodules=["experiments.first"]\n'
+    )
+    manifest.write_text(original)
+    first = capture_sources(load_project(manifest))
+    manifest.write_text(original.replace("experiments.first", "experiments.second"))
+    second = capture_sources(load_project(manifest))
+    assert first.manifest.ref != second.manifest.ref
+    assert first.manifest.maintenance_hash == second.manifest.maintenance_hash
+    restored = load_project(
+        materialize_sources(first, tmp_path / "retained") / "scopecat.toml"
+    )
+    assert restored.capabilities is not None
+    assert restored.capabilities.author_modules == ("experiments.first",)
+    manifest.write_text(original.replace("lab:build", "lab:other"))
+    assert (
+        capture_sources(load_project(manifest)).manifest.maintenance_hash
+        != first.manifest.maintenance_hash
+    )

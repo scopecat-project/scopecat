@@ -6,12 +6,17 @@ import base64
 import platform
 import shutil
 import tempfile
+import tomllib
 from contextvars import ContextVar
 from importlib.metadata import PackageNotFoundError, distributions, version
 from pathlib import Path
-from typing import Protocol
+from typing import Protocol, cast
 
-from scopecat.kernel.content_identity import sha256_content_hash, sha256_json_hash
+from scopecat.kernel.content_identity import (
+    content_fingerprint,
+    sha256_content_hash,
+    sha256_json_hash,
+)
 from scopecat.records.author_revision import (
     AuthorRevisionBundle,
     AuthorRevisionManifest,
@@ -97,6 +102,12 @@ def capture_sources(project: SourceProject) -> AuthorRevisionBundle:
         for name, digest in digests.items()
         if not any(Path(name).is_relative_to(root) for root in project.refresh_roots)
     }
+    # Catalog selection belongs to this author revision. Keep its exact bytes in
+    # files/ref, but compare laboratory maintenance independently of that choice.
+    document = tomllib.loads(files["scopecat.toml"].decode("utf-8"))
+    authors = cast("dict[str, object]", document.get("authors", {}))
+    authors.pop("modules", None)
+    maintenance["scopecat.toml"] = sha256_json_hash(content_fingerprint(document))
     from scopecat.execution_environment import execution_packages
     from scopecat.installed_authors import capture_installed_authors
 

@@ -26,8 +26,19 @@ class Summary:
 def test_two_workspace_publication_and_execution(tmp_path: Path) -> None:
     first = initialize_project(tmp_path / "first")
     second = initialize_project(tmp_path / "second")
+    # Each source selects its own catalog without copying laboratory capabilities.
+    manifest = second.root / "scopecat.toml"
+    manifest.write_text(
+        manifest.read_text().replace(
+            'modules = ["scopecat_lab.authored"]',
+            'modules = ["scopecat_lab.authored.signal"]',
+        )
+    )
     source = second.root / "src/scopecat_lab/authored/signal.py"
     source.write_text(source.read_text().replace("return 1.0 /", "return 2.0 /"))
+    (source.parent / "alternate.py").write_text(
+        source.read_text().replace('id="signal"', 'id="alternate"')
+    )
     registered = register_author_workspace(first.root, second.root)
     with pytest.raises(ValueError, match="service workspace"):
         LocalDaemonRuntime(second.root)
@@ -38,6 +49,7 @@ def test_two_workspace_publication_and_execution(tmp_path: Path) -> None:
             initial_b = b.state()
             assert initial_a.active != initial_b.active
             assert b.workspace_id == registered.id
+            assert {item.id for item in b.catalog().entries} == {"signal"}
             collection = a.create_record_collection("Shared acquisition")
             a.use(collection=collection.id)
             b.use(collection=collection.id)
@@ -57,7 +69,18 @@ def test_two_workspace_publication_and_execution(tmp_path: Path) -> None:
             source.write_text(
                 source.read_text().replace("return 2.0 /", "return 3.0 /")
             )
+            manifest.write_text(
+                manifest.read_text().replace(
+                    'modules = ["scopecat_lab.authored.signal"]',
+                    'modules = ["scopecat_lab.authored"]',
+                )
+            )
             refreshed_b = b.refresh_authors(expected_generation=initial_b.generation)
+            assert {item.id for item in b.catalog().entries} == {"signal", "alternate"}
+            assert {item.id for item in a.catalog().entries} == {"signal"}
+            assert {
+                item.id for item in b.catalog(code_revision=initial_b.active).entries
+            } == {"signal"}
             assert a.state() == initial_a
             assert refreshed_b.active != initial_b.active
             old = (

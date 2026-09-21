@@ -57,7 +57,8 @@ def test_init_creates_runnable_python_project_and_does_not_overwrite(
 
     assert project.bootstrap_spec == "scopecat_lab.application:create_bootstrap"
     assert project.application_spec is None
-    assert "[lab.capabilities]" in (tmp_path / "scopecat.toml").read_text()
+    assert project.capabilities is not None
+    assert project.capabilities.author_modules == ("scopecat_lab.authored",)
     assert (
         "create_application"
         not in (tmp_path / "src/scopecat_lab/application.py").read_text()
