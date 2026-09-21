@@ -39,6 +39,7 @@ from scopecat.sdk.domain import (
     DomainResultBinding,
     DomainResultValue,
     PreparedDomainExecution,
+    execute_domain_batch,
 )
 from scopecat.sdk.instruments import (
     DriverAcquisition,
@@ -74,6 +75,7 @@ from scopecat.sdk.instruments.execution import (
     RunHardwareCollect,
     RunHardwareCollectBinding,
     RunHardwareInvoke,
+    RunHardwareValue,
 )
 from scopecat.sdk.problems import ProblemPhase, problem
 
@@ -435,55 +437,50 @@ class VolatileProgramTarget:
         del payload
         if self.before_trigger is not None:
             self.before_trigger()
-        receipt = instruments.execute(
-            RunHardwareBatch(
-                operation_id=f"{execution_key}:acquire",
-                actions=(
-                    RunHardwareInvoke(
-                        effect_id=f"{execution_key}:trigger",
-                        instrument_id=_INSTRUMENT,
-                        resource_id=_INSTRUMENT,
-                        interface_id=_INTERFACE,
-                        operation_id="trigger",
-                    ),
-                    RunHardwareCollect(
-                        effect_id=f"{execution_key}:collect",
-                        instrument_id=_INSTRUMENT,
-                        point_count=1,
-                        requests=(
-                            CollectResultRequest(
-                                id="signal",
-                                interface_id=_INTERFACE,
-                                acquisition_id="sample",
-                                result_id="signal",
-                                unit="count",
-                            ),
+        batch = RunHardwareBatch(
+            operation_id=f"{execution_key}:acquire",
+            actions=(
+                RunHardwareInvoke(
+                    effect_id=f"{execution_key}:trigger",
+                    instrument_id=_INSTRUMENT,
+                    resource_id=_INSTRUMENT,
+                    interface_id=_INTERFACE,
+                    operation_id="trigger",
+                ),
+                RunHardwareCollect(
+                    effect_id=f"{execution_key}:collect",
+                    instrument_id=_INSTRUMENT,
+                    point_count=1,
+                    requests=(
+                        CollectResultRequest(
+                            id="signal",
+                            interface_id=_INTERFACE,
+                            acquisition_id="sample",
+                            result_id="signal",
+                            unit="count",
                         ),
-                        bindings=(
-                            RunHardwareCollectBinding(
-                                request_id="signal", value_ids=("signal",)
-                            ),
+                    ),
+                    bindings=(
+                        RunHardwareCollectBinding(
+                            request_id="signal", value_ids=("signal",)
                         ),
                     ),
                 ),
-            )
-        )
-        if receipt.problems or receipt.indeterminate:
-            return DomainExecutionReceipt(
-                execution_key=execution_key,
-                status="unknown" if receipt.indeterminate else "not_executed",
-                problems=receipt.problems,
-            )
-        [value] = receipt.values
-        assert isinstance(value.value, MeasurementScalar)
-        return DomainExecutionResult(
-            DomainExecutionReceipt(
-                execution_key=execution_key,
-                status="completed",
-                result_fingerprint="signal-1",
-                result_count=1,
             ),
-            value.value,
+        )
+
+        def decode(values: tuple[RunHardwareValue, ...]) -> MeasurementScalar:
+            [value] = values
+            assert isinstance(value.value, MeasurementScalar)
+            return value.value
+
+        return execute_domain_batch(
+            execution_key,
+            batch,
+            instruments=instruments,
+            artifact_fingerprint=hashlib.sha256(self.content.encode()).hexdigest(),
+            result_count=1,
+            decode_result=decode,
         )
 
     def realize(

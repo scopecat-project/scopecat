@@ -8,6 +8,7 @@ import sys
 import scopecat.sdk.domain as domain
 
 _DOMAIN_ADAPTER_CONTRACTS = {
+    "execute_domain_batch",
     "DomainBatchInputs",
     "DomainBatchRequest",
     "DomainExecutionReceipt",

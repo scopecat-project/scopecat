@@ -97,6 +97,7 @@ class _RunHardwareReceiptWire(_WireModel):
         "scopecat.run_hardware_receipt.v1"
     )
     operation_id: str = Field(min_length=1)
+    completed_effect_ids: tuple[str, ...]
     values: tuple[_RunHardwareValueWire, ...] = ()
     state_actions: tuple[RunHardwareStateActionReceipt, ...] = ()
     problems: tuple[Problem, ...] = ()
@@ -169,6 +170,7 @@ def encode_run_hardware_receipt(receipt: RunHardwareBatchReceipt) -> bytes:
     attachments: list[EncodedMeasurementArray] = []
     header = _RunHardwareReceiptWire(
         operation_id=receipt.operation_id,
+        completed_effect_ids=receipt.completed_effect_ids,
         values=tuple(
             _RunHardwareValueWire(
                 point_index=value.point_index,
@@ -198,6 +200,7 @@ def decode_run_hardware_receipt(content: bytes) -> RunHardwareBatchReceipt:
     try:
         return RunHardwareBatchReceipt(
             operation_id=header.operation_id,
+            completed_effect_ids=header.completed_effect_ids,
             values=tuple(
                 RunHardwareValue(
                     point_index=value.point_index,
