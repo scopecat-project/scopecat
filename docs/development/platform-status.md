@@ -151,3 +151,13 @@ per-session kernelspec and does not start an experiment service. Relaunch after 
 stopped environment update to select the replacement interpreter. Existing kernels
 and external editors are not redirected; close them before updating. This is a
 foreground local entry, not manager-owned Notebook lifecycle supervision.
+
+
+### Installed laboratory first use
+
+The setup form can create a minimal installed-adapter laboratory from a delivery
+and bind an existing source-only author folder in its selected interpreter (#719).
+Author registration succeeds before startup, and the resulting workbench selects
+that source. Connect retries preserve completed environment/registration and source
+IDs. Building the new private adapter and its author examples, checkout/build recipe
+integration and richer development diagnostics remain separate work.

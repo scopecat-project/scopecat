@@ -58,12 +58,16 @@ function mount(serviceState = "running", fresh = false) {
         : Response.json(state);
     if (path === "/api/operations") {
       if (typeof options.body !== "string") throw new Error("Expected a JSON command");
-      const command = JSON.parse(options.body) as { action: string };
+      const command = JSON.parse(options.body) as {
+        action: string;
+        setup?: { author_workspace?: string };
+      };
       if (command.action === "setup" && !control.failOperation) state.services = [initialService];
       requests.push({ path, body: command });
       const operation = {
         command,
         service: command.action === "setup" ? "service-a" : null,
+        workspace: command.setup?.author_workspace ? "author-id" : null,
         status: control.failOperation ? "failed" : "succeeded",
         detail: control.failOperation ? "environment mismatch retained in log" : "ready",
         created: 0,
@@ -251,6 +255,9 @@ it("shows first-run setup, preserves edits during polling, and enters the create
       data_root: "E:\\科学记录",
       settings_file: null,
       environment_bundle: null,
+      adapter_distribution: null,
+      adapter_manifest: null,
+      author_workspace: null,
       name: null,
     },
   });
@@ -339,4 +346,37 @@ it("updates the selected stopped laboratory without opening or creating another 
   });
   expect(host.assign).not.toHaveBeenCalled();
   expect(screen.queryByRole("link", { name: "打开工作台（新标签页）" })).not.toBeInTheDocument();
+});
+
+it("sets up an installed adapter and opens the independently registered author catalog", async () => {
+  const host = mount("running", true);
+  await screen.findByLabelText("接入方式");
+  fireEvent.change(screen.getByLabelText("接入方式"), { target: { value: "adapter" } });
+  const fields = {
+    新的实验室运行目录: "/lab/runtime",
+    适配包名称: "my-lab",
+    包内声明路径: "my_lab/adapter.toml",
+    实验室离线交付目录: "/builds/current",
+    "独立作者代码目录（可选）": "/author/code",
+  };
+  for (const [label, value] of Object.entries(fields)) {
+    fireEvent.input(screen.getByLabelText(label), { target: { value } });
+  }
+  await host.poll();
+  expect(screen.getByLabelText("适配包名称")).toHaveValue("my-lab");
+  fireEvent.submit(document.getElementById("setup-form")!);
+  await waitFor(() =>
+    expect(host.assign).toHaveBeenCalledWith("http://127.0.0.1:9001/?workspace=author-id"),
+  );
+  expect(host.requests[0]?.body).toMatchObject({
+    action: "setup",
+    setup: {
+      mode: "adapter",
+      project: "/lab/runtime",
+      environment_bundle: "/builds/current",
+      adapter_distribution: "my-lab",
+      adapter_manifest: "my_lab/adapter.toml",
+      author_workspace: "/author/code",
+    },
+  });
 });

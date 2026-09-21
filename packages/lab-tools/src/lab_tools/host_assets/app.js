@@ -84,7 +84,9 @@ async function submit(command) {
       if (service?.state !== "running" || !service.url) throw new Error("实验服务尚未就绪，请查看日志。");
       const url = workbenchUrl(service.url);
       if (command.action === "setup") {
-        location.assign(url);
+        const selected = new URL(url);
+        if (operation.workspace) selected.searchParams.set("workspace", operation.workspace);
+        location.assign(selected.href);
         return;
       }
       readyServices.set(identity, url);
@@ -246,7 +248,15 @@ setupForm.addEventListener("input", () => { setupVisited = true; });
 document.getElementById("setup-mode").addEventListener("change", event => {
   setupVisited = true;
   const connect = event.target.value === "connect";
-  document.getElementById("setup-description").textContent = connect ? "选择包含 scopecat.toml 的实验室代码文件夹。沿用已有设置；若依赖或环境需要处理，会在操作结果中说明。" : "创建可修改的基础实验项目。你的实验代码保存在此处，教学专题在帮助中单独提供。";
+  const adapter = event.target.value === "adapter";
+  document.getElementById("setup-adapter-fields").hidden = !adapter;
+  document.getElementById("setup-author-fields").hidden = !(connect || adapter);
+  document.getElementById("setup-adapter-distribution").required = adapter;
+  document.getElementById("setup-adapter-manifest").required = adapter;
+  document.getElementById("setup-bundle").required = adapter;
+  document.querySelector('label[for="setup-bundle"]').textContent = adapter ? "实验室离线交付目录" : "实验室离线交付目录（可选）";
+  document.querySelector('label[for="setup-project"]').textContent = adapter ? "新的实验室运行目录" : "主要代码文件夹";
+  document.getElementById("setup-description").textContent = adapter ? "从交付包准备实验室适配与运行环境；实验和分析代码可以放在独立作者目录中。" : connect ? "选择包含 scopecat.toml 的实验室代码文件夹。沿用已有设置；若依赖或环境需要处理，会在操作结果中说明。" : "创建可修改的基础实验项目。你的实验代码保存在此处，教学专题在帮助中单独提供。";
   document.getElementById("setup-project-help").textContent = connect ? "填写实验室代码文件夹的完整路径。" : "填写本机完整路径；填写尚不存在的新目录，应用会创建它。";
   document.getElementById("setup-data-help").textContent = connect ? "留空保留该项目已有的数据绑定。填写新目录不会迁移已有记录。" : "留空使用新项目的默认数据目录。";
   document.getElementById("setup-data").placeholder = connect ? "留空保留已有数据绑定" : "留空使用项目默认目录";
@@ -258,6 +268,9 @@ setupForm.addEventListener("submit", event => {
   if (!value("setup-project")) { message("请填写主要代码文件夹的完整路径。", true); return; }
   submit({ action: "setup", setup: {
     mode: value("setup-mode"), project: value("setup-project"),
+    adapter_distribution: value("setup-mode") === "adapter" ? value("setup-adapter-distribution") : null,
+    adapter_manifest: value("setup-mode") === "adapter" ? value("setup-adapter-manifest") : null,
+    author_workspace: value("setup-mode") === "create" ? null : value("setup-author") || null,
     data_root: value("setup-data") || null, settings_file: value("setup-settings") || null, environment_bundle: value("setup-bundle") || null, name: value("setup-name") || null,
   } }).catch(error => message(error.message, true));
 });
