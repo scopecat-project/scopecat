@@ -361,6 +361,42 @@ def parameter_snapshot(
     )
 
 
+def parameter_rows[T: ParameterModel](
+    snapshot: ParameterSnapshot,
+    model: type[T],
+) -> tuple[T, ...]:
+    """Read detached typed rows from an effective snapshot without defaults.
+
+    Unknown required cells remain unreadable; optional unknowns become None.
+    Editing returned rows does not mutate the snapshot. Compiler adapters should
+    freeze consumed values before retaining them in a compilation cache.
+    """
+    name = parameter_table_name(model)
+    stored = snapshot.get(name)
+    if stored is None:
+        raise ValueError(
+            f"{name}: parameter table is missing from snapshot {snapshot.id!r}"
+        )
+    normalized = coerce_stored_parameter_value(
+        parameter_definition(model), stored, path=(name,), allow_missing=True
+    )
+    assert isinstance(normalized, TableParameterValue)
+    rows: list[T] = []
+    for values in normalized.rows:
+        row = object.__new__(model)
+        detached: dict[str, object] = {}
+        for field in parameter_fields(model):
+            value = values.get(field.name)
+            if value is None:
+                if field.optional:
+                    detached[field.name] = None
+                continue
+            detached[field.name] = value.value if isinstance(value, Quantity) else value
+        object.__setattr__(row, "_parameter_values", detached)
+        rows.append(row)
+    return tuple(rows)
+
+
 def parameter_row_values(row: ParameterModel) -> dict[str, ParameterAtomValue]:
     """Detach stored values from a model, preserving declared physical units."""
     values: dict[str, ParameterAtomValue] = {}

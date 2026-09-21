@@ -133,6 +133,7 @@ if TYPE_CHECKING:
         param,
         parameter_definition,
         parameter_ref,
+        parameter_rows,
         parameter_snapshot,
         parameter_table_name,
         parameter_table_ref,
@@ -326,6 +327,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
         "scopecat.authoring.parameter_models",
         "parameter_definition",
     ),
+    "parameter_rows": ("scopecat.authoring.parameter_models", "parameter_rows"),
     "parameter_snapshot": ("scopecat.authoring.parameter_models", "parameter_snapshot"),
     "parameter_table_ref": (
         "scopecat.authoring.parameter_models",
