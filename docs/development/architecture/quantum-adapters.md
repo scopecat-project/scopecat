@@ -24,6 +24,34 @@ planning already available in the quantum package remain framework responsibilit
 Hardware-specific constraints belong in explicit capabilities or encoding rules, rather
 than copied general-purpose schedulers.
 
+## Windows around calibrated operations
+
+`authoring.flat_top_window(signal, body, amplitude=..., rise_duration=...,
+fall_duration=..., settle_duration=...)` composes a cosine-flat-top control waveform
+around a static body. The body may contain calibrated gates, explicit pulses and
+measurement. Its duration is determined after recipe and measurement lowering,
+so authors do not forward gate widths or sum readout and acquisition durations.
+
+The body starts after the rise and settling intervals. The plateau lasts for the
+settling interval plus the complete lowered body; the fall begins only after that
+body ends. Both the readout pulse and acquisition contribute through the existing
+scheduler. The body is lowered once, retaining acquisition identities and recipe
+scopes. Overlapping use of the window signal is subject to normal resource validation.
+Realtime conditional bodies are outside this initial static-window contract.
+
+Measurement recipes must include acquisition start delays in their pulse body, rather
+than shifting acquisition later during target encoding. Author `capture = acquire(...)`
+and compose `sequence(delay(capture.signal, offset), capture)` alongside the readout
+pulse. `delay` accepts acquisition signals and nonnegative durations, including a
+scanned zero offset. The window then covers whichever ends later: readout or capture.
+
+The public waveform has no device-specific zero tail. A target may require an explicit
+zero-delta segment before combining a waveform with a resident baseline. That segment,
+DAC block alignment, baseline addition and range checks remain adapter/driver policy.
+A zero waveform delta means return to the selected baseline, not necessarily zero
+physical output. These semantics do not establish physical equivalence between a
+smooth edge and an older stepped implementation.
+
 ## Remaining framework work
 
 This entry point centralizes existing orchestration; it does not implement automatic

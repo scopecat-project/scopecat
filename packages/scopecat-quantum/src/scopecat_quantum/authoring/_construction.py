@@ -14,6 +14,7 @@ from typing import (
     overload,
 )
 
+from scopecat import Quantity
 from scopecat.authoring import (
     QuantityType,
     ScalarType,
@@ -44,6 +45,7 @@ from scopecat_quantum.pulses import (
     EnvelopePhaseReference,
     FluxSignal,
     FrameSignal,
+    LogicalSignal,
     PlaySignal,
     ReadoutSignal,
 )
@@ -102,6 +104,7 @@ from ._ir import (
     RepeatCount,
     _ConditionalFragment,
     _DelayFragment,
+    _FlatTopWindowFragment,
     _ParallelCouplerEachFragment,
     _ParallelEachFragment,
     _ParallelFragment,
@@ -499,11 +502,47 @@ def play(
     )
 
 
-def delay(signal: PlaySignal, duration: QuantumQuantity, /) -> PulseFragment:
+def delay(signal: LogicalSignal, duration: QuantumQuantity, /) -> PulseFragment:
     """Reserve time on one logical signal."""
 
     _require_quantity_expression(duration, field="duration", kind="time")
     return _DelayFragment(signal=signal, duration=duration)
+
+
+_ZERO_WINDOW_SETTLE = Quantity(0, "ns")
+
+
+def flat_top_window(
+    signal: PlaySignal,
+    body: QuantumFragment,
+    /,
+    *,
+    amplitude: QuantumQuantity,
+    rise_duration: QuantumQuantity,
+    fall_duration: QuantumQuantity,
+    settle_duration: QuantumQuantity = _ZERO_WINDOW_SETTLE,
+) -> QuantumFragment:
+    """Surround a static body with a cosine-edged control window.
+
+    The body starts after the rise and settling intervals. The plateau extends
+    through its complete lowered duration, including recipe gates and acquisition.
+    All durations share the canonical logical timeline. Device-specific tails and
+    resident operating-point addition belong to the target adapter.
+    """
+    _require_quantity_expression(amplitude, field="amplitude", kind="amplitude")
+    for name, value in (
+        ("rise_duration", rise_duration),
+        ("fall_duration", fall_duration),
+        ("settle_duration", settle_duration),
+    ):
+        _require_quantity_expression(value, field=name, kind="time")
+    if _summarize_fragment(body).has_realtime:
+        raise ValueError(
+            "flat_top_window requires a static body without real-time control"
+        )
+    return _FlatTopWindowFragment(
+        signal, body, amplitude, rise_duration, fall_duration, settle_duration
+    )
 
 
 def recipe_scope(scope: str, operation: QuantumFragment) -> QuantumFragment:

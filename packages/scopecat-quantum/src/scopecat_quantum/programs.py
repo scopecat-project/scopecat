@@ -15,15 +15,20 @@ static regions while preserving bounded real-time control for the compiler.
 from __future__ import annotations
 
 import itertools
+import math
 from collections import Counter
 from collections.abc import Iterator
 from collections.abc import Sequence as SequenceCollection
 from dataclasses import dataclass, replace
+from decimal import Decimal
 from typing import Literal
+
+from scopecat import Quantity
 
 from scopecat_quantum._ids import (
     AcquisitionSlotId,
     CircuitOperationId,
+    PulseEventId,
     PulseProgramId,
     QuantumProgramId,
     QubitId,
@@ -49,12 +54,17 @@ from scopecat_quantum.pulses import (
     Acquire,
     AcquireSignal,
     AcquisitionSlot,
+    CosineFlatTop,
     DriveSignal,
+    FluxSignal,
     LogicalSignal,
+    Play,
+    PlaySignal,
     PulseInstruction,
     PulseProgram,
     PulseValidationError,
     ReadoutSignal,
+    TimeShift,
     iter_pulse_leaves,
     pulse_leaf_owners,
     schedule,
@@ -115,6 +125,35 @@ class Parallel:
 
 
 @dataclass(frozen=True, slots=True)
+class FlatTopWindow:
+    """A smooth window whose plateau follows a static lowered body's duration."""
+
+    id: CircuitOperationId
+    signal: PlaySignal
+    operation: QuantumNode
+    amplitude: Quantity
+    rise_duration: Quantity
+    fall_duration: Quantity
+    settle_duration: Quantity
+
+    def __post_init__(self) -> None:
+        for name, quantity in (
+            ("rise_duration", self.rise_duration),
+            ("fall_duration", self.fall_duration),
+            ("settle_duration", self.settle_duration),
+        ):
+            value = quantity.to("s").value
+            if not math.isfinite(value) or value < 0:
+                raise ValueError(
+                    f"flat_top_window {name} must be finite and non-negative"
+                )
+        if _node_requires_realtime_target(self.operation):
+            raise ValueError(
+                "flat_top_window requires a static body without real-time control"
+            )
+
+
+@dataclass(frozen=True, slots=True)
 class ParallelEach:
     """One retained entity-set map with a single bound body template."""
 
@@ -170,7 +209,13 @@ class Conditional:
 
 type QuantumOperation = GateCall | Measure | PulseBlock | ImplementedGate
 type QuantumNode = (
-    QuantumOperation | Sequence | Parallel | ParallelEach | Repeat | Conditional
+    QuantumOperation
+    | Sequence
+    | Parallel
+    | ParallelEach
+    | Repeat
+    | Conditional
+    | FlatTopWindow
 )
 
 
@@ -288,6 +333,13 @@ class QuantumProgramWorkload:
     max_parallel_width: int
 
 
+def _window_qubits(node: FlatTopWindow) -> tuple[QubitId, ...]:
+    owner = (
+        node.signal.owner if isinstance(node.signal, FluxSignal) else node.signal.qubit
+    )
+    return (owner,) if isinstance(owner, QubitId) else ()
+
+
 def estimate_quantum_program_workload(
     program: VerifiedQuantumProgram,
 ) -> QuantumProgramWorkload:
@@ -325,6 +377,14 @@ def estimate_quantum_program_workload(
                 if isinstance(owner, QubitId) and owner not in selected_template_items
             )
             return 1, 1
+        if isinstance(node, FlatTopWindow):
+            structural, expanded = estimate(node.operation, selected_template_items)
+            selected_entities.update(
+                owner
+                for owner in _window_qubits(node)
+                if owner not in selected_template_items
+            )
+            return structural + 1, expanded + 1
         if isinstance(node, Repeat):
             structural, expanded = estimate(node.operation, selected_template_items)
             return structural, expanded * node.count
@@ -352,6 +412,8 @@ def estimate_quantum_program_workload(
     def parallel_width(node: QuantumNode) -> int:
         if isinstance(node, GateCall | Measure | ImplementedGate | PulseBlock):
             return 1
+        if isinstance(node, FlatTopWindow):
+            return 1 + parallel_width(node.operation)
         if isinstance(node, Repeat):
             return parallel_width(node.operation)
         if isinstance(node, ParallelEach):
@@ -385,6 +447,9 @@ def iter_quantum_operations(node: QuantumNode) -> Iterator[QuantumOperation]:
     ):
         yield node
         return
+    if isinstance(node, FlatTopWindow):
+        yield from iter_quantum_operations(node.operation)
+        return
     if isinstance(node, Repeat):
         if node.count:
             yield from iter_quantum_operations(node.operation)
@@ -414,6 +479,9 @@ def iter_expanded_quantum_operations(node: QuantumNode) -> Iterator[QuantumOpera
         GateCall | Measure | PulseBlock | ImplementedGate,
     ):
         yield node
+        return
+    if isinstance(node, FlatTopWindow):
+        yield from iter_expanded_quantum_operations(node.operation)
         return
     if isinstance(node, Repeat):
         for _ in range(node.count):
@@ -497,6 +565,10 @@ def _substitute_pulse_template(
         return signal
 
     def substitute_instruction(instruction: PulseInstruction) -> PulseInstruction:
+        if isinstance(instruction, TimeShift):
+            return replace(
+                instruction, instruction=substitute_instruction(instruction.instruction)
+            )
         if isinstance(instruction, PulseSequence):
             return PulseSequence(
                 tuple(
@@ -598,6 +670,25 @@ def _substitute_quantum_node(
                 for child in node.branches
             ),
             alignment=node.alignment,
+        )
+    if isinstance(node, FlatTopWindow):
+        signal = node.signal
+        if isinstance(signal, FluxSignal):
+            signal = replace(
+                signal, owner=target if signal.owner == source else signal.owner
+            )
+        else:
+            signal = replace(
+                signal,
+                qubit=_substitute_qubit(signal.qubit, source=source, target=target),
+            )
+        return replace(
+            node,
+            id=_scoped_operation_id(node.id, scope),
+            signal=signal,
+            operation=_substitute_quantum_node(
+                node.operation, source=source, target=target, scope=scope
+            ),
         )
     if isinstance(node, Repeat):
         return Repeat(
@@ -937,6 +1028,8 @@ def _node_has_acquisitions(node: QuantumNode) -> bool:
         return bool(node.pulse_template.acquisition_slots)
     if isinstance(node, GateCall | ImplementedGate):
         return False
+    if isinstance(node, FlatTopWindow):
+        return _node_has_acquisitions(node.operation)
     if isinstance(node, Repeat):
         return node.count > 0 and _node_has_acquisitions(node.operation)
     if isinstance(node, ParallelEach):
@@ -955,6 +1048,8 @@ def _node_requires_realtime_target(node: QuantumNode) -> bool:
         return False
     if isinstance(node, Conditional):
         return True
+    if isinstance(node, FlatTopWindow):
+        return _node_requires_realtime_target(node.operation)
     if isinstance(node, Repeat):
         return node.result_dimension_id is not None or _node_requires_realtime_target(
             node.operation
@@ -970,6 +1065,8 @@ def _node_needs_realtime_verification(node: QuantumNode) -> bool:
         return False
     if isinstance(node, Conditional):
         return True
+    if isinstance(node, FlatTopWindow):
+        return _node_needs_realtime_verification(node.operation)
     if isinstance(node, Repeat):
         return (
             node.result_dimension_id is not None
@@ -989,6 +1086,10 @@ def _collect_source_acquisitions(
 ) -> tuple[_SourceAcquisition, ...]:
     if isinstance(node, GateCall | Measure | PulseBlock | ImplementedGate):
         return _leaf_acquisitions(node, source_program_id=source_program_id)
+    if isinstance(node, FlatTopWindow):
+        return _collect_source_acquisitions(
+            node.operation, source_program_id=source_program_id
+        )
     if isinstance(node, Repeat):
         if node.count == 0:
             return ()
@@ -1228,6 +1329,17 @@ def _verify_quantum_realtime_dataflow(
                 slot_id: active_result_dimensions for slot_id, _contract in acquisitions
             },
         }
+    if isinstance(node, FlatTopWindow):
+        return _verify_quantum_realtime_dataflow(
+            node.operation,
+            source_program_id=source_program_id,
+            path=(*path, "body"),
+            available=available,
+            active_result_dimensions=active_result_dimensions,
+            slot_index=slot_index,
+            issues=issues,
+            inside_conditional_branch=inside_conditional_branch,
+        )
     if isinstance(node, Sequence):
         selected = available
         for index, child in enumerate(node.operations):
@@ -1388,7 +1500,7 @@ def _iter_operations_with_paths(
                 (*path, "branches", index),
             )
         return
-    if isinstance(node, ParallelEach):
+    if isinstance(node, ParallelEach | FlatTopWindow):
         yield from _iter_operations_with_paths(
             node.operation,
             (*path, "operation"),
@@ -1418,14 +1530,14 @@ def _verify_parallel_qubits(
     path: tuple[QuantumIssuePathItem, ...],
     issues: list[CircuitIssue],
 ) -> set[QubitId]:
-    if isinstance(node, GateCall):
-        return set(node.qubits)
+    if isinstance(node, GateCall | ImplementedGate):
+        return set((node.call if isinstance(node, ImplementedGate) else node).qubits)
     if isinstance(node, Measure):
         return {node.qubit}
     if isinstance(node, PulseBlock):
         return set()
-    if isinstance(node, ImplementedGate):
-        return set(node.call.qubits)
+    if isinstance(node, FlatTopWindow):
+        return _verify_parallel_qubits(node.operation, (*path, "body"), issues)
     if isinstance(node, Sequence):
         sequence_touched: set[QubitId] = set()
         for index, child in enumerate(node.operations):
@@ -1833,6 +1945,44 @@ def _lower_node(
     acquisition_slots: list[AcquisitionSlot],
     occurrence_scope: tuple[str, ...],
 ) -> PulseInstruction:
+    if isinstance(node, FlatTopWindow):
+        slot_start = len(acquisition_slots)
+        body = _lower_node(
+            node.operation,
+            source_program_id=source_program_id,
+            bindings=bindings,
+            acquisition_slots=acquisition_slots,
+            occurrence_scope=occurrence_scope,
+        )
+        prefix = (
+            "programs",
+            source_program_id.value,
+            *occurrence_scope,
+            "operations",
+            node.id.value,
+        )
+        body_program = PulseProgram(
+            PulseProgramId("/".join(prefix)),
+            body,
+            acquisition_slots=tuple(acquisition_slots[slot_start:]),
+        )
+        body_duration = schedule(body_program).duration_seconds
+        rise = Decimal(str(node.rise_duration.to("s").value))
+        settle = Decimal(str(node.settle_duration.to("s").value))
+        fall = Decimal(str(node.fall_duration.to("s").value))
+        envelope = CosineFlatTop(
+            duration=Quantity(float(rise + settle + body_duration + fall), "s"),
+            amplitude=node.amplitude,
+            rise_duration=node.rise_duration,
+            fall_duration=node.fall_duration,
+        )
+        shifted_body = TimeShift(body, Quantity(float(rise + settle), "s"))
+        return PulseParallel(
+            (
+                Play(PulseEventId("window", scope=prefix), node.signal, envelope),
+                shifted_body,
+            )
+        )
     if isinstance(node, Sequence):
         return PulseSequence(
             tuple(
@@ -1967,6 +2117,10 @@ def _instantiate_template(
     }
 
     def instantiate(instruction: PulseInstruction) -> PulseInstruction:
+        if isinstance(instruction, TimeShift):
+            return replace(
+                instruction, instruction=instantiate(instruction.instruction)
+            )
         if isinstance(instruction, PulseSequence):
             return PulseSequence(
                 tuple(instantiate(child) for child in instruction.instructions)

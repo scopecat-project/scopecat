@@ -34,6 +34,7 @@ from scopecat_quantum.pulses import (
     AnalyticEnvelope,
     EnvelopePhaseReference,
     FrameSignal,
+    LogicalSignal,
     PlaySignal,
 )
 
@@ -337,7 +338,7 @@ type CouplerInput = Annotated[
 QUANTUM_PROGRAM_DIALECT_ID = "scopecat.quantum.program"
 
 
-QUANTUM_PROGRAM_DIALECT_VERSION = "6"
+QUANTUM_PROGRAM_DIALECT_VERSION = "7"
 
 
 class _GateHandle(Protocol):
@@ -444,7 +445,7 @@ class _PlayFragment(PulseFragment):
 
 @dataclass(frozen=True, slots=True)
 class _DelayFragment(PulseFragment):
-    signal: PlaySignal
+    signal: LogicalSignal
     duration: QuantumQuantity
 
 
@@ -458,6 +459,16 @@ class _ShiftPhaseFragment(PulseFragment):
 class _PulseTemplateCallFragment(PulseFragment):
     template: _PulseTemplateHandle
     body: QuantumFragment
+
+
+@dataclass(frozen=True, slots=True)
+class _FlatTopWindowFragment(QuantumFragment):
+    signal: PlaySignal
+    body: QuantumFragment
+    amplitude: QuantumQuantity
+    rise_duration: QuantumQuantity
+    fall_duration: QuantumQuantity
+    settle_duration: QuantumQuantity
 
 
 @dataclass(frozen=True, slots=True)

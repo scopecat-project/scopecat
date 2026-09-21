@@ -36,6 +36,7 @@ from scopecat_quantum.programs import (
     Conditional as IrQuantumConditional,
 )
 from scopecat_quantum.programs import (
+    FlatTopWindow,
     ImplementedGate,
     PulseBlock,
     QuantumNode,
@@ -104,6 +105,7 @@ from ._ir import (
     _ConditionalFragment,
     _DelayFragment,
     _ExpandedFragment,
+    _FlatTopWindowFragment,
     _FragmentCall,
     _GateFragment,
     _ImplementedGateFragment,
@@ -349,7 +351,7 @@ def _apply_recipe_scope(node: QuantumNode, scope: str) -> QuantumNode:
                 _apply_recipe_scope(child, scope) for child in node.branches
             ),
         )
-    if isinstance(node, IrQuantumRepeat | IrQuantumParallelEach):
+    if isinstance(node, IrQuantumRepeat | IrQuantumParallelEach | FlatTopWindow):
         return replace(node, operation=_apply_recipe_scope(node.operation, scope))
     if isinstance(node, IrQuantumConditional):
         return replace(
@@ -372,6 +374,24 @@ def _bind_quantum_fragment(
     path: tuple[str, ...],
     acquisition_scope: tuple[str, ...] = (),
 ) -> QuantumNode:
+    if isinstance(fragment, _FlatTopWindowFragment):
+        return FlatTopWindow(
+            id=CircuitOperationId(_operation_id(path, "window")),
+            signal=cast(
+                "PlaySignal", _substitute_signal(fragment.signal, element_bindings)
+            ),
+            operation=_bind_quantum_fragment(
+                fragment.body,
+                bindings,
+                element_bindings=element_bindings,
+                path=(*path, "body"),
+                acquisition_scope=acquisition_scope,
+            ),
+            amplitude=_bound_quantity(fragment.amplitude, bindings),
+            rise_duration=_bound_quantity(fragment.rise_duration, bindings),
+            fall_duration=_bound_quantity(fragment.fall_duration, bindings),
+            settle_duration=_bound_quantity(fragment.settle_duration, bindings),
+        )
     if isinstance(fragment, _RecipeScopeFragment):
         body = _bind_quantum_fragment(
             fragment.body,
@@ -671,10 +691,7 @@ def _bind_pulse_fragment(
     if isinstance(fragment, _DelayFragment):
         return Delay(
             id=PulseEventId("delay", scope=path),
-            signal=cast(
-                "PlaySignal",
-                _substitute_signal(fragment.signal, element_bindings),
-            ),
+            signal=_substitute_signal(fragment.signal, element_bindings),
             duration=_bound_quantity(fragment.duration, bindings),
         )
     if isinstance(fragment, Acquisition):
@@ -955,7 +972,9 @@ def _bound_gate_definitions(
 ) -> tuple[GateDefinition, ...]:
     """Derive the exact gate catalog from the point-bound fragment tree."""
 
-    if isinstance(fragment, _ExpandedFragment | _RecipeScopeFragment):
+    if isinstance(
+        fragment, _ExpandedFragment | _RecipeScopeFragment | _FlatTopWindowFragment
+    ):
         return _bound_gate_definitions(fragment.body, bindings)
     if isinstance(fragment, _FragmentCall):
         raise AssertionError("quantum fragment calls must expand before binding")

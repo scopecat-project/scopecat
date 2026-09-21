@@ -328,7 +328,7 @@ def test_draw_exposes_switch_cases_and_repeat_result_dimension() -> None:
     assert "switch $state" in rendered
     assert "case 1" in rendered
     assert "default" in rendered
-    assert authoring.QUANTUM_PROGRAM_DIALECT_VERSION == "6"
+    assert authoring.QUANTUM_PROGRAM_DIALECT_VERSION == "7"
 
     bound = authoring.bind(declaration)
     snapshot = build_quantum_program_inspection_snapshot(

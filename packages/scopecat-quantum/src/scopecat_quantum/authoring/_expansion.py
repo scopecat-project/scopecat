@@ -25,6 +25,7 @@ from ._ir import (
     QubitSet,
     _ConditionalFragment,
     _ExpandedFragment,
+    _FlatTopWindowFragment,
     _FragmentCall,
     _FragmentHandle,
     _ParallelCouplerEachFragment,
@@ -56,7 +57,9 @@ def _expand_fragment_calls(
         )
         _validate_expanded_fragment(value, expanded)
         return _ExpandedFragment(definition_id=definition.id, body=expanded)
-    if isinstance(value, _ExpandedFragment | _RecipeScopeFragment):
+    if isinstance(
+        value, _ExpandedFragment | _RecipeScopeFragment | _FlatTopWindowFragment
+    ):
         return replace(
             value,
             body=_expand_fragment_calls(value.body, bindings, stack=stack),

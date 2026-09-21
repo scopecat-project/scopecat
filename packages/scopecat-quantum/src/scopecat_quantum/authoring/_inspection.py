@@ -54,6 +54,7 @@ from ._ir import (
     _ConditionalFragment,
     _DelayFragment,
     _ExpandedFragment,
+    _FlatTopWindowFragment,
     _FragmentCall,
     _GateFragment,
     _ImplementedGateFragment,
@@ -158,6 +159,15 @@ def _draw_inspection_children(
 
 
 def _inspection_node(fragment: QuantumFragment) -> _InspectionNode:
+    if isinstance(fragment, _FlatTopWindowFragment):
+        return _InspectionNode(
+            f"flat_top_window {fragment.signal!r}"
+            f" amplitude={_inspection_value(fragment.amplitude)}"
+            f" rise={_inspection_value(fragment.rise_duration)}"
+            f" settle={_inspection_value(fragment.settle_duration)}"
+            f" fall={_inspection_value(fragment.fall_duration)}",
+            children=(_inspection_node(fragment.body),),
+        )
     if isinstance(fragment, _RecipeScopeFragment):
         return _InspectionNode(
             f"recipe_scope {fragment.scope!r}",

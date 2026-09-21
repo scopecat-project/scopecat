@@ -28,6 +28,7 @@ from scopecat_quantum.circuits import Measure
 from scopecat_quantum.gates import GateCall
 from scopecat_quantum.programs import (
     Conditional,
+    FlatTopWindow,
     ImplementedGate,
     Parallel,
     ParallelEach,
@@ -297,6 +298,31 @@ def _logical_layer_index(
             facts = (
                 CompiledInspectionFact("entity_set_id", node.entity_set_id),
                 CompiledInspectionFact("entity_count", len(node.entity_ids)),
+            )
+        elif isinstance(node, FlatTopWindow):
+            operation_id = node.id.value
+            structural_id = f"logical:operation:{operation_id}"
+            operation_nodes[operation_id] = structural_id
+            kind, label, children = (
+                "flat_top_window",
+                "flat_top_window",
+                (node.operation,),
+            )
+            owner = (
+                node.signal.owner
+                if isinstance(node.signal, FluxSignal)
+                else node.signal.qubit
+            )
+            entity_ids = (owner.value,)
+            facts = tuple(
+                CompiledInspectionFact(name, str(value))
+                for name, value in (
+                    ("signal", node.signal),
+                    ("amplitude", node.amplitude),
+                    ("rise_duration", node.rise_duration),
+                    ("settle_duration", node.settle_duration),
+                    ("fall_duration", node.fall_duration),
+                )
             )
         elif isinstance(node, Repeat):
             dimension_suffix = (

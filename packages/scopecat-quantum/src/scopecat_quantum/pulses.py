@@ -236,8 +236,21 @@ class Parallel:
     alignment: Literal["start", "end"] = "start"
 
 
+@dataclass(frozen=True, slots=True)
+class TimeShift:
+    """Shift an entire static subtree without reserving an additional signal."""
+
+    instruction: PulseInstruction
+    duration: Quantity
+
+    def __post_init__(self) -> None:
+        value = self.duration.to("s").value
+        if not math.isfinite(value) or value < 0:
+            raise ValueError("pulse time shift must be finite and non-negative")
+
+
 type PulseLeaf = Play | Acquire | Delay | ShiftPhase
-type PulseInstruction = PulseLeaf | Sequence | Parallel
+type PulseInstruction = PulseLeaf | Sequence | Parallel | TimeShift
 
 
 def iter_pulse_leaves(instruction: PulseInstruction) -> Iterator[PulseLeaf]:
@@ -246,6 +259,8 @@ def iter_pulse_leaves(instruction: PulseInstruction) -> Iterator[PulseLeaf]:
     match instruction:
         case Play() | Acquire() | Delay() | ShiftPhase():
             yield instruction
+        case TimeShift(instruction=child):
+            yield from iter_pulse_leaves(child)
         case Sequence(instructions=children) | Parallel(branches=children):
             for child in children:
                 yield from iter_pulse_leaves(child)
@@ -860,6 +875,17 @@ def _place_instruction(
     seen_ids: set[PulseEventId],
     acquisition_uses: dict[AcquisitionSlotId, list[Acquire]],
 ) -> tuple[list[_PlacedLeaf], Decimal]:
+    if isinstance(instruction, TimeShift):
+        offset = Decimal(str(instruction.duration.to("s").value))
+        events, duration = _place_instruction(
+            instruction.instruction,
+            start=start + offset,
+            path=(*path, 0),
+            issues=issues,
+            seen_ids=seen_ids,
+            acquisition_uses=acquisition_uses,
+        )
+        return events, offset + duration
     if isinstance(instruction, Sequence):
         placed: list[_PlacedLeaf] = []
         cursor = start
@@ -969,8 +995,17 @@ def _place_instruction(
                 issues=issues,
                 instruction_id=event_id,
                 path=path,
-                positive=True,
+                positive=False,
             )
+            if normalized_duration is not None and normalized_duration < 0:
+                _issue(
+                    issues,
+                    "pulse_duration_negative",
+                    "delay duration must be non-negative",
+                    instruction_id=event_id,
+                    path=path,
+                )
+                normalized_duration = None
             if normalized_duration is not None:
                 duration = normalized_duration
                 normalized_duration_value = _representable_quantity_seconds(
