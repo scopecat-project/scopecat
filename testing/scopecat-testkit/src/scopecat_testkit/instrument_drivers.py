@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from scopecat.config.documents import load_config_snapshot_document
 from scopecat.kernel.quantity import Quantity
 from scopecat.kernel.state import StateValue
 from scopecat.kernel.value_types import Payload as PayloadType
@@ -33,7 +32,7 @@ from scopecat.sdk.instruments import (
     state_readback,
 )
 
-from scopecat_testkit.paths import CORE_FIXTURE_DIR as EXAMPLE_DIR
+from scopecat_testkit.config_fixtures import simple_scan_config
 
 
 class SignalInstrumentDriver:
@@ -160,7 +159,7 @@ class SignalInstrumentDriver:
 
 
 def load_config() -> ConfigProfileSnapshot:
-    return load_config_snapshot_document(EXAMPLE_DIR / "config-snapshot.json")
+    return simple_scan_config()
 
 
 def quantity_state(value: float, unit: str) -> StateValue:
