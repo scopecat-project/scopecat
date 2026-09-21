@@ -168,9 +168,36 @@ An empty evidence tuple must not be interpreted as a complete dependency invento
 preserving quantities, entities and nested key sources. This is parameter evidence, not
 code-version provenance or a designated persistent-data compatibility baseline.
 
-The remaining boundary is to persist this evidence alongside the new target adapter's
-point-effective device preparation and measurement records. Do not recover provenance
-afterward by re-running queries or assume a serializable in-memory field is already saved.
+Target adapters can attach evidence to the existing durable invocation intent using
+`parameter_evidence_intent` from `scopecat_quantum.recipe_evidence_records`:
+
+```python
+target_intent = parameter_evidence_intent(
+    [(point.ordinal, compiled)],
+    target_intent={"realization": "iq"},
+)
+# Supply this target_intent when creating DomainInvocationSpec or closing the invocation.
+```
+
+Use the run's logical point ordinals, not chunk-local indices, and include only compiled
+entries belonging to that invocation. The namespaced, current-format document is covered
+by `DomainInvocationIntent.intent_fingerprint` and retained in the ordinary domain-job
+transition ledger; no sidecar file or separate database schema is introduced. Duplicate
+point/entry pairs and overwriting an existing attachment are rejected.
+
+After restart, `read_parameter_evidence(invocation.intent)` reconstructs typed evidence
+from `run.domain_jobs()` results (or an invocation transition from
+`run.domain_job_transitions()`). It does not load author code or re-run queries. An absent
+attachment is an explicit error, not an inferred empty dependency set.
+
+Retention follows the target's `DomainTransitionPolicy`: use `write_ahead` to retain the
+invocation before effects. `batched` admits a loss window; `abnormal_only` omits ordinary
+synchronous successes and therefore cannot promise complete parameter evidence. A saved
+invocation proves the compiled intent, not successful device execution or measured state.
+
+The new private execution adapter must still attach these entries and verify that its
+device preparation, pulse inputs and measurement records use the same effective point
+parameters. The ledger integration alone does not establish that physical invariant.
 
 ## Circuit transformation contract
 
