@@ -15,6 +15,36 @@ remembered registration returns to management instead of selecting another servi
 The workbench's **Help and maintenance** page links to this guide. Returning to the
 manager does not change a notebook's scientific selection or start a measurement.
 
+## Open an already bound author folder
+
+After a maintainer has registered an author workspace with the existing laboratory,
+open its workbench without registering another service:
+
+```shell
+scopecat app --workspace "/path/to/author code" --home "/path/to/application home"
+```
+
+The application resolves the folder's existing source identity and laboratory owner,
+uses the owner's registered interpreter/GUI/settings, and follows the normal durable
+service start checks. Startup may initialize instruments; opening never submits a
+measurement. The workbench selects that source before loading its experiment catalog.
+The laboratory must already be registered in this application home. Unknown sources,
+missing owners and interpreter/binding mismatches fail without creating or rebinding
+a service. A retained but unavailable source stays unavailable in the workbench; it
+never silently selects the service owner's code.
+
+`--workspace` cannot be combined with a positional project or `--python`, `--name`,
+`--static-dir`: those options change deployment registration. `--manage` and
+`--no-browser` retain their maintenance/state-only behavior without starting a service.
+The remembered primary choice is still the laboratory, not a global code selection;
+opening a source is page-local. Subsequent launch without `--workspace` opens that
+laboratory with its normal default code selection.
+
+This reuses [registered same-environment sources](../development/architecture/workspace-bindings.md).
+It does not yet install an environment, register a source automatically, or separate
+an author-only manifest from maintained composition. Independent deployments still
+have separate hardware authorities; this entry does not merge them.
+
 ## First use
 
 A fresh installation opens **Set up the primary workbench (设置主要实验工作台)**.

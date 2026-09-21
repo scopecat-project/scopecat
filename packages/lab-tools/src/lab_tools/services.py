@@ -16,6 +16,11 @@ import httpx2
 from filelock import FileLock
 from pydantic import BaseModel, ConfigDict, Field
 
+from scopecat.author_workspaces import (
+    LocalAuthorWorkspaces,
+    author_bindings_path,
+    author_workspace_id,
+)
 from scopecat.project import open_project
 from scopecat_server.lifecycle import inspect_daemon
 
@@ -135,6 +140,35 @@ class Services:
         if selected is None:
             raise ValueError("未找到已登记的实验服务；请从本机 CLI 登记项目")
         return selected
+
+    def for_workspace(self, root: Path) -> tuple[Service, str]:
+        """Resolve an already bound source without registering or probing a runtime."""
+        project = open_project(root, resolve_adapter=False)
+        path = author_bindings_path(project.root)
+        if not path.is_file():
+            raise ValueError("代码目录尚未绑定实验室；请先登记作者工作区")
+        registry = LocalAuthorWorkspaces.model_validate_json(path.read_bytes())
+        workspace = author_workspace_id(project.root)
+        service = next(
+            (item for item in self.list() if Path(item.root) == registry.service_root),
+            None,
+        )
+        if service is None:
+            raise ValueError("代码所属实验室尚未登记到此应用；不会另建服务")
+        binding = project.runtime_binding
+        owner_binding = open_project(
+            service.root, resolve_adapter=False
+        ).runtime_binding
+        if (binding.data_root, binding.deployment_root) != (
+            owner_binding.data_root,
+            owner_binding.deployment_root,
+        ):
+            raise ValueError("代码目录与实验室运行绑定不一致；请重新检查作者登记")
+        if workspace != "legacy":
+            source = next(item for item in registry.items if item.id == workspace)
+            if source.python != Path(service.python):
+                raise ValueError("作者登记与实验室解释器不一致；请重新检查运行环境")
+        return service, workspace
 
     def register(
         self, root: Path, python: Path, *, name: str, static_dir: Path | None = None

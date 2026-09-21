@@ -8,6 +8,7 @@ import sys
 import webbrowser
 from pathlib import Path
 from typing import Protocol, cast
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 import httpx2
 
@@ -19,7 +20,8 @@ from .services import Services
 
 class Arguments(Protocol):
     project: Path | None
-    python: Path
+    workspace: Path | None
+    python: Path | None
     name: str | None
     static_dir: Path | None
     home: Path
@@ -31,16 +33,22 @@ class Arguments(Protocol):
 def main(argv: list[str] | None = None) -> None:
     configure_console()
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
+    location = parser.add_mutually_exclusive_group()
+    location.add_argument(
         "project",
         type=Path,
         nargs="?",
         help="Open an existing workbench; startup may initialize instruments",
     )
+    location.add_argument(
+        "--workspace",
+        type=Path,
+        help="Open already bound author code in its registered laboratory",
+    )
     parser.add_argument(
         "--python",
         type=Path,
-        default=Path(sys.executable),
+        default=None,
         help="Project's Python interpreter (venv path)",
     )
     parser.add_argument("--name")
@@ -54,14 +62,24 @@ def main(argv: list[str] | None = None) -> None:
         help="Open maintenance without starting a service",
     )
     args = cast("Arguments", cast("object", parser.parse_args(argv)))
+    if args.workspace is not None and any(
+        value is not None for value in (args.python, args.name, args.static_dir)
+    ):
+        parser.error(
+            "--workspace 使用实验室已登记环境，"
+            "不能同时指定 --python、--name 或 --static-dir"
+        )
     manager_url: str | None = None
+    workspace_id: str | None = None
     try:
         store = Services(args.home.resolve())
         selected = None
-        if args.project is not None:
+        if args.workspace is not None:
+            selected, workspace_id = store.for_workspace(args.workspace)
+        elif args.project is not None:
             service = store.register(
                 args.project,
-                args.python,
+                args.python or Path(sys.executable),
                 name=args.name or args.project.resolve().name,
                 static_dir=args.static_dir,
             )
@@ -89,7 +107,13 @@ def main(argv: list[str] | None = None) -> None:
         if view is None or view.state != "running" or view.url is None:
             raise ValueError("启动后的服务状态或登记已改变；请在管理页面检查")
         store.remember(selected.id)
-        webbrowser.open(view.url)
+        url = view.url
+        if workspace_id is not None:
+            parts = urlsplit(url)
+            query = dict(parse_qsl(parts.query))
+            query["workspace"] = workspace_id
+            url = urlunsplit(parts._replace(query=urlencode(query)))
+        webbrowser.open(url)
     except (OSError, ValueError, subprocess.SubprocessError, httpx2.HTTPError) as error:
         if manager_url is not None:
             webbrowser.open(manager_url)

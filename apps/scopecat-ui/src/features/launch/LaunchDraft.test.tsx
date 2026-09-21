@@ -801,3 +801,25 @@ it("ignores a pending preview from the previous source even when the experiment 
   await selectPrepared();
   expect(screen.getByLabelText("Code workspace")).toHaveValue("legacy");
 });
+
+it("opens the linked source without loading the service owner's catalog", async () => {
+  window.history.replaceState(null, "", "/?workspace=workspace-b");
+  const { catalogOwners, previewOwners } = mockWorkspaceCatalog();
+  render(<Harness />);
+  await selectPrepared();
+  expect(screen.getByLabelText("Code workspace")).toHaveValue("workspace-b");
+  await previewReady();
+  expect(catalogOwners.length).toBeGreaterThan(0);
+  expect(catalogOwners.every((id) => id === "workspace-b")).toBe(true);
+  expect(previewOwners).toEqual(["workspace-b"]);
+});
+
+it("keeps an unknown linked source unavailable instead of selecting default code", async () => {
+  window.history.replaceState(null, "", "/?workspace=missing-source");
+  const { catalogOwners } = mockWorkspaceCatalog();
+  render(<Harness />);
+  expect(await screen.findByText(/missing-source is not registered/)).toBeVisible();
+  expect(screen.getByLabelText("Code workspace")).toHaveValue("missing-source");
+  expect(catalogOwners).toEqual([]);
+  expect(submissions).toEqual([]);
+});
