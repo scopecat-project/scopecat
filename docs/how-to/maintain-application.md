@@ -100,6 +100,37 @@ Current-format backup retains this evidence; restore still requires explicit loc
 source registration before executing its code. Adapter artifacts must remain
 available separately: the snapshot does not archive installed wheels.
 
+## Open a Notebook in the registered environment
+
+From the already registered author folder, run:
+
+```shell
+scopecat notebook --home "/path/to/application home"
+```
+
+Or supply the author folder explicitly: `scopecat notebook "/path/to/author code"
+--home "/path/to/application home"`. Add `--no-browser` when you want to open the
+printed Jupyter URL yourself. Run this in a local terminal; it remains attached to
+the Notebook server. The selected laboratory delivery must contain
+`scopecat-lab-tools[notebook]` (the public builder's `--notebook` option or an
+appropriate laboratory recipe dependency). Missing extras produce an error; the
+launcher does not install packages or choose another Python.
+
+This resolves the source's registered laboratory and launches JupyterLab and its
+**Scopecat 实验环境** kernel with that laboratory's interpreter. Each launch uses
+its own temporary kernel configuration; it does not install a global kernelspec or
+overwrite another running Notebook server's configuration. Existing notebooks that
+request another kernel must select **Scopecat 实验环境**. The working directory is
+the author folder, and inherited Python-path/daemon-URL overrides are removed.
+
+Opening this editor does not start the experiment service or initialize instruments.
+Open the workbench separately when ready to work. Close this Jupyter server and its
+kernels before updating the laboratory, then run the same command again: it resolves
+the newly registered interpreter. An incomplete environment switch blocks launch.
+Already running kernels and external editors such as VS Code are not redirected;
+those editors still require explicit interpreter selection and kernel restart.
+This entry does not supervise Notebook processes in the application manager.
+
 ## First use
 
 A fresh installation opens **Set up the primary workbench (设置主要实验工作台)**.
@@ -307,9 +338,10 @@ selected delivery while old copies retain their own environment.
 3. Wait for success in **Recent operations**. The application retains the delivery,
    prepares a separate environment in its home, and checks the laboratory and every
    registered author folder with that interpreter before switching registration.
-4. Read the new interpreter path in **Project and environment**. Select it in your
-   Notebook editor and restart the kernel. An existing kernelspec pointing to the
-   old environment does not change automatically.
+4. Relaunch `scopecat notebook` from the author folder to use the updated environment.
+   For another editor, read the interpreter path in **Project and environment**,
+   select it and restart the kernel. Existing editor kernelspecs do not change
+   automatically.
 5. Explicitly start the workbench when ready. Preview new work before submitting it.
 
 The laboratory ID, data/deployment paths, settings selection and author folder IDs
@@ -332,7 +364,8 @@ with a changed adapter. Keep matching old artifacts/environments for archival us
 
 This action accepts an already built delivery or managed build home. Building from
 public/private checkouts and selecting the new Notebook interpreter remain separate
-steps; the complete development update workflow is tracked in #712.
+steps; the complete development update workflow is tracked in #712. The registered
+Notebook entry above handles JupyterLab selection; external editors remain explicit.
 
 ## Recheck after updating the existing environment
 

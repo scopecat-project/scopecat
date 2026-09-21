@@ -155,6 +155,9 @@ class Services:
         )
         if service is None:
             raise ValueError("代码所属实验室尚未登记到此应用；不会另建服务")
+        from .lab_environment import require_completed_update
+
+        require_completed_update(self.database.parent.parent, service.id)
         binding = project.runtime_binding
         owner_binding = open_project(
             service.root, resolve_adapter=False

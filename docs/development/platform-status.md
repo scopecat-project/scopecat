@@ -76,8 +76,8 @@ are not implicit unfinished requirements of that closed issue. The current
 registration when paths change. Changing the manager delivery does not redirect registered runtimes. An explicit
 stopped laboratory update now prepares a separate delivery environment, qualifies
 registered sources and switches their interpreter bindings while retaining IDs and
-data paths (#713). The combined public/private development build and Notebook
-interpreter selection workflow remains #712.
+data paths (#713). The combined public/private checkout/build/setup workflow remains
+#712; the registered Notebook entry below handles JupyterLab interpreter selection.
 
 ## Debt and evidence boundaries
 
@@ -140,5 +140,14 @@ and selecting only a verified completed artifact. Setup and stopped updates acce
 that stable path and pin its selected manifest before installation. This removes
 manual output numbering; it does not automatically update a runtime or certify an
 installation. Builds remain wheel-based and use ordinary tool caches. Source-aware
-artifact reuse, the full checkout/setup flow and Notebook environment selection
-remain #712 work.
+artifact reuse and the full checkout/setup flow remain #712 work.
+
+
+### Registered Notebook entry
+
+`scopecat notebook [WORKSPACE] --home HOME` resolves a bound author folder to the
+laboratory's current interpreter (#717). It preflights Notebook extras, uses a
+per-session kernelspec and does not start an experiment service. Relaunch after a
+stopped environment update to select the replacement interpreter. Existing kernels
+and external editors are not redirected; close them before updating. This is a
+foreground local entry, not manager-owned Notebook lifecycle supervision.
