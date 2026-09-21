@@ -1,0 +1,45 @@
+"""Quantum call context for public parameter projections."""
+
+from collections.abc import Mapping
+from dataclasses import dataclass
+
+from scopecat.authoring.parameter_queries import ParameterProjection, QueryInput
+from scopecat.kernel.entity import EntityRef
+from scopecat.records.parameter import ParameterSnapshot
+
+from scopecat_quantum.circuits import Measure
+from scopecat_quantum.gates import GateCall
+
+
+def recipe_operand(index: int = 0) -> QueryInput:
+    """Select an operation's logical qubit as a typed entity key."""
+    if index < 0:
+        raise ValueError("operand index must be nonnegative")
+    return QueryInput(f"operand:{index}")
+
+
+def recipe_operation() -> QueryInput:
+    """Select the logical gate ID (not available for a measurement)."""
+    return QueryInput("operation")
+
+
+@dataclass(frozen=True, slots=True)
+class RecipeParameterInputs:
+    projection: ParameterProjection
+
+    def __call__(
+        self, snapshot: ParameterSnapshot, call: GateCall | Measure
+    ) -> Mapping[str, object]:
+        qubits = call.qubits if isinstance(call, GateCall) else (call.qubit,)
+        context: dict[str, object] = {
+            f"operand:{index}": EntityRef(id=qubit.value, kind="logical_qubit")
+            for index, qubit in enumerate(qubits)
+        }
+        if isinstance(call, GateCall):
+            context["operation"] = call.gate_id.value
+        return self.projection.resolve(snapshot, context).values
+
+
+def recipe_parameter_inputs(projection: ParameterProjection) -> RecipeParameterInputs:
+    """Adapt a declarative projection to a recipe's named input boundary."""
+    return RecipeParameterInputs(projection)
