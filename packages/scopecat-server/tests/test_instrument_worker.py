@@ -231,6 +231,7 @@ def test_spawned_worker_executes_closed_driver_requests(
     assert invoke.metadata == {
         "payload_hex": content.hex(),
         "payload_types": ["_DecodedProgram"],
+        "payload_hashes": [EncodedPayloadContent.from_bytes(content).content_hash()],
         "worker_pid": endpoint.worker_pid,
     }
     assert "worker_fixture.backend" not in sys.modules

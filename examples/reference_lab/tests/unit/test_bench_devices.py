@@ -28,6 +28,7 @@ from reference_lab.bench_interfaces import (
 )
 from reference_lab.interfaces import CLOCK_TIMING
 from reference_lab.payloads import (
+    TRIGGER_PROGRAM_PAYLOAD,
     DigitizerProgramDocument,
     DigitizerProgramEntryDocument,
     TriggerProgramDocument,
@@ -112,6 +113,9 @@ def test_virtual_trigger_idempotency_is_scoped_to_driver_session() -> None:
                 arguments={
                     TRIGGER_PROGRAM.argument_id: DriverPayload(
                         schema_id="reference_lab.trigger_program.v1",
+                        content_hash=TRIGGER_PROGRAM_PAYLOAD.encode(
+                            loaded
+                        ).content.content_hash(),
                         value=loaded,
                     )
                 },
