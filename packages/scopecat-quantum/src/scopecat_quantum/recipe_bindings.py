@@ -6,9 +6,13 @@ from copy import deepcopy
 from dataclasses import dataclass, field
 from functools import partial
 from typing import get_type_hints
+from urllib.parse import quote
 
-from scopecat_quantum._ids import CouplerId, GateId
+from scopecat.kernel.content_identity import content_fingerprint, stable_content_hash
+
+from scopecat_quantum._ids import CouplerId, GateId, PulseImplementationId
 from scopecat_quantum._recipe_identity import gate_implementation_id
+from scopecat_quantum.acquisitions import AcquisitionKind
 from scopecat_quantum.authoring import (
     Coupler,
     Gate,
@@ -20,6 +24,10 @@ from scopecat_quantum.authoring import (
 )
 from scopecat_quantum.circuits import Measure, VerifiedCircuitOperations
 from scopecat_quantum.gates import GateCall, GateDefinition
+from scopecat_quantum.measurement_implementations import (
+    MeasurementPulseImplementation,
+    MeasurementPulseImplementationKey,
+)
 from scopecat_quantum.pulse_implementations import (
     GatePulseImplementation,
     GatePulseImplementationKey,
@@ -206,3 +214,138 @@ def bind_gate_pulse_recipe[ParametersT](
         f"{build.__module__}.{build.__qualname__}:{gate.id.value}" if id is None else id
     )
     return GateRecipeBinding(identity, gate, build, inputs, resources)
+
+
+@dataclass(frozen=True, slots=True)
+class MeasurementRecipeBinding[ParametersT]:
+    """Resolve named readout inputs only for used measurement contracts.
+
+    Readout uses the effective baseline snapshot even within a gate recipe scope.
+    Builders own pulse/acquisition timing; the framework preserves result identity.
+    """
+
+    id: str
+    kind: AcquisitionKind
+    build: Callable[..., QuantumFragment] = field(repr=False)
+    inputs: Callable[[ParametersT, Measure], Mapping[str, object]] = field(repr=False)
+    _signature: inspect.Signature = field(init=False, repr=False)
+
+    def __post_init__(self) -> None:
+        if not self.id.strip():
+            raise ValueError("recipe binding id must be non-empty")
+        signature = inspect.signature(self.build)
+        parameters = tuple(signature.parameters.values())
+        positional = tuple(
+            p
+            for p in parameters
+            if p.kind in (p.POSITIONAL_ONLY, p.POSITIONAL_OR_KEYWORD)
+        )
+        if (
+            len(positional) != 1
+            or get_type_hints(self.build).get(positional[0].name) is not Qubit
+            or any(p.kind in (p.VAR_POSITIONAL, p.VAR_KEYWORD) for p in parameters)
+        ):
+            raise TypeError(
+                "measurement pulse functions require one Qubit and named inputs"
+            )
+        object.__setattr__(self, "_signature", signature)
+
+    @property
+    def recipe_ids(self) -> tuple[str, ...]:
+        return (self.id,)
+
+    def materialize(
+        self,
+        parameters: ParametersT,
+        circuit: VerifiedCircuitOperations,
+        *,
+        cache: PulseRecipeMaterializationCache | None = None,
+        scoped_parameters: Mapping[str, ParametersT] | None = None,
+    ) -> ResolvedPulseImplementations:
+        return self.materialize_operations(
+            parameters,
+            circuit.operations,
+            gate_definition=circuit.gate_definition,
+            cache=cache,
+            scoped_parameters=scoped_parameters,
+        )
+
+    def materialize_operations(
+        self,
+        parameters: ParametersT,
+        operations: Iterable[GateCall | Measure],
+        *,
+        gate_definition: Callable[[GateId], GateDefinition],
+        cache: PulseRecipeMaterializationCache | None = None,
+        scoped_parameters: Mapping[str, ParametersT] | None = None,
+    ) -> ResolvedPulseImplementations:
+        # Measurements deliberately use baseline parameters, independent of gate scopes.
+        del gate_definition, scoped_parameters
+        implementations: list[MeasurementPulseImplementation] = []
+        seen: set[MeasurementPulseImplementationKey] = set()
+        for measurement in operations:
+            if (
+                not isinstance(measurement, Measure)
+                or measurement.contract.acquisition_kind is not self.kind
+            ):
+                continue
+            key = MeasurementPulseImplementationKey.from_measurement(measurement)
+            if key in seen:
+                continue
+            label = f"measurement recipe {self.id!r} for {measurement.qubit.value!r}"
+            try:
+                inputs = deepcopy(dict(self.inputs(parameters, measurement)))
+                bound = self._signature.bind(qubit(measurement.qubit.value), **inputs)
+                bound.apply_defaults()
+            except (KeyError, TypeError, ValueError) as error:
+                raise ValueError(f"{label}: input binding failed: {error}") from error
+            build = partial(self._materialize, key, bound)
+            implementation = (
+                build()
+                if cache is None
+                else cache.materialize_measurement(
+                    self.id,
+                    inputs,
+                    key,
+                    build,
+                )
+            )
+            implementations.append(implementation)
+            seen.add(key)
+        return ResolvedPulseImplementations(
+            gates=(), measurements=tuple(implementations)
+        )
+
+    def _materialize(
+        self,
+        key: MeasurementPulseImplementationKey,
+        bound: inspect.BoundArguments,
+    ) -> MeasurementPulseImplementation:
+        contract_id = stable_content_hash(content_fingerprint(key.contract))
+        identity = PulseImplementationId(
+            f"{self.id}[{quote(key.qubit.value, safe='-._~')}][{contract_id}]"
+        )
+        body = self.build(*bound.args, **bound.kwargs)
+        return MeasurementPulseImplementation(
+            id=identity,
+            key=key,
+            pulse_template=materialize_pulse_recipe_body(
+                f"{identity.value}.template",
+                body,
+                measurement=(key.qubit, key.contract),
+            ),
+        )
+
+
+def bind_measurement_pulse_recipe[ParametersT](
+    *,
+    kind: AcquisitionKind,
+    build: Callable[..., QuantumFragment],
+    inputs: Callable[[ParametersT, Measure], Mapping[str, object]],
+    id: str | None = None,
+) -> MeasurementRecipeBinding[ParametersT]:
+    """Bind a pulse/acquisition function without imposing a parameter row model."""
+    identity = (
+        f"{build.__module__}.{build.__qualname__}:{kind.value}" if id is None else id
+    )
+    return MeasurementRecipeBinding(identity, kind, build, inputs)
