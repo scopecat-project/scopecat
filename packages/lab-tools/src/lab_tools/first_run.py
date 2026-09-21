@@ -19,7 +19,7 @@ from scopecat_server.lifecycle import inspect_daemon
 from scopecat_server.scaffold import write_project_scaffold
 from scopecat_server.static_assets import select_static_dir
 
-from .bundle import verify_bundle
+from .bundle import resolve_delivery, verify_bundle
 from .host_models import SetupRequest as SetupRequest
 from .lab_environment import prepare_environment
 from .services import Service, Services
@@ -115,7 +115,7 @@ def setup(
     failures preserve the user's folder; reconnecting is the explicit retry path.
     """
     delivery = (
-        Path(request.environment_bundle).resolve()
+        resolve_delivery(Path(request.environment_bundle))
         if request.environment_bundle
         else None
     )

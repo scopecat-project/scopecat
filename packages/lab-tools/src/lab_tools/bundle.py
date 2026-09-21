@@ -26,6 +26,7 @@ from pathlib import Path
 from typing import Literal, Protocol, TypedDict, cast
 
 MANIFEST = "bundle.json"
+CURRENT_DELIVERY = "delivery-current.json"
 RECEIPT = "scopecat-lab-delivery.json"
 OWNERSHIP = ".scopecat-environment-owner"
 
@@ -72,6 +73,33 @@ def inventory(root: Path, folders: tuple[str, ...]) -> dict[str, str]:
             if path.is_file():
                 result[path.relative_to(root).as_posix()] = file_hash(path)
     return result
+
+
+def resolve_delivery(root: Path) -> Path:
+    """Pin a build home's current artifact once; explicit bundles remain supported."""
+    root = root.resolve()
+    pointer = root / CURRENT_DELIVERY
+    if not pointer.exists():
+        return root
+    document = cast("object", json.loads(pointer.read_text(encoding="utf-8")))
+    if not isinstance(document, dict):
+        raise ValueError("无法识别当前交付选择")
+    selected = cast("dict[str, object]", document)
+    identity = selected.get("build")
+    digest = selected.get("manifest_sha256")
+    if (
+        selected.get("format") != 1
+        or not isinstance(identity, str)
+        or len(identity) != 32
+        or any(character not in "0123456789abcdef" for character in identity)
+        or not isinstance(digest, str)
+        or len(digest) != 64
+    ):
+        raise ValueError("无效的当前交付选择")
+    artifact = managed_path(root, root / "builds" / identity)
+    if file_hash(artifact / MANIFEST) != digest:
+        raise ValueError("当前交付清单与构建选择不符；请保留产物并检查构建结果")
+    return artifact
 
 
 def read_bundle(root: Path) -> Bundle:
@@ -169,7 +197,7 @@ def install_bundle(
     ownership_token: str | None = None,
     on_process: Callable[[int | Literal["not-started"] | None], None] | None = None,
 ) -> Path:
-    root = root.resolve()
+    root = resolve_delivery(root)
     destination = destination.resolve()
     if destination.exists():
         raise FileExistsError(f"环境目录已存在: {destination}; 请使用新目录")
@@ -304,7 +332,7 @@ def check_receipt(environment: Path, bundle: Path) -> None:
 
 def install_home(root: Path, home: Path) -> Path:
     """Prepare a retained release, then atomically select it for the next launch."""
-    root = root.resolve()
+    root = resolve_delivery(root)
     home = home.resolve()
     if home.is_relative_to(root):
         raise ValueError("安装中心不能位于待复制的交付目录内")
@@ -316,7 +344,7 @@ def install_home(root: Path, home: Path) -> Path:
 
 def retain_bundle(root: Path, home: Path) -> Path:
     """Retain and verify delivery files without selecting an application runtime."""
-    root = root.resolve()
+    root = resolve_delivery(root)
     home = home.resolve()
     if home.is_relative_to(root):
         raise ValueError("安装中心不能位于待复制的交付目录内")

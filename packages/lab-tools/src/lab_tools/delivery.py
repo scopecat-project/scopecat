@@ -13,10 +13,20 @@ from dataclasses import dataclass
 from email.parser import BytesParser
 from pathlib import Path, PureWindowsPath
 from typing import Protocol, cast
+from uuid import uuid4
 
+from filelock import FileLock, Timeout
 from packaging.utils import canonicalize_name
 
-from lab_tools.bundle import MANIFEST, file_hash, inventory, target_identity
+from lab_tools.bundle import (
+    CURRENT_DELIVERY,
+    MANIFEST,
+    file_hash,
+    inventory,
+    managed_path,
+    target_identity,
+    verify_bundle,
+)
 from scopecat.kernel.content_identity import sha256_content_hash, sha256_json_hash
 
 REPOSITORY = Path.cwd()
@@ -28,7 +38,8 @@ MODULES = {
 
 
 class BuildArguments(Protocol):
-    destination: Path
+    destination: Path | None
+    output_home: Path | None
     release: bool
     notebook: bool
     source: Path | None
@@ -389,28 +400,85 @@ def build_delivery(
     return destination
 
 
+def build_managed_delivery(
+    home: Path,
+    *,
+    release: bool = False,
+    notebook: bool = False,
+    source: Path | None = None,
+    gui: Path | None = None,
+    recipe: Path | None = None,
+) -> Path:
+    """Retain every attempt, publishing only a verified build to a stable entry."""
+    home = home.resolve()
+    home.mkdir(parents=True, exist_ok=True)
+    lock = managed_path(home, home / ".build.lock")
+    try:
+        with FileLock(lock, timeout=0):
+            identity = uuid4().hex
+            artifact = managed_path(home, home / "builds" / identity)
+            print(f"本次构建目录（失败也保留）: {artifact}", flush=True)
+            result = build_delivery(
+                artifact,
+                release=release,
+                notebook=notebook,
+                source=source,
+                gui=gui,
+                recipe=recipe,
+            )
+            verify_bundle(result)
+            pointer = managed_path(home, home / CURRENT_DELIVERY)
+            staged = managed_path(home, home / f"{CURRENT_DELIVERY}.tmp")
+            staged.write_text(
+                json.dumps(
+                    {
+                        "format": 1,
+                        "build": identity,
+                        "manifest_sha256": file_hash(result / MANIFEST),
+                    },
+                    indent=2,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            staged.replace(pointer)
+            print(f"当前交付已选择；安装/更新时可继续使用: {home}", flush=True)
+            return result
+    except Timeout as error:
+        raise ValueError("此交付目录已有构建正在进行；请等待完成后重试") from error
+
+
 def main() -> None:
     from .bundle import configure_console
 
     configure_console()
     parser = argparse.ArgumentParser(description=__doc__)
-    _ = parser.add_argument("destination", type=Path)
+    _ = parser.add_argument("destination", type=Path, nargs="?")
+    _ = parser.add_argument("--output-home", type=Path)
     _ = parser.add_argument("--release", action="store_true")
     _ = parser.add_argument("--notebook", action="store_true")
     _ = parser.add_argument("--source", type=Path)
     _ = parser.add_argument("--recipe", type=Path)
     _ = parser.add_argument("--gui", type=Path)
     args = cast("BuildArguments", cast("object", parser.parse_args()))
-    print(
-        build_delivery(
-            args.destination,
-            release=args.release,
-            notebook=args.notebook,
-            source=args.source,
-            gui=args.gui,
-            recipe=args.recipe,
+    if (args.destination is None) == (args.output_home is None):
+        parser.error("请选择 destination 或 --output-home，不能同时使用")
+    build = build_managed_delivery if args.output_home is not None else build_delivery
+    target = args.output_home if args.output_home is not None else args.destination
+    assert target is not None
+    try:
+        print(
+            build(
+                target,
+                release=args.release,
+                notebook=args.notebook,
+                source=args.source,
+                gui=args.gui,
+                recipe=args.recipe,
+            )
         )
-    )
+    except (ValueError, OSError, subprocess.CalledProcessError) as error:
+        parser.exit(2, f"{error}\n")
 
 
 if __name__ == "__main__":

@@ -155,9 +155,29 @@ package before rechecking or starting.
 
 ## Build a laboratory delivery
 
-Maintainers can use `python -m lab_tools.delivery OUTPUT --recipe RECIPE.toml`
-from their locked build environment. Build on the recipient platform and Python
-ABI; `OUTPUT` must not exist. The recipe has one `[delivery]` table:
+Maintainers build on the recipient platform and Python ABI from their locked
+build environment. For repeated development builds, keep one output home outside
+the source checkout. In PowerShell, for example:
+
+```powershell
+python -m lab_tools.delivery --recipe "D:\LabSource\delivery.toml" --output-home "D:\Scopecat-Builds"
+```
+
+Replace the two paths with your maintained recipe and build directory. Run the same
+command after code changes; do not create numbered output folders. Each attempt is
+retained under `builds/`, including failures. Only a completed, integrity-checked
+build atomically updates `delivery-current.json`. A build already using that home
+blocks a concurrent attempt. Failed builds leave the previous selection unchanged.
+
+Use that same output-home path in the application's initial setup or **Update
+laboratory environment** field. Installation resolves the selected artifact once
+and retains its identity; a later build does not switch an installed runtime.
+The pointer is not evidence of successful installation or hardware acceptance.
+If no build has succeeded yet, there is no installable current delivery.
+
+For a one-off artifact, `python -m lab_tools.delivery OUTPUT --recipe RECIPE.toml`
+remains available; `OUTPUT` must not exist. Do not combine it with `--output-home`.
+The recipe has one `[delivery]` table:
 
 ```toml
 [delivery]
@@ -176,6 +196,14 @@ lock project supplies dependencies and build constraints; `include_project = tru
 includes its runtime dependencies as well as the named dependency group. The public
 checkout supplies the installer, GUI and locked download toolchain. The builder
 rejects duplicate distributions and records recipe identity in the delivery.
+
+Development adapters are still installed from wheels; editable adapter installs
+are not supported. Every invocation builds the declared packages and GUI (unless
+`--gui` supplies a matching prebuilt GUI), using ordinary uv/pip/pnpm/build-backend
+caches. There is no new source-based artifact-skipping cache. The manifest records
+public/laboratory Git revisions (including dirty status), wheel/GUI hashes and tool
+identity. Do not edit those checkouts during a build; retain the exact artifacts
+when a dirty checkout is used.
 
 The build needs network access and, unless `--gui DIRECTORY` supplies an already
 built matching GUI, pnpm. Verify an offline installation and representative virtual
@@ -293,16 +321,18 @@ Preparation or qualification failure leaves the previous registration intact. Co
 its cause and select the same delivery to retry; a completed candidate is reused.
 If switching the source bindings and service registration is interrupted, ordinary
 application startup is blocked. Repeat the **same delivery** update to complete that
-switch; do not bypass it by starting through a lower-level CLI.
+switch; do not bypass it by starting through a lower-level CLI. If using a build
+home whose current selection has advanced, select the original artifact directory
+under its `builds/` folder instead.
 
 Old environments, failed candidates and retained deliveries are not automatically
 removed. Existing scientific records are not rewritten. This is an environment
 replacement, not a scientific-data migration or a promise that historical plans run
 with a changed adapter. Keep matching old artifacts/environments for archival use.
 
-This action accepts an already built delivery. Building a delivery incrementally
-from public/private checkouts and selecting the new Notebook interpreter remain
-separate steps; the complete development update workflow is tracked in #712.
+This action accepts an already built delivery or managed build home. Building from
+public/private checkouts and selecting the new Notebook interpreter remain separate
+steps; the complete development update workflow is tracked in #712.
 
 ## Recheck after updating the existing environment
 

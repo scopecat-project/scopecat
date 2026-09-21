@@ -131,3 +131,14 @@ only an installed adapter reference (#710). Registration binds the folder to tha
 laboratory; revisions capture its adapter declaration and installed artifact
 identity. Local driver/bootstrap projects still use the combined declaration.
 Environment installation and updates remain separate work.
+
+
+### Repeatable delivery output
+
+The delivery builder accepts a fixed `--output-home` (#715), retaining every attempt
+and selecting only a verified completed artifact. Setup and stopped updates accept
+that stable path and pin its selected manifest before installation. This removes
+manual output numbering; it does not automatically update a runtime or certify an
+installation. Builds remain wheel-based and use ordinary tool caches. Source-aware
+artifact reuse, the full checkout/setup flow and Notebook environment selection
+remain #712 work.
