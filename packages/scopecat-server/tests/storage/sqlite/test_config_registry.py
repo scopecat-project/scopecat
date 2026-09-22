@@ -41,7 +41,10 @@ from scopecat.records.scientific_binding import (
     ResolvedScientificBinding,
     UnboundSubject,
 )
-from scopecat_testkit.config_registry import load_config_registry_config
+from scopecat_testkit.config_registry import (
+    initialize_setup,
+    load_config_registry_config,
+)
 from scopecat_testkit.paths import CORE_FIXTURE_DIR
 from scopecat_testkit.server.runtime import SQLiteTestRunRepository
 
@@ -111,6 +114,7 @@ def test_publish_is_idempotent_and_round_trips(tmp_path: Path) -> None:
     unit_of_work = _store(tmp_path).write_unit_of_work
     config = load_config_snapshot_document(CORE_FIXTURE_DIR / "config-snapshot.json")
 
+    initialize_setup(config, unit_of_work=unit_of_work)
     first = _publish_direct_revision(
         config=config,
         unit_of_work=unit_of_work,
@@ -140,6 +144,7 @@ def test_publish_is_idempotent_and_round_trips(tmp_path: Path) -> None:
 def test_duplicate_identity_rejects_different_request(tmp_path: Path) -> None:
     unit_of_work = _store(tmp_path).write_unit_of_work
     config = load_config_snapshot_document(CORE_FIXTURE_DIR / "config-snapshot.json")
+    initialize_setup(config, unit_of_work=unit_of_work)
     _publish_direct_revision(
         config=config,
         unit_of_work=unit_of_work,
@@ -162,6 +167,7 @@ def test_activation_uses_generation_cas_and_resolves_source(
 ) -> None:
     unit_of_work = _store(tmp_path).write_unit_of_work
     config = load_config_snapshot_document(CORE_FIXTURE_DIR / "config-snapshot.json")
+    initialize_setup(config, unit_of_work=unit_of_work)
     result = _publish_direct_revision(
         config=config,
         unit_of_work=unit_of_work,
@@ -210,6 +216,7 @@ def test_activation_operation_round_trips(tmp_path: Path) -> None:
     store = _store(tmp_path)
     operations = SQLiteConfigOperationStore(store.sqlite)
     config = load_config_snapshot_document(CORE_FIXTURE_DIR / "config-snapshot.json")
+    initialize_setup(config, unit_of_work=store.write_unit_of_work)
     result = _publish_direct_revision(
         config=config,
         unit_of_work=store.write_unit_of_work,
@@ -256,6 +263,7 @@ def test_publish_operation_round_trips_exact_receipt(tmp_path: Path) -> None:
     store = _store(tmp_path)
     operations = SQLiteConfigOperationStore(store.sqlite)
     config = load_config_snapshot_document(CORE_FIXTURE_DIR / "config-snapshot.json")
+    initialize_setup(config, unit_of_work=store.write_unit_of_work)
     result = _publish_direct_revision(
         config=config,
         unit_of_work=store.write_unit_of_work,
@@ -315,6 +323,7 @@ def test_registry_and_run_reads_share_one_database(tmp_path: Path) -> None:
     )
     config = load_config_snapshot_document(CORE_FIXTURE_DIR / "config-snapshot.json")
 
+    initialize_setup(config, unit_of_work=store.write_unit_of_work)
     _publish_direct_revision(
         config=config,
         unit_of_work=store.write_unit_of_work,
@@ -332,6 +341,7 @@ def test_listing_reads_entry_metadata_without_loading_each_config(
 ) -> None:
     store = _store(tmp_path)
     config = load_config_snapshot_document(CORE_FIXTURE_DIR / "config-snapshot.json")
+    initialize_setup(config, unit_of_work=store.write_unit_of_work)
     _publish_direct_revision(
         config=config,
         unit_of_work=store.write_unit_of_work,
@@ -370,6 +380,7 @@ def test_registry_and_activation_pages_use_stable_newest_first_cursors(
 ) -> None:
     store = _store(tmp_path)
     config = load_config_snapshot_document(CORE_FIXTURE_DIR / "config-snapshot.json")
+    initialize_setup(config, unit_of_work=store.write_unit_of_work)
     for index in range(1, 4):
         _publish_direct_revision(
             config=config.model_copy(update={"id": f"config-{index}"}),
@@ -405,6 +416,7 @@ def test_registry_and_activation_pages_use_stable_newest_first_cursors(
 def test_aggregate_reads_open_one_unit_of_work(tmp_path: Path) -> None:
     store = _store(tmp_path)
     config = load_config_snapshot_document(CORE_FIXTURE_DIR / "config-snapshot.json")
+    initialize_setup(config, unit_of_work=store.write_unit_of_work)
     _publish_direct_revision(
         config=config,
         unit_of_work=store.write_unit_of_work,
@@ -453,6 +465,7 @@ def test_publish_rolls_back_together(tmp_path: Path) -> None:
             """
         )
 
+    initialize_setup(config, unit_of_work=store.write_unit_of_work)
     with pytest.raises(StorageError):
         _publish_direct_revision(
             config=config,
@@ -470,6 +483,7 @@ def test_borrowed_unit_of_work_leaves_transaction_and_connection_owned_by_caller
 ) -> None:
     store = _store(tmp_path)
     config = load_config_snapshot_document(CORE_FIXTURE_DIR / "config-snapshot.json")
+    initialize_setup(config, unit_of_work=store.write_unit_of_work)
     connection = sqlite3.connect(store.database, isolation_level=None)
     connection.row_factory = sqlite3.Row
     with store.borrowed_unit_of_work(connection) as work:
@@ -520,6 +534,7 @@ def test_generation_cas_is_shared_across_store_instances(tmp_path: Path) -> None
     store = _store(tmp_path)
     peer = SQLiteConfigRegistryStore(store.sqlite, runs=store.runs)
     config = load_config_snapshot_document(CORE_FIXTURE_DIR / "config-snapshot.json")
+    initialize_setup(config, unit_of_work=store.write_unit_of_work)
     _publish_direct_revision(
         config=config,
         unit_of_work=store.write_unit_of_work,

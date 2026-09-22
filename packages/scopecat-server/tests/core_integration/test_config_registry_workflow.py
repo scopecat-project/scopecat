@@ -54,6 +54,7 @@ from scopecat.records.run import ConfigRegistryRunConfigSource
 from scopecat.runs.refs import record_content_ref
 from scopecat_testkit.config_registry import (
     activate_candidate_config,
+    initialize_setup,
     load_config,
     load_config_registry_config,
     load_config_registry_entry,
@@ -118,6 +119,7 @@ def test_publish_revision_writes_and_activates_direct_entry(
     tmp_path: Path,
 ) -> None:
     config = load_config()
+    initialize_setup(config, unit_of_work=sqlite_config_registry_unit_of_work(tmp_path))
     entry = _publish_direct_revision(
         config=config,
         unit_of_work=sqlite_config_registry_unit_of_work(tmp_path),
@@ -451,6 +453,9 @@ def test_manual_config_draft_restores_after_its_original_base_changes(
 def test_candidate_config_publish_preserves_parameter_proposal_source(
     tmp_path: Path,
 ) -> None:
+    initialize_setup(
+        load_config(), unit_of_work=sqlite_config_registry_unit_of_work(tmp_path)
+    )
     _publish_direct_revision(
         config=load_config(),
         unit_of_work=sqlite_config_registry_unit_of_work(tmp_path),
@@ -535,6 +540,9 @@ def test_candidate_activation_rejects_a_stale_base_config(tmp_path: Path) -> Non
         reviewer="operator",
     )
     newer_config = load_config().model_copy(update={"id": "newer-base"})
+    initialize_setup(
+        newer_config, unit_of_work=sqlite_config_registry_unit_of_work(tmp_path)
+    )
     active = _publish_direct_revision(
         config=newer_config,
         unit_of_work=sqlite_config_registry_unit_of_work(tmp_path),
@@ -564,6 +572,9 @@ def test_candidate_activation_rejects_a_stale_base_config(tmp_path: Path) -> Non
 def test_activation_generation_is_append_only_and_rejects_stale_writes(
     tmp_path: Path,
 ) -> None:
+    initialize_setup(
+        load_config(), unit_of_work=sqlite_config_registry_unit_of_work(tmp_path)
+    )
     first = _publish_direct_revision(
         config=load_config(),
         unit_of_work=sqlite_config_registry_unit_of_work(tmp_path),
@@ -644,6 +655,9 @@ def test_publish_runs_full_config_semantic_validation(tmp_path: Path) -> None:
             )
         }
     )
+    initialize_setup(
+        load_config(), unit_of_work=sqlite_config_registry_unit_of_work(tmp_path)
+    )
     with pytest.raises(CheckFailed) as error:
         _publish_direct_revision(
             config=invalid_config,
@@ -668,6 +682,7 @@ def test_publish_rejects_rekeying_an_existing_logical_instrument(
 ) -> None:
     unit_of_work = sqlite_config_registry_unit_of_work(tmp_path)
     config = load_config()
+    initialize_setup(config, unit_of_work=unit_of_work)
     _publish_direct_revision(
         config=config,
         unit_of_work=unit_of_work,
@@ -711,6 +726,7 @@ def test_publish_domain_target_rename_requires_selected_setup(
 ) -> None:
     unit_of_work = sqlite_config_registry_unit_of_work(tmp_path)
     config = load_config()
+    initialize_setup(config, unit_of_work=unit_of_work)
     _publish_direct_revision(
         config=config,
         unit_of_work=unit_of_work,
@@ -751,6 +767,7 @@ def test_publish_logical_rename_requires_selected_setup(
 ) -> None:
     unit_of_work = sqlite_config_registry_unit_of_work(tmp_path)
     config = load_config()
+    initialize_setup(config, unit_of_work=unit_of_work)
     _publish_direct_revision(
         config=config,
         unit_of_work=unit_of_work,
@@ -800,6 +817,7 @@ def test_publish_rejects_logical_rename_that_also_rekeys(
 ) -> None:
     unit_of_work = sqlite_config_registry_unit_of_work(tmp_path)
     config = load_config()
+    initialize_setup(config, unit_of_work=unit_of_work)
     _publish_direct_revision(
         config=config,
         unit_of_work=unit_of_work,
@@ -943,6 +961,7 @@ def test_inventory_migration_plan_validates_target_before_returning_keys() -> No
 def test_default_activation_cannot_reverse_selected_setup(tmp_path: Path) -> None:
     work = sqlite_config_registry_unit_of_work(tmp_path)
     config = load_config()
+    initialize_setup(config, unit_of_work=work)
     seed = _publish_direct_revision(
         config=config, unit_of_work=work, entry_id="seed", actor="operator"
     )
@@ -988,6 +1007,7 @@ def test_concurrent_publishes_apply_one_generation(
     tmp_path: Path,
 ) -> None:
     unit_of_work = sqlite_config_registry_unit_of_work(tmp_path)
+    initialize_setup(load_config(), unit_of_work=unit_of_work)
     initial = _publish_direct_revision(
         config=load_config(),
         unit_of_work=unit_of_work,
@@ -1252,6 +1272,9 @@ def _publish_candidate_revision(
 def _resolved_candidate(
     project_root: Path,
 ) -> tuple[str, ParameterChangeProposal, _ResolvedCandidate]:
+    initialize_setup(
+        load_config(), unit_of_work=sqlite_config_registry_unit_of_work(project_root)
+    )
     _publish_direct_revision(
         config=load_config(),
         unit_of_work=sqlite_config_registry_unit_of_work(project_root),
@@ -1289,6 +1312,9 @@ def _resolved_candidate(
 def _seed_active_config_registry(
     project_root: Path,
 ) -> tuple[ConfigRegistryEntry, ConfigRegistryActivationRecord]:
+    initialize_setup(
+        load_config(), unit_of_work=sqlite_config_registry_unit_of_work(project_root)
+    )
     result = _publish_direct_revision(
         config=load_config(),
         unit_of_work=sqlite_config_registry_unit_of_work(project_root),

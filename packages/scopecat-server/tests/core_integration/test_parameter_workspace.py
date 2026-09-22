@@ -46,7 +46,7 @@ from scopecat.records.parameter import (
 )
 from scopecat.records.sample import SampleBinding, SampleSelector
 from scopecat.records.setup import ExecutableSetupSnapshot, SetupRevision
-from scopecat_testkit.config_registry import load_config
+from scopecat_testkit.config_registry import initialize_setup, load_config
 from scopecat_testkit.server.runtime import sqlite_config_registry_unit_of_work
 
 
@@ -170,6 +170,7 @@ def operations(tmp_path: Path) -> RegistryOperations:
             ),
         }
     )
+    initialize_setup(config, unit_of_work=operations.uow)
     seed = publish_config_revision(
         revision=ConfigRevision(
             source=DirectConfigRevisionSource(config), entry_id="lab", actor="operator"

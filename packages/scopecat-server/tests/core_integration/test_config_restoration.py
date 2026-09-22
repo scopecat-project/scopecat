@@ -22,7 +22,7 @@ from scopecat.config.registry.records import (
 from scopecat.config.registry.service import load_config_registry_entry_snapshot
 from scopecat.kernel.errors import Conflict, DataIntegrityError
 from scopecat.records.config import ConfigContentHash, config_content_hash
-from scopecat_testkit.config_registry import load_config
+from scopecat_testkit.config_registry import initialize_setup, load_config
 from scopecat_testkit.server.runtime import sqlite_config_registry_unit_of_work
 
 
@@ -30,6 +30,7 @@ from scopecat_testkit.server.runtime import sqlite_config_registry_unit_of_work
 def test_restore_previously_accepted_candidate(tmp_path: Path, kind: str) -> None:
     uow = sqlite_config_registry_unit_of_work(tmp_path)
     base = load_config()
+    initialize_setup(base, unit_of_work=uow)
     publish_config_revision(
         revision=ConfigRevision(
             source=DirectConfigRevisionSource(base), entry_id="base", actor="operator"
@@ -133,6 +134,7 @@ def test_restoration_requires_exact_historical_identity(
     tmp_path: Path, field: str
 ) -> None:
     uow = sqlite_config_registry_unit_of_work(tmp_path)
+    initialize_setup(load_config(), unit_of_work=uow)
     for generation, entry_id in enumerate(("old", "new")):
         publish_config_revision(
             revision=ConfigRevision(

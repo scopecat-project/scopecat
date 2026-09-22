@@ -805,11 +805,52 @@ def test_bootstrap_config_is_active_and_idempotent_across_restarts(
     assert first.entry_id.startswith("daemon-")
     assert second == first
     assert [event.kind for event in first_events] == [
+        "setup_activated",
         "config_saved",
         "config_activated",
     ]
     assert second_events == first_events
     assert bootstrap_calls == 1
+
+
+def test_interrupted_bootstrap_preserves_setup_and_requires_explicit_completion(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from scopecat_server.errors import BackendConflict
+    from scopecat_server.services.config import ConfigService
+
+    def fail_publish(self: ConfigService, command: ConfigPublishCommand) -> None:
+        raise RuntimeError("parameter publication interrupted")
+
+    with monkeypatch.context() as patch:
+        patch.setattr(ConfigService, "publish_config", fail_publish)
+        with pytest.raises(RuntimeError, match="publication interrupted"):
+            LocalDaemonRuntime(tmp_path, bootstrap_config=_config())
+
+    def must_not_rebuild() -> ConfigProfileSnapshot:
+        raise AssertionError(
+            "partial initialization must not re-evaluate adapter input"
+        )
+
+    with pytest.raises(BackendConflict, match="explicitly complete initialization"):
+        LocalDaemonRuntime(tmp_path, bootstrap_config=must_not_rebuild)
+    with LocalDaemonRuntime(tmp_path) as runtime:
+        original = runtime.application.setup.current()
+        assert not runtime.application.config.get_config_registry().entries
+        runtime.application.config.publish_config(
+            _direct_publish_command(
+                config=_config(),
+                entry_id="reviewed-completion",
+                actor="maintainer",
+                expected_generation=0,
+            )
+        )
+        assert runtime.application.setup.current() == original
+    with LocalDaemonRuntime(tmp_path, bootstrap_config=must_not_rebuild) as runtime:
+        assert (
+            runtime.application.config.get_active_config().entry.id
+            == "reviewed-completion"
+        )
 
 
 def test_bootstrap_config_does_not_replace_later_activation(
@@ -880,6 +921,18 @@ def test_config_registry_http_workflow_persists_and_publishes_events(
             client.get("/api/v1/config-registry").json()
         )
         missing = client.get("/api/v1/config-registry/active")
+        rejected = client.post(
+            "/api/v1/config-registry/publish-operations",
+            json=_direct_publish_command(
+                entry_id="baseline",
+                config=baseline,
+                actor="notebook",
+            ).model_dump(mode="json"),
+        )
+        assert rejected.status_code == 409
+        assert not runtime.application.setup.list()
+        assert not runtime.application.config.get_config_registry().entries
+        _select_setup(runtime, baseline, revision_id="bench", expected_generation=0)
         baseline_publish = client.post(
             "/api/v1/config-registry/publish-operations",
             json=_direct_publish_command(
@@ -1030,6 +1083,7 @@ def test_config_registry_http_workflow_persists_and_publishes_events(
         assert active.entry.id == "updated"
         assert active.config == updated
         assert [(event.kind, event.payload, event.run_id) for event in events] == [
+            ("setup_activated", {"generation": 1, "revision_id": "bench"}, None),
             ("config_saved", {"entry_id": "baseline"}, None),
             (
                 "config_activated",
@@ -1179,6 +1233,7 @@ def test_config_publish_operation_replays_exact_receipt_across_head_changes(
             item.id for item in runtime.application.config.get_config_registry().entries
         }
         assert [event.kind for event in _events(runtime).items] == [
+            "setup_activated",
             "config_saved",
             "config_activated",
             "config_saved",
@@ -1423,6 +1478,10 @@ def test_config_publish_rolls_back_registry_and_event_when_event_fails(
         return append_event(control, connection, event)
 
     with LocalDaemonRuntime(tmp_path) as runtime:
+        setup = _select_setup(
+            runtime, _config(), revision_id="bench", expected_generation=0
+        )
+        initial_events = _events(runtime).items
         with monkeypatch.context() as patch:
             patch.setattr(
                 SQLiteControlPlane,
@@ -1433,7 +1492,8 @@ def test_config_publish_rolls_back_registry_and_event_when_event_fails(
                 runtime.application.config.publish_config(command)
 
         assert runtime.application.config.get_config_registry() == ConfigRegistryPage()
-        assert _events(runtime).items == ()
+        assert _events(runtime).items == initial_events
+        assert runtime.application.setup.current() == setup
 
         receipt = runtime.application.config.publish_config(command)
 
@@ -1443,6 +1503,7 @@ def test_config_publish_rolls_back_registry_and_event_when_event_fails(
             for entry in runtime.application.config.get_config_registry().entries
         ] == ["baseline"]
         assert [event.kind for event in _events(runtime).items] == [
+            "setup_activated",
             "config_saved",
             "config_activated",
         ]

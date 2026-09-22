@@ -9,7 +9,7 @@ from scopecat.project import load_project
 from scopecat.records.execution_scenario import SoftwareExecutionScenario
 from scopecat.records.scientific_scope import setup_content_hash
 from scopecat.records.setup import ExecutableSetupSnapshot, SetupRevision
-from scopecat_testkit.config_registry import load_config
+from scopecat_testkit.config_registry import initialize_setup, load_config
 from scopecat_testkit.server.runtime import SQLiteTestRunRepository
 
 from scopecat_server.setup_access import setup_config
@@ -150,7 +150,7 @@ def test_setup_transaction_rollback_and_snapshot_restore(tmp_path: Path) -> None
         assert work.setups.read_activation_operation("activate-a") == receipt
 
 
-def test_initial_config_publication_bootstraps_both_owners_atomically(
+def test_parameter_publication_requires_setup_and_preserves_it_on_failure(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     from scopecat.config.registry.service import (
@@ -169,6 +169,19 @@ def test_initial_config_publication_bootstraps_both_owners_atomically(
         entry_id="initial",
         actor="maintainer",
     )
+
+    with pytest.raises(Conflict, match="select an executable setup"):
+        publish_config_revision(
+            revision=revision,
+            unit_of_work=store.write_unit_of_work,
+            expected_generation=0,
+        )
+    with store.read_unit_of_work() as work:
+        assert work.setups.list_revisions() == ()
+        assert work.registry.list_entries() == ()
+    initialize_setup(load_config(), unit_of_work=store.write_unit_of_work)
+    with store.read_unit_of_work() as work:
+        initial_setup = work.setups.read_current()
 
     def abort_activation(
         self: SQLiteConfigRegistryRepository,
@@ -189,8 +202,8 @@ def test_initial_config_publication_bootstraps_both_owners_atomically(
                 expected_generation=0,
             )
     with store.read_unit_of_work() as work:
-        assert work.setups.list_revisions() == ()
-        assert work.setups.read_current() is None
+        assert len(work.setups.list_revisions()) == 1
+        assert work.setups.read_current() == initial_setup
         assert work.registry.list_entries() == ()
         assert work.registry.current_generation() == 0
     published = publish_config_revision(

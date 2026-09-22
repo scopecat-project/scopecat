@@ -14,15 +14,43 @@ from scopecat.config.registry.service import (
     load_config_registry_entry_snapshot,
     publish_config_revision,
 )
+from scopecat.kernel.content_identity import sha256_json_hash
 from scopecat.project_state import ProjectStateServices
 from scopecat.records.config import ConfigProfileSnapshot
 from scopecat.records.parameter_change import ParameterChangeApprovalRecord
+from scopecat.records.setup import ExecutableSetupSnapshot, SetupRevision
 
 from scopecat_testkit.workflow_fixtures import load_config as load_workflow_config
 
 
 def load_config() -> ConfigProfileSnapshot:
     return load_workflow_config()
+
+
+def initialize_setup(
+    config: ConfigProfileSnapshot, *, unit_of_work: ConfigRegistryUnitOfWorkFactory
+) -> None:
+    """Explicitly provision a fixture's equipment before parameter publication."""
+    setup = ExecutableSetupSnapshot.from_config(config)
+    with unit_of_work() as work:
+        revision = work.setups.save_revision(
+            SetupRevision(
+                id="fixture-setup",
+                setup=setup,
+                content_hash=setup.content_hash,
+                actor="fixture",
+            )
+        )
+        work.setups.activate(
+            revision=revision.ref,
+            expected_generation=0,
+            operation_id="fixture-setup",
+            actor="fixture",
+            note="explicit test equipment",
+            intent_hash=sha256_json_hash(
+                {"setup": revision.ref.model_dump(mode="json")}
+            ),
+        )
 
 
 def load_config_registry_entry(

@@ -43,7 +43,7 @@ from scopecat.records.analysis import (
     RunAnalysisSubject,
 )
 from scopecat.runs.refs import record_content_ref
-from scopecat_testkit.config_registry import activate_candidate_config
+from scopecat_testkit.config_registry import activate_candidate_config, initialize_setup
 from scopecat_testkit.server.in_process_lab import in_process_lab
 from scopecat_testkit.server.runtime import (
     sqlite_project_services,
@@ -175,6 +175,7 @@ def test_workflow_analysis_review_activate_and_rerun_active_config(
     tmp_path: Path,
 ) -> None:
     services = sqlite_project_services(tmp_path)
+    initialize_setup(load_config(), unit_of_work=services.config_registry)
     config_registry_service.publish_config_revision(
         revision=config_registry_service.ConfigRevision(
             source=config_registry_service.DirectConfigRevisionSource(load_config()),

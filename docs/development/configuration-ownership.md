@@ -86,8 +86,7 @@ accepts and returns full configurations, and run evidence
 still retains complete execution snapshots. Do not infer new calibration validity
 or compose historical parameters with the currently active setup on read.
 
-1. Move maintained first-use/template/scaffold consumers and fixtures to the
-   independent owners, then remove implicit setup initialization. Do not
+1. Move maintained first-use/scaffold declarations to the independent owners. Do not
    mechanically replace every full-config call with `set_parameter_default`:
    saving parameters and selecting a global default are different operations.
 2. Separate measurement-target binding from device setup where required by real
@@ -102,7 +101,20 @@ or compose historical parameters with the currently active setup on read.
    parameter updates, conflicts and historical result reopening; preserve useful
    scientific assertions rather than every old fixture/interface.
 
-Existing `bootstrap_config`, `set_default` first-publication behavior, full-config
+Parameter publication no longer creates or activates setup, even for the first
+full-config publication into an empty store. Runtime first-use orchestration
+explicitly saves and activates setup, then publishes parameter-only content with
+that exact setup reference. Setup activation has its own durable event. Parameter
+publication failure leaves that setup intact; restarting reports incomplete
+initialization before re-evaluating the adapter factory. A maintainer can inspect
+the selected setup and explicitly complete parameter publication. Initialized
+stores preserve operator choices without re-running their bootstrap factory.
+
+Maintained registry/context fixtures now explicitly provision equipment before
+publishing parameter defaults. Publication rollback and missing-setup tests assert
+that parameter operations neither create nor alter equipment authority.
+
+Existing `bootstrap_config` declarations, full-config `set_default` inputs,
 working-point entries, setup rebinding and full-config experiment-system builders
 remain transitional dependencies. Green tests for them do not close this issue.
 
