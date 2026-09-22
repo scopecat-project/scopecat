@@ -135,5 +135,4 @@ Windows without a Node setup in the installation job.
 
 Next, [edit and analyze a starter experiment](../tutorials/starter-authoring.md)
 in this same project. See the [project layout reference](../reference/project-layout.md)
-for file ownership. The [reference integration lab](../tutorials/reference-lab.md)
-is optional advanced material, not a template to copy for ordinary exploration.
+for file ownership, or choose another [tutorial sandbox](../tutorials/teaching-sandboxes.md).

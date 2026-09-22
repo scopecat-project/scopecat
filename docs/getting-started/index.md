@@ -13,8 +13,6 @@ a real lab uses later.
   by `scopecat init`.
 - [Edit a starter experiment](../tutorials/starter-authoring.md) adds request
   editing, scans, retained analysis and reopening in that same small workspace.
-- [Reference integration lab](../tutorials/reference-lab.md) is optional material
-  for compiler, device and framework maintainers, not the next required lesson.
 
 The pilot bundle includes the runtime and GUI. A source checkout is needed only
-for framework development or the optional reference integration lab.
+for framework development and its integration fixtures.

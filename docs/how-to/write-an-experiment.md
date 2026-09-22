@@ -5,30 +5,28 @@ scientific helpers, timing and analysis; the lab maintainer configures discovery
 once. There is no per-experiment catalog, service or procedure to write.
 
 For your first request/scan/analysis, use the [starter authoring lesson](../tutorials/starter-authoring.md).
-The examples below are advanced compositions using the reference lab's existing
-quantum capabilities; they are not required to start a new project.
+Use a [tutorial sandbox](../tutorials/teaching-sandboxes.md) to practice one feature.
+The old reference gallery is not an authoring template.
 
-## Compose reference laboratory operations
+## Compose laboratory operations
 
-The reference application discovers `reference_lab.workflows.authored`. Its
-`signal.py` contains two experiments: an analytic resonance and a Ramsey sequence
-using the existing virtual laboratory operations. Run the reference project as in
-[the reference-lab tutorial](../tutorials/reference-lab.md), then open **Launch**.
-Select **Exploratory signal** or **Editable Ramsey**. Each control supplies its
-name, unit, source mode and bounds from the same Python declaration.
+Work in the author directory registered by your laboratory or generated starter.
+Each control supplies its name, unit, source mode and bounds from the same Python
+declaration. Compose the operations provided by your installed adapter without
+copying a reference application's compiler or configuration.
 
-In `examples/reference_lab/src/reference_lab/workflows/authored/signal.py`:
+In your experiment module:
 
-- Change the frequency default or bounds on the `frequency` input, or the response helper.
-- Change the `delay` input, the Ramsey phase or shot count to compose supported timing.
-- Change `selected_mean` to choose data differently or use your own fitting code.
+- Change a declared input's default or bounds, or a response helper.
+- Compose supported timing operations from your laboratory's library.
+- Change an analysis function to select data differently or fit your own model.
 - To create a new experiment, copy a function or file inside the author folder and
   give the experiment function a distinct name (or an explicit distinct decorator
   ID). Imported/reexported experiments are not discovered a second time. Duplicate
   IDs are errors rather than an arbitrary selection.
 
-Keep imported shared operations such as `quantum_capture` and `ramsey_program`
-as library calls unless you intend to maintain those shared capabilities. Their
+Keep imported shared laboratory operations as library calls unless you intend
+to maintain those capabilities. Their
 compiler, physical mapping and drivers are not needed to edit this experiment.
 Discovery reads the function's input contract without executing its body. Scalar
 inputs (`str`, `int`, `float`, `bool`, or a homogeneous scalar `Literal`) can be
@@ -66,15 +64,16 @@ the worker log is useful for a full traceback, but should not be necessary just
 to discover the cause. Unexpected device exceptions retain their separate
 sanitization policy.
 
-The reference project enables complete author revisions. Refresh after editing,
+Registered author directories retain complete author revisions. Refresh after editing,
 then prepare and submit through the revision-aware notebook connection. No Git
 commit, manual hash or device-service restart is required.
 
 ```python
 import scopecat as sc
 
-project = sc.open_project("examples/reference_lab")
+project = sc.open_project("/path/to/author-workspace")
 with project.authoring() as authors:
+    authors.use(parameter_branch="experiment")
     observed = authors.state()
     authors.refresh(expected_generation=observed.generation)
     launch = authors.prepare("signal", actor="alice")
@@ -115,18 +114,20 @@ helper, experiment and analysis source. Historical analysis explicitly chooses
 an archived revision. See [the refresh and recovery boundary](refresh-author-code.md),
 including the current-format store requirement and external environment limitations.
 
-## One-time laboratory composition
+## One-time author directory registration
 
-The maintainer adds the author package to the existing application:
+The maintainer registers the author package in the workspace manifest:
 
-```python
-LabApplication(
-    build_experiment_system=build_system,
-    procedures=existing_procedures,
-    launch_provider=existing_provider,
-    author_modules=("my_lab.authored",),
-)
+```toml
+[authors]
+modules = ["my_lab.authored"]
+source_roots = ["src"]
+refresh_roots = ["src/my_lab/authored"]
 ```
+
+The installed laboratory adapter supplies execution capabilities. Ordinary author
+registration does not require assembling a `LabApplication`; see
+[project layout](../reference/project-layout.md).
 
 `AuthorExperiments.discover(...)` is also available from
 `scopecat.application.authoring` for explicit composition and inspection. Discovery

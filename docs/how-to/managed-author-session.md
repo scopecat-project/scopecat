@@ -1,16 +1,18 @@
 # Run an experiment from a notebook
 
 Use the laboratory's installed environment and start its daemon as described by
-its setup guide. The lab maintainer supplies an existing sample/workpoint context
-and registered experiment. This example uses the reference laboratory's `qubits`
-table and `signal` experiment; substitute your laboratory's names.
+its setup guide. The lab maintainer supplies a parameter branch and registered
+experiment. This example assumes a laboratory `qubits` table and `signal`
+experiment; substitute your laboratory's names. Sample/target selection is a
+separate choice, not a prerequisite for editing parameters.
 
 ```python
 import scopecat as sc
 
 project = sc.open_project("/path/to/lab")
 with project.authoring() as author:
-    parameters = author.config.workspace(context="my-sample-start")
+    author.use(parameter_branch="experiment")
+    parameters = author.params
     parameters["qubits"]["q0"]["drive_carrier_frequency"] = sc.Quantity(5.1, "GHz")
     checked = author.prepare(
         "signal",
@@ -24,7 +26,7 @@ with project.authoring() as author:
     job.wait(timeout=60)
     run = job.result()
     values = run.measurements()["result"].require_values()
-    saved = parameters.save("my-sample-next")
+    saved = parameters.save()
 ```
 
 `fixed` supplies scalar controls. `scans` supplies sequences, Python ranges or
@@ -47,7 +49,7 @@ program, import a device SDK or acquire data. Importing a laboratory module stil
 executes that module's ordinary Python top-level code.
 
 ```python
-from reference_lab.workflows.authored.signal import signal
+from my_lab.authored.signal import signal
 
 request = signal(gain=1.0, polarity="positive")
 request.values["frequency"] = sc.Scan(sc.Quantity(f, "GHz") for f in (5.0, 5.1, 5.2))

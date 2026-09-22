@@ -133,8 +133,11 @@ branch; both generated notebooks use author-session preparation, and template
 imports create independent parameter revisions without selecting defaults.
 Shared reference acceptance and snapshot recovery now run with setup-only
 fixtures and exact independent parameter selections, preserving an empty combined
-registry. The reference gallery and calibration publication workflows still
-declare transitional defaults; their remaining consumers must be moved together.
+registry. Legacy reference scripts and calibration workflows still declare
+transitional defaults. Reassess their requirements and extract necessary behavior
+into focused tests before retiring the old consumers; do not mechanically port
+the gallery to preserve its interfaces. Follow the
+[retirement inventory](reference-gallery-retirement.md).
 
 Full-config `set_default` inputs,
 working-point entries, setup rebinding and full-config experiment-system builders

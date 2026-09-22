@@ -56,9 +56,10 @@ end-user journey rather than become a permanent concept.
 needed devices, perform typed operations immediately, and attribute failure to
 one device or connection.
 
-**Executable evidence:** `00_lab_tour.py`, `10_direct_control.py`, the direct
-control integration tests, and the
-[reference-lab tutorial](../tutorials/reference-lab.md).
+**Executable evidence:** server instrument-view and direct-control tests, with
+`10_direct_control.py` temporarily retained for coupled virtual-device behavior.
+The old fixed-inventory tour is retired; see the
+[retirement inventory](reference-gallery-retirement.md).
 
 **Success evidence:** inventory and availability are visible, temperature and
 trace receipts succeed, coupled virtual behavior is observable, and the source

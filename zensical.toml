@@ -19,7 +19,6 @@ nav = [
     "tutorials/index.md",
     { "Runnable tutorial sandboxes" = "tutorials/teaching-sandboxes.md" },
     { "Edit a starter experiment" = "tutorials/starter-authoring.md" },
-    { "Tour the reference lab" = "tutorials/reference-lab.md" },
   ] },
   { "How-to guides" = [
     "how-to/index.md",
@@ -78,6 +77,7 @@ nav = [
     "development/index.md",
     { "Current platform status" = "development/platform-status.md" },
     { "Repository map" = "development/repository-map.md" },
+    { "Reference gallery retirement" = "development/reference-gallery-retirement.md" },
     { "Data compatibility policy" = "development/data-compatibility.md" },
     { "Core workflow evaluations" = "development/workflow-evaluations.md" },
     { "Supervised laboratory pilot roadmap" = "development/lab-pilot-roadmap.md" },

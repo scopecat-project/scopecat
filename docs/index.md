@@ -24,8 +24,8 @@ runs the smallest experiment through the complete durable workflow.
 Use the [learning paths](getting-started/learning-path.md) to choose an author,
 maintainer or extension route. Continue according to what you want to accomplish:
 
-- [Tour the reference lab](tutorials/reference-lab.md) for a runnable gallery of
-  instrument, experiment, data, and quantum workflows.
+- [Open a tutorial sandbox](tutorials/teaching-sandboxes.md) for focused exercises
+  in parameters, compute, refresh and grouped analysis.
 - [Control configured instruments](how-to/control-instruments.md) for direct and
   experiment-time device access.
 - [Run from a notebook](how-to/managed-author-session.md) with parameter edits,

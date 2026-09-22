@@ -19,41 +19,6 @@ class _ReferenceLabDaemon(Protocol):
     url: str
 
 
-def test_lab_tour_shows_one_inventory_and_parameter_catalog(
-    reference_lab_daemon: _ReferenceLabDaemon,
-    reference_lab_notebooks: Path,
-) -> None:
-    assert reference_lab_daemon.url.startswith("http://127.0.0.1:")
-    namespace = run_path(str(reference_lab_notebooks / "00_lab_tour.py"))
-    summary = cast("dict[str, object]", namespace["lab_tour_summary"])
-
-    assert set(cast("list[str]", summary["instruments"])) == {
-        "pump-source",
-        "bench-source",
-        "drive-lo-a",
-        "drive-lo-b",
-        "readout-lo",
-        "drive-awg",
-        "readout-awg",
-        "readout-digitizer",
-        "timing-controller",
-        "bench-scope",
-        "flux-dac-a",
-        "flux-dac-b",
-        "mixing-chamber",
-        "readout-vna",
-    }
-    assert summary["parameter_rows"] == {
-        "qubits": 4,
-        "iq_chains": 5,
-        "awg_output_baselines": 1,
-        "lo_groups": 3,
-        "readout_resonators": 4,
-        "channel_calibrations": 4,
-        "bias_profiles": 8,
-    }
-
-
 def test_sample_workflow_binds_exact_revision_and_analysis_subject(
     reference_lab_daemon: _ReferenceLabDaemon,
     reference_lab_notebooks: Path,

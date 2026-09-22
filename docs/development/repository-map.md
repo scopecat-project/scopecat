@@ -7,7 +7,7 @@
 | `packages/scopecat-instruments` | Typed instrument capabilities, drivers, transports, and virtual devices. |
 | `packages/scopecat-quantum` | Hardware-independent quantum building blocks and target contracts. |
 | `apps/scopecat-ui` | React/Vite project console. |
-| `examples/reference_lab` | Complete hardware-free lab and executable workflow gallery. |
+| `examples/reference_lab` | Retained device/scientific integration fixtures; legacy gallery under retirement. |
 | `testing/scopecat-testkit` | Shared test support with explicit package boundaries. |
 | `fixtures` | Test-only serialized inputs. |
 | `docs` | Published user, extension, reference, and contributor documentation. |

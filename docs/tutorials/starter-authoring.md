@@ -86,6 +86,6 @@ calling `prepared.run()` again creates a new acquisition.
 ## Where to go next
 
 Use [managed author sessions](../how-to/managed-author-session.md) for parameter
-workspaces and saved plans. The [reference lab](reference-lab.md) is an optional
-integration laboratory for physical routing, quantum compilation, and calibration
-recovery. It is not a project template and need not be copied into your workspace.
+workspaces and saved plans, or choose another [tutorial sandbox](teaching-sandboxes.md).
+Device and quantum extension authors can follow the
+[extension guides](../extensions/index.md).

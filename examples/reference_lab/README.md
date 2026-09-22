@@ -1,6 +1,6 @@
 # Scopecat Reference Integration Lab
 
-The reference lab is a maintainer-owned integration fixture and advanced gallery: one four-qubit project
+The reference lab is a retained integration fixture with legacy author code: one four-qubit project
 with virtual RF and DC sources, temperature monitor, VNA, three shared LOs, two
 bare AWGs, a bare digitizer, timing controller, and oscilloscope. Its fourteen
 devices and six reviewed parameter tables exercise direct control, experiments,
@@ -15,18 +15,25 @@ feeds responses into this normal device path.
 
 ## Audience and boundary
 
+The gallery is retired as teaching material. Do not translate its scripts to new
+APIs merely to keep their old interfaces working. New lessons belong in public
+tutorial sandboxes. Extract necessary scientific/device behaviors into focused
+tests, reassess assertions tied to obsolete configuration models, then retire
+the corresponding scripts and dependencies. Existing tests do not establish a
+compatibility promise. See the [retirement inventory](../../docs/development/reference-gallery-retirement.md).
+
 First-time authors should use `scopecat init` and its two starter scripts; see
 [starter authoring](../../docs/tutorials/starter-authoring.md). This application
 is not a user workspace template or a production laboratory distribution.
 Private laboratory training should consume shared framework capabilities, not
 copy this application or reproduce every generic lesson.
 
-Keep specialized examples here when they demonstrate a named integration
-contract. Framework fault injection and recovery fixtures are maintainer work;
-adding them does not add another required beginner lesson. See the
+Retain only the integration inputs still needed for a named behavior while its
+replacement is built. Framework fault injection and recovery are maintainer work.
+See the
 [fixture ownership map](../../docs/development/reference-fixtures.md).
 
-## Start the lab
+## Reproduce a retained integration case
 
 From the repository root, build the source-checkout UI once and start the
 project:
@@ -53,13 +60,13 @@ The virtual world is deterministic: enabled flux bias moves the VNA notch and
 changes mixing-chamber telemetry. Experiments use logical capabilities and can
 be routed to compatible real devices.
 
-## Gallery
+## Retained script inventory
 
-The scripts are ordinary Python with `# %%` cells and can be followed in order.
+These scripts are legacy test inputs. This list is not a learning sequence or a
+list of interfaces to preserve.
 
 | Script | Demonstrates |
 |---|---|
-| `00_lab_tour.py` | Shared inventory, routing, and parameter rows |
 | `02_session_lifetime.py` | Captured snapshots, explicit connection cleanup, and retained-run reattachment |
 | `05_sample_workflow.py` | Versioned chip registration, exact run binding, and longitudinal sample analysis |
 | `10_direct_control.py` | Live typed clients and multi-device reservation without an experiment run |
@@ -123,7 +130,7 @@ does not create an implicit sample or enroll the DRAG publication workflow.
 | `src/reference_lab/physical_policies.py` | Lab-owned IQ-offset coupling and host preparation policy |
 | `src/reference_lab/provider.py` | Bare virtual device provider and coupled AWG/scope world |
 | `src/reference_lab/virtual_lab/` | Injected deterministic quantum plant adapter |
-| `src/reference_lab/workflows/` | Copyable experiment, analysis, production, and calibration automation workflows |
+| `src/reference_lab/workflows/` | Legacy integration inputs; extract valid behaviors before retirement |
 | `notebooks/` | User-facing recipes and their intent |
 | `tests/` | Daemon, worker, target, storage, analysis, and configuration checks |
 

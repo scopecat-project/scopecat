@@ -14,7 +14,7 @@ Start with the [documentation home](docs/index.md) or follow the
 [source preview quickstart](docs/getting-started/quickstart.md) to create a
 hardware-free project and complete the first durable run.
 
-- [Reference lab tutorial](docs/tutorials/reference-lab.md)
+- [Runnable tutorial sandboxes](docs/tutorials/teaching-sandboxes.md)
 - [Instrument control](docs/how-to/control-instruments.md)
 - [Experiment authoring dataflow](docs/concepts/experiment-dataflow.md)
 - [Chips and physical samples](docs/concepts/samples.md)
@@ -66,7 +66,7 @@ uv run python examples/reference_lab/notebooks/30_drag_calibration.py
   coupled virtual devices.
 - `packages/scopecat-quantum`: hardware-independent quantum building blocks.
 - `apps/scopecat-ui`: React/Vite project console.
-- `examples/reference_lab`: tested hardware-free workflow gallery.
+- `examples/reference_lab`: retained integration fixtures; legacy author examples are being retired.
 - `docs`: published user, extension, reference, and contributor documentation.
 
 ## Development
