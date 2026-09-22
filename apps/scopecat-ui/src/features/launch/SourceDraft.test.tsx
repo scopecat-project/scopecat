@@ -143,13 +143,25 @@ it("invalidates same-definition current-source preview keys only for the refresh
 it("selects an exact saved configuration before a draft without changing lab defaults", () => {
   mount();
   const ref = { entry_id: "imported-config", content_hash: "sha256:imported" };
-  act(() => state.selectConfiguration(ref));
+  act(() => state.selectConfiguration({ kind: "saved", ref }));
   expect(state.draft).toBeUndefined();
   act(() => state.select(entry));
   expect(state.draft?.selection.configuration).toEqual({ kind: "saved", ref });
   act(() => state.selectContext());
   expect(state.draft?.selection.configuration).toEqual({ kind: "active" });
 });
+it("selects independent parameters with an exact setup before opening an experiment", () => {
+  mount();
+  const choice = {
+    kind: "parameters" as const,
+    ref: { revision_id: "trial", content_hash: "sha256:parameters" },
+    setup: { revision_id: "bench", content_hash: "sha256:setup" },
+  };
+  act(() => state.selectConfiguration(choice));
+  act(() => state.select(entry));
+  expect(state.draft?.selection.configuration).toEqual(choice);
+});
+
 it("changes only a running draft's parameter selection and invalidates its old preview", () => {
   mount();
   act(() => state.select(entry));
@@ -168,7 +180,7 @@ it("changes only a running draft's parameter selection and invalidates its old p
   );
   const original = state.draft!;
   const ref = { entry_id: "imported-config", content_hash: "sha256:imported" };
-  act(() => state.selectConfiguration(ref));
+  act(() => state.selectConfiguration({ kind: "saved", ref }));
   expect(state.draft?.selection).toEqual({
     ...original.selection,
     configuration: { kind: "saved", ref },

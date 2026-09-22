@@ -134,6 +134,7 @@ from pathlib import Path
 
 from scopecat.application import LabBootstrap
 from scopecat.records.configuration_template import ConfigurationTemplate
+from scopecat.records.setup import ExecutableSetupSnapshot
 
 from .configuration import bootstrap_config
 
@@ -141,6 +142,7 @@ from .configuration import bootstrap_config
 def create_bootstrap(_project_root: Path) -> LabBootstrap:
     """Expose only config construction to the daemon process."""
 
+    config = bootstrap_config()
     return LabBootstrap(
         bootstrap_config=bootstrap_config,
         configuration_templates=lambda: (
@@ -151,7 +153,9 @@ def create_bootstrap(_project_root: Path) -> LabBootstrap:
                     "Virtual temperature readings and analytic signal scans. "
                     "Import fresh parameters without changing existing defaults."
                 ),
-                config=bootstrap_config(),
+                setup=ExecutableSetupSnapshot.from_config(config),
+                catalog=config.parameter_catalog,
+                parameters=config.parameter_snapshot,
             ),
         ),
     )

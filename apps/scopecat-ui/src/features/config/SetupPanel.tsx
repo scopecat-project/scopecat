@@ -1,4 +1,5 @@
 import type { components } from "../../api-schema";
+import { ApiError } from "../../api-client";
 import { ConfigurationTemplatesPanel } from "./ConfigurationTemplatesPanel";
 import { ExecutionScenario } from "../../ui/ExecutionScenario";
 import { useState } from "react";
@@ -22,7 +23,7 @@ export function SetupPanel({
 }: {
   config: ConfigProfileSnapshot | undefined;
   operator: string;
-  onSelectConfiguration?: (ref: components["schemas"]["PlanConfigRef"]) => void;
+  onSelectConfiguration?: (choice: components["schemas"]["ConfigurationChoice-Input"]) => void;
 }) {
   const cache = useQueryClient();
   const current = useQuery({
@@ -65,7 +66,10 @@ export function SetupPanel({
     },
   });
   const candidate = revisions.data?.items.find((item) => item.id === selected);
-  const error = current.error ?? revisions.error ?? save.error ?? activate.error;
+  const noActiveSetup = current.error instanceof ApiError && current.error.status === 404;
+  const canSelectSetup = Boolean(current.data) || noActiveSetup;
+  const error =
+    (noActiveSetup ? undefined : current.error) ?? revisions.error ?? save.error ?? activate.error;
   return (
     <section
       aria-label="Executable setup"
@@ -83,9 +87,12 @@ export function SetupPanel({
         }}
       />
       <p>
-        Current setup: <strong>{current.data?.revision.id ?? "Loading…"}</strong>. Setup selects
-        topology, routing, instrument identities and configured defaults. Parameter defaults and
-        saved working points are selected separately.
+        Current setup:{" "}
+        <strong>
+          {current.data?.revision.id ?? (noActiveSetup ? "Not selected" : "Loading…")}
+        </strong>
+        . Setup selects topology, routing, instrument identities and configured defaults. Parameter
+        defaults and saved working points are selected separately.
       </p>
       {current.data && (
         <ExecutionScenario
@@ -162,13 +169,13 @@ export function SetupPanel({
         </label>
         <button
           className={secondaryButton}
-          disabled={!candidate || !current.data || !operator.trim() || activate.isPending}
+          disabled={!candidate || !canSelectSetup || !operator.trim() || activate.isPending}
           onClick={() => {
-            if (!candidate || !current.data) return;
+            if (!candidate || !canSelectSetup) return;
             setReview({
               operation_id: createConfigOperationId("setup"),
               revision: { revision_id: candidate.id, content_hash: candidate.content_hash },
-              expected_generation: current.data.activation.generation,
+              expected_generation: current.data?.activation.generation ?? 0,
               actor: operator.trim(),
               note: "",
               changes: [],

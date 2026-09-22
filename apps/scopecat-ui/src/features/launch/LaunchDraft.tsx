@@ -62,7 +62,7 @@ interface DraftContext {
   authorRefreshed: (workspaceId: string) => void;
   selectedContext: ConfigContextResolution | undefined;
   selectContext: (resolution?: ConfigContextResolution) => void;
-  selectConfiguration: (ref: components["schemas"]["PlanConfigRef"]) => void;
+  selectConfiguration: (choice: components["schemas"]["ConfigurationChoice-Input"]) => void;
   draft: LaunchDraft | undefined;
   openPlan: (
     plan: PlanRevision,
@@ -166,7 +166,7 @@ function ProjectDraft({
   );
   const currentWorkspace = useRef(workspaceId);
   const [selectedConfiguration, setSelectedConfiguration] =
-    useState<components["schemas"]["PlanConfigRef"]>();
+    useState<components["schemas"]["ConfigurationChoice-Input"]>();
   const [selectedContext, setSelectedContext] = useState<ConfigContextResolution>();
   const [attempt, setAttempt] = useState<SubmissionAttempt>();
   const queryClient = useQueryClient();
@@ -250,7 +250,7 @@ function ProjectDraft({
             : selectedConfiguration
               ? {
                   ...defaultSelection(),
-                  configuration: { kind: "saved", ref: selectedConfiguration },
+                  configuration: selectedConfiguration,
                 }
               : defaultSelection());
         next.collection = current?.collection;
@@ -350,19 +350,19 @@ function ProjectDraft({
               : current,
           ),
         selectedContext,
-        selectConfiguration: (ref) => {
+        selectConfiguration: (choice) => {
           if (!alive.current) return;
           setSelectedContext(undefined);
-          setSelectedConfiguration(ref);
+          setSelectedConfiguration(choice);
           setDraft((current) =>
             current
               ? invalidateDraft(
                   {
                     ...current,
                     planDirty: Boolean(current.plan),
-                    selection: { ...current.selection, configuration: { kind: "saved", ref } },
+                    selection: { ...current.selection, configuration: choice },
                   },
-                  "Saved configuration selected. Preview again before starting.",
+                  "Configuration selected. Preview again before starting.",
                 )
               : current,
           );

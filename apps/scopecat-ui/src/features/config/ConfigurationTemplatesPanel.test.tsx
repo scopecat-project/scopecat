@@ -37,17 +37,14 @@ const result: ConfigurationTemplateImportResult = {
     recorded_at: "2026-09-21T00:00:00Z",
     setup: { ...config.system },
   },
-  configuration: {
-    entry: {
-      id: "imported-config",
-      content_hash: "sha256:config",
-      config_ref: "reference",
-      source: { kind: "direct_config_profile" },
-      recorded_at: "2026-09-21T00:00:00Z",
-      actor: "operator",
-      note: "",
-    },
-    config,
+  parameters: {
+    id: "imported-config",
+    content_hash: "sha256:config",
+    recorded_at: "2026-09-21T00:00:00Z",
+    actor: "operator",
+    note: "",
+    catalog: config.system.parameter_catalog,
+    parameters: config.parameter_snapshot,
   },
 };
 beforeEach(() => {
@@ -59,7 +56,9 @@ beforeEach(() => {
         label: "Resonance template",
         description: "Prepared software lab",
         content_hash: "sha256:template",
-        config,
+        setup: result.setup.setup,
+        catalog: result.parameters.catalog,
+        parameters: result.parameters.parameters,
       },
     ],
   });
@@ -98,7 +97,7 @@ it("imports exact template evidence, retries the same entry, and waits for expli
     content_hash: "sha256:template",
     actor: "operator",
   });
-  expect(command.entry_id).toBeTruthy();
+  expect(command.revision_id).toBeTruthy();
   fireEvent.click(screen.getByRole("button", { name: "Retry template import" }));
   await screen.findByText("imported-config");
   expect(vi.mocked(importConfigurationTemplate).mock.calls[1]![0]).toEqual(command);
@@ -112,8 +111,9 @@ it("imports exact template evidence, retries the same entry, and waits for expli
   fireEvent.click(use);
   await waitFor(() =>
     expect(onSelectConfiguration).toHaveBeenCalledWith({
-      entry_id: "imported-config",
-      content_hash: "sha256:config",
+      kind: "parameters",
+      ref: { revision_id: "imported-config", content_hash: "sha256:config" },
+      setup: { revision_id: "imported-setup", content_hash: "sha256:setup" },
     }),
   );
 });

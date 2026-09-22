@@ -86,7 +86,8 @@ with LabApplication().connect(record.base_url) as lab, project.authoring() as au
     scenario = run.snapshot.scientific_binding.scenario
     assert scenario is not None and scenario.id == 'starter-software'
     assert scenario.model_id == 'scopecat.starter.responses'
-    assert run.snapshot.config_source.entry_id == imported.configuration.entry.id
+    assert run.snapshot.config_source.parameters == imported.parameters.ref
+    assert run.snapshot.config_source.setup == imported.setup.ref
     assert lab.config.active() == original_default
     report = author.analyze_as(
         run.id, 'scopecat_lab.authored.signal:summarize', Summary

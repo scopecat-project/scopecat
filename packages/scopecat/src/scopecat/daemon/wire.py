@@ -47,7 +47,6 @@ from scopecat.config.registry.records import (
 )
 from scopecat.config.structure import ParameterStructurePlan
 from scopecat.control.models import RunPlanSummary
-from scopecat.daemon.views import ConfigEntryView
 from scopecat.kernel.content_identity import stable_content_hash
 from scopecat.kernel.problems import Problem
 from scopecat.kernel.run_outcome import RunOutcome
@@ -100,7 +99,7 @@ from scopecat.records.parameter_revision import (
     ParameterRevisionContent,
     ParameterRevisionRef,
 )
-from scopecat.records.plan_ref import PlanConfigRef, ProcedureChildSubmission
+from scopecat.records.plan_ref import ProcedureChildSubmission
 from scopecat.records.run import (
     RunConfigSource,
     RunSnapshot,
@@ -115,7 +114,7 @@ from scopecat.records.sample import (
 )
 from scopecat.records.scientific_binding import ResolvedScientificBinding
 from scopecat.records.scientific_selection import (
-    SavedConfiguration,
+    ParameterConfiguration,
     ScientificSelection,
 )
 from scopecat.records.setup import (
@@ -515,7 +514,9 @@ class ConfigurationTemplateView(_WireModel):
     id: NonEmptyText
     label: NonEmptyText
     description: str
-    config: ConfigProfileSnapshot
+    setup: ExecutableSetupSnapshot
+    catalog: ParameterCatalog
+    parameters: ParameterSnapshot
     content_hash: Sha256ContentHash
 
     @classmethod
@@ -526,7 +527,9 @@ class ConfigurationTemplateView(_WireModel):
             id=template.id,
             label=template.label,
             description=template.description,
-            config=template.config,
+            setup=template.setup,
+            catalog=template.catalog,
+            parameters=template.parameters,
             content_hash=template.content_hash,
         )
 
@@ -538,24 +541,21 @@ class ConfigurationTemplateList(_WireModel):
 class ConfigurationTemplateImportCommand(_WireModel):
     template_id: NonEmptyText
     content_hash: Sha256ContentHash
-    entry_id: NonEmptyText
+    revision_id: NonEmptyText
     actor: NonEmptyText
     note: str = ""
 
 
 class ConfigurationTemplateImportResult(_WireModel):
     setup: SetupRevision
-    configuration: ConfigEntryView
+    parameters: ParameterRevision
 
     @property
     def selection(self) -> ScientificSelection:
-        entry = self.configuration.entry
         return ScientificSelection(
-            configuration=SavedConfiguration(
-                ref=PlanConfigRef(
-                    entry_id=entry.id,
-                    content_hash=entry.content_hash,
-                )
+            configuration=ParameterConfiguration(
+                ref=self.parameters.ref,
+                setup=self.setup.ref,
             )
         )
 
