@@ -38,7 +38,7 @@ def measure_zero(
 
 
 @sc.analysis_step(id="teaching.fit-zero")
-def fit_zero(context: sc.AnalysisContext) -> sc.Analysis:
+def fit_zero(context: sc.AnalysisContext, *, target: str = "q0") -> sc.Analysis:
     data = context.measurements()
     value = float(data["setting"].require_values()[0])
     error = float(data["residual"].require_values()[0])
@@ -47,7 +47,7 @@ def fit_zero(context: sc.AnalysisContext) -> sc.Analysis:
         .fact("estimated_offset", value - error)
         .propose(
             "zero-offset",
-            sc.parameter_update(Sensor.offset, "q0", value - error),
+            sc.parameter_update(Sensor.offset, target, value - error),
             reason="已声明的线性响应模型：当前设置减去实测残差",
             evidence=("estimated_offset",),
         )

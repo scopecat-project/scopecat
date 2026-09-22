@@ -3,6 +3,8 @@
 Public, device-free tutorial resources: parameters, scans, complex computation,
 source refresh, retained analysis, grouped reads and verified branch calibration.
 The calibration topic includes pause/resume and retained scientific rejection.
+The joint-calibration topic demonstrates a coupled failure after individually
+successful checks, complete target coverage and recovery after composition.
 Every sandbox topic includes
 a complete runnable Notebook and editable author source.
 

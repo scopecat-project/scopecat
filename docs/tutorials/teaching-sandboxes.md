@@ -31,6 +31,7 @@ Each topic has its own environment and one complete Notebook:
 | `refresh` | Edit defaults, refresh author code and import a newly added experiment |
 | `groups` | Analyze two groups from a retained scan and reopen their summaries |
 | `calibration` | Fit a synthetic zero offset, verify and publish to an independent branch; pause/resume and retain a rejected result |
+| `joint-calibration` | Compose two candidates, remeasure the joint settings and distinguish coupled failure from missing target coverage |
 
 Open the generated project folder and select its `.venv` kernel. The first cell
 rejects the wrong interpreter. Run All before making one small change. The current

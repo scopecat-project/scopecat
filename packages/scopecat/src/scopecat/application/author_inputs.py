@@ -3,13 +3,19 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Annotated, Literal, cast, get_args, get_origin
+from typing import Annotated, Literal, TypeAliasType, cast, get_args, get_origin
 
 from pydantic import BaseModel, ConfigDict, TypeAdapter, create_model
 
 from scopecat.authoring.definitions import Input
 from scopecat.authoring.experiments import Experiment
 from scopecat.program.controls import ControlSet
+
+
+def _unalias(annotation: object) -> object:
+    while isinstance(annotation, TypeAliasType):
+        annotation = cast("object", annotation.__value__)
+    return annotation
 
 
 def _json_scalar(annotation: object) -> bool:
@@ -37,11 +43,12 @@ def author_input_model(
         name = item.name
         if name in excluded:
             continue
-        annotation = item.annotation
+        annotation = _unalias(item.annotation)
         if get_origin(annotation) is Annotated:
-            annotation = cast("tuple[object, ...]", get_args(annotation))[0]
+            annotation = _unalias(cast("tuple[object, ...]", get_args(annotation))[0])
         if get_origin(annotation) is Input:
             [annotation] = cast("tuple[object, ...]", get_args(annotation))
+            annotation = _unalias(annotation)
         if not _json_scalar(annotation):
             raise TypeError(
                 f"author input {name!r} needs a JSON scalar annotation "

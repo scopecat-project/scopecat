@@ -144,15 +144,19 @@ the retired cohort-only fixtures.
 The installed `calibration` teaching topic now provides a complete single-target
 synthetic workflow, with editable model/fit/policy/procedure source, pause/resume
 and retained rejection. Its shipped notebook cells are tested across a daemon
-restart without reacquiring completed steps. It does not claim multi-target
-coverage, scientific freshness or completed human usability validation.
+restart without reacquiring completed steps. The independent `joint-calibration`
+topic adds two-target composition and complete verification, a coupled rejection
+despite individually accepted candidates, and a missing-target decision that
+cannot publish. Its pause is after composition; restart does not repeat prior
+baseline or individual-check acquisitions. These are declared synthetic models,
+not scientific freshness policies or completed human usability validation.
 
 ## Remaining implementation order
 
 1. Define scientific freshness/applicability over explicit parameter dependencies,
    subject, setup and policy; do not reuse the retired full-config projection.
-2. Extend the runnable single-target calibration sandbox to joint composition
-   and scope-complete verification once the introductory workflow is understood.
+2. Collect focused usability feedback on the single-target and joint notebooks
+   before extending the teaching surface to automatic target selection.
 
 Track the retirement in [#773](https://github.com/scopecat-project/scopecat/issues/773).
 No historical store rewrite or prebaseline migration is part of this work.

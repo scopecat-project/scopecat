@@ -9,6 +9,7 @@ TOPICS = {
     "refresh": "修改、刷新和新增实验",
     "groups": "分组分析与历史",
     "calibration": "参数校准与恢复",
+    "joint-calibration": "联合校准与耦合验证",
 }
 
 
@@ -36,17 +37,22 @@ def install_lesson(root: Path, topic: str) -> Path:
         _ = (root / "src/my_experiment/teaching.py").write_bytes(
             lesson.joinpath("compute_experiment.py.txt").read_bytes()
         )
-    if topic == "calibration":
+    if topic in ("calibration", "joint-calibration"):
         _ = (root / "src/my_experiment/calibration.py").write_bytes(
             lesson.joinpath("calibration.py.txt").read_bytes()
         )
         (root / "src/my_experiment/teaching.py").unlink()
+        procedure = "my_experiment.calibration:calibrate"
+        if topic == "joint-calibration":
+            _ = (root / "src/my_experiment/joint_calibration.py").write_bytes(
+                lesson.joinpath("joint_calibration.py.txt").read_bytes()
+            )
+            procedure = "my_experiment.joint_calibration:calibrate_joint"
         manifest = root / "scopecat.toml"
         _ = manifest.write_text(
             manifest.read_text(encoding="utf-8").replace(
                 "[lab.capabilities]",
-                "[lab.capabilities]\n"
-                'procedures = ["my_experiment.calibration:calibrate"]',
+                f'[lab.capabilities]\nprocedures = ["{procedure}"]',
             ),
             encoding="utf-8",
         )
