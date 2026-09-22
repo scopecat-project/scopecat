@@ -3,8 +3,12 @@
 from dataclasses import dataclass
 
 from scopecat.daemon.client import DaemonClient
-from scopecat.daemon.views import ConfigEntryView
-from scopecat.daemon.wire import ParameterBindCommand, ParameterSaveCommand
+from scopecat.daemon.views import ConfigEntryView, ParameterResolution
+from scopecat.daemon.wire import (
+    ParameterBindCommand,
+    ParameterResolveCommand,
+    ParameterSaveCommand,
+)
 from scopecat.records.parameter import ParameterCatalog, ParameterSnapshot
 from scopecat.records.parameter_revision import ParameterRevision, ParameterRevisionRef
 from scopecat.records.setup import SetupRevision, SetupRevisionRef
@@ -70,5 +74,26 @@ class LabParameterOperations:
                 system_id=system_id,
                 actor=self.operator,
                 note=note,
+            )
+        )
+
+    def resolve(
+        self,
+        revision: ParameterRevision | ParameterRevisionRef,
+        *,
+        setup: SetupRevision | SetupRevisionRef | None = None,
+    ) -> ParameterResolution:
+        """Resolve exact run inputs without saving a combined registry entry.
+
+        If setup is omitted, capture the current setup once. The result retains
+        exact references and can be passed as `config` to the low-level runner.
+        """
+        selected = setup or self.client.active_setup().revision
+        return self.client.resolve_parameters(
+            ParameterResolveCommand(
+                parameters=revision.ref
+                if isinstance(revision, ParameterRevision)
+                else revision,
+                setup=selected.ref if isinstance(selected, SetupRevision) else selected,
             )
         )

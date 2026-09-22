@@ -265,6 +265,8 @@ class NotebookSession(AuthorProject):
         configuration_label = (
             configuration.ref.entry_id
             if isinstance(configuration, WorkingPointConfiguration | SavedConfiguration)
+            else configuration.ref.revision_id
+            if configuration.kind == "parameters"
             else configuration.kind
         )
         batch_label = (

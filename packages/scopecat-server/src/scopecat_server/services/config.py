@@ -62,6 +62,7 @@ from scopecat.daemon.views import (
     ConfigDraftPreview,
     ConfigEntryView,
     ConfigRegistryPage,
+    ParameterResolution,
 )
 from scopecat.daemon.wire import (
     CalibrationPublicationCommand,
@@ -82,6 +83,7 @@ from scopecat.daemon.wire import (
     ManualConfigDraftRevisionSource,
     ParameterBindCommand,
     ParameterConfigRevisionSource,
+    ParameterResolveCommand,
     ParameterSaveCommand,
 )
 from scopecat.kernel.errors import (
@@ -131,6 +133,7 @@ from scopecat_server.storage.sqlite.run_repository import SQLiteRunRepository
 
 from ..errors import BackendConflict, BackendNotFound
 from .analyses import AnalysisService
+from .parameter_resolution import resolve_parameters
 from .samples import SampleService
 
 
@@ -180,6 +183,14 @@ class ConfigService:
     def parameter_revisions(self) -> tuple[ParameterRevision, ...]:
         with self._control.sqlite.read_connection() as connection:
             return ParameterRevisionRepository(connection).list()
+
+    def resolve_parameters(
+        self, command: ParameterResolveCommand
+    ) -> ParameterResolution:
+        with self._control.sqlite.read_transaction() as connection:
+            return resolve_parameters(
+                connection, parameters=command.parameters, setup=command.setup
+            )
 
     def parameter_revision(self, revision_id: str) -> ParameterRevision:
         with self._control.sqlite.read_connection() as connection:

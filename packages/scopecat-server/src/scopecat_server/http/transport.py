@@ -161,6 +161,7 @@ from scopecat.daemon.views import (
     MeasurementTracePreviewQuery,
     ParameterProposalPage,
     ParameterProposalView,
+    ParameterResolution,
     ProjectAnalysisContentPage,
     ProjectAnalysisPage,
     ProjectAnalysisView,
@@ -220,6 +221,7 @@ from scopecat.daemon.wire import (
     MeasurementIngestReceipt,
     MeasurementSealCommand,
     ParameterBindCommand,
+    ParameterResolveCommand,
     ParameterRevisionList,
     ParameterSaveCommand,
     PayloadObjectReceipt,
@@ -906,6 +908,12 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
     @app.post(f"{_API_PREFIX}/parameters/bindings")
     def bind_parameter_revision(command: ParameterBindCommand) -> ConfigEntryView:
         return application.config.bind_parameters(command)
+
+    @app.post(f"{_API_PREFIX}/parameters/resolve")
+    def resolve_parameter_inputs(
+        command: ParameterResolveCommand,
+    ) -> ParameterResolution:
+        return application.config.resolve_parameters(command)
 
     @app.get(f"{_API_PREFIX}/setup/templates")
     def configuration_templates() -> ConfigurationTemplateList:

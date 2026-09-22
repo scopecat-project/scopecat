@@ -53,6 +53,14 @@ neither owner. This bridges into existing saved configuration selection and
 working-point base creation; it does not introduce another measurement-context
 type. See [independent parameters](../how-to/independent-parameters.md).
 
+Independent launches now bypass that bridge: `session.use(parameters=...)` uses
+`ParameterConfiguration` in the existing scientific selection. Read-only
+resolution, admission, manual-preview checks and saved plans share exact input
+resolution. Run provenance retains parameter/setup references directly; no
+combined registry entry or global parameter default is created. Reviewed inputs
+stay frozen after setup/session changes, and execution still checks current setup
+authority. Direct parameters do not acquire working-point calibration ownership.
+
 Keep four concerns distinct: authoring parameters, recording how values were
 obtained, deciding where calibration is applicable, and freezing execution input.
 A setup reference belongs in the latter records when relevant; it is not a
@@ -78,22 +86,18 @@ accepts and returns full configurations, and run evidence
 still retains complete execution snapshots. Do not infer new calibration validity
 or compose historical parameters with the currently active setup on read.
 
-1. Resolve independent parameter/setup inputs through the common measurement
-   selection and launch resolver, retaining subject, batch and working-point
-   ownership. Remove the need for authors to manually construct a saved-config
-   choice; avoid silently replacing subject/batch during parameter selection.
-2. Move maintained first-use/template/scaffold consumers and fixtures to the
+1. Move maintained first-use/template/scaffold consumers and fixtures to the
    independent owners, then remove implicit setup initialization. Do not
    mechanically replace every full-config call with `set_parameter_default`:
    saving parameters and selecting a global default are different operations.
-3. Separate measurement-target binding from device setup where required by real
+2. Separate measurement-target binding from device setup where required by real
    consumers. Define compatibility and independent execution by resource overlap,
    not by author-folder boundaries or a global parameter default.
-4. Centralize resolution of exact setup/binding/parameter/author revisions into
+3. Continue centralizing exact setup/binding/parameter/author revisions into
    execution inputs, with explicit incompatibility diagnostics and retained source
    identities. A schema-compatible value is not automatically a valid calibration
    under a different setup or temperature.
-5. Retire combined-config editing/bootstrap APIs after their maintained consumers
+4. Retire combined-config editing/bootstrap APIs after their maintained consumers
    use the new owners. Rewrite tests around independent creation, selection,
    parameter updates, conflicts and historical result reopening; preserve useful
    scientific assertions rather than every old fixture/interface.

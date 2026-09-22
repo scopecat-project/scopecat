@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from scopecat.daemon.wire import ParameterResolveCommand
 from scopecat.kernel.content_identity import sha256_json_hash
 from scopecat.records.config_context import ContextRunConfigSource
 from scopecat.records.manual_preview import (
@@ -12,7 +13,10 @@ from scopecat.records.manual_preview import (
     ManualPreviewValidity,
     PreviewInstrument,
 )
-from scopecat.records.run import AnalysisCandidateRunConfigSource
+from scopecat.records.run import (
+    AnalysisCandidateRunConfigSource,
+    ParameterRunConfigSource,
+)
 
 from scopecat_server.storage.sqlite.connection import SQLiteDatabase
 from scopecat_server.storage.sqlite.manual_preview import ManualPreviewRepository
@@ -47,6 +51,13 @@ class ManualPreviewService:
             # Candidates change only parameter cells; physical inventory belongs
             # to the exact baseline and was checked by the launch resolver.
             config = self.runs.get_run_config(source.source_run_id).config
+        elif isinstance(source, ParameterRunConfigSource):
+            config = self.config.resolve_parameters(
+                ParameterResolveCommand(
+                    parameters=source.parameters,
+                    setup=source.setup,
+                )
+            ).config
         else:
             entry_id = (
                 source.context.entry_id

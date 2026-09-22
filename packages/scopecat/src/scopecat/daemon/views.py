@@ -59,7 +59,7 @@ from scopecat.records.parameter_change import (
 )
 from scopecat.records.plan_ref import ExperimentPlanRef
 from scopecat.records.record_collection import RunAddress
-from scopecat.records.run import RunSnapshot
+from scopecat.records.run import ParameterRunConfigSource, RunSnapshot
 from scopecat.records.run_request import RunRequest
 from scopecat.records.sample import SampleId, SampleRecord, SampleRevision
 from scopecat.records.setup import SetupRevisionRef
@@ -876,6 +876,7 @@ __all__ = [
     "MeasurementTraceSeries",
     "ParameterProposalPage",
     "ParameterProposalView",
+    "ParameterResolution",
     "ProjectAnalysisContentPage",
     "ProjectAnalysisPage",
     "ProjectAnalysisSummary",
@@ -915,3 +916,8 @@ class ConfigContextResolution(_ViewModel):
     config_source: ContextRunConfigSource
     value_origins: tuple[ConfigValueOrigin, ...] = ()
     missing_values: tuple[str, ...] = ()
+
+
+class ParameterResolution(_ViewModel):
+    config: ConfigProfileSnapshot
+    config_source: ParameterRunConfigSource

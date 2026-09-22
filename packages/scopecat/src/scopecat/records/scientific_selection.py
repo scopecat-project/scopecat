@@ -5,11 +5,13 @@ from typing import Annotated, Literal
 from pydantic import BaseModel, ConfigDict, Field, JsonValue
 
 from scopecat.records.config_context import ConfigContextRef, ContextRunConfigSource
+from scopecat.records.parameter_revision import ParameterRevisionRef
 from scopecat.records.parameter_update import ParameterUpdate
 from scopecat.records.plan_ref import PlanConfigRef
 from scopecat.records.run import (
     AnalysisCandidateRunConfigSource,
     ConfigRegistryRunConfigSource,
+    ParameterRunConfigSource,
 )
 from scopecat.records.sample import SampleId
 from scopecat.records.scientific_binding import (
@@ -19,6 +21,7 @@ from scopecat.records.scientific_binding import (
     UnboundSubject,
 )
 from scopecat.records.scientific_scope import BatchScope, DeclaredBatch, UnscopedBatch
+from scopecat.records.setup import SetupRevisionRef
 from scopecat.records.target_catalog import TargetRevisionRef
 
 
@@ -56,6 +59,14 @@ class SavedConfiguration(_SelectionModel):
     ref: PlanConfigRef
 
 
+class ParameterConfiguration(_SelectionModel):
+    """Independent parameters; omitted setup resolves current authority at preview."""
+
+    kind: Literal["parameters"] = "parameters"
+    ref: ParameterRevisionRef
+    setup: SetupRevisionRef | None = None
+
+
 class WorkingPointConfiguration(_SelectionModel):
     kind: Literal["working_point"] = "working_point"
     ref: ConfigContextRef
@@ -69,6 +80,7 @@ class CandidateConfiguration(_SelectionModel):
 
 type ConfigurationChoice = Annotated[
     ActiveConfiguration
+    | ParameterConfiguration
     | SavedConfiguration
     | WorkingPointConfiguration
     | CandidateConfiguration,
@@ -77,6 +89,7 @@ type ConfigurationChoice = Annotated[
 
 type LaunchConfigSource = (
     ConfigRegistryRunConfigSource
+    | ParameterRunConfigSource
     | ContextRunConfigSource
     | AnalysisCandidateRunConfigSource
 )

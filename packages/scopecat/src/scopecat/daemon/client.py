@@ -142,6 +142,7 @@ from scopecat.daemon.views import (
     MeasurementTracePreviewQuery,
     ParameterProposalPage,
     ParameterProposalView,
+    ParameterResolution,
     ProjectAnalysisContentPage,
     ProjectAnalysisPage,
     ProjectAnalysisView,
@@ -201,6 +202,7 @@ from scopecat.daemon.wire import (
     MeasurementIngestReceipt,
     MeasurementSealCommand,
     ParameterBindCommand,
+    ParameterResolveCommand,
     ParameterRevisionList,
     ParameterSaveCommand,
     PayloadObjectReceipt,
@@ -1050,6 +1052,13 @@ class DaemonClient:
     def bind_parameters(self, command: ParameterBindCommand) -> ConfigEntryView:
         return self._post_idempotent_model(
             f"{_API_PREFIX}/parameters/bindings", command, ConfigEntryView
+        )
+
+    def resolve_parameters(
+        self, command: ParameterResolveCommand
+    ) -> ParameterResolution:
+        return self._post_model(
+            f"{_API_PREFIX}/parameters/resolve", command, ParameterResolution
         )
 
     def setup_revision(self, revision_id: str) -> SetupRevision:
