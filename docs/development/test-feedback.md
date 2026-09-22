@@ -158,8 +158,11 @@ remain checked there.
 DRAG acquisition, fit/figure/report, candidate acquisition and cross-run decision
 with independent parameter/setup inputs. It replaces the retired DRAG gallery's
 scientific assertions without requiring global-default publication and restore.
-Legacy publication fences remain in `test_project_analysis_runtime.py`; these
-are not evidence that verified publication to parameter branches exists.
+The managed-author journey also publishes explicitly to an independent branch
+and retries the same request. `test_project_analysis_runtime.py` covers rejected
+decisions, branch-head/base conflicts, transaction rollback and current-format
+backup/restore of publication receipts. Legacy publication fences remain there
+until their consumers retire.
 
 `test_typed_candidate_policy_uses_retained_decision_and_workpoint` checks negative
 policy branches through in-process HTTP and real SQLite publications. It seeds

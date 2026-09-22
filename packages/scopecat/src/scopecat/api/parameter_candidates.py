@@ -33,6 +33,7 @@ from scopecat.daemon.wire import (
     ConfigContextPublishCommand,
     ConfigContextPublishReceipt,
     ConfigPublishReceipt,
+    ParameterBranchPublishCommand,
 )
 from scopecat.kernel.entity import EntityRef
 from scopecat.kernel.value_types import Table
@@ -42,6 +43,7 @@ from scopecat.records.author_revision import AuthorRevisionRef
 from scopecat.records.config import ConfigProfileSnapshot
 from scopecat.records.config_context import ConfigContextRef
 from scopecat.records.parameter import ParameterAtomValue
+from scopecat.records.parameter_branch import ParameterBranch
 from scopecat.records.run import RunConfigSource
 
 
@@ -154,6 +156,38 @@ class VerifiedParameterCandidate:
 
     candidate: ParameterCandidate
     verification: PublishedAnalysis
+
+    def publish_to_branch(
+        self,
+        branch: ParameterBranch,
+        *,
+        name: str,
+        note: str = "",
+    ) -> ParameterBranch:
+        """Accept into an exact branch head; repeat identical arguments to retry.
+
+        This does not move a session checkout or change setup/default selection.
+        The receipt records acceptance of these cells, not branch-wide validity.
+        """
+        decision = self.verification.fact("decision")
+        return self.candidate.operations.client.publish_parameter_branch(
+            ParameterBranchPublishCommand(
+                name=branch.name,
+                expected_generation=branch.generation,
+                base=branch.revision,
+                run_id=self.candidate.config.source_run_id,
+                proposal_id=self.candidate.config.proposal_id,
+                verification=ProjectAnalysisDecisionReference(
+                    analysis_record_id=self.verification.id,
+                    output_id="decision",
+                    schema_id=decision.schema_id,
+                    schema_hash=decision.schema_hash,
+                ),
+                revision_id=name,
+                actor=self.candidate.operations.operator,
+                note=note,
+            )
+        )
 
     def select(self) -> ParameterCandidate:
         """Return this exact candidate for one explicit prepare(candidate=...) call."""

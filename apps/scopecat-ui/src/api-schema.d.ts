@@ -6874,6 +6874,7 @@ export interface components {
              */
             note: string;
             previous?: components["schemas"]["ParameterRevisionRef"] | null;
+            publication?: components["schemas"]["ParameterBranchPublication"] | null;
             /**
              * Recorded At
              * Format: date-time
@@ -6887,6 +6888,17 @@ export interface components {
             items: components["schemas"]["ParameterBranch"][];
             /** Next Cursor */
             next_cursor?: string | null;
+        };
+        /**
+         * ParameterBranchPublication
+         * @description Exact evidence for one accepted candidate, not blanket branch validity.
+         */
+        ParameterBranchPublication: {
+            /** Proposal Id */
+            proposal_id: string;
+            /** Run Id */
+            run_id: string;
+            verification: components["schemas"]["ProjectAnalysisDecisionReference"];
         };
         /**
          * ParameterCatalog

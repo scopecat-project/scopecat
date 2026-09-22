@@ -102,15 +102,47 @@ Save **structure** changes before preparing an experiment, as with the earlier
 editor. When `parameters=params` is omitted, session preparation uses the selected
 saved revision; it does not silently include an editor's unsaved buffer.
 
-## Scientific context remains separate
+## Publish a verified candidate
 
-Candidate verification and branch saving are currently separate capabilities.
-You can prepare an exact candidate and collect independent verification data
-without changing a branch or lab default. `VerifiedParameterCandidate.publish_to()`
-currently targets a working point, not a parameter branch; `publish_default()`
-uses the legacy shared configuration registry. Verified publication to a branch
-is not implemented yet. Copying values into `params` and saving is a manual edit,
-not a retained calibration acceptance.
+After collecting independent candidate data and obtaining a retained positive
+policy decision, publish explicitly to a captured branch head:
+
+```python
+destination = lab.parameters.checkout("chip-a/daily").head
+verified = candidate.verify(check_result)
+receipt = verified.publish_to_branch(
+    destination,
+    name="chip-a-readout-verified-1",
+    note="Independent readout verification passed",
+)
+# Explicitly adopt the published head for future preparation.
+session.use(parameter_branch="chip-a/daily")
+```
+
+`name` identifies the immutable result revision. Repeat the same destination,
+name and note to recover the same receipt after a lost response, even if later
+commits have advanced the branch. Different publication requests against an old
+head fail without creating a revision. Re-checking out an advanced head does not
+authorize reusing an old candidate: the baseline run must use that exact parameter
+revision without unsaved overrides. Collect new evidence after changing the base.
+
+The server checks retained proposal and decision records, an independent successful
+candidate run and matching sample/target, execution scenario and equipment setup.
+It atomically stores the result and advances only the chosen branch. Prepared
+runs, other branches, the lab default and setup remain unchanged. The receipt's
+`publication` records the source run, proposal and verification decision;
+`previous` identifies the exact base parameter revision.
+
+Copying values into `params` and saving remains a manual edit, not calibration
+acceptance. Ordinary saves have no `publication` claim; history retains earlier
+receipts. Publishing verified cells does not assert that every parameter on the
+branch is calibrated or applicable to another sample. No automatic merge of
+verified candidates or cohort publication is provided by this operation.
+
+The older `publish_to(working_point=...)` and `publish_default()` still serve
+legacy consumers; new branch workflows use `publish_to_branch()`.
+
+## Scientific context remains separate
 
 Session branch selection and explicit branch-editor preparation preserve the
 subject, batch, operator and record collection. Selecting another sample/target

@@ -216,6 +216,20 @@ class ParameterBranchHistory(_WireModel):
     items: tuple[ParameterBranch, ...]
 
 
+class ParameterBranchPublishCommand(_WireModel):
+    """Publish a verified candidate against one captured branch generation."""
+
+    name: NonEmptyText
+    expected_generation: int = Field(ge=1)
+    base: ParameterRevisionRef
+    run_id: NonEmptyText
+    proposal_id: NonEmptyText
+    verification: ProjectAnalysisDecisionReference
+    revision_id: NonEmptyText
+    actor: NonEmptyText
+    note: str = ""
+
+
 class ParameterBranchPage(_WireModel):
     items: tuple[ParameterBranch, ...]
     next_cursor: str | None = None
@@ -1578,6 +1592,7 @@ __all__ = [
     "ParameterBranchCommitCommand",
     "ParameterBranchHistory",
     "ParameterBranchPage",
+    "ParameterBranchPublishCommand",
     "ParameterConfigRevisionSource",
     "ParameterResolveCommand",
     "ParameterRevisionList",

@@ -198,6 +198,29 @@ def test_typed_candidates_retain_cells_and_independent_policy(
             == prepared.preview.reviewed.config_source
         )
         assert lab.config.registry() == registry
+        publication_branch = lab.parameters.create_branch("accepted", revision=baseline)
+        published = verified.publish_to_branch(
+            publication_branch,
+            name="verified-carrier",
+            note="Independent policy passed",
+        )
+        assert (
+            verified.publish_to_branch(
+                publication_branch,
+                name="verified-carrier",
+                note="Independent policy passed",
+            )
+            == published
+        )
+        assert published.publication is not None
+        assert (
+            published.publication.verification.analysis_record_id
+            == verified.verification.id
+        )
+        assert (
+            lab.parameters.get(published.revision.revision_id).parameters
+            == check_run.config.parameter_snapshot
+        )
         # Editing the branch does not change an already verified candidate.
         author.params["qubits"]["q0"]["drive_carrier_frequency"] = sc.Quantity(
             5.0, "GHz"

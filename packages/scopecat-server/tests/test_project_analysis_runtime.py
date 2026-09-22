@@ -2499,6 +2499,181 @@ def test_typed_candidate_policy_uses_retained_decision_and_workpoint(
         assert lab.config.active().entry.id != "wrong-point"
 
 
+def test_verified_parameter_branch_publication_is_atomic_and_restorable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from scopecat.daemon.wire import ParameterBranchPublishCommand
+
+    from scopecat_server.snapshots import create_snapshot, restore_snapshot
+    from scopecat_server.storage.sqlite.parameter_branches import (
+        ParameterBranchRepository,
+    )
+
+    root = tmp_path / "source"
+    with (
+        LocalDaemonRuntime(root, bootstrap_config=_config()) as runtime,
+        TestClient(runtime.app()) as transport,
+    ):
+        lab = LabClient(_daemon_client(transport))
+        initial = _config()
+        revision = lab.parameters.save(
+            name="baseline",
+            catalog=initial.parameter_catalog,
+            parameters=initial.parameter_snapshot,
+        )
+        branch = lab.parameters.create_branch("daily", revision=revision)
+        untouched = lab.parameters.create_branch("other", revision=revision)
+        resolved = lab.parameters.resolve(revision)
+        baseline_id = _complete_signal_run(
+            runtime,
+            submission_id="branch-baseline",
+            signal=0.8,
+            submission=_submission("branch-baseline").model_copy(
+                update={
+                    "config": resolved.config,
+                    "config_source": resolved.config_source,
+                }
+            ),
+        )
+        proposal = parameter_change_proposal_from_updates(
+            source_run_id=baseline_id,
+            source_config=resolved.config,
+            analysis_title="fit",
+            analysis_record_id="analysis-fit-r1",
+            proposal_id="drive-frequency",
+            updates=(
+                replace_scalar_parameter("drive_frequency", Quantity(5.1, "GHz")),
+            ),
+            reason="fit converged",
+            confidence=0.9,
+        )
+        runtime.application.runs.save_run_analysis(
+            baseline_id, _analysis_command(proposal)
+        )
+        baseline = lab.get_run(baseline_id)
+        candidate = baseline.published_analysis("fit").candidate_config()
+        config, source = lab.config.resolve_with_source(candidate)
+        candidate_id = _complete_signal_run(
+            runtime,
+            submission_id="branch-candidate",
+            signal=1.1,
+            submission=_submission("branch-candidate").model_copy(
+                update={
+                    "config": config,
+                    "config_source": source,
+                }
+            ),
+        )
+        context = lab.analysis("Verify branch", key="branch-verification")
+        context.measurements(baseline, id="baseline", role="baseline")
+        context.measurements(
+            lab.get_run(candidate_id), id="candidate", role="candidate"
+        )
+        verification = (
+            context.result()
+            .fact(
+                "decision",
+                _CandidateDecision(accepted=True),
+                schema=_CANDIDATE_DECISION_SCHEMA,
+            )
+            .save()
+        )
+        fact = verification.fact("decision")
+        command = ParameterBranchPublishCommand(
+            name=branch.name,
+            expected_generation=branch.generation,
+            base=revision.ref,
+            run_id=baseline_id,
+            proposal_id=proposal.id,
+            verification=ProjectAnalysisDecisionReference(
+                analysis_record_id=verification.id,
+                output_id="decision",
+                schema_id=fact.schema_id,
+                schema_hash=fact.schema_hash,
+            ),
+            revision_id="accepted",
+            actor="operator",
+        )
+        registry = lab.config.registry()
+        setup = lab.setup.active()
+        rejected = (
+            context.result()
+            .fact(
+                "decision",
+                _CandidateDecision(accepted=False),
+                schema=_CANDIDATE_DECISION_SCHEMA,
+            )
+            .save()
+        )
+        with pytest.raises(DaemonConflictError, match="did not accept"):
+            lab.config.client.publish_parameter_branch(
+                command.model_copy(
+                    update={
+                        "verification": command.verification.model_copy(
+                            update={"analysis_record_id": rejected.id}
+                        ),
+                    }
+                )
+            )
+
+        # Fail after writing the revision: the head and evidence must roll back too.
+        def fail_append(*args: object) -> None:
+            raise RuntimeError("head unavailable")
+
+        with monkeypatch.context() as patch:
+            patch.setattr(ParameterBranchRepository, "append", fail_append)
+            with pytest.raises(RuntimeError, match="head unavailable"):
+                runtime.application.config.publish_parameter_branch(command)
+        assert lab.parameters.checkout("daily").head == branch
+        with pytest.raises(DaemonNotFoundError):
+            lab.parameters.get("accepted")
+        published = lab.config.client.publish_parameter_branch(command)
+        assert published.previous == revision.ref
+        assert published.publication is not None
+        assert published.publication.verification == command.verification
+        assert lab.parameters.get("accepted").parameters == config.parameter_snapshot
+        assert lab.config.client.publish_parameter_branch(command) == published
+        with pytest.raises(DaemonConflictError, match="changed"):
+            lab.config.client.publish_parameter_branch(
+                command.model_copy(update={"revision_id": "stale"})
+            )
+        with pytest.raises(DaemonNotFoundError):
+            lab.parameters.get("stale")
+        # Reloading the head is not authority to publish the old baseline again.
+        with pytest.raises(DaemonConflictError, match="exact branch revision"):
+            lab.config.client.publish_parameter_branch(
+                command.model_copy(
+                    update={
+                        "expected_generation": published.generation,
+                        "base": published.revision,
+                        "revision_id": "wrong-base",
+                    }
+                )
+            )
+        assert lab.parameters.checkout("other").head == untouched
+        assert lab.config.registry() == registry
+        assert lab.setup.active() == setup
+        ordinary = lab.parameters.checkout("daily").save(
+            catalog=initial.parameter_catalog,
+            parameters=config.parameter_snapshot,
+        )
+        assert ordinary.publication is None
+        assert lab.config.client.publish_parameter_branch(command) == published
+
+    (root / "scopecat.toml").write_text("[lab]\n")
+    create_snapshot(load_project(root / "scopecat.toml"), tmp_path / "snapshot")
+    restore_snapshot(tmp_path / "snapshot", tmp_path / "restored")
+    with LocalDaemonRuntime(tmp_path / "restored") as recovered:
+        assert recovered.application.config.parameter_branch("daily") == ordinary
+        assert (
+            recovered.application.config.publish_parameter_branch(command) == published
+        )
+        assert (
+            recovered.application.config.parameter_revision("accepted").parameters
+            == config.parameter_snapshot
+        )
+
+
 def test_verified_candidates_publish_to_independent_working_points(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

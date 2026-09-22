@@ -224,6 +224,7 @@ from scopecat.daemon.wire import (
     ParameterBranchCommitCommand,
     ParameterBranchHistory,
     ParameterBranchPage,
+    ParameterBranchPublishCommand,
     ParameterResolveCommand,
     ParameterRevisionList,
     ParameterSaveCommand,
@@ -923,6 +924,12 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
         command: ParameterBranchCommitCommand,
     ) -> ParameterBranch:
         return application.config.commit_parameter_branch(command)
+
+    @app.post(f"{_API_PREFIX}/parameters/branch-publications")
+    def publish_parameter_branch(
+        command: ParameterBranchPublishCommand,
+    ) -> ParameterBranch:
+        return application.config.publish_parameter_branch(command)
 
     @app.get(f"{_API_PREFIX}/parameters/revisions")
     def list_parameter_revisions() -> ParameterRevisionList:

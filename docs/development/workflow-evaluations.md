@@ -131,9 +131,11 @@ show scientific effect and scope, not just a structural configuration diff.
 prepare production work with that exact saved revision. Retain proposal and
 verification provenance without changing equipment or unrelated selections.
 
-**Current gap:** ordinary branch saves exist, but verified candidate publication
-still targets the legacy registry or working points. Neither ordinary `params.save()`
-nor passing a candidate to preparation establishes calibration acceptance.
+**Executable evidence:** `VerifiedParameterCandidate.publish_to_branch()` and
+the managed-author candidate journey implement explicit single-candidate branch
+publication. Server tests cover exact baseline/head checks, rejection, atomic
+rollback, retry and current-format recovery. Ordinary `params.save()` and passing
+a candidate to preparation still establish no calibration acceptance.
 
 **Required evidence:** publication checks the destination generation, candidate
 base and edited-cell ownership; the retained decision names exact independent
