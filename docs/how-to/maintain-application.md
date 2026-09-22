@@ -269,6 +269,24 @@ includes its runtime dependencies as well as the named dependency group. The pub
 checkout supplies the installer, GUI and locked download toolchain. The builder
 rejects duplicate distributions and records recipe identity in the delivery.
 
+For a public checkout outside the recipe directory, select it explicitly:
+
+```powershell
+python -m lab_tools.delivery --recipe "D:\LabSource\delivery.toml" --source "D:\Framework\scopecat" --output-home "D:\Scopecat-Builds"
+```
+
+Use `{source = "public", path = "packages/scopecat"}` entries in `packages`
+for wheels from that checkout. String entries such as `"."` still refer to the
+recipe directory. With `--source`, `public_source` may be omitted; if present,
+the command-line selection overrides it. Package paths cannot escape their
+selected root, including through symlinks. GUI, installer and public build tools
+come from the same selected checkout.
+
+This selects build inputs; it does not rewrite the lock project's `uv` source
+declarations or regenerate its lock. Maintain those dependencies in the lock
+project and verify that its frozen export succeeds with the intended checkout
+layout. Both repositories' revisions and the built artifacts remain recorded.
+
 Development adapters are still installed from wheels; editable adapter installs
 are not supported. Every invocation builds the declared packages and GUI (unless
 `--gui` supplies a matching prebuilt GUI), using ordinary uv/pip/pnpm/build-backend
