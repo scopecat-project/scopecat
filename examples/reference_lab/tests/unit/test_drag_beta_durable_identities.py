@@ -9,7 +9,6 @@ from reference_lab.workflows.drag_beta_freshness import (
     drag_beta_freshness_calibration,
 )
 from reference_lab.workflows.drag_beta_procedure import (
-    drag_beta_calibration_procedure,
     drag_beta_verification_procedure,
 )
 from reference_lab.workflows.drag_beta_publication import (
@@ -23,7 +22,6 @@ def test_drag_beta_durable_capability_manifest_changes_explicitly() -> None:
     # Software scenario provenance changes setup/config and child binding contracts.
     # Advance all dependent capabilities with the current development format.
     assert {
-        "manual_procedure": drag_beta_calibration_procedure.ref.model_dump(mode="json"),
         "verification_procedure": drag_beta_verification_procedure.ref.model_dump(
             mode="json"
         ),
@@ -33,14 +31,6 @@ def test_drag_beta_durable_capability_manifest_changes_explicitly() -> None:
             mode="json"
         ),
     } == {
-        "manual_procedure": {
-            "id": "reference-lab.drag-beta-calibration",
-            "version": "10",
-            "fingerprint": (
-                "sha256:7046e277a7572f6e3d07526eb2f0cb44b"
-                "f982df3d8c090022ffbba65f3ed86b2"
-            ),
-        },
         "verification_procedure": {
             "id": "reference-lab.drag-beta-verification",
             "version": "10",

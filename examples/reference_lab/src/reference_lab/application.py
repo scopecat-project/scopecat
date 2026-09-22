@@ -45,7 +45,6 @@ def create_application(_project_root: Path) -> LabApplication:
         DRAG_BETA_CALIBRATION_REGISTRY,
     )
     from reference_lab.workflows.drag_beta_procedure import (
-        drag_beta_calibration_procedure,
         drag_beta_verification_procedure,
     )
     from reference_lab.workflows.temperature_diagnostic import (
@@ -69,7 +68,6 @@ def create_application(_project_root: Path) -> LabApplication:
             temperature_diagnostic_procedure,
             failed_temperature_analysis,
             recovered_temperature_analysis,
-            drag_beta_calibration_procedure,
             drag_beta_verification_procedure,
         ),
         calibrations=DRAG_BETA_CALIBRATION_REGISTRY,
