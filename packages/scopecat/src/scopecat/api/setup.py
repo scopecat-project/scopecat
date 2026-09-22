@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from uuid import uuid4
 
 from scopecat.config.inventory import InstrumentInventoryChange
-from scopecat.daemon.client import DaemonClient
+from scopecat.daemon.client import DaemonClient, DaemonNotFoundError
 from scopecat.daemon.wire import (
     ConfigurationTemplateImportCommand,
     ConfigurationTemplateImportResult,
@@ -94,11 +94,13 @@ class LabSetupOperations:
         if isinstance(revision, str):
             revision = self.get(revision)
         ref = revision.ref if isinstance(revision, SetupRevision) else revision
-        generation = (
-            self.active().activation.generation
-            if expected_generation is None
-            else expected_generation
-        )
+        if expected_generation is None:
+            try:
+                generation = self.active().activation.generation
+            except DaemonNotFoundError:
+                generation = 0
+        else:
+            generation = expected_generation
         return self.client.activate_setup(
             SetupActivateCommand(
                 operation_id=operation_id or f"setup-activation:{uuid4().hex}",

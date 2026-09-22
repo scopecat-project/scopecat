@@ -17,6 +17,34 @@ that state. A partly initialized catalog is rejected rather than silently repair
 
 ## Prepare and review in Python
 
+For an empty laboratory, setup can be prepared before any parameter configuration:
+
+```python
+revision = lab.setup.save(reviewed_setup, name="initial-setup")
+lab.setup.activate(revision)
+```
+
+Here `reviewed_setup` is an `ExecutableSetupSnapshot` supplied by the adapter and
+maintainer. Saving or selecting it does not create a parameter registry entry.
+To use the current full-snapshot execution API, explicitly compose parameters:
+
+```python
+from scopecat.config.resolution import compose_configuration
+
+config = compose_configuration(
+    reviewed_setup,
+    id="initial-parameters",
+    system_id="lab",
+    catalog=author_parameter_catalog,
+    parameters=reviewed_parameters,
+)
+lab.config.set_default(config)
+```
+
+Composition validates without persistence; publishing selects the parameter
+default and leaves the already selected setup unchanged. The combined snapshot
+is a transitional carrier; see [configuration ownership](../development/configuration-ownership.md).
+
 Read the current setup and save a reviewed replacement:
 
 ```python
