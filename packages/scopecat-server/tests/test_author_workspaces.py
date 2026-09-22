@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 from filelock import FileLock
+from scopecat.application import LabApplication
 from scopecat.author_workspaces import author_workspace_id
 from scopecat.daemon.client import DaemonClient
 from scopecat.daemon.endpoint import resolve_daemon_endpoint
@@ -46,7 +47,11 @@ def test_two_workspace_publication_and_execution(tmp_path: Path) -> None:
         LocalDaemonRuntime(second.root)
     start_project(first, timeout=60)
     try:
-        with first.connect() as lab, first.authoring() as a, second.authoring() as b:
+        with (
+            LabApplication().connect(resolve_daemon_endpoint(first.root)) as lab,
+            first.authoring() as a,
+            second.authoring() as b,
+        ):
             initial_a = a.state()
             initial_b = b.state()
             assert initial_a.active != initial_b.active
