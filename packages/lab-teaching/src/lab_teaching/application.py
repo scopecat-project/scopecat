@@ -5,30 +5,32 @@ from pathlib import Path
 import scopecat as sc
 from scopecat.application import LabBootstrap
 from scopecat.records.config import (
-    ConfigProfileSnapshot,
     InstrumentRegistry,
     RoutingGraph,
-    SystemSpec,
     Topology,
-    snapshot_config_profile,
 )
+from scopecat.records.parameter_revision import ParameterRevisionContent
+from scopecat.records.setup import ExecutableSetupSnapshot
 
 from .parameters import Drive
 
 
-def bootstrap_config() -> ConfigProfileSnapshot:
-    return snapshot_config_profile(
-        profile_id="teaching",
-        system=SystemSpec(
-            id="synthetic-teaching",
-            primary_entity_id="q0",
-            topology=Topology(entities=[sc.EntityRef(id="q0", kind="logical_qubit")]),
-            instrument_registry=InstrumentRegistry(instruments=[]),
-            routing=RoutingGraph(routes=[]),
-            domain_target=None,
-            parameter_catalog=sc.parameter_catalog("teaching", Drive),
-        ),
-        parameter_snapshot=sc.parameter_snapshot(
+def initial_setup() -> ExecutableSetupSnapshot:
+    return ExecutableSetupSnapshot(
+        primary_entity_id="q0",
+        topology=Topology(entities=[sc.EntityRef(id="q0", kind="logical_qubit")]),
+        instrument_registry=InstrumentRegistry(instruments=[]),
+        routing=RoutingGraph(routes=[]),
+        domain_target=None,
+    )
+
+
+def initial_parameters() -> ParameterRevisionContent:
+    return ParameterRevisionContent(
+        id="teaching",
+        system_id="synthetic-teaching",
+        catalog=sc.parameter_catalog("teaching", Drive),
+        parameters=sc.parameter_snapshot(
             "teaching-inputs",
             tables={Drive: [Drive(id="q0", frequency=5.15)]},
         ),
@@ -36,4 +38,4 @@ def bootstrap_config() -> ConfigProfileSnapshot:
 
 
 def create_bootstrap(_project_root: Path) -> LabBootstrap:
-    return LabBootstrap(bootstrap_config=bootstrap_config)
+    return LabBootstrap(setup=initial_setup, parameter_defaults=initial_parameters)

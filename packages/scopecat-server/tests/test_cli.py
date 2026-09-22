@@ -15,6 +15,8 @@ from scopecat.config.documents import load_config_snapshot_document
 from scopecat.daemon.endpoint import DaemonEndpointRecord
 from scopecat.project import Project
 from scopecat.records.config import ConfigProfileSnapshot, config_content_hash
+from scopecat.records.setup import ExecutableSetupSnapshot
+from scopecat_testkit.config_registry import bootstrap_declaration, parameter_content
 from typer.testing import CliRunner
 
 from scopecat_server.cli import app
@@ -70,7 +72,12 @@ def test_config_check_resolves_lazy_bootstrap_factory(
         bootstrap_calls += 1
         return config
 
-    bootstrap = LabBootstrap(bootstrap_config=bootstrap_config)
+    bootstrap = LabBootstrap(
+        setup=lambda: ExecutableSetupSnapshot.from_config(
+            load_config_snapshot_document(_CONFIG_FIXTURE)
+        ),
+        parameter_defaults=lambda: parameter_content(bootstrap_config()),
+    )
     monkeypatch.setattr(
         Project,
         "load_bootstrap",
@@ -93,7 +100,29 @@ def test_config_check_rejects_missing_bootstrap_factory(tmp_path: Path) -> None:
     result = CliRunner().invoke(app, ["config", "check", str(tmp_path)])
 
     assert result.exit_code == 1
-    assert "error: project bootstrap does not define bootstrap_config" in result.output
+    assert (
+        "error: project bootstrap must define setup and parameter_defaults"
+        in result.output
+    )
+    assert not (tmp_path / ".scopecat").exists()
+
+
+def test_config_check_accepts_equipment_without_parameter_defaults(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _write_manifest(tmp_path)
+    equipment = ExecutableSetupSnapshot.from_config(
+        load_config_snapshot_document(_CONFIG_FIXTURE)
+    )
+    monkeypatch.setattr(
+        Project,
+        "load_bootstrap",
+        _bootstrap_loader(LabBootstrap(setup=lambda: equipment)),
+    )
+    result = CliRunner().invoke(app, ["config", "check", str(tmp_path)])
+    assert result.exit_code == 0, result.output
+    assert f"setup={equipment.content_hash}" in result.output
+    assert "parameter_defaults=none" in result.output
     assert not (tmp_path / ".scopecat").exists()
 
 
@@ -117,7 +146,7 @@ def test_config_check_reports_invalid_snapshot(
             )
         }
     )
-    bootstrap = LabBootstrap(bootstrap_config=lambda: invalid_config)
+    bootstrap = bootstrap_declaration(invalid_config)
     monkeypatch.setattr(
         Project,
         "load_bootstrap",
@@ -141,7 +170,12 @@ def test_config_check_reports_bootstrap_source_loader_failure(
     def bootstrap_config() -> ConfigProfileSnapshot:
         return load_config_snapshot_document(tmp_path / "missing-config.json")
 
-    bootstrap = LabBootstrap(bootstrap_config=bootstrap_config)
+    bootstrap = LabBootstrap(
+        setup=lambda: ExecutableSetupSnapshot.from_config(
+            load_config_snapshot_document(_CONFIG_FIXTURE)
+        ),
+        parameter_defaults=lambda: parameter_content(bootstrap_config()),
+    )
     monkeypatch.setattr(
         Project,
         "load_bootstrap",

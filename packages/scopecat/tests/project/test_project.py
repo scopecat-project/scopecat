@@ -179,7 +179,7 @@ def test_bootstrap_and_application_are_imported_from_project_src(
             "    from project_application_bootstrap import CONFIG\n"
             "    return CONFIG\n\n"
             "def create_bootstrap(_project):\n"
-            "    return LabBootstrap(bootstrap_config=lazy_bootstrap)\n\n"
+            "    return LabBootstrap(setup=lazy_bootstrap)\n\n"
             "def create(_project):\n"
             "    from scopecat.application import LabApplication\n"
             "    from project_automation_callbacks import CALLBACK_MARKER\n"
@@ -228,8 +228,8 @@ def test_bootstrap_and_application_are_imported_from_project_src(
     assert "project_automation_callbacks" in sys.modules
     assert isinstance(bootstrap, LabBootstrap)
     assert isinstance(application, LabApplication)
-    assert bootstrap.bootstrap_config is not None
-    assert bootstrap.bootstrap_config() == {"id": "lazy-project-config"}
+    assert bootstrap.setup is not None
+    assert bootstrap.setup() == {"id": "lazy-project-config"}
     assert isinstance(repeated_bootstrap(tmp_path), LabBootstrap)
     assert isinstance(repeated(tmp_path), LabApplication)
     assert str(tmp_path / "src") in sys.path

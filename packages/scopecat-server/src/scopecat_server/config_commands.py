@@ -11,8 +11,8 @@ from uuid import uuid4
 
 from scopecat.config.documents import config_snapshot_document_json
 from scopecat.config.resolution import (
+    compose_configuration,
     config_revision_entry_id,
-    validate_config_profile,
 )
 from scopecat.daemon.client import DaemonNotFoundError
 from scopecat.daemon.endpoint import (
@@ -85,10 +85,18 @@ class ProjectConfigExportResult:
 def load_source_config(project: Project) -> ConfigProfileSnapshot:
     """Freshly evaluate and validate the project's executable config source."""
 
-    bootstrap_config = project.load_bootstrap().bootstrap_config
-    if bootstrap_config is None:
-        raise ValueError("project bootstrap does not define bootstrap_config")
-    return validate_config_profile(bootstrap_config())
+    bootstrap = project.load_bootstrap()
+    if bootstrap.setup is None or bootstrap.parameter_defaults is None:
+        raise ValueError("project bootstrap must define setup and parameter_defaults")
+    setup = bootstrap.setup()
+    parameters = bootstrap.parameter_defaults()
+    return compose_configuration(
+        setup,
+        id=parameters.id,
+        system_id=parameters.system_id,
+        catalog=parameters.catalog,
+        parameters=parameters.parameters,
+    )
 
 
 def diff_project_config(project: Project) -> ProjectConfigDiff:

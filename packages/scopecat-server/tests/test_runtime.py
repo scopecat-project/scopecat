@@ -880,11 +880,11 @@ def test_explicit_runtime_bootstrap_overrides_project_seed(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    def unavailable_bootstrap() -> ConfigProfileSnapshot:
+    def unavailable_bootstrap() -> ExecutableSetupSnapshot:
         raise AssertionError("explicit test config must take precedence")
 
     def bootstrap_factory(_root: Path) -> LabBootstrap:
-        return LabBootstrap(bootstrap_config=unavailable_bootstrap)
+        return LabBootstrap(setup=unavailable_bootstrap)
 
     def load_factory(
         _spec: str,

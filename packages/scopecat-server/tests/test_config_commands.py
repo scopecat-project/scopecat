@@ -24,6 +24,8 @@ from scopecat.daemon.wire import ConfigActivationReceipt, ConfigPublishReceipt
 from scopecat.kernel.errors import CheckFailed
 from scopecat.project import Project
 from scopecat.records.config import ConfigProfileSnapshot, config_content_hash
+from scopecat.records.setup import ExecutableSetupSnapshot
+from scopecat_testkit.config_registry import bootstrap_declaration, parameter_content
 
 from scopecat_server.config_commands import (
     apply_project_config,
@@ -66,7 +68,14 @@ def test_source_config_is_freshly_built_and_validated(
     monkeypatch.setattr(
         Project,
         "load_bootstrap",
-        _bootstrap_loader(LabBootstrap(bootstrap_config=bootstrap_config)),
+        _bootstrap_loader(
+            LabBootstrap(
+                setup=lambda: ExecutableSetupSnapshot.from_config(
+                    load_config_snapshot_document(_CONFIG_FIXTURE)
+                ),
+                parameter_defaults=lambda: parameter_content(bootstrap_config()),
+            )
+        ),
     )
 
     first = load_source_config(project)
@@ -90,7 +99,7 @@ def test_source_config_rejects_missing_or_invalid_bootstrap(
 
     with pytest.raises(
         ValueError,
-        match="project bootstrap does not define bootstrap_config",
+        match="project bootstrap must define setup and parameter_defaults",
     ):
         load_source_config(project)
 
@@ -112,7 +121,7 @@ def test_source_config_rejects_missing_or_invalid_bootstrap(
     monkeypatch.setattr(
         Project,
         "load_bootstrap",
-        _bootstrap_loader(LabBootstrap(bootstrap_config=lambda: invalid)),
+        _bootstrap_loader(bootstrap_declaration(invalid)),
     )
 
     with pytest.raises(CheckFailed):
@@ -173,7 +182,7 @@ def test_diff_uses_selected_project_record_instead_of_environment_override(
     monkeypatch.setattr(
         Project,
         "load_bootstrap",
-        _bootstrap_loader(LabBootstrap(bootstrap_config=lambda: config)),
+        _bootstrap_loader(bootstrap_declaration(config)),
     )
     observed_urls: list[str | None] = []
 
@@ -497,7 +506,7 @@ def _patch_project(
     monkeypatch.setattr(
         Project,
         "load_bootstrap",
-        _bootstrap_loader(LabBootstrap(bootstrap_config=lambda: source)),
+        _bootstrap_loader(bootstrap_declaration(source)),
     )
 
     def recorded_url(_project: Project) -> str:

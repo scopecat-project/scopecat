@@ -44,13 +44,17 @@ dependency retention and explicit schema-version policy.
 
 | Command | Purpose |
 | --- | --- |
-| `scopecat config check [PROJECT]` | Validate executable bootstrap source without creating state. |
+| `scopecat config check [PROJECT]` | Validate separate setup and optional parameter-default sources without creating state. |
 | `scopecat config diff [PROJECT]` | Compare freshly evaluated source with the daemon default. |
-| `scopecat config apply [PROJECT]` | Validate and publish the source as a new daemon default. |
+| `scopecat config apply [PROJECT]` | Publish declared parameter defaults against compatible selected equipment; never select setup. |
 | `scopecat config export [PROJECT] --output PATH` | Export the complete daemon default as JSON. |
 
 `config apply` accepts `--actor` and `--note`. `config export` refuses to replace
 an existing destination unless `--force` is supplied.
+These default-management commands are transitional maintainer tools. Use parameter
+branches and `session.params.save()` for ordinary author edits. `diff` and `apply`
+require both bootstrap declarations; setup-only labs do not acquire a parameter
+default merely by starting or checking their sources.
 
 ## Automation
 

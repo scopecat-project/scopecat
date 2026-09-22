@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from scopecat.application import LabBootstrap
 from scopecat.config.candidates import CandidateConfig
 from scopecat.config.changes import prepare_parameter_change_approval
 from scopecat.config.registry.ports import ConfigRegistryUnitOfWorkFactory
@@ -18,6 +19,7 @@ from scopecat.kernel.content_identity import sha256_json_hash
 from scopecat.project_state import ProjectStateServices
 from scopecat.records.config import ConfigProfileSnapshot
 from scopecat.records.parameter_change import ParameterChangeApprovalRecord
+from scopecat.records.parameter_revision import ParameterRevisionContent
 from scopecat.records.setup import ExecutableSetupSnapshot, SetupRevision
 
 from scopecat_testkit.workflow_fixtures import load_config as load_workflow_config
@@ -25,6 +27,24 @@ from scopecat_testkit.workflow_fixtures import load_config as load_workflow_conf
 
 def load_config() -> ConfigProfileSnapshot:
     return load_workflow_config()
+
+
+def parameter_content(config: ConfigProfileSnapshot) -> ParameterRevisionContent:
+    """Extract parameter defaults from an existing combined test fixture."""
+    return ParameterRevisionContent(
+        id=config.id,
+        system_id=config.system.id,
+        catalog=config.parameter_catalog,
+        parameters=config.parameter_snapshot,
+    )
+
+
+def bootstrap_declaration(config: ConfigProfileSnapshot) -> LabBootstrap:
+    """Declare the separate first-use inputs of a combined test fixture."""
+    return LabBootstrap(
+        setup=lambda: ExecutableSetupSnapshot.from_config(config),
+        parameter_defaults=lambda: parameter_content(config),
+    )
 
 
 def initialize_setup(

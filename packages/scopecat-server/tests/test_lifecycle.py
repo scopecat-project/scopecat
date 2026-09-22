@@ -12,7 +12,6 @@ from pathlib import Path
 import httpx2
 import psutil
 import pytest
-from scopecat.config.resolution import validate_config_profile
 from scopecat.daemon.client import DaemonClient
 from scopecat.daemon.endpoint import (
     DAEMON_URL_ENV,
@@ -31,6 +30,7 @@ from scopecat_testkit.project_loading import isolated_project_imports
 from typer.testing import CliRunner
 
 from scopecat_server.cli import app
+from scopecat_server.config_commands import load_source_config
 from scopecat_server.lifecycle import (
     DaemonLifecycleError,
     DaemonStatus,
@@ -82,9 +82,7 @@ def test_init_creates_runnable_python_project_and_does_not_overwrite(
     assert 'lab.run(first_run.build(), name="First run")' in notebook_source
     assert "lab.prepare(" not in notebook_source
 
-    bootstrap = project.load_bootstrap()
-    assert bootstrap.bootstrap_config is not None
-    config = validate_config_profile(bootstrap.bootstrap_config())
+    config = load_source_config(project)
     assert config.id == "default"
     assert config.primary_entity_id == "subject"
     assert config.parameter_snapshot.get("repetitions") == ScalarParameterValue(
@@ -506,8 +504,8 @@ def test_startup_trace_locates_config_stall_after_instrument_readiness(
     configuration = tmp_path / "src/scopecat_lab/configuration.py"
     configuration.write_text(
         configuration.read_text().replace(
-            "def bootstrap_config() -> ConfigProfileSnapshot:",
-            "def bootstrap_config() -> ConfigProfileSnapshot:\n"
+            "def initial_parameters() -> ParameterRevisionContent:",
+            "def initial_parameters() -> ParameterRevisionContent:\n"
             "    import faulthandler\n"
             "    import time\n"
             "    from scopecat_server import _startup_diagnostics as diagnostics\n"
@@ -521,7 +519,7 @@ def test_startup_trace_locates_config_stall_after_instrument_readiness(
 
     def stop_after_sample(_elapsed: float, _stage: str) -> None:
         if any(
-            "in bootstrap_config" in trace.read_text()
+            "in initial_parameters" in trace.read_text()
             for trace in diagnostics.glob("daemon-startup-*.log")
         ):
             raise SampleCaptured
@@ -537,7 +535,7 @@ def test_startup_trace_locates_config_stall_after_instrument_readiness(
     assert "instrument endpoint ready" in evidence
     assert "project schema ready" in evidence
     assert "daemon application ready; bootstrapping config registry" in evidence
-    assert "in bootstrap_config" in evidence
+    assert "in initial_parameters" in evidence
     assert "config registry ready; starting application services" not in evidence
     assert not daemon_record_path(tmp_path).exists()
 

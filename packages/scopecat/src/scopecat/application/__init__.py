@@ -9,7 +9,6 @@ from typing import TYPE_CHECKING, cast
 
 if TYPE_CHECKING:
     from scopecat.application.bootstrap import (
-        BootstrapConfigFactory,
         LabBootstrap,
     )
     from scopecat.application.capabilities import LabCapabilities
@@ -17,10 +16,6 @@ if TYPE_CHECKING:
 
 _EXPORTS = {
     "LabCapabilities": ("scopecat.application.capabilities", "LabCapabilities"),
-    "BootstrapConfigFactory": (
-        "scopecat.application.bootstrap",
-        "BootstrapConfigFactory",
-    ),
     "LabBootstrap": ("scopecat.application.bootstrap", "LabBootstrap"),
     "LabApplication": ("scopecat.application.lab", "LabApplication"),
 }

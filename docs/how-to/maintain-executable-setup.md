@@ -25,6 +25,28 @@ below. Do not delete the catalog or rerun initialization over existing choices.
 
 ## Prepare and review in Python
 
+Maintained bootstrap declarations provide independent factories:
+
+```python
+from scopecat.application import LabBootstrap
+
+
+def create_bootstrap(project_root):
+    return LabBootstrap(
+        setup=initial_setup,  # returns ExecutableSetupSnapshot
+        parameter_defaults=initial_parameters,  # returns ParameterRevisionContent
+    )
+```
+
+Both factories are evaluated only for a new catalog. `parameter_defaults` is
+optional: `LabBootstrap(setup=initial_setup)` initializes equipment without
+creating any parameter default. Independent parameter branches can then be
+created by the author. The optional default factory remains a bridge for older
+execution consumers, not a parameter branch, calibration claim or save callback.
+Generated starter and teaching projects declare each part directly; they do not
+extract equipment from an author-owned full configuration. Routine parameter
+editing does not reevaluate equipment declarations.
+
 For ordinary parameter authoring, start with
 [independent parameter revisions](independent-parameters.md): saving parameters
 does not require setup. The sequence below specifically initializes a global
