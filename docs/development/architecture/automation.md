@@ -240,227 +240,58 @@ next durable step boundary the underlying procedure worker releases the procedur
 ready for another exact worker. If there is no next step, the procedure closes
 successfully. There is no mid-effect cancellation contract.
 
-## Freshness evaluation and bounded calibration cohorts
+## Retired cohort planning and remaining backend contracts
 
-This section describes the remaining legacy full-config cohort API. The reference
-DRAG application no longer registers or recommends it. New branch workflows use
-explicit requested targets and joint verification; scientific freshness over
-independent parameter dependencies still needs a replacement design.
+The full-config `CalibrationDefinition` / `CalibrationRegistry` authoring layer,
+project freshness evaluator, automatic-publication policy registry and finalizer
+are removed. They have no remaining application consumers. Their old semantic
+input projection, effective-success selection and implicit subset admission are
+not compatibility requirements for independent parameter branches. New workers
+execute explicit procedures; scientific freshness and dependency applicability
+still need a replacement design.
 
-The remaining low-level evaluator accepts an immutable `CalibrationRegistry`;
-application and notebook-client registration have been retired, along with the
-root `calibration` authoring exports. Each legacy `CalibrationDefinition` owns a typed target
-selector, a typed input/dependency observer, and a pure intent builder. One
-cycle resolves one exact saved configuration or working-point head. The selector,
-observer, and builder receive that same frozen planning context. A publishing
-cohort requires a working-point scope containing its stable workspace identity
-and exact sample revision/workpoint/batch. A catalog-scoped `procedure_success`
-check can remain unbound to a sample. The
-builder additionally receives its stable target, validated freshness-input
-model, and flat exact dependency-success evidence. The context contains the
-captured configuration and exact source value, not a client or read interface,
-so the builder cannot refresh a mutable head while admitting work.
-The freshness-input model must include every semantic value whose change should
-rerun the calibration, such as a relevant configuration content hash; invocation
-provenance such as the exact entry reference remains in the context and procedure
-intent without necessarily making otherwise identical semantic inputs stale.
+The following legacy backend surfaces remain for a separate retirement:
 
-The evaluator binds declared logical targets to the planning owner before
-observation or status lookup. Calibration keys include that stable owner, rather
-than the changing head revision. Thus two branches with the same sample and
-working-point name do not share attempts or successes, and publication does not
-erase the owner's calibration history. Dependency targets use the same scope;
-cross-owner reuse needs a future explicit applicability contract. Fan-out scope
-still controls shared capacity and may intentionally span several owners.
+- cohort wire/domain records, daemon client methods and HTTP services;
+- SQLite cohort/member/finalization/status/publication-anchor storage;
+- exact full-config cohort publication helpers and their evidence checks.
 
-The evaluator supports at most 200 selected members and 200 combined member and
-dependency status keys per definition. It first queries all logical calibration
-statuses using the server clock and the definition's fan-out scope. Only after
-that status snapshot may it build intents for the deterministic ready frontier.
-`active` and `attention_required` attempts suppress new work. A failed or
-cancelled attempt suppresses only the same freshness fingerprint: changing the
-explicit calibration definition, exact procedure, observed inputs, or exact
-dependency successes establishes a new need that may be admitted. There is no
-project-side forced flag because a constant force value would create a cohort on
-every poll; an operator-forced retry must be an explicit manually authored
-cohort with a stable external identity.
+These are implementation debt, not another recommended automation path. They do
+not provide a resident planner or automatic publisher. Retaining them does not
+designate this development schema as a supported persistent-data baseline.
+Historical stores are not rewritten or deleted by the authoring-layer retirement.
 
-Each definition also declares how success becomes effective.
-`procedure_success` means a successful procedure closure is immediately fresh.
-`published_result` means the closure has produced a verified proposal but has
-not yet changed authoritative configuration. That closure is reported as
-pending publication: the same exact definition, procedure, freshness
-fingerprint, and base configuration suppress another run, but the pending result
-is neither fresh nor valid dependency evidence. If that workspace head changes
-before publication, suppression ends and the evaluator emits a typed
-`publication_base_changed` reason. The old finalizer still names its exact old
-base and cannot advance the new head. An unrelated workspace or parameter-only
-global default update does not have that effect.
+The remaining admission service atomically freezes the cohort spec and member
+procedure requests, validates the observed status and fan-out capacity, and
+returns the original result for an exact replay. It rejects stale observations
+and cannot adopt unrelated pre-existing procedure runs. Sample/workpoint/batch
+scope remains part of the retained ownership and evidence contract.
 
-A prior effective success is fresh only when its definition, target procedure,
-semantic input fingerprint, dependency-success identities, and optional
-validity duration all still match. For `published_result`, those comparisons use
-the result input and freshness fingerprints attached by the atomic publication,
-not the inputs observed before its procedure started. An unrelated later
-configuration revision therefore need not invalidate a result when the
-definition's observer projects the same semantic inputs. Missing or pending
-dependency success blocks that member. Dependencies can reference only effective
-successes present in the status snapshot taken before cohort creation, including
-the publication operation identity where one is required. A member cannot
-depend on a success created in its own cohort, so the daemon never persists a
-dynamic closure or performs recursive scheduling. Later cycles converge after
-upstream successes become visible.
+Legacy publication still checks complete member coverage, successful exact
+procedure checkpoints and retained fit/proposal/decision lineage against one
+full-config base. Non-conflicting scalar and keyed-table edits use the shared
+common-base merge core. Independent member decisions are **not** joint scientific
+verification; new branch procedures remeasure the composed result explicitly.
 
-Available admission capacity is
-`max_in_flight - observed_fanout_active_count`. The evaluator takes at most that
-many canonically ordered ready members and the daemon atomically checks both the
-status observation and capacity while creating the cohort. A cohort ID is
-derived from the complete immutable cohort-spec hash. Each member uses its
-logical calibration key as `member_id`; its procedure request key covers the
-cohort ID and exact member spec. Concurrent workers can therefore race safely:
-one atomic admission wins, exact replay returns the winner, and a stale
-observation is a benign admission conflict retried by a later cycle.
+The publication transaction fences the exact destination and, where present,
+ready-finalization revision. Approvals, the configuration revision, workspace
+head, operation receipt and member publication anchors commit together or roll
+back together. Anchors retain exact member and publication identities; they
+cannot be substituted between operations. Unknown-outcome reconciliation in the
+remaining publication helper looks up the original operation and validates its
+receipt without rebuilding the plan or rebasing to a newer head.
 
-The calibration-definition fingerprint covers its ID/version, success policy,
-input schema, selector, observer, builder, exact procedure reference, fan-out
-scope, and capacity. A transitive imported-code change still requires an
-explicit version bump. The server stores immutable cohorts, member/run
-associations, flat prior success evidence, publication anchors, and ordinary
-procedure runs. It does not store selectors, Python closures, graph edges, or a
-traversal cursor. The hard 200-member first slice makes every evaluation bounded;
-larger cohorts will require an explicit durable traversal policy rather than an
-in-memory cursor.
-
-The former worker-wide publication backlog barrier is retired. Independent
-parameter-branch procedures publish within their own durable ledger and fence
-their captured destination head; unrelated pending publication work does not
-suspend interval planning. The resident worker checks stop between phases and
-uses interruptible exponential backoff for retryable transport and 5xx/429
-control failures. The remaining legacy evaluator can still be called directly.
-After an unknown
-cohort-create transport outcome, the evaluator reopens the deterministic cohort
-ID; not-found retries the original transport error, while a different
-deterministic 4xx is fatal because the durable outcome cannot be classified
-safely.
-
-## Exact cohort finalization and published freshness
-
-Publication is a project-side operation, not another procedure step or an
-implicit daemon reaction to procedure closure. The explicit caller or registered
-resident policy reopens one exact cohort and its complete member page, then
-supplies one contribution for every member. A contribution carries a versioned
-`verified_parameter_proposal_v1` proof: one self-contained exact procedure
-checkpoint whose project-analysis output owns the accepted decision. The
-semantic result-input fingerprint remains composition evidence rather than part
-of that scientific proof. Only `published_result` members whose exact parent
-procedures closed successfully are eligible.
-
-The server resolves all evidence before publishing logical state. It checks the
-cohort spec and base source, complete member coverage, and that the exact
-evidence step published the referenced project decision. The project analysis
-must have exactly two direct run inputs. From those durable inputs the server
-uniquely identifies the cohort-base baseline and analysis-candidate run, then
-derives the fit analysis and proposal from the candidate source and revalidates
-the complete lineage. The durable registry source records the proof dialect,
-checkpoint, and resolved run, analysis, proposal, and decision identities, so
-later readers do not have to trust caller-supplied derived fields.
-
-The baseline uses the cohort's exact context, and baseline/candidate runs retain
-its exact sample revision and batch. Parent sample selectors are frozen from that
-basis at admission. The generic multi-stage parent does not freeze the full
-baseline config hash, because its candidate stage legitimately changes parameters;
-child setup/resource checks and finalization proofs still apply.
-
-All proposals must branch from the cohort's one exact base. The generic
-`common_base_cells_v1` merge combines non-conflicting whole scalar values and
-keyed-table cells deterministically; incompatible edits to the same atomic value
-or cell are a conflict. The finalizer also names a versioned and fingerprinted
-project composition policy. Project code may use that policy to check how the
-merged snapshot maps back to each member's semantic result inputs, but the
-daemon neither imports the policy nor treats it as executable code.
-
-This evidence means that every contribution was verified independently and that
-their composition obeyed the declared deterministic policy. It does **not** mean
-the merged device configuration received a joint scientific verification. A
-campaign that needs crosstalk, simultaneous-operation, or device-wide validation
-must publish that additional evidence explicitly rather than infer it from the
-cell merge.
-
-A dedicated calibration-publication command is the transaction boundary. Its
-config revision intent uses the same source-intent and operation identity rules
-as an ordinary config publication, while its optional finalization-revision
-fence remains calibration-specific. After resolving an exact operation replay,
-automatic publication also fences the exact still-ready finalization revision
-and its server-clock availability. The server then prepares every proposal
-approval, saves one context revision and advances the owning workspace head with
-exact-base CAS, commits one dedicated receipt containing the
-complete typed member-success tuple, records it in the shared config-operation
-ledger, marks the finalization published, and inserts one publication anchor per
-member in the same transaction. Any proof, state fence, merge, result-hash,
-head, receipt, or anchor failure rolls the logical transaction back. A
-successful two-member finalization therefore creates two anchors but only one
-entry and one workspace-head update, without a global activation; when both proposals were previously
-unapproved, it also creates their two approvals.
-
-Each anchor binds the exact member success and closure time to the cohort base,
-publish operation and source-intent hash, semantic result-input fingerprint,
-server-recomputed result freshness fingerprint, result context and workspace,
-and publication time. The calibration receipt must cover exactly the resolved
-contribution set; the generic config command and receipt do not expose
-finalization fences or calibration anchors. Status loads
-the anchor by the exact successful procedure-run key, so a stored anchor cannot
-be substituted from another operation or member. Once anchored, the result is
-an effective success and may supply flat dependency evidence.
-
-The project finalizer derives deterministic entry and operation IDs from the
-complete merge source, actor, and note. An automatic plan additionally carries
-the ready finalization revision without changing those replay identities. A
-successful response is validated against that frozen plan. If transport loss, a
-server failure, or an invalid response leaves the outcome uncertain,
-reconciliation only reopens the exact operation and finalization; it does not
-refresh the destination head, rebuild contributions, or issue a new intent. An
-unclassified outcome retains the original plan. The legacy helper reports a
-typed unknown outcome even when the immediate cause was response validation or
-receipt drift; the standard resident worker no longer retries this legacy path.
-
-Automatic publication policies are immutable, fingerprinted, and pinned into
-the cohort spec. The legacy low-level policy registry retains exact historical
-capability needed to drain already-admitted cohorts, independently of its active
-admission bindings. Multiple policy versions may therefore target the same exact
-calibration definition; a manually assembled legacy evaluator selects one active policy
-when that selection is otherwise ambiguous. The planning callback sees only
-read-only procedure/run projections and plan builders; the legacy finalizer alone
-owns publish, defer, and attention mutations. Ready work is durable and
-capability-filtered by every retained exact policy reference, while new cohorts
-pin only the selected active binding. Discovery uses a finite insertion-sequence
-high-water, wrapping only after the terminal page, so late readiness cannot be
-lost and continuous arrivals cannot make a cycle unbounded.
-
-Workers do not persist a second claim or lease. They prepare deterministically
-and race through the finalization revision plus exact working-point head fences. A lost
-publish response is reconciled by exact operation and cohort finalization;
-published and superseded states are benign completion, while an unresolved
-outcome retains the same plan for retry. Deterministic proof errors move the
-exact ready revision to operator attention. A typed temporary block defers that
-same ready occurrence using server-clock availability. Disposition responses
-are never blindly replayed: response loss is reconciled by exact finalization,
-and a different worker's revision is counted as a benign race.
-
-These services are no longer assembled by the standard application or CLI.
-Direct low-level consumers must supply their own retained policies and worker
-components. Operator-wide discovery is deliberately narrower: there
-is not yet an indexed query that combines publication attention with ready work
-whose exact historical policy is unavailable to the current worker. Adding
-that view requires a durable state/capability ordering; it must not be emulated
-by repeatedly listing all cohorts and reopening every member page. Until that
-query exists, automatic publication should be enabled only where policy
-capabilities are deployed and monitored as part of the project application.
+These server invariants and helper behavior retain focused tests until those
+interfaces are deliberately retired. The removed planner/finalizer tests are not
+substitutes for current branch workflow tests. The latter cover joint evidence,
+partial rejection, stale destinations, daemon restart and lost publication
+responses in the durable procedure ledger.
 
 ## Capabilities needed at larger chip scale
 
-Moving beyond the current bounded 200-member flat slice to hundreds or thousands
-of related calibrations requires additional control-plane concepts, not a larger
-procedure function:
+Scaling explicit branch procedures to hundreds or thousands of related
+calibrations requires additional control-plane concepts. The legacy 200-member
+cohort limit is not the target platform model:
 
 - selectors and immutable cohorts for qubits, couplers, channels, and regions;
 - dependency and freshness records that explain why a calibration is due and
@@ -473,7 +304,7 @@ procedure function:
 - explicit quality gates, approval policy, stop conditions, and rollback to an
   exact entry rather than a relative undo;
 - fleet-level publication priorities, maintenance windows, and operator tooling
-  beyond the current bounded exact-capability queue;
+  with explicit policy availability rather than restoring the retired registry;
 - richer recurring scheduling and worker-fleet discovery, including cron/civil
   time, version availability, worker heartbeats, maintenance windows, and
   operator attention queues;

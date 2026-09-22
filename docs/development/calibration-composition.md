@@ -124,9 +124,15 @@ covered independently of the legacy cohort fixtures.
 The notebook client no longer constructs a cohort facade or accepts calibration
 and publication registries. `LabClient.calibrations` and the root `calibration` /
 `Calibration*` authoring exports are retired. Ordinary authors use registered
-procedures and independent parameter candidates. The remaining low-level cohort
-planners, publication helpers, daemon endpoints and stored records are not a
-second recommended author workflow; they remain for a separate backend retirement.
+procedures and independent parameter candidates.
+
+The unused generic freshness evaluator, automatic publication finalizer, policy
+registry and calibration-definition authoring layer are now also removed, along
+with tests whose only consumers were those retired components. No automatic
+freshness or implicit subset behavior is carried forward. The remaining exact
+publication helpers, daemon endpoints, wire records and storage are a separate
+backend retirement: their transaction and evidence tests remain, and no stored
+record or schema changes in this removal.
 
 ## Remaining implementation order
 
