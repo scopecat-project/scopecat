@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, Literal
 
 from scopecat.config.candidates import CandidateConfig
 from scopecat.config.scientific_binding import bind_scientific_evidence
+from scopecat.daemon.client import DaemonNotFoundError
 from scopecat.daemon.wire import ParameterResolveCommand
 from scopecat.records.config import ConfigProfileSnapshot
 from scopecat.records.config_context import ContextRunConfigSource
@@ -236,7 +237,15 @@ def _resolve_configuration(
     else:
         assert isinstance(choice, ActiveConfiguration)
         if reviewed is None:
-            config, active_source = lab.config.resolve_with_source("active")
+            try:
+                config, active_source = lab.config.resolve_with_source("active")
+            except DaemonNotFoundError as error:
+                raise ValueError(
+                    "No parameters selected and this lab has no parameter default. "
+                    "Select a parameter branch with session.use(parameter_branch=...), "
+                    "pass parameters=... to session.prepare(), or choose a parameter "
+                    "branch in the workbench Measurement context."
+                ) from error
             assert isinstance(active_source, ConfigRegistryRunConfigSource)
             source = active_source
         else:

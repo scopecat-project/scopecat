@@ -96,6 +96,21 @@ policies and scientific records remain owned by the consuming laboratory.
 
 ## What belongs to the exercise
 
+Starting a new exercise installs only its synthetic setup. It does not publish a
+global parameter default. The Notebook's `open_parameters(session)` creates or
+opens `teaching-table`, then selects that branch in the session. Saving parameters
+advances that branch; previews retain exact parameter/setup references, and
+reopening a result does not require selecting today's branch again.
+
+Before the setup cell has selected parameters, a preview reports how to select a
+branch or pass `parameters=...`. Run the setup cell, or use
+`session.use(parameter_branch="teaching-table")` when reopening a saved branch.
+In the workbench, select the saved branch in **Measurement context**. The tutorial
+does not need **Use lab parameter default**.
+Existing exercise data is retained; upgrading does not delete defaults saved by
+older versions or rewrite their runs. Use a fresh sandbox to try the new starting
+state.
+
 Each topic includes editable `my_experiment/parameters.py`, `response.py`,
 `teaching.py` and `setup.py`. The first declares local parameter models; the next
 two define the synthetic response and experiments. The last prepares the example

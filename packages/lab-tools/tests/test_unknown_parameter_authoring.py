@@ -7,8 +7,7 @@ import pytest
 import scopecat as sc
 from lab_teaching.project import create_project
 from scopecat.kernel.errors import CheckFailed
-from scopecat.records.config_context import ConfigContextRef
-from scopecat.records.sample import SampleRevisionDraft
+from scopecat.records.run import ParameterRunConfigSource
 from scopecat_server.lifecycle import start_project, stop_project
 
 
@@ -38,29 +37,23 @@ def test_new_table_unknowns_freeze_and_structural_history(
     start_project(project)
     try:
         with project.connect() as lab:
-            active = lab.config.active()
-            lab.samples.create(
-                "author-unknown",
-                kind="synthetic",
-                content=SampleRevisionDraft(display_name="Unknown author sample"),
+            assert lab.config.registry().entries == ()
+            empty = lab.parameters.save(
+                name="author-empty",
+                catalog=sc.parameter_catalog("author"),
+                parameters=sc.parameter_snapshot("author-values", tables={}),
             )
-            lab.config.save_context(
-                entry_id="author-unknown-start",
-                base=ConfigContextRef(
-                    entry_id=active.entry.id, content_hash=active.entry.content_hash
-                ),
-                sample=lab.samples.handle("author-unknown").selector(),
-                working_point_id="new",
-                label="New sample",
-            )
-            params = lab.config.workspace(context="author-unknown-start")
+            lab.parameters.create_branch("author-unknown", revision=empty)
+            params = lab.parameters.workspace("author-unknown")
             probes = params.declare_table(ProbeParameters)
             probes.add(ProbeParameters(id="q0", duration=40))
             probes.add(ProbeParameters(id="q1", duration=60))
             initial = params.save("author-unknown-probes")
             assert params[ProbeParameters]["q0"].duration == 40
             assert (
-                lab.config.workspace(context=initial)[ProbeParameters]["q0"].duration
+                lab.parameters.workspace("author-unknown-probes")[ProbeParameters][
+                    "q0"
+                ].duration
                 == 40
             )
             assert params["probes"]["q0"]["pi_amplitude"] is None
@@ -68,6 +61,8 @@ def test_new_table_unknowns_freeze_and_structural_history(
             run = lab.run(duration_probe.build(), config=params.freeze())
             assert run.status == "completed"
             original = run.snapshot
+            assert isinstance(original.config_source, ParameterRunConfigSource)
+            assert original.config_source.parameters == initial.ref
             with pytest.raises(CheckFailed, match=r"probes.*q0.*pi_amplitude.*unknown"):
                 lab.preview(pi_probe.build(), config=params.freeze())
             probes["q0"].pi_amplitude = 0.2
@@ -79,15 +74,15 @@ def test_new_table_unknowns_freeze_and_structural_history(
             assert filled.status == "completed"
             assert filled.config == frozen.config
             assert lab.get_run(run.id).snapshot == original
-            # Structural changes make a new context; the old run stays immutable.
+            # Structure changes fork a branch; old evidence stays immutable.
             params.discard()
             params.convert_unit("probes", "duration", "us")
             params.rename_column("probes", "duration", "pulse_length")
             params.save("author-unknown-renamed")
             assert params["probes"]["q0"]["pulse_length"] == sc.Quantity(0.04, "us")
-            old = lab.config.workspace(context=initial)
+            old = lab.parameters.workspace("author-unknown-probes")
             assert old["probes"]["q0"]["duration"] == sc.Quantity(40, "ns")
             assert lab.get_run(run.id).snapshot == original
-            assert lab.config.active() == active
+            assert lab.config.registry().entries == ()
     finally:
         stop_project(project)
