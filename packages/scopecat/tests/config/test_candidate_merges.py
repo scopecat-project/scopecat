@@ -7,6 +7,7 @@ from scopecat_testkit.workflow_fixtures import load_config
 
 from scopecat.config.candidate_merges import (
     merge_common_base_parameter_proposals,
+    merge_parameter_deltas,
 )
 from scopecat.config.changes import parameter_change_proposal_from_updates
 from scopecat.config.parameter_updates import update_parameter_rows
@@ -35,6 +36,88 @@ from scopecat.records.parameter_change import (
     ParameterChangeProposal,
     ParameterValueDelta,
 )
+from scopecat.records.parameter_content import ParameterContent
+
+
+def test_parameter_composition_needs_no_setup_or_complete_calibration() -> None:
+    definition = ParameterDefinition(
+        id="drive",
+        value_type=Table(
+            columns=(
+                TableColumn("qubit", Scalar(String())),
+                TableColumn("beta", Scalar(Float())),
+            ),
+            primary_key=("qubit",),
+        ),
+    )
+    original = TableParameterValue(
+        id="drive",
+        rows=({"qubit": "q0", "beta": 0.0}, {"qubit": "q1", "beta": 0.0}),
+    )
+    base = ParameterContent(
+        parameter_catalog=ParameterCatalog(
+            id="lab",
+            definitions=(
+                definition,
+                ParameterDefinition(id="uncalibrated", value_type=Scalar(Float())),
+            ),
+        ),
+        parameter_snapshot=ParameterSnapshot(id="baseline", values=(original,)),
+    )
+    q0 = ParameterValueDelta(
+        parameter_id="drive",
+        before=original,
+        after=TableParameterValue(
+            id="drive",
+            rows=(
+                {"qubit": "q0", "beta": 0.25},
+                {"qubit": "q1", "beta": 0.0},
+            ),
+        ),
+    )
+    q1 = ParameterValueDelta(
+        parameter_id="drive",
+        before=original,
+        after=TableParameterValue(
+            id="drive",
+            rows=(
+                {"qubit": "q0", "beta": 0.0},
+                {"qubit": "q1", "beta": -0.5},
+            ),
+        ),
+    )
+    merged = merge_parameter_deltas(((q0,), (q1,)), base=base, snapshot_id="joint")
+    assert merged == merge_parameter_deltas(
+        ((q1,), (q0,)), base=base, snapshot_id="joint"
+    )
+    value = merged.parameters.get("drive")
+    assert isinstance(value, TableParameterValue)
+    assert value.rows == ({"qubit": "q0", "beta": 0.25}, {"qubit": "q1", "beta": -0.5})
+    assert merged.parameters.get("uncalibrated") is None
+    assert merged.deltas[0].cells is not None
+    assert len(merged.deltas[0].cells) == 2
+    assert base.parameter_snapshot.get("drive") == original
+
+    conflicting = q0.model_copy(
+        update={
+            "after": TableParameterValue(
+                id="drive",
+                rows=(
+                    {"qubit": "q0", "beta": 0.75},
+                    {"qubit": "q1", "beta": 0.0},
+                ),
+            )
+        }
+    )
+    with pytest.raises(Conflict) as error:
+        merge_parameter_deltas(
+            ((q0,), (conflicting,)), base=base, snapshot_id="conflict"
+        )
+    assert error.value.problems[0].details["column_id"] == "beta"
+    stale = q1.model_copy(update={"before": q0.after})
+    with pytest.raises(Conflict) as error:
+        merge_parameter_deltas(((stale,),), base=base, snapshot_id="stale")
+    assert error.value.problems[0].code == "parameter_merge.delta_base_mismatch"
 
 
 def test_common_base_keyed_table_merge_is_cell_aware_and_order_independent() -> None:

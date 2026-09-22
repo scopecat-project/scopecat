@@ -78,6 +78,11 @@ expresses an obsolete requirement before removing it.
 
 ## Development order
 
+The [calibration composition contract](calibration-composition.md) separates pure
+parameter merging from scientific acceptance and atomic publication. Its shared
+parameter-only merge core is implemented; retained multi-source candidates and
+joint verification remain prerequisites for replacing the old cohort workflow.
+
 1. Remove gallery recommendations from learning routes. Keep the former tutorial
    URL as a retirement notice. Stop adding or mechanically migrating old examples.
 2. Remove redundant presentation scripts and fixture-shape assertions. Extract
