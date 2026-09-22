@@ -37,7 +37,6 @@ from scopecat_server.services.admission import AdmissionService
 from scopecat_server.services.analyses import AnalysisService
 from scopecat_server.services.application import DaemonApplication
 from scopecat_server.services.automation import AutomationService
-from scopecat_server.services.calibration_cohorts import CalibrationCohortService
 from scopecat_server.services.config import ConfigService
 from scopecat_server.services.executor import ExecutorService
 from scopecat_server.services.leases import OwnershipLeaseSupervisor
@@ -50,9 +49,6 @@ from scopecat_server.services.samples import SampleService
 from scopecat_server.services.setup import SetupService
 from scopecat_server.storage.sqlite.analysis_repository import SQLiteAnalysisRepository
 from scopecat_server.storage.sqlite.automation import SQLiteAutomationStore
-from scopecat_server.storage.sqlite.calibration_cohorts import (
-    SQLiteCalibrationCohortStore,
-)
 from scopecat_server.storage.sqlite.config_operations import SQLiteConfigOperationStore
 from scopecat_server.storage.sqlite.config_registry import SQLiteConfigRegistryStore
 from scopecat_server.storage.sqlite.connection import SQLiteDatabase
@@ -170,7 +166,7 @@ class LocalDaemonRuntime:
             startup_stage("project store ready; composing services")
             control = SQLiteControlPlane(sqlite)
             automation_store = SQLiteAutomationStore(sqlite)
-            calibration_cohort_store = SQLiteCalibrationCohortStore(sqlite)
+
             procedure_schedule_store = SQLiteProcedureScheduleStore(sqlite)
             runs = SQLiteRunRepository(sqlite, objects)
             analyses = SQLiteAnalysisRepository(sqlite, objects)
@@ -196,11 +192,7 @@ class LocalDaemonRuntime:
                 runs=runs,
                 resource_waits=ProcedureResourceWaits(control, runs, point_plans),
             )
-            calibration_cohorts = CalibrationCohortService(
-                calibration_cohort_store,
-                automation,
-                config_registry,
-            )
+
             procedure_schedules = ProcedureScheduleService(
                 procedure_schedule_store,
                 automation,
@@ -220,14 +212,11 @@ class LocalDaemonRuntime:
                 runs=runs,
                 services=services,
                 analyses=analysis_service,
-                automation=automation_store,
-                calibration_cohorts=calibration_cohort_store,
             )
             setup_service = SetupService(
                 control=control,
                 config_registry=config_registry,
                 actors=instrument_actors,
-                calibration_cohorts=calibration_cohort_store,
             )
             run_service = RunService(
                 control=control,
@@ -292,7 +281,6 @@ class LocalDaemonRuntime:
                 lease_supervisor=lease_supervisor,
                 reviews=reviews,
                 automation=automation,
-                calibration_cohorts=calibration_cohorts,
                 procedure_schedules=procedure_schedules,
                 point_plans=point_plans,
                 samples=samples,

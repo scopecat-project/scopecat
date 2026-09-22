@@ -8,7 +8,6 @@ from typing import Literal, cast
 from pydantic import ValidationError
 from pydantic_core import PydanticSerializationError
 from scopecat.daemon.wire import (
-    CalibrationPublicationReceipt,
     ConfigActivationReceipt,
     ConfigContextPublishReceipt,
     ConfigPublishReceipt,
@@ -21,14 +20,10 @@ from scopecat_server.storage.sqlite.connection import SQLiteDatabase
 type ConfigOperationKind = Literal[
     "activate_entry",
     "publish_revision",
-    "publish_calibration",
     "publish_context",
 ]
 type ConfigOperationReceipt = (
-    ConfigActivationReceipt
-    | ConfigPublishReceipt
-    | CalibrationPublicationReceipt
-    | ConfigContextPublishReceipt
+    ConfigActivationReceipt | ConfigPublishReceipt | ConfigContextPublishReceipt
 )
 
 _CONFIG_OPERATIONS_REF = "config-registry/operations"
@@ -75,10 +70,6 @@ class SQLiteConfigOperationStore:
                 )
             elif kind == "publish_revision":
                 receipt = ConfigPublishReceipt.model_validate_json(receipt_json)
-            elif kind == "publish_calibration":
-                receipt = CalibrationPublicationReceipt.model_validate_json(
-                    receipt_json
-                )
             elif kind == "publish_context":
                 receipt = ConfigContextPublishReceipt.model_validate_json(receipt_json)
             else:
@@ -120,14 +111,14 @@ class SQLiteConfigOperationStore:
                     None
                     if isinstance(
                         receipt,
-                        (ConfigContextPublishReceipt, CalibrationPublicationReceipt),
+                        ConfigContextPublishReceipt,
                     )
                     else receipt.operation.expected_generation,
                     operation.entry_id,
                     None
                     if isinstance(
                         receipt,
-                        (ConfigContextPublishReceipt, CalibrationPublicationReceipt),
+                        ConfigContextPublishReceipt,
                     )
                     else receipt.operation.activation_generation,
                     receipt_json,
@@ -145,8 +136,6 @@ def config_operation_kind(receipt: ConfigOperationReceipt) -> ConfigOperationKin
         return "publish_context"
     if isinstance(receipt, ConfigActivationReceipt):
         return "activate_entry"
-    if isinstance(receipt, CalibrationPublicationReceipt):
-        return "publish_calibration"
     return "publish_revision"
 
 

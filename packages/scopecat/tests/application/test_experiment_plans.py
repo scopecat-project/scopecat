@@ -94,25 +94,6 @@ def test_legacy_run_request_identity_omits_absent_plan() -> None:
     assert RunRequest.model_validate_json(encoded).model_dump(mode="json") == original
 
 
-def test_saved_entry_is_catalog_calibration_input_without_publication_owner() -> None:
-    from scopecat.automation.calibrations import CalibrationConfigSourceRef
-    from scopecat.records.run import ConfigRegistryRunConfigSource
-
-    source = ConfigRegistryRunConfigSource(
-        selector="saved",
-        entry_id="saved",
-        config_ref="saved",
-        content_hash="sha256:" + "b" * 64,
-        registry_generation=3,
-    )
-    basis = CalibrationConfigSourceRef.from_run_config_source(source)
-    assert basis.entry_id == source.entry_id
-    assert basis.config_ref == source.config_ref
-    assert basis.content_hash == source.content_hash
-    assert basis.scope.kind == "catalog"
-    assert basis.scope.sample_selectors() == ()
-
-
 def test_run_request_view_plan_projection_roundtrip() -> None:
     from scopecat.daemon.views import RunRequestView
 

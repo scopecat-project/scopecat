@@ -17,8 +17,8 @@ loads the same registry and replays the function from its beginning.
 
 The definition fingerprint covers the registered function source and intent
 schema. Analysis invocation fingerprints additionally cover their bound
-arguments, defaults, and nonlocal closure values. Durable procedure,
-calibration, and automatic-publication callbacks reject nonlocal captures;
+arguments, defaults, and nonlocal closure values. Durable procedure
+callbacks reject nonlocal captures;
 callback configuration must enter typed intent, definition, or reference
 fields. Authors must still bump the corresponding definition or policy version
 when a transitive imported dependency changes; a source fingerprint is not a
@@ -153,13 +153,11 @@ Single-target requests use the same path without a synthetic merge.
 The old DRAG default-publishing and verify-only cohort procedures, semantic merge
 policy and automatic-publication registry have been retired. Peer-insensitive
 freshness and implicit subset reruns are withdrawn, not mechanically translated.
-Generic full-config cohort services remain legacy implementation debt, documented
-below for their existing framework callers/tests.
+Generic full-config cohort services are also removed, as documented below.
 
 The procedure replay layer deliberately has no DAG representation, automatic
 retry policy, cron trigger, or dynamic loop checkpoint. A linear Python
-procedure with durable step checkpoints remains the unit of execution; the flat
-bounded cohort admission layer described below does not add another run engine.
+procedure with durable step checkpoints remains the unit of execution.
 
 ## One-shot schedules and project automation workers
 
@@ -240,53 +238,34 @@ next durable step boundary the underlying procedure worker releases the procedur
 ready for another exact worker. If there is no next step, the procedure closes
 successfully. There is no mid-effect cancellation contract.
 
-## Retired cohort planning and remaining backend contracts
+## Retired full-config cohort subsystem
 
-The full-config `CalibrationDefinition` / `CalibrationRegistry` authoring layer,
-project freshness evaluator, automatic-publication policy registry and finalizer
-are removed. They have no remaining application consumers. Their old semantic
-input projection, effective-success selection and implicit subset admission are
-not compatibility requirements for independent parameter branches. New workers
-execute explicit procedures; scientific freshness and dependency applicability
-still need a replacement design.
+The full-config cohort subsystem is removed: author declarations and registries,
+project freshness evaluation, automatic publication, daemon cohort/status routes,
+wire records, full-config merge receipts and SQLite cohort/queue/anchor storage.
+Ordinary config saves and setup activation no longer supersede cohort queues;
+procedure closure no longer triggers a second publication state machine. Runtime
+composition has no cohort service or store dependency, and the workbench no longer
+renders its retired provenance shape.
 
-The following legacy backend surfaces remain for a separate retirement:
+Development schema 88 records this removal. Earlier stores are rejected before
+bootstrap mutates them; there is no prebaseline migration, compatibility reader,
+or automatic deletion of historical data. Retain an old environment for archival
+reading. Current-format backup and restore remain supported and tested.
 
-- cohort wire/domain records, daemon client methods and HTTP services;
-- SQLite cohort/member/finalization/status/publication-anchor storage;
-- server-side full-config cohort publication and its evidence checks.
+New calibration requests are explicit durable procedures using independent
+parameter candidates. Joint composition preserves every contributing source;
+scientific verification must cover the composed result rather than inherit the
+individual acceptances. Publication fences the captured branch generation and
+retains an atomic receipt. Unknown outcomes recover that exact receipt without
+rebasing, including after the branch has subsequently advanced.
 
-These are implementation debt, not another recommended automation path. They do
-not provide a resident planner or automatic publisher. Retaining them does not
-designate this development schema as a supported persistent-data baseline.
-Historical stores are not rewritten or deleted by the authoring-layer retirement.
-
-The remaining admission service atomically freezes the cohort spec and member
-procedure requests, validates the observed status and fan-out capacity, and
-returns the original result for an exact replay. It rejects stale observations
-and cannot adopt unrelated pre-existing procedure runs. Sample/workpoint/batch
-scope remains part of the retained ownership and evidence contract.
-
-Legacy publication still checks complete member coverage, successful exact
-procedure checkpoints and retained fit/proposal/decision lineage against one
-full-config base. Non-conflicting scalar and keyed-table edits use the shared
-common-base merge core. Independent member decisions are **not** joint scientific
-verification; new branch procedures remeasure the composed result explicitly.
-
-The publication transaction fences the exact destination and, where present,
-ready-finalization revision. Approvals, the configuration revision, workspace
-head, operation receipt and member publication anchors commit together or roll
-back together. Anchors retain exact member and publication identities; they
-cannot be substituted between operations. The old client-side publication plan,
-evidence builder and receipt-reconciliation helpers are removed; only the typed
-daemon transport remains for this legacy transaction. Current parameter-branch
-publication owns its own exact command and receipt recovery.
-
-These server invariants retain focused tests until those
-interfaces are deliberately retired. The removed planner/finalizer tests are not
-substitutes for current branch workflow tests. The latter cover joint evidence,
-partial rejection, stale destinations, daemon restart and lost publication
-responses in the durable procedure ledger.
+The replacement tests cover partial rejection, stale destinations, daemon
+restart, lost publication responses, transaction rollback and current-format
+backup/restore. Generic schedule and procedure lease/backoff tests remain.
+Scientific freshness and dependency applicability are deliberately still missing:
+the retired full-config observer, implicit target subsets and working-point
+ownership rules are not compatibility requirements for their replacement.
 
 ## Capabilities needed at larger chip scale
 

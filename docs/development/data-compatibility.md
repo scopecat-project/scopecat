@@ -1,7 +1,7 @@
 # Data formats before the compatibility baseline
 
 Scopecat has **no designated persistent-data compatibility baseline yet**. Current
-schema **87** is a development format identifier, not the start of a compatibility
+schema **88** is a development format identifier, not the start of a compatibility
 promise. The target, setup, calibration and application ownership models must
 settle before a supported baseline is explicitly designated with its formats,
 retained fixtures, supported operations and upgrade policy.

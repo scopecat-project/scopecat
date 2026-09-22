@@ -197,7 +197,7 @@ the destination or evidence changes step identity. Analysis-only recovery into a
 different procedure excludes any attempted parameter publication, just as it
 excludes old configuration acceptance.
 
-This durable output uses development schema 87. Existing development stores are
+This durable output uses development schema 88. Existing development stores are
 left untouched; use a fresh store rather than rewriting an older one.
 
 For target selection, durable composition, joint verification and worker setup,

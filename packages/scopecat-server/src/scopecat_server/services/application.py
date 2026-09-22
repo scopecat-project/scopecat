@@ -30,7 +30,6 @@ from .admission import AdmissionService
 from .analyses import AnalysisService
 from .author_workspaces import AuthorWorkspaceServices
 from .automation import AutomationService
-from .calibration_cohorts import CalibrationCohortService
 from .config import ConfigService
 from .executor import ExecutorService
 from .experiment_plans import ExperimentPlanService
@@ -68,7 +67,6 @@ class DaemonApplication:
         lease_supervisor: OwnershipLeaseSupervisor,
         reviews: ReviewService,
         automation: AutomationService,
-        calibration_cohorts: CalibrationCohortService,
         procedure_schedules: ProcedureScheduleService,
         point_plans: RunPointPlanService,
         samples: SampleService,
@@ -109,7 +107,7 @@ class DaemonApplication:
         self.payloads = payloads
         self.reviews = reviews
         self.automation = automation
-        self.calibration_cohorts = calibration_cohorts
+
         self.procedure_schedules = procedure_schedules
         self.point_plans = point_plans
         self.samples = samples

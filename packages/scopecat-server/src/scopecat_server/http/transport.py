@@ -74,28 +74,6 @@ from scopecat.automation import (
     ProcedureWorkerLeaseReleaseCommand,
     ProcedureWorkerLeaseReleaseReceipt,
 )
-from scopecat.automation.calibration_wire import (
-    CalibrationCohortCreateCommand,
-    CalibrationCohortCreateReceipt,
-    CalibrationCohortGetQuery,
-    CalibrationCohortGetReceipt,
-    CalibrationCohortListQuery,
-    CalibrationCohortMemberListQuery,
-    CalibrationCohortMemberPage,
-    CalibrationCohortPage,
-    CalibrationPublicationAttentionCommand,
-    CalibrationPublicationAttentionReceipt,
-    CalibrationPublicationDeferCommand,
-    CalibrationPublicationDeferReceipt,
-    CalibrationPublicationGetQuery,
-    CalibrationPublicationGetReceipt,
-    CalibrationPublicationReadyPage,
-    CalibrationPublicationReadyQuery,
-    CalibrationPublicationRetryCommand,
-    CalibrationPublicationRetryReceipt,
-    CalibrationStatusQuery,
-    CalibrationStatusReceipt,
-)
 from scopecat.automation.wire import (
     ProcedureStepResourceWaitCommand,
     ProcedureStepResourceWaitReceipt,
@@ -186,8 +164,6 @@ from scopecat.daemon.wire import (
     AnalysisSaveReceipt,
     AttentionResolutionCommand,
     AttentionResolutionReceipt,
-    CalibrationPublicationCommand,
-    CalibrationPublicationReceipt,
     ConfigActivationReceipt,
     ConfigContextPublishCommand,
     ConfigContextPublishReceipt,
@@ -1689,102 +1665,6 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
     ) -> ProcedureSubmitReceipt:
         return application.automation.submit(command)
 
-    @app.post(f"{_API_PREFIX}/calibration-status/query")
-    def query_calibration_status(
-        query: CalibrationStatusQuery,
-    ) -> CalibrationStatusReceipt:
-        return application.calibration_cohorts.status(query)
-
-    @app.post(f"{_API_PREFIX}/calibration-cohorts", status_code=201)
-    def create_calibration_cohort(
-        command: CalibrationCohortCreateCommand,
-    ) -> CalibrationCohortCreateReceipt:
-        return application.calibration_cohorts.create(command)
-
-    @app.get(f"{_API_PREFIX}/calibration-cohorts")
-    def list_calibration_cohorts(
-        limit: Annotated[int, Query(ge=1, le=200)] = 50,
-        cursor: Annotated[int | None, Query(ge=1)] = None,
-        fanout_scope: Annotated[str | None, Query(min_length=1)] = None,
-    ) -> CalibrationCohortPage:
-        return application.calibration_cohorts.list(
-            CalibrationCohortListQuery(
-                limit=limit,
-                cursor=cursor,
-                fanout_scope=fanout_scope,
-            )
-        )
-
-    @app.get(f"{_API_PREFIX}/calibration-cohort-members/by-cohort/{{cohort_id:path}}")
-    def list_calibration_cohort_members(
-        cohort_id: str,
-        limit: Annotated[int, Query(ge=1, le=200)] = 50,
-        cursor: Annotated[int | None, Query(ge=0)] = None,
-    ) -> CalibrationCohortMemberPage:
-        return application.calibration_cohorts.list_members(
-            CalibrationCohortMemberListQuery(
-                cohort_id=cohort_id,
-                limit=limit,
-                cursor=cursor,
-            )
-        )
-
-    @app.get(f"{_API_PREFIX}/calibration-cohorts/by-id/{{cohort_id:path}}")
-    def get_calibration_cohort(cohort_id: str) -> CalibrationCohortGetReceipt:
-        return application.calibration_cohorts.get(
-            CalibrationCohortGetQuery(cohort_id=cohort_id)
-        )
-
-    @app.post(f"{_API_PREFIX}/calibration-publications/ready/query")
-    def list_ready_calibration_publications(
-        query: CalibrationPublicationReadyQuery,
-    ) -> CalibrationPublicationReadyPage:
-        return application.calibration_cohorts.ready_publications(query)
-
-    @app.get(f"{_API_PREFIX}/calibration-publications/by-cohort/{{cohort_id:path}}")
-    def get_calibration_publication(
-        cohort_id: str,
-    ) -> CalibrationPublicationGetReceipt:
-        return application.calibration_cohorts.get_publication(
-            CalibrationPublicationGetQuery(cohort_id=cohort_id)
-        )
-
-    @app.get(f"{_API_PREFIX}/calibration-publications/operations/{{operation_id:path}}")
-    def get_calibration_publication_operation(
-        operation_id: str,
-    ) -> CalibrationPublicationReceipt:
-        return application.config.get_calibration_publication_operation(operation_id)
-
-    @app.post(f"{_API_PREFIX}/calibration-publications/operations")
-    def publish_calibration(
-        command: CalibrationPublicationCommand,
-    ) -> CalibrationPublicationReceipt:
-        return application.config.publish_calibration(command)
-
-    @app.post(f"{_API_PREFIX}/calibration-publication-attentions/{{cohort_id:path}}")
-    def require_calibration_publication_attention(
-        cohort_id: str,
-        command: CalibrationPublicationAttentionCommand,
-    ) -> CalibrationPublicationAttentionReceipt:
-        _require_calibration_publication_cohort_id(cohort_id, command.cohort_id)
-        return application.calibration_cohorts.require_publication_attention(command)
-
-    @app.post(f"{_API_PREFIX}/calibration-publication-retries/{{cohort_id:path}}")
-    def retry_calibration_publication(
-        cohort_id: str,
-        command: CalibrationPublicationRetryCommand,
-    ) -> CalibrationPublicationRetryReceipt:
-        _require_calibration_publication_cohort_id(cohort_id, command.cohort_id)
-        return application.calibration_cohorts.retry_publication(command)
-
-    @app.post(f"{_API_PREFIX}/calibration-publication-deferrals/{{cohort_id:path}}")
-    def defer_calibration_publication(
-        cohort_id: str,
-        command: CalibrationPublicationDeferCommand,
-    ) -> CalibrationPublicationDeferReceipt:
-        _require_calibration_publication_cohort_id(cohort_id, command.cohort_id)
-        return application.calibration_cohorts.defer_publication(command)
-
     @app.post(f"{_API_PREFIX}/procedure-schedules", status_code=201)
     def create_procedure_schedule(
         command: ProcedureScheduleCreateCommand,
@@ -2794,17 +2674,6 @@ def _require_procedure_run_id(
         raise HTTPException(
             status_code=422,
             detail="path procedure_run_id must match request body",
-        )
-
-
-def _require_calibration_publication_cohort_id(
-    path_cohort_id: str,
-    body_cohort_id: str,
-) -> None:
-    if path_cohort_id != body_cohort_id:
-        raise HTTPException(
-            status_code=422,
-            detail="path cohort_id must match request body",
         )
 
 

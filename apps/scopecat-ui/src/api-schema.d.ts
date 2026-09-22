@@ -2857,53 +2857,6 @@ export interface components {
             parameters: components["schemas"]["ParameterRevisionRef"];
             setup: components["schemas"]["SetupRevisionRef"];
         };
-        /**
-         * CalibrationCohortMergeRegistrySource
-         * @description Durable provenance for an individually verified cohort composition.
-         */
-        CalibrationCohortMergeRegistrySource: {
-            automatic_publication_policy_fingerprint?: components["schemas"]["Sha256ContentHash"] | null;
-            automatic_publication_policy_id?: components["schemas"]["_NonEmptyText"] | null;
-            automatic_publication_policy_version?: components["schemas"]["_NonEmptyText"] | null;
-            base: components["schemas"]["CalibrationConfigSourceRef"];
-            candidate_id: components["schemas"]["_NonEmptyText"];
-            cohort_id: components["schemas"]["_NonEmptyText"];
-            composition_policy_ref: components["schemas"]["ConfigCompositionPolicyRef"];
-            /** Contributions */
-            contributions: components["schemas"]["ResolvedCalibrationCohortMergeContribution"][];
-            /**
-             * Kind
-             * @default calibration_cohort_merge
-             * @constant
-             */
-            kind: "calibration_cohort_merge";
-            /**
-             * Merge Policy
-             * @default common_base_cells_v1
-             * @constant
-             */
-            merge_policy: "common_base_cells_v1";
-            spec_hash: components["schemas"]["Sha256ContentHash"];
-        };
-        /**
-         * CalibrationConfigSourceRef
-         * @description Exact saved configuration and its calibration ownership scope.
-         */
-        CalibrationConfigSourceRef: {
-            /** Config Ref */
-            config_ref: string;
-            content_hash: components["schemas"]["ConfigContentHash"];
-            /** Entry Id */
-            entry_id: string;
-            /**
-             * Kind
-             * @default config_registry
-             * @constant
-             */
-            kind: "config_registry";
-            scope?: components["schemas"]["CalibrationScope"];
-        };
-        CalibrationScope: components["schemas"]["CatalogCalibrationScope"] | components["schemas"]["WorkingPointCalibrationScope"];
         /** CandidateConfigRegistrySource */
         CandidateConfigRegistrySource: {
             /** Acceptance */
@@ -2939,17 +2892,6 @@ export interface components {
              */
             kind: "candidate";
             source: components["schemas"]["AnalysisCandidateRunConfigSource"];
-        };
-        /**
-         * CatalogCalibrationScope
-         * @description Saved inputs for nonpublishing checks; no implicit parameter owner.
-         */
-        CatalogCalibrationScope: {
-            /**
-             * @description discriminator enum property added by openapi-typescript
-             * @enum {string}
-             */
-            kind: "catalog";
         };
         /** ChangeParameterColumn */
         ChangeParameterColumn: {
@@ -3673,25 +3615,6 @@ export interface components {
             /** Row Index */
             row_index?: number | null;
         };
-        /**
-         * ConfigCompositionEvidenceStepRef
-         * @description Self-contained exact checkpoint in one contribution procedure.
-         */
-        ConfigCompositionEvidenceStepRef: {
-            /** Attempt */
-            attempt: number;
-            procedure_run_id: components["schemas"]["_NonEmptyText"];
-            step_key: components["schemas"]["_NonEmptyText"];
-        };
-        /**
-         * ConfigCompositionPolicyRef
-         * @description Exact project-owned policy that selected one config composition.
-         */
-        ConfigCompositionPolicyRef: {
-            fingerprint: components["schemas"]["Sha256ContentHash"];
-            id: components["schemas"]["_NonEmptyText"];
-            version: components["schemas"]["_NonEmptyText"];
-        };
         ConfigContentHash: string;
         /**
          * ConfigContextMetadata
@@ -4122,8 +4045,7 @@ export interface components {
              * @enum {string}
              */
             kind: "parameter_context";
-            /** Publication */
-            publication?: components["schemas"]["CandidateConfigRegistrySource"] | components["schemas"]["CalibrationCohortMergeRegistrySource"] | null;
+            publication?: components["schemas"]["CandidateConfigRegistrySource"] | null;
             rebind?: components["schemas"]["SetupRebindRegistrySource"] | null;
         };
         /**
@@ -8112,15 +8034,6 @@ export interface components {
             /** Next Cursor */
             next_cursor?: number | null;
         };
-        /**
-         * ResolvedCalibrationCohortMergeContribution
-         * @description Server-resolved exact outputs behind one wire contribution.
-         */
-        ResolvedCalibrationCohortMergeContribution: {
-            member_id: components["schemas"]["_NonEmptyText"];
-            proof: components["schemas"]["ResolvedVerifiedParameterProposalProofV1"];
-            result_input_fingerprint: components["schemas"]["Sha256ContentHash"];
-        };
         /** ResolvedRunDomainView */
         ResolvedRunDomainView: {
             /**
@@ -8155,24 +8068,6 @@ export interface components {
             subject: components["schemas"]["ResolvedSubject"];
         };
         ResolvedSubject: components["schemas"]["UnboundSubject"] | components["schemas"]["InlineSamplesSubject"] | components["schemas"]["RegisteredTargetSubject"];
-        /**
-         * ResolvedVerifiedParameterProposalProofV1
-         * @description Server-resolved exact lineage behind one accepted proposal proof.
-         */
-        ResolvedVerifiedParameterProposalProofV1: {
-            baseline_run_id: components["schemas"]["_NonEmptyText"];
-            candidate_run_id: components["schemas"]["_NonEmptyText"];
-            decision: components["schemas"]["ProjectAnalysisDecisionReference"];
-            evidence_step: components["schemas"]["ConfigCompositionEvidenceStepRef"];
-            fit_analysis_record_id: components["schemas"]["_NonEmptyText"];
-            /**
-             * Kind
-             * @default verified_parameter_proposal_v1
-             * @constant
-             */
-            kind: "verified_parameter_proposal_v1";
-            proposal_id: components["schemas"]["_NonEmptyText"];
-        };
         /** @constant */
         ResourceKind: "instrument";
         /** @enum {string} */
@@ -10399,20 +10294,6 @@ export interface components {
              * @enum {string}
              */
             retention: "retained" | "unavailable_active_quota";
-        };
-        /**
-         * WorkingPointCalibrationScope
-         * @description One stable workspace and the exact physical scope it owns.
-         */
-        WorkingPointCalibrationScope: {
-            /**
-             * @description discriminator enum property added by openapi-typescript
-             * @enum {string}
-             */
-            kind: "working_point";
-            sample: components["schemas"]["SampleBinding"];
-            /** Workspace Id */
-            workspace_id: string;
         };
         /** WorkingPointConfiguration */
         "WorkingPointConfiguration-Input": {

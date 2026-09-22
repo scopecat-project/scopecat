@@ -44,7 +44,7 @@ CREATE TABLE IF NOT EXISTS config_operations (
     operation_id TEXT PRIMARY KEY,
     kind TEXT NOT NULL CHECK (
         kind IN ('activate_entry', 'publish_revision',
-            'publish_calibration', 'publish_context')
+            'publish_context')
     ),
     intent_hash TEXT NOT NULL,
     expected_generation INTEGER CHECK (expected_generation >= 0),
@@ -55,10 +55,10 @@ CREATE TABLE IF NOT EXISTS config_operations (
     receipt_json TEXT NOT NULL,
     recorded_at TEXT NOT NULL,
     CHECK (
-        (kind IN ('publish_context', 'publish_calibration')
+        (kind = 'publish_context'
             AND expected_generation IS NULL
             AND result_activation_generation IS NULL)
-        OR (kind NOT IN ('publish_context', 'publish_calibration')
+        OR (kind != 'publish_context'
             AND expected_generation IS NOT NULL
             AND result_activation_generation IS NOT NULL AND (
                 result_activation_generation = expected_generation

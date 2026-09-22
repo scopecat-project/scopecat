@@ -24,7 +24,7 @@ def test_bootstrap_creates_the_complete_project_store_and_is_idempotent(
     store.bootstrap()
     store.bootstrap()
 
-    assert store.schema_version() == 87
+    assert store.schema_version() == 88
     with sqlite3.connect(database) as connection:
         journal_mode = connection.execute("PRAGMA journal_mode").fetchone()
         tables = {
@@ -54,58 +54,6 @@ def test_bootstrap_creates_the_complete_project_store_and_is_idempotent(
         procedure_run_columns = {
             row[1] for row in connection.execute("PRAGMA table_info(procedure_runs)")
         }
-        calibration_cohort_columns = {
-            row[1]
-            for row in connection.execute("PRAGMA table_info(calibration_cohorts)")
-        }
-        calibration_member_columns = {
-            row[1]
-            for row in connection.execute(
-                "PRAGMA table_info(calibration_cohort_members)"
-            )
-        }
-        calibration_member_indexes = {
-            row[1]
-            for row in connection.execute(
-                "PRAGMA index_list(calibration_cohort_members)"
-            )
-        }
-        calibration_publication_columns = {
-            row[1]
-            for row in connection.execute(
-                "PRAGMA table_info(calibration_success_publications)"
-            )
-        }
-        calibration_publication_indexes = {
-            row[1]
-            for row in connection.execute(
-                "PRAGMA index_list(calibration_success_publications)"
-            )
-        }
-        finalization_columns = {
-            row[1]
-            for row in connection.execute(
-                "PRAGMA table_info(calibration_cohort_finalizations)"
-            )
-        }
-        ready_queue_indexes = {
-            row[1]
-            for row in connection.execute(
-                "PRAGMA index_list(calibration_publication_ready_queue)"
-            )
-        }
-        ready_queue_columns = {
-            row[1]
-            for row in connection.execute(
-                "PRAGMA table_info(calibration_publication_ready_queue)"
-            )
-        }
-        finalization_indexes = {
-            row[1]
-            for row in connection.execute(
-                "PRAGMA index_list(calibration_cohort_finalizations)"
-            )
-        }
         triggers = {
             row[0]
             for row in connection.execute(
@@ -131,11 +79,6 @@ def test_bootstrap_creates_the_complete_project_store_and_is_idempotent(
         "procedure_step_attempts",
         "procedure_leases",
         "procedure_schedules",
-        "calibration_cohorts",
-        "calibration_cohort_members",
-        "calibration_success_publications",
-        "calibration_cohort_finalizations",
-        "calibration_publication_ready_queue",
         "config_registry_entries",
         "config_registry_activations",
         "config_operations",
@@ -162,59 +105,11 @@ def test_bootstrap_creates_the_complete_project_store_and_is_idempotent(
         "closure_status",
         "closed_at",
     } <= procedure_run_columns
-    assert calibration_cohort_columns == {
-        "sequence",
-        "cohort_id",
-        "fanout_scope",
-        "cohort_json",
-    }
-    assert calibration_member_columns == {
-        "sequence",
-        "cohort_id",
-        "member_index",
-        "member_id",
-        "calibration_key",
-        "procedure_run_id",
-        "closure_status",
-        "closed_at",
-        "member_json",
-    }
-    assert {
-        "calibration_cohort_members_key_sequence",
-        "calibration_cohort_members_success_key_sequence",
-    } <= calibration_member_indexes
-    assert {
-        "procedure_run_id",
-        "operation_id",
-        "result_input_fingerprint",
-        "result_freshness_fingerprint",
-        "result_entry_id",
-        "publication_json",
-    } <= calibration_publication_columns
-    assert (
-        "calibration_success_publications_operation" in calibration_publication_indexes
-    )
-    assert {
-        "state",
-        "revision",
-        "attempt_count",
-        "available_at",
-        "supersession_json",
-        "owner_workspace_id",
-        "setup_content_hash",
-        "publication_operation_id",
-    } <= finalization_columns
-    assert ready_queue_columns == {"sequence", "cohort_id", "enqueued_at"}
-    assert ready_queue_indexes == {
-        "sqlite_autoindex_calibration_publication_ready_queue_1"
-    }
-    assert "calibration_cohort_finalizations_ready_capability" in finalization_indexes
-    assert "calibration_cohort_members_sync_terminal_closure" in triggers
-    assert "calibration_publication_sync_terminal_success" in triggers
-    assert "calibration_publication_sync_terminal_failure" in triggers
+    assert not any(name.startswith("calibration_") for name in tables)
+    assert not any(name.startswith("calibration_") for name in triggers)
 
 
-@pytest.mark.parametrize("version", (0, 99))
+@pytest.mark.parametrize("version", (0, 87, 99))
 def test_bootstrap_refuses_a_noncurrent_project_schema(
     tmp_path: Path,
     version: int,
@@ -224,9 +119,13 @@ def test_bootstrap_refuses_a_noncurrent_project_schema(
     store.bootstrap()
     with sqlite3.connect(database) as connection:
         connection.execute("UPDATE project_schema SET version = ?", (version,))
+        before = tuple(connection.iterdump())
 
     with pytest.raises(SchemaVersionError, match=f"version: {version}"):
         store.bootstrap()
+
+    with sqlite3.connect(database) as connection:
+        assert tuple(connection.iterdump()) == before
 
 
 def test_bootstrap_refuses_v39_before_config_publish_step_boundary(
@@ -447,7 +346,7 @@ def test_bootstrap_refuses_v52_without_execution_segments(
     store = SQLiteProjectStore(SQLiteDatabase(database), tmp_path / "objects")
     with pytest.raises(
         SchemaVersionError,
-        match="version: 52; expected 87",
+        match="version: 52; expected 88",
     ):
         store.bootstrap()
 
@@ -513,7 +412,7 @@ def test_current_schema_read_keeps_one_snapshot_during_checkpoint(
         project_store, "_has_project_schema", checkpoint_after_schema_read
     )
     try:
-        assert store.schema_version() == 87
+        assert store.schema_version() == 88
         with pytest.raises(SchemaVersionError, match="version: 99"):
             store.schema_version()
     finally:
@@ -543,7 +442,7 @@ def test_reopening_current_test_store_does_not_copy_disappearing_wal(
         try:
             assert (
                 SQLiteProjectStore(second.sqlite, tmp_path / "objects").schema_version()
-                == 87
+                == 88
             )
             assert copies == []
         finally:

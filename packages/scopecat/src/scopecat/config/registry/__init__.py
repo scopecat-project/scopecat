@@ -15,13 +15,9 @@ if TYPE_CHECKING:
     )
     from scopecat.config.registry.records import (
         BoundParameterRegistrySource,
-        CalibrationCohortMergeContribution,
-        CalibrationCohortMergeRegistrySource,
         CandidateAcceptance,
         CandidateConfigRegistrySource,
         ConfigActivationOperation,
-        ConfigCompositionEvidenceStepRef,
-        ConfigCompositionPolicyRef,
         ConfigPublishOperation,
         ConfigRegistryActivationPage,
         ConfigRegistryActivationRecord,
@@ -33,16 +29,12 @@ if TYPE_CHECKING:
         ManualCandidateAcceptance,
         ManualConfigDraftRegistrySource,
         ParameterConfigRegistrySource,
-        ResolvedCalibrationCohortMergeContribution,
-        ResolvedVerifiedParameterProposalProofV1,
-        VerifiedParameterProposalProofV1,
         config_activation_intent_hash,
         config_publish_intent_hash,
     )
     from scopecat.config.registry.service import (
         ACTIVE_CONFIG_REGISTRY_ENTRY_SELECTOR,
         ActiveConfigRegistrySnapshot,
-        CalibrationCohortMergeRevisionSource,
         CandidateConfigRevisionSource,
         ConfigRegistryEntrySnapshot,
         ConfigRegistryMutationResult,
@@ -70,8 +62,6 @@ if TYPE_CHECKING:
 
 _RECORD_EXPORTS = (
     "BoundParameterRegistrySource",
-    "CalibrationCohortMergeContribution",
-    "CalibrationCohortMergeRegistrySource",
     "CandidateAcceptance",
     "CandidateConfigRegistrySource",
     "ConfigActivationOperation",
@@ -81,16 +71,11 @@ _RECORD_EXPORTS = (
     "ConfigRegistryEntry",
     "ConfigRegistryEntryPage",
     "ConfigRegistryEntrySource",
-    "ConfigCompositionPolicyRef",
-    "ConfigCompositionEvidenceStepRef",
     "CrossRunCandidateAcceptance",
     "DirectConfigRegistrySource",
     "ParameterConfigRegistrySource",
     "ManualCandidateAcceptance",
     "ManualConfigDraftRegistrySource",
-    "ResolvedCalibrationCohortMergeContribution",
-    "ResolvedVerifiedParameterProposalProofV1",
-    "VerifiedParameterProposalProofV1",
     "config_activation_intent_hash",
     "config_publish_intent_hash",
 )
@@ -102,7 +87,6 @@ _PORT_EXPORTS = (
 _SERVICE_EXPORTS = (
     "ACTIVE_CONFIG_REGISTRY_ENTRY_SELECTOR",
     "ActiveConfigRegistrySnapshot",
-    "CalibrationCohortMergeRevisionSource",
     "CandidateConfigRevisionSource",
     "ConfigRevision",
     "ConfigRevisionSource",

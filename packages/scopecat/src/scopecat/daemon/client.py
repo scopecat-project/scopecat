@@ -61,26 +61,6 @@ from scopecat.automation import (
     ProcedureWorkerLeaseReleaseCommand,
     ProcedureWorkerLeaseReleaseReceipt,
 )
-from scopecat.automation.calibration_wire import (
-    CalibrationCohortCreateCommand,
-    CalibrationCohortCreateReceipt,
-    CalibrationCohortGetReceipt,
-    CalibrationCohortListQuery,
-    CalibrationCohortMemberListQuery,
-    CalibrationCohortMemberPage,
-    CalibrationCohortPage,
-    CalibrationPublicationAttentionCommand,
-    CalibrationPublicationAttentionReceipt,
-    CalibrationPublicationDeferCommand,
-    CalibrationPublicationDeferReceipt,
-    CalibrationPublicationGetReceipt,
-    CalibrationPublicationReadyPage,
-    CalibrationPublicationReadyQuery,
-    CalibrationPublicationRetryCommand,
-    CalibrationPublicationRetryReceipt,
-    CalibrationStatusQuery,
-    CalibrationStatusReceipt,
-)
 from scopecat.automation.wire import (
     ProcedureStepResourceWaitCommand,
     ProcedureStepResourceWaitReceipt,
@@ -167,8 +147,6 @@ from scopecat.daemon.wire import (
     AnalysisSaveReceipt,
     AttentionResolutionCommand,
     AttentionResolutionReceipt,
-    CalibrationPublicationCommand,
-    CalibrationPublicationReceipt,
     ConfigActivationReceipt,
     ConfigContextPublishCommand,
     ConfigContextPublishReceipt,
@@ -607,149 +585,6 @@ class DaemonClient:
             f"{_API_PREFIX}/procedures",
             command,
             ProcedureSubmitReceipt,
-        )
-
-    def query_calibration_status(
-        self,
-        query: CalibrationStatusQuery,
-    ) -> CalibrationStatusReceipt:
-        return self._post_idempotent_model(
-            f"{_API_PREFIX}/calibration-status/query",
-            query,
-            CalibrationStatusReceipt,
-        )
-
-    def create_calibration_cohort(
-        self,
-        command: CalibrationCohortCreateCommand,
-    ) -> CalibrationCohortCreateReceipt:
-        return self._post_idempotent_model(
-            f"{_API_PREFIX}/calibration-cohorts",
-            command,
-            CalibrationCohortCreateReceipt,
-        )
-
-    def get_calibration_cohort(
-        self,
-        cohort_id: str,
-    ) -> CalibrationCohortGetReceipt:
-        return self._get_model(
-            (f"{_API_PREFIX}/calibration-cohorts/by-id/{quote(cohort_id, safe='')}"),
-            CalibrationCohortGetReceipt,
-        )
-
-    def list_calibration_cohorts(
-        self,
-        query: CalibrationCohortListQuery,
-    ) -> CalibrationCohortPage:
-        params: dict[str, str | int] = {"limit": query.limit}
-        if query.cursor is not None:
-            params["cursor"] = query.cursor
-        if query.fanout_scope is not None:
-            params["fanout_scope"] = query.fanout_scope
-        return self._get_model(
-            f"{_API_PREFIX}/calibration-cohorts",
-            CalibrationCohortPage,
-            params=params,
-        )
-
-    def list_calibration_cohort_members(
-        self,
-        query: CalibrationCohortMemberListQuery,
-    ) -> CalibrationCohortMemberPage:
-        params: dict[str, str | int] = {"limit": query.limit}
-        if query.cursor is not None:
-            params["cursor"] = query.cursor
-        return self._get_model(
-            (
-                f"{_API_PREFIX}/calibration-cohort-members/by-cohort/"
-                f"{quote(query.cohort_id, safe='')}"
-            ),
-            CalibrationCohortMemberPage,
-            params=params,
-        )
-
-    def list_ready_calibration_publications(
-        self,
-        query: CalibrationPublicationReadyQuery,
-    ) -> CalibrationPublicationReadyPage:
-        return self._post_idempotent_model(
-            f"{_API_PREFIX}/calibration-publications/ready/query",
-            query,
-            CalibrationPublicationReadyPage,
-        )
-
-    def get_calibration_publication(
-        self,
-        cohort_id: str,
-    ) -> CalibrationPublicationGetReceipt:
-        return self._get_model(
-            (
-                f"{_API_PREFIX}/calibration-publications/by-cohort/"
-                f"{quote(cohort_id, safe='')}"
-            ),
-            CalibrationPublicationGetReceipt,
-        )
-
-    def publish_calibration(
-        self,
-        command: CalibrationPublicationCommand,
-    ) -> CalibrationPublicationReceipt:
-        return self._post_idempotent_model(
-            f"{_API_PREFIX}/calibration-publications/operations",
-            command,
-            CalibrationPublicationReceipt,
-        )
-
-    def calibration_publication_operation(
-        self,
-        operation_id: str,
-    ) -> CalibrationPublicationReceipt:
-        return self._get_model(
-            (
-                f"{_API_PREFIX}/calibration-publications/operations/"
-                f"{quote(operation_id, safe='')}"
-            ),
-            CalibrationPublicationReceipt,
-        )
-
-    def require_calibration_publication_attention(
-        self,
-        command: CalibrationPublicationAttentionCommand,
-    ) -> CalibrationPublicationAttentionReceipt:
-        return self._post_model(
-            (
-                f"{_API_PREFIX}/calibration-publication-attentions/"
-                f"{quote(command.cohort_id, safe='')}"
-            ),
-            command,
-            CalibrationPublicationAttentionReceipt,
-        )
-
-    def retry_calibration_publication(
-        self,
-        command: CalibrationPublicationRetryCommand,
-    ) -> CalibrationPublicationRetryReceipt:
-        return self._post_model(
-            (
-                f"{_API_PREFIX}/calibration-publication-retries/"
-                f"{quote(command.cohort_id, safe='')}"
-            ),
-            command,
-            CalibrationPublicationRetryReceipt,
-        )
-
-    def defer_calibration_publication(
-        self,
-        command: CalibrationPublicationDeferCommand,
-    ) -> CalibrationPublicationDeferReceipt:
-        return self._post_model(
-            (
-                f"{_API_PREFIX}/calibration-publication-deferrals/"
-                f"{quote(command.cohort_id, safe='')}"
-            ),
-            command,
-            CalibrationPublicationDeferReceipt,
         )
 
     def list_procedures(

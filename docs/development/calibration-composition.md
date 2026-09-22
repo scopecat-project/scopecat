@@ -20,10 +20,9 @@ an experiment is responsible for checking its required inputs.
 
 This is a framework composition primitive, not an ordinary-author workflow for
 publishing calibration. It does not authenticate proposal sources, save anything,
-decide applicability or inherit verification. The legacy proposal adapter still
-checks exact source identities/full-config bases and delegates value composition
-to this core. It remains in the legacy server publication implementation and focused
-server tests, not as a compatibility requirement for independent-parameter candidates.
+decide applicability or inherit verification. The old full-config proposal adapter is removed. Independent-parameter
+candidates authenticate their sources at the server boundary and use this core
+without inheriting the old working-point publication model.
 
 ## Scientific verification
 
@@ -79,7 +78,7 @@ branch generation/base, exact candidate and verification analyses and revision
 name. Completed steps retain and replay the accepted head; interrupted publication
 retries the same server command. Unknown outcomes require attention, and
 analysis-only recovery cannot carry attempted publication into a new procedure.
-The output and SQLite operation contract use development schema 87, with no
+The output and SQLite operation contract use development schema 88, with no
 prebaseline migration.
 
 `combine_parameter_candidates()` retains composition as an analysis step. The
@@ -102,16 +101,14 @@ merge publisher and automatic-publication registration are removed with their
 obsolete tests. In particular, automatically excluding peer DRAG values from
 freshness and inferring q0-only reruns is **withdrawn**, not silently preserved.
 The new worker accepts submitted requests; it does not decide scientific freshness
-or widen/narrow their target scope. Legacy generic cohort APIs still have other
-framework test coverage and require a separate removal pass.
+or widen/narrow their target scope. The generic cohort backend is also retired as described below.
 
 Standard application composition and the installed worker no longer expose the
 legacy enrollment path: `LabApplication`, `[lab.capabilities]` and
 `scopecat automation work` register/dispatch procedures and schedules, not cohort
 evaluators or publication registries. Removed declaration keys and the old
-`--working-point` option fail visibly. Direct low-level client/cohort services
-and their stored records remain pending a separate retirement; this cutover does
-not delete queues, rewrite evidence or introduce a persistent-data migration.
+`--working-point` option fail visibly. Low-level cohort services and their storage
+schema are now retired too; existing files are not rewritten or migrated.
 
 The shared `ProjectAutomationWorker` also no longer accepts legacy evaluator or
 finalizer components. Its cycle result contains only interval, schedule and
@@ -135,26 +132,20 @@ also removed: their only remaining consumers were their own unit tests. Current
 parameter candidates and durable procedure publication provide separate exact
 evidence and recovery paths.
 
-Daemon endpoints, wire records, server publication and storage remain a separate
-backend retirement. Their transaction and evidence tests remain, and no stored
-record or schema changes in this removal.
-
-The remaining backend has four coupled boundaries to remove together:
-
-| Boundary | Existing coupling | Required retirement check |
-| --- | --- | --- |
-| HTTP and daemon client | Cohort admission/status and publication commands/receipts | Remove matching routes and wire exports; keep branch commands and replay intact. |
-| Config and setup services | Full-config publication, member approvals/anchors, supersession when workspace or setup changes | Remove cohort hooks without weakening independent branch fences or setup identity. |
-| Runtime composition | Application/service/store construction | Remove mandatory cohort dependencies from ordinary daemon startup. |
-| SQLite schema | Cohort/member tables, publication queues and procedure-state triggers | Change the development schema deliberately; preserve current-format backup/restore tests, with no prebaseline migration or historical-store rewrite. |
+The server retirement is complete in development schema 88. Cohort routes and
+client methods, wire records, publication receipts, config/setup supersession
+hooks, daemon service/store composition and SQLite tables/queues/triggers are
+removed together. The workbench and generated API schema also drop old cohort
+provenance. Pure common-base parameter merging and independent candidate proof
+checks remain. Existing stored files are untouched; schema 87 is rejected rather
+than migrated. Current branch transaction, replay and backup/restore tests replace
+the retired cohort-only fixtures.
 
 ## Remaining implementation order
 
 1. Define scientific freshness/applicability over explicit parameter dependencies,
    subject, setup and policy; do not reuse the retired full-config projection.
-2. Retire unused generic working-point/cohort publication surfaces once their
-   remaining callers and retained-data contracts have been reviewed.
-3. Introduce a reusable teaching sandbox for this complete author workflow.
+2. Introduce a reusable teaching sandbox for this complete author workflow.
 
 Track the retirement in [#773](https://github.com/scopecat-project/scopecat/issues/773).
 No historical store rewrite or prebaseline migration is part of this work.

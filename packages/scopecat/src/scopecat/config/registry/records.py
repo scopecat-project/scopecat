@@ -9,17 +9,12 @@ from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
-    field_validator,
     model_validator,
 )
 
 from scopecat.kernel.content_identity import stable_content_hash
 from scopecat.kernel.run_outcome import utc_now
 from scopecat.records.analysis import ProjectAnalysisDecisionReference
-from scopecat.records.calibration_scope import (
-    CalibrationConfigSourceRef,
-    WorkingPointCalibrationScope,
-)
 from scopecat.records.config import ConfigContentHash
 from scopecat.records.config_context import ConfigContextMetadata, ConfigContextRef
 from scopecat.records.content import Sha256ContentHash
@@ -108,220 +103,6 @@ class CandidateConfigRegistrySource(_FrozenRegistryModel):
         return self
 
 
-class ConfigCompositionPolicyRef(_FrozenRegistryModel):
-    """Exact project-owned policy that selected one config composition."""
-
-    id: _NonEmptyText
-    version: _NonEmptyText
-    fingerprint: Sha256ContentHash
-
-    @field_validator("id", "version")
-    @classmethod
-    def validate_identity(cls, value: str) -> str:
-        if not value.strip():
-            raise ValueError("config composition policy identity must be non-empty")
-        return value
-
-
-class ConfigCompositionEvidenceStepRef(_FrozenRegistryModel):
-    """Self-contained exact checkpoint in one contribution procedure."""
-
-    procedure_run_id: _NonEmptyText
-    step_key: _NonEmptyText
-    attempt: int = Field(ge=1)
-
-    @field_validator("procedure_run_id", "step_key")
-    @classmethod
-    def validate_identity(cls, value: str) -> str:
-        if not value.strip():
-            raise ValueError("config composition evidence identity must be non-empty")
-        return value
-
-
-class VerifiedParameterProposalProofV1(_FrozenRegistryModel):
-    """One exact project decision accepting a parameter-proposal candidate."""
-
-    kind: Literal["verified_parameter_proposal_v1"] = "verified_parameter_proposal_v1"
-    evidence_step: ConfigCompositionEvidenceStepRef
-    decision: ProjectAnalysisDecisionReference
-
-
-class ResolvedVerifiedParameterProposalProofV1(_FrozenRegistryModel):
-    """Server-resolved exact lineage behind one accepted proposal proof."""
-
-    kind: Literal["verified_parameter_proposal_v1"] = "verified_parameter_proposal_v1"
-    evidence_step: ConfigCompositionEvidenceStepRef
-    baseline_run_id: _NonEmptyText
-    fit_analysis_record_id: _NonEmptyText
-    proposal_id: _NonEmptyText
-    candidate_run_id: _NonEmptyText
-    decision: ProjectAnalysisDecisionReference
-
-    @field_validator(
-        "baseline_run_id",
-        "fit_analysis_record_id",
-        "proposal_id",
-        "candidate_run_id",
-    )
-    @classmethod
-    def validate_identity(cls, value: str) -> str:
-        if not value.strip():
-            raise ValueError("resolved parameter proposal proof identity is empty")
-        return value
-
-
-class CalibrationCohortMergeContribution(_FrozenRegistryModel):
-    """Exact proof for one individually verified calibration contribution."""
-
-    member_id: _NonEmptyText
-    proof: VerifiedParameterProposalProofV1
-    result_input_fingerprint: Sha256ContentHash
-
-    @field_validator("member_id")
-    @classmethod
-    def validate_identity(cls, value: str) -> str:
-        if not value.strip():
-            raise ValueError("calibration merge contribution identity is empty")
-        return value
-
-
-class ResolvedCalibrationCohortMergeContribution(_FrozenRegistryModel):
-    """Server-resolved exact outputs behind one wire contribution."""
-
-    member_id: _NonEmptyText
-    proof: ResolvedVerifiedParameterProposalProofV1
-    result_input_fingerprint: Sha256ContentHash
-
-    @field_validator("member_id")
-    @classmethod
-    def validate_identity(cls, value: str) -> str:
-        if not value.strip():
-            raise ValueError("resolved calibration contribution identity is empty")
-        return value
-
-
-def canonical_calibration_merge_contributions(
-    contributions: tuple[CalibrationCohortMergeContribution, ...],
-) -> tuple[CalibrationCohortMergeContribution, ...]:
-    """Validate and sort exact contributions independently of caller order."""
-
-    selected = tuple(
-        sorted(
-            contributions,
-            key=lambda item: (
-                item.member_id,
-                item.proof.evidence_step.procedure_run_id,
-                item.proof.decision.analysis_record_id,
-            ),
-        )
-    )
-    identities = (
-        ("member", tuple(item.member_id for item in selected)),
-        (
-            "procedure run",
-            tuple(item.proof.evidence_step.procedure_run_id for item in selected),
-        ),
-        (
-            "decision",
-            tuple(item.proof.decision.analysis_record_id for item in selected),
-        ),
-    )
-    for label, values in identities:
-        if len(values) != len(set(values)):
-            raise ValueError(f"calibration merge {label} identities must be unique")
-    return selected
-
-
-def canonical_resolved_calibration_merge_contributions(
-    contributions: tuple[ResolvedCalibrationCohortMergeContribution, ...],
-) -> tuple[ResolvedCalibrationCohortMergeContribution, ...]:
-    """Validate and sort resolved contributions by their member identity."""
-
-    selected = tuple(
-        sorted(
-            contributions,
-            key=lambda item: (
-                item.member_id,
-                item.proof.evidence_step.procedure_run_id,
-                item.proof.proposal_id,
-            ),
-        )
-    )
-    identity_groups: tuple[tuple[str, tuple[object, ...]], ...] = (
-        ("member", tuple(item.member_id for item in selected)),
-        (
-            "procedure run",
-            tuple(item.proof.evidence_step.procedure_run_id for item in selected),
-        ),
-        ("baseline run", tuple(item.proof.baseline_run_id for item in selected)),
-        ("candidate run", tuple(item.proof.candidate_run_id for item in selected)),
-        (
-            "proposal",
-            tuple(
-                (item.proof.baseline_run_id, item.proof.proposal_id)
-                for item in selected
-            ),
-        ),
-    )
-    for label, values in identity_groups:
-        if len(values) != len(set(values)):
-            raise ValueError(
-                f"resolved calibration merge {label} identities must be unique"
-            )
-    return selected
-
-
-class CalibrationCohortMergeRegistrySource(_FrozenRegistryModel):
-    """Durable provenance for an individually verified cohort composition."""
-
-    kind: Literal["calibration_cohort_merge"] = "calibration_cohort_merge"
-    cohort_id: _NonEmptyText
-    spec_hash: Sha256ContentHash
-    automatic_publication_policy_id: _NonEmptyText | None = None
-    automatic_publication_policy_version: _NonEmptyText | None = None
-    automatic_publication_policy_fingerprint: Sha256ContentHash | None = None
-    composition_policy_ref: ConfigCompositionPolicyRef
-    merge_policy: Literal["common_base_cells_v1"] = "common_base_cells_v1"
-    base: CalibrationConfigSourceRef
-    candidate_id: _NonEmptyText
-    contributions: tuple[ResolvedCalibrationCohortMergeContribution, ...] = Field(
-        min_length=1,
-        max_length=_MAX_CALIBRATION_MERGE_CONTRIBUTIONS,
-    )
-
-    @field_validator("cohort_id", "candidate_id")
-    @classmethod
-    def validate_identity(cls, value: str) -> str:
-        if not value.strip():
-            raise ValueError("calibration merge registry identity must be non-empty")
-        return value
-
-    @field_validator("contributions")
-    @classmethod
-    def canonicalize_contributions(
-        cls,
-        value: tuple[ResolvedCalibrationCohortMergeContribution, ...],
-    ) -> tuple[ResolvedCalibrationCohortMergeContribution, ...]:
-        return canonical_resolved_calibration_merge_contributions(value)
-
-    @model_validator(mode="after")
-    def validate_automatic_publication(
-        self,
-    ) -> CalibrationCohortMergeRegistrySource:
-        if not isinstance(self.base.scope, WorkingPointCalibrationScope):
-            raise ValueError("calibration merge requires a working point")
-        identity = (
-            self.automatic_publication_policy_id,
-            self.automatic_publication_policy_version,
-            self.automatic_publication_policy_fingerprint,
-        )
-        if any(value is None for value in identity) and any(
-            value is not None for value in identity
-        ):
-            raise ValueError("calibration publication policy identity must be complete")
-        return self
-
-
 class SetupRebindRegistrySource(_FrozenRegistryModel):
     """Explicitly composed setup and parameter input; no calibration acceptance."""
 
@@ -334,9 +115,7 @@ class ContextConfigRegistrySource(_FrozenRegistryModel):
     kind: Literal["parameter_context"] = "parameter_context"
     context: ConfigContextMetadata
     rebind: SetupRebindRegistrySource | None = None
-    publication: (
-        CandidateConfigRegistrySource | CalibrationCohortMergeRegistrySource | None
-    ) = None
+    publication: CandidateConfigRegistrySource | None = None
 
 
 ConfigRegistryEntrySource = Annotated[
@@ -359,13 +138,6 @@ class ConfigRegistryEntry(_FrozenRegistryModel):
     actor: str
     note: str = ""
     recorded_at: datetime = Field(default_factory=utc_now)
-
-    @model_validator(mode="after")
-    def validate_identity(self) -> ConfigRegistryEntry:
-        if not self.id or not self.config_ref or not self.actor.strip():
-            msg = "config registry entry identity fields must be non-empty"
-            raise ValueError(msg)
-        return self
 
 
 def _exclude_none(value: object) -> bool:
@@ -533,19 +305,6 @@ class ConfigContextPublishOperation(_FrozenRegistryModel):
     operation_id: _NonEmptyText
     intent_hash: Sha256ContentHash
     base: ConfigContextRef
-    entry_id: _NonEmptyText
-    actor: _NonEmptyText
-    note: str = ""
-    recorded_at: datetime = Field(default_factory=utc_now)
-
-
-class CalibrationPublicationOperation(_FrozenRegistryModel):
-    """Atomic verified cohort publication into one exact working-point head."""
-
-    operation_id: _NonEmptyText
-    intent_hash: Sha256ContentHash
-    source_intent_hash: Sha256ContentHash
-    base: CalibrationConfigSourceRef
     entry_id: _NonEmptyText
     actor: _NonEmptyText
     note: str = ""

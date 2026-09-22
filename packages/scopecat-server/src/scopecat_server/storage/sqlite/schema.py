@@ -12,9 +12,6 @@ from scopecat_server.storage.sqlite.author_workspace_schema import (
 )
 from scopecat_server.storage.sqlite.automation_schema import AUTOMATION_TABLES_SQL
 from scopecat_server.storage.sqlite.batch_schema import EXPERIMENTAL_BATCH_TABLES_SQL
-from scopecat_server.storage.sqlite.calibration_schema import (
-    CALIBRATION_COHORT_TABLES_SQL,
-)
 from scopecat_server.storage.sqlite.collection_schema import (
     RECORD_COLLECTION_TABLES_SQL,
 )
@@ -32,7 +29,7 @@ from scopecat_server.storage.sqlite.sample_schema import SAMPLE_TABLES_SQL
 from scopecat_server.storage.sqlite.setup_schema import SETUP_TABLES_SQL
 from scopecat_server.storage.sqlite.target_schema import TARGET_CATALOG_TABLES_SQL
 
-PROJECT_SCHEMA_VERSION = 87
+PROJECT_SCHEMA_VERSION = 88
 
 _CONTROL_TABLES_SQL = f"""
 CREATE TABLE IF NOT EXISTS project_schema (
@@ -219,7 +216,6 @@ PROJECT_SCHEMA_SQL = "\n".join(
         APPARATUS_HISTORY_TABLES_SQL,
         ANALYSIS_TABLES_SQL,
         AUTOMATION_TABLES_SQL,
-        CALIBRATION_COHORT_TABLES_SQL,
         PROCEDURE_SCHEDULE_TABLES_SQL,
         CONFIG_REGISTRY_TABLES_SQL,
         SETUP_TABLES_SQL,

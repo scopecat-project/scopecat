@@ -14,7 +14,7 @@ inputs and destination branch. Joint verification precedes atomic publication;
 recovery reuses the original request and retained receipt.
 
 Existing scientific data is not rewritten or deleted. Retain an old environment
-if needed for archival reading. Low-level legacy cohort services remain in the
-framework pending a separate review; this does not make them a supported new
-application deployment path. Automatic scientific freshness needs a new explicit
-applicability policy and is not inferred by the replacement worker.
+if needed for archival reading. The legacy cohort server, transport and SQLite
+subsystem are also removed in development schema 88; older development stores
+are rejected without migration. Automatic scientific freshness needs a new
+explicit applicability policy and is not inferred by the replacement worker.

@@ -21,9 +21,6 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Literal
 
-from scopecat.config.candidate_merges import (
-    merge_common_base_parameter_proposals,
-)
 from scopecat.config.candidates import (
     CandidateConfig,
     resolve_candidate_config_from_snapshot,
@@ -39,10 +36,8 @@ from scopecat.config.registry.ports import (
 )
 from scopecat.config.registry.records import (
     BoundParameterRegistrySource,
-    CalibrationCohortMergeRegistrySource,
     CandidateAcceptance,
     CandidateConfigRegistrySource,
-    ConfigCompositionPolicyRef,
     ConfigRegistryActivationPage,
     ConfigRegistryActivationRecord,
     ConfigRegistryEntry,
@@ -50,7 +45,6 @@ from scopecat.config.registry.records import (
     DirectConfigRegistrySource,
     ManualConfigDraftRegistrySource,
     ParameterConfigRegistrySource,
-    ResolvedCalibrationCohortMergeContribution,
     SetupRebindRegistrySource,
 )
 from scopecat.config.structure import (
@@ -72,10 +66,6 @@ from scopecat.kernel.problems import (
     ProblemPhase,
     StorageLocation,
 )
-from scopecat.records.calibration_scope import (
-    CalibrationConfigSourceRef,
-    WorkingPointCalibrationScope,
-)
 from scopecat.records.config import (
     ConfigContentHash,
     ConfigProfileSnapshot,
@@ -83,7 +73,7 @@ from scopecat.records.config import (
     config_content_hash,
 )
 from scopecat.records.config_context import ConfigContextMetadata, ConfigContextRef
-from scopecat.records.content import ContentEntry, Sha256ContentHash
+from scopecat.records.content import ContentEntry
 from scopecat.records.parameter import ParameterSnapshot
 from scopecat.records.parameter_change import (
     ParameterChangeProposal,
@@ -145,23 +135,6 @@ class CandidateConfigRevisionSource:
     run_id: str
     proposal_id: str
     acceptance: CandidateAcceptance
-
-
-@dataclass(frozen=True, slots=True)
-class CalibrationCohortMergeRevisionSource:
-    """Individually verified contributions selected for one cell merge."""
-
-    cohort_id: str
-    spec_hash: Sha256ContentHash
-    composition_policy_ref: ConfigCompositionPolicyRef
-    merge_policy: Literal["common_base_cells_v1"]
-    base: CalibrationConfigSourceRef
-    candidate_id: str
-    contributions: tuple[ResolvedCalibrationCohortMergeContribution, ...]
-    expected_result_content_hash: ConfigContentHash
-    automatic_publication_policy_id: str | None = None
-    automatic_publication_policy_version: str | None = None
-    automatic_publication_policy_fingerprint: Sha256ContentHash | None = None
 
 
 type ConfigRevisionSource = (
@@ -545,139 +518,6 @@ def validate_candidate_source_records(
         source=source,
         deltas=proposal.deltas,
     )
-
-
-def _prepare_calibration_cohort_merge_locked(
-    *,
-    work: ConfigRegistryUnitOfWork,
-    source: CalibrationCohortMergeRevisionSource,
-) -> tuple[
-    ConfigProfileSnapshot,
-    CalibrationCohortMergeRegistrySource,
-    tuple[ParameterValueDelta, ...],
-]:
-    """Resolve exact proposal records and compose their exact working-point base."""
-
-    base = _load_config_registry_entry_locked(entry_id=source.base.entry_id, work=work)
-    scope = source.base.scope
-    if not isinstance(scope, WorkingPointCalibrationScope) or not isinstance(
-        base.entry.source, ContextConfigRegistrySource
-    ):
-        raise ValueError("calibration publication requires a working point")
-    metadata = base.entry.source.context
-    if (
-        base.entry.content_hash != source.base.content_hash
-        or base.entry.config_ref != source.base.config_ref
-        or metadata.sample != scope.sample
-        or metadata.workspace_id != scope.workspace_id
-        or work.registry.context_head(scope.workspace_id) != base.entry.id
-    ):
-        raise ValueError("calibration working point changed")
-    authority = work.setups.read_current()
-    if (
-        authority is None
-        or setup_content_hash(base.config)
-        != authority.revision.setup.execution_content_hash
-    ):
-        raise ValueError("calibration executable setup changed")
-
-    proposals = tuple(
-        _load_calibration_merge_proposal(
-            storage=work.runs,
-            contribution=contribution,
-        )
-        for contribution in source.contributions
-    )
-    result = merge_common_base_parameter_proposals(
-        proposals,
-        base_config=base.config,
-        candidate_id=source.candidate_id,
-    )
-    if result.content_hash != source.expected_result_content_hash:
-        raise _registry_failure(
-            Conflict,
-            code="config_registry.calibration_merge_result_changed",
-            message="calibration merge result changed since it was evaluated",
-            location=_registry_model_location(
-                "revision",
-                "source",
-                "expected_result_content_hash",
-            ),
-            details={
-                "expected_content_hash": source.expected_result_content_hash,
-                "actual_content_hash": result.content_hash,
-            },
-        )
-    return (
-        result.config,
-        CalibrationCohortMergeRegistrySource(
-            cohort_id=source.cohort_id,
-            spec_hash=source.spec_hash,
-            automatic_publication_policy_id=(source.automatic_publication_policy_id),
-            automatic_publication_policy_version=(
-                source.automatic_publication_policy_version
-            ),
-            automatic_publication_policy_fingerprint=(
-                source.automatic_publication_policy_fingerprint
-            ),
-            composition_policy_ref=source.composition_policy_ref,
-            merge_policy=source.merge_policy,
-            base=source.base,
-            candidate_id=source.candidate_id,
-            contributions=source.contributions,
-        ),
-        result.deltas,
-    )
-
-
-def _load_calibration_merge_proposal(
-    *,
-    storage: RunRepository,
-    contribution: ResolvedCalibrationCohortMergeContribution,
-) -> ParameterChangeProposal:
-    proof = contribution.proof
-    proposal_record = _require_run_record(
-        storage=storage,
-        run_id=proof.baseline_run_id,
-        record_id=proof.proposal_id,
-        kind="parameter_change_proposal",
-    )
-    proposal_ref = record_content_ref(
-        record_id=proposal_record.id,
-        kind=proposal_record.kind,
-    )
-    proposal = storage.read_model(
-        proof.baseline_run_id,
-        proposal_ref,
-        ParameterChangeProposal,
-    )
-    if (
-        proposal.id != proof.proposal_id
-        or proposal.source_run_id != proof.baseline_run_id
-        or proposal.analysis_record_id != proof.fit_analysis_record_id
-    ):
-        raise _registry_failure(
-            DataIntegrityError,
-            code="config_registry.calibration_merge_proposal_mismatch",
-            message="calibration contribution does not match its proposal record",
-            location=_registry_storage_location(
-                proposal_ref,
-                run_id=proof.baseline_run_id,
-            ),
-            related_locations=(
-                _registry_model_location(
-                    "revision",
-                    "source",
-                    "contributions",
-                    contribution.member_id,
-                ),
-            ),
-            details={
-                "member_id": contribution.member_id,
-                "proposal_id": proof.proposal_id,
-            },
-        )
-    return proposal
 
 
 def load_config_registry_page(
@@ -1432,7 +1272,6 @@ def _registry_storage_location(
 __all__ = [
     "ACTIVE_CONFIG_REGISTRY_ENTRY_SELECTOR",
     "ActiveConfigRegistrySnapshot",
-    "CalibrationCohortMergeRevisionSource",
     "CandidateConfigRevisionSource",
     "ConfigRegistryEntrySnapshot",
     "ConfigRegistryMutationResult",
@@ -1471,9 +1310,7 @@ def save_config_context(
     parameters: ParameterSnapshot | None,
     structure_plan: ParameterStructurePlan | None = None,
     advance: bool = False,
-    publication: CandidateConfigRegistrySource
-    | CalibrationCohortMergeRegistrySource
-    | None = None,
+    publication: CandidateConfigRegistrySource | None = None,
     actor: str,
     note: str,
     unit_of_work: ConfigRegistryUnitOfWorkFactory,
@@ -1506,9 +1343,7 @@ def _save_config_context_locked(
     parameters: ParameterSnapshot | None,
     structure_plan: ParameterStructurePlan | None = None,
     advance: bool = False,
-    publication: CandidateConfigRegistrySource
-    | CalibrationCohortMergeRegistrySource
-    | None = None,
+    publication: CandidateConfigRegistrySource | None = None,
     actor: str,
     note: str,
     work: ConfigRegistryUnitOfWork,
@@ -1641,43 +1476,6 @@ def latest_parameter_context(
         workspace_id = selected.entry.source.context.workspace_id
         return _load_config_registry_entry_locked(
             entry_id=work.registry.context_head(workspace_id), work=work
-        )
-
-
-def publish_calibration_context(
-    *,
-    source: CalibrationCohortMergeRevisionSource,
-    entry_id: str,
-    actor: str,
-    note: str,
-    unit_of_work: ConfigRegistryUnitOfWorkFactory,
-) -> ConfigRegistryMutationResult:
-    """Compose verified evidence and advance only its owning working point."""
-    with unit_of_work() as work:
-        config, publication, deltas = _prepare_calibration_cohort_merge_locked(
-            work=work, source=source
-        )
-        base = _load_config_registry_entry_locked(
-            entry_id=source.base.entry_id, work=work
-        )
-        assert isinstance(base.entry.source, ContextConfigRegistrySource)
-        context = base.entry.source.context
-        saved = _save_config_context_locked(
-            entry_id=entry_id,
-            base=source.base.context_ref,
-            sample=context.sample,
-            working_point_id=context.working_point_id,
-            label=context.label,
-            parameters=config.parameter_snapshot,
-            advance=True,
-            publication=publication,
-            actor=actor,
-            note=note,
-            work=work,
-            profile_id=config.id,
-        )
-        return ConfigRegistryMutationResult(
-            entry=saved.entry, saved=True, deltas=deltas
         )
 
 
