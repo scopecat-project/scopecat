@@ -90,6 +90,7 @@ from scopecat.records.measurement_recording import (
     MeasurementDatasetSeal,
 )
 from scopecat.records.parameter import ParameterCatalog, ParameterSnapshot
+from scopecat.records.parameter_branch import ParameterBranch
 from scopecat.records.parameter_change import (
     ParameterChangeProposal,
     ParameterValueDelta,
@@ -201,6 +202,18 @@ class ParameterSaveCommand(_WireModel):
     parameters: ParameterSnapshot
     actor: NonEmptyText
     note: str = ""
+
+
+class ParameterBranchCommitCommand(_WireModel):
+    name: NonEmptyText
+    expected_generation: int = Field(ge=0)
+    source: ParameterSaveCommand | ParameterRevisionRef
+    actor: NonEmptyText
+    note: str = ""
+
+
+class ParameterBranchHistory(_WireModel):
+    items: tuple[ParameterBranch, ...]
 
 
 class ParameterRevisionList(_WireModel):
@@ -1556,6 +1569,8 @@ __all__ = [
     "MeasurementIngestReceipt",
     "MeasurementSealCommand",
     "ParameterBindCommand",
+    "ParameterBranchCommitCommand",
+    "ParameterBranchHistory",
     "ParameterConfigRevisionSource",
     "ParameterResolveCommand",
     "ParameterRevisionList",

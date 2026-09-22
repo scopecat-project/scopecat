@@ -82,10 +82,12 @@ from scopecat.daemon.wire import (
     DirectConfigRevisionSource,
     ManualConfigDraftRevisionSource,
     ParameterBindCommand,
+    ParameterBranchCommitCommand,
     ParameterConfigRevisionSource,
     ParameterResolveCommand,
     ParameterSaveCommand,
 )
+from scopecat.kernel.content_identity import sha256_json_hash
 from scopecat.kernel.errors import (
     CheckFailed,
     Conflict,
@@ -100,6 +102,7 @@ from scopecat.records.analysis import (
 from scopecat.records.calibration_scope import WorkingPointCalibrationScope
 from scopecat.records.config import ConfigProfileSnapshot, config_content_hash
 from scopecat.records.config_context import ConfigContextRef, ContextRunConfigSource
+from scopecat.records.parameter_branch import ParameterBranch
 from scopecat.records.parameter_revision import (
     ParameterRevision,
     ParameterRevisionContent,
@@ -126,6 +129,7 @@ from scopecat_server.storage.sqlite.calibration_cohorts import (
 from scopecat_server.storage.sqlite.config_operations import SQLiteConfigOperationStore
 from scopecat_server.storage.sqlite.config_registry import SQLiteConfigRegistryStore
 from scopecat_server.storage.sqlite.control_plane import SQLiteControlPlane
+from scopecat_server.storage.sqlite.parameter_branches import ParameterBranchRepository
 from scopecat_server.storage.sqlite.parameter_revisions import (
     ParameterRevisionRepository,
 )
@@ -183,6 +187,80 @@ class ConfigService:
     def parameter_revisions(self) -> tuple[ParameterRevision, ...]:
         with self._control.sqlite.read_connection() as connection:
             return ParameterRevisionRepository(connection).list()
+
+    def parameter_branch(self, name: str) -> ParameterBranch:
+        with self._control.sqlite.read_connection() as connection:
+            try:
+                return ParameterBranchRepository(connection).get(name)
+            except KeyError as error:
+                raise BackendNotFound("parameter branch was not found") from error
+
+    def parameter_branch_history(self, name: str) -> tuple[ParameterBranch, ...]:
+        with self._control.sqlite.read_connection() as connection:
+            return ParameterBranchRepository(connection).history(name)
+
+    def commit_parameter_branch(
+        self, command: ParameterBranchCommitCommand
+    ) -> ParameterBranch:
+        intent = sha256_json_hash(command.model_dump(mode="json"))
+        with self._config_errors(), self._control.write_transaction() as connection:
+            branches = ParameterBranchRepository(connection)
+            revisions = ParameterRevisionRepository(connection)
+            try:
+                replay = branches.replay(
+                    command.name, command.expected_generation + 1, intent
+                )
+                if replay is not None:
+                    return replay
+                try:
+                    previous = branches.get(command.name)
+                except KeyError:
+                    previous = None
+                if (
+                    previous.generation if previous else 0
+                ) != command.expected_generation:
+                    raise BackendConflict(
+                        "parameter branch changed; reload before saving"
+                    )
+                source = command.source
+                if isinstance(source, ParameterSaveCommand):
+                    problems = validate_parameter_snapshot(
+                        source.catalog, source.parameters
+                    )
+                    if problems:
+                        raise CheckFailed(problems)
+                    revision = revisions.save(
+                        ParameterRevision(
+                            id=source.revision_id,
+                            catalog=source.catalog,
+                            parameters=source.parameters,
+                            content_hash=parameter_revision_hash(
+                                source.catalog, source.parameters
+                            ),
+                            actor=source.actor,
+                            note=source.note,
+                        )
+                    )
+                else:
+                    revision = revisions.get(source.revision_id)
+                    if revision.ref != source:
+                        raise BackendConflict(
+                            "parameter reference does not match saved content"
+                        )
+                branch = ParameterBranch(
+                    name=command.name,
+                    generation=command.expected_generation + 1,
+                    revision=revision.ref,
+                    previous=previous.revision if previous else None,
+                    actor=command.actor,
+                    note=command.note,
+                )
+                branches.append(branch, intent)
+                return branch
+            except KeyError as error:
+                raise BackendNotFound("parameter revision was not found") from error
+            except ValueError as error:
+                raise BackendConflict(str(error)) from error
 
     def resolve_parameters(
         self, command: ParameterResolveCommand

@@ -1,15 +1,18 @@
 """Independent parameter revisions and explicit execution-input preparation."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from uuid import uuid4
 
 from scopecat.daemon.client import DaemonClient
 from scopecat.daemon.views import ConfigEntryView, ParameterResolution
 from scopecat.daemon.wire import (
     ParameterBindCommand,
+    ParameterBranchCommitCommand,
     ParameterResolveCommand,
     ParameterSaveCommand,
 )
 from scopecat.records.parameter import ParameterCatalog, ParameterSnapshot
+from scopecat.records.parameter_branch import ParameterBranch
 from scopecat.records.parameter_revision import ParameterRevision, ParameterRevisionRef
 from scopecat.records.setup import SetupRevision, SetupRevisionRef
 
@@ -18,6 +21,33 @@ from scopecat.records.setup import SetupRevision, SetupRevisionRef
 class LabParameterOperations:
     client: DaemonClient
     operator: str
+
+    def create_branch(
+        self,
+        name: str,
+        *,
+        revision: ParameterRevision | ParameterRevisionRef,
+        note: str = "",
+    ) -> ParameterBranch:
+        """Create a named history from existing values without selecting defaults."""
+        return self.client.commit_parameter_branch(
+            ParameterBranchCommitCommand(
+                name=name,
+                expected_generation=0,
+                source=revision.ref
+                if isinstance(revision, ParameterRevision)
+                else revision,
+                actor=self.operator,
+                note=note,
+            )
+        )
+
+    def checkout(self, name: str) -> ParameterBranchWorkspace:
+        """Capture an editing base; concurrent saves will not be overwritten."""
+        return ParameterBranchWorkspace(self, self.client.get_parameter_branch(name))
+
+    def history(self, name: str) -> tuple[ParameterBranch, ...]:
+        return self.client.parameter_branch_history(name).items
 
     def save(
         self,
@@ -97,3 +127,52 @@ class LabParameterOperations:
                 setup=selected.ref if isinstance(selected, SetupRevision) else selected,
             )
         )
+
+
+@dataclass(slots=True)
+class ParameterBranchWorkspace:
+    """A local editing base for one named branch."""
+
+    operations: LabParameterOperations
+    head: ParameterBranch
+    _pending: ParameterBranchCommitCommand | None = field(
+        default=None, init=False, repr=False
+    )
+
+    @property
+    def revision(self) -> ParameterRevision:
+        return self.operations.get(self.head.revision.revision_id)
+
+    def save(
+        self,
+        *,
+        catalog: ParameterCatalog,
+        parameters: ParameterSnapshot,
+        note: str = "",
+    ) -> ParameterBranch:
+        """Save a revision and advance this branch atomically, or report a conflict."""
+        source = ParameterSaveCommand(
+            revision_id=f"parameters-{uuid4().hex}",
+            catalog=catalog,
+            parameters=parameters,
+            actor=self.operations.operator,
+            note=note,
+        )
+        pending = self._pending
+        if (
+            pending is None
+            or not isinstance(pending.source, ParameterSaveCommand)
+            or pending.source.model_dump(exclude={"revision_id"})
+            != source.model_dump(exclude={"revision_id"})
+        ):
+            pending = ParameterBranchCommitCommand(
+                name=self.head.name,
+                expected_generation=self.head.generation,
+                source=source,
+                actor=self.operations.operator,
+                note=note,
+            )
+        self._pending = pending
+        self.head = self.operations.client.commit_parameter_branch(pending)
+        self._pending = None
+        return self.head
