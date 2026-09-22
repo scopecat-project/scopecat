@@ -200,6 +200,9 @@ from scopecat.daemon.wire import (
     MeasurementHeaderCommand,
     MeasurementIngestReceipt,
     MeasurementSealCommand,
+    ParameterBindCommand,
+    ParameterRevisionList,
+    ParameterSaveCommand,
     PayloadObjectReceipt,
     RunAdmission,
     RunAttachmentCommand,
@@ -284,6 +287,7 @@ from scopecat.records.measurement_recording import (
     MeasurementDatasetAppend,
     MeasurementDatasetReceipt,
 )
+from scopecat.records.parameter_revision import ParameterRevision
 from scopecat.records.plan_ref import ExperimentPlanRef
 from scopecat.records.record_collection import (
     RecordCollection,
@@ -1026,6 +1030,27 @@ class DaemonClient:
 
     def active_setup(self) -> ActiveSetupView:
         return self._get_model(f"{_API_PREFIX}/setup/active", ActiveSetupView)
+
+    def parameter_revision(self, revision_id: str) -> ParameterRevision:
+        return self._get_model(
+            f"{_API_PREFIX}/parameters/revisions/{quote(revision_id, safe='')}",
+            ParameterRevision,
+        )
+
+    def parameter_revisions(self) -> ParameterRevisionList:
+        return self._get_model(
+            f"{_API_PREFIX}/parameters/revisions", ParameterRevisionList
+        )
+
+    def save_parameters(self, command: ParameterSaveCommand) -> ParameterRevision:
+        return self._post_idempotent_model(
+            f"{_API_PREFIX}/parameters/revisions", command, ParameterRevision
+        )
+
+    def bind_parameters(self, command: ParameterBindCommand) -> ConfigEntryView:
+        return self._post_idempotent_model(
+            f"{_API_PREFIX}/parameters/bindings", command, ConfigEntryView
+        )
 
     def setup_revision(self, revision_id: str) -> SetupRevision:
         return self._get_model(

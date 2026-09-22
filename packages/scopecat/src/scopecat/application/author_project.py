@@ -20,6 +20,7 @@ from scopecat.api._remote import RemoteRunOperations
 from scopecat.api.apparatus_history import LabApparatusOperations
 from scopecat.api.lab import LabClient
 from scopecat.api.parameter_candidates import ParameterCandidate
+from scopecat.api.parameter_revisions import LabParameterOperations
 from scopecat.api.parameters import ParameterWorkspace
 from scopecat.api.published_analysis import (
     AnalysisGroupResult,
@@ -252,6 +253,10 @@ class AuthorProject(DaemonClient):
         return LabConfigOperations(
             self, self.run_operations, None, self._selection.operator
         )
+
+    @property
+    def parameters(self) -> LabParameterOperations:
+        return LabParameterOperations(self, operator=self.selection.operator)
 
     def live[**P, ResultT](
         self, experiment: Experiment[P, ResultT]

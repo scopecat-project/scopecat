@@ -289,7 +289,16 @@ class LabConfigOperations:
                 ),
             )
         if isinstance(selected, str):
-            raise ValueError("daemon config selector must be 'active'")
+            saved = self.entry(selected)
+            return (
+                saved.config,
+                ConfigRegistryRunConfigSource(
+                    selector=saved.entry.id,
+                    entry_id=saved.entry.id,
+                    config_ref=saved.entry.config_ref,
+                    content_hash=saved.entry.content_hash,
+                ),
+            )
         if isinstance(selected, CandidateConfig):
             proposal = selected.parameter_proposal
             try:

@@ -90,12 +90,16 @@ from scopecat.records.measurement_recording import (
     MeasurementDatasetReceipt,
     MeasurementDatasetSeal,
 )
-from scopecat.records.parameter import ParameterSnapshot
+from scopecat.records.parameter import ParameterCatalog, ParameterSnapshot
 from scopecat.records.parameter_change import (
     ParameterChangeProposal,
     ParameterValueDelta,
 )
-from scopecat.records.parameter_revision import ParameterRevisionContent
+from scopecat.records.parameter_revision import (
+    ParameterRevision,
+    ParameterRevisionContent,
+    ParameterRevisionRef,
+)
 from scopecat.records.plan_ref import PlanConfigRef, ProcedureChildSubmission
 from scopecat.records.run import (
     RunConfigSource,
@@ -190,6 +194,29 @@ class ParameterConfigRevisionSource(_WireModel):
     kind: Literal["parameter_revision"] = "parameter_revision"
     parameters: ParameterRevisionContent
     setup: SetupRevisionRef
+
+
+class ParameterSaveCommand(_WireModel):
+    revision_id: NonEmptyText
+    catalog: ParameterCatalog
+    parameters: ParameterSnapshot
+    actor: NonEmptyText
+    note: str = ""
+
+
+class ParameterRevisionList(_WireModel):
+    items: tuple[ParameterRevision, ...]
+
+
+class ParameterBindCommand(_WireModel):
+    """Prepare saved execution inputs without selecting a global default."""
+
+    parameters: ParameterRevisionRef
+    setup: SetupRevisionRef
+    entry_id: NonEmptyText
+    system_id: NonEmptyText
+    actor: NonEmptyText
+    note: str = ""
 
 
 class DirectConfigRevisionSource(_WireModel):
@@ -1523,7 +1550,10 @@ __all__ = [
     "MeasurementHeaderCommand",
     "MeasurementIngestReceipt",
     "MeasurementSealCommand",
+    "ParameterBindCommand",
     "ParameterConfigRevisionSource",
+    "ParameterRevisionList",
+    "ParameterSaveCommand",
     "PayloadObjectReceipt",
     "PublishedAnalysisInputPayload",
     "RunAdmission",

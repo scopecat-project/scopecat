@@ -40,9 +40,29 @@ catalog. Parameter publication can follow without changing the selected setup.
 The new test starts without a full bootstrap fixture and verifies both owners
 across reopen. This provides an independent path; it does not remove the old one.
 
+## Independent authoring and the execution bridge
+
+Parameter revision persistence in schema 85 is independent of setup, system
+labels, sample and batch. `lab.parameters.save(...)` / `session.parameters.save(...)`
+validate declarations and values without selecting a context or asserting
+calibration validity. Exact parameter references identify those immutable inputs.
+
+`parameters.bind(...)` resolves an exact parameter reference and setup reference
+into a saved execution input, with both references in provenance. It selects
+neither owner. This bridges into existing saved configuration selection and
+working-point base creation; it does not introduce another measurement-context
+type. See [independent parameters](../how-to/independent-parameters.md).
+
+Keep four concerns distinct: authoring parameters, recording how values were
+obtained, deciding where calibration is applicable, and freezing execution input.
+A setup reference belongs in the latter records when relevant; it is not a
+mandatory property of every parameter edit. A shared setup hash alone proves
+neither physical conditions nor calibration validity. Current whole-setup scope
+checks remain conservative until narrower dependencies have concrete consumers.
+
 ## Remaining changes, in order
 
-The schema 84 registry now stores `ParameterRevisionContent` separately from
+Since schema 84, the execution registry stores `ParameterRevisionContent` separately from
 content-addressed executable setup payloads. Entries retain an exact setup content
 hash; identical setup content is shared without activating or creating a named
 setup revision. Reads reconstruct the existing full execution snapshot and verify
@@ -58,17 +78,22 @@ accepts and returns full configurations, and run evidence
 still retains complete execution snapshots. Do not infer new calibration validity
 or compose historical parameters with the currently active setup on read.
 
-1. Move remaining maintained consumers and fixtures to parameter-only inputs and
-   explicit first-use orchestration, then remove the special
-   case that initializes setup during the first full-config publication.
-2. Separate measurement-target binding from device setup where required by real
+1. Resolve independent parameter/setup inputs through the common measurement
+   selection and launch resolver, retaining subject, batch and working-point
+   ownership. Remove the need for authors to manually construct a saved-config
+   choice; avoid silently replacing subject/batch during parameter selection.
+2. Move maintained first-use/template/scaffold consumers and fixtures to the
+   independent owners, then remove implicit setup initialization. Do not
+   mechanically replace every full-config call with `set_parameter_default`:
+   saving parameters and selecting a global default are different operations.
+3. Separate measurement-target binding from device setup where required by real
    consumers. Define compatibility and independent execution by resource overlap,
    not by author-folder boundaries or a global parameter default.
-3. Centralize resolution of exact setup/binding/parameter/author revisions into
+4. Centralize resolution of exact setup/binding/parameter/author revisions into
    execution inputs, with explicit incompatibility diagnostics and retained source
    identities. A schema-compatible value is not automatically a valid calibration
    under a different setup or temperature.
-4. Retire combined-config editing/bootstrap APIs after their maintained consumers
+5. Retire combined-config editing/bootstrap APIs after their maintained consumers
    use the new owners. Rewrite tests around independent creation, selection,
    parameter updates, conflicts and historical result reopening; preserve useful
    scientific assertions rather than every old fixture/interface.

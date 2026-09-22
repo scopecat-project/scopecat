@@ -2828,6 +2828,19 @@ export interface components {
             upper: number;
         };
         /**
+         * BoundParameterRegistrySource
+         * @description Execution combination of two independently saved exact revisions.
+         */
+        BoundParameterRegistrySource: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "bound_parameters";
+            parameters: components["schemas"]["ParameterRevisionRef"];
+            setup: components["schemas"]["SetupRevisionRef"];
+        };
+        /**
          * CalibrationCohortMergeRegistrySource
          * @description Durable provenance for an individually verified cohort composition.
          */
@@ -3942,7 +3955,7 @@ export interface components {
              */
             recorded_at?: string;
             /** Source */
-            source: components["schemas"]["DirectConfigRegistrySource"] | components["schemas"]["ParameterConfigRegistrySource"] | components["schemas"]["ManualConfigDraftRegistrySource"] | components["schemas"]["CandidateConfigRegistrySource"] | components["schemas"]["ContextConfigRegistrySource"] | components["schemas"]["SetupRebindRegistrySource"];
+            source: components["schemas"]["DirectConfigRegistrySource"] | components["schemas"]["BoundParameterRegistrySource"] | components["schemas"]["ParameterConfigRegistrySource"] | components["schemas"]["ManualConfigDraftRegistrySource"] | components["schemas"]["CandidateConfigRegistrySource"] | components["schemas"]["ContextConfigRegistrySource"] | components["schemas"]["SetupRebindRegistrySource"];
         };
         /**
          * ConfigRegistryPage
@@ -6996,6 +7009,12 @@ export interface components {
             parameters: components["schemas"]["ParameterSnapshot"];
             /** System Id */
             system_id: string;
+        };
+        /** ParameterRevisionRef */
+        ParameterRevisionRef: {
+            content_hash: components["schemas"]["Sha256ContentHash"];
+            /** Revision Id */
+            revision_id: string;
         };
         /**
          * ParameterSnapshot
