@@ -137,6 +137,7 @@ def capture(root: Path, *, seed: bool) -> dict[str, JsonValue]:
         layers = lab.published_analysis("snapshot-layers").figure("figure")
         assert layers.layers[1].preview.series[0].y_lower == [0.9, 1.9]
         assert layers.layers[0].source.kind == "published_dataset"
+        assert client.config_registry().entries == ()
         return {
             "runs": runs.model_dump(mode="json"),
             "measurements": {
@@ -166,6 +167,8 @@ def capture(root: Path, *, seed: bool) -> dict[str, JsonValue]:
             "layered_publication": client.project_analysis(
                 "snapshot-layers"
             ).model_dump(mode="json"),
+            "parameters": client.parameter_revisions().model_dump(mode="json"),
+            "setup": client.active_setup().model_dump(mode="json"),
             "registry": client.config_registry().model_dump(mode="json"),
             "activations": client.config_activation_history().model_dump(mode="json"),
             "procedures": procedures.model_dump(mode="json"),
@@ -220,6 +223,17 @@ def check_roundtrip(template: Path) -> None:
         for name in ("src", "config"):
             shutil.copytree(template / name, source / name)
         shutil.copy2(template / "scopecat.toml", source / "scopecat.toml")
+        shutil.copy2(
+            template / "fixtures/equipment_bootstrap.py",
+            source / "src/equipment_bootstrap.py",
+        )
+        manifest = source / "scopecat.toml"
+        manifest.write_text(
+            manifest.read_text().replace(
+                "reference_lab.application:create_bootstrap",
+                "equipment_bootstrap:create_bootstrap",
+            )
+        )
         project = load_project(source / "scopecat.toml")
         _start_fixture_project(project)
         try:

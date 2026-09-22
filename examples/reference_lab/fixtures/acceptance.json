@@ -1,4 +1,198 @@
 {
+  "candidate_proposal": {
+    "items": [
+      {
+        "approval": null,
+        "proposal": {
+          "analysis_record_id": "acceptance-analysis",
+          "base_config_content_hash": "sha256:ada673b9384d907a13adb59231f3f2dbd9aa63f76115d7712e6e6c926ed93486",
+          "base_config_id": "acceptance-parameters",
+          "confidence": null,
+          "deltas": [
+            {
+              "after": {
+                "id": "channel_calibrations",
+                "rows": [
+                  {
+                    "channel_delay": {
+                      "unit": "ns",
+                      "value": 0.0
+                    },
+                    "flux_gain": 0.98,
+                    "flux_offset": {
+                      "unit": "V",
+                      "value": 0.0
+                    },
+                    "flux_polarity": 1,
+                    "qubit": {
+                      "id": "q0",
+                      "kind": "logical_qubit",
+                      "metadata": {}
+                    }
+                  },
+                  {
+                    "channel_delay": {
+                      "unit": "ns",
+                      "value": 1.0
+                    },
+                    "flux_gain": 1.02,
+                    "flux_offset": {
+                      "unit": "V",
+                      "value": 0.002
+                    },
+                    "flux_polarity": -1,
+                    "qubit": {
+                      "id": "q1",
+                      "kind": "logical_qubit",
+                      "metadata": {}
+                    }
+                  },
+                  {
+                    "channel_delay": {
+                      "unit": "ns",
+                      "value": -0.5
+                    },
+                    "flux_gain": 1.01,
+                    "flux_offset": {
+                      "unit": "V",
+                      "value": -0.001
+                    },
+                    "flux_polarity": 1,
+                    "qubit": {
+                      "id": "q2",
+                      "kind": "logical_qubit",
+                      "metadata": {}
+                    }
+                  },
+                  {
+                    "channel_delay": {
+                      "unit": "ns",
+                      "value": 0.75
+                    },
+                    "flux_gain": 0.99,
+                    "flux_offset": {
+                      "unit": "V",
+                      "value": 0.003
+                    },
+                    "flux_polarity": -1,
+                    "qubit": {
+                      "id": "q3",
+                      "kind": "logical_qubit",
+                      "metadata": {}
+                    }
+                  }
+                ],
+                "shape": "table"
+              },
+              "before": {
+                "id": "channel_calibrations",
+                "rows": [
+                  {
+                    "channel_delay": {
+                      "unit": "ns",
+                      "value": 0.0
+                    },
+                    "flux_gain": 0.98,
+                    "flux_offset": {
+                      "unit": "V",
+                      "value": 0.0
+                    },
+                    "flux_polarity": 1,
+                    "qubit": {
+                      "id": "q0",
+                      "kind": "logical_qubit",
+                      "metadata": {}
+                    }
+                  },
+                  {
+                    "channel_delay": {
+                      "unit": "ns",
+                      "value": 1.5
+                    },
+                    "flux_gain": 1.02,
+                    "flux_offset": {
+                      "unit": "V",
+                      "value": 0.002
+                    },
+                    "flux_polarity": -1,
+                    "qubit": {
+                      "id": "q1",
+                      "kind": "logical_qubit",
+                      "metadata": {}
+                    }
+                  },
+                  {
+                    "channel_delay": {
+                      "unit": "ns",
+                      "value": -0.5
+                    },
+                    "flux_gain": 1.01,
+                    "flux_offset": {
+                      "unit": "V",
+                      "value": -0.001
+                    },
+                    "flux_polarity": 1,
+                    "qubit": {
+                      "id": "q2",
+                      "kind": "logical_qubit",
+                      "metadata": {}
+                    }
+                  },
+                  {
+                    "channel_delay": {
+                      "unit": "ns",
+                      "value": 0.75
+                    },
+                    "flux_gain": 0.99,
+                    "flux_offset": {
+                      "unit": "V",
+                      "value": 0.003
+                    },
+                    "flux_polarity": -1,
+                    "qubit": {
+                      "id": "q3",
+                      "kind": "logical_qubit",
+                      "metadata": {}
+                    }
+                  }
+                ],
+                "shape": "table"
+              },
+              "cells": [
+                {
+                  "after": {
+                    "unit": "ns",
+                    "value": 1.0
+                  },
+                  "before": {
+                    "unit": "ns",
+                    "value": 1.5
+                  },
+                  "change_kind": "physical",
+                  "field": "channel_delay",
+                  "key": {
+                    "qubit": {
+                      "id": "q1",
+                      "kind": "logical_qubit",
+                      "metadata": {}
+                    }
+                  }
+                }
+              ],
+              "parameter_id": "channel_calibrations"
+            }
+          ],
+          "evidence_output_ids": [],
+          "id": "q1-channel-delay",
+          "proposed_at": "2026-09-01T00:00:00Z",
+          "reason": "align q1 acquisition with the shared readout window",
+          "source_run_id": "acceptance-source"
+        }
+      }
+    ],
+    "next_cursor": null,
+    "run_id": "acceptance-source"
+  },
   "coherent_scalar": {
     "dataset_schema": {
       "dataset_id": "raw-measurements",
@@ -262,7 +456,7 @@
             "unit": "ratio",
             "value": {
               "imag": 1.0364972768961422e-14,
-              "real": 0.6250000000000054
+              "real": 0.6250000000000053
             }
           }
         },
@@ -501,7 +695,7 @@
         "code_revision": {
           "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
         },
-        "config_source_hash": "sha256:f1a47c33186c0d9ad80ee5016812607aa6f794af72131e5bf1623406c94b7d7b",
+        "config_source_hash": "sha256:b72194b3f7b0b56ac3397a5a61a14f16e80941f466a8e65c64ab618e19afb9e9",
         "request_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
       },
       "event_id": 1
@@ -512,9 +706,9 @@
       "scope_basis": "One authored run; all selected points.",
       "stages": [
         {
-          "config_content_hash": "sha256:15248161728d3097f23ae3b6e8109e20a2a2ec2b720eafcceefc89943acd302e",
-          "configuration": "accepted",
-          "configuration_meaning": "Uses the reviewed active configuration; no default changes.",
+          "config_content_hash": "sha256:ada673b9384d907a13adb59231f3f2dbd9aa63f76115d7712e6e6c926ed93486",
+          "configuration": "selected_context",
+          "configuration_meaning": "Uses exact parameter and setup revisions for this run; no calibration acceptance or default changes.",
           "costs": [
             {
               "artifact_fingerprint": null,
@@ -604,20 +798,26 @@
     "resources": [],
     "reviewed": {
       "binding": {
-        "codec": "scopecat.scientific-binding.v1",
-        "config_content_hash": "sha256:15248161728d3097f23ae3b6e8109e20a2a2ec2b720eafcceefc89943acd302e",
-        "setup_content_hash": "sha256:0dd9a56d7a191330af179ab3c90de06de2e529c6bb44934129ee18b03fa345f3",
+        "codec": "scopecat.scientific-binding.v2",
+        "config_content_hash": "sha256:ada673b9384d907a13adb59231f3f2dbd9aa63f76115d7712e6e6c926ed93486",
+        "scenario": null,
+        "setup_content_hash": "sha256:812feca4f5b8ca2aacd28e29032c69b84f4cea4cdb2e74895660dfe0436a2289",
         "subject": {
           "kind": "unbound"
         }
       },
       "config_source": {
-        "config_ref": "config-registry/configs/daemon-15248161728d3097f23ae3b6e8109e20a2a2ec2b720eafcceefc89943acd302e.config-profile-snapshot.json",
-        "content_hash": "sha256:15248161728d3097f23ae3b6e8109e20a2a2ec2b720eafcceefc89943acd302e",
-        "entry_id": "daemon-15248161728d3097f23ae3b6e8109e20a2a2ec2b720eafcceefc89943acd302e",
-        "kind": "config_registry",
-        "registry_generation": 1,
-        "selector": "active"
+        "content_hash": "sha256:ada673b9384d907a13adb59231f3f2dbd9aa63f76115d7712e6e6c926ed93486",
+        "kind": "parameter_revision",
+        "overrides": [],
+        "parameters": {
+          "content_hash": "sha256:fa9ee3d310686f0601ba7f7fc8f622b6972cf2901899ec5eda21a23017d9fae6",
+          "revision_id": "acceptance-parameters"
+        },
+        "setup": {
+          "content_hash": "sha256:86d52ff730334a8090f4e7e383ac8c2755fa3164b218df0d114946f7f58836f2",
+          "revision_id": "setup-86d52ff730334a8090f4e7e383ac8c2755fa3164b218df0d114946f7f58836f2"
+        }
       }
     },
     "summary": "Preview fixed or scanned signal controls against the reviewed q0 carrier.\n\nProject limits: at most 64 points; amplitude at most 0.2 V when detuning\nexceeds 0.25 GHz. This analytic model makes no device calls.",
@@ -887,7 +1087,7 @@
         "code_revision": {
           "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
         },
-        "config_source_hash": "sha256:f1a47c33186c0d9ad80ee5016812607aa6f794af72131e5bf1623406c94b7d7b",
+        "config_source_hash": "sha256:b72194b3f7b0b56ac3397a5a61a14f16e80941f466a8e65c64ab618e19afb9e9",
         "request_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
       },
       "event_id": 1
@@ -898,9 +1098,9 @@
       "scope_basis": "One authored run; all selected points.",
       "stages": [
         {
-          "config_content_hash": "sha256:15248161728d3097f23ae3b6e8109e20a2a2ec2b720eafcceefc89943acd302e",
-          "configuration": "accepted",
-          "configuration_meaning": "Uses the reviewed active configuration; no default changes.",
+          "config_content_hash": "sha256:ada673b9384d907a13adb59231f3f2dbd9aa63f76115d7712e6e6c926ed93486",
+          "configuration": "selected_context",
+          "configuration_meaning": "Uses exact parameter and setup revisions for this run; no calibration acceptance or default changes.",
           "costs": [
             {
               "artifact_fingerprint": null,
@@ -990,20 +1190,26 @@
     "resources": [],
     "reviewed": {
       "binding": {
-        "codec": "scopecat.scientific-binding.v1",
-        "config_content_hash": "sha256:15248161728d3097f23ae3b6e8109e20a2a2ec2b720eafcceefc89943acd302e",
-        "setup_content_hash": "sha256:0dd9a56d7a191330af179ab3c90de06de2e529c6bb44934129ee18b03fa345f3",
+        "codec": "scopecat.scientific-binding.v2",
+        "config_content_hash": "sha256:ada673b9384d907a13adb59231f3f2dbd9aa63f76115d7712e6e6c926ed93486",
+        "scenario": null,
+        "setup_content_hash": "sha256:812feca4f5b8ca2aacd28e29032c69b84f4cea4cdb2e74895660dfe0436a2289",
         "subject": {
           "kind": "unbound"
         }
       },
       "config_source": {
-        "config_ref": "config-registry/configs/daemon-15248161728d3097f23ae3b6e8109e20a2a2ec2b720eafcceefc89943acd302e.config-profile-snapshot.json",
-        "content_hash": "sha256:15248161728d3097f23ae3b6e8109e20a2a2ec2b720eafcceefc89943acd302e",
-        "entry_id": "daemon-15248161728d3097f23ae3b6e8109e20a2a2ec2b720eafcceefc89943acd302e",
-        "kind": "config_registry",
-        "registry_generation": 1,
-        "selector": "active"
+        "content_hash": "sha256:ada673b9384d907a13adb59231f3f2dbd9aa63f76115d7712e6e6c926ed93486",
+        "kind": "parameter_revision",
+        "overrides": [],
+        "parameters": {
+          "content_hash": "sha256:fa9ee3d310686f0601ba7f7fc8f622b6972cf2901899ec5eda21a23017d9fae6",
+          "revision_id": "acceptance-parameters"
+        },
+        "setup": {
+          "content_hash": "sha256:86d52ff730334a8090f4e7e383ac8c2755fa3164b218df0d114946f7f58836f2",
+          "revision_id": "setup-86d52ff730334a8090f4e7e383ac8c2755fa3164b218df0d114946f7f58836f2"
+        }
       }
     },
     "summary": "Preview fixed or scanned signal controls against the reviewed q0 carrier.\n\nProject limits: at most 64 points; amplitude at most 0.2 V when detuning\nexceeds 0.25 GHz. This analytic model makes no device calls.",
@@ -1563,7 +1769,7 @@
         "code_revision": {
           "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
         },
-        "config_source_hash": "sha256:f1a47c33186c0d9ad80ee5016812607aa6f794af72131e5bf1623406c94b7d7b",
+        "config_source_hash": "sha256:b72194b3f7b0b56ac3397a5a61a14f16e80941f466a8e65c64ab618e19afb9e9",
         "request_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
       },
       "event_id": 1
@@ -1574,9 +1780,9 @@
       "scope_basis": "One authored run; all selected points.",
       "stages": [
         {
-          "config_content_hash": "sha256:15248161728d3097f23ae3b6e8109e20a2a2ec2b720eafcceefc89943acd302e",
-          "configuration": "accepted",
-          "configuration_meaning": "Uses the reviewed active configuration; no default changes.",
+          "config_content_hash": "sha256:ada673b9384d907a13adb59231f3f2dbd9aa63f76115d7712e6e6c926ed93486",
+          "configuration": "selected_context",
+          "configuration_meaning": "Uses exact parameter and setup revisions for this run; no calibration acceptance or default changes.",
           "costs": [
             {
               "artifact_fingerprint": null,
@@ -1682,20 +1888,26 @@
     ],
     "reviewed": {
       "binding": {
-        "codec": "scopecat.scientific-binding.v1",
-        "config_content_hash": "sha256:15248161728d3097f23ae3b6e8109e20a2a2ec2b720eafcceefc89943acd302e",
-        "setup_content_hash": "sha256:0dd9a56d7a191330af179ab3c90de06de2e529c6bb44934129ee18b03fa345f3",
+        "codec": "scopecat.scientific-binding.v2",
+        "config_content_hash": "sha256:ada673b9384d907a13adb59231f3f2dbd9aa63f76115d7712e6e6c926ed93486",
+        "scenario": null,
+        "setup_content_hash": "sha256:812feca4f5b8ca2aacd28e29032c69b84f4cea4cdb2e74895660dfe0436a2289",
         "subject": {
           "kind": "unbound"
         }
       },
       "config_source": {
-        "config_ref": "config-registry/configs/daemon-15248161728d3097f23ae3b6e8109e20a2a2ec2b720eafcceefc89943acd302e.config-profile-snapshot.json",
-        "content_hash": "sha256:15248161728d3097f23ae3b6e8109e20a2a2ec2b720eafcceefc89943acd302e",
-        "entry_id": "daemon-15248161728d3097f23ae3b6e8109e20a2a2ec2b720eafcceefc89943acd302e",
-        "kind": "config_registry",
-        "registry_generation": 1,
-        "selector": "active"
+        "content_hash": "sha256:ada673b9384d907a13adb59231f3f2dbd9aa63f76115d7712e6e6c926ed93486",
+        "kind": "parameter_revision",
+        "overrides": [],
+        "parameters": {
+          "content_hash": "sha256:fa9ee3d310686f0601ba7f7fc8f622b6972cf2901899ec5eda21a23017d9fae6",
+          "revision_id": "acceptance-parameters"
+        },
+        "setup": {
+          "content_hash": "sha256:86d52ff730334a8090f4e7e383ac8c2755fa3164b218df0d114946f7f58836f2",
+          "revision_id": "setup-86d52ff730334a8090f4e7e383ac8c2755fa3164b218df0d114946f7f58836f2"
+        }
       }
     },
     "summary": "Retain one thermometer sample without changing device state or defaults.",
@@ -2214,205 +2426,5 @@
       },
       "status": "blocked"
     }
-  ],
-  "reviewed_candidate": {
-    "items": [
-      {
-        "approval": {
-          "actor": "acceptance-operator",
-          "approved_at": "2026-09-01T00:00:00Z",
-          "note": "Verified in virtual lab",
-          "proposal_id": "q1-channel-delay",
-          "run_id": "acceptance-source"
-        },
-        "proposal": {
-          "analysis_record_id": "acceptance-analysis",
-          "base_config_content_hash": "sha256:15248161728d3097f23ae3b6e8109e20a2a2ec2b720eafcceefc89943acd302e",
-          "base_config_id": "reference-lab-profile",
-          "confidence": null,
-          "deltas": [
-            {
-              "after": {
-                "id": "channel_calibrations",
-                "rows": [
-                  {
-                    "channel_delay": {
-                      "unit": "ns",
-                      "value": 0.0
-                    },
-                    "flux_gain": 0.98,
-                    "flux_offset": {
-                      "unit": "V",
-                      "value": 0.0
-                    },
-                    "flux_polarity": 1,
-                    "qubit": {
-                      "id": "q0",
-                      "kind": "logical_qubit",
-                      "metadata": {}
-                    }
-                  },
-                  {
-                    "channel_delay": {
-                      "unit": "ns",
-                      "value": 1.0
-                    },
-                    "flux_gain": 1.02,
-                    "flux_offset": {
-                      "unit": "V",
-                      "value": 0.002
-                    },
-                    "flux_polarity": -1,
-                    "qubit": {
-                      "id": "q1",
-                      "kind": "logical_qubit",
-                      "metadata": {}
-                    }
-                  },
-                  {
-                    "channel_delay": {
-                      "unit": "ns",
-                      "value": -0.5
-                    },
-                    "flux_gain": 1.01,
-                    "flux_offset": {
-                      "unit": "V",
-                      "value": -0.001
-                    },
-                    "flux_polarity": 1,
-                    "qubit": {
-                      "id": "q2",
-                      "kind": "logical_qubit",
-                      "metadata": {}
-                    }
-                  },
-                  {
-                    "channel_delay": {
-                      "unit": "ns",
-                      "value": 0.75
-                    },
-                    "flux_gain": 0.99,
-                    "flux_offset": {
-                      "unit": "V",
-                      "value": 0.003
-                    },
-                    "flux_polarity": -1,
-                    "qubit": {
-                      "id": "q3",
-                      "kind": "logical_qubit",
-                      "metadata": {}
-                    }
-                  }
-                ],
-                "shape": "table"
-              },
-              "before": {
-                "id": "channel_calibrations",
-                "rows": [
-                  {
-                    "channel_delay": {
-                      "unit": "ns",
-                      "value": 0.0
-                    },
-                    "flux_gain": 0.98,
-                    "flux_offset": {
-                      "unit": "V",
-                      "value": 0.0
-                    },
-                    "flux_polarity": 1,
-                    "qubit": {
-                      "id": "q0",
-                      "kind": "logical_qubit",
-                      "metadata": {}
-                    }
-                  },
-                  {
-                    "channel_delay": {
-                      "unit": "ns",
-                      "value": 1.5
-                    },
-                    "flux_gain": 1.02,
-                    "flux_offset": {
-                      "unit": "V",
-                      "value": 0.002
-                    },
-                    "flux_polarity": -1,
-                    "qubit": {
-                      "id": "q1",
-                      "kind": "logical_qubit",
-                      "metadata": {}
-                    }
-                  },
-                  {
-                    "channel_delay": {
-                      "unit": "ns",
-                      "value": -0.5
-                    },
-                    "flux_gain": 1.01,
-                    "flux_offset": {
-                      "unit": "V",
-                      "value": -0.001
-                    },
-                    "flux_polarity": 1,
-                    "qubit": {
-                      "id": "q2",
-                      "kind": "logical_qubit",
-                      "metadata": {}
-                    }
-                  },
-                  {
-                    "channel_delay": {
-                      "unit": "ns",
-                      "value": 0.75
-                    },
-                    "flux_gain": 0.99,
-                    "flux_offset": {
-                      "unit": "V",
-                      "value": 0.003
-                    },
-                    "flux_polarity": -1,
-                    "qubit": {
-                      "id": "q3",
-                      "kind": "logical_qubit",
-                      "metadata": {}
-                    }
-                  }
-                ],
-                "shape": "table"
-              },
-              "cells": [
-                {
-                  "after": {
-                    "unit": "ns",
-                    "value": 1.0
-                  },
-                  "before": {
-                    "unit": "ns",
-                    "value": 1.5
-                  },
-                  "change_kind": "physical",
-                  "field": "channel_delay",
-                  "key": {
-                    "qubit": {
-                      "id": "q1",
-                      "kind": "logical_qubit",
-                      "metadata": {}
-                    }
-                  }
-                }
-              ],
-              "parameter_id": "channel_calibrations"
-            }
-          ],
-          "evidence_output_ids": [],
-          "id": "q1-channel-delay",
-          "proposed_at": "2026-09-01T00:00:00Z",
-          "reason": "align q1 acquisition with the shared readout window",
-          "source_run_id": "acceptance-source"
-        }
-      }
-    ],
-    "next_cursor": null,
-    "run_id": "acceptance-source"
-  }
+  ]
 }

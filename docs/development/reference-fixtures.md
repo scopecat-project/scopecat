@@ -26,6 +26,20 @@ mapping is irrelevant. Use the full virtual plant for shared claims, channel
 routing, compiled buffers and recovery interactions. Mocking these boundaries
 would remove the evidence the tests exist to provide.
 
+The shared acceptance capture and snapshot roundtrip use
+`reference_lab/fixtures/equipment_bootstrap.py` in their disposable projects.
+This fixture starts equipment without publishing parameter defaults. Capture
+saves an independent parameter revision and selects its exact setup for previews
+and runs; recovery compares both owners as well as retained scientific results.
+The combined registry remains empty. Candidate acquisition is not approval:
+the shared response contains an unapproved proposal, with approval decoding tested
+separately in the UI. Calibration publication and restoration remain covered by
+the dedicated DRAG integration workflows.
+
+The ordinary reference gallery still starts with transitional parameter defaults.
+Its calibration/default-publication consumers must migrate together before that
+bootstrap path can be removed; the acceptance fixture is not a second user mode.
+
 No private package may become a prerequisite for public CI or the installed
 starter. Shared test helpers belong in testkit only when independently reused;
 reference_lab is not a production library to install on physical benches.

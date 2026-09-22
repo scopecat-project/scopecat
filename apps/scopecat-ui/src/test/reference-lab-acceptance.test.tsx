@@ -38,7 +38,7 @@ const fixtures = JSON.parse(
   controls_scan: components["schemas"]["LaunchPreview"];
   coherent_scalar: components["schemas"]["MeasurementPreview"];
   inspection: components["schemas"]["ReviewSessionView"];
-  reviewed_candidate: components["schemas"]["ParameterProposalPage"];
+  candidate_proposal: components["schemas"]["ParameterProposalPage"];
   entity_analysis: components["schemas"]["MeasurementDatasetSchema-Output"];
 };
 
@@ -280,14 +280,28 @@ describe("shared reference-lab acceptance", () => {
     ]);
   });
 
-  it("reads the reviewed candidate without discarding its approval or table delta", async () => {
-    serve(fixtures.reviewed_candidate);
+  it("reads a candidate without treating its execution as approval", async () => {
+    serve(fixtures.candidate_proposal);
     const page = await getRunParameterProposals("acceptance-source");
     expect(page.items).toHaveLength(1);
     expect(page.items[0]?.id).toBe("q1-channel-delay");
-    expect(page.items[0]?.approval?.actor).toBe("acceptance-operator");
+    expect(page.items[0]?.approval).toBeUndefined();
     expect(page.items[0]?.deltas[0]?.parameterId).toBe("channel_calibrations");
     expect(page.items[0]?.deltas[0]?.before).not.toEqual(page.items[0]?.deltas[0]?.after);
+  });
+
+  it("preserves a separately supplied operator approval", async () => {
+    const approved = structuredClone(fixtures.candidate_proposal);
+    approved.items[0]!.approval = {
+      actor: "reviewer",
+      approved_at: "2026-09-01T00:00:00Z",
+      note: "Explicit operator review",
+      proposal_id: "q1-channel-delay",
+      run_id: "acceptance-source",
+    };
+    serve(approved);
+    const page = await getRunParameterProposals("acceptance-source");
+    expect(page.items[0]?.approval?.actor).toBe("reviewer");
   });
 
   it("consumes the same read-only inspection and entity-indexed schema", async () => {

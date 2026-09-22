@@ -33,6 +33,17 @@ def main() -> None:
         shutil.copytree(EXAMPLE_ROOT / "config", root / "config")
         shutil.copytree(EXAMPLE_ROOT / "src", root / "src")
         shutil.copy2(EXAMPLE_ROOT / "scopecat.toml", root / "scopecat.toml")
+        shutil.copy2(
+            EXAMPLE_ROOT / "fixtures/equipment_bootstrap.py",
+            root / "src/equipment_bootstrap.py",
+        )
+        manifest = root / "scopecat.toml"
+        manifest.write_text(
+            manifest.read_text().replace(
+                "reference_lab.application:create_bootstrap",
+                "equipment_bootstrap:create_bootstrap",
+            )
+        )
         project = load_project(root / "scopecat.toml")
         endpoint = start_project(project)
         try:
@@ -40,7 +51,9 @@ def main() -> None:
                 create_application(root).connect(endpoint.base_url) as lab,
                 DaemonClient(endpoint.base_url) as client,
             ):
+                assert lab.config.registry().entries == ()
                 content = acceptance_json(capture_acceptance_fixtures(lab, client))
+                assert lab.config.registry().entries == ()
         finally:
             stop_project(project)
     if cast("bool", args.check):
