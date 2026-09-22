@@ -1,56 +1,71 @@
-# Work on a parameter branch
+# Edit parameters on a branch
 
-A revision is immutable declarations and values. A branch gives a sequence of
-revisions a stable name. Neither owns equipment, establishes calibration validity
-nor changes the laboratory default.
+A revision is immutable declarations and values. A branch names an editing
+history. Neither owns equipment nor establishes calibration validity.
 
 With an initial parameter revision and a selected executable setup:
 
 ```python
 lab.parameters.create_branch("chip-a/daily", revision=initial)
 session.use(parameter_branch="chip-a/daily", operator="Alice")
+params = session.params
 
-values = session.parameter_branch.revision
-# Edit values.catalog / values.parameters using your parameter-authoring code.
-session.parameter_branch.save(
-    catalog=values.catalog,
-    parameters=updated_parameters,
-    note="Update readout calibration",
-)
-# Future preparations use the revision just saved.
-prepared = session.prepare(experiment())
+# The same dictionary/typed-table editor used in the tutorials.
+params["drive"]["q0"]["frequency"] = 5.15
+params.diff()
+version = params.save(note="Update readout calibration")
+prepared = session.prepare(experiment(), parameters=params)
 ```
 
-Saving generates the immutable revision ID and advances only the checked-out
-branch. No setup reference or version name is needed for each save. The previous
-revision remains available. Inspect history with
-`lab.parameters.history("chip-a/daily")`.
+For editing alone, `params = lab.parameters.workspace("chip-a/daily")` needs no
+setup, sample or working point. Typed row views, scalars, declarations, schema
+changes, table import/export, `diff()`, `copy()` and `discard()` share the existing
+parameter editor implementation.
 
-Checkout captures an editing base. Another notebook may advance the same branch,
-but it cannot silently replace this notebook's values. A save from a stale base
-reports a conflict and creates no revision. Inspect the other change before
-checking out again with `session.use(parameter_branch="chip-a/daily")`; merge
-decisions are explicit, and automatic table merging is not implemented.
+Ordinary `params.save()` generates a revision ID and advances the current branch.
+An unchanged ordinary save returns the existing version. Saving never changes
+the lab default. `params.save("chip-a/trial")` forks and selects a new branch,
+leaving the original branch unchanged. Inspect history with
+`lab.parameters.history("chip-a/daily")`; read an exact version with
+`lab.parameters.get(version.id)`.
 
-The same checkout can be used without an author session:
-`draft = lab.parameters.checkout("chip-a/daily")`, followed by `draft.save(...)`.
+Checkout captures an editing base. If another writer advances the branch,
+saving reports a conflict without losing the local draft or saving an orphan
+revision. Call `params.rebase()` to merge non-conflicting cells from the latest
+head. Conflicting cells leave the entire draft unchanged. A changed catalog or
+pending structure edits require explicit review rather than automatic schema
+merging. Re-selecting the branch through `session.use(...)` starts a fresh checkout;
+it does not merge the old editor's unsaved values.
+
 An unchanged retry after a lost response reuses the pending save command.
-Create a separate experiment branch with `create_branch("chip-a/trial",
-revision=draft.head.revision)`.
+Independent copies retain their editing base and do not move the original
+session's selection when saved.
 
-Session branch selection preserves the current subject, batch, operator and
-record collection, except fields explicitly changed in the same call. Selecting
-another sample/target drops the checkout unless a branch is also explicitly
-selected. Selecting `parameters=revision` or a working point exits branch mode.
-Branches currently have no enforced sample, cooldown or working-point scope:
-their names are labels, not scientific applicability checks.
+## Prepare without saving value edits
 
-Prepared requests and saved plans contain exact parameter references. Later
-branch changes cannot alter those inputs. Run provenance currently retains the
-exact parameter/setup revisions, not a branch-name attribution. Branch following
-across sessions, automatic merging and a graphical branch editor are not provided.
+`session.prepare(request, parameters=params)` captures unsaved **value** changes as
+run-only overrides. Previewing does not write a revision or advance a branch.
+Later edits to `params` do not change an existing preview. Runs and saved plans
+retain the exact base parameter/setup references and overrides.
 
-A working point describes an experimental condition, while branches organize
-parameter editing. A default should select a branch for new sessions, not be
-changed as a side effect of saving. Existing working-point/default APIs remain
-transitional; this feature does not rename or convert their old records.
+Save **structure** changes before preparing an experiment, as with the earlier
+editor. When `parameters=params` is omitted, session preparation uses the selected
+saved revision; it does not silently include an editor's unsaved buffer.
+
+## Scientific context remains separate
+
+Session branch selection and explicit branch-editor preparation preserve the
+subject, batch, operator and record collection. Selecting another sample/target
+drops the checkout unless a branch is also explicitly selected. Choosing a saved
+parameter revision or working point exits branch mode. Branch names currently
+carry no enforced sample/cooldown applicability or calibration acceptance.
+
+The low-level `checkout(...).save(catalog=..., parameters=...)` remains available
+for programmatic full-snapshot producers; ordinary authors use `params.save()`.
+The old `session.config.workspace(context=...)` still serves maintained
+working-point consumers, but new teaching uses the independent branch backend
+without fabricating samples or working points.
+
+Default branch selection, scientific working-point consolidation, graphical
+branch management and equipment/target/binding separation remain follow-up work.
+No prebaseline data migration or historical-file rewriting is introduced.

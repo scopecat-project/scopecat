@@ -12,6 +12,7 @@ from scopecat.config.contexts import (
     missing_context_values,
     validate_context_config,
 )
+from scopecat.config.parameter_resolution import validate_parameter_snapshot
 from scopecat.config.validation import coerce_parameter_table_cell
 from scopecat.kernel.content_identity import sha256_json_hash
 from scopecat.kernel.errors import CheckFailed
@@ -37,6 +38,7 @@ from scopecat.records.parameter import (
     StoredParameterValue,
     TableParameterValue,
 )
+from scopecat.records.parameter_content import ParameterContent
 from scopecat.records.parameter_structure import (
     AddParameterColumn,
     AddParameterScalar,
@@ -97,9 +99,8 @@ class StructureCellMapping(BaseModel):
     evidence: StructureValueDecision | None = None
 
 
-class ParameterStructurePreview(BaseModel):
+class ParameterStructurePreviewBase(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
-    config: ConfigProfileSnapshot = Field(repr=False)
     origin: ParameterStructureOrigin = Field(repr=False)
     impacts: tuple[StructureColumnImpact, ...]
     missing_values: tuple[str, ...]
@@ -109,6 +110,14 @@ class ParameterStructurePreview(BaseModel):
         "Affected parameter identities are reported. Arbitrary compiler and analysis "
         "code is not enumerated; preview each dependent experiment before use."
     )
+
+
+class ParameterStructurePreview(ParameterStructurePreviewBase):
+    config: ConfigProfileSnapshot = Field(repr=False)
+
+
+class ParameterContentPreview(ParameterStructurePreviewBase):
+    content: ParameterContent = Field(repr=False)
 
 
 def parameter_structure_version(catalog: ParameterCatalog) -> Sha256ContentHash:
@@ -131,6 +140,40 @@ def preview_parameter_structure(
         raise ValueError("base configuration does not match this structure draft")
     if parameter_structure_version(config.parameter_catalog) != plan.structure_version:
         raise ValueError("parameter structure changed since this draft was prepared")
+    preview = preview_parameter_content(
+        ParameterContent(
+            parameter_catalog=config.parameter_catalog,
+            parameter_snapshot=config.parameter_snapshot,
+        ),
+        edits=plan.edits,
+        consumers=plan.consumers,
+    )
+    result = config.model_copy(
+        update={
+            "system": config.system.model_copy(
+                update={"parameter_catalog": preview.content.parameter_catalog}
+            ),
+            "parameter_snapshot": preview.content.parameter_snapshot,
+        }
+    )
+    validate_context_config(result)
+    return ParameterStructurePreview(
+        config=result,
+        origin=preview.origin,
+        impacts=preview.impacts,
+        missing_values=preview.missing_values,
+        cell_mappings=preview.cell_mappings,
+        consumers=preview.consumers,
+        consumer_scope=preview.consumer_scope,
+    )
+
+
+def preview_parameter_content(
+    config: ParameterContent,
+    *,
+    edits: tuple[ParameterStructureEdit, ...],
+    consumers: tuple[StructureConsumer, ...] = (),
+) -> ParameterContentPreview:
     definitions = {item.id: item for item in config.parameter_catalog.definitions}
     values = {item.id: item for item in config.parameter_snapshot.values}
     impacts: list[StructureColumnImpact] = []
@@ -148,7 +191,7 @@ def preview_parameter_structure(
         if definition.id == value.id and isinstance(definition.value_type, Table)
         for column in definition.value_type.columns
     }
-    for edit in plan.edits:
+    for edit in edits:
         if isinstance(edit, AddParameterScalar | AddParameterTable):
             impacts.append(_add_parameter(edit, definitions, values))
             continue
@@ -261,17 +304,19 @@ def preview_parameter_structure(
     catalog = ParameterCatalog(
         id=config.parameter_catalog.id, definitions=tuple(definitions.values())
     )
-    result = config.model_copy(
-        update={
-            "system": config.system.model_copy(update={"parameter_catalog": catalog}),
-            "parameter_snapshot": ParameterSnapshot(
-                id=config.parameter_snapshot.id, values=tuple(values.values())
-            ),
-        }
+    result = ParameterContent(
+        parameter_catalog=catalog,
+        parameter_snapshot=ParameterSnapshot(
+            id=config.parameter_snapshot.id, values=tuple(values.values())
+        ),
     )
-    validate_context_config(result)
+    value_problems = validate_parameter_snapshot(
+        catalog, result.parameter_snapshot, allow_missing=True
+    )
+    if value_problems:
+        raise CheckFailed(value_problems)
     consumer_impacts: list[StructureConsumerImpact] = []
-    for consumer in plan.consumers:
+    for consumer in consumers:
         problems: list[Problem] = []
         for contract in consumer.contracts:
             try:
@@ -281,12 +326,12 @@ def preview_parameter_structure(
         consumer_impacts.append(
             StructureConsumerImpact(name=consumer.name, problems=tuple(problems))
         )
-    return ParameterStructurePreview(
-        config=result,
+    return ParameterContentPreview(
+        content=result,
         origin=ParameterStructureOrigin(
-            before_version=plan.structure_version,
+            before_version=parameter_structure_version(config.parameter_catalog),
             after_version=parameter_structure_version(catalog),
-            edits=plan.edits,
+            edits=edits,
         ),
         impacts=tuple(impacts),
         missing_values=missing_context_values(result),

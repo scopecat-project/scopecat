@@ -33,6 +33,7 @@ from scopecat.records.parameter_change import (
     ParameterChangeProposal,
     ParameterValueDelta,
 )
+from scopecat.records.parameter_content import ParameterContent
 
 MAX_COMMON_BASE_PROPOSALS = 200
 
@@ -51,7 +52,7 @@ class CommonBaseCandidateMergeResult:
 
 def merge_parameter_branches(
     *,
-    base: ConfigProfileSnapshot,
+    base: ConfigProfileSnapshot | ParameterContent,
     local: ParameterSnapshot,
     current: ParameterSnapshot,
 ) -> ParameterSnapshot:

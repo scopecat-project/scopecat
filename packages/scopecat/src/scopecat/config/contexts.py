@@ -21,6 +21,7 @@ from scopecat.records.parameter import (
     ScalarParameterValue,
     TableParameterValue,
 )
+from scopecat.records.parameter_content import ParameterContent
 from scopecat.records.parameter_structure import StructureValueDecision
 
 
@@ -181,7 +182,9 @@ def context_value_origins(
     return tuple(origins)
 
 
-def missing_context_values(config: ConfigProfileSnapshot) -> tuple[str, ...]:
+def missing_context_values(
+    config: ConfigProfileSnapshot | ParameterContent,
+) -> tuple[str, ...]:
     """Describe unknown values without confusing them with invalid provided values."""
     missing: list[str] = []
     for definition in config.parameter_catalog.definitions:

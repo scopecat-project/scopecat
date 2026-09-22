@@ -43,13 +43,12 @@ for group in fitted.groups:
     assert group.publication.dataset("curve").table.num_rows == 21
 research = session.save_research_project(
     "teaching-groups", ResearchProjectEdit(name="教学分组"))
-session.associate_research_member(research.id, "samples", "teaching-synthetic")
 session.associate_research_member(research.id, "runs", run.id)
 history = session.list_runs(history=RunHistoryFilter(research_project=research.id))
 assert history.items[0].run_id == run.id
 (project.root / "grouped-run.json").write_text(json.dumps({
     "run_id": run.id, "publication_id": fitted.publication.id,
-    "parameter_version": version.name}), encoding="utf-8")
+    "parameter_version": version.id}), encoding="utf-8")
 session.close()
 """,
 )

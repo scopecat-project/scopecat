@@ -10,6 +10,7 @@ from scopecat.application.author_project import AuthorProject
 from scopecat.application.experiment_plans import plan_definition, plan_launch_request
 from scopecat.application.launch import LaunchPreview
 from scopecat.application.launch_config import resolve_launch_config
+from scopecat.config.parameter_updates import replace_scalar_parameter
 from scopecat.config.registry.records import BoundParameterRegistrySource
 from scopecat.daemon.client import DaemonClient
 from scopecat.daemon.views import ConfigEntryView
@@ -19,6 +20,7 @@ from scopecat.daemon.wire import (
     SampleCreateCommand,
     SetupSaveCommand,
 )
+from scopecat.kernel.quantity import Quantity
 from scopecat.records.config_context import ConfigContextRef
 from scopecat.records.experiment_plan import ExperimentPlanSave
 from scopecat.records.experimental_batch import ExperimentalBatchEdit
@@ -289,13 +291,25 @@ def test_prepared_inputs_share_subject_batch_and_working_point_resolution(
                     action="preview",
                     experiment="test",
                     version="1",
-                    selection=selected.science,
+                    selection=selected.science.model_copy(
+                        update={
+                            "configuration": ParameterConfiguration(
+                                ref=parameters.ref,
+                                overrides=(
+                                    replace_scalar_parameter(
+                                        "drive_frequency", Quantity(5.2, "GHz")
+                                    ),
+                                ),
+                            ),
+                        }
+                    ),
                 )
                 original = resolve_launch_config(lab, request)
                 source = original.reviewed.config_source
                 assert isinstance(source, ParameterRunConfigSource)
                 assert source.parameters == parameters.ref
                 assert source.setup == setup.ref
+                assert source.overrides
                 saved_branch = session.parameter_branch.save(
                     catalog=parameters.catalog,
                     parameters=parameters.parameters.model_copy(
@@ -345,7 +359,7 @@ def test_prepared_inputs_share_subject_batch_and_working_point_resolution(
                 )
                 assert checked.manual_state is not None
                 assert definition.selection.configuration == ParameterConfiguration(
-                    ref=parameters.ref, setup=setup.ref
+                    ref=parameters.ref, setup=setup.ref, overrides=source.overrides
                 )
                 plan = runtime.application.plans.save(
                     ExperimentPlanSave(

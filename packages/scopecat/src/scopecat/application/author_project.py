@@ -21,10 +21,11 @@ from scopecat.api.apparatus_history import LabApparatusOperations
 from scopecat.api.lab import LabClient
 from scopecat.api.parameter_candidates import ParameterCandidate
 from scopecat.api.parameter_revisions import (
+    BranchParameterEditor,
     LabParameterOperations,
     ParameterBranchWorkspace,
 )
-from scopecat.api.parameters import ParameterWorkspace
+from scopecat.api.parameters import ParameterEditor
 from scopecat.api.published_analysis import (
     AnalysisGroupResult,
     AnalysisResult,
@@ -85,7 +86,10 @@ from scopecat.records.measurement import MeasurementRecord
 from scopecat.records.parameter_revision import ParameterRevision, ParameterRevisionRef
 from scopecat.records.parameter_update import ParameterUpdate
 from scopecat.records.plan_ref import ExperimentPlanRef, PlanAnalysisSource
-from scopecat.records.run import AnalysisCandidateRunConfigSource
+from scopecat.records.run import (
+    AnalysisCandidateRunConfigSource,
+    ParameterRunConfigSource,
+)
 from scopecat.records.run_request import AxisValuesSourceRecord
 from scopecat.records.scientific_scope import DeclaredBatch, UnscopedBatch
 from scopecat.records.scientific_selection import (
@@ -137,6 +141,7 @@ class AuthorProject(DaemonClient):
         self._source_project = source_project
         self._selection = SessionContext()
         self._parameter_branch: ParameterBranchWorkspace | None = None
+        self._parameter_editor: BranchParameterEditor | None = None
 
     @property
     def selection(self) -> SessionContext:
@@ -152,6 +157,7 @@ class AuthorProject(DaemonClient):
                         ),
                     }
                 ),
+                "parameter_branch": self._parameter_branch.head.name,
             }
         )
 
@@ -161,6 +167,13 @@ class AuthorProject(DaemonClient):
         if self._parameter_branch is None:
             raise ValueError("select a parameter branch first")
         return self._parameter_branch
+
+    @property
+    def params(self) -> BranchParameterEditor:
+        """Edit the selected branch with the shared table/scalar workspace."""
+        if self._parameter_editor is None:
+            self._parameter_editor = BranchParameterEditor(self.parameter_branch)
+        return self._parameter_editor
 
     def use(self, **changes: Unpack[SessionContextUpdate]) -> SessionContext:
         """Validate and atomically update this client's defaults for future work.
@@ -207,6 +220,8 @@ class AuthorProject(DaemonClient):
         self._selection = selected
         if branch is not None:
             branch.operations = LabParameterOperations(self, operator=selected.operator)
+        if branch is not self._parameter_branch:
+            self._parameter_editor = None
         self._parameter_branch = branch
         return selected
 
@@ -464,7 +479,7 @@ class AuthorProject(DaemonClient):
         context: ConfigContextRef | SessionDefault | None,
         sample: str | SessionDefault | None,
         batch: str | SessionDefault | None,
-        parameters: ParameterWorkspace | None,
+        parameters: ParameterEditor | None,
         candidate: ParameterCandidate | CandidateConfig | None,
         overrides: tuple[ParameterUpdate, ...],
     ) -> ScientificSelection:
@@ -484,7 +499,7 @@ class AuthorProject(DaemonClient):
                 raise ValueError(
                     "parameters/candidate already selects scientific context"
                 )
-            science = ScientificSelection()
+            science = defaults.science
         else:
             base = ScientificSelection() if context is None else defaults.science
             science = self._select_science(base, changes)
@@ -541,6 +556,16 @@ class AuthorProject(DaemonClient):
         if parameters is not None:
             frozen = parameters.freeze()
             source = frozen.config_source
+            if isinstance(source, ParameterRunConfigSource):
+                return science.model_copy(
+                    update={
+                        "configuration": ParameterConfiguration(
+                            ref=source.parameters,
+                            setup=source.setup,
+                            overrides=source.overrides,
+                        ),
+                    }
+                )
             science = ScientificSelection(
                 subject=SampleSubjectChoice(
                     sample_id=source.sample.sample_id, revision=source.sample.revision
@@ -561,7 +586,7 @@ class AuthorProject(DaemonClient):
         control_edits: dict[str, ControlEdit] | None = None,
         fixed: Mapping[str, SupportsFloat | Quantity] | None = None,
         scans: Mapping[str, Iterable[SupportsFloat | Quantity]] | None = None,
-        parameters: ParameterWorkspace | None = None,
+        parameters: ParameterEditor | None = None,
         candidate: ParameterCandidate | CandidateConfig | None = None,
         code_revision: AuthorRevisionRef | None = None,
         inputs: dict[str, JsonValue] | None = None,

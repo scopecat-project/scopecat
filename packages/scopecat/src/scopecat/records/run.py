@@ -11,6 +11,7 @@ from scopecat.kernel.run_outcome import RunOutcome, RunStatus, utc_now
 from scopecat.records.config import ConfigContentHash
 from scopecat.records.config_context import ContextRunConfigSource
 from scopecat.records.parameter_revision import ParameterRevisionRef
+from scopecat.records.parameter_update import ParameterUpdate
 from scopecat.records.sample import SampleBinding
 from scopecat.records.scientific_binding import ResolvedScientificBinding
 from scopecat.records.setup import SetupRevisionRef
@@ -39,6 +40,7 @@ class ParameterRunConfigSource(BaseModel):
     parameters: ParameterRevisionRef
     setup: SetupRevisionRef
     content_hash: ConfigContentHash
+    overrides: tuple[ParameterUpdate, ...] = Field(default=(), max_length=256)
 
 
 class AnalysisCandidateRunConfigSource(BaseModel):

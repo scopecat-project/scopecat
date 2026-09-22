@@ -45,7 +45,8 @@ session = project.authoring()
 bookmark = json.loads(
     (project.root / "notebooks/first-run.json").read_text(encoding="utf-8")
 )
-params = session.config.workspace(context=bookmark["parameter_version"])
+session.use(parameter_branch=bookmark["parameter_branch"])
+params = session.params
 drive = params[Drive]
 run = session.run(bookmark["run_id"])
 report = analyze_rabi(session, run)

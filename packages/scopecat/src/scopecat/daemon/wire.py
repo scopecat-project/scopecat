@@ -234,6 +234,7 @@ class ParameterBindCommand(_WireModel):
 class ParameterResolveCommand(_WireModel):
     parameters: ParameterRevisionRef
     setup: SetupRevisionRef
+    overrides: tuple[ParameterUpdate, ...] = Field(default=(), max_length=256)
 
 
 class DirectConfigRevisionSource(_WireModel):
