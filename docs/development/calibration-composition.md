@@ -121,6 +121,13 @@ unknown-outcome recovery belong to each durable procedure. Stop-before-cycle,
 stop-after-planning, bounded dispatch, lease races and transport backoff remain
 covered independently of the legacy cohort fixtures.
 
+The notebook client no longer constructs a cohort facade or accepts calibration
+and publication registries. `LabClient.calibrations` and the root `calibration` /
+`Calibration*` authoring exports are retired. Ordinary authors use registered
+procedures and independent parameter candidates. The remaining low-level cohort
+planners, publication helpers, daemon endpoints and stored records are not a
+second recommended author workflow; they remain for a separate backend retirement.
+
 ## Remaining implementation order
 
 1. Define scientific freshness/applicability over explicit parameter dependencies,

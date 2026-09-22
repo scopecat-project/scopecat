@@ -1,33 +1,10 @@
+"""Keep retired cohort authoring out of the ordinary notebook entry point."""
+
 import subprocess
 import sys
 
-import scopecat as sc
-from scopecat.api.calibration_planner import CalibrationPlanningContext
-from scopecat.automation import (
-    CalibrationDependencyEvidence,
-    CalibrationDependencyRequirement,
-    CalibrationObservation,
-    CalibrationTargetRef,
-    calibration,
-)
 
-
-def test_root_facade_exports_calibration_authoring_contract() -> None:
-    assert sc.calibration is calibration
-    assert sc.CalibrationObservation is CalibrationObservation
-    assert sc.CalibrationDependencyRequirement is CalibrationDependencyRequirement
-    assert sc.CalibrationDependencyEvidence is CalibrationDependencyEvidence
-    assert sc.CalibrationTargetRef is CalibrationTargetRef
-    assert sc.CalibrationPlanningContext is CalibrationPlanningContext
-    assert {
-        "calibration",
-        "CalibrationObservation",
-        "CalibrationTargetRef",
-        "CalibrationPlanningContext",
-    } <= set(sc.__all__)
-
-
-def test_root_facade_keeps_calibration_runtime_lazy() -> None:
+def test_notebook_client_does_not_assemble_legacy_calibration_runtime() -> None:
     result = subprocess.run(
         [
             sys.executable,
@@ -35,14 +12,23 @@ def test_root_facade_keeps_calibration_runtime_lazy() -> None:
             """
 import sys
 import scopecat
+from scopecat.api.lab import LabClient
+from scopecat.daemon.client import DaemonClient
 
-if "scopecat.api.calibration_planner" in sys.modules:
-    raise SystemExit("root import eagerly loaded the calibration planner")
-if "CalibrationPlanningContext" not in scopecat.__all__:
-    raise SystemExit("root facade does not publish calibration authoring")
-scopecat.CalibrationPlanningContext
-if "scopecat.api.calibration_planner" not in sys.modules:
-    raise SystemExit("lazy calibration authoring export did not resolve")
+with DaemonClient("http://daemon.test") as daemon:
+    lab = LabClient(daemon)
+    assert lab.procedures is not None
+    assert not hasattr(lab, "calibrations")
+
+assert "calibration" not in scopecat.__all__
+assert not any(name.startswith("Calibration") for name in scopecat.__all__)
+for module in (
+    "scopecat.api.calibrations",
+    "scopecat.api.calibration_planner",
+    "scopecat.api.calibration_finalizer",
+    "scopecat.api.calibration_policy",
+):
+    assert module not in sys.modules, module
 """,
         ],
         check=False,

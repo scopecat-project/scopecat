@@ -247,8 +247,9 @@ DRAG application no longer registers or recommends it. New branch workflows use
 explicit requested targets and joint verification; scientific freshness over
 independent parameter dependencies still needs a replacement design.
 
-The project application may also register a small immutable
-`CalibrationRegistry`. Each `CalibrationDefinition` owns a typed target
+The remaining low-level evaluator accepts an immutable `CalibrationRegistry`;
+application and notebook-client registration have been retired, along with the
+root `calibration` authoring exports. Each legacy `CalibrationDefinition` owns a typed target
 selector, a typed input/dependency observer, and a pure intent builder. One
 cycle resolves one exact saved configuration or working-point head. The selector,
 observer, and builder receive that same frozen planning context. A publishing
@@ -418,9 +419,9 @@ successful response is validated against that frozen plan. If transport loss, a
 server failure, or an invalid response leaves the outcome uncertain,
 reconciliation only reopens the exact operation and finalization; it does not
 refresh the destination head, rebuild contributions, or issue a new intent. An
-unclassified outcome retains the original plan and is always retryable by the
-resident backoff loop, even when the immediate cause was response validation or
-receipt drift.
+unclassified outcome retains the original plan. The legacy helper reports a
+typed unknown outcome even when the immediate cause was response validation or
+receipt drift; the standard resident worker no longer retries this legacy path.
 
 Automatic publication policies are immutable, fingerprinted, and pinned into
 the cohort spec. The legacy low-level policy registry retains exact historical
@@ -428,7 +429,7 @@ capability needed to drain already-admitted cohorts, independently of its active
 admission bindings. Multiple policy versions may therefore target the same exact
 calibration definition; a manually assembled legacy evaluator selects one active policy
 when that selection is otherwise ambiguous. The planning callback sees only
-read-only procedure/run projections and plan builders; the resident engine alone
+read-only procedure/run projections and plan builders; the legacy finalizer alone
 owns publish, defer, and attention mutations. Ready work is durable and
 capability-filtered by every retained exact policy reference, while new cohorts
 pin only the selected active binding. Discovery uses a finite insertion-sequence

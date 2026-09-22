@@ -4,6 +4,9 @@ The former `scopecat automation work --working-point ...` workflow and applicati
 cohort/publication registries are retired development interfaces. They coupled
 scientific scope, parameter history and automatic freshness to a saved full
 configuration. New workers do not enroll or drain these cohorts automatically.
+`LabClient.calibrations`, its constructor registry options and the root
+`scopecat.calibration` / `Calibration*` exports are also removed. There is no
+compatibility wrapper that translates old full-config policies to branch policies.
 
 Use [parameter-branch calibration procedures](automate-parameter-calibration.md).
 Each request freezes its target list, scientific subject, exact parameter/setup

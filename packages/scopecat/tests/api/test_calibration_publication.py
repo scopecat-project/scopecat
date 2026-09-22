@@ -18,7 +18,6 @@ from scopecat.api.calibration_publication import (
     calibration_cohort_merge_revision_source,
     publish_calibration_cohort,
 )
-from scopecat.api.lab import LabClient
 from scopecat.api.procedures import LabProcedureOperations, ProcedureHandle
 from scopecat.api.published_analysis import PublishedAnalysis
 from scopecat.api.run import RunHandle
@@ -68,7 +67,6 @@ from scopecat.config.registry.records import (
 )
 from scopecat.config.scientific_binding import bind_scientific_evidence
 from scopecat.daemon.client import (
-    DaemonClient,
     DaemonConflictError,
     DaemonNotFoundError,
     DaemonUnavailableError,
@@ -426,13 +424,6 @@ def test_unknown_publish_reconciliation_rejects_exact_operation_drift() -> None:
         publish_calibration_cohort(operations, plan)
     assert operations.publish_calls == 1
     assert operations.lookup_ids == [plan.operation_id]
-
-
-def test_lab_client_wires_its_exact_procedure_and_read_session() -> None:
-    lab = LabClient(cast("DaemonClient", object()))
-
-    assert lab.calibrations._publication_session is lab
-    assert lab.calibrations._procedures is lab.procedures
 
 
 @dataclass(slots=True)

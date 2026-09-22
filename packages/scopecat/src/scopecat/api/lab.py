@@ -13,9 +13,6 @@ from scopecat.api._remote import RemoteRunOperations
 from scopecat.api._runner import _DaemonRunner
 from scopecat.api.analysis import AnalysisContext, AnalysisStep
 from scopecat.api.apparatus_history import LabApparatusOperations
-from scopecat.api.calibration_planner import CalibrationPlanningContext
-from scopecat.api.calibration_policy import CalibrationPublicationPolicyRegistry
-from scopecat.api.calibrations import LabCalibrationOperations
 from scopecat.api.instruments import LabInstrumentOperations
 from scopecat.api.parameter_revisions import LabParameterOperations
 from scopecat.api.plans import LabPlanOperations
@@ -29,7 +26,6 @@ from scopecat.api.samples import LabSampleOperations, SampleHandle, SampleOperat
 from scopecat.api.setup import LabSetupOperations
 from scopecat.authoring.experiments import Experiment, ExperimentInvocation
 from scopecat.automation import ProcedureRegistry, ProcedureScheduleRegistry
-from scopecat.automation.calibration_definition import CalibrationRegistry
 from scopecat.config.candidates import CandidateConfig
 from scopecat.control.models import ControlRunState
 from scopecat.daemon.client import DaemonClient
@@ -171,8 +167,6 @@ class LabClient:
         procedure_schedules: (
             ProcedureScheduleRegistry[ProcedurePlanningContext] | None
         ) = None,
-        calibrations: CalibrationRegistry[CalibrationPlanningContext] | None = None,
-        calibration_publications: CalibrationPublicationPolicyRegistry | None = None,
         operator: str = "operator",
     ) -> None:
         self._owns_client = isinstance(daemon, str)
@@ -209,20 +203,6 @@ class LabClient:
                 procedure_schedules
                 if procedure_schedules is not None
                 else ProcedureScheduleRegistry()
-            ),
-        )
-        self._calibrations = LabCalibrationOperations(
-            client=self._client,
-            config=self._config,
-            procedures=self._procedures,
-            publication_session=self,
-            registry=(
-                calibrations if calibrations is not None else CalibrationRegistry()
-            ),
-            publication_registry=(
-                calibration_publications
-                if calibration_publications is not None
-                else CalibrationPublicationPolicyRegistry()
             ),
         )
 
@@ -297,10 +277,6 @@ class LabClient:
     @property
     def procedures(self) -> LabProcedureOperations:
         return self._procedures
-
-    @property
-    def calibrations(self) -> LabCalibrationOperations:
-        return self._calibrations
 
     def health(self) -> DaemonHealth:
         return self._control.health()
