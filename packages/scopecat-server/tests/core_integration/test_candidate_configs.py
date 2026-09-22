@@ -24,7 +24,7 @@ from scopecat.kernel.errors import CheckFailed, Conflict, DataIntegrityError
 from scopecat.kernel.quantity import Quantity
 from scopecat.records.parameter import ScalarParameterValue
 from scopecat.records.parameter_change import ParameterChangeProposal
-from scopecat_testkit.config_registry import activate_candidate_config
+from scopecat_testkit.config_registry import activate_candidate_config, initialize_setup
 from scopecat_testkit.instrument_host import compose_test_instruments
 from scopecat_testkit.server.in_process_lab import InProcessLab, in_process_lab
 from scopecat_testkit.server.runtime import (
@@ -246,6 +246,9 @@ def test_candidate_config_rejects_drifted_source_snapshot_before_publish(
 ) -> None:
     lab = _lab(tmp_path)
     run = lab.prepare(load_invocation()).run()
+    initialize_setup(
+        run.config, unit_of_work=sqlite_config_registry_unit_of_work(tmp_path)
+    )
     initial = publish_config_revision(
         revision=ConfigRevision(
             source=DirectConfigRevisionSource(run.config),

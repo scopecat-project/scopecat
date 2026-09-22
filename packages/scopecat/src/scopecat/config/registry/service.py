@@ -58,7 +58,6 @@ from scopecat.config.structure import (
     mapped_structure_origins,
     preview_parameter_structure,
 )
-from scopecat.kernel.content_identity import sha256_json_hash
 from scopecat.kernel.errors import (
     CheckFailed,
     Conflict,
@@ -366,7 +365,13 @@ def publish_config_revision(
 
     _validate_config_revision(revision)
     with unit_of_work() as work:
-        _bootstrap_executable_setup(work, revision, expected_generation)
+        if work.setups.read_current() is None:
+            raise _registry_failure(
+                Conflict,
+                code="config_registry.setup_not_selected",
+                message="select an executable setup before publishing parameters",
+                location=_registry_model_location("setup"),
+            )
         saved = _save_config_revision_locked(
             revision=revision,
             work=work,
@@ -385,53 +390,6 @@ def publish_config_revision(
             activated=activated.activated,
             deltas=saved.deltas,
         )
-
-
-def _bootstrap_executable_setup(
-    work: ConfigRegistryUnitOfWork, revision: ConfigRevision, expected_generation: int
-) -> None:
-    """Only the first full-config publication initializes both independent owners."""
-    if work.setups.read_current() is not None:
-        return
-    if (
-        expected_generation != 0
-        or work.registry.list_entries()
-        or work.setups.list_revisions()
-        or not isinstance(revision.source, DirectConfigRevisionSource)
-    ):
-        raise _registry_failure(
-            Conflict,
-            code="config_registry.setup_not_selected",
-            message="select an executable setup before publishing parameters",
-            location=_registry_model_location("setup"),
-        )
-    setup = ExecutableSetupSnapshot.from_config(revision.source.config)
-    saved = work.setups.save_revision(
-        SetupRevision(
-            id=f"setup-{setup.content_hash.removeprefix('sha256:')}",
-            content_hash=setup.content_hash,
-            setup=setup,
-            actor=revision.actor,
-            note=revision.note,
-        )
-    )
-    command: dict[str, object] = {
-        "revision": saved.ref.model_dump(mode="json"),
-        "expected_generation": 0,
-        "actor": revision.actor,
-        "note": revision.note,
-        "changes": [],
-    }
-    work.setups.activate(
-        revision=saved.ref,
-        expected_generation=0,
-        operation_id=f"bootstrap-setup:{saved.id}",
-        actor=revision.actor,
-        note=revision.note,
-        intent_hash=sha256_json_hash(
-            {"codec": "scopecat.setup-activation.v1", "command": command}
-        ),
-    )
 
 
 def _save_config_revision_locked(

@@ -61,7 +61,10 @@ def services(root: Path) -> tuple[SetupService, SQLiteConfigRegistryStore]:
 
 
 def test_import_retries_and_reopens_without_changing_authority(tmp_path: Path) -> None:
+    from scopecat_testkit.config_registry import initialize_setup
+
     service, registry = services(tmp_path)
+    initialize_setup(load_config(), unit_of_work=registry.write_unit_of_work)
     publish_config_revision(
         revision=ConfigRevision(
             entry_id="default",

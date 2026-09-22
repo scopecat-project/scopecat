@@ -17,12 +17,16 @@ from scopecat.author_workspaces import author_workspace_id
 from scopecat.config.resolution import validate_config_profile
 from scopecat.daemon.wire import (
     ConfigPublishCommand,
-    DirectConfigRevisionSource,
+    ParameterConfigRevisionSource,
+    SetupActivateCommand,
+    SetupSaveCommand,
 )
 from scopecat.project import load_bootstrap_factory
 from scopecat.project_state import ProjectStateServices
 from scopecat.records.config import ConfigProfileSnapshot, config_content_hash
 from scopecat.records.configuration_template import ConfigurationTemplate
+from scopecat.records.parameter_revision import ParameterRevisionContent
+from scopecat.records.setup import ExecutableSetupSnapshot
 from scopecat.runtime_binding import load_runtime_binding
 
 from scopecat_server._startup_diagnostics import stage as startup_stage
@@ -379,21 +383,49 @@ def _bootstrap_config_registry(
         return
     if setup_service.list():
         raise BackendConflict(
-            "initial parameter bootstrap requires an empty setup registry"
+            "existing setup has no parameter default; "
+            "review and explicitly complete initialization"
         )
     # Resolve application-owned inputs only for a genuinely empty registry.
     selected = config() if callable(config) else config
     validated = validate_config_profile(selected)
     digest = config_content_hash(validated).removeprefix("sha256:")
     entry_id = f"daemon-{digest}"
+    note = "imported while bootstrapping a new lab instance"
+    equipment = ExecutableSetupSnapshot.from_config(validated)
+    setup = setup_service.save(
+        SetupSaveCommand(
+            revision_id=f"setup-{equipment.content_hash.removeprefix('sha256:')}",
+            setup=equipment,
+            actor="scopecat",
+            note=note,
+        )
+    )
+    setup_service.activate(
+        SetupActivateCommand(
+            operation_id=f"bootstrap-setup:{setup.id}",
+            revision=setup.ref,
+            expected_generation=0,
+            actor="scopecat",
+            note=note,
+        )
+    )
     config_service.publish_config(
         ConfigPublishCommand(
             operation_id=f"bootstrap-config:{entry_id}",
-            source=DirectConfigRevisionSource(config=validated),
+            source=ParameterConfigRevisionSource(
+                setup=setup.ref,
+                parameters=ParameterRevisionContent(
+                    id=validated.id,
+                    system_id=validated.system.id,
+                    catalog=validated.parameter_catalog,
+                    parameters=validated.parameter_snapshot,
+                ),
+            ),
             entry_id=entry_id,
             actor="scopecat",
             expected_generation=0,
-            note="imported while bootstrapping a new lab instance",
+            note=note,
         )
     )
 

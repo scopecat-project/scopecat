@@ -11,9 +11,17 @@ configuration snapshot and save its setup. Saving adds an immutable revision.
 Review the revision and explicitly activate it to change execution authority.
 The parameter default and working-point versions remain unchanged.
 
-A new empty catalog initializes setup and parameter default together from the
-laboratory's bootstrap configuration. Subsequent source-code changes do not rewrite
-that state. A partly initialized catalog is rejected rather than silently repaired.
+A new empty catalog's startup orchestration explicitly saves and activates setup,
+then publishes its parameter default from the laboratory bootstrap input.
+Parameter publication itself never initializes equipment, including the old
+full-snapshot `set_default` path. Subsequent source-code changes do not rewrite
+initialized state or re-evaluate the bootstrap input.
+
+If startup stops between setup activation and parameter publication, the selected
+setup is retained. Restart reports incomplete initialization instead of repairing
+it automatically. A maintainer must open the retained instance without the seed,
+inspect setup selection and explicitly complete publication using the commands
+below. Do not delete the catalog or rerun initialization over existing choices.
 
 ## Prepare and review in Python
 

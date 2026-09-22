@@ -34,7 +34,7 @@ from scopecat.records.parameter import (
     TableParameterValue,
 )
 from scopecat.records.sample import SampleBinding
-from scopecat_testkit.config_registry import load_config
+from scopecat_testkit.config_registry import initialize_setup, load_config
 from scopecat_testkit.server.runtime import sqlite_config_registry_unit_of_work
 
 
@@ -43,6 +43,7 @@ def test_two_samples_two_working_points_are_saved_without_activation(
 ) -> None:
     uow = sqlite_config_registry_unit_of_work(tmp_path)
     base = load_config()
+    initialize_setup(base, unit_of_work=uow)
     seed = publish_config_revision(
         revision=ConfigRevision(
             source=DirectConfigRevisionSource(base), entry_id="lab", actor="operator"

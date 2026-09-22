@@ -23,6 +23,7 @@ from scopecat.records.parameter import (
 )
 from scopecat_testkit.config_registry import (
     activate_candidate_config,
+    initialize_setup,
     load_config_registry_config,
 )
 from scopecat_testkit.instrument_host import compose_test_instruments
@@ -40,6 +41,7 @@ def test_candidate_config_activation_materializes_table_row_updates(
     tmp_path: Path,
 ) -> None:
     config = _config_with_drive_channels()
+    initialize_setup(config, unit_of_work=sqlite_config_registry_unit_of_work(tmp_path))
     publish_config_revision(
         revision=ConfigRevision(
             source=DirectConfigRevisionSource(config),

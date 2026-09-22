@@ -33,7 +33,7 @@ from scopecat.records.parameter_structure import (
     StructureValueDecision,
 )
 from scopecat.records.sample import SampleBinding
-from scopecat_testkit.config_registry import load_config
+from scopecat_testkit.config_registry import initialize_setup, load_config
 from scopecat_testkit.server.runtime import sqlite_config_registry_unit_of_work
 
 
@@ -74,6 +74,7 @@ def test_structure_save_preserves_source_addresses_and_imported_evidence(
             ),
         }
     )
+    initialize_setup(base, unit_of_work=uow)
     initial = publish_config_revision(
         revision=ConfigRevision(
             source=DirectConfigRevisionSource(base), entry_id="lab", actor="operator"
@@ -245,6 +246,7 @@ def test_cell_patch_round_trip_retains_other_rows_evidence_and_source(
             ),
         }
     )
+    initialize_setup(base, unit_of_work=uow)
     initial = publish_config_revision(
         revision=ConfigRevision(
             source=DirectConfigRevisionSource(base), entry_id="lab", actor="operator"

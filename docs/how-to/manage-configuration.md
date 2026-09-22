@@ -11,6 +11,12 @@ rewrite that source file. Executable setup has its own saved revisions and curre
 selection; see [maintain executable setup](maintain-executable-setup.md). Parameter
 defaults and working points must match that authority before execution.
 
+New author workflows should use [parameter branches](parameter-branches.md);
+the working-point APIs below serve existing calibration/publication consumers.
+Publishing a default, even through full-snapshot `set_default`, requires an
+explicitly selected setup and never creates equipment authority. Ordinary branch
+editing needs no setup and does not publish a shared default.
+
 ## Edit a saved working point in Python
 
 For ordinary parameter edits, open a context that your laboratory project has
