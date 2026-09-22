@@ -36,13 +36,14 @@ class LabSetupOperations:
         """Save reviewed setup and complete parameters, without activating either.
 
         Use a stable name to retry. Select the returned setup explicitly and use
-        configuration.entry.id as the saved configuration for later experiments.
+        parameters with session.use(parameters=result.parameters), or use
+        result.selection to retain the exact imported setup as well.
         """
         return self.client.import_configuration_template(
             ConfigurationTemplateImportCommand(
                 template_id=template.id,
                 content_hash=template.content_hash,
-                entry_id=name,
+                revision_id=name,
                 actor=self.operator,
                 note=note,
             )

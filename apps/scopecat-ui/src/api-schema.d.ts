@@ -4014,17 +4014,17 @@ export interface components {
         ConfigurationTemplateImportCommand: {
             actor: components["schemas"]["NonEmptyText"];
             content_hash: components["schemas"]["Sha256ContentHash"];
-            entry_id: components["schemas"]["NonEmptyText"];
             /**
              * Note
              * @default
              */
             note: string;
+            revision_id: components["schemas"]["NonEmptyText"];
             template_id: components["schemas"]["NonEmptyText"];
         };
         /** ConfigurationTemplateImportResult */
         ConfigurationTemplateImportResult: {
-            configuration: components["schemas"]["ConfigEntryView"];
+            parameters: components["schemas"]["ParameterRevision"];
             setup: components["schemas"]["SetupRevision"];
         };
         /** ConfigurationTemplateList */
@@ -4034,12 +4034,14 @@ export interface components {
         };
         /** ConfigurationTemplateView */
         ConfigurationTemplateView: {
-            config: components["schemas"]["ConfigProfileSnapshot"];
+            catalog: components["schemas"]["ParameterCatalog"];
             content_hash: components["schemas"]["Sha256ContentHash"];
             /** Description */
             description: string;
             id: components["schemas"]["NonEmptyText"];
             label: components["schemas"]["NonEmptyText"];
+            parameters: components["schemas"]["ParameterSnapshot"];
+            setup: components["schemas"]["ExecutableSetupSnapshot"];
         };
         /**
          * ConfigValueOrigin
@@ -7007,6 +7009,29 @@ export interface components {
         ParameterProposalView: {
             approval?: components["schemas"]["ParameterChangeApprovalRecord"] | null;
             proposal: components["schemas"]["ParameterChangeProposal-Output"];
+        };
+        /**
+         * ParameterRevision
+         * @description Independent declarations and values, without execution or validity claims.
+         */
+        ParameterRevision: {
+            /** Actor */
+            actor: string;
+            catalog: components["schemas"]["ParameterCatalog"];
+            content_hash: components["schemas"]["Sha256ContentHash"];
+            /** Id */
+            id: string;
+            /**
+             * Note
+             * @default
+             */
+            note: string;
+            parameters: components["schemas"]["ParameterSnapshot"];
+            /**
+             * Recorded At
+             * Format: date-time
+             */
+            recorded_at?: string;
         };
         /**
          * ParameterRevisionContent

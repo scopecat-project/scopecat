@@ -180,7 +180,8 @@ claim a physics model or deterministic random stream that the provider does not 
 In the workbench's configuration view, **Configuration templates** lists complete
 recipes offered by the current laboratory adapter. Read the description and any
 software model coverage before importing. Import saves a new immutable setup and
-its parameter configuration together; it does not select either as a global
+an independent parameter revision in one transaction; it creates no combined
+configuration entry and does not select either as a global
 default. A template is an initial recipe, not evidence of calibration validity.
 
 Review and activate the imported setup, then use its parameters for a launch.
@@ -205,12 +206,15 @@ session.use(selection=imported.selection)
 prepared = session.prepare(experiment())
 ```
 
-`imported.selection` contains the exact saved parameter reference. It does not
+`imported.selection` contains the exact parameter and setup references. It does not
 invent a sample or working point. To apply parameters from an existing working
 point to another setup, use the explicit setup rebind workflow instead. Source
 refresh preserves this selection. Importing again with the same name and intent
 returns the same records; changing the template or import intent requires a new
-name. Previously imported configurations remain in the normal configuration history.
+name. Imported parameters are available through `lab.parameters.get(name)` and
+`lab.parameters.list()`. To use them with the session's current setup instead,
+call `session.use(parameters=imported.parameters)`; this preserves its subject
+and batch. Parameter records themselves have no setup ownership.
 
 Only templates declared by the running adapter are offered. Selecting a software
 label does not replace the instrument backend or make physical connections virtual.

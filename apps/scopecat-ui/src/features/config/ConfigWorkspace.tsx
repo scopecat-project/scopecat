@@ -44,7 +44,7 @@ export function ConfigWorkspace({
   daemonUnavailable: boolean;
   onOpenRun?: (runId: string) => void;
   onSelectContext?: (context: ConfigContextResolution) => void;
-  onSelectConfiguration?: (ref: components["schemas"]["PlanConfigRef"]) => void;
+  onSelectConfiguration?: (choice: components["schemas"]["ConfigurationChoice-Input"]) => void;
 }) {
   const queryClient = useQueryClient();
   const fileInput = useRef<HTMLInputElement>(null);
@@ -291,8 +291,11 @@ export function ConfigWorkspace({
                     className={secondaryButton}
                     onClick={() =>
                       onSelectConfiguration({
-                        entry_id: selectedEntry.id,
-                        content_hash: selectedEntry.content_hash,
+                        kind: "saved",
+                        ref: {
+                          entry_id: selectedEntry.id,
+                          content_hash: selectedEntry.content_hash,
+                        },
                       })
                     }
                   >

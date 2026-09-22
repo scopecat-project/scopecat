@@ -134,6 +134,7 @@ from pathlib import Path
 
 from scopecat.application import LabBootstrap
 from scopecat.records.configuration_template import ConfigurationTemplate
+from scopecat.records.setup import ExecutableSetupSnapshot
 
 from .configuration import bootstrap_config
 
@@ -143,16 +144,23 @@ def create_bootstrap(_project_root: Path) -> LabBootstrap:
 
     return LabBootstrap(
         bootstrap_config=bootstrap_config,
-        configuration_templates=lambda: (
-            ConfigurationTemplate(
-                id="starter-software",
-                label="Software experiment bench",
-                description=(
-                    "Virtual temperature readings and analytic signal scans. "
-                    "Import fresh parameters without changing existing defaults."
-                ),
-                config=bootstrap_config(),
+        configuration_templates=configuration_templates,
+    )
+
+
+def configuration_templates() -> tuple[ConfigurationTemplate, ...]:
+    config = bootstrap_config()
+    return (
+        ConfigurationTemplate(
+            id="starter-software",
+            label="Software experiment bench",
+            description=(
+                "Virtual temperature readings and analytic signal scans. "
+                "Import fresh parameters without changing existing defaults."
             ),
+            setup=ExecutableSetupSnapshot.from_config(config),
+            catalog=config.parameter_catalog,
+            parameters=config.parameter_snapshot,
         ),
     )
 

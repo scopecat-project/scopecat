@@ -59,7 +59,9 @@ These are distinct responsibilities:
 | Run evidence | Resolved inputs and scientific binding used for that run |
 
 Compilation still consumes a combined snapshot, while run provenance retains
-the independent input references. Working points and old bootstrap/template
+the independent input references. Adapter templates also save independent
+parameter revisions and setup revisions atomically, without selecting defaults.
+Working points and old bootstrap
 consumers still need ownership cleanup, tracked in
 [#754](https://github.com/scopecat-project/scopecat/issues/754). The older
 `lab.config.set_parameter_default(...)` specifically publishes a global default;

@@ -21,7 +21,7 @@ export function ConfigurationTemplatesPanel({
   actor: string;
   activeSetupHash?: string;
   onImported: (result: ConfigurationTemplateImportResult) => Promise<void>;
-  onSelectConfiguration?: (ref: components["schemas"]["PlanConfigRef"]) => void;
+  onSelectConfiguration?: (choice: components["schemas"]["ConfigurationChoice-Input"]) => void;
 }) {
   const templates = useQuery({
     queryKey: ["setup", "templates"],
@@ -73,10 +73,7 @@ export function ConfigurationTemplatesPanel({
       {candidate && (
         <>
           <p>{candidate.description}</p>
-          <ExecutionScenario
-            scenario={candidate.config.system.scenario}
-            label="Template scenario"
-          />
+          <ExecutionScenario scenario={candidate.setup.scenario} label="Template scenario" />
           <button
             className={secondaryButton}
             disabled={!actor.trim() || imported.isPending || Boolean(result)}
@@ -84,7 +81,7 @@ export function ConfigurationTemplatesPanel({
               const next = command ?? {
                 template_id: candidate.id,
                 content_hash: candidate.content_hash,
-                entry_id: createConfigOperationId("template"),
+                revision_id: createConfigOperationId("template"),
                 actor: actor.trim(),
                 note: "",
               };
@@ -103,8 +100,8 @@ export function ConfigurationTemplatesPanel({
       {result && (
         <div role="status">
           <p>
-            Imported setup <code>{result.setup.id}</code> and configuration{" "}
-            <code>{result.configuration.entry.id}</code>.
+            Imported setup <code>{result.setup.id}</code> and parameters{" "}
+            <code>{result.parameters.id}</code>.
           </p>
           <p>
             Review and confirm the imported setup below. Setup selection affects this entire
@@ -117,8 +114,12 @@ export function ConfigurationTemplatesPanel({
               disabled={activeSetupHash !== result.setup.content_hash}
               onClick={() =>
                 onSelectConfiguration({
-                  entry_id: result.configuration.entry.id,
-                  content_hash: result.configuration.entry.content_hash,
+                  kind: "parameters",
+                  ref: {
+                    revision_id: result.parameters.id,
+                    content_hash: result.parameters.content_hash,
+                  },
+                  setup: { revision_id: result.setup.id, content_hash: result.setup.content_hash },
                 })
               }
             >

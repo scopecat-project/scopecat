@@ -12,13 +12,12 @@ from scopecat.config.inventory import (
     InstrumentInventoryRenameRekey,
 )
 from scopecat.config.registry import service as config_registry_service
-from scopecat.config.resolution import validate_config_profile
+from scopecat.config.resolution import compose_configuration, validate_config_profile
 from scopecat.control.models import (
     DurableEventInput,
     InventoryMigrationBlocker,
     ResourceKey,
 )
-from scopecat.daemon.views import ConfigEntryView
 from scopecat.daemon.wire import (
     ConfigurationTemplateImportCommand,
     ConfigurationTemplateImportResult,
@@ -29,9 +28,12 @@ from scopecat.daemon.wire import (
 from scopecat.kernel.content_identity import sha256_json_hash
 from scopecat.kernel.errors import CheckFailed, Conflict, DataIntegrityError, NotFound
 from scopecat.records.configuration_template import ConfigurationTemplate
+from scopecat.records.parameter_revision import (
+    ParameterRevision,
+    parameter_revision_hash,
+)
 from scopecat.records.setup import (
     ActiveSetupView,
-    ExecutableSetupSnapshot,
     SetupRevision,
 )
 
@@ -47,6 +49,9 @@ from scopecat_server.storage.sqlite.calibration_cohorts import (
 )
 from scopecat_server.storage.sqlite.config_registry import SQLiteConfigRegistryStore
 from scopecat_server.storage.sqlite.control_plane import SQLiteControlPlane
+from scopecat_server.storage.sqlite.parameter_revisions import (
+    ParameterRevisionRepository,
+)
 
 
 class SetupService:
@@ -93,10 +98,17 @@ class SetupService:
                 )
             if template.content_hash != command.content_hash:
                 raise BackendConflict("configuration template changed; review it again")
-            setup = ExecutableSetupSnapshot.from_config(template.config)
+            setup = template.setup
+            compose_configuration(
+                setup,
+                id=command.revision_id,
+                system_id="template",
+                catalog=template.catalog,
+                parameters=template.parameters,
+            )
             note = f"Template {template.id} ({template.content_hash})\n{command.note}"
             revision = SetupRevision(
-                id=f"template-setup:{command.entry_id}",
+                id=f"template-setup:{command.revision_id}",
                 content_hash=setup.content_hash,
                 setup=setup,
                 actor=command.actor,
@@ -105,24 +117,21 @@ class SetupService:
             with self._control.write_transaction() as connection:
                 with self._registry.borrowed_unit_of_work(connection) as work:
                     retained = work.setups.save_revision(revision)
-                result = config_registry_service.save_config_revision(
-                    revision=config_registry_service.ConfigRevision(
-                        entry_id=command.entry_id,
+                parameters = ParameterRevisionRepository(connection).save(
+                    ParameterRevision(
+                        id=command.revision_id,
                         actor=command.actor,
                         note=note,
-                        source=config_registry_service.DirectConfigRevisionSource(
-                            config=template.config
+                        catalog=template.catalog,
+                        parameters=template.parameters,
+                        content_hash=parameter_revision_hash(
+                            template.catalog, template.parameters
                         ),
-                    ),
-                    unit_of_work=lambda: self._registry.borrowed_unit_of_work(
-                        connection
                     ),
                 )
             return ConfigurationTemplateImportResult(
                 setup=retained,
-                configuration=ConfigEntryView(
-                    entry=result.entry, config=template.config
-                ),
+                parameters=parameters,
             )
 
     def current(self) -> ActiveSetupView:

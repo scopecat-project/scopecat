@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { ConfigProfileSnapshot } from "../../api-contract";
+import { ApiError } from "../../api-client";
 import { SetupPanel } from "./SetupPanel";
 import {
   activateSetup,
@@ -76,6 +77,26 @@ function renderPanel() {
   );
   return cache;
 }
+it("allows explicit first setup activation without a bootstrap default", async () => {
+  vi.mocked(getActiveSetup).mockRejectedValue(new ApiError("no executable setup", 404));
+  vi.mocked(activateSetup).mockResolvedValue(active);
+  renderPanel();
+  await screen.findByText("Not selected");
+  fireEvent.change(screen.getByLabelText("Saved setup"), { target: { value: "setup-B" } });
+  fireEvent.click(screen.getByRole("button", { name: "Review setup selection" }));
+  expect(activateSetup).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "Confirm setup selection" }));
+  await waitFor(() =>
+    expect(activateSetup).toHaveBeenCalledWith(
+      expect.objectContaining({
+        expected_generation: 0,
+        revision: { revision_id: next.id, content_hash: next.content_hash },
+      }),
+      expect.anything(),
+    ),
+  );
+});
+
 it("saves setup from the selected configuration without activating it", async () => {
   vi.mocked(saveSetupFromConfig).mockResolvedValue(next);
   renderPanel();
