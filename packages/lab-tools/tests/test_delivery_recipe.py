@@ -1,6 +1,7 @@
 """Locked laboratory recipes reuse the application delivery pipeline."""
 
 import json
+import shutil
 import tomllib
 import zipfile
 from pathlib import Path
@@ -119,6 +120,70 @@ def test_default_build_includes_instrument_dependency(recipe, tmp_path, build_to
     lock = (result / "requirements.lock").read_text()
     assert "scopecat-instruments==1.0 --hash=sha256:" in lock
     assert set(json.loads((result / MANIFEST).read_text())["sources"]) == {"public"}
+
+
+def test_managed_recipe_build_uses_explicit_separate_public_checkout(
+    recipe, tmp_path, build_tools
+):
+    external = tmp_path / "separate-checkout"
+    shutil.move(str(tmp_path / "public"), external)
+    document = tomllib.loads(recipe.read_text())["delivery"]
+    local = tmp_path / "lab"
+    project(local, "my-adapter")
+    recipe = local / "delivery.toml"
+    packages = [
+        '"."',
+        *(
+            '{source="public", path=' + json.dumps(name.removeprefix("public/")) + "}"
+            for name in document["packages"][1:]
+        ),
+    ]
+    recipe.write_text(
+        '[delivery]\nlock_project="."\ndependency_group="lab-delivery"\n'
+        "include_project=true\npackages=[" + ",".join(packages) + "]\n"
+    )
+    with pytest.raises(ValueError, match="explicit --source"):
+        delivery.load_recipe(recipe)
+    gui = tmp_path / "gui"
+    gui.mkdir()
+    (gui / "index.html").write_text("<html>workbench</html>")
+    result = delivery.build_managed_delivery(
+        tmp_path / "output", recipe=recipe, source=external, gui=gui
+    )
+    plan = delivery.load_recipe(recipe, public_source=external)
+    assert plan.public_source == external
+    assert plan.lock_project == local
+    assert plan.packages[0] == local
+    assert all(item.is_relative_to(external) for item in plan.packages[1:])
+    assert {
+        Path(command[-1]) for command, _ in build_tools if command[1] == "build"
+    } == set(plan.packages)
+    verify_bundle(result)
+    assert set(json.loads((result / MANIFEST).read_text())["sources"]) == {
+        "public",
+        "lab",
+    }
+
+
+def test_selected_public_root_rejects_package_escape_and_symlinks(recipe, tmp_path):
+    public = tmp_path / "public"
+    original = recipe.read_text()
+    for bad in ("../outside", "/absolute", "C:\\outside"):
+        recipe.write_text(
+            original.replace(
+                'packages=["."',
+                'packages=[{source="public", path=' + json.dumps(bad) + "}",
+            )
+        )
+        with pytest.raises(ValueError, match="relative directories"):
+            delivery.load_recipe(recipe, public_source=public)
+    escaped = public / "escaped"
+    escaped.symlink_to(tmp_path, target_is_directory=True)
+    recipe.write_text(
+        original.replace('packages=["."', 'packages=[{source="public", path="escaped"}')
+    )
+    with pytest.raises(ValueError, match="local pyproject"):
+        delivery.load_recipe(recipe, public_source=public)
 
 
 @pytest.mark.parametrize("bad", ["../outside", "/absolute", "C:\\outside"])

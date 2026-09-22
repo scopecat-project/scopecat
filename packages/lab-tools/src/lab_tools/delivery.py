@@ -56,7 +56,7 @@ class DeliveryRecipe:
     packages: tuple[Path, ...]
 
 
-def load_recipe(path: Path) -> DeliveryRecipe:
+def load_recipe(path: Path, *, public_source: Path | None = None) -> DeliveryRecipe:
     """Resolve a maintained recipe without evaluating Python or shell commands."""
     path = path.resolve()
     document = cast(
@@ -65,19 +65,19 @@ def load_recipe(path: Path) -> DeliveryRecipe:
     if set(document) != {"delivery"} or not isinstance(document["delivery"], dict):
         raise ValueError("recipe requires only a [delivery] table")
     table = cast("dict[str, object]", document["delivery"])
-    if set(table) != {
+    required = {
         "lock_project",
-        "public_source",
         "dependency_group",
         "include_project",
         "packages",
-    }:
+    }
+    if not required <= set(table) or set(table) - required - {"public_source"}:
         raise ValueError(
-            "delivery recipe requires lock_project, public_source, dependency_group, "
+            "delivery recipe requires lock_project, dependency_group, "
             "include_project and packages"
         )
 
-    def directory(value: object) -> Path:
+    def directory(value: object, root: Path) -> Path:
         if (
             not isinstance(value, str)
             or not value.strip()
@@ -87,17 +87,36 @@ def load_recipe(path: Path) -> DeliveryRecipe:
             or ".." in Path(value).parts
         ):
             raise ValueError(
-                "recipe paths must be relative directories within the recipe folder"
+                "recipe paths must be relative directories within their selected root"
             )
-        selected = (path.parent / value).resolve()
+        selected = (root / value).resolve()
         if (
-            not selected.is_relative_to(path.parent)
+            not selected.is_relative_to(root)
             or not (selected / "pyproject.toml").is_file()
         ):
             raise ValueError(
                 f"recipe package/project lacks a local pyproject.toml: {value}"
             )
         return selected
+
+    if public_source is not None:
+        public = public_source.resolve()
+        if not (public / "pyproject.toml").is_file():
+            raise ValueError(f"selected public source lacks pyproject.toml: {public}")
+    elif "public_source" in table:
+        public = directory(table["public_source"], path.parent)
+    else:
+        raise ValueError(
+            "recipe requires public_source or an explicit --source checkout"
+        )
+
+    def package(value: object) -> Path:
+        if isinstance(value, dict):
+            reference = cast("dict[str, object]", value)
+            if set(reference) != {"source", "path"} or reference["source"] != "public":
+                raise ValueError("package reference requires source='public' and path")
+            return directory(reference["path"], public)
+        return directory(value, path.parent)
 
     group = table["dependency_group"]
     include = table["include_project"]
@@ -109,11 +128,11 @@ def load_recipe(path: Path) -> DeliveryRecipe:
     if not isinstance(packages, list) or not packages:
         raise ValueError("packages must list the local packages to build")
     result = DeliveryRecipe(
-        directory(table["lock_project"]),
-        directory(table["public_source"]),
+        directory(table["lock_project"], path.parent),
+        public,
         group,
         include,
-        tuple(directory(item) for item in cast("list[object]", packages)),
+        tuple(package(item) for item in cast("list[object]", packages)),
     )
     if len(set(result.packages)) != len(result.packages):
         raise ValueError("recipe packages contains duplicate directories")
@@ -201,10 +220,10 @@ def build_delivery(
     gui: Path | None = None,
     recipe: Path | None = None,
 ) -> Path:
-    if recipe is not None and (source is not None or notebook):
-        raise ValueError("recipe cannot be combined with source or notebook overrides")
+    if recipe is not None and notebook:
+        raise ValueError("recipe cannot be combined with notebook override")
     plan = (
-        load_recipe(recipe)
+        load_recipe(recipe, public_source=source)
         if recipe is not None
         else _default_recipe((source or REPOSITORY).resolve(), notebook)
     )
@@ -457,7 +476,11 @@ def main() -> None:
     _ = parser.add_argument("--output-home", type=Path)
     _ = parser.add_argument("--release", action="store_true")
     _ = parser.add_argument("--notebook", action="store_true")
-    _ = parser.add_argument("--source", type=Path)
+    _ = parser.add_argument(
+        "--source",
+        type=Path,
+        help="public checkout (also overrides recipe public_source)",
+    )
     _ = parser.add_argument("--recipe", type=Path)
     _ = parser.add_argument("--gui", type=Path)
     args = cast("BuildArguments", cast("object", parser.parse_args()))
