@@ -16,6 +16,7 @@ from scopecat.daemon.views import ConfigEntryView, ParameterResolution
 from scopecat.daemon.wire import (
     ParameterBindCommand,
     ParameterBranchCommitCommand,
+    ParameterBranchPage,
     ParameterResolveCommand,
     ParameterSaveCommand,
 )
@@ -63,6 +64,12 @@ class LabParameterOperations:
 
     def history(self, name: str) -> tuple[ParameterBranch, ...]:
         return self.client.parameter_branch_history(name).items
+
+    def branches(
+        self, *, limit: int = 100, after: str | None = None
+    ) -> ParameterBranchPage:
+        """Browse current heads by name; use next_cursor for subsequent pages."""
+        return self.client.parameter_branches(limit=limit, after=after)
 
     def save(
         self,

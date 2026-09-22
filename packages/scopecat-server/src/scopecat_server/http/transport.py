@@ -223,6 +223,7 @@ from scopecat.daemon.wire import (
     ParameterBindCommand,
     ParameterBranchCommitCommand,
     ParameterBranchHistory,
+    ParameterBranchPage,
     ParameterResolveCommand,
     ParameterRevisionList,
     ParameterSaveCommand,
@@ -894,6 +895,17 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
             scope=run_payload_scope(run_id, operation_id),
             expected_content_hash=f"sha256:{hexdigest}",
             declared_size_bytes=_request_content_length(request),
+        )
+
+    @app.get(f"{_API_PREFIX}/parameters/branches")
+    def list_parameter_branches(
+        limit: Annotated[int, Query(ge=1, le=100)] = 100,
+        after: str | None = None,
+    ) -> ParameterBranchPage:
+        items = application.config.parameter_branch_heads(limit=limit + 1, after=after)
+        return ParameterBranchPage(
+            items=items[:limit],
+            next_cursor=items[limit - 1].name if len(items) > limit else None,
         )
 
     @app.get(f"{_API_PREFIX}/parameters/branches/{{name:path}}")

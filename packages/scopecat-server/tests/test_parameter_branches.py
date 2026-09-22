@@ -53,6 +53,16 @@ def test_branch_history_retries_conflicts_and_reopen(tmp_path: Path) -> None:
         assert response.status_code == 200
         latest = ParameterBranch.model_validate(response.json())
         assert latest.previous == original.revision
+        page = client.get("/api/v1/parameters/branches", params={"limit": 1}).json()
+        assert page["items"] == [latest.model_dump(mode="json")]
+        assert page["next_cursor"] == "chip/daily"
+        final = client.get(
+            "/api/v1/parameters/branches",
+            params={"limit": 1, "after": page["next_cursor"]},
+        ).json()
+        assert [item["name"] for item in final["items"]] == ["chip/trial"]
+        assert final["next_cursor"] is None
+        assert client.get("/api/v1/parameters/branches?limit=0").status_code == 422
         assert (
             client.post(endpoint, json=first.model_dump(mode="json")).json()
             == created.json()

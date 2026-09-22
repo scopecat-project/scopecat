@@ -60,6 +60,37 @@ An unchanged retry after a lost response reuses the pending save command.
 Independent copies retain their editing base and do not move the original
 session's selection when saved.
 
+## Use a notebook's saved parameters in the workbench
+
+On the experiment form, open **Choose parameter branch** in **Measurement context**.
+Choose a branch, review its generation, author, note and version, then click
+**Use this parameter version**. The form retains its subject, batch and operator;
+any previous preview is invalidated. Preview again before acquisition.
+
+The page holds that exact saved revision. Saving the branch in a notebook or
+clicking **Refresh parameter branches** only updates the choices, not the selected
+inputs or an existing preview. To adopt a newer head, explicitly use its version.
+Branches are paginated with **Load more parameter branches**. A failed refresh
+leaves existing inputs intact and blocks adopting a choice until a successful retry.
+**Use lab parameter default** explicitly returns to the shared parameter default.
+
+This chooser reads saved values; unsaved notebook edits remain local. Create,
+edit, fork and rebase branches through the editor above. The chooser does not
+activate a setup or establish calibration validity.
+
+Python callers can browse the same heads without reading every revision:
+
+```python
+page = lab.parameters.branches(limit=100)
+for branch in page.items:
+    print(branch.name, branch.generation, branch.revision.revision_id)
+if page.next_cursor is not None:
+    page = lab.parameters.branches(after=page.next_cursor)
+```
+
+Pages are ordered by branch name and contain only the current head per branch.
+They are a live catalog view; selecting a returned revision pins that version.
+
 ## Prepare without saving value edits
 
 `session.prepare(request, parameters=params)` captures unsaved **value** changes as
@@ -86,5 +117,5 @@ working-point consumers, but new teaching uses the independent branch backend
 without fabricating samples or working points.
 
 Default branch selection, scientific working-point consolidation, graphical
-branch management and equipment/target/binding separation remain follow-up work.
+branch editing and equipment/target/binding separation remain follow-up work.
 No prebaseline data migration or historical-file rewriting is introduced.

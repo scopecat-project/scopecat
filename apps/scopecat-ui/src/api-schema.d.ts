@@ -874,6 +874,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/parameters/branches": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Parameter Branches */
+        get: operations["list_parameter_branches_api_v1_parameters_branches_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/procedures": {
         parameters: {
             query?: never;
@@ -6843,6 +6860,34 @@ export interface components {
         /** @enum {string} */
         OperatorRegionScope: "current" | "selected" | "all";
         ParameterAtomValue: components["schemas"]["scopecat__kernel__quantity__Quantity"] | components["schemas"]["EntityRef"] | boolean | number | string;
+        /** ParameterBranch */
+        ParameterBranch: {
+            /** Actor */
+            actor: string;
+            /** Generation */
+            generation: number;
+            /** Name */
+            name: string;
+            /**
+             * Note
+             * @default
+             */
+            note: string;
+            previous?: components["schemas"]["ParameterRevisionRef"] | null;
+            /**
+             * Recorded At
+             * Format: date-time
+             */
+            recorded_at?: string;
+            revision: components["schemas"]["ParameterRevisionRef"];
+        };
+        /** ParameterBranchPage */
+        ParameterBranchPage: {
+            /** Items */
+            items: components["schemas"]["ParameterBranch"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+        };
         /**
          * ParameterCatalog
          * @description Authored parameter schema in one shape-independent namespace.
@@ -12056,6 +12101,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TargetRevision"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_parameter_branches_api_v1_parameters_branches_get: {
+        parameters: {
+            query?: {
+                after?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ParameterBranchPage"];
                 };
             };
             /** @description Validation Error */

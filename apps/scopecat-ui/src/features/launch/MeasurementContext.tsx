@@ -5,6 +5,7 @@ import { getSamples } from "../samples/sample-api";
 import { ScopeCatalog } from "../context/ScopeCatalog";
 import type { ConfigContextResolution } from "../config/config-api";
 import { TargetPicker } from "./TargetPicker";
+import { ParameterBranchPicker } from "./ParameterBranchPicker";
 import type { LaunchDraft } from "./LaunchDraft";
 
 export function MeasurementContext({
@@ -60,6 +61,14 @@ export function MeasurementContext({
   return (
     <fieldset disabled={draft.pending} className="border border-line rounded p-3 space-y-3">
       <legend className="font-semibold">Measurement context · this page</legend>
+      <ParameterBranchPicker
+        value={configuration}
+        projectId={projectId}
+        disabled={draft.pending}
+        onChange={(choice) =>
+          onChange({ selection: { ...draft.selection, configuration: choice } })
+        }
+      />
       <div className="flex flex-wrap gap-3">
         <label>
           Sample ID{" "}

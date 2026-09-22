@@ -195,6 +195,12 @@ class ConfigService:
             except KeyError as error:
                 raise BackendNotFound("parameter branch was not found") from error
 
+    def parameter_branch_heads(
+        self, *, limit: int, after: str | None
+    ) -> tuple[ParameterBranch, ...]:
+        with self._control.sqlite.read_connection() as connection:
+            return ParameterBranchRepository(connection).heads(limit=limit, after=after)
+
     def parameter_branch_history(self, name: str) -> tuple[ParameterBranch, ...]:
         with self._control.sqlite.read_connection() as connection:
             return ParameterBranchRepository(connection).history(name)

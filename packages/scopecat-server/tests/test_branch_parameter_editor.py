@@ -85,6 +85,13 @@ def test_table_structure_save_copy_rebase_and_fork(session: AuthorProject) -> No
     assert session.parameters.checkout("daily").head.revision == merged.ref
     assert session.parameters.checkout("trial").head.revision == fork.ref
     assert session.selection.parameter_branch == "daily"
+    page = session.parameters.branches(limit=1)
+    assert page.items[0].revision == merged.ref
+    assert page.next_cursor == "daily"
+    assert (
+        session.parameters.branches(after=page.next_cursor).items[0].revision
+        == fork.ref
+    )
 
 
 def test_session_edits_before_setup_and_rejects_invalid_selection_atomically(

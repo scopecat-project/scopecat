@@ -23,6 +23,22 @@ class ParameterBranchRepository:
             ParameterBranch.model_validate_json(cast("str", row[0])) for row in rows
         )
 
+    def heads(self, *, limit: int, after: str | None) -> tuple[ParameterBranch, ...]:
+        rows = cast(
+            "list[sqlite3.Row]",
+            self.connection.execute(
+                "SELECT c.record_json FROM parameter_branch_commits AS c "
+                "JOIN (SELECT name, MAX(generation) AS generation "
+                "FROM parameter_branch_commits WHERE (? IS NULL OR name > ?) "
+                "GROUP BY name ORDER BY name LIMIT ?) AS h "
+                "ON c.name = h.name AND c.generation = h.generation ORDER BY c.name",
+                (after, after, limit),
+            ).fetchall(),
+        )
+        return tuple(
+            ParameterBranch.model_validate_json(cast("str", row[0])) for row in rows
+        )
+
     def get(self, name: str) -> ParameterBranch:
         row = cast(
             "sqlite3.Row | None",

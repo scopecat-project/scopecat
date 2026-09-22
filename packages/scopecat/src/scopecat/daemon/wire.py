@@ -216,6 +216,11 @@ class ParameterBranchHistory(_WireModel):
     items: tuple[ParameterBranch, ...]
 
 
+class ParameterBranchPage(_WireModel):
+    items: tuple[ParameterBranch, ...]
+    next_cursor: str | None = None
+
+
 class ParameterRevisionList(_WireModel):
     items: tuple[ParameterRevision, ...]
 
@@ -1572,6 +1577,7 @@ __all__ = [
     "ParameterBindCommand",
     "ParameterBranchCommitCommand",
     "ParameterBranchHistory",
+    "ParameterBranchPage",
     "ParameterConfigRevisionSource",
     "ParameterResolveCommand",
     "ParameterRevisionList",

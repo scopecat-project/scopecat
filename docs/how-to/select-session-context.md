@@ -68,6 +68,11 @@ one shared kernel share its session, just as they share Python variables.
 
 ## Override one preparation
 
+The workbench's **Measurement context** also offers **Choose parameter branch**
+to adopt a saved parameter version from a notebook. It preserves the page's subject
+and batch and requires a new preview. Refreshing the branch list never replaces
+the selected version automatically; see [parameter branches](parameter-branches.md).
+
 Existing explicit `prepare` arguments keep their meaning:
 
 ```python

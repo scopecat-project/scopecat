@@ -177,6 +177,81 @@ it("shows a project without registered experiments", async () => {
     await screen.findByText("This project has no registered experiments."),
   ).toBeInTheDocument();
 });
+
+it("previews a chosen branch version and invalidates only when another version is adopted", async () => {
+  let generation = 1;
+  const requests: Array<{
+    selection: { configuration: { ref: { revision_id: string } }; subject: unknown };
+  }> = [];
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (request: Request) => {
+      const path = new URL(request.url).pathname;
+      if (path.endsWith("/parameters/branches"))
+        return Response.json({
+          items: [
+            {
+              name: "daily",
+              generation,
+              actor: "Alice",
+              note: "",
+              revision: {
+                revision_id: `values-${generation}`,
+                content_hash: `sha256:${generation}`,
+              },
+            },
+          ],
+          next_cursor: null,
+        });
+      if (path.endsWith("/preview")) {
+        requests.push(await request.json());
+        return Response.json({
+          ...previewResult,
+          reviewed: reviewedFixture({
+            kind: "parameter_revision",
+            parameters: {
+              revision_id: `values-${generation}`,
+              content_hash: `sha256:${generation}`,
+            },
+            setup: { revision_id: "bench", content_hash: "sha256:bench" },
+            content_hash: "sha256:resolved",
+            overrides: [],
+          }),
+        });
+      }
+      return Response.json({ entries: [entry] });
+    }),
+  );
+  mount();
+  fireEvent.change(await screen.findByLabelText("Qubit"), { target: { value: "Q12" } });
+  fireEvent.change(screen.getByLabelText("Amplitude"), { target: { value: "0.4" } });
+  fireEvent.change(screen.getByLabelText("Sample ID"), { target: { value: "chip-a" } });
+  fireEvent.click(screen.getByRole("button", { name: "Choose parameter branch" }));
+  await screen.findByRole("option", { name: /daily.*generation 1/ });
+  fireEvent.change(screen.getByLabelText("Parameter branch"), { target: { value: "daily" } });
+  fireEvent.click(screen.getByRole("button", { name: "Use this parameter version" }));
+  fireEvent.click(screen.getByRole("button", { name: "Preview" }));
+  await screen.findByText("Preview ready");
+  expect(requests[0]?.selection).toEqual({
+    subject: { kind: "sample", sample_id: "chip-a" },
+    batch: { kind: "unscoped" },
+    configuration: {
+      kind: "parameters",
+      ref: { revision_id: "values-1", content_hash: "sha256:1" },
+      overrides: [],
+    },
+  });
+  generation = 2;
+  fireEvent.click(screen.getByRole("button", { name: "Refresh parameter branches" }));
+  await screen.findByRole("option", { name: /generation 2/ });
+  expect(screen.getByText("Preview ready")).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Use this parameter version" }));
+  await waitFor(() => expect(screen.queryByText("Preview ready")).not.toBeInTheDocument());
+  fireEvent.click(screen.getByRole("button", { name: "Preview" }));
+  await screen.findByText("Preview ready");
+  expect(requests[1]?.selection.configuration.ref.revision_id).toBe("values-2");
+  expect(requests[1]?.selection.subject).toEqual(requests[0]?.selection.subject);
+});
 it("shows compilation failure without a successful preview", async () => {
   vi.stubGlobal(
     "fetch",
