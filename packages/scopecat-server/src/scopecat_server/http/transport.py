@@ -221,6 +221,8 @@ from scopecat.daemon.wire import (
     MeasurementIngestReceipt,
     MeasurementSealCommand,
     ParameterBindCommand,
+    ParameterBranchCommitCommand,
+    ParameterBranchHistory,
     ParameterResolveCommand,
     ParameterRevisionList,
     ParameterSaveCommand,
@@ -299,6 +301,7 @@ from scopecat.records.launch_rejection import LaunchRejectionResponse
 from scopecat.records.launch_request import LaunchRequest
 from scopecat.records.manual_preview import ManualPreviewFence, ManualPreviewValidity
 from scopecat.records.measurement_recording import MeasurementDatasetReceipt
+from scopecat.records.parameter_branch import ParameterBranch
 from scopecat.records.parameter_revision import ParameterRevision
 from scopecat.records.plan_ref import ExperimentPlanRef
 from scopecat.records.record_collection import (
@@ -892,6 +895,22 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
             expected_content_hash=f"sha256:{hexdigest}",
             declared_size_bytes=_request_content_length(request),
         )
+
+    @app.get(f"{_API_PREFIX}/parameters/branches/{{name:path}}")
+    def get_parameter_branch(name: str) -> ParameterBranch:
+        return application.config.parameter_branch(name)
+
+    @app.get(f"{_API_PREFIX}/parameters/branch-history/{{name:path}}")
+    def get_parameter_branch_history(name: str) -> ParameterBranchHistory:
+        return ParameterBranchHistory(
+            items=application.config.parameter_branch_history(name)
+        )
+
+    @app.post(f"{_API_PREFIX}/parameters/branch-commits")
+    def commit_parameter_branch(
+        command: ParameterBranchCommitCommand,
+    ) -> ParameterBranch:
+        return application.config.commit_parameter_branch(command)
 
     @app.get(f"{_API_PREFIX}/parameters/revisions")
     def list_parameter_revisions() -> ParameterRevisionList:

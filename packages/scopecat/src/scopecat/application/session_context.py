@@ -24,6 +24,7 @@ class SessionContext(BaseModel):
     science: ScientificSelection = Field(default_factory=ScientificSelection)
     collection: RecordCollectionId | None = None
     operator: str = Field(default="operator", min_length=1)
+    parameter_branch: str | None = None
 
 
 class SessionContextUpdate(TypedDict, total=False):
@@ -33,5 +34,6 @@ class SessionContextUpdate(TypedDict, total=False):
     batch: str | None
     working_point: ConfigContextRef | None
     parameters: str | ParameterRevision | ParameterRevisionRef | None
+    parameter_branch: str | None
     collection: str | None
     operator: str

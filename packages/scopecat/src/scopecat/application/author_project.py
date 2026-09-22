@@ -20,7 +20,10 @@ from scopecat.api._remote import RemoteRunOperations
 from scopecat.api.apparatus_history import LabApparatusOperations
 from scopecat.api.lab import LabClient
 from scopecat.api.parameter_candidates import ParameterCandidate
-from scopecat.api.parameter_revisions import LabParameterOperations
+from scopecat.api.parameter_revisions import (
+    LabParameterOperations,
+    ParameterBranchWorkspace,
+)
 from scopecat.api.parameters import ParameterWorkspace
 from scopecat.api.published_analysis import (
     AnalysisGroupResult,
@@ -133,11 +136,31 @@ class AuthorProject(DaemonClient):
         self.project_root = project_root.resolve() if project_root is not None else None
         self._source_project = source_project
         self._selection = SessionContext()
+        self._parameter_branch: ParameterBranchWorkspace | None = None
 
     @property
     def selection(self) -> SessionContext:
         """Read this client's current defaults without refreshing code or state."""
-        return self._selection
+        if self._parameter_branch is None:
+            return self._selection
+        return self._selection.model_copy(
+            update={
+                "science": self._selection.science.model_copy(
+                    update={
+                        "configuration": ParameterConfiguration(
+                            ref=self._parameter_branch.head.revision
+                        ),
+                    }
+                ),
+            }
+        )
+
+    @property
+    def parameter_branch(self) -> ParameterBranchWorkspace:
+        """The checked-out editing base selected by use(parameter_branch=...)."""
+        if self._parameter_branch is None:
+            raise ValueError("select a parameter branch first")
+        return self._parameter_branch
 
     def use(self, **changes: Unpack[SessionContextUpdate]) -> SessionContext:
         """Validate and atomically update this client's defaults for future work.
@@ -154,17 +177,37 @@ class AuthorProject(DaemonClient):
         scientific_changes = {
             key: value
             for key, value in changes.items()
-            if key not in ("collection", "operator")
+            if key not in ("collection", "operator", "parameter_branch")
         }
-        science = self._select_science(self._selection.science, scientific_changes)
+        branch = self._parameter_branch
+        if any(
+            key in changes
+            for key in ("selection", "sample", "target", "parameters", "working_point")
+        ):
+            branch = None
+        if "parameter_branch" in changes:
+            if any(
+                key in changes for key in ("selection", "parameters", "working_point")
+            ):
+                raise ValueError(
+                    "choose parameter_branch or another parameter selection"
+                )
+            name = changes["parameter_branch"]
+            branch = self.parameters.checkout(name) if name is not None else None
+            scientific_changes["parameters"] = branch.head.revision if branch else None
+        science = self._select_science(self.selection.science, scientific_changes)
         selected = SessionContext(
             science=science,
             collection=changes.get("collection", self._selection.collection),
             operator=changes.get("operator", self._selection.operator),
+            parameter_branch=branch.head.name if branch else None,
         )
         if selected.collection is not None:
             self.record_collection(selected.collection)
         self._selection = selected
+        if branch is not None:
+            branch.operations = LabParameterOperations(self, operator=selected.operator)
+        self._parameter_branch = branch
         return selected
 
     def _select_science(
@@ -425,7 +468,7 @@ class AuthorProject(DaemonClient):
         candidate: ParameterCandidate | CandidateConfig | None,
         overrides: tuple[ParameterUpdate, ...],
     ) -> ScientificSelection:
-        defaults = self._selection
+        defaults = self.selection
         changes: dict[str, object] = {}
         for key, value in (
             ("selection", selection),

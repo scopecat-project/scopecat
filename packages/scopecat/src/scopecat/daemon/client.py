@@ -202,6 +202,8 @@ from scopecat.daemon.wire import (
     MeasurementIngestReceipt,
     MeasurementSealCommand,
     ParameterBindCommand,
+    ParameterBranchCommitCommand,
+    ParameterBranchHistory,
     ParameterResolveCommand,
     ParameterRevisionList,
     ParameterSaveCommand,
@@ -289,6 +291,7 @@ from scopecat.records.measurement_recording import (
     MeasurementDatasetAppend,
     MeasurementDatasetReceipt,
 )
+from scopecat.records.parameter_branch import ParameterBranch
 from scopecat.records.parameter_revision import ParameterRevision
 from scopecat.records.plan_ref import ExperimentPlanRef
 from scopecat.records.record_collection import (
@@ -1032,6 +1035,24 @@ class DaemonClient:
 
     def active_setup(self) -> ActiveSetupView:
         return self._get_model(f"{_API_PREFIX}/setup/active", ActiveSetupView)
+
+    def get_parameter_branch(self, name: str) -> ParameterBranch:
+        return self._get_model(
+            f"{_API_PREFIX}/parameters/branches/{quote(name, safe='')}", ParameterBranch
+        )
+
+    def parameter_branch_history(self, name: str) -> ParameterBranchHistory:
+        return self._get_model(
+            f"{_API_PREFIX}/parameters/branch-history/{quote(name, safe='')}",
+            ParameterBranchHistory,
+        )
+
+    def commit_parameter_branch(
+        self, command: ParameterBranchCommitCommand
+    ) -> ParameterBranch:
+        return self._post_idempotent_model(
+            f"{_API_PREFIX}/parameters/branch-commits", command, ParameterBranch
+        )
 
     def parameter_revision(self, revision_id: str) -> ParameterRevision:
         return self._get_model(

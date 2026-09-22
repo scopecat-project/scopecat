@@ -267,7 +267,8 @@ def test_prepared_inputs_share_subject_batch_and_working_point_resolution(
                     collection=collection.id,
                     operator="alice",
                 )
-                selected = session.use(parameters=parameters)
+                session.parameters.create_branch("daily", revision=parameters)
+                selected = session.use(parameter_branch="daily")
                 assert selected.science.subject == before.science.subject
                 assert selected.science.batch == before.science.batch
                 assert (selected.collection, selected.operator) == (
@@ -295,14 +296,19 @@ def test_prepared_inputs_share_subject_batch_and_working_point_resolution(
                 assert isinstance(source, ParameterRunConfigSource)
                 assert source.parameters == parameters.ref
                 assert source.setup == setup.ref
-                newer = session.parameters.save(
-                    name="revised",
+                saved_branch = session.parameter_branch.save(
                     catalog=parameters.catalog,
                     parameters=parameters.parameters.model_copy(
                         update={"id": "revised"}
                     ),
                 )
-                session.use(parameters=newer)
+                assert session.selection.parameter_branch == "daily"
+                assert session.selection.science.subject == selected.science.subject
+                assert session.selection.science.batch == selected.science.batch
+                assert (
+                    session.selection.science.configuration
+                    == ParameterConfiguration(ref=saved_branch.revision)
+                )
                 assert other.selection.science.configuration == ParameterConfiguration(
                     ref=parameters.ref
                 )
