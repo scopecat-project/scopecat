@@ -42,6 +42,18 @@ across reopen. This provides an independent path; it does not remove the old one
 
 ## Remaining changes, in order
 
+The schema 84 registry now stores `ParameterRevisionContent` separately from
+content-addressed executable setup payloads. Entries retain an exact setup content
+hash; identical setup content is shared without activating or creating a named
+setup revision. Reads reconstruct the existing full execution snapshot and verify
+the retained setup hash. Metadata differences are preserved, even when execution
+semantics are unchanged. Current-format backup/restore includes both parts.
+
+This is a storage split, not yet a parameter-only HTTP/Python registry API. The
+repository port still accepts and returns full configurations, and run evidence
+still retains complete execution snapshots. Do not infer new calibration validity
+or compose historical parameters with the currently active setup on read.
+
 1. Introduce parameter-only registry inputs/revisions and explicit first-use
    orchestration. Move maintained consumers and fixtures, then remove the special
    case that initializes setup during the first full-config publication.

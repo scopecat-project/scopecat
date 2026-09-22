@@ -1,11 +1,17 @@
 """SQLite configuration-registry tables."""
 
 CONFIG_REGISTRY_TABLES_SQL = """
+CREATE TABLE IF NOT EXISTS configuration_setup_contents (
+    content_hash TEXT PRIMARY KEY,
+    setup_json TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS config_registry_entries (
     entry_id TEXT PRIMARY KEY,
     config_ref TEXT NOT NULL UNIQUE,
     entry_json TEXT NOT NULL,
-    config_json TEXT NOT NULL,
+    parameters_json TEXT NOT NULL,
+    setup_content_hash TEXT NOT NULL
+        REFERENCES configuration_setup_contents(content_hash),
     recorded_at TEXT NOT NULL
 );
 

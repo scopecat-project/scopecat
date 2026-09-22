@@ -26,7 +26,9 @@ from scopecat.kernel.problems import (
     StorageLocation,
     problem,
 )
-from scopecat.records.config import ConfigProfileSnapshot
+from scopecat.records.config import ConfigProfileSnapshot, SystemSpec
+from scopecat.records.parameter_revision import ParameterRevisionContent
+from scopecat.records.setup import ExecutableSetupSnapshot
 from scopecat.runs.repository import RunRepository
 
 from scopecat_server.storage.sqlite.connection import SQLiteDatabase
@@ -170,9 +172,12 @@ class SQLiteConfigRegistryRepository:
             row = _one(
                 self._connection.execute(
                     """
-                    SELECT config_json
-                    FROM config_registry_entries
-                    WHERE config_ref = ?
+                    SELECT entries.parameters_json, entries.setup_content_hash,
+                           setups.setup_json
+                    FROM config_registry_entries AS entries
+                    LEFT JOIN configuration_setup_contents AS setups
+                      ON setups.content_hash = entries.setup_content_hash
+                    WHERE entries.config_ref = ?
                     """,
                     (ref,),
                 )
@@ -181,11 +186,34 @@ class SQLiteConfigRegistryRepository:
             raise _storage_failure(ref) from error
         if row is None:
             raise _missing_record(ref)
-        return _parse_model(
-            _text(row, "config_json"),
-            ConfigProfileSnapshot,
+        parameters = _parse_model(
+            _text(row, "parameters_json"),
+            ParameterRevisionContent,
             ref=ref,
             code="config_registry.config_invalid",
+        )
+        setup = _parse_model(
+            _text(row, "setup_json"),
+            ExecutableSetupSnapshot,
+            ref=ref,
+            code="config_registry.setup_invalid",
+        )
+        if setup.content_hash != _text(row, "setup_content_hash"):
+            raise _integrity_failure(
+                ref,
+                code="config_registry.setup_hash_mismatch",
+                message="retained setup content does not match its reference",
+            )
+        return ConfigProfileSnapshot(
+            id=parameters.id,
+            system=SystemSpec.model_validate(
+                {
+                    **setup.model_dump(),
+                    "id": parameters.system_id,
+                    "parameter_catalog": parameters.catalog,
+                }
+            ),
+            parameter_snapshot=parameters.parameters,
         )
 
     def context_head(self, workspace_id: str) -> str:
@@ -370,24 +398,40 @@ class SQLiteConfigRegistryRepository:
         entry: ConfigRegistryEntry,
         config: ConfigProfileSnapshot,
     ) -> None:
+        setup = ExecutableSetupSnapshot.from_config(config)
+        parameters = ParameterRevisionContent(
+            id=config.id,
+            system_id=config.system.id,
+            catalog=config.parameter_catalog,
+            parameters=config.parameter_snapshot,
+        )
         try:
+            self._connection.execute(
+                """
+                INSERT INTO configuration_setup_contents(content_hash, setup_json)
+                VALUES (?, ?) ON CONFLICT(content_hash) DO NOTHING
+                """,
+                (setup.content_hash, _encode_model(setup, ref=entry.config_ref)),
+            )
             self._connection.execute(
                 """
                 INSERT INTO config_registry_entries(
                     entry_id,
                     config_ref,
                     entry_json,
-                    config_json,
+                    parameters_json,
+                    setup_content_hash,
                     recorded_at
                 )
-                VALUES (?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?)
                 ON CONFLICT(entry_id) DO NOTHING
                 """,
                 (
                     entry.id,
                     entry.config_ref,
                     _encode_model(entry, ref=self.entry_ref(entry.id)),
-                    _encode_model(config, ref=entry.config_ref),
+                    _encode_model(parameters, ref=entry.config_ref),
+                    setup.content_hash,
                     entry.recorded_at.isoformat(),
                 ),
             )
