@@ -15,8 +15,11 @@ from scopecat_server.services.config import ConfigService
 
 
 def _declare(monkeypatch: pytest.MonkeyPatch, inputs: LabBootstrap) -> None:
+    def factory(_root: Path) -> LabBootstrap:
+        return inputs
+
     def load_factory(*_args: object, **_kwargs: object) -> object:
-        return lambda _root: inputs
+        return factory
 
     monkeypatch.setattr("scopecat_server.runtime.load_bootstrap_factory", load_factory)
 
