@@ -6,6 +6,7 @@ import sys
 from pathlib import Path
 
 import scopecat as sc
+from scopecat.config.resolution import compose_configuration
 from scopecat.planning.catalog import InstrumentContractCatalog
 from scopecat.records.config import config_content_hash, instrument_bindings
 from scopecat.sdk.instruments import InstrumentProviderContext
@@ -84,8 +85,8 @@ def test_reference_lab_application_loads_selected_project_system(
     infrastructure_path = config_dir / "system-infrastructure.json"
     infrastructure_path.write_text(
         infrastructure_path.read_text().replace(
-            '"id": "reference-lab-system"',
-            '"id": "selected-reference-lab-system"',
+            '"exclusivity_key": "pump-source"',
+            '"exclusivity_key": "selected/pump-source"',
             1,
         )
     )
@@ -96,8 +97,18 @@ def test_reference_lab_application_loads_selected_project_system(
     assert application.build_experiment_system is not None
     assert bootstrap.setup is not None
     assert bootstrap.parameter_defaults is not None
-    selected_config = bootstrap_config(config_dir)
-    assert bootstrap.setup().primary_entity_id == selected_config.primary_entity_id
+    equipment = bootstrap.setup()
+    assert equipment.instrument_registry.instruments[0].exclusivity_key == (
+        "selected/pump-source"
+    )
+    parameters = bootstrap.parameter_defaults()
+    selected_config = compose_configuration(
+        equipment,
+        id=parameters.id,
+        system_id=parameters.system_id,
+        catalog=parameters.catalog,
+        parameters=parameters.parameters,
+    )
     assert selected_config == bootstrap_config(config_dir)
     backend = create_backend(tmp_path)
     provider = backend.provider
