@@ -225,7 +225,7 @@ class ConfigService:
                 source = command.source
                 if isinstance(source, ParameterSaveCommand):
                     problems = validate_parameter_snapshot(
-                        source.catalog, source.parameters
+                        source.catalog, source.parameters, allow_missing=True
                     )
                     if problems:
                         raise CheckFailed(problems)
@@ -267,7 +267,10 @@ class ConfigService:
     ) -> ParameterResolution:
         with self._control.sqlite.read_transaction() as connection:
             return resolve_parameters(
-                connection, parameters=command.parameters, setup=command.setup
+                connection,
+                parameters=command.parameters,
+                setup=command.setup,
+                overrides=command.overrides,
             )
 
     def parameter_revision(self, revision_id: str) -> ParameterRevision:
@@ -279,7 +282,9 @@ class ConfigService:
 
     def save_parameters(self, command: ParameterSaveCommand) -> ParameterRevision:
         with self._config_errors():
-            problems = validate_parameter_snapshot(command.catalog, command.parameters)
+            problems = validate_parameter_snapshot(
+                command.catalog, command.parameters, allow_missing=True
+            )
             if problems:
                 raise CheckFailed(problems)
             revision = ParameterRevision(

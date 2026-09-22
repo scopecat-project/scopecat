@@ -65,6 +65,7 @@ class ParameterConfiguration(_SelectionModel):
     kind: Literal["parameters"] = "parameters"
     ref: ParameterRevisionRef
     setup: SetupRevisionRef | None = None
+    overrides: tuple[ParameterUpdate, ...] = Field(default=(), max_length=256)
 
 
 class WorkingPointConfiguration(_SelectionModel):

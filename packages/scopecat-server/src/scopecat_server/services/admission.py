@@ -321,6 +321,7 @@ class AdmissionService:
                     connection,
                     parameters=source.parameters,
                     setup=source.setup,
+                    overrides=source.overrides,
                 )
             if resolved.config_source != source:
                 raise BackendConflict(

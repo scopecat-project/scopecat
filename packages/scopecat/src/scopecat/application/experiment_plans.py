@@ -90,7 +90,9 @@ def plan_definition(
     configuration = (
         WorkingPointConfiguration(ref=config.context, overrides=config.overrides)
         if isinstance(config, ContextRunConfigSource)
-        else ParameterConfiguration(ref=config.parameters, setup=config.setup)
+        else ParameterConfiguration(
+            ref=config.parameters, setup=config.setup, overrides=config.overrides
+        )
         if isinstance(config, ParameterRunConfigSource)
         else SavedConfiguration(
             ref=PlanConfigRef(

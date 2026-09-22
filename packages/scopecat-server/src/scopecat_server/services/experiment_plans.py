@@ -62,6 +62,7 @@ class ExperimentPlanService:
                 ParameterResolveCommand(
                     parameters=choice.ref,
                     setup=choice.setup,
+                    overrides=choice.overrides,
                 )
             ).config
         elif isinstance(choice, WorkingPointConfiguration):

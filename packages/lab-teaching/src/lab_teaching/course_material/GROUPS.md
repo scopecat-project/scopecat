@@ -35,7 +35,7 @@ print(before, after, params.save() == after)
 
 第三项应为 `True`：没有修改就复用原版本。`save("标签")` 表示另建命名分支，
 日常保存只需 `save()`。重新打开 `open_parameters(session)` 会取教学工作区的最新值；
-`session.config.workspace(context=before.name)` 精确读取旧版本，不追随最新值。
+`session.parameters.get(before.id)` 精确读取旧版本，不追随分支最新值。
 保存不会自动发布共享默认配置，已经 prepare 的请求也不会换成新参数。
 
 **近邻变化：** 再改一次频率并保存。关闭连接后重开，能否找回最新值和指定旧版本？

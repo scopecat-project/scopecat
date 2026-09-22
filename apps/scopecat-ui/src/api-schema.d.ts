@@ -4008,8 +4008,8 @@ export interface components {
             base: components["schemas"]["ConfigContextRef"];
             setup: components["schemas"]["SetupRevisionRef"];
         };
-        "ConfigurationChoice-Input": components["schemas"]["ActiveConfiguration"] | components["schemas"]["ParameterConfiguration"] | components["schemas"]["SavedConfiguration"] | components["schemas"]["WorkingPointConfiguration-Input"] | components["schemas"]["CandidateConfiguration"];
-        "ConfigurationChoice-Output": components["schemas"]["ActiveConfiguration"] | components["schemas"]["ParameterConfiguration"] | components["schemas"]["SavedConfiguration"] | components["schemas"]["WorkingPointConfiguration-Output"] | components["schemas"]["CandidateConfiguration"];
+        "ConfigurationChoice-Input": components["schemas"]["ActiveConfiguration"] | components["schemas"]["ParameterConfiguration-Input"] | components["schemas"]["SavedConfiguration"] | components["schemas"]["WorkingPointConfiguration-Input"] | components["schemas"]["CandidateConfiguration"];
+        "ConfigurationChoice-Output": components["schemas"]["ActiveConfiguration"] | components["schemas"]["ParameterConfiguration-Output"] | components["schemas"]["SavedConfiguration"] | components["schemas"]["WorkingPointConfiguration-Output"] | components["schemas"]["CandidateConfiguration"];
         /** ConfigurationTemplateImportCommand */
         ConfigurationTemplateImportCommand: {
             actor: components["schemas"]["NonEmptyText"];
@@ -5640,8 +5640,8 @@ export interface components {
             /** Version */
             version: string;
         };
-        "LaunchConfigSource-Input": components["schemas"]["ConfigRegistryRunConfigSource"] | components["schemas"]["ParameterRunConfigSource"] | components["schemas"]["ContextRunConfigSource-Input"] | components["schemas"]["AnalysisCandidateRunConfigSource"];
-        "LaunchConfigSource-Output": components["schemas"]["ConfigRegistryRunConfigSource"] | components["schemas"]["ParameterRunConfigSource"] | components["schemas"]["ContextRunConfigSource-Output"] | components["schemas"]["AnalysisCandidateRunConfigSource"];
+        "LaunchConfigSource-Input": components["schemas"]["ConfigRegistryRunConfigSource"] | components["schemas"]["ParameterRunConfigSource-Input"] | components["schemas"]["ContextRunConfigSource-Input"] | components["schemas"]["AnalysisCandidateRunConfigSource"];
+        "LaunchConfigSource-Output": components["schemas"]["ConfigRegistryRunConfigSource"] | components["schemas"]["ParameterRunConfigSource-Output"] | components["schemas"]["ContextRunConfigSource-Output"] | components["schemas"]["AnalysisCandidateRunConfigSource"];
         /** LaunchControl */
         LaunchControl: {
             /** Default */
@@ -6951,12 +6951,35 @@ export interface components {
          * ParameterConfiguration
          * @description Independent parameters; omitted setup resolves current authority at preview.
          */
-        ParameterConfiguration: {
+        "ParameterConfiguration-Input": {
             /**
              * @description discriminator enum property added by openapi-typescript
              * @enum {string}
              */
             kind: "parameters";
+            /**
+             * Overrides
+             * @default []
+             */
+            overrides: components["schemas"]["ParameterUpdate-Input"][];
+            ref: components["schemas"]["ParameterRevisionRef"];
+            setup?: components["schemas"]["SetupRevisionRef"] | null;
+        };
+        /**
+         * ParameterConfiguration
+         * @description Independent parameters; omitted setup resolves current authority at preview.
+         */
+        "ParameterConfiguration-Output": {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "parameters";
+            /**
+             * Overrides
+             * @default []
+             */
+            overrides: components["schemas"]["ParameterUpdate-Output"][];
             ref: components["schemas"]["ParameterRevisionRef"];
             setup?: components["schemas"]["SetupRevisionRef"] | null;
         };
@@ -7058,13 +7081,38 @@ export interface components {
          * ParameterRunConfigSource
          * @description Exact independent inputs; carries no working-point calibration ownership.
          */
-        ParameterRunConfigSource: {
+        "ParameterRunConfigSource-Input": {
+            content_hash: components["schemas"]["ConfigContentHash"];
+            /**
+             * Kind
+             * @default parameter_revision
+             * @constant
+             */
+            kind: "parameter_revision";
+            /**
+             * Overrides
+             * @default []
+             */
+            overrides: components["schemas"]["ParameterUpdate-Input"][];
+            parameters: components["schemas"]["ParameterRevisionRef"];
+            setup: components["schemas"]["SetupRevisionRef"];
+        };
+        /**
+         * ParameterRunConfigSource
+         * @description Exact independent inputs; carries no working-point calibration ownership.
+         */
+        "ParameterRunConfigSource-Output": {
             content_hash: components["schemas"]["ConfigContentHash"];
             /**
              * @description discriminator enum property added by openapi-typescript
              * @enum {string}
              */
             kind: "parameter_revision";
+            /**
+             * Overrides
+             * @default []
+             */
+            overrides: components["schemas"]["ParameterUpdate-Output"][];
             parameters: components["schemas"]["ParameterRevisionRef"];
             setup: components["schemas"]["SetupRevisionRef"];
         };
@@ -8389,7 +8437,7 @@ export interface components {
              */
             unavailable_reason: string;
         };
-        "RunConfigSource-Output": components["schemas"]["ConfigRegistryRunConfigSource"] | components["schemas"]["ParameterRunConfigSource"] | components["schemas"]["AnalysisCandidateRunConfigSource"] | components["schemas"]["ContextRunConfigSource-Output"];
+        "RunConfigSource-Output": components["schemas"]["ConfigRegistryRunConfigSource"] | components["schemas"]["ParameterRunConfigSource-Output"] | components["schemas"]["AnalysisCandidateRunConfigSource"] | components["schemas"]["ContextRunConfigSource-Output"];
         /**
          * RunContentPage
          * @description Newest-first keyset page from one run's content catalog.

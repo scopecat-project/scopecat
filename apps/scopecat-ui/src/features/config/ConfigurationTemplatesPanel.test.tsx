@@ -112,6 +112,7 @@ it("imports exact template evidence, retries the same entry, and waits for expli
   await waitFor(() =>
     expect(onSelectConfiguration).toHaveBeenCalledWith({
       kind: "parameters",
+      overrides: [],
       ref: { revision_id: "imported-config", content_hash: "sha256:config" },
       setup: { revision_id: "imported-setup", content_hash: "sha256:setup" },
     }),

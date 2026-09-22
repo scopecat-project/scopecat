@@ -10,6 +10,7 @@ import scopecat as sc
 from lab_teaching.parameters import Drive
 from lab_teaching.project import create_project
 from lab_teaching.session import analyze_rabi, open_parameters
+from scopecat.records.run import ParameterRunConfigSource
 from scopecat_server.lifecycle import start_project, stop_project
 
 
@@ -32,13 +33,26 @@ def test_minimal_teaching_refresh_and_restart(tmp_path: Path, notebook_imports) 
             assert list(params) == ["teaching_drive"]
             params[Drive]["q0"].frequency = 5.148
             version = params.save("learner-choice")
+            assert session.params is params
+            assert session.selection.parameter_branch == "learner-choice"
+            assert session.parameter_branch.head.revision == version.ref
+            params[Drive]["q0"].frequency = 5.147
             prepared = session.prepare(
                 "teaching.rabi",
                 parameters=params,
                 scans={"amplitude": np.linspace(0, 0.8, 21)},
             )
+            frozen = prepared.preview.reviewed.config_source
+            assert isinstance(frozen, ParameterRunConfigSource)
+            assert frozen.parameters == version.ref
+            assert frozen.overrides
+            params[Drive]["q0"].frequency = 5.149
             job = prepared.run()
             run = job.wait(timeout=120).result()
+            assert run.snapshot.config_source == frozen
+            assert not run.snapshot.scientific_binding.samples
+            assert params.version == version
+            params.discard()
             first_report = analyze_rabi(session, run)
             assert first_report.status == "passed"
             state = session.state()
@@ -84,10 +98,9 @@ def test_minimal_teaching_refresh_and_restart(tmp_path: Path, notebook_imports) 
     start_project(project, timeout=120, static_dir=static_dir)
     try:
         with project.authoring() as session:
-            assert (
-                session.config.workspace(context=version.name)[Drive]["q0"].frequency
-                == 5.148
-            )
+            session.use(parameter_branch="learner-choice")
+            assert session.params.version == version
+            assert session.params[Drive]["q0"].frequency == 5.148
             restored = session.reopen(receipt).wait(timeout=120).result()
             assert restored.id == run_id
             assert (

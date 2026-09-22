@@ -115,6 +115,7 @@ export function ConfigurationTemplatesPanel({
               onClick={() =>
                 onSelectConfiguration({
                   kind: "parameters",
+                  overrides: [],
                   ref: {
                     revision_id: result.parameters.id,
                     content_hash: result.parameters.content_hash,

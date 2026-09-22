@@ -67,7 +67,7 @@ def execute_project(destination: Path, *, static_dir: Path | None = None) -> Pat
                     "assert again.pi_amplitude == report.pi_amplitude\n"
                     if name == "start"
                     else "assert run.id == bookmark['run_id']\n"
-                    "assert drive['q0'].frequency == 5.15\n"
+                    "assert saved.id == bookmark['parameter_version']\n"
                 )
                 cast("list[object]", notebook.cells).append(
                     nbformat.v4.new_code_cell(checks + "session.close()\n")

@@ -56,6 +56,7 @@ class ManualPreviewService:
                 ParameterResolveCommand(
                     parameters=source.parameters,
                     setup=source.setup,
+                    overrides=source.overrides,
                 )
             ).config
         else:

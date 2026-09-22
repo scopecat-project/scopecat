@@ -172,6 +172,7 @@ def _resolve_configuration(
         if old is not None and (
             not isinstance(old, ParameterRunConfigSource)
             or old.parameters != choice.ref
+            or old.overrides != choice.overrides
             or (choice.setup is not None and old.setup != choice.setup)
         ):
             raise ValueError("parameter selection differs from reviewed inputs")
@@ -181,7 +182,9 @@ def _resolve_configuration(
             else choice.setup or lab.config.client.active_setup().revision.ref
         )
         resolved = lab.config.client.resolve_parameters(
-            ParameterResolveCommand(parameters=choice.ref, setup=setup)
+            ParameterResolveCommand(
+                parameters=choice.ref, setup=setup, overrides=choice.overrides
+            )
         )
         config, source = resolved.config, resolved.config_source
     elif isinstance(choice, WorkingPointConfiguration):

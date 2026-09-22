@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from abc import ABC, abstractmethod
 from collections.abc import Callable, Iterator, Mapping, MutableMapping, Sequence
 from dataclasses import dataclass, replace
 from html import escape
@@ -52,7 +53,11 @@ from scopecat.config.structure import (
     preview_parameter_structure,
 )
 from scopecat.daemon.client import DaemonConflictError
-from scopecat.daemon.views import ConfigContextResolution, ConfigEntryView
+from scopecat.daemon.views import (
+    ConfigContextResolution,
+    ConfigEntryView,
+    ParameterResolution,
+)
 from scopecat.kernel.entity import EntityRef
 from scopecat.kernel.errors import Conflict
 from scopecat.kernel.quantity import Quantity
@@ -80,6 +85,7 @@ from scopecat.records.parameter import (
     ScalarParameterValue,
     TableParameterValue,
 )
+from scopecat.records.parameter_content import ParameterContent
 from scopecat.records.parameter_structure import (
     AddParameterColumn,
     AddParameterScalar,
@@ -140,7 +146,7 @@ class ParameterVersion:
         return self.context.entry_id
 
 
-class ParameterWorkspace(Mapping[str, "ParameterTable"]):
+class ParameterEditor(Mapping[str, "ParameterTable"], ABC):
     """An isolated edit buffer; reads never alter stored values or their units.
 
     Tables require declared primary keys. A single key uses a scalar and a
@@ -150,48 +156,42 @@ class ParameterWorkspace(Mapping[str, "ParameterTable"]):
     Scalar parameters use the mutable values in ``scalars[name]``.
     """
 
-    def __init__(
-        self,
-        operations: ParameterWorkspaceOperations,
-        *,
-        context: str | ParameterVersion,
-        latest: bool = False,
-    ) -> None:
-        self._operations = operations
-        self._base = self._resolve(context)
-        if latest:
-            saved = operations.latest_context(self._base.config_source.context)
-            self._base = self._resolve(
-                ParameterVersion(
-                    ConfigContextRef(
-                        entry_id=saved.entry.id, content_hash=saved.entry.content_hash
-                    )
-                )
-            )
+    @property
+    @abstractmethod
+    def _baseline(self) -> ConfigProfileSnapshot | ParameterContent: ...
+
+    @property
+    @abstractmethod
+    def _saved_snapshot(self) -> ParameterSnapshot: ...
+
+    @property
+    def _resolution(self) -> ConfigContextResolution | None:
+        return None
+
+    @property
+    def _label(self) -> str | None:
+        return None
+
+    @abstractmethod
+    def _copy_base(self) -> Self: ...
+
+    @abstractmethod
+    def _stage_structure(self, edits: Sequence[ParameterStructureEdit]) -> None: ...
+
+    @abstractmethod
+    def freeze(self) -> ConfigContextResolution | ParameterResolution: ...
+
+    def _initialize_buffers(self) -> None:
         self._structure: list[ParameterStructureEdit] = []
         self._tables: dict[str, ParameterTable] = {}
         self._data: dict[str, _TableData] = {}
         self._scalars: dict[str, ParameterAtomValue] = {}
-        self._load(self._base.config.parameter_snapshot)
-
-    def _resolve(self, context: str | ParameterVersion) -> ConfigContextResolution:
-        if isinstance(context, ParameterVersion):
-            ref = context.context
-        else:
-            entry = self._operations.entry(context)
-            if not isinstance(entry.entry.source, ContextConfigRegistrySource):
-                raise ValueError(f"{context!r} is not a saved sample/workpoint context")
-            ref = ConfigContextRef(
-                entry_id=entry.entry.id, content_hash=entry.entry.content_hash
-            )
-        return self._operations.resolve_context(ref)
+        self._load(self._saved_snapshot)
 
     @override
     def __repr__(self) -> str:
         return (
-            f"ParameterWorkspace(sample={self.sample!r}, "
-            f"working_point={self.working_point!r}, "
-            f"tables={len(self)}, edits={len(self.diff())}, "
+            f"{type(self).__name__}(tables={len(self)}, edits={len(self.diff())}, "
             f"structure_edits={len(self._structure)})"
         )
 
@@ -202,18 +202,6 @@ class ParameterWorkspace(Mapping[str, "ParameterTable"]):
             "default unchanged.</p>"
             + "".join(table.render_html() for table in islice(self.values(), 5))
         )
-
-    @property
-    def version(self) -> ParameterVersion:
-        return ParameterVersion(self._base.config_source.context)
-
-    @property
-    def sample(self) -> str:
-        return self._base.config_source.sample.sample_id
-
-    @property
-    def working_point(self) -> str:
-        return self._base.config_source.sample.context_id or ""
 
     @overload
     def __getitem__(self, name: str) -> ParameterTable: ...
@@ -251,51 +239,6 @@ class ParameterWorkspace(Mapping[str, "ParameterTable"]):
         """Select a dictionary table or bind a declared row view."""
         table = self[name]
         return table if row_type is None else TypedParameterTable(table, row_type)
-
-    def _structure_plan(self) -> ParameterStructurePlan | None:
-        if not self._structure:
-            return None
-        return ParameterStructurePlan(
-            base=self.version.context,
-            structure_version=parameter_structure_version(
-                self._base.config.parameter_catalog
-            ),
-            edits=tuple(self._structure),
-        )
-
-    @property
-    def _baseline(self) -> ConfigProfileSnapshot:
-        plan = self._structure_plan()
-        return (
-            preview_parameter_structure(self._base.config, plan).config
-            if plan
-            else self._base.config
-        )
-
-    def structure_diff(self) -> ParameterStructurePreview | None:
-        """Review explicit schema changes without saving or changing active defaults."""
-        plan = self._structure_plan()
-        return preview_parameter_structure(self._base.config, plan) if plan else None
-
-    def _stage_structure(self, edits: Sequence[ParameterStructureEdit]) -> None:
-        if self.diff():
-            raise ValueError(
-                "Save or discard value edits before changing the table structure"
-            )
-        plan = ParameterStructurePlan(
-            base=self.version.context,
-            structure_version=parameter_structure_version(
-                self._base.config.parameter_catalog
-            ),
-            edits=(*self._structure, *edits),
-        )
-        preview = preview_parameter_structure(self._base.config, plan)
-        # Old row views must not read a different semantic field/key after a rename.
-        for item in edits:
-            if item.parameter_id in self._data:
-                self._data[item.parameter_id].tokens.clear()
-        self._structure.extend(edits)
-        self._load(preview.config.parameter_snapshot)
 
     @overload
     def declare_table[T: ParameterModel](
@@ -480,7 +423,7 @@ class ParameterWorkspace(Mapping[str, "ParameterTable"]):
 
     def copy(self) -> Self:
         """Detach all edits while retaining the same immutable base and connection."""
-        copied = type(self)(self._operations, context=self.version)
+        copied = self._copy_base()
         copied._structure = list(self._structure)
         copied._load(copied._baseline.parameter_snapshot)
         copied._scalars = dict(self._scalars)
@@ -491,7 +434,7 @@ class ParameterWorkspace(Mapping[str, "ParameterTable"]):
     def discard(self) -> None:
         """Discard all edits and restore the last saved/rebased version."""
         self._structure.clear()
-        self._load(self._base.config.parameter_snapshot)
+        self._load(self._saved_snapshot)
 
     def _load(self, snapshot: ParameterSnapshot) -> None:
         names = {d.id for d in self._baseline.parameter_catalog.definitions}
@@ -513,11 +456,13 @@ class ParameterWorkspace(Mapping[str, "ParameterTable"]):
                 continue
             data = self._data.setdefault(
                 definition.id,
-                _TableData(definition.id, definition.value_type, self._base),
+                _TableData(definition.id, definition.value_type, self._resolution),
             )
             if data.schema != definition.value_type:
                 data.tokens.clear()
-            data.resolution = self._base
+            data.resolution = self._resolution
+            data.saved_snapshot = self._saved_snapshot
+            data.label = self._label
             data.schema = definition.value_type
             self._tables.setdefault(definition.id, ParameterTable(data))
             stored = snapshot.get(definition.id)
@@ -601,10 +546,129 @@ class ParameterWorkspace(Mapping[str, "ParameterTable"]):
         assert isinstance(edit.after, Mapping)
         return insert_parameter_rows(edit.parameter, (edit.after,))
 
+
+class ParameterWorkspace(ParameterEditor):
+    """Legacy sample/workpoint editor backed by configuration contexts."""
+
+    def __init__(
+        self,
+        operations: ParameterWorkspaceOperations,
+        *,
+        context: str | ParameterVersion,
+        latest: bool = False,
+    ) -> None:
+        self._operations = operations
+        self._base = self._resolve(context)
+        if latest:
+            saved = operations.latest_context(self._base.config_source.context)
+            self._base = self._resolve(
+                ParameterVersion(
+                    ConfigContextRef(
+                        entry_id=saved.entry.id, content_hash=saved.entry.content_hash
+                    )
+                )
+            )
+        self._initialize_buffers()
+
+    def _resolve(self, context: str | ParameterVersion) -> ConfigContextResolution:
+        if isinstance(context, ParameterVersion):
+            ref = context.context
+        else:
+            entry = self._operations.entry(context)
+            if not isinstance(entry.entry.source, ContextConfigRegistrySource):
+                raise ValueError(f"{context!r} is not a saved sample/workpoint context")
+            ref = ConfigContextRef(
+                entry_id=entry.entry.id, content_hash=entry.entry.content_hash
+            )
+        return self._operations.resolve_context(ref)
+
+    @override
+    def __repr__(self) -> str:
+        return (
+            f"ParameterWorkspace(sample={self.sample!r}, "
+            f"working_point={self.working_point!r}, "
+            f"tables={len(self)}, edits={len(self.diff())}, "
+            f"structure_edits={len(self._structure)})"
+        )
+
+    @property
+    def version(self) -> ParameterVersion:
+        return ParameterVersion(self._base.config_source.context)
+
+    @property
+    def sample(self) -> str:
+        return self._base.config_source.sample.sample_id
+
+    @property
+    def working_point(self) -> str:
+        return self._base.config_source.sample.context_id or ""
+
+    def _structure_plan(self) -> ParameterStructurePlan | None:
+        if not self._structure:
+            return None
+        return ParameterStructurePlan(
+            base=self.version.context,
+            structure_version=parameter_structure_version(
+                self._base.config.parameter_catalog
+            ),
+            edits=tuple(self._structure),
+        )
+
+    @property
+    @override
+    def _baseline(self) -> ConfigProfileSnapshot:
+        plan = self._structure_plan()
+        return (
+            preview_parameter_structure(self._base.config, plan).config
+            if plan
+            else self._base.config
+        )
+
+    def structure_diff(self) -> ParameterStructurePreview | None:
+        """Review explicit schema changes without saving or changing active defaults."""
+        plan = self._structure_plan()
+        return preview_parameter_structure(self._base.config, plan) if plan else None
+
+    @override
+    def _stage_structure(self, edits: Sequence[ParameterStructureEdit]) -> None:
+        if self.diff():
+            raise ValueError(
+                "Save or discard value edits before changing the table structure"
+            )
+        plan = ParameterStructurePlan(
+            base=self.version.context,
+            structure_version=parameter_structure_version(
+                self._base.config.parameter_catalog
+            ),
+            edits=(*self._structure, *edits),
+        )
+        preview = preview_parameter_structure(self._base.config, plan)
+        # Old row views must not read a different semantic field/key after a rename.
+        for item in edits:
+            if item.parameter_id in self._data:
+                self._data[item.parameter_id].tokens.clear()
+        self._structure.extend(edits)
+        self._load(preview.config.parameter_snapshot)
+
+    @property
+    @override
+    def _saved_snapshot(self) -> ParameterSnapshot:
+        return self._base.config.parameter_snapshot
+
+    @property
+    @override
+    def _resolution(self) -> ConfigContextResolution:
+        return self._base
+
+    @override
+    def _copy_base(self) -> Self:
+        return type(self)(self._operations, context=self.version)
+
     def preview(self) -> ConfigContextResolution:
         """Validate this buffer without persistence or default activation."""
         return self.freeze()
 
+    @override
     def freeze(self) -> ConfigContextResolution:
         """Capture exact unsaved edits and original provenance for a future run."""
         if self._structure:
@@ -733,6 +797,8 @@ class _TableData:
         resolution: ConfigContextResolution | None = None,
     ) -> None:
         self.resolution = resolution
+        self.saved_snapshot: ParameterSnapshot | None = None
+        self.label: str | None = None
         self.name = name
         self.schema = schema
         self.rows: dict[_Identity, dict[str, ParameterAtomValue]] = {}
@@ -742,9 +808,14 @@ class _TableData:
         value = row.get(field)
         if value is None:
             return "Unknown"
-        if self.resolution is None:
+        snapshot = (
+            self.resolution.config.parameter_snapshot
+            if self.resolution
+            else self.saved_snapshot
+        )
+        if snapshot is None:
             return "Manual · unsaved"
-        baseline = self.resolution.config.parameter_snapshot.get(self.name)
+        baseline = snapshot.get(self.name)
         key = self.identity(self.key(row))
         previous = (
             next(
@@ -764,6 +835,8 @@ class _TableData:
         )
         if previous is None or previous.get(field) != value:
             return "Manual · unsaved"
+        if self.resolution is None:
+            return "Saved · parameter revision"
         for origin in self.resolution.value_origins:
             if (
                 origin.parameter_id == self.name
@@ -847,7 +920,7 @@ class ParameterTable(MutableMapping[RowKey, "ParameterRow"]):
             + (
                 f"{context.sample_id} / {context.context_id}"
                 if context
-                else "Detached table"
+                else self._data.label or "Detached table"
             )
         )
         return (

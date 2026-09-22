@@ -154,6 +154,7 @@ it("selects independent parameters with an exact setup before opening an experim
   mount();
   const choice = {
     kind: "parameters" as const,
+    overrides: [],
     ref: { revision_id: "trial", content_hash: "sha256:parameters" },
     setup: { revision_id: "bench", content_hash: "sha256:setup" },
   };
