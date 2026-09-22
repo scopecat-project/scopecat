@@ -779,7 +779,9 @@ def test_guard_reset_invalidates_state_required_by_quantum_domain() -> None:
     }
 
 
-def test_fixed_if_lo_sweep_bounds_real_time_batches_with_host_effects() -> None:
+def test_fixed_if_lo_sweep_bounds_real_time_batches_with_host_effects(
+    tmp_path: Path,
+) -> None:
     config = bootstrap_config()
     provider = ReferenceLabProvider(seed=7)
     target = _configured_target(config, provider)
@@ -847,3 +849,20 @@ def test_fixed_if_lo_sweep_bounds_real_time_batches_with_host_effects() -> None:
         "readout-lo",
         "timing-controller",
     }
+
+    # Execute the same host/target composition and retain its measured carriers.
+    lab = in_process_lab(
+        tmp_path,
+        config=config,
+        system=composition.system,
+        instrument_backend=composition.backend,
+    )
+    invocation = q0_fixed_if_lo_sweep.build()
+    run = lab.prepare(invocation).run()
+    assert run.status == "completed"
+    data = run.measurements()
+    assert len(data.records) == 3
+    signed_ifs = data[invocation.output.signed_if_frequency].require_quantities("MHz")
+    carriers = data[invocation.output.carrier_frequency].require_quantities("GHz")
+    assert [value.value for value in signed_ifs] == pytest.approx([-50.0] * 3)
+    assert [value.value for value in carriers] == pytest.approx([4.79, 4.8, 4.81])

@@ -12,12 +12,10 @@ from scopecat_instruments import DCSourceTarget, dc_source, rf_source
 from scopecat_quantum import authoring as q
 from scopecat_quantum.measurement_computes import (
     BinaryIqProbabilityProducts,
-    binary_iq_probabilities,
 )
 
 from reference_lab.parameters import LoGroupParameters, QubitParameters
 from reference_lab.quantum_runner import (
-    BINARY_IQ_DISCRIMINATOR,
     prepare_quantum_hardware,
     quantum_capture,
 )
@@ -104,23 +102,6 @@ def conflicting_drive(experiment: sc.ExperimentContext) -> None:
     )
 
 
-@sc.experiment(id="reference_lab.q0_ramsey")
-def q0_ramsey(experiment: sc.ExperimentContext) -> RamseyDataset:
-    """Run a delay scan on q0 through its configured drive/readout channels."""
-
-    delay = experiment.scan("delay", RAMSEY_DELAYS)
-    probabilities = experiment.use(
-        quantum_capture(
-            ramsey_program(
-                qubit="q0",
-                delay=delay,
-                phase=sc.Quantity(0.0, "rad"),
-            ).with_shots(RAMSEY_SHOTS)
-        )
-    )
-    return RamseyDataset(delay=delay, probabilities=probabilities)
-
-
 @dataclass(frozen=True, slots=True)
 class FluxRamseyDataset:
     dc_bias: sc.CoordinateRef[sc.Quantity]
@@ -185,13 +166,6 @@ def entity_routed_ramsey(experiment: sc.ExperimentContext) -> EntityRamseyDatase
         delay=delay,
         probabilities=probabilities,
     )
-
-
-@dataclass(frozen=True, slots=True)
-class ParallelRamseyDataset:
-    delay: sc.CoordinateRef[sc.Quantity]
-    q0: BinaryIqProbabilityProducts
-    q1: BinaryIqProbabilityProducts
 
 
 @dataclass(frozen=True, slots=True)
@@ -266,43 +240,6 @@ def parallel_raw_ramsey(experiment: sc.ExperimentContext) -> ParallelRawRamseyDa
     )
 
 
-@sc.experiment(id="reference_lab.parallel_two_qubit_ramsey")
-def parallel_two_qubit_ramsey(
-    experiment: sc.ExperimentContext,
-) -> ParallelRamseyDataset:
-    """Compile synchronized q0/q1 Ramsey branches onto independent channels."""
-
-    delay = experiment.scan("delay", RAMSEY_DELAYS[:3])
-    call = parallel_two_qubit_ramsey_program(
-        q0="q0",
-        q1="q1",
-        delay=delay,
-        q0_phase=sc.Quantity(0.0, "rad"),
-        q1_phase=sc.Quantity(0.4, "rad"),
-    ).with_shots(RAMSEY_SHOTS)
-    prepare_quantum_hardware(experiment)
-    results = experiment.use(
-        call.with_compiler_inputs(qubits=sc.parameter_table_ref(QubitParameters))
-    )
-    q0_products = binary_iq_probabilities(
-        experiment,
-        results.q0_iq_shots,
-        discriminator=BINARY_IQ_DISCRIMINATOR,
-        id="q0-discrimination",
-    )
-    q1_products = binary_iq_probabilities(
-        experiment,
-        results.q1_iq_shots,
-        discriminator=BINARY_IQ_DISCRIMINATOR,
-        id="q1-discrimination",
-    )
-    return ParallelRamseyDataset(
-        delay=delay,
-        q0=q0_products,
-        q1=q1_products,
-    )
-
-
 __all__ = [
     "Q0_LO_FREQUENCIES",
     "RAMSEY_DELAYS",
@@ -310,7 +247,6 @@ __all__ = [
     "EntityRamseyDataset",
     "FixedIfLoSweepDataset",
     "FluxRamseyDataset",
-    "ParallelRamseyDataset",
     "ParallelRawRamseyDataset",
     "RamseyDataset",
     "TopologyScaledRamseyDataset",
@@ -318,8 +254,6 @@ __all__ = [
     "entity_routed_ramsey",
     "flux_ramsey",
     "parallel_raw_ramsey",
-    "parallel_two_qubit_ramsey",
     "q0_fixed_if_lo_sweep",
-    "q0_ramsey",
     "topology_scaled_ramsey",
 ]

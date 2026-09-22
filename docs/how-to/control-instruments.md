@@ -308,11 +308,9 @@ rf = lo + sc.Quantity(-100, "MHz")
 return SpectrumResult(rf_frequency=rf)
 ```
 
-The reference lab's
-[`xy_drive` workflow](https://github.com/scopecat-project/scopecat/blob/main/examples/reference_lab/src/reference_lab/workflows/xy_drive.py)
-shows this composition, and the
-[`fixed-IF quantum sweep`](https://github.com/scopecat-project/scopecat/blob/main/examples/reference_lab/notebooks/36_q0_fixed_if_lo_sweep.py)
-shows an LO host effect bounding domain batches.
+An LO change is a host effect: it bounds real-time target batches so that each
+batch executes with the requested LO setting. The target can retain the same
+signed IF while the resulting RF carrier changes with the LO.
 
 Routing determines which source is changed. Equal requests to one resolved LO
 owner coalesce; distinct LO owners remain independently schedulable. Only a lab
