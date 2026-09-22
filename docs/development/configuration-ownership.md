@@ -131,8 +131,10 @@ tests use independent branches rather than synthetic working points. The starter
 virtual-instrument project also uses equipment-only startup and an author-owned
 branch; both generated notebooks use author-session preparation, and template
 imports create independent parameter revisions without selecting defaults.
-Reference integration still declares transitional defaults; its remaining
-consumers must be moved deliberately.
+Shared reference acceptance and snapshot recovery now run with setup-only
+fixtures and exact independent parameter selections, preserving an empty combined
+registry. The reference gallery and calibration publication workflows still
+declare transitional defaults; their remaining consumers must be moved together.
 
 Full-config `set_default` inputs,
 working-point entries, setup rebinding and full-config experiment-system builders

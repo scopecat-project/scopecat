@@ -63,11 +63,10 @@ def test_shared_fixture_retains_diagnostic_review_and_entity_contracts() -> None
         is not None
     )
     [reviewed] = ParameterProposalPage.model_validate(
-        fixture["reviewed_candidate"]
+        fixture["candidate_proposal"]
     ).items
     assert reviewed.proposal.id == "q1-channel-delay"
-    assert reviewed.approval is not None
-    assert reviewed.approval.actor == "acceptance-operator"
+    assert reviewed.approval is None
     schema = MeasurementDatasetSchema.model_validate(fixture["entity_analysis"])
     [entity_axis] = [
         dimension for dimension in schema.dimensions if dimension.kind == "entity"

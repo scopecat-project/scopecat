@@ -22,9 +22,13 @@ from scopecat.records.control_edit import ControlEdit
 from scopecat.records.launch_request import LaunchRequest
 from scopecat.records.measurement import MeasurementScalar
 from scopecat.records.measurement_recording import measurement_record_content_hash
+from scopecat.records.scientific_selection import (
+    ParameterConfiguration,
+    ScientificSelection,
+)
 from scopecat_instruments import temperature_readout
 
-from reference_lab.configuration import bootstrap_config
+from reference_lab.configuration import initial_parameters
 from reference_lab.launch import launch_provider
 from reference_lab.parameters import ChannelCalibration
 from reference_lab.workflows.coherent_ramsey import coherent_ramsey
@@ -115,25 +119,46 @@ def capture_acceptance_fixtures(
             }
         )
     )
+    registry = lab.config.registry()
+    setup = lab.setup.active()
+    content = initial_parameters()
+    parameters = lab.parameters.save(
+        name="acceptance-parameters",
+        catalog=content.catalog,
+        parameters=content.parameters,
+    )
+    resolved = lab.parameters.resolve(parameters, setup=setup.revision)
+    selection = ScientificSelection(
+        configuration=ParameterConfiguration(
+            ref=parameters.ref, setup=setup.revision.ref
+        )
+    )
     setting_preview = launch_provider(
-        lab, LaunchRequest(action="preview", experiment="channel-timing", version="1")
+        lab,
+        LaunchRequest(
+            action="preview",
+            experiment="channel-timing",
+            version="1",
+            selection=selection,
+        ),
     )
     assert isinstance(setting_preview, LaunchPreview)
     assert setting_preview.preflight is not None
-    config = bootstrap_config()
-    active = lab.config.active()
+    config = resolved.config
     launch_preview = _checked_launch_preview(
         client,
         LaunchRequest(
             action="preview",
             experiment="reference_lab.temperature_diagnostic",
             version="1",
+            selection=selection,
         ),
     )
     scalar_request = LaunchRequest(
         action="preview",
         experiment="reference_lab.frequency_amplitude",
         version="1",
+        selection=selection,
         control_edits={
             "frequency": ControlEdit.model_validate(
                 {"mode": "fixed", "value": {"value": 4900.0, "unit": "MHz"}}
@@ -184,7 +209,7 @@ def capture_acceptance_fixtures(
         config=config,
         edits=scan_request.control_edits,
     )
-    controlled_run = lab.run(controlled, config=config)
+    controlled_run = lab.run(controlled, config=resolved)
     assert controlled_run.status == "completed"
     controlled_records = controlled_run.measurements().records
     assert len(controlled_records) == 6
@@ -207,14 +232,15 @@ def capture_acceptance_fixtures(
             2 * math.pi * (frequency.value - reference_value.value)
         )
         assert math.isclose(response.value, expected, rel_tol=1e-12, abs_tol=1e-12)
-    diagnostic_run = lab.run(temperature_diagnostic.build(), config=config)
+    diagnostic_run = lab.run(temperature_diagnostic.build(), config=resolved)
     assert diagnostic_run.status == "completed"
-    assert lab.config.active() == active
+    assert diagnostic_run.snapshot.config_source == resolved.config_source
+    assert lab.config.registry() == registry
     diagnostic = client.measurement_preview(diagnostic_run.id)
     assert diagnostic.items == diagnostic_run.measurements().records
 
     coherent = coherent_ramsey.build()
-    coherent_run = lab.run(coherent, config=config)
+    coherent_run = lab.run(coherent, config=resolved)
     assert coherent_run.status == "completed"
     coherent_data = coherent_run.measurements()
     coherent_preview = client.measurement_preview(coherent_run.id, limit=4)
@@ -258,13 +284,15 @@ def capture_acceptance_fixtures(
 
     before = client.list_runs()
     with lab.review(
-        temperature_diagnostic.build(), config=config, name="Temperature diagnostic"
+        temperature_diagnostic.build(), config=resolved, name="Temperature diagnostic"
     ) as review:
         inspection = review.session
     assert client.list_runs() == before
 
     invocation = parallel_raw_ramsey.build()
-    source = lab.run(invocation, config=config, name="Reference lab acceptance source")
+    source = lab.run(
+        invocation, config=resolved, name="Reference lab acceptance source"
+    )
     analysis = (
         source.analysis("Channel timing review")
         .result()
@@ -287,11 +315,9 @@ def capture_acceptance_fixtures(
         candidate_source is not None and candidate_source.kind == "analysis_candidate"
     )
     assert candidate_source.proposal_id == candidate.proposal_id
-    lab.config.accept(
-        candidate, actor="acceptance-operator", note="Verified in virtual lab"
-    )
-    reviewed = client.parameter_proposals(source.id)
-    lab.config.set_default(active.config)
+    # Candidate execution is evidence, not an operator approval or publication.
+    proposals = client.parameter_proposals(source.id)
+    assert all(item.approval is None for item in proposals.items)
     schema = source.measurements().schema
 
     with lab.instruments.open(temperature_readout("mixing-chamber")):
@@ -311,6 +337,10 @@ def capture_acceptance_fixtures(
         assert cancelled is not None and cancelled.result == "cancelled"
         assert client.measurement_preview(wait.run_id).items == ()
 
+    assert lab.config.registry() == registry
+    assert lab.setup.active() == setup
+    assert lab.parameters.get(parameters.id) == parameters
+
     # Normalize only capture metadata at explicit production-model fields. Do not
     # rewrite scientific values, arbitrary strings, content hashes or lineage.
     diagnostic = _normalize_preview(diagnostic, "acceptance-diagnostic")
@@ -327,7 +357,7 @@ def capture_acceptance_fixtures(
             else None,
         }
     )
-    reviewed = reviewed.model_copy(
+    proposals = proposals.model_copy(
         update={
             "run_id": "acceptance-source",
             "items": tuple(
@@ -340,17 +370,9 @@ def capture_acceptance_fixtures(
                                 "proposed_at": FIXTURE_TIME,
                             }
                         ),
-                        "approval": item.approval.model_copy(
-                            update={
-                                "run_id": "acceptance-source",
-                                "approved_at": FIXTURE_TIME,
-                            }
-                        )
-                        if item.approval
-                        else None,
                     }
                 )
-                for item in reviewed.items
+                for item in proposals.items
             ),
         }
     )
@@ -374,7 +396,7 @@ def capture_acceptance_fixtures(
         "controls_scalar": controls_scalar.model_dump(mode="json"),
         "controls_scan": controls_scan.model_dump(mode="json"),
         "inspection": inspection.model_dump(mode="json"),
-        "reviewed_candidate": reviewed.model_dump(mode="json"),
+        "candidate_proposal": proposals.model_dump(mode="json"),
         "entity_analysis": schema.model_dump(mode="json"),
         "resource_waiting": [
             item.model_copy(
