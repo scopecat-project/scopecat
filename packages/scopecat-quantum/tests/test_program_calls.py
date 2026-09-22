@@ -830,21 +830,29 @@ def test_program_call_captures_scalar_compiler_input_literals() -> None:
     assert compiler_types[1] == sc.ScalarType(sc.BoolType())
 
 
-def test_repeated_program_calls_require_explicit_instances() -> None:
+def test_repeated_program_calls_allocate_definition_local_names() -> None:
     @authoring.program(id="test.quantum.repeated")
     def declaration(qubit: authoring.Qubit) -> authoring.QuantumFragment:
         return authoring.measure(qubit, result="iq")
 
-    with pytest.raises(ValueError, match="duplicate module domain execution ids"):
+    def repeated_defaults(context: sc.ExperimentContext) -> None:
+        for index in range(3):
+            call = declaration("q0").with_shots(8)
+            results = context.use(call)
+            assert results.iq is call.results.iq
+            assert results.iq.id == (
+                "repeated/iq" if index == 0 else f"repeated.{index + 1}/iq"
+            )
+            _ = context.alias(call.results.iq, record_id=f"result_{index}")
 
-        @sc.experiment(id="test.quantum.repeated-defaults")
-        def repeated_defaults(
-            context: sc.ExperimentContext,
-        ) -> None:
-            context.use(declaration("q0").with_shots(8))
-            context.use(declaration("q0").with_shots(8))
-
-        repeated_defaults.build()
+    first = compile_invocation(sc.experiment(repeated_defaults).build())
+    second = compile_invocation(sc.experiment(repeated_defaults).build())
+    assert first.request == second.request
+    assert (
+        first.program.program.domain_executions
+        == second.program.program.domain_executions
+    )
+    assert first.program.product_declarations == second.program.product_declarations
 
     left = declaration.call("left", "q0").with_shots(8)
     right = declaration.call("right", "q0").with_shots(8)
@@ -857,6 +865,61 @@ def test_repeated_program_calls_require_explicit_instances() -> None:
     compile_invocation(repeated_explicit.build())
     assert left.results.iq.id == "left/iq"
     assert right.results.iq.id == "right/iq"
+
+
+def test_program_occurrence_names_are_scoped_to_nested_modules() -> None:
+    @authoring.program(id="test.quantum.acquire")
+    def acquire(qubit: authoring.Qubit) -> authoring.QuantumFragment:
+        return authoring.measure(qubit, result="iq")
+
+    @sc.module
+    def pair(module: sc.ModuleContext, qubit: str) -> None:
+        for _ in range(2):
+            module.use(acquire(qubit))
+
+    @sc.experiment
+    def nested(context: sc.ExperimentContext) -> None:
+        context.use(acquire("q0"))
+        context.use(pair.call("left", "q0"))
+        context.use(pair.call("right", "q1"))
+        last = context.use(acquire("q1"))
+        assert last.iq.id == "acquire.2/iq"
+
+    compiled = compile_invocation(nested.build())
+    assert {
+        product.qualified_id
+        for product in compiled.program.product_declarations.values()
+    } == {
+        "acquire/iq",
+        "acquire.2/iq",
+        "left/acquire/iq",
+        "left/acquire.2/iq",
+        "right/acquire/iq",
+        "right/acquire.2/iq",
+    }
+
+
+def test_explicit_program_names_are_reserved_and_never_silently_renamed() -> None:
+    @authoring.program(id="test.quantum.acquire")
+    def acquire(qubit: authoring.Qubit) -> authoring.QuantumFragment:
+        return authoring.measure(qubit, result="iq")
+
+    @sc.experiment
+    def reserved(context: sc.ExperimentContext) -> None:
+        context.use(acquire.call("acquire", "q0"))
+        assert context.use(acquire("q0")).iq.id == "acquire.2/iq"
+
+    compile_invocation(reserved.build())
+
+    @sc.experiment
+    def conflict(context: sc.ExperimentContext) -> None:
+        context.use(acquire("q0"))
+        context.use(acquire.call("acquire", "q0"))
+
+    with pytest.raises(ValueError, match="duplicate explicit domain call name"):
+        conflict.build()
+    # A failed definition must not leak its namespace into a later build.
+    compile_invocation(reserved.build())
 
 
 def test_parent_compute_consumes_program_call_result() -> None:
