@@ -22,6 +22,7 @@ from scopecat.records.sample import (
     SampleRevisionDraft,
     SampleSelector,
 )
+from scopecat.records.setup import ExecutableSetupSnapshot
 
 from scopecat_server import BackendNotFound, LocalDaemonRuntime
 from scopecat_server.storage.sqlite.control_plane import SQLiteControlPlane
@@ -108,9 +109,16 @@ def _daemon_client(transport: TestClient) -> DaemonClient:
 
 def test_sample_revision_and_run_binding_survive_restart(tmp_path: Path) -> None:
     with (
-        LocalDaemonRuntime(tmp_path, bootstrap_config=_config()) as runtime,
+        LocalDaemonRuntime(tmp_path) as runtime,
         TestClient(runtime.app()) as transport,
     ):
+        with _daemon_client(transport) as client:
+            lab = LabClient(client)
+            setup = lab.setup.save(
+                ExecutableSetupSnapshot.from_config(_config()), name="sample-bench"
+            )
+            lab.setup.activate(setup)
+            assert lab.config.registry().entries == ()
         parent_response = transport.post(
             "/api/v1/samples",
             json=SampleCreateCommand(
@@ -234,12 +242,26 @@ def test_sample_revision_and_run_binding_survive_restart(tmp_path: Path) -> None
         )
 
         run_id = admission.run_id
+        later_revision = transport.post(
+            "/api/v1/samples/die-1/revisions",
+            json=SampleReviseCommand(
+                operation_id="revise:die-1:3",
+                expected_revision=2,
+                actor="operator",
+                content=SampleRevisionDraft(
+                    display_name="Die 1 after cooldown", status="available"
+                ),
+            ).model_dump(mode="json"),
+        )
+        assert later_revision.status_code == 200
+        assert later_revision.json()["revision"]["revision"] == 3
 
     with LocalDaemonRuntime(tmp_path) as restarted:
         sample = restarted.application.samples.get("die-1")
         snapshot = restarted.application.runs.get_run(run_id).snapshot
+        assert restarted.application.config.get_config_registry().entries == ()
 
-    assert sample.record.active_revision == 2
+    assert sample.record.active_revision == 3
     assert sample.run_count == 1
     assert snapshot.samples == (binding,)
 

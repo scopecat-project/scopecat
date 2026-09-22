@@ -12,9 +12,10 @@ source; installed historical environments and scientific data are untouched.
 | --- | --- | --- |
 | `00_lab_tour.py` | Instrument views and parameter inspection | Retired with its fixed inventory/row-count test. Server `test_instruments.py::test_instrument_views_expose_only_safe_configuration_summaries` covers inventory views; starter and parameter teaching cover author inspection. The reference fixture's exact device list is not a product invariant. |
 | `02_session_lifetime.py`, `21_scan_shapes.py`, `40_measurement_workbench.py` | Reattach without acquisition, scan semantics, retained data projections | Retired with duplicate gallery tests. Session closure/reattachment now uses the existing starter restart journey; scan and dataset behaviors have focused core coverage listed below. |
-| `05_sample_workflow.py` | Exact sample revision and analysis provenance | Preserve identity/history assertions in target/sample integration tests; reassess old working-point assumptions separately. |
+| `05_sample_workflow.py` | Exact sample revision and analysis provenance | Retired. Dedicated sample binding/restart and sample-analysis isolation tests cover the behavior with equipment-only initialization and an empty parameter registry. |
+| `22_channel_map.py` | Routing and shared physical channels | Retired fixed-map presentation/test. Generic route completeness tests, compiled multiplexing constraints and real device journeys remain; exact four-qubit endpoint strings are fixture data, not a product contract. |
 | `10_direct_control.py`, `33_multichannel_dc_bias.py`, `35_awg_output_monitor.py`, `50_ragged_scope_capture.py` | Shared device ownership, physical routes, entityless diagnostics, ragged acquisition | Keep focused real-worker coverage. Add future device-topic sandboxes using current APIs rather than wrapping the old gallery. |
-| `20_flux_spectroscopy.py`, `22`–`26`, `28`–`29`, `31`–`32`, `34`, `36` | Compiled buffers, channel conflicts, signed IF/LO semantics, multiplexed readout, topology and inspection | Extract minimal compiler/runner inputs and keep a bounded full-device journey. Review duplicated recipes and hard-coded configuration assumptions instead of preserving their signatures. |
+| `20_flux_spectroscopy.py`, `23`–`26`, `28`–`29`, `31`–`32`, `34`, `36` | Compiled buffers, channel conflicts, signed IF/LO semantics, multiplexed readout, topology and inspection | Extract minimal compiler/runner inputs and keep a bounded full-device journey. Review duplicated recipes and hard-coded configuration assumptions instead of preserving their signatures. |
 | `27_channel_timing_candidate.py`, `30_drag_calibration.py`, `workflows/drag_beta_*` | Exact candidate lineage, independent verification, ownership of edited cells, conflict detection, durable publication/recovery | Specify these behaviors against independent parameter branches. Retire assertions requiring publication/restoration of a global active config; existing workflow structure and working-point APIs are not acceptance criteria. |
 | `quantum_compilation`, `targets/list_mode`, `provider`, `virtual_lab` | Deterministic device/compiler integration | Retain only dependencies of named scientific/device tests; extract generic framework capabilities where justified. Compute-only teaching does not replace device evidence. |
 | Shared acceptance and `snapshot_roundtrip.py` | Real HTTP payloads and exact current-format recovery | Already use independent parameters/setup and an empty combined registry. Keep this evidence as legacy bootstrap consumers are removed. |
@@ -25,6 +26,21 @@ under the target design. Record replacement evidence or why an assertion
 expresses an obsolete requirement before removing it.
 
 ### Retired generic cases: retained evidence
+
+- `packages/scopecat-server/tests/test_samples_runtime.py::test_sample_revision_and_run_binding_survive_restart`
+  covers sample creation/revision, bound run identity and restart. Server
+  `test_project_analysis_runtime.py::test_sample_analysis_is_scoped_to_runs_bound_to_that_sample`
+  covers sample-owned publication, rejects unrelated/reference-role inputs and
+  preserves the analysis owner after restart. Both initialize equipment explicitly
+  without publishing a global parameter default. Their explicit run snapshots
+  still use small combined test inputs; this is not a claim that all sample
+  fixtures have migrated to independent parameter APIs.
+- `packages/scopecat/tests/planning/test_routing.py` checks complete route
+  selection. Reference unit
+  `test_quantum_runner.py::test_parallel_qubit_set_compiles_to_one_entity_axis_result_group`
+  checks actual shared I/Q and acquisition constraints in the compiled footprint.
+  Retained multichannel-DC and parallel-Ramsey journeys exercise physical values
+  and multiplexed acquisition, beyond the retired mapping display.
 
 - `packages/scopecat-server/tests/test_lifecycle.py::test_cli_daemon_first_use_loop_uses_dynamic_port_and_cleans_record`
   retains a snapshot and records, rejects reads through closed run/dataset

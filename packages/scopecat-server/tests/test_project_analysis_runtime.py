@@ -94,6 +94,8 @@ from scopecat.daemon.wire import (
     RunCoverageAdvanceCommand,
     RunSubmission,
     SampleCreateCommand,
+    SetupActivateCommand,
+    SetupSaveCommand,
     TerminalRunCommitCommand,
 )
 from scopecat.execution.evidence import build_terminal_contents
@@ -143,6 +145,7 @@ from scopecat.records.parameter_change import (
 from scopecat.records.run import ConfigRegistryRunConfigSource, RunSnapshot
 from scopecat.records.run_request import RunRequest
 from scopecat.records.sample import SampleRevisionDraft, SampleSelector
+from scopecat.records.setup import ExecutableSetupSnapshot
 
 from scopecat_server import BackendConflict, BackendNotFound, LocalDaemonRuntime
 from scopecat_server.storage.sqlite.calibration_cohorts import (
@@ -630,7 +633,23 @@ def test_project_analysis_compares_completed_runs_and_reloads_outputs(
 
 
 def test_sample_analysis_is_scoped_to_runs_bound_to_that_sample(tmp_path: Path) -> None:
-    with LocalDaemonRuntime(tmp_path, bootstrap_config=_config()) as runtime:
+    with LocalDaemonRuntime(tmp_path) as runtime:
+        setup = runtime.application.setup.save(
+            SetupSaveCommand(
+                revision_id="analysis-bench",
+                setup=ExecutableSetupSnapshot.from_config(_config()),
+                actor="maintainer",
+            )
+        )
+        runtime.application.setup.activate(
+            SetupActivateCommand(
+                operation_id="activate-analysis-bench",
+                revision=setup.ref,
+                expected_generation=0,
+                actor="maintainer",
+            )
+        )
+        assert runtime.application.config.get_config_registry().entries == ()
         runtime.application.samples.create(
             SampleCreateCommand(
                 operation_id="create:die-1",
@@ -765,6 +784,7 @@ def test_sample_analysis_is_scoped_to_runs_bound_to_that_sample(tmp_path: Path) 
         )
         assert isinstance(restored.view.analysis.subject, SampleAnalysisSubject)
         assert restored.view.analysis.subject.sample_id == "die-1"
+        assert restarted.application.config.get_config_registry().entries == ()
 
 
 def test_project_analysis_allocates_distinct_revisions_for_concurrent_saves(
