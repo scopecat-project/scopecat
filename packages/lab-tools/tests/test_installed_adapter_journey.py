@@ -155,9 +155,11 @@ from scopecat.project_sources import capture_sources
 project = sc.open_project(Path(sys.argv[1]))
 application = project.load_application()
 assert application.authors is not None
-assert len(application.authors.experiments) == 2
+assert len(application.authors.experiments) == 3
 from local_experiments import signal
+from test_lab.authored.parameters import open_parameters
 with project.authoring() as author:
+    open_parameters(author)
     signal = author.load_experiment(signal)
     request = signal(center=0.0)
     request.values["position"] = sc.Scan([-1.0, 0.0, 1.0])
@@ -165,7 +167,9 @@ with project.authoring() as author:
     plan = prepared.save_plan("Retained source-only experiment", saved_by="test")
     original = prepared.run().wait(timeout=60).result()
     source = project.root / "src/local_experiments.py"
-    source.write_text(source.read_text().replace("return 1.0 /", "return 2.0 /"))
+    source.write_text(
+        source.read_text().replace("return scale /", "return 2.0 * scale /")
+    )
     signal = author.refresh(signal)
     refreshed = signal(center=0.0)
     refreshed.values["position"] = sc.Scan([-1.0, 0.0, 1.0])
@@ -298,7 +302,9 @@ def test_installed_adapter_wheel_local_refresh_and_missing_adapter_stop(
     project = tmp_path / "experiment"
     (project / "src").mkdir(parents=True)
     (project / "src/local_experiments.py").write_text(
-        (tmp_path / "scaffold/src/scopecat_lab/authored/signal.py").read_text()
+        (tmp_path / "scaffold/src/scopecat_lab/authored/signal.py")
+        .read_text()
+        .replace("from .parameters import", "from test_lab.authored.parameters import")
     )
     (project / "scopecat.toml").write_text("""[authors]
 modules = ["local_experiments"]

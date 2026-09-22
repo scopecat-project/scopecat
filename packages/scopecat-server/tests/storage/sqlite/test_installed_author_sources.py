@@ -86,11 +86,14 @@ def test_installed_experiments_are_discovered_alongside_local_declarations(
     (package / "signal.py").write_text(
         source.replace('id="signal"', 'id="shared_signal"')
     )
+    (package / "parameters.py").write_text(
+        (root / "src/scopecat_lab/authored/parameters.py").read_text()
+    )
     metadata = site / "lab_methods-1.0.dist-info"
     metadata.mkdir()
     (metadata / "METADATA").write_text("Name: lab-methods\nVersion: 1.0\n")
     (metadata / "RECORD").write_text(
-        "lab_methods/__init__.py,,\nlab_methods/signal.py,,\n"
+        "lab_methods/__init__.py,,\nlab_methods/signal.py,,\nlab_methods/parameters.py,,\n"
     )
     manifest = root / "scopecat.toml"
     manifest.write_text(
@@ -115,7 +118,7 @@ def test_installed_experiments_are_discovered_alongside_local_declarations(
                 "from scopecat_server.author_worker import validate; "
                 "app = validate(Path.cwd(), Path.cwd()); "
                 "assert app.authors is not None; "
-                "assert len(app.authors.experiments) == 2"
+                "assert len(app.authors.experiments) == 3"
             ),
         ],
         cwd=root,

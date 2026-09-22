@@ -25,12 +25,10 @@ from scopecat.project import (
     open_project,
 )
 from scopecat.records.measurement import MeasurementScalar
-from scopecat.records.parameter import ScalarParameterValue
 from scopecat_testkit.project_loading import isolated_project_imports
 from typer.testing import CliRunner
 
 from scopecat_server.cli import app
-from scopecat_server.config_commands import load_source_config
 from scopecat_server.lifecycle import (
     DaemonLifecycleError,
     DaemonStatus,
@@ -79,16 +77,11 @@ def test_init_creates_runnable_python_project_and_does_not_overwrite(
     assert notebook.is_file()
     notebook_source = notebook.read_text(encoding="utf-8")
     assert "quantum_lab_demo" not in notebook_source
-    assert 'lab.run(first_run.build(), name="First run")' in notebook_source
-    assert "lab.prepare(" not in notebook_source
-
-    config = load_source_config(project)
-    assert config.id == "default"
-    assert config.primary_entity_id == "subject"
-    assert config.parameter_snapshot.get("repetitions") == ScalarParameterValue(
-        id="repetitions",
-        value=128,
-    )
+    assert 'session.prepare("first_run")' in notebook_source
+    bootstrap = project.load_bootstrap()
+    assert bootstrap.parameter_defaults is None
+    assert bootstrap.setup is not None
+    assert bootstrap.setup().primary_entity_id == "subject"
     assert project.instrument_backend_spec is not None
     create_backend = load_instrument_backend_factory(
         project.instrument_backend_spec,
@@ -303,6 +296,7 @@ def test_cli_daemon_first_use_loop_uses_dynamic_port_and_cleans_record(
         assert console_url == f"{record.base_url}/?run={run_id}"
         with DaemonClient(record.base_url) as client:
             preview = client.measurement_preview(run_id)
+            assert client.config_registry().entries == ()
         [measurement] = preview.items
         temperature = measurement.observables["temperature"]
         assert isinstance(temperature, MeasurementScalar)
@@ -342,6 +336,7 @@ def test_cli_daemon_first_use_loop_uses_dynamic_port_and_cleans_record(
 
         # Generic request rejection belongs to this starter, not the quantum lab.
         with project.authoring() as author:
+            author.use(parameter_branch="starter")
             before = author_workers()
             assert before
             source = author.state()
@@ -356,6 +351,18 @@ def test_cli_daemon_first_use_loop_uses_dynamic_port_and_cleans_record(
             author.prepare("signal")
             assert author_workers() == before
             assert author.state() == source
+            params = author.params
+            params["response"]["signal"]["scale"] = 2.0
+            saved = params.save()
+            scaled = (
+                author.prepare("signal", scans={"position": [-1.0, 0.0, 1.0]})
+                .run()
+                .wait(timeout=120)
+                .result()
+            )
+            assert scaled.measurements()["result"].require_values() == (1.0, 2.0, 1.0)
+            assert author.params.version == saved
+            assert author.config.registry().entries == ()
 
         status = runner.invoke(app, ["status", str(tmp_path)])
         assert status.exit_code == 0, status.output
@@ -388,6 +395,7 @@ def test_cli_daemon_first_use_loop_uses_dynamic_port_and_cleans_record(
             assert client.measurement_preview(run_id) == preview
         with project.authoring() as author:
             retained = author.run(scan_run_id)
+            assert author.config.registry().entries == ()
             assert retained.measurements()["result"].require_values() == (0.5, 1.0, 0.5)
             assert (
                 retained.published_analysis(scan_summary["analysis_id"])
@@ -504,8 +512,8 @@ def test_startup_trace_locates_config_stall_after_instrument_readiness(
     configuration = tmp_path / "src/scopecat_lab/configuration.py"
     configuration.write_text(
         configuration.read_text().replace(
-            "def initial_parameters() -> ParameterRevisionContent:",
-            "def initial_parameters() -> ParameterRevisionContent:\n"
+            "def initial_setup() -> ExecutableSetupSnapshot:",
+            "def initial_setup() -> ExecutableSetupSnapshot:\n"
             "    import faulthandler\n"
             "    import time\n"
             "    from scopecat_server import _startup_diagnostics as diagnostics\n"
@@ -519,7 +527,7 @@ def test_startup_trace_locates_config_stall_after_instrument_readiness(
 
     def stop_after_sample(_elapsed: float, _stage: str) -> None:
         if any(
-            "in initial_parameters" in trace.read_text()
+            "in initial_setup" in trace.read_text()
             for trace in diagnostics.glob("daemon-startup-*.log")
         ):
             raise SampleCaptured
@@ -535,7 +543,7 @@ def test_startup_trace_locates_config_stall_after_instrument_readiness(
     assert "instrument endpoint ready" in evidence
     assert "project schema ready" in evidence
     assert "daemon application ready; bootstrapping config registry" in evidence
-    assert "in initial_parameters" in evidence
+    assert "in initial_setup" in evidence
     assert "config registry ready; starting application services" not in evidence
     assert not daemon_record_path(tmp_path).exists()
 

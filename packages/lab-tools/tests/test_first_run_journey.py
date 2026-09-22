@@ -67,7 +67,7 @@ from scopecat_server.lifecycle import inspect_daemon
 record = inspect_daemon(project).record
 assert record is not None
 with LabApplication().connect(record.base_url) as lab, project.authoring() as author:
-    original_default = lab.config.active()
+    assert lab.config.registry().entries == ()
     original_setup = lab.setup.active()
     templates = lab.setup.templates()
     assert len(templates) == 1 and templates[0].id == 'starter-software'
@@ -75,7 +75,7 @@ with LabApplication().connect(record.base_url) as lab, project.authoring() as au
     assert lab.setup.import_template(
         templates[0], name='fresh-software-parameters'
     ) == imported
-    assert lab.config.active() == original_default
+    assert lab.config.registry().entries == ()
     assert lab.setup.active() == original_setup
     lab.setup.activate(
         imported.setup, expected_generation=original_setup.activation.generation
@@ -88,7 +88,7 @@ with LabApplication().connect(record.base_url) as lab, project.authoring() as au
     assert scenario.model_id == 'scopecat.starter.responses'
     assert run.snapshot.config_source.parameters == imported.parameters.ref
     assert run.snapshot.config_source.setup == imported.setup.ref
-    assert lab.config.active() == original_default
+    assert lab.config.registry().entries == ()
     report = author.analyze_as(
         run.id, 'scopecat_lab.authored.signal:summarize', Summary
     )

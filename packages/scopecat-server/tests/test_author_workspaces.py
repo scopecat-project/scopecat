@@ -35,7 +35,9 @@ def test_two_workspace_publication_and_execution(tmp_path: Path) -> None:
         )
     )
     source = second.root / "src/scopecat_lab/authored/signal.py"
-    source.write_text(source.read_text().replace("return 1.0 /", "return 2.0 /"))
+    source.write_text(
+        source.read_text().replace("return scale /", "return 2.0 * scale /")
+    )
     (source.parent / "alternate.py").write_text(
         source.read_text().replace('id="signal"', 'id="alternate"')
     )
@@ -44,13 +46,18 @@ def test_two_workspace_publication_and_execution(tmp_path: Path) -> None:
         LocalDaemonRuntime(second.root)
     start_project(first, timeout=60)
     try:
-        with first.authoring() as a, second.authoring() as b:
+        with first.connect() as lab, first.authoring() as a, second.authoring() as b:
             initial_a = a.state()
             initial_b = b.state()
             assert initial_a.active != initial_b.active
             assert b.workspace_id == registered.id
             assert {item.id for item in b.catalog().entries} == {"signal"}
             collection = a.create_record_collection("Shared acquisition")
+            imported = lab.setup.import_template(
+                lab.setup.templates()[0], name="shared-parameters"
+            )
+            a.use(selection=imported.selection)
+            b.use(selection=imported.selection)
             a.use(collection=collection.id)
             b.use(collection=collection.id)
             prepared_a = a.prepare("signal")
@@ -67,7 +74,9 @@ def test_two_workspace_publication_and_execution(tmp_path: Path) -> None:
             assert two.request.metadata["author_workspace"] == registered.id
             assert one.request.metadata["author_workspace"] == "legacy"
             source.write_text(
-                source.read_text().replace("return 2.0 /", "return 3.0 /")
+                source.read_text().replace(
+                    "return 2.0 * scale /", "return 3.0 * scale /"
+                )
             )
             manifest.write_text(
                 manifest.read_text().replace(
@@ -76,8 +85,12 @@ def test_two_workspace_publication_and_execution(tmp_path: Path) -> None:
                 )
             )
             refreshed_b = b.refresh_authors(expected_generation=initial_b.generation)
-            assert {item.id for item in b.catalog().entries} == {"signal", "alternate"}
-            assert {item.id for item in a.catalog().entries} == {"signal"}
+            assert {item.id for item in b.catalog().entries} == {
+                "signal",
+                "alternate",
+                "first_run",
+            }
+            assert {item.id for item in a.catalog().entries} == {"signal", "first_run"}
             assert {
                 item.id for item in b.catalog(code_revision=initial_b.active).entries
             } == {"signal"}
