@@ -46,10 +46,16 @@ def recipe_definition_identity(value: object) -> object:
             ),
         }
     if isinstance(value, Mapping):
-        return tuple(
-            (recipe_definition_identity(key), recipe_definition_identity(item))
-            for key, item in cast("Mapping[object, object]", value).items()
-        )
+        return {
+            "type": f"{type(value).__module__}.{type(value).__qualname__}",
+            "items": tuple(
+                (recipe_definition_identity(key), recipe_definition_identity(item))
+                for key, item in cast("Mapping[object, object]", value).items()
+            ),
+        }
     if isinstance(value, Sequence) and not isinstance(value, str | bytes):
-        return tuple(recipe_definition_identity(item) for item in value)
+        return {
+            "type": f"{type(value).__module__}.{type(value).__qualname__}",
+            "items": tuple(recipe_definition_identity(item) for item in value),
+        }
     return content_fingerprint(value)

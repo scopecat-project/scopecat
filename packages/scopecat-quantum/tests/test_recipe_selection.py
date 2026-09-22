@@ -7,6 +7,7 @@ from scopecat.records.parameter import ParameterSnapshot
 
 from scopecat_quantum import authoring as q
 from scopecat_quantum._ids import TargetCompileEntryId
+from scopecat_quantum._recipe_definition_identity import recipe_definition_identity
 from scopecat_quantum.compilation import RecipeTargetCompiler
 from scopecat_quantum.gates import GateCall
 from scopecat_quantum.pulse_recipes import PulseRecipeProfile
@@ -93,3 +94,7 @@ def test_direct_pulse_program_needs_no_recipe_profile() -> None:
     assert float(result.entry.program.body.program.duration_seconds) == pytest.approx(
         32e-9
     )
+
+
+def test_captured_sequence_type_is_part_of_recipe_identity() -> None:
+    assert recipe_definition_identity([24]) != recipe_definition_identity((24,))
