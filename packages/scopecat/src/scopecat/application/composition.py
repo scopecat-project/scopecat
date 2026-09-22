@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from functools import partial
 from typing import TYPE_CHECKING, cast
 
 from scopecat.application.lab import LabApplication
@@ -29,13 +30,24 @@ def compose_application(
 
     for module in declaration.author_modules:
         load_author_module(module)
+    builder = (
+        cast("ExperimentSystemBuilder", resolve(declaration.experiment_system))
+        if declaration.experiment_system
+        else None
+    )
+    if declaration.experiment_system_inputs:
+        if builder is None:
+            raise ValueError(
+                "Author experiment_system_inputs require a declared builder"
+            )
+        inputs: dict[str, object] = {}
+        for name, spec in declaration.experiment_system_inputs:
+            module, _, attribute = spec.partition(":")
+            inputs[name] = getattr(load_author_module(module), attribute)
+        builder = partial(builder, **inputs)
     return LabApplication(
         author_modules=declaration.author_modules,
-        build_experiment_system=(
-            cast("ExperimentSystemBuilder", resolve(declaration.experiment_system))
-            if declaration.experiment_system
-            else None
-        ),
+        build_experiment_system=builder,
         procedures=tuple(
             cast("RegisteredProcedure", resolve(spec))
             for spec in declaration.procedures

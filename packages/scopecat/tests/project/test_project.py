@@ -516,3 +516,35 @@ def test_author_modules_reject_custom_application_factory(tmp_path: Path) -> Non
     )
     with pytest.raises(ProjectManifestError, match=r"not lab\.application"):
         load_project(manifest)
+
+
+@pytest.mark.parametrize(
+    "entry",
+    [
+        'config="lab:VALUE"',
+        'instrument_catalog="lab:VALUE"',
+        'recipes="not-an-import"',
+        "recipes=42",
+    ],
+)
+def test_author_system_inputs_reject_invalid_declarations(
+    tmp_path: Path,
+    entry: str,
+) -> None:
+    manifest = tmp_path / "scopecat.toml"
+    manifest.write_text("[lab]\n[authors.experiment_system_inputs]\n" + entry)
+    with pytest.raises(ProjectManifestError):
+        _ = load_project(manifest)
+
+
+def test_author_system_inputs_require_builder_at_application_load(
+    tmp_path: Path,
+) -> None:
+    manifest = tmp_path / "scopecat.toml"
+    manifest.write_text(
+        '[lab]\n[authors.experiment_system_inputs]\nrecipes="unimported:VALUE"'
+    )
+    project = load_project(manifest)
+    with pytest.raises(ValueError, match="require a declared builder"):
+        _ = project.load_application()
+    assert "unimported" not in sys.modules

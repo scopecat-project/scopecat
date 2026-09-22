@@ -191,7 +191,8 @@ A project without `[authors]` retains its existing initial-load behavior and has
 no refresh button.
 
 Files outside the refresh roots form the maintained composition identity.
-Manifest settings other than `authors.modules` remain maintained; changing source
+Manifest settings other than `authors.modules` and `authors.experiment_system_inputs`
+remain maintained; changing source
 boundaries, package ownership or dependencies still requires maintenance.
 Formatting and comments do not change the manifest maintenance identity.
 Compiler, driver, bootstrap, dependency declaration or other maintained source

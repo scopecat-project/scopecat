@@ -128,6 +128,7 @@ def capture_sources(project: SourceProject) -> AuthorRevisionBundle:
     document = tomllib.loads(files["scopecat.toml"].decode("utf-8"))
     authors = cast("dict[str, object]", document.get("authors", {}))
     authors.pop("modules", None)
+    authors.pop("experiment_system_inputs", None)
     maintenance["scopecat.toml"] = sha256_json_hash(content_fingerprint(document))
     from scopecat.execution_environment import execution_packages
     from scopecat.installed_authors import capture_installed_authors

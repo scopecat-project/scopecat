@@ -5,8 +5,10 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
+from scopecat_testkit.config_fixtures import simple_scan_config
 from scopecat_testkit.project_loading import isolated_project_imports
 
+from scopecat.planning.catalog import InstrumentContractCatalog
 from scopecat.project import (
     ProjectCodeLoadError,
     ProjectManifestError,
@@ -14,12 +16,16 @@ from scopecat.project import (
     open_project,
 )
 from scopecat.project_sources import capture_sources, require_environment
+from scopecat.records.config import config_content_hash
 
 
 @pytest.fixture(autouse=True)
 def isolated() -> Iterator[None]:
     with isolated_project_imports():
         yield
+    for name in tuple(sys.modules):
+        if name == "test_lab_adapter" or name.startswith("test_lab_adapter."):
+            del sys.modules[name]
 
 
 @pytest.fixture
@@ -89,6 +95,54 @@ def test_bootstrap_and_local_authors_share_declared_composition(
         module / "authored.py"
     )
     assert sys.modules["experiments"].__file__ == str(root / "src" / "experiments.py")
+
+
+def test_author_inputs_bind_installed_builder_and_are_revision_owned(
+    adapter: tuple[Path, Path],
+) -> None:
+    root, module = adapter
+    manifest = module / "adapter.toml"
+    manifest.write_text(
+        manifest.read_text().replace(
+            "[lab.capabilities]",
+            '[lab.capabilities]\nexperiment_system="test_lab_adapter.system:build"',
+        )
+    )
+    (module / "system.py").write_text(
+        "from scopecat.planning.system import ExperimentSystem\n"
+        "def build(config, instrument_catalog, *, recipes):\n"
+        "    assert recipes == config.id\n"
+        "    return ExperimentSystem(instrument_catalog=instrument_catalog)\n"
+    )
+    metadata = module.parent / "test_lab_adapter-1.0.dist-info" / "RECORD"
+    metadata.write_text(metadata.read_text() + "\ntest_lab_adapter/system.py,,\n")
+    selected = simple_scan_config()
+    (root / "src" / "calibration.py").write_text(f"RECIPES = {selected.id!r}\n")
+    source_manifest = root / "scopecat.toml"
+    source_manifest.write_text(
+        source_manifest.read_text()
+        + ('\n[authors.experiment_system_inputs]\nrecipes="calibration:RECIPES"\n')
+    )
+    project = open_project(root)
+    assert "calibration" not in sys.modules
+    assert "test_lab_adapter.system" not in sys.modules
+    (module / "__init__.py").write_text("")
+    before = capture_sources(project)
+    application = project.load_application()
+    assert application.build_experiment_system is not None
+    catalog = InstrumentContractCatalog(
+        config_content_hash=config_content_hash(selected)
+    )
+    assert (
+        application.build_experiment_system(selected, catalog).instrument_catalog
+        is catalog
+    )
+    source_manifest.write_text(
+        source_manifest.read_text().replace("calibration:RECIPES", "calibration:OTHER")
+    )
+    after = capture_sources(open_project(root))
+    assert before.manifest.maintenance_hash == after.manifest.maintenance_hash
+    assert before.files != after.files
 
 
 def test_capture_detects_same_version_adapter_replacement(

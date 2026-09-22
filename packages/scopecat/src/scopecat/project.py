@@ -234,10 +234,11 @@ def load_project(
         "refresh_roots",
         "packages",
         "dependencies",
+        "experiment_system_inputs",
     }:
         raise ProjectManifestError(
-            "[authors] accepts modules, source_roots, refresh_roots, packages "
-            "and dependencies"
+            "[authors] accepts modules, source_roots, refresh_roots, packages, "
+            "dependencies and experiment_system_inputs"
         )
     if "modules" in authors:
         if application is not None:
@@ -258,6 +259,13 @@ def load_project(
             declaration,
             author_modules=tuple(
                 dict.fromkeys((*declaration.author_modules, *modules))
+            ),
+        )
+    if "experiment_system_inputs" in authors:
+        capabilities = replace(
+            capabilities or LabCapabilities(),
+            experiment_system_inputs=_parse_system_inputs(
+                authors["experiment_system_inputs"], application=application
             ),
         )
     dependencies_value = authors.get("dependencies")
@@ -725,6 +733,26 @@ def _local_roots(value: object) -> tuple[str, ...]:
             )
         selected.append(item)
     return tuple(selected)
+
+
+def _parse_system_inputs(
+    value: object, *, application: str | None
+) -> tuple[tuple[str, str], ...]:
+    if application is not None:
+        raise ProjectManifestError(
+            "authors.experiment_system_inputs requires declarative lab capabilities"
+        )
+    if not isinstance(value, dict):
+        raise ProjectManifestError("authors.experiment_system_inputs must be a table")
+    selected: list[tuple[str, str]] = []
+    for name, spec in cast("dict[str, object]", value).items():
+        if not name.isidentifier() or name in {"config", "instrument_catalog"}:
+            raise ProjectManifestError(f"Invalid experiment system input name: {name}")
+        if not isinstance(spec, str):
+            raise ProjectManifestError("Experiment system inputs must be import names")
+        _ = _parse_capabilities({"experiment_system": spec})
+        selected.append((name, spec))
+    return tuple(sorted(selected))
 
 
 def _parse_capabilities(value: object) -> LabCapabilities:

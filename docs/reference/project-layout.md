@@ -64,6 +64,25 @@ the supplied path and makes the project's `src` directory importable.
 
 ## Source ownership
 
+An author workspace can supply code values to the installed experiment-system
+builder without replacing it:
+
+```toml
+[authors.experiment_system_inputs]
+recipes = "calibration:RECIPES"
+```
+
+The framework resolves these symbols in the selected author revision and binds
+them as keyword arguments. The adapter's builder accepts the usual positional
+`config, instrument_catalog` plus its declared keyword inputs, for example
+`def build(config, instrument_catalog, *, recipes): ...`.
+Discovery and daemon bootstrap do not import these values. Keep local input
+modules in source/refresh roots. Input selections and their source belong to
+the author revision; numeric scientific settings still belong in configuration.
+Inputs require declarative capabilities and cannot override the builder,
+`config`, or `instrument_catalog`. Missing or unsupported keyword arguments
+follow normal Python call errors; there is no global recipe registry.
+
 - `application.py` exports the lightweight initial configuration bootstrap.
 - `[lab.capabilities]` declares notebook and worker execution capabilities without
   requiring a custom application factory.
