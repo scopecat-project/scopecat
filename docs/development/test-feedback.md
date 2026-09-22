@@ -154,10 +154,13 @@ candidate unchanged; verification changes neither the branch nor the lab default
 fit fields, receipt authority, candidate identity and unrelated-cell preservation
 remain checked there.
 
-`test_drag_candidate_retains_science_without_default_publication` retains actual
+`test_drag_candidate_publishes_to_branch_and_runs_accepted_gate` retains actual
 DRAG acquisition, fit/figure/report, candidate acquisition and cross-run decision
-with independent parameter/setup inputs. It replaces the retired DRAG gallery's
-scientific assertions without requiring global-default publication and restore.
+with independent parameter/setup inputs. It then publishes the verified candidate
+to the captured branch and executes the standard-gate fixture with that exact
+parameter revision and setup. The global registry remains empty. This replaces
+the retired DRAG gallery and unused single-target default-publishing procedure;
+no global-default publication or restore is required.
 The managed-author journey also publishes explicitly to an independent branch
 and retries the same request. `test_project_analysis_runtime.py` covers rejected
 decisions, branch-head/base conflicts, transaction rollback and current-format

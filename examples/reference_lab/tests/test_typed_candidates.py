@@ -8,10 +8,17 @@ from pathlib import Path
 import pytest
 import scopecat as sc
 from scopecat.analysis.facts import ordinary_result_schema
+from scopecat.api.parameter_candidates import (
+    ParameterCandidate,
+    VerifiedParameterCandidate,
+)
 from scopecat.application import LabApplication
 from scopecat.project import load_project
 from scopecat.records.parameter import TableParameterValue
-from scopecat.records.run import AnalysisCandidateRunConfigSource
+from scopecat.records.run import (
+    AnalysisCandidateRunConfigSource,
+    ParameterRunConfigSource,
+)
 from scopecat.records.sample import SampleRevisionDraft
 from scopecat_server.lifecycle import start_project, stop_project
 
@@ -29,6 +36,7 @@ from reference_lab.workflows.drag_beta_verification import (
     DRAG_BETA_VERIFICATION_SCHEMA,
     drag_beta_candidate_verification,
 )
+from reference_lab.workflows.production_drag_gate import production_drag_experiment
 
 from .conftest import ReferenceLabDaemon
 
@@ -239,7 +247,7 @@ def test_typed_candidates_retain_cells_and_independent_policy(
         assert lab.parameters.checkout("daily").head.revision == advanced.ref
 
 
-def test_drag_candidate_retains_science_without_default_publication(
+def test_drag_candidate_publishes_to_branch_and_runs_accepted_gate(
     candidate_daemon: ReferenceLabDaemon,
 ) -> None:
     with create_application(candidate_daemon.root).connect(candidate_daemon.url) as lab:
@@ -302,4 +310,28 @@ def test_drag_candidate_retains_science_without_default_publication(
         assert lab.config.registry() == registry
         assert lab.setup.active() == setup
         assert lab.parameters.checkout("drag/daily").head == branch
+        assert lab.parameters.get(parameters.id) == parameters
+        # This legacy numerical analysis publishes its own retained decision;
+        # the server validates that evidence again at the publication boundary.
+        verified = VerifiedParameterCandidate(
+            ParameterCandidate(lab.config, candidate), verification
+        )
+        published = verified.publish_to_branch(branch, name="drag-accepted")
+        assert published.publication is not None
+        assert published.publication.verification.analysis_record_id == verification.id
+        accepted = lab.parameters.get(published.revision.revision_id)
+        assert accepted.parameters == check.config.parameter_snapshot
+        production = lab.run(
+            production_drag_experiment.build(),
+            config=lab.parameters.resolve(accepted, setup=setup.revision),
+        )
+        assert production.status == "completed"
+        assert len(production.measurements().records) == 1
+        production_source = production.snapshot.config_source
+        assert isinstance(production_source, ParameterRunConfigSource)
+        assert production_source.parameters == published.revision
+        assert production_source.setup == setup.revision.ref
+        assert lab.parameters.checkout("drag/daily").head == published
+        assert lab.config.registry() == registry
+        assert lab.setup.active() == setup
         assert lab.parameters.get(parameters.id) == parameters
