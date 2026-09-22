@@ -13,6 +13,8 @@ def create_bootstrap(project_root: Path):
     import scopecat_server.runtime as daemon_runtime  # noqa: TID251
     from scopecat.application import LabBootstrap
     from scopecat.records.config import ConfigProfileSnapshot
+    from scopecat.records.parameter_revision import ParameterRevisionContent
+    from scopecat.records.setup import ExecutableSetupSnapshot
 
     from .daemon_telemetry import telemetry_payload_service
 
@@ -23,7 +25,15 @@ def create_bootstrap(project_root: Path):
     config = ConfigProfileSnapshot.model_validate_json(
         (project_root / "benchmark-config.json").read_text(encoding="utf-8")
     )
-    return LabBootstrap(bootstrap_config=lambda: config)
+    return LabBootstrap(
+        setup=lambda: ExecutableSetupSnapshot.from_config(config),
+        parameter_defaults=lambda: ParameterRevisionContent(
+            id=config.id,
+            system_id=config.system.id,
+            catalog=config.parameter_catalog,
+            parameters=config.parameter_snapshot,
+        ),
+    )
 
 
 def create_application(project_root: Path):

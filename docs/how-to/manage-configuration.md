@@ -241,6 +241,11 @@ prebaseline snapshots or runs; preserve original files separately under the
 
 ## Review configuration source changes
 
+This is a maintainer workflow for the transitional execution default. Bootstrap
+declares `setup` and optional `parameter_defaults` separately. Ordinary author
+edits belong in `session.params` and named parameter branches; they do not require
+editing bootstrap source or publishing a daemon-wide default.
+
 Validate the source without starting the daemon:
 
 ```sh
@@ -260,7 +265,7 @@ audit note:
 ```sh
 scopecat config apply ./my-lab \
   --actor alice \
-  --note "add readout VNA and reviewed defaults"
+  --note "publish reviewed repetition defaults"
 ```
 
 Export a complete JSON snapshot for review or backup:
@@ -269,9 +274,11 @@ Export a complete JSON snapshot for review or backup:
 scopecat config export ./my-lab --output ./active-config.json
 ```
 
-The exported JSON is generated state, not the primary editing format. Continue
-editing the project's Python configuration source and use `diff` and `apply` for
-subsequent changes.
+The exported JSON is generated state, not the primary editing format. `apply`
+never installs or switches equipment. Review and explicitly activate equipment
+changes through [setup management](maintain-executable-setup.md) first; publishing
+defaults requires a compatible selected setup. `diff` and `apply` require both
+declarations, while `check` also accepts equipment-only bootstrap.
 
 
 ## Propose an entity or field edit

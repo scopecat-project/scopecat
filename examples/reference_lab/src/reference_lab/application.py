@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 
 from scopecat.application import LabBootstrap
 
-from reference_lab.configuration import bootstrap_config
+from reference_lab.configuration import initial_parameters, initial_setup
 
 if TYPE_CHECKING:
     from scopecat.application import LabApplication
@@ -18,7 +18,8 @@ def create_bootstrap(project_root: Path) -> LabBootstrap:
 
     config_dir = project_root / "config"
     return LabBootstrap(
-        bootstrap_config=lambda: bootstrap_config(config_dir),
+        setup=lambda: initial_setup(config_dir),
+        parameter_defaults=initial_parameters,
     )
 
 

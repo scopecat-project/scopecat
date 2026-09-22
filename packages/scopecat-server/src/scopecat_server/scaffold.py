@@ -27,16 +27,13 @@ from __future__ import annotations
 import scopecat as sc
 from scopecat.kernel.entity import EntityRef
 from scopecat.records.config import (
-    ConfigProfileSnapshot,
     InstrumentRegistry,
     InstrumentSpec,
     ResourceRoute,
     RoutingEndpoint,
     RoutingGraph,
-    SystemSpec,
     Topology,
     VirtualInstrumentConnection,
-    snapshot_config_profile,
 )
 from scopecat.records.execution_scenario import SoftwareExecutionScenario
 from scopecat.records.parameter import (
@@ -45,73 +42,78 @@ from scopecat.records.parameter import (
     ParameterSnapshot,
     ScalarParameterValue,
 )
+from scopecat.records.parameter_revision import ParameterRevisionContent
+from scopecat.records.setup import ExecutableSetupSnapshot
 
 DEFAULT_REPETITIONS = 128
 
 
-def bootstrap_config() -> ConfigProfileSnapshot:
-    """Build the default config used only while the daemon registry is empty."""
-
-    return snapshot_config_profile(
-        profile_id="default",
-        system=SystemSpec(
-            id="default-system",
-            scenario=SoftwareExecutionScenario(
-                id="starter-software",
-                label="Software experiment bench",
-                model_id="scopecat.starter.responses",
-                model_version="1",
-                capabilities=("Virtual temperature readings", "Analytic signal scans"),
-                limitations=(
-                    "Synthetic responses, not a model of a physical sample.",
-                    "No physical instrument connections.",
+def initial_setup() -> ExecutableSetupSnapshot:
+    """Declare equipment independently of author parameter tables."""
+    return ExecutableSetupSnapshot(
+        scenario=SoftwareExecutionScenario(
+            id="starter-software",
+            label="Software experiment bench",
+            model_id="scopecat.starter.responses",
+            model_version="1",
+            capabilities=("Virtual temperature readings", "Analytic signal scans"),
+            limitations=(
+                "Synthetic responses, not a model of a physical sample.",
+                "No physical instrument connections.",
+            ),
+        ),
+        primary_entity_id="subject",
+        topology=Topology(
+            entities=[EntityRef(id="subject", kind="logical_subject")],
+        ),
+        instrument_registry=InstrumentRegistry(
+            instruments=[
+                InstrumentSpec(
+                    id="thermometer",
+                    exclusivity_key="thermometer",
+                    driver_id="scopecat.virtual.temperature_monitor",
+                    connection=VirtualInstrumentConnection(),
+                    run_start="preserve",
+                    success_action="release",
+                    failure_action="abort_and_release",
                 ),
-            ),
-            primary_entity_id="subject",
-            topology=Topology(
-                entities=[EntityRef(id="subject", kind="logical_subject")],
-            ),
-            instrument_registry=InstrumentRegistry(
-                instruments=[
-                    InstrumentSpec(
-                        id="thermometer",
-                        exclusivity_key="thermometer",
-                        driver_id="scopecat.virtual.temperature_monitor",
-                        connection=VirtualInstrumentConnection(),
-                        run_start="preserve",
-                        success_action="release",
-                        failure_action="abort_and_release",
-                    ),
-                ]
-            ),
-            routing=RoutingGraph(
-                routes=[
-                    ResourceRoute(
-                        id="thermometer",
-                        instrument_id="thermometer",
-                        entity_ids=["subject"],
-                        endpoints=[
-                            RoutingEndpoint(
-                                interface_id="scopecat.temperature_readout/v1",
-                                entity_id="subject",
-                            )
-                        ],
-                    ),
-                ]
-            ),
-            domain_target=None,
-            parameter_catalog=ParameterCatalog(
-                id="parameters",
-                definitions=(
-                    ParameterDefinition(
-                        id="repetitions",
-                        value_type=sc.ScalarType(sc.IntType(minimum=1)),
-                        description="Default number of repeated acquisitions.",
-                    ),
+            ]
+        ),
+        routing=RoutingGraph(
+            routes=[
+                ResourceRoute(
+                    id="thermometer",
+                    instrument_id="thermometer",
+                    entity_ids=["subject"],
+                    endpoints=[
+                        RoutingEndpoint(
+                            interface_id="scopecat.temperature_readout/v1",
+                            entity_id="subject",
+                        )
+                    ],
+                ),
+            ]
+        ),
+        domain_target=None,
+    )
+
+
+def initial_parameters() -> ParameterRevisionContent:
+    """Seed the transitional execution default only on first use."""
+    return ParameterRevisionContent(
+        id="default",
+        system_id="default-system",
+        catalog=ParameterCatalog(
+            id="parameters",
+            definitions=(
+                ParameterDefinition(
+                    id="repetitions",
+                    value_type=sc.ScalarType(sc.IntType(minimum=1)),
+                    description="Default number of repeated acquisitions.",
                 ),
             ),
         ),
-        parameter_snapshot=ParameterSnapshot(
+        parameters=ParameterSnapshot(
             id="default-values",
             values=(
                 ScalarParameterValue(
@@ -123,7 +125,7 @@ def bootstrap_config() -> ConfigProfileSnapshot:
     )
 
 
-__all__ = ["bootstrap_config"]
+__all__ = ["initial_parameters", "initial_setup"]
 ''',
     "src/scopecat_lab/application.py": '''\
 """Initial configuration bootstrap for this project."""
@@ -134,22 +136,22 @@ from pathlib import Path
 
 from scopecat.application import LabBootstrap
 from scopecat.records.configuration_template import ConfigurationTemplate
-from scopecat.records.setup import ExecutableSetupSnapshot
 
-from .configuration import bootstrap_config
+from .configuration import initial_parameters, initial_setup
 
 
 def create_bootstrap(_project_root: Path) -> LabBootstrap:
     """Expose only config construction to the daemon process."""
 
     return LabBootstrap(
-        bootstrap_config=bootstrap_config,
+        setup=initial_setup,
+        parameter_defaults=initial_parameters,
         configuration_templates=configuration_templates,
     )
 
 
 def configuration_templates() -> tuple[ConfigurationTemplate, ...]:
-    config = bootstrap_config()
+    parameters = initial_parameters()
     return (
         ConfigurationTemplate(
             id="starter-software",
@@ -158,9 +160,9 @@ def configuration_templates() -> tuple[ConfigurationTemplate, ...]:
                 "Virtual temperature readings and analytic signal scans. "
                 "Import fresh parameters without changing existing defaults."
             ),
-            setup=ExecutableSetupSnapshot.from_config(config),
-            catalog=config.parameter_catalog,
-            parameters=config.parameter_snapshot,
+            setup=initial_setup(),
+            catalog=parameters.catalog,
+            parameters=parameters.parameters,
         ),
     )
 

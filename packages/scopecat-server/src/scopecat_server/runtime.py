@@ -12,9 +12,9 @@ from uuid import UUID, uuid4
 
 from fastapi import FastAPI
 from filelock import FileLock, Timeout
-from scopecat.application.bootstrap import BootstrapConfigFactory
+from scopecat.application.bootstrap import LabBootstrap
 from scopecat.author_workspaces import author_workspace_id
-from scopecat.config.resolution import validate_config_profile
+from scopecat.config.resolution import compose_configuration, validate_config_profile
 from scopecat.daemon.wire import (
     ConfigPublishCommand,
     ParameterConfigRevisionSource,
@@ -26,7 +26,7 @@ from scopecat.project_state import ProjectStateServices
 from scopecat.records.config import ConfigProfileSnapshot, config_content_hash
 from scopecat.records.configuration_template import ConfigurationTemplate
 from scopecat.records.parameter_revision import ParameterRevisionContent
-from scopecat.records.setup import ExecutableSetupSnapshot
+from scopecat.records.setup import ExecutableSetupSnapshot, SetupRevision
 from scopecat.runtime_binding import load_runtime_binding
 
 from scopecat_server._startup_diagnostics import stage as startup_stage
@@ -85,7 +85,9 @@ class LocalDaemonRuntime:
         self,
         project_root: str | Path,
         *,
-        bootstrap_config: ConfigProfileSnapshot | BootstrapConfigFactory | None = None,
+        bootstrap_config: (
+            ConfigProfileSnapshot | Callable[[], ConfigProfileSnapshot] | None
+        ) = None,
         bootstrap_spec: str | None = None,
         adapter_packages: tuple[tuple[str, str], ...] = (),
         instrument_backend_spec: str | None = None,
@@ -130,7 +132,7 @@ class LocalDaemonRuntime:
             ) from error
         database = self.state_dir / "control.sqlite3"
         objects = self.state_dir / "objects"
-        project_bootstrap: BootstrapConfigFactory | None = None
+        project_bootstrap: LabBootstrap | None = None
         configuration_templates: (
             Callable[[], tuple[ConfigurationTemplate, ...]] | None
         ) = None
@@ -156,7 +158,7 @@ class LocalDaemonRuntime:
                     self.project_root,
                     installed_packages=adapter_packages,
                 )(self.project_root)
-                project_bootstrap = bootstrap.bootstrap_config
+                project_bootstrap = bootstrap
                 configuration_templates = bootstrap.configuration_templates
             if instrument_backend_spec is not None:
                 instrument_endpoint = SubprocessInstrumentBackendEndpoint(
@@ -369,9 +371,22 @@ class LocalDaemonRuntime:
 
 def _bootstrap_config_registry(
     config_service: ConfigService,
-    config: ConfigProfileSnapshot | BootstrapConfigFactory,
+    config: ConfigProfileSnapshot | Callable[[], ConfigProfileSnapshot] | LabBootstrap,
     setup_service: SetupService,
 ) -> None:
+    if isinstance(config, LabBootstrap) and config.parameter_defaults is None:
+        if config.setup is not None:
+            if setup_service.list():
+                try:
+                    setup_service.current()
+                except BackendNotFound as error:
+                    raise BackendConflict(
+                        "existing setup has not been activated; "
+                        "review and explicitly complete initialization"
+                    ) from error
+            else:
+                _initialize_setup(setup_service, config.setup())
+        return
     if config_service.get_config_registry().entries:
         try:
             setup_service.current()
@@ -387,12 +402,53 @@ def _bootstrap_config_registry(
             "review and explicitly complete initialization"
         )
     # Resolve application-owned inputs only for a genuinely empty registry.
-    selected = config() if callable(config) else config
-    validated = validate_config_profile(selected)
+    if isinstance(config, LabBootstrap):
+        if config.setup is None:
+            raise BackendConflict(
+                "parameter_defaults require an initial setup declaration"
+            )
+        assert config.parameter_defaults is not None
+        equipment = config.setup()
+        parameters = config.parameter_defaults()
+        validated = compose_configuration(
+            equipment,
+            id=parameters.id,
+            system_id=parameters.system_id,
+            catalog=parameters.catalog,
+            parameters=parameters.parameters,
+        )
+    else:
+        selected = config() if callable(config) else config
+        validated = validate_config_profile(selected)
+        equipment = ExecutableSetupSnapshot.from_config(validated)
+        parameters = ParameterRevisionContent(
+            id=validated.id,
+            system_id=validated.system.id,
+            catalog=validated.parameter_catalog,
+            parameters=validated.parameter_snapshot,
+        )
     digest = config_content_hash(validated).removeprefix("sha256:")
     entry_id = f"daemon-{digest}"
     note = "imported while bootstrapping a new lab instance"
-    equipment = ExecutableSetupSnapshot.from_config(validated)
+    setup = _initialize_setup(setup_service, equipment)
+    config_service.publish_config(
+        ConfigPublishCommand(
+            operation_id=f"bootstrap-config:{entry_id}",
+            source=ParameterConfigRevisionSource(
+                setup=setup.ref, parameters=parameters
+            ),
+            entry_id=entry_id,
+            actor="scopecat",
+            expected_generation=0,
+            note=note,
+        )
+    )
+
+
+def _initialize_setup(
+    setup_service: SetupService, equipment: ExecutableSetupSnapshot
+) -> SetupRevision:
+    note = "imported while bootstrapping a new lab instance"
     setup = setup_service.save(
         SetupSaveCommand(
             revision_id=f"setup-{equipment.content_hash.removeprefix('sha256:')}",
@@ -410,24 +466,7 @@ def _bootstrap_config_registry(
             note=note,
         )
     )
-    config_service.publish_config(
-        ConfigPublishCommand(
-            operation_id=f"bootstrap-config:{entry_id}",
-            source=ParameterConfigRevisionSource(
-                setup=setup.ref,
-                parameters=ParameterRevisionContent(
-                    id=validated.id,
-                    system_id=validated.system.id,
-                    catalog=validated.parameter_catalog,
-                    parameters=validated.parameter_snapshot,
-                ),
-            ),
-            entry_id=entry_id,
-            actor="scopecat",
-            expected_generation=0,
-            note=note,
-        )
-    )
+    return setup
 
 
 __all__ = ["LocalDaemonRuntime"]

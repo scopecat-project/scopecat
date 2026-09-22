@@ -86,9 +86,11 @@ accepts and returns full configurations, and run evidence
 still retains complete execution snapshots. Do not infer new calibration validity
 or compose historical parameters with the currently active setup on read.
 
-1. Move maintained first-use/scaffold declarations to the independent owners. Do not
-   mechanically replace every full-config call with `set_parameter_default`:
-   saving parameters and selecting a global default are different operations.
+1. Move remaining execution consumers away from requiring a global parameter
+   default. First-use/scaffold declarations already separate setup and parameters;
+   the optional default is still a transition. Do not mechanically replace every
+   full-config call with `set_parameter_default`: saving parameters and selecting
+   a global default are different operations.
 2. Separate measurement-target binding from device setup where required by real
    consumers. Define compatibility and independent execution by resource overlap,
    not by author-folder boundaries or a global parameter default.
@@ -114,7 +116,15 @@ Maintained registry/context fixtures now explicitly provision equipment before
 publishing parameter defaults. Publication rollback and missing-setup tests assert
 that parameter operations neither create nor alter equipment authority.
 
-Existing `bootstrap_config` declarations, full-config `set_default` inputs,
+Maintained `LabBootstrap` declarations now use independent lazy `setup` and
+optional `parameter_defaults` factories. Generated projects, teaching resources,
+reference bootstrap and source-maintenance CLI consume these declarations.
+Equipment-only startup creates no parameter default. The explicit runtime
+`bootstrap_config` injection still serves combined test fixtures; it is no longer
+a `LabBootstrap` field or the generated authoring example. The optional initial
+parameter default is still a bridge to existing execution consumers, not a branch.
+
+Full-config `set_default` inputs,
 working-point entries, setup rebinding and full-config experiment-system builders
 remain transitional dependencies. Green tests for them do not close this issue.
 

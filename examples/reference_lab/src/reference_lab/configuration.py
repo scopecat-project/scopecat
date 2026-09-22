@@ -6,11 +6,12 @@ import json
 from pathlib import Path
 from typing import cast
 
+from scopecat.config.resolution import compose_configuration
 from scopecat.records.config import (
     ConfigProfileSnapshot,
-    SystemSpec,
-    snapshot_config_profile,
 )
+from scopecat.records.parameter_revision import ParameterRevisionContent
+from scopecat.records.setup import ExecutableSetupSnapshot
 
 from reference_lab.parameters import (
     REFERENCE_PARAMETER_CATALOG,
@@ -22,22 +23,38 @@ DEMO_CONFIG_DIR = EXAMPLE_ROOT / "config"
 DAEMON_URL_ENV = "SCOPECAT_DAEMON_URL"
 
 
-def bootstrap_config(
+def initial_setup(
     config_dir: str | Path = DEMO_CONFIG_DIR,
-) -> ConfigProfileSnapshot:
-    """Combine infrastructure with the Python-owned parameter system."""
+) -> ExecutableSetupSnapshot:
+    """Load equipment without importing parameter tables into its declaration."""
 
     root = Path(config_dir)
     document = cast(
         "dict[str, object]",
         json.loads((root / "system-infrastructure.json").read_text(encoding="utf-8")),
     )
-    document["parameter_catalog"] = REFERENCE_PARAMETER_CATALOG
-    system = SystemSpec.model_validate(document)
-    return snapshot_config_profile(
-        profile_id="reference-lab-profile",
-        system=system,
-        parameter_snapshot=reference_lab_parameter_snapshot(),
+    document.pop("id")
+    return ExecutableSetupSnapshot.model_validate(document)
+
+
+def initial_parameters() -> ParameterRevisionContent:
+    return ParameterRevisionContent(
+        id="reference-lab-profile",
+        system_id="reference-lab-system",
+        catalog=REFERENCE_PARAMETER_CATALOG,
+        parameters=reference_lab_parameter_snapshot(),
+    )
+
+
+def bootstrap_config(config_dir: str | Path = DEMO_CONFIG_DIR) -> ConfigProfileSnapshot:
+    """Compose the execution carrier used by retained reference workflows."""
+    parameters = initial_parameters()
+    return compose_configuration(
+        initial_setup(config_dir),
+        id=parameters.id,
+        system_id=parameters.system_id,
+        catalog=parameters.catalog,
+        parameters=parameters.parameters,
     )
 
 
@@ -46,4 +63,6 @@ __all__ = [
     "DEMO_CONFIG_DIR",
     "EXAMPLE_ROOT",
     "bootstrap_config",
+    "initial_parameters",
+    "initial_setup",
 ]

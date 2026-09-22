@@ -83,7 +83,7 @@ def test_bootstrap_and_local_authors_share_declared_composition(
     root, module = adapter
     (module / "__init__.py").write_text("")
     project = open_project(root)
-    assert project.load_bootstrap().bootstrap_config is None
+    assert project.load_bootstrap().setup is None
     assert project.load_application().authors is not None
     assert sys.modules["test_lab_adapter.authored"].__file__ == str(
         module / "authored.py"

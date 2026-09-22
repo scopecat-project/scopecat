@@ -268,18 +268,28 @@ def config_check(
         typer.Argument(help="Project directory or scopecat.toml."),
     ] = _CURRENT_DIRECTORY,
 ) -> None:
-    """Validate the project's lazy bootstrap configuration source."""
+    """Validate first-use setup and optional parameter-default declarations."""
 
-    from scopecat.config.resolution import validate_config_profile
     from scopecat.project import open_project
     from scopecat.records.config import config_content_hash
+    from scopecat.records.setup import ExecutableSetupSnapshot
+
+    from .config_commands import load_source_config
 
     try:
         selected = open_project(project)
-        bootstrap_config = selected.load_bootstrap().bootstrap_config
-        if bootstrap_config is None:
-            raise ValueError("project bootstrap does not define bootstrap_config")
-        config = validate_config_profile(bootstrap_config())
+        bootstrap = selected.load_bootstrap()
+        if bootstrap.setup is not None and bootstrap.parameter_defaults is None:
+            setup = ExecutableSetupSnapshot.model_validate(
+                bootstrap.setup().model_dump()
+            )
+            console.print(
+                f"[green]valid[/green] setup={setup.content_hash} "
+                "parameter_defaults=none",
+                soft_wrap=True,
+            )
+            return
+        config = load_source_config(selected)
     except _project_config_errors() as error:
         _fail(error)
 
@@ -339,7 +349,7 @@ def config_apply(
         typer.Option(help="Reason recorded with the immutable revision."),
     ] = "apply project config source",
 ) -> None:
-    """Validate project configuration and make it the daemon default."""
+    """Publish declared parameter defaults; never select executable setup."""
 
     from scopecat.project import open_project
 

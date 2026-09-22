@@ -26,8 +26,13 @@ def test_reference_lab_manifest_discovers_separate_bootstrap_and_application() -
     assert project.bootstrap_spec == "reference_lab.application:create_bootstrap"
     assert project.application_spec == "reference_lab.application:create_application"
     assert project.instrument_backend_spec == "reference_lab.backend:create_backend"
-    assert bootstrap.bootstrap_config is not None
-    assert bootstrap.bootstrap_config() == bootstrap_config()
+    assert bootstrap.setup is not None
+    assert bootstrap.parameter_defaults is not None
+    assert bootstrap.setup().primary_entity_id == bootstrap_config().primary_entity_id
+    assert (
+        bootstrap.parameter_defaults().parameters
+        == bootstrap_config().parameter_snapshot
+    )
 
 
 def test_reference_lab_daemon_bootstrap_keeps_execution_callbacks_cold(
@@ -89,8 +94,10 @@ def test_reference_lab_application_loads_selected_project_system(
     bootstrap = create_bootstrap(tmp_path)
 
     assert application.build_experiment_system is not None
-    assert bootstrap.bootstrap_config is not None
-    selected_config = bootstrap.bootstrap_config()
+    assert bootstrap.setup is not None
+    assert bootstrap.parameter_defaults is not None
+    selected_config = bootstrap_config(config_dir)
+    assert bootstrap.setup().primary_entity_id == selected_config.primary_entity_id
     assert selected_config == bootstrap_config(config_dir)
     backend = create_backend(tmp_path)
     provider = backend.provider
