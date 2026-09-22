@@ -6,7 +6,7 @@ from __future__ import annotations
 import inspect
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import Protocol, cast
+from typing import TYPE_CHECKING, Protocol, cast
 
 from scopecat.authoring import (
     ComputeInput,
@@ -19,6 +19,12 @@ from scopecat.authoring.entity_selection import PerEntity
 from scopecat.domain.program import DomainProgramDef
 from scopecat.kernel.entity import EntityRef
 from scopecat.kernel.quantity import Quantity
+from scopecat.records.parameter import ParameterSnapshot
+
+from scopecat_quantum.recipe_selection import RecipeSelection
+
+if TYPE_CHECKING:
+    from scopecat_quantum.pulse_recipes import PulseRecipeProfile
 from scopecat.kernel.value_type_compatibility import (
     literal_scalar_type,
     require_assignable,
@@ -118,6 +124,30 @@ class QuantumProgramCall:
             key=self.domain_call.key,
         )
 
+    def with_recipes(
+        self, recipes: PulseRecipeProfile[ParameterSnapshot], /
+    ) -> QuantumProgramCall:
+        """Select pulse implementations for this call, without copying parameters."""
+        selected = Program(
+            ir_id=self.program.ir_id,
+            body=self.program.body,
+            elements=self.program.elements,
+            entity_sets=self.program.entity_sets,
+            inputs=self.program.inputs,
+            results=self.program.results,
+            description=self.program.description,
+            recipe_parameter_bindings=self.program.recipe_parameter_bindings,
+            recipes=RecipeSelection(recipes),
+        )
+        return _program_call(
+            selected,
+            self.domain_call.id,
+            inputs=dict(self.arguments),
+            compiler_inputs=dict(self.compiler_arguments),
+            shots=self.shots,
+            key=self.domain_call.key,
+        )
+
     def with_compiler_inputs(self, **inputs: ComputeInput) -> QuantumProgramCall:
         """Bind typed lowering-only values without changing the Program ABI."""
 
@@ -179,6 +209,7 @@ class QuantumProgramCall:
             results=self.program.results,
             description=self.program.description,
             recipe_parameter_bindings=tuple(bindings),
+            recipes=self.program.recipes,
         )
         return _program_call(
             program,
@@ -234,6 +265,7 @@ class Program:
     results: ProgramResults
     description: str | None = None
     recipe_parameter_bindings: tuple[RecipeParameterBinding, ...] = ()
+    recipes: RecipeSelection | None = None
 
     @property
     def id(self) -> str:
@@ -281,6 +313,7 @@ class ProgramDefinition(Program):
             results=declaration.results,
             description=declaration.description,
             recipe_parameter_bindings=declaration.recipe_parameter_bindings,
+            recipes=declaration.recipes,
         )
         self._definition = definition
         self._contract = contract

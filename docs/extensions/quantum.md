@@ -21,6 +21,29 @@ entry ids and result mappings remain request-local.
 
 ## Keep continuous intent and sampled realization separate
 
+Authors can select implementations on each program call:
+
+```python
+call = sequence("q0").with_recipes(RECIPES).with_shots(1024)
+result = context.use(call)
+```
+
+`RECIPES` is a `PulseRecipeProfile[ParameterSnapshot]`. Selection is local to
+the call and survives shot/compiler-input/recipe-parameter modifiers; it does
+not modify the reusable program definition or copy calibration values.
+`RecipeTargetCompiler` uses the call's selection ahead of its target-provided
+default. Pass `None` as that default when authors own recipe selection.
+Direct pulse/acquisition programs need no recipe profile; unresolved logical
+operations still require matching implementations.
+
+Selection identity includes declared recipe data, lexical Python function
+source, defaults and captured values. It excludes process-local caches. Function
+source must be inspectable; transitive module dependencies remain the retained
+author revision's responsibility. Do not mutate profiles or callback globals
+after selection. Different profiles never share a materialization cache.
+Only compiled numerical artifacts reach instrument workers; selecting recipes
+does not let author code choose physical routes or bypass target limits.
+
 The canonical pulse scheduler retains requested boundaries as exact `Decimal`
 seconds. `resolve_waveform_events(...)` applies logical `ShiftPhase` operations
 and returns exact, continuous-time `ResolvedWaveformEvent` values before any
