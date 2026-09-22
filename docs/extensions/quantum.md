@@ -19,7 +19,7 @@ candidate, because core may later split it around host-state changes. Repeated
 device-effective programs may share one scheduled representation; exact target
 entry ids and result mappings remain request-local.
 
-## Keep continuous intent and sampled realization separate
+## Select pulse recipes per call
 
 Authors can select implementations on each program call:
 
@@ -43,6 +43,8 @@ author revision's responsibility. Do not mutate profiles or callback globals
 after selection. Different profiles never share a materialization cache.
 Only compiled numerical artifacts reach instrument workers; selecting recipes
 does not let author code choose physical routes or bypass target limits.
+
+## Keep continuous intent and sampled realization separate
 
 The canonical pulse scheduler retains requested boundaries as exact `Decimal`
 seconds. `resolve_waveform_events(...)` applies logical `ShiftPhase` operations
