@@ -126,8 +126,6 @@ def test_interval_worker_plans_executes_and_reopens_one_exact_slot(
         worker = ProjectAutomationWorker(
             lab.procedures,
             planner=lab.procedures.interval_planner(clock=lambda: _DUE_PLANNER_NOW),
-            calibration_evaluator=lab.calibrations.evaluator(),
-            calibration_finalizer=lab.calibrations.publication_finalizer(),
             worker_id="interval-worker-first",
         )
 
@@ -169,8 +167,6 @@ def test_interval_worker_plans_executes_and_reopens_one_exact_slot(
         worker = ProjectAutomationWorker(
             lab.procedures,
             planner=lab.procedures.interval_planner(clock=lambda: _DUE_PLANNER_NOW),
-            calibration_evaluator=lab.calibrations.evaluator(),
-            calibration_finalizer=lab.calibrations.publication_finalizer(),
             worker_id="interval-worker-restarted",
         )
 
@@ -206,8 +202,6 @@ def test_planner_clock_cannot_make_a_future_one_shot_due_on_the_server(
         worker = ProjectAutomationWorker(
             lab.procedures,
             planner=lab.procedures.interval_planner(clock=lambda: _FUTURE_ANCHOR),
-            calibration_evaluator=lab.calibrations.evaluator(),
-            calibration_finalizer=lab.calibrations.publication_finalizer(),
             worker_id="future-interval-worker",
         )
 

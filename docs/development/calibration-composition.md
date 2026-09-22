@@ -105,6 +105,14 @@ The new worker accepts submitted requests; it does not decide scientific freshne
 or widen/narrow their target scope. Legacy generic cohort APIs still have other
 framework test coverage and require a separate removal pass.
 
+Standard application composition and the installed worker no longer expose the
+legacy enrollment path: `LabApplication`, `[lab.capabilities]` and
+`scopecat automation work` register/dispatch procedures and schedules, not cohort
+evaluators or publication registries. Removed declaration keys and the old
+`--working-point` option fail visibly. Direct low-level client/cohort services
+and their stored records remain pending a separate retirement; this cutover does
+not delete queues, rewrite evidence or introduce a persistent-data migration.
+
 ## Remaining implementation order
 
 1. Define scientific freshness/applicability over explicit parameter dependencies,

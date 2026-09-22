@@ -138,8 +138,6 @@ def test_application_replace_preserves_discovered_authors_without_reloading(
     assert copied.launch_provider is application.launch_provider
     assert copied.procedures is application.procedures
     assert copied.procedure_schedules is application.procedure_schedules
-    assert copied.calibrations is application.calibrations
-    assert copied.calibration_publications is application.calibration_publications
     assert copied.procedures.refs == tuple(
         item.ref for item in copied.authors.procedures
     )

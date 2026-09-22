@@ -8,13 +8,10 @@ from typing import TYPE_CHECKING, cast
 from scopecat.application.lab import LabApplication
 
 if TYPE_CHECKING:
-    from scopecat.api.calibration_planner import CalibrationPlanningContext
-    from scopecat.api.calibration_policy import CalibrationPublicationPolicyRegistry
     from scopecat.api.procedure_planner import ProcedurePlanningContext
     from scopecat.application.capabilities import LabCapabilities
     from scopecat.application.comparison import ComparisonProvider
     from scopecat.application.launch import LaunchProvider
-    from scopecat.automation.calibration_definition import CalibrationRegistry
     from scopecat.automation.definition import RegisteredProcedure
     from scopecat.automation.intervals import RegisteredProcedureSchedule
     from scopecat.planning.system import ExperimentSystemBuilder
@@ -43,22 +40,6 @@ def compose_application(
         procedure_schedules=tuple(
             cast("RegisteredProcedureSchedule[ProcedurePlanningContext]", resolve(spec))
             for spec in declaration.procedure_schedules
-        ),
-        calibrations=(
-            cast(
-                "CalibrationRegistry[CalibrationPlanningContext]",
-                resolve(declaration.calibrations),
-            )
-            if declaration.calibrations
-            else ()
-        ),
-        calibration_publications=(
-            cast(
-                "CalibrationPublicationPolicyRegistry",
-                resolve(declaration.calibration_publications),
-            )
-            if declaration.calibration_publications
-            else ()
         ),
         launch_provider=(
             cast("LaunchProvider", resolve(declaration.launch_provider))

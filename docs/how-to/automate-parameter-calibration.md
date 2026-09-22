@@ -82,6 +82,20 @@ request.summary()
 request.steps()
 ```
 
+With a configured author workspace, the installed CLI starts the same worker:
+
+```console
+scopecat automation work /path/to/lab
+scopecat automation work /path/to/lab --once
+```
+
+The CLI dispatches registered procedures, due schedules and registered interval
+planning. It does not evaluate legacy cohort freshness or choose a working point.
+Register procedures via `LabApplication(procedures=...)` or the `procedures`
+list in `[lab.capabilities]`. The former `calibrations` and
+`calibration_publications` application declarations and `--working-point` worker
+option are retired; old declarations fail visibly instead of being ignored.
+
 Completed steps replay their outputs. Missing steps remain pending. A scientific
 rejection is a retained result and must not fall through to publishing a subset.
 A stale destination requires a new request based on reviewed inputs; retrying

@@ -175,14 +175,12 @@ schedule is idempotent; changing its exact content under the same schedule ID is
 a conflict. Due-time processing never rebuilds intent from the active
 configuration or the worker's current Python environment.
 
-`scopecat automation work PROJECT --working-point ENTRY` runs the project-owned
-Python worker against the workspace identified by that saved context. Each cycle
-resolves that workspace's current head, then freezes it for the cohort. Omitting
-`--working-point` permits catalog-scoped, nonpublishing checks; it does not choose
-a writable sample or enable parameter-publication definitions. Workers remain
-processes separate from the daemon. Each bounded cycle first finalizes supported
-ready calibration publications, then performs config-sensitive interval planning
-and calibration evaluation, materializes already-frozen due schedules, and asks
+`scopecat automation work PROJECT` runs the project-owned Python worker. The old
+`--working-point` option and application-level cohort/publication registries are
+retired. Scientific targets and publication destinations belong to each explicit
+procedure request. Workers remain processes separate from the daemon. Each
+bounded CLI cycle evaluates registered interval planning, materializes already-frozen
+due schedules, and asks
 the daemon for oldest-first runnable procedures matching the worker registry's
 exact definition references. A live lease or acquisition race does not stop
 later work. A definition unavailable in this worker is not returned by
@@ -427,10 +425,10 @@ resident backoff loop, even when the immediate cause was response validation or
 receipt drift.
 
 Automatic publication policies are immutable, fingerprinted, and pinned into
-the cohort spec. The application registry retains every exact historical
+the cohort spec. The legacy low-level policy registry retains exact historical
 capability needed to drain already-admitted cohorts, independently of its active
 admission bindings. Multiple policy versions may therefore target the same exact
-calibration definition; the application must explicitly select one active policy
+calibration definition; a manually assembled legacy evaluator selects one active policy
 when that selection is otherwise ambiguous. The planning callback sees only
 read-only procedure/run projections and plan builders; the resident engine alone
 owns publish, defer, and attention mutations. Ready work is durable and
@@ -449,8 +447,9 @@ same ready occurrence using server-clock availability. Disposition responses
 are never blindly replayed: response loss is reconciled by exact finalization,
 and a different worker's revision is counted as a benign race.
 
-The resident path is complete for publication policies retained by the loaded
-project application. Operator-wide discovery is deliberately narrower: there
+These services are no longer assembled by the standard application or CLI.
+Direct low-level consumers must supply their own retained policies and worker
+components. Operator-wide discovery is deliberately narrower: there
 is not yet an indexed query that combines publication attention with ready work
 whose exact historical policy is unavailable to the current worker. Adding
 that view requires a durable state/capability ordering; it must not be emulated

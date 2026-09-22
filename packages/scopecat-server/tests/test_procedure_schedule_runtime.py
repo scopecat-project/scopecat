@@ -164,8 +164,6 @@ def test_project_worker_materializes_executes_and_reopens_one_shot_schedule(
         worker = ProjectAutomationWorker(
             lab.procedures,
             planner=lab.procedures.interval_planner(),
-            calibration_evaluator=lab.calibrations.evaluator(),
-            calibration_finalizer=lab.calibrations.publication_finalizer(),
             worker_id="project-worker-before-crash",
         )
         with pytest.raises(httpx2.ReadError, match="response was lost"):
@@ -181,8 +179,6 @@ def test_project_worker_materializes_executes_and_reopens_one_shot_schedule(
         worker = ProjectAutomationWorker(
             lab.procedures,
             planner=lab.procedures.interval_planner(),
-            calibration_evaluator=lab.calibrations.evaluator(),
-            calibration_finalizer=lab.calibrations.publication_finalizer(),
             worker_id="project-worker-restarted",
         )
 

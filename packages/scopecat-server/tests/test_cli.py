@@ -303,20 +303,8 @@ def test_automation_worker_cli_supports_once_and_resident_polling(
 
     procedure_operations = FakeProcedureOperations()
 
-    class FakeCalibrationOperations:
-        def publication_finalizer(self) -> object:
-            calls.append(("calibration_finalizer",))
-            return "calibration-finalizer"
-
-        def evaluator(self, *, working_point: str | None = None) -> object:
-            calls.append(("calibration_evaluator", working_point))
-            return "calibration-evaluator"
-
-    calibration_operations = FakeCalibrationOperations()
-
     class FakeLab:
         procedures = procedure_operations
-        calibrations = calibration_operations
 
         def __enter__(self) -> Self:
             calls.append(("enter",))
@@ -333,43 +321,22 @@ def test_automation_worker_cli_supports_once_and_resident_polling(
             operations: object,
             *,
             planner: object,
-            calibration_evaluator: object,
-            calibration_finalizer: object,
         ) -> None:
             calls.append(
                 (
                     "worker",
                     operations,
                     planner,
-                    calibration_evaluator,
-                    calibration_finalizer,
                 )
             )
 
         def cycle(self) -> object:
             calls.append(("cycle",))
             return SimpleNamespace(
-                publications=SimpleNamespace(
-                    ready_items=3,
-                    prepared_items=2,
-                    published_items=1,
-                    deferred_items=1,
-                    attention_items=0,
-                    reconciled_items=1,
-                    superseded_items=1,
-                    benign_races=1,
-                    failures=0,
-                ),
                 intervals=SimpleNamespace(
                     created_schedules=1,
                     failures=0,
                     drifted_schedules=0,
-                ),
-                calibrations=SimpleNamespace(
-                    failures=0,
-                    cohort_drifts=0,
-                    admitted_members=2,
-                    blocked_members=1,
                 ),
                 schedules=SimpleNamespace(
                     materialized=2,
@@ -380,7 +347,6 @@ def test_automation_worker_cli_supports_once_and_resident_polling(
                     failures=0,
                     conflicts=0,
                 ),
-                config_planning_blocked=True,
                 needs_review=False,
                 failure_count=0,
                 benign_conflicts=2,
@@ -398,9 +364,7 @@ def test_automation_worker_cli_supports_once_and_resident_polling(
             calls.append(("run_forever", poll_seconds))
             on_cycle(
                 SimpleNamespace(
-                    publications=SimpleNamespace(failures=1, attention_items=1),
                     intervals=SimpleNamespace(failures=0, drifted_schedules=0),
-                    calibrations=SimpleNamespace(failures=1, cohort_drifts=0),
                     schedules=SimpleNamespace(failures=1),
                     procedures=SimpleNamespace(failures=0, conflicts=1),
                     needs_review=True,
@@ -429,29 +393,25 @@ def test_automation_worker_cli_supports_once_and_resident_polling(
             str(tmp_path),
             "--poll-seconds",
             "2.5",
-            "--working-point",
-            "chip-parked",
         ],
     )
 
     assert once.exit_code == 0, once.output
-    assert "publication_ready=3" in once.output
-    assert "publication_published=1" in once.output
-    assert "publication_reconciled=1" in once.output
-    assert "publication_superseded=1" in once.output
-    assert "publication_barrier=true" in once.output
+    assert "publication_" not in once.output
     assert "interval_created=1" in once.output
-    assert "calibration_admitted=2" in once.output
+    assert "calibration_" not in once.output
     assert "materialized=2" in once.output
     assert "dispatched=1" in once.output
     assert resident.exit_code == 0, resident.output
     assert "worker worker-cli" in resident.output
     assert "automation cycle needs review" in resident.output
-    assert "publication_failures=1" in resident.output
+    assert "schedule_failures=1" in resident.output
     assert "procedure_conflicts=1" in resident.output
     assert ("run_forever", 2.5) in calls
-    assert ("calibration_evaluator", None) in calls
-    assert ("calibration_evaluator", "chip-parked") in calls
+    retired = runner.invoke(
+        app, ["automation", "work", str(tmp_path), "--working-point", "chip-parked"]
+    )
+    assert retired.exit_code == 2
 
     class OutcomeFailureWorker:
         worker_id = "worker-outcome-failure"
@@ -461,44 +421,22 @@ def test_automation_worker_cli_supports_once_and_resident_polling(
             _operations: object,
             *,
             planner: object,
-            calibration_evaluator: object,
-            calibration_finalizer: object,
         ) -> None:
             assert planner == "interval-planner"
-            assert calibration_evaluator == "calibration-evaluator"
-            assert calibration_finalizer == "calibration-finalizer"
 
         def cycle(self) -> object:
             return SimpleNamespace(
-                publications=SimpleNamespace(
-                    ready_items=1,
-                    prepared_items=0,
-                    published_items=0,
-                    deferred_items=0,
-                    attention_items=1,
-                    reconciled_items=0,
-                    superseded_items=0,
-                    benign_races=0,
-                    failures=1,
-                ),
                 intervals=SimpleNamespace(
                     created_schedules=0,
                     failures=0,
                     drifted_schedules=1,
                 ),
-                calibrations=SimpleNamespace(
-                    failures=0,
-                    cohort_drifts=0,
-                    admitted_members=0,
-                    blocked_members=0,
-                ),
-                schedules=SimpleNamespace(materialized=0, failures=0),
+                schedules=SimpleNamespace(materialized=0, failures=1),
                 procedures=SimpleNamespace(
                     dispatched=0,
                     failures=0,
                     conflicts=0,
                 ),
-                config_planning_blocked=False,
                 needs_review=True,
                 failure_count=2,
                 benign_conflicts=0,
@@ -515,7 +453,6 @@ def test_automation_worker_cli_supports_once_and_resident_polling(
 
     assert failed_outcome.exit_code == 1
     assert "cycle completed with failures" in failed_outcome.output
-    assert "publication_failures=1" in failed_outcome.output
     assert "interval_drifts=1" in failed_outcome.output
     assert "error: automation worker cycle reported 2 failure" in failed_outcome.output
 
@@ -527,12 +464,8 @@ def test_automation_worker_cli_supports_once_and_resident_polling(
             _operations: object,
             *,
             planner: object,
-            calibration_evaluator: object,
-            calibration_finalizer: object,
         ) -> None:
             assert planner == "interval-planner"
-            assert calibration_evaluator == "calibration-evaluator"
-            assert calibration_finalizer == "calibration-finalizer"
 
         def cycle(self) -> object:
             raise ProcedureControlError(

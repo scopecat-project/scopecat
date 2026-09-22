@@ -414,16 +414,6 @@ def automation_work(
         Path,
         typer.Argument(help="Project directory or scopecat.toml."),
     ] = _CURRENT_DIRECTORY,
-    working_point: Annotated[
-        str | None,
-        typer.Option(
-            "--working-point",
-            help=(
-                "Saved parameter entry whose workspace head calibration follows. "
-                "Without it, calibration only checks nonpublishing catalog work."
-            ),
-        ),
-    ] = None,
     once: Annotated[
         bool,
         typer.Option("--once", help="Run one bounded automation cycle and exit."),
@@ -437,7 +427,7 @@ def automation_work(
         ),
     ] = 1.0,
 ) -> None:
-    """Finalize calibrations, plan work, and execute exact procedures."""
+    """Plan and execute explicitly registered durable procedures."""
 
     import signal
     from threading import Event
@@ -455,10 +445,6 @@ def automation_work(
             worker = ProjectAutomationWorker(
                 lab.procedures,
                 planner=lab.procedures.interval_planner(),
-                calibration_evaluator=lab.calibrations.evaluator(
-                    working_point=working_point
-                ),
-                calibration_finalizer=lab.calibrations.publication_finalizer(),
             )
             if once:
                 result = worker.cycle()
@@ -469,35 +455,11 @@ def automation_work(
                 )
                 console.print(
                     f"{outcome} "
-                    f"publication_ready="
-                    f"{result.publications.ready_items} "
-                    f"publication_prepared="
-                    f"{result.publications.prepared_items} "
-                    f"publication_published="
-                    f"{result.publications.published_items} "
-                    f"publication_deferred="
-                    f"{result.publications.deferred_items} "
-                    f"publication_attention="
-                    f"{result.publications.attention_items} "
-                    f"publication_reconciled="
-                    f"{result.publications.reconciled_items} "
-                    f"publication_superseded="
-                    f"{result.publications.superseded_items} "
-                    f"publication_races="
-                    f"{result.publications.benign_races} "
-                    f"publication_barrier="
-                    f"{str(result.config_planning_blocked).lower()} "
                     f"interval_created={result.intervals.created_schedules} "
-                    f"calibration_admitted={result.calibrations.admitted_members} "
-                    f"calibration_blocked={result.calibrations.blocked_members} "
                     f"materialized={result.schedules.materialized} "
                     f"dispatched={result.procedures.dispatched} "
                     f"planner_failures={result.intervals.failures} "
                     f"interval_drifts={result.intervals.drifted_schedules} "
-                    f"publication_failures="
-                    f"{result.publications.failures} "
-                    f"calibration_failures={result.calibrations.failures} "
-                    f"calibration_drifts={result.calibrations.cohort_drifts} "
                     f"schedule_failures={result.schedules.failures} "
                     f"procedure_failures={result.procedures.failures} "
                     f"procedure_conflicts={result.procedures.conflicts} "
@@ -531,12 +493,6 @@ def automation_work(
                         "[yellow]automation cycle needs review:[/yellow] "
                         f"planner_failures={result.intervals.failures} "
                         f"interval_drifts={result.intervals.drifted_schedules} "
-                        f"publication_failures="
-                        f"{result.publications.failures} "
-                        f"publication_attention="
-                        f"{result.publications.attention_items} "
-                        f"calibration_failures={result.calibrations.failures} "
-                        f"calibration_drifts={result.calibrations.cohort_drifts} "
                         f"schedule_failures={result.schedules.failures} "
                         f"procedure_failures={result.procedures.failures} "
                         f"procedure_conflicts={result.procedures.conflicts}",

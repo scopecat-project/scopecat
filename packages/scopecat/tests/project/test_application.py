@@ -192,24 +192,6 @@ def test_direct_lab_client_rejects_schedule_target_missing_from_registry() -> No
         )
 
 
-def test_application_owns_validated_calibration_registry() -> None:
-    calibrations = CalibrationRegistry((_CALIBRATION,))
-
-    application = LabApplication(
-        procedures=(_example_procedure,),
-        calibrations=calibrations,
-    )
-    replaced = replace(application)
-
-    assert application.calibrations is calibrations
-    assert replaced.calibrations is calibrations
-
-
-def test_application_rejects_calibration_target_missing_from_registry() -> None:
-    with pytest.raises(LookupError, match="no procedure"):
-        LabApplication(procedures=(_other_procedure,), calibrations=(_CALIBRATION,))
-
-
 def test_direct_lab_client_rejects_calibration_target_missing_from_registry() -> None:
     with pytest.raises(LookupError, match="no procedure"):
         LabClient(
@@ -217,23 +199,6 @@ def test_direct_lab_client_rejects_calibration_target_missing_from_registry() ->
             procedures=ProcedureRegistry((_other_procedure,)),
             calibrations=CalibrationRegistry((_CALIBRATION,)),
         )
-
-
-def test_application_owns_historical_calibration_publication_registry() -> None:
-    publications = CalibrationPublicationPolicyRegistry(
-        (_PUBLICATION_POLICY,),
-        active=(_PUBLICATION_POLICY.ref,),
-    )
-    application = LabApplication(
-        procedures=(_example_procedure,),
-        calibrations=(_PUBLISHED_CALIBRATION,),
-        calibration_publications=publications,
-    )
-    replaced = replace(application)
-
-    assert application.calibration_publications is publications
-    assert replaced.calibration_publications is publications
-    assert publications.active_bindings == (_PUBLICATION_POLICY.ref,)
 
 
 def test_direct_lab_client_retains_calibration_publication_registry() -> None:
