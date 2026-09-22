@@ -67,11 +67,9 @@ list of interfaces to preserve.
 
 | Script | Demonstrates |
 |---|---|
-| `02_session_lifetime.py` | Captured snapshots, explicit connection cleanup, and retained-run reattachment |
 | `05_sample_workflow.py` | Versioned chip registration, exact run binding, and longitudinal sample analysis |
 | `10_direct_control.py` | Live typed clients and multi-device reservation without an experiment run |
 | `20_flux_spectroscopy.py` | Bias scan, complex traces, fit artifacts, and a parameter proposal |
-| `21_scan_shapes.py` | Ordered point clouds, duplicate points, repeat, and snake traversal |
 | `22_channel_map.py` | Physical I/Q, shared readout, demodulator, and DC channel routes |
 | `23_q0_ramsey.py` | First quantum delay scan |
 | `24_flux_ramsey.py` | Host DC bias composed with a quantum delay scan |
@@ -87,7 +85,6 @@ list of interfaces to preserve.
 | `34_xy_lo_sweep.py` | Shared LO scan, signed IF waveforms, shared clocks, and derived carrier records |
 | `35_awg_output_monitor.py` | Entityless AWG/scope diagnostic with temporary cable intent |
 | `36_q0_fixed_if_lo_sweep.py` | Host-controlled LO scan bounding a fixed-IF domain program |
-| `40_measurement_workbench.py` | Selection, grouping, Xarray, Arrow, and paged reads |
 | `50_ragged_scope_capture.py` | Point-varying oscilloscope record length and ragged waveform slicing |
 
 The application also registers one bounded q0/q1 DRAG calibration definition.

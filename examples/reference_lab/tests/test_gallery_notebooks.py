@@ -4,15 +4,9 @@ from pathlib import Path
 from runpy import run_path
 from typing import Protocol, cast
 
-import pytest
-from pydantic import ValidationError
 from scopecat.api.published_analysis import PublishedAnalysis
-from scopecat.api.run import RunHandle
 from scopecat.daemon.client import DaemonClient
 from scopecat.daemon.views import MeasurementTracePreviewQuery
-from scopecat.kernel.errors import SessionClosedError
-from scopecat.measurements.dataset import Dataset
-from scopecat.records.run import ConfigRegistryRunConfigSource, RunSnapshot
 
 
 class _ReferenceLabDaemon(Protocol):
@@ -36,24 +30,6 @@ def test_sample_workflow_binds_exact_revision_and_analysis_subject(
         "run_status": "completed",
         "analysis_subject": "sample",
         "analysis_inputs": 1,
-    }
-
-
-def test_scan_shapes_run_as_real_lab_experiments(
-    reference_lab_daemon: _ReferenceLabDaemon,
-    reference_lab_notebooks: Path,
-) -> None:
-    assert reference_lab_daemon.url.startswith("http://127.0.0.1:")
-    namespace = run_path(str(reference_lab_notebooks / "21_scan_shapes.py"))
-    summary = cast("dict[str, object]", namespace["scan_shapes_summary"])
-
-    assert summary == {
-        "point_cloud_points": 4,
-        "point_cloud_layout": "point_cloud",
-        "point_cloud_rows": 4,
-        "repeated_grid_points": 8,
-        "repeated_grid_layout": "product_grid",
-        "repeated_grid_rows": 8,
     }
 
 
@@ -446,23 +422,6 @@ def test_drag_calibration_closes_the_reviewed_config_loop(
     assert summary["default_restored"]
 
 
-def test_measurement_workbench_uses_real_durable_data(
-    reference_lab_daemon: _ReferenceLabDaemon,
-    reference_lab_notebooks: Path,
-) -> None:
-    assert reference_lab_daemon.url.startswith("http://127.0.0.1:")
-    namespace = run_path(str(reference_lab_notebooks / "40_measurement_workbench.py"))
-    summary = cast("dict[str, object]", namespace["measurement_summary"])
-
-    assert summary["points"] == 3
-    assert summary["nearest_points"] == 1
-    assert summary["first_two_points"] == 2
-    assert summary["available_points"] == 3
-    assert summary["groups"] == 3
-    assert summary["arrow_rows"] == 3
-    assert summary["batch_sizes"] == [2, 1]
-
-
 def test_ragged_scope_data_survives_daemon_boundaries(
     reference_lab_daemon: _ReferenceLabDaemon,
     reference_lab_notebooks: Path,
@@ -477,34 +436,3 @@ def test_ragged_scope_data_survives_daemon_boundaries(
         "window_shapes": [[2], [2], [2]],
         "status": "completed",
     }
-
-
-def test_session_lifetime_captures_and_reattaches_without_reacquisition(
-    reference_lab_daemon: _ReferenceLabDaemon,
-    reference_lab_notebooks: Path,
-) -> None:
-    with DaemonClient(reference_lab_daemon.url) as client:
-        before = {run.run_id for run in client.list_runs(limit=100).items}
-        namespace = run_path(str(reference_lab_notebooks / "02_session_lifetime.py"))
-        after = {run.run_id for run in client.list_runs(limit=100).items}
-    snapshot = cast("RunSnapshot", namespace["snapshot"])
-    assert after - before == {snapshot.run_id}
-    assert namespace["session_lifetime_summary"] == {
-        "run_id": snapshot.run_id,
-        "status": "completed",
-        "same_snapshot": True,
-        "same_measurements": True,
-        "records": 1,
-        "sessions_closed": True,
-    }
-    run = cast("RunHandle", namespace["run"])
-    with pytest.raises(SessionClosedError, match=r"lab.get_run"):
-        _ = run.status
-    lazy = cast("Dataset", namespace["lazy_measurements"])
-    with pytest.raises(SessionClosedError, match="session is closed"):
-        _ = lazy.records
-    with pytest.raises(ValidationError, match="frozen_instance"):
-        snapshot.run_id = "changed"
-    assert isinstance(snapshot.config_source, ConfigRegistryRunConfigSource)
-    with pytest.raises(ValidationError, match="frozen_instance"):
-        snapshot.config_source.entry_id = "changed"

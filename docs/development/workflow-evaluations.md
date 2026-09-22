@@ -91,8 +91,10 @@ describe conflicts in user vocabulary rather than compiler structure.
 points, and move bounded data into Xarray, Arrow, pandas, or Polars without
 reconstructing the experiment or guessing schema from values.
 
-**Executable evidence:** `40_measurement_workbench.py`, measurement dataset
-tests, and the [measurement data guide](../how-to/use-measurement-data.md).
+**Executable evidence:** core measurement dataset selection/grouping/Xarray
+tests, `core_integration/test_run_handle.py` for durable Arrow pagination, and
+the [measurement data guide](../how-to/use-measurement-data.md). The duplicate
+reference workbench script is retired.
 
 **Success evidence:** point selections retain identity, grid projection restores
 authored axes, exports agree on row counts, and paged reads remain finite and

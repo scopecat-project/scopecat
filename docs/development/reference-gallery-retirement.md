@@ -11,7 +11,7 @@ source; installed historical environments and scientific data are untouched.
 | Legacy input | Behavior worth retaining | Destination and exit condition |
 | --- | --- | --- |
 | `00_lab_tour.py` | Instrument views and parameter inspection | Retired with its fixed inventory/row-count test. Server `test_instruments.py::test_instrument_views_expose_only_safe_configuration_summaries` covers inventory views; starter and parameter teaching cover author inspection. The reference fixture's exact device list is not a product invariant. |
-| `02_session_lifetime.py`, `21_scan_shapes.py`, `40_measurement_workbench.py` | Reattach without acquisition, scan semantics, retained data projections | Compare with starter/teaching and core coverage, move missing behavior to small fixtures, then remove scripts and duplicate tests. Do not port their application setup. |
+| `02_session_lifetime.py`, `21_scan_shapes.py`, `40_measurement_workbench.py` | Reattach without acquisition, scan semantics, retained data projections | Retired with duplicate gallery tests. Session closure/reattachment now uses the existing starter restart journey; scan and dataset behaviors have focused core coverage listed below. |
 | `05_sample_workflow.py` | Exact sample revision and analysis provenance | Preserve identity/history assertions in target/sample integration tests; reassess old working-point assumptions separately. |
 | `10_direct_control.py`, `33_multichannel_dc_bias.py`, `35_awg_output_monitor.py`, `50_ragged_scope_capture.py` | Shared device ownership, physical routes, entityless diagnostics, ragged acquisition | Keep focused real-worker coverage. Add future device-topic sandboxes using current APIs rather than wrapping the old gallery. |
 | `20_flux_spectroscopy.py`, `22`–`26`, `28`–`29`, `31`–`32`, `34`, `36` | Compiled buffers, channel conflicts, signed IF/LO semantics, multiplexed readout, topology and inspection | Extract minimal compiler/runner inputs and keep a bounded full-device journey. Review duplicated recipes and hard-coded configuration assumptions instead of preserving their signatures. |
@@ -19,10 +19,32 @@ source; installed historical environments and scientific data are untouched.
 | `quantum_compilation`, `targets/list_mode`, `provider`, `virtual_lab` | Deterministic device/compiler integration | Retain only dependencies of named scientific/device tests; extract generic framework capabilities where justified. Compute-only teaching does not replace device evidence. |
 | Shared acceptance and `snapshot_roundtrip.py` | Real HTTP payloads and exact current-format recovery | Already use independent parameters/setup and an empty combined registry. Keep this evidence as legacy bootstrap consumers are removed. |
 
-The middle rows are an inventory, not a claim that replacement coverage is
+Rows not marked retired are an inventory, not a claim that replacement coverage is
 complete. Test existence alone does not establish that an assertion is valid
 under the target design. Record replacement evidence or why an assertion
 expresses an obsolete requirement before removing it.
+
+### Retired generic cases: retained evidence
+
+- `packages/scopecat-server/tests/test_lifecycle.py::test_cli_daemon_first_use_loop_uses_dynamic_port_and_cleans_record`
+  retains a snapshot and records, rejects reads through closed run/dataset
+  handles, and reattaches after restart with identical evidence and no new run.
+  It uses independent parameters and adds no daemon startup. Core
+  `test_remote_lab.py` also checks connection ownership and no HTTP after close.
+  The old assertion that every run must carry `ConfigRegistryRunConfigSource`
+  is obsolete; exact source identity is retained without requiring that kind.
+- `packages/scopecat/tests/program/test_point_plan_policy.py` checks repeat
+  expansion and canonical point order; `test_point_plan_invocations.py` checks
+  invocation composition. `planning/test_point_order.py` checks snake traversal,
+  and `planning/test_system.py::test_planning_executes_repeated_grid_in_snake_order`
+  checks its execution. The server's ragged point-cloud worker test retains
+  actual acquisition across daemon/worker boundaries. The deleted gallery scan
+  test checked only point counts and layout names, not DRAG or VNA science.
+- `packages/scopecat/tests/measurements/test_dataset.py` covers unit-aware
+  selection, availability, grouping and grid/Xarray identity. Server
+  `core_integration/test_run_handle.py::test_run_projects_paged_measurements_into_one_arrow_reader`
+  checks durable Arrow pagination and schema. These directly cover the deleted
+  workbench's summary counts without acquiring a resonator scan first.
 
 ## Development order
 
