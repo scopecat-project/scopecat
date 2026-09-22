@@ -173,12 +173,6 @@ def merge_common_base_parameter_proposals(
         )
 
     base_hash = config_content_hash(base_config)
-    base_values = {value.id: value for value in base_config.parameter_snapshot.values}
-    definitions = {
-        definition.id: definition
-        for definition in base_config.parameter_catalog.definitions
-    }
-    branches_by_parameter: dict[str, list[StoredParameterValue]] = {}
     for proposal_index, proposal in enumerate(canonical):
         _validate_proposal_base(
             proposal,
@@ -186,14 +180,71 @@ def merge_common_base_parameter_proposals(
             base_config=base_config,
             base_hash=base_hash,
         )
-        for delta in proposal.deltas:
+    merged = merge_parameter_deltas(
+        tuple(proposal.deltas for proposal in canonical),
+        base=ParameterContent(
+            parameter_catalog=base_config.parameter_catalog,
+            parameter_snapshot=base_config.parameter_snapshot,
+        ),
+        snapshot_id=f"{candidate_id}.parameters",
+    )
+    return CommonBaseCandidateMergeResult(
+        config=base_config.model_copy(
+            update={"id": candidate_id, "parameter_snapshot": merged.parameters},
+            deep=True,
+        ),
+        deltas=merged.deltas,
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class ParameterMergeResult:
+    """Parameter values and canonical changed cells; no acceptance claim."""
+
+    parameters: ParameterSnapshot
+    deltas: tuple[ParameterValueDelta, ...]
+
+
+def merge_parameter_deltas(
+    changesets: Sequence[Sequence[ParameterValueDelta]],
+    *,
+    base: ParameterContent,
+    snapshot_id: str,
+) -> ParameterMergeResult:
+    """Compose changes relative to one exact parameter base.
+
+    This pure operation needs no setup, full config, run or registry. It checks
+    each before-value and uses catalog-aware cell conflicts. Callers resolve
+    retained provenance and scientific applicability separately; successful
+    composition does not transfer independent candidates' verification.
+    """
+    if not 1 <= len(changesets) <= MAX_COMMON_BASE_PROPOSALS:
+        raise _merge_check(
+            "parameter_merge.changeset_count",
+            "parameter merge requires between 1 and "
+            f"{MAX_COMMON_BASE_PROPOSALS} changesets",
+            path=("changesets",),
+        )
+    if not snapshot_id.strip():
+        raise _merge_check(
+            "parameter_merge.snapshot_id_empty",
+            "merged parameter snapshot id must be non-empty",
+            path=("snapshot_id",),
+        )
+    base_values = {value.id: value for value in base.parameter_snapshot.values}
+    definitions = {
+        definition.id: definition for definition in base.parameter_catalog.definitions
+    }
+    branches_by_parameter: dict[str, list[StoredParameterValue]] = {}
+    for change_index, changes in enumerate(changesets):
+        for delta in changes:
             definition = definitions.get(delta.parameter_id)
             base_value = base_values.get(delta.parameter_id)
             if definition is None or base_value is None:
                 raise _merge_check(
                     "parameter_merge.unknown_parameter",
-                    f"proposal references unknown parameter {delta.parameter_id!r}",
-                    path=("proposals", proposal_index, "deltas", delta.parameter_id),
+                    f"change references unknown parameter {delta.parameter_id!r}",
+                    path=("changesets", change_index, "deltas", delta.parameter_id),
                     details={"parameter_id": delta.parameter_id},
                 )
             normalized_base = _validate_parameter_representation(definition, base_value)
@@ -210,11 +261,10 @@ def merge_common_base_parameter_proposals(
             ):
                 raise _merge_conflict(
                     "parameter_merge.delta_base_mismatch",
-                    "proposal delta before value does not match the common base",
+                    "delta before value does not match the common base",
                     parameter_id=delta.parameter_id,
                     details={
-                        "source_run_id": proposal.source_run_id,
-                        "proposal_id": proposal.id,
+                        "changeset_index": change_index,
                     },
                 )
             if _parameter_values_equal(
@@ -259,33 +309,25 @@ def merge_common_base_parameter_proposals(
     if not deltas:
         raise _merge_check(
             "parameter_merge.no_effective_changes",
-            "common-base proposals contain no effective parameter changes",
-            path=("proposals",),
+            "common-base changes contain no effective parameter changes",
+            path=("changesets",),
         )
 
     candidate_snapshot = ParameterSnapshot(
-        id=f"{candidate_id}.parameters",
+        id=snapshot_id,
         values=tuple(
             merged_by_id.get(value.id, value)
-            for value in base_config.parameter_snapshot.values
+            for value in base.parameter_snapshot.values
         ),
     )
     problems = validate_parameter_snapshot(
-        base_config.parameter_catalog,
+        base.parameter_catalog,
         candidate_snapshot,
+        allow_missing=True,
     )
     if problems:
         raise CheckFailed(problems)
-    return CommonBaseCandidateMergeResult(
-        config=base_config.model_copy(
-            update={
-                "id": candidate_id,
-                "parameter_snapshot": candidate_snapshot,
-            },
-            deep=True,
-        ),
-        deltas=tuple(deltas),
-    )
+    return ParameterMergeResult(parameters=candidate_snapshot, deltas=tuple(deltas))
 
 
 def _validate_proposal_base(
@@ -662,6 +704,8 @@ def _merge_conflict(
 __all__ = [
     "MAX_COMMON_BASE_PROPOSALS",
     "CommonBaseCandidateMergeResult",
+    "ParameterMergeResult",
     "merge_common_base_parameter_proposals",
     "merge_parameter_branches",
+    "merge_parameter_deltas",
 ]
