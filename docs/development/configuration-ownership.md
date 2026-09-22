@@ -127,9 +127,12 @@ parameter default is still a bridge to existing execution consumers, not a branc
 Teaching bootstrap now uses equipment-only startup. Its author-owned parameter
 branches support the complete run/refresh/analysis/reopen journey with an empty
 combined configuration registry. Unknown-value and structural-history teaching
-tests use independent branches rather than synthetic working points. Starter
-virtual-instrument and reference integration projects still declare transitional
-defaults; their remaining consumers must be moved deliberately.
+tests use independent branches rather than synthetic working points. The starter
+virtual-instrument project also uses equipment-only startup and an author-owned
+branch; both generated notebooks use author-session preparation, and template
+imports create independent parameter revisions without selecting defaults.
+Reference integration still declares transitional defaults; its remaining
+consumers must be moved deliberately.
 
 Full-config `set_default` inputs,
 working-point entries, setup rebinding and full-config experiment-system builders

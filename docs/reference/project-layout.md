@@ -23,7 +23,9 @@ my-lab/
     ├── configuration.py
     └── authored/
         ├── __init__.py
-        └── signal.py
+        ├── parameters.py
+        ├── signal.py
+        └── thermometer.py
 ```
 
 Projects may add a `config/` directory for external, version-controlled
@@ -68,16 +70,18 @@ the supplied path and makes the project's `src` directory importable.
 - `[lab.capabilities]` declares notebook and worker execution capabilities without
   requiring a custom application factory.
 - `backend.py` composes worker-only instrument providers and drivers.
-- `configuration.py` builds the bootstrap configuration used only while the
-  daemon registry is empty.
+- `configuration.py` declares equipment for first use, without parameter values.
+- `authored/parameters.py` declares the starter's parameter model and opens its
+  independent editing branch. Existing saved branch values are not reseeded.
 - `authored/` contains locally editable experiment and analysis declarations. Source
   refresh captures these edits; it does not upgrade installed shared packages.
 - `notebooks/` contains user-owned interactive workflows and scripts.
 
 After initialization, these are application source files: edit, test, and
 version them with the rest of the lab project. Use the
-[configuration review workflow](../how-to/manage-configuration.md) to publish
-configuration changes explicitly.
+[setup management](../how-to/maintain-executable-setup.md) to activate reviewed
+equipment changes and [parameter branches](../how-to/parameter-branches.md) for
+ordinary author edits. The generated starter publishes no global parameter default.
 
 Declare procedure, schedule, calibration, publication, and system-builder symbols
 in `[lab.capabilities]`. They are resolved in the notebook or project worker, not

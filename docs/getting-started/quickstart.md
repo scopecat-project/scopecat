@@ -73,13 +73,17 @@ python ./my-lab/notebooks/01_first_run.py
 ```
 
 The script prints a run ID, `completed` status, and a console link selecting that
-run. Open the link, or select **First run** in the console. Under **Measurement
+run. Open the link to select the `first_run` experiment. Under **Measurement
 data**, open **Raw records** to inspect one temperature sample of **0.02 K**, its
 resistance, and evidence identifying the virtual `thermometer` instrument.
 
 The generated `configuration.py` declares the virtual instrument and its routing.
-The `repetitions` parameter remains an editable starting parameter; the first
-notebook intentionally takes just one sample.
+Startup selects equipment without creating a global parameter default. Both
+notebooks open the independent `starter` branch defined in
+`authored/parameters.py`. Its `response.scale` parameter controls the synthetic
+scan in the second notebook; the thermometer takes one sample without consuming
+parameter values. In the workbench, choose the saved `starter` branch under
+**Measurement context** before preparing another experiment.
 
 ## Restart and retain the result
 
@@ -89,7 +93,7 @@ scopecat start ./my-lab
 scopecat open ./my-lab
 ```
 
-Select the same **First run** and confirm that its ID and measurement values are
+Select the same run and confirm that its ID and measurement values are
 unchanged. Restart can choose a different port, so reopen through `scopecat open`
 instead of bookmarking the old daemon URL. Stop when finished:
 

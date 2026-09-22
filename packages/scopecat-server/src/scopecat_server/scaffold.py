@@ -24,7 +24,6 @@ refresh_roots = ["src/scopecat_lab/authored"]
 
 from __future__ import annotations
 
-import scopecat as sc
 from scopecat.kernel.entity import EntityRef
 from scopecat.records.config import (
     InstrumentRegistry,
@@ -36,16 +35,7 @@ from scopecat.records.config import (
     VirtualInstrumentConnection,
 )
 from scopecat.records.execution_scenario import SoftwareExecutionScenario
-from scopecat.records.parameter import (
-    ParameterCatalog,
-    ParameterDefinition,
-    ParameterSnapshot,
-    ScalarParameterValue,
-)
-from scopecat.records.parameter_revision import ParameterRevisionContent
 from scopecat.records.setup import ExecutableSetupSnapshot
-
-DEFAULT_REPETITIONS = 128
 
 
 def initial_setup() -> ExecutableSetupSnapshot:
@@ -98,34 +88,7 @@ def initial_setup() -> ExecutableSetupSnapshot:
     )
 
 
-def initial_parameters() -> ParameterRevisionContent:
-    """Seed the transitional execution default only on first use."""
-    return ParameterRevisionContent(
-        id="default",
-        system_id="default-system",
-        catalog=ParameterCatalog(
-            id="parameters",
-            definitions=(
-                ParameterDefinition(
-                    id="repetitions",
-                    value_type=sc.ScalarType(sc.IntType(minimum=1)),
-                    description="Default number of repeated acquisitions.",
-                ),
-            ),
-        ),
-        parameters=ParameterSnapshot(
-            id="default-values",
-            values=(
-                ScalarParameterValue(
-                    id="repetitions",
-                    value=DEFAULT_REPETITIONS,
-                ),
-            ),
-        ),
-    )
-
-
-__all__ = ["initial_parameters", "initial_setup"]
+__all__ = ["initial_setup"]
 ''',
     "src/scopecat_lab/application.py": '''\
 """Initial configuration bootstrap for this project."""
@@ -137,7 +100,8 @@ from pathlib import Path
 from scopecat.application import LabBootstrap
 from scopecat.records.configuration_template import ConfigurationTemplate
 
-from .configuration import initial_parameters, initial_setup
+from .authored.parameters import initial_parameters
+from .configuration import initial_setup
 
 
 def create_bootstrap(_project_root: Path) -> LabBootstrap:
@@ -145,7 +109,6 @@ def create_bootstrap(_project_root: Path) -> LabBootstrap:
 
     return LabBootstrap(
         setup=initial_setup,
-        parameter_defaults=initial_parameters,
         configuration_templates=configuration_templates,
     )
 
@@ -161,8 +124,8 @@ def configuration_templates() -> tuple[ConfigurationTemplate, ...]:
                 "Import fresh parameters without changing existing defaults."
             ),
             setup=initial_setup(),
-            catalog=parameters.catalog,
-            parameters=parameters.parameters,
+            catalog=parameters.parameter_catalog,
+            parameters=parameters.parameter_snapshot,
         ),
     )
 
@@ -190,40 +153,83 @@ def create_backend(_project_root: Path) -> InstrumentBackend:
 
 __all__ = ["create_backend"]
 ''',
-    "notebooks/01_first_run.py": '''\
-"""Retain one virtual thermometer sample through the project daemon."""
+    "src/scopecat_lab/authored/thermometer.py": '''\
+"""Read a virtual thermometer without applying instrument state."""
 
-from __future__ import annotations
+import scopecat as sc
+from scopecat.kernel.entity import EntityRef
+from scopecat_instruments import TemperatureSampleProducts, temperature_readout
+
+
+@sc.experiment(id="first_run")
+def first_run(experiment: sc.ExperimentContext) -> TemperatureSampleProducts:
+    thermometer = temperature_readout(
+        experiment, for_=sc.one(EntityRef(id="subject", kind="logical_subject"))
+    )
+    return thermometer.sample()
+''',
+    "src/scopecat_lab/authored/parameters.py": '''\
+"""Author-owned parameter definitions and an explicit editing branch."""
+
+import scopecat as sc
+from scopecat.api.parameter_revisions import BranchParameterEditor
+from scopecat.application.author_project import AuthorProject
+from scopecat.daemon.client import DaemonNotFoundError
+from scopecat.records.parameter_content import ParameterContent
+
+
+class ResponseParameters(sc.ParameterModel, table="response"):
+    id: sc.Param[str] = sc.param(key=True)
+    scale: sc.Param[float] = sc.param(default=1.0)
+
+
+def initial_parameters() -> ParameterContent:
+    return ParameterContent(
+        parameter_catalog=sc.parameter_catalog("starter", ResponseParameters),
+        parameter_snapshot=sc.parameter_snapshot(
+            "starter-values",
+            tables={ResponseParameters: [ResponseParameters(id="signal")]},
+        ),
+    )
+
+
+def open_parameters(session: AuthorProject) -> BranchParameterEditor:
+    try:
+        session.use(parameter_branch="starter")
+    except DaemonNotFoundError:
+        content = initial_parameters()
+        initial = session.parameters.save(
+            name="starter-initial",
+            catalog=content.parameter_catalog,
+            parameters=content.parameter_snapshot,
+        )
+        session.parameters.create_branch("starter", revision=initial)
+        session.use(parameter_branch="starter")
+    return session.params
+''',
+    "notebooks/01_first_run.py": '''\
+"""Retain one virtual thermometer sample through an author session."""
 
 from pathlib import Path
 from urllib.parse import urlencode
 
 import scopecat as sc
 from scopecat.daemon.endpoint import resolve_daemon_endpoint
-from scopecat.kernel.entity import EntityRef
-from scopecat_instruments import TemperatureSampleProducts, temperature_readout
-
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-
-
-@sc.experiment
-def first_run(experiment: sc.ExperimentContext) -> TemperatureSampleProducts:
-    """Read the virtual thermometer without applying instrument state."""
-
-    thermometer = temperature_readout(
-        experiment, for_=sc.one(EntityRef(id="subject", kind="logical_subject"))
-    )
-    return thermometer.sample()
-
 
 # %%
-project = sc.open_project(PROJECT_ROOT)
-with project.connect() as lab:
-    run = lab.run(first_run.build(), name="First run")
+project = sc.open_project(Path(__file__).resolve().parents[1])
+_ = project.load_application()
+with project.authoring() as session:
+    session.refresh()
+    from scopecat_lab.authored.parameters import open_parameters
+
+    params = open_parameters(session)
+    prepared = session.prepare("first_run")
+    run = prepared.run().wait(timeout=120).result()
     summary = {"run_id": run.id, "status": run.status}
 
 print(summary)
-print(resolve_daemon_endpoint(PROJECT_ROOT) + "/?" + urlencode({"run": run.id}))
+print(resolve_daemon_endpoint(project.root) + "/?" + urlencode({"run": run.id}))
 ''',
     "README.md": """\
 # Your Scopecat workspace
@@ -241,8 +247,11 @@ and reopen the same run. Both use the project daemon and its GUI.
 | `.scopecat/` | Runtime data, retained source, receipts and logs; do not edit by hand |
 
 This is a small virtual workspace, not a copy of the reference integration lab.
-The only instrument is a virtual thermometer. `repetitions` is a starter scalar
-configuration example; the synthetic scan uses its explicit request inputs.
+The only instrument is a virtual thermometer. Both notebooks open the independent
+`starter` parameter branch. Its `response.scale` value scales the synthetic signal;
+the thermometer needs no parameter values. Startup installs equipment only and
+does not publish a global parameter default. Edit parameters through the branch,
+and select its saved version in the workbench Measurement context.
 Keep your environment and source with data backups. Updating Scopecat does not
 rewrite this workspace or migrate its retained database.
 
@@ -262,9 +271,12 @@ from typing import Annotated, cast
 import scopecat as sc
 from scopecat.measurements.dataset import Dataset
 
+from .parameters import ResponseParameters
 
-def response(position: float, center: float) -> float:
-    return 1.0 / (1.0 + (position - center) ** 2)
+
+@sc.compute
+def response(position: float, center: float, scale: float) -> float:
+    return scale / (1.0 + (position - center) ** 2)
 
 
 @sc.experiment(id="signal")
@@ -276,9 +288,11 @@ def signal(
         sc.Input[float], sc.ControlSpec(title="Position", scannable=True)
     ] = 0.0,
 ) -> sc.ValueRef[float]:
-    return cast(
-        "sc.ValueRef[float]",
-        experiment.compute(fn=response, position=position, center=center),
+    del experiment
+    return response(
+        position=position,
+        center=center,
+        scale=sc.parameter_ref(ResponseParameters.scale, "signal"),
     )
 
 
@@ -305,16 +319,17 @@ from scopecat.daemon.endpoint import resolve_daemon_endpoint
 # %% Setup: load this workspace's local application and import its declarations.
 project = sc.open_project(Path(__file__).resolve().parents[1])
 _ = project.load_application()
-from scopecat_lab.authored.signal import Summary, signal
-
-# %% Edit the request. Arrays become a scan only through sc.Scan.
-request = signal(center=0.0)
-request.values["position"] = sc.Scan([-1.0, 0.0, 1.0])
-alternative = request.copy()
-alternative.values["center"] = 0.25
-
 with project.authoring() as author:
-    prepared = author.prepare(request)
+    author.refresh()
+    from scopecat_lab.authored.parameters import open_parameters
+    from scopecat_lab.authored.signal import Summary, signal
+
+    params = open_parameters(author)
+    # Change params["response"]["signal"]["scale"], then save() to keep your edits.
+    request = signal(center=0.0).sweep(position=[-1.0, 0.0, 1.0])
+    alternative = request.copy()
+    alternative.values["center"] = 0.25
+    prepared = author.prepare(request, parameters=params)
     job = prepared.run()
     run = job.wait(timeout=120).result()
     report = author.analyze_as(
@@ -322,8 +337,14 @@ with project.authoring() as author:
     )
     # Reopen existing evidence. Calling prepared.run() again would acquire again.
     reopened = author.reopen(job.receipt).wait(timeout=120).result()
-    print({"run_id": reopened.id, "points": report.value.points,
-           "mean": report.value.mean, "analysis_id": report.publication.id})
+    print(
+        {
+            "run_id": reopened.id,
+            "points": report.value.points,
+            "mean": report.value.mean,
+            "analysis_id": report.publication.id,
+        }
+    )
 print(resolve_daemon_endpoint(project.root) + "/?" + urlencode({"run": run.id}))
 ''',
 }

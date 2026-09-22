@@ -24,9 +24,10 @@ creates a request and prints a run link. This is a framework lesson, not a model
 or calibration of a real qubit.
 
 ```python
+params = open_parameters(author)
 request = signal(center=0.0)
 request.values["position"] = sc.Scan([-1.0, 0.0, 1.0])
-prepared = author.prepare(request)
+prepared = author.prepare(request, parameters=params)
 job = prepared.run()
 run = job.wait(timeout=120).result()
 ```
@@ -39,6 +40,25 @@ request for comparison; creating or editing a request never starts acquisition.
 The supplied three points produce `(0.5, 1.0, 0.5)`. The script publishes a
 `Summary(mean=2/3, points=3)` using `analyze_as`, records the analysis source and
 opens the retained run again through its receipt. Inspect the same run in the GUI.
+
+`authored/parameters.py` owns the parameter model and opens the `starter` branch.
+The `scale` column has a real effect on the response:
+
+```python
+params["response"]["signal"]["scale"] = 2.0
+params.save(note="Compare a doubled response")
+```
+
+Repeating the same scan now gives `(1.0, 2.0, 1.0)`. Reopening a Notebook preserves
+the saved branch values; it does not reset them to the source defaults. For a
+disposable comparison, `params.save("trial")` forks the branch. Previous previews,
+runs and analyses retain their original inputs. Startup, editing and running
+create no global parameter default or artificial working point.
+
+The thermometer experiment lives in `authored/thermometer.py`; the first Notebook
+uses the same author-session preparation path. Both scripts load the project's
+local package before refreshing its author modules, so ordinary imports work
+when running a generated script from outside its source directory.
 
 ## Edit code and retain evidence
 
