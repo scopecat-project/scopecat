@@ -2116,7 +2116,7 @@ def test_admission_rejects_domain_requirement_outside_active_authority(
         LocalDaemonRuntime(tmp_path, bootstrap_config=config) as runtime,
         pytest.raises(
             BackendConflict,
-            match="differs from the active configuration",
+            match="differs from the active setup",
         ),
     ):
         runtime.application.submit_run(
