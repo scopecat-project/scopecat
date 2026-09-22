@@ -16,6 +16,7 @@ from scopecat.authoring import (
     ValueType,
 )
 from scopecat.authoring.entity_selection import PerEntity
+from scopecat.authoring.occurrence_names import domain_occurrence_name
 from scopecat.domain.program import DomainProgramDef
 from scopecat.kernel.entity import EntityRef
 from scopecat.kernel.quantity import Quantity
@@ -334,12 +335,12 @@ class ProgramDefinition(Program):
         *args: object,
         **inputs: object,
     ) -> QuantumProgramCall:
-        """Bind ports in their declared Python order."""
+        """Bind ports, allocating an occurrence name in the current definition."""
 
         bound = self._contract.signature.bind(*args, **inputs)
         return _program_call(
             self,
-            self.id.rsplit(".", maxsplit=1)[-1],
+            domain_occurrence_name(self.id.rsplit(".", maxsplit=1)[-1]),
             inputs=bound.arguments,
             compiler_inputs={},
             shots=1,
@@ -357,7 +358,7 @@ class ProgramDefinition(Program):
         bound = self._contract.signature.bind(*args, **inputs)
         return _program_call(
             self,
-            instance_id,
+            domain_occurrence_name(instance_id, explicit=True),
             inputs=bound.arguments,
             compiler_inputs={},
             shots=1,

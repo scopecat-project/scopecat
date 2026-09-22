@@ -35,9 +35,15 @@ not modify the reusable program definition or copy calibration values.
 default. Pass `None` as that default when authors own recipe selection.
 Direct pulse/acquisition programs need no recipe profile; unresolved logical
 operations still require matching implementations.
-For repeated occurrences of one program in the same experiment, use the existing
-explicit call names, such as `sequence.call("baseline", "q0")` and
-`sequence.call("candidate", "q0")`, before selecting each call's recipes.
+Repeated `sequence(...)` calls created inside an experiment or module definition
+receive local names `sequence`, `sequence.2`, and so on, in construction order.
+Python loops work the same way; each nested module definition has its own scope.
+Modifiers retain the call identity, and results obtained before `context.use(call)`
+remain valid. Point scans reuse this graph rather than allocate names per point.
+For names that should survive reordering, use `sequence.call("baseline", "q0")`.
+Explicit names are reserved and conflicts are errors, never silent renames.
+Calls constructed outside definitions still need explicit names when combined;
+placing the same call object twice does not create a second occurrence.
 
 Selection identity includes declared recipe data, lexical Python function
 source, defaults and captured values. It excludes process-local caches. Function

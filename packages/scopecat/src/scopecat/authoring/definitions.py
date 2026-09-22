@@ -49,6 +49,7 @@ from scopecat.authoring.experiments import (
     ExperimentRequest,
 )
 from scopecat.authoring.member_projection import StateProjector
+from scopecat.authoring.occurrence_names import occurrence_names_internal
 from scopecat.authoring.scans import (
     Axis,
     PointRow,
@@ -1289,7 +1290,7 @@ def _module_from_function[ResultT, **P](
         values: dict[str, object] = dict(runtime_values)
         for name, value in structural_values.items():
             values[name] = context.capture_structural_value_internal(value)
-        with compute_context_internal(context):
+        with compute_context_internal(context), occurrence_names_internal():
             result = context.capture_result_internal(source(context, **values))
         module_def = context.close_definition_internal(
             id=selected_id,
@@ -1457,7 +1458,7 @@ def _experiment_from_function[ResultT, **P](
             context = ExperimentContext()
             if controls.fields:
                 context.grid(*controls.default_axes())
-            with compute_context_internal(context):
+            with compute_context_internal(context), occurrence_names_internal():
                 output = cast("ResultT", source(context, **values))
             recorded_tree = _record_experiment_output(
                 context, output, result_types=contract.result_types
