@@ -10,7 +10,9 @@ import scopecat as sc
 from lab_teaching.parameters import Drive
 from lab_teaching.project import create_project
 from lab_teaching.session import analyze_rabi, open_parameters
+from scopecat.daemon.wire import SampleCreateCommand
 from scopecat.records.run import ParameterRunConfigSource
+from scopecat.records.sample import SampleRevisionDraft
 from scopecat_server.lifecycle import start_project, stop_project
 
 
@@ -37,9 +39,21 @@ def test_minimal_teaching_refresh_and_restart(tmp_path: Path, notebook_imports) 
             assert session.selection.parameter_branch == "learner-choice"
             assert session.parameter_branch.head.revision == version.ref
             params[Drive]["q0"].frequency = 5.147
+            session.create_sample(
+                SampleCreateCommand(
+                    operation_id="synthetic-subject",
+                    sample_id="chip",
+                    kind="synthetic",
+                    actor="author",
+                    content=SampleRevisionDraft(display_name="Chip"),
+                )
+            )
+            batch = session.create_experimental_batch("Cooldown")
             prepared = session.prepare(
                 "teaching.rabi",
                 parameters=params,
+                sample="chip",
+                batch=batch.id,
                 scans={"amplitude": np.linspace(0, 0.8, 21)},
             )
             frozen = prepared.preview.reviewed.config_source
@@ -50,7 +64,10 @@ def test_minimal_teaching_refresh_and_restart(tmp_path: Path, notebook_imports) 
             job = prepared.run()
             run = job.wait(timeout=120).result()
             assert run.snapshot.config_source == frozen
-            assert not run.snapshot.scientific_binding.samples
+            subject = run.snapshot.scientific_binding.samples[0]
+            assert (subject.sample_id, subject.batch_id) == ("chip", batch.id)
+            assert session.selection.science.subject.kind == "unbound"
+            assert session.selection.parameter_branch == "learner-choice"
             assert params.version == version
             params.discard()
             first_report = analyze_rabi(session, run)

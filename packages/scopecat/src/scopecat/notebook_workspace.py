@@ -269,6 +269,10 @@ class NotebookSession(AuthorProject):
             if configuration.kind == "parameters"
             else configuration.kind
         )
+        if self.selection.parameter_branch is not None:
+            configuration_label = (
+                f"branch {self.selection.parameter_branch} ({configuration_label})"
+            )
         batch_label = (
             science.batch.id if science.batch.kind == "declared" else "unspecified"
         )

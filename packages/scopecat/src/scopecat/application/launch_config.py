@@ -30,6 +30,7 @@ from scopecat.records.scientific_selection import (
     ReviewedScientificSelection,
     SampleSubjectChoice,
     SavedConfiguration,
+    ScientificSelection,
     UnboundSubjectChoice,
     WorkingPointConfiguration,
     require_selection_binding,
@@ -43,6 +44,35 @@ if TYPE_CHECKING:
 class ResolvedLaunchScience:
     config: ConfigProfileSnapshot
     reviewed: ReviewedScientificSelection
+
+
+def validate_editing_selection(lab: LabClient, selection: ScientificSelection) -> None:
+    """Check selected identities without requiring an executable configuration.
+
+    Parameter editing and subject selection are possible before equipment is
+    configured. Compatibility and supported execution topology belong to preview.
+    """
+    choice = selection.configuration
+    if isinstance(choice, ParameterConfiguration):
+        if lab.parameters.get(choice.ref.revision_id).ref != choice.ref:
+            raise ValueError("parameter reference differs from saved content")
+        if choice.setup is not None:
+            setup = lab.config.client.setup_revision(choice.setup.revision_id)
+            if setup.ref != choice.setup:
+                raise ValueError("setup reference differs from saved content")
+    else:
+        assert isinstance(choice, ActiveConfiguration)
+    subject = selection.subject
+    if isinstance(subject, RegisteredTargetChoice):
+        lab.resolve_target(subject.ref)
+    elif isinstance(subject, SampleSubjectChoice):
+        lab.config.client.get_sample(subject.sample_id)
+        if subject.revision is not None:
+            lab.config.client.sample_revision(subject.sample_id, subject.revision)
+    if isinstance(selection.batch, DeclaredBatch):
+        if isinstance(subject, UnboundSubjectChoice):
+            raise ValueError("batch requires a subject")
+        lab.experimental_batch(selection.batch.id)
 
 
 def _without_generation(source: LaunchConfigSource) -> LaunchConfigSource:

@@ -181,12 +181,12 @@ def test_session_target_selection_is_atomic_and_pins_head(
     head = target
     accepted: list[ScientificSelection] = []
 
-    def resolve(_lab: LabClient, request: LaunchRequest) -> None:
-        if isinstance(request.selection.subject, SampleSubjectChoice):
+    def resolve(_lab: LabClient, selection: ScientificSelection) -> None:
+        if isinstance(selection.subject, SampleSubjectChoice):
             raise ValueError("sample unavailable")
-        accepted.append(request.selection)
+        accepted.append(selection)
 
-    monkeypatch.setattr(author_module, "resolve_launch_config", resolve)
+    monkeypatch.setattr(author_module, "validate_editing_selection", resolve)
 
     def current_target(_self: AuthorProject, _name: str) -> TargetRevision:
         return head
@@ -339,10 +339,10 @@ def test_explicit_clear_in_prepare_does_not_inherit_session_subject(
     from scopecat.application.session_context import INHERIT
     from scopecat.records.scientific_selection import UnboundSubjectChoice
 
-    def accept(_lab: LabClient, _request: LaunchRequest) -> None:
+    def accept(_lab: LabClient, _selection: ScientificSelection) -> None:
         pass
 
-    monkeypatch.setattr(author_module, "resolve_launch_config", accept)
+    monkeypatch.setattr(author_module, "validate_editing_selection", accept)
     with AuthorProject("http://test") as session:
         session.use(sample="chip")
         science = session._prepare_science(
