@@ -104,6 +104,14 @@ saved revision; it does not silently include an editor's unsaved buffer.
 
 ## Scientific context remains separate
 
+Candidate verification and branch saving are currently separate capabilities.
+You can prepare an exact candidate and collect independent verification data
+without changing a branch or lab default. `VerifiedParameterCandidate.publish_to()`
+currently targets a working point, not a parameter branch; `publish_default()`
+uses the legacy shared configuration registry. Verified publication to a branch
+is not implemented yet. Copying values into `params` and saving is a manual edit,
+not a retained calibration acceptance.
+
 Session branch selection and explicit branch-editor preparation preserve the
 subject, batch, operator and record collection. Selecting another sample/target
 drops the checkout unless a branch is also explicitly selected. Choosing a saved

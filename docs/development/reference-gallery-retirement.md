@@ -17,7 +17,8 @@ source; installed historical environments and scientific data are untouched.
 | `10_direct_control.py`, `33_multichannel_dc_bias.py`, `35_awg_output_monitor.py`, `50_ragged_scope_capture.py` | Shared device ownership, physical routes, entityless diagnostics, ragged acquisition | Keep focused real-worker coverage. Add future device-topic sandboxes using current APIs rather than wrapping the old gallery. |
 | `23_q0_ramsey.py`, `26_parallel_multiplexed_ramsey.py`, `27_channel_timing_candidate.py`, `32_quantum_program_inspection.py`, `36_q0_fixed_if_lo_sweep.py` | Quantum execution, multiplexing, candidate lineage, layered preview and signed IF/LO semantics | Retired with duplicate gallery tests and unused probability-result experiment wrappers. Focused runner tests and shared acceptance retain execution evidence, as detailed below. |
 | `20_flux_spectroscopy.py`, `24`–`25`, `28`–`29`, `31`, `34` | Compiled buffers, channel conflicts, signed IF/LO semantics, multiplexed readout and topology | Extract minimal compiler/runner inputs and keep a bounded full-device journey. Review duplicated recipes and hard-coded configuration assumptions instead of preserving their signatures. |
-| `30_drag_calibration.py`, `workflows/drag_beta_*` | Exact candidate lineage, independent verification, ownership of edited cells, conflict detection, durable publication/recovery | Specify these behaviors against independent parameter branches. Retire assertions requiring publication/restoration of a global active config; existing workflow structure and working-point APIs are not acceptance criteria. |
+| `30_drag_calibration.py` | DRAG acquisition, fit and uncertainty display, exact candidate lineage and independent verification | Retired. `test_typed_candidates.py` retains the real-device simulation and analysis with independent parameters/setup and no default mutation. Global publication/restore is no longer a required author journey. |
+| `workflows/drag_beta_*` | Independent verification, ownership of edited cells, conflict detection, durable publication/recovery | Retained integration dependencies, not recommended author code. Verified publication still targets the legacy registry/working points; implement explicit parameter-branch publication before replacing these consumers. |
 | `quantum_compilation`, `targets/list_mode`, `provider`, `virtual_lab` | Deterministic device/compiler integration | Retain only dependencies of named scientific/device tests; extract generic framework capabilities where justified. Compute-only teaching does not replace device evidence. |
 | Shared acceptance and `snapshot_roundtrip.py` | Real HTTP payloads and exact current-format recovery | Already use independent parameters/setup and an empty combined registry. Keep this evidence as legacy bootstrap consumers are removed. |
 
@@ -84,6 +85,8 @@ expresses an obsolete requirement before removing it.
    retain exact source and verification evidence, require an explicit publication
    decision, and reject conflicting head/cell changes. Derive requirements from
    these behaviors, not from the old DRAG procedure implementation.
+   [Issue #778](https://github.com/scopecat-project/scopecat/issues/778) tracks
+   atomic single-candidate publication and its retained verification evidence.
 4. Build a focused calibration fixture and, when the API is usable, a new
    calibration-topic sandbox. Remove replaced DRAG/default-config workflows and
    their unused dependencies in the same functional change.

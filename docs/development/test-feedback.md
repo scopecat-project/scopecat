@@ -148,10 +148,18 @@ actual notebook prepare boundary, which direct scan execution does not cover.
 
 `test_typed_candidates_retain_cells_and_independent_policy` retains the real
 managed-author chain: acquire, fit, stage named cells, prepare the exact candidate,
-acquire independent verification data, run its policy, publish explicitly, reject
-stale admission without side effects, and restore the previous default. Unknown
+acquire independent verification data and run its policy. It starts with equipment
+only and selects a parameter branch. Advancing that branch leaves a prepared
+candidate unchanged; verification changes neither the branch nor the lab default. Unknown
 fit fields, receipt authority, candidate identity and unrelated-cell preservation
 remain checked there.
+
+`test_drag_candidate_retains_science_without_default_publication` retains actual
+DRAG acquisition, fit/figure/report, candidate acquisition and cross-run decision
+with independent parameter/setup inputs. It replaces the retired DRAG gallery's
+scientific assertions without requiring global-default publication and restore.
+Legacy publication fences remain in `test_project_analysis_runtime.py`; these
+are not evidence that verified publication to parameter branches exists.
 
 `test_typed_candidate_policy_uses_retained_decision_and_workpoint` checks negative
 policy branches through in-process HTTP and real SQLite publications. It seeds

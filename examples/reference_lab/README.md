@@ -73,7 +73,6 @@ list of interfaces to preserve.
 | `25_entity_routed_ramsey.py` | Point-local entity selection over reusable quantum work |
 | `28_channel_conflict_diagnostic.py` | Precise conflict on an overlapping physical drive route |
 | `29_channel_unavailable.py` | Entity-axis IQ traces, identity selection, provenance, and one unavailable demodulation channel |
-| `30_drag_calibration.py` | Calibration, cross-run candidate verification, acceptance, production use, and undo |
 | `31_topology_scaled_ramsey.py` | One connected-qubit-set program reused across chip topology and scale |
 | `33_multichannel_dc_bias.py` | Profile/calibration join across two multichannel DC sources |
 | `34_xy_lo_sweep.py` | Shared LO scan, signed IF waveforms, shared clocks, and derived carrier records |
