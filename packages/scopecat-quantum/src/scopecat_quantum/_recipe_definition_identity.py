@@ -16,6 +16,8 @@ def recipe_definition_identity(value: object) -> object:
     Transitive module dependencies are owned by the retained author revision.
     Mutating globals or recipe objects after construction is not supported.
     """
+    value_type = type(value)
+    type_name = f"{value_type.__module__}.{value_type.__qualname__}"
     if inspect.isfunction(value):
         return {
             "function": python_source_identity(value, label="pulse recipe"),
@@ -33,7 +35,7 @@ def recipe_definition_identity(value: object) -> object:
         }
     if is_dataclass(value) and not isinstance(value, type):
         return {
-            "type": f"{type(value).__module__}.{type(value).__qualname__}",
+            "type": type_name,
             "fields": tuple(
                 (
                     field.name,
@@ -47,7 +49,7 @@ def recipe_definition_identity(value: object) -> object:
         }
     if isinstance(value, Mapping):
         return {
-            "type": f"{type(value).__module__}.{type(value).__qualname__}",
+            "type": type_name,
             "items": tuple(
                 (recipe_definition_identity(key), recipe_definition_identity(item))
                 for key, item in cast("Mapping[object, object]", value).items()
@@ -55,7 +57,7 @@ def recipe_definition_identity(value: object) -> object:
         }
     if isinstance(value, Sequence) and not isinstance(value, str | bytes):
         return {
-            "type": f"{type(value).__module__}.{type(value).__qualname__}",
+            "type": type_name,
             "items": tuple(recipe_definition_identity(item) for item in value),
         }
     return content_fingerprint(value)
