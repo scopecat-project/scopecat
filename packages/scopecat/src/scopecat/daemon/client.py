@@ -204,6 +204,7 @@ from scopecat.daemon.wire import (
     ParameterBindCommand,
     ParameterBranchCommitCommand,
     ParameterBranchHistory,
+    ParameterBranchPage,
     ParameterResolveCommand,
     ParameterRevisionList,
     ParameterSaveCommand,
@@ -1035,6 +1036,15 @@ class DaemonClient:
 
     def active_setup(self) -> ActiveSetupView:
         return self._get_model(f"{_API_PREFIX}/setup/active", ActiveSetupView)
+
+    def parameter_branches(
+        self, *, limit: int = 100, after: str | None = None
+    ) -> ParameterBranchPage:
+        return self._get_model(
+            f"{_API_PREFIX}/parameters/branches",
+            ParameterBranchPage,
+            params={"limit": limit, **({"after": after} if after is not None else {})},
+        )
 
     def get_parameter_branch(self, name: str) -> ParameterBranch:
         return self._get_model(
