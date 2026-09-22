@@ -254,7 +254,7 @@ The following legacy backend surfaces remain for a separate retirement:
 
 - cohort wire/domain records, daemon client methods and HTTP services;
 - SQLite cohort/member/finalization/status/publication-anchor storage;
-- exact full-config cohort publication helpers and their evidence checks.
+- server-side full-config cohort publication and its evidence checks.
 
 These are implementation debt, not another recommended automation path. They do
 not provide a resident planner or automatic publisher. Retaining them does not
@@ -277,11 +277,12 @@ The publication transaction fences the exact destination and, where present,
 ready-finalization revision. Approvals, the configuration revision, workspace
 head, operation receipt and member publication anchors commit together or roll
 back together. Anchors retain exact member and publication identities; they
-cannot be substituted between operations. Unknown-outcome reconciliation in the
-remaining publication helper looks up the original operation and validates its
-receipt without rebuilding the plan or rebasing to a newer head.
+cannot be substituted between operations. The old client-side publication plan,
+evidence builder and receipt-reconciliation helpers are removed; only the typed
+daemon transport remains for this legacy transaction. Current parameter-branch
+publication owns its own exact command and receipt recovery.
 
-These server invariants and helper behavior retain focused tests until those
+These server invariants retain focused tests until those
 interfaces are deliberately retired. The removed planner/finalizer tests are not
 substitutes for current branch workflow tests. The latter cover joint evidence,
 partial rejection, stale destinations, daemon restart and lost publication

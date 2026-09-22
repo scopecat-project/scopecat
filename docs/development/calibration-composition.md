@@ -22,7 +22,7 @@ This is a framework composition primitive, not an ordinary-author workflow for
 publishing calibration. It does not authenticate proposal sources, save anything,
 decide applicability or inherit verification. The legacy proposal adapter still
 checks exact source identities/full-config bases and delegates value composition
-to this core. It remains in the legacy framework publication API and focused
+to this core. It remains in the legacy server publication implementation and focused
 server tests, not as a compatibility requirement for independent-parameter candidates.
 
 ## Scientific verification
@@ -129,10 +129,24 @@ procedures and independent parameter candidates.
 The unused generic freshness evaluator, automatic publication finalizer, policy
 registry and calibration-definition authoring layer are now also removed, along
 with tests whose only consumers were those retired components. No automatic
-freshness or implicit subset behavior is carried forward. The remaining exact
-publication helpers, daemon endpoints, wire records and storage are a separate
-backend retirement: their transaction and evidence tests remain, and no stored
+freshness or implicit subset behavior is carried forward. The old client-side
+publication plan, contribution builder and receipt-reconciliation helpers are
+also removed: their only remaining consumers were their own unit tests. Current
+parameter candidates and durable procedure publication provide separate exact
+evidence and recovery paths.
+
+Daemon endpoints, wire records, server publication and storage remain a separate
+backend retirement. Their transaction and evidence tests remain, and no stored
 record or schema changes in this removal.
+
+The remaining backend has four coupled boundaries to remove together:
+
+| Boundary | Existing coupling | Required retirement check |
+| --- | --- | --- |
+| HTTP and daemon client | Cohort admission/status and publication commands/receipts | Remove matching routes and wire exports; keep branch commands and replay intact. |
+| Config and setup services | Full-config publication, member approvals/anchors, supersession when workspace or setup changes | Remove cohort hooks without weakening independent branch fences or setup identity. |
+| Runtime composition | Application/service/store construction | Remove mandatory cohort dependencies from ordinary daemon startup. |
+| SQLite schema | Cohort/member tables, publication queues and procedure-state triggers | Change the development schema deliberately; preserve current-format backup/restore tests, with no prebaseline migration or historical-store rewrite. |
 
 ## Remaining implementation order
 
