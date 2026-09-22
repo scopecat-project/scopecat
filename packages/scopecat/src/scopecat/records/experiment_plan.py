@@ -29,6 +29,7 @@ from scopecat.records.plan_ref import (
 from scopecat.records.request_sweep import ParameterSweep
 from scopecat.records.scientific_binding import ResolvedScientificBinding
 from scopecat.records.scientific_selection import (
+    ParameterConfiguration,
     SavedConfiguration,
     ScientificSelection,
     WorkingPointConfiguration,
@@ -80,6 +81,11 @@ class ExperimentPlanDefinition(BaseModel):
 
     @model_validator(mode="after")
     def exact_configuration(self) -> ExperimentPlanDefinition:
+        choice = self.selection.configuration
+        if isinstance(choice, ParameterConfiguration):
+            if choice.setup is None:
+                raise ValueError("parameter plan requires an exact setup reference")
+            return self
         if not isinstance(
             self.selection.configuration, SavedConfiguration | WorkingPointConfiguration
         ):

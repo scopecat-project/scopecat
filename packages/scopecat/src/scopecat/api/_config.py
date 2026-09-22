@@ -43,6 +43,7 @@ from scopecat.daemon.views import (
     ConfigEntryView,
     ConfigRegistryPage,
     ParameterProposalPage,
+    ParameterResolution,
 )
 from scopecat.daemon.wire import (
     CandidateConfigRevisionSource,
@@ -247,6 +248,7 @@ class LabConfigOperations:
         | CandidateConfig
         | ConfigContextRef
         | ConfigContextResolution
+        | ParameterResolution
         | None = None,
     ) -> ConfigDraft:
         return ConfigDraft.from_snapshot(self.resolve(config))
@@ -258,6 +260,7 @@ class LabConfigOperations:
         | CandidateConfig
         | ConfigContextRef
         | ConfigContextResolution
+        | ParameterResolution
         | None = None,
     ) -> ConfigProfileSnapshot:
         return self.resolve_with_source(config)[0]
@@ -269,12 +272,13 @@ class LabConfigOperations:
         | CandidateConfig
         | ConfigContextRef
         | ConfigContextResolution
+        | ParameterResolution
         | None = None,
     ) -> tuple[ConfigProfileSnapshot, RunConfigSource | None]:
         selected = self.default_config if config is None else config
         if isinstance(selected, ConfigContextRef):
             selected = self.resolve_context(selected)
-        if isinstance(selected, ConfigContextResolution):
+        if isinstance(selected, ConfigContextResolution | ParameterResolution):
             return selected.config, selected.config_source
         if selected is None or selected == "active":
             active = self.client.active_config()

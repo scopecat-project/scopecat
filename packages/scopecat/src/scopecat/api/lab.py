@@ -36,6 +36,7 @@ from scopecat.daemon.client import DaemonClient
 from scopecat.daemon.views import (
     ConfigContextResolution,
     DaemonHealth,
+    ParameterResolution,
     ProjectAnalysisPage,
     SampleAnalysisPage,
 )
@@ -459,6 +460,7 @@ class LabClient:
         | CandidateConfig
         | ConfigContextRef
         | ConfigContextResolution
+        | ParameterResolution
         | None = None,
     ) -> ConfigProfileSnapshot:
         return self._config.resolve(config)
@@ -472,6 +474,7 @@ class LabClient:
         | CandidateConfig
         | ConfigContextRef
         | ConfigContextResolution
+        | ParameterResolution
         | None = None,
     ) -> PreparedLabExperiment:
         invocation = _experiment_invocation(experiment)
@@ -492,6 +495,7 @@ class LabClient:
         | CandidateConfig
         | ConfigContextRef
         | ConfigContextResolution
+        | ParameterResolution
         | None = None,
         point: PreviewPoint = "first",
         coordinates: Mapping[str, object] | None = None,
@@ -530,6 +534,7 @@ class LabClient:
         | CandidateConfig
         | ConfigContextRef
         | ConfigContextResolution
+        | ParameterResolution
         | None = None,
         name: str | None = None,
         tags: tuple[str, ...] = (),
@@ -562,6 +567,7 @@ class LabClient:
         | CandidateConfig
         | ConfigContextRef
         | ConfigContextResolution
+        | ParameterResolution
         | None = None,
         name: str | None = None,
         tags: tuple[str, ...] = (),

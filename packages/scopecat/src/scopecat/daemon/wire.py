@@ -219,6 +219,11 @@ class ParameterBindCommand(_WireModel):
     note: str = ""
 
 
+class ParameterResolveCommand(_WireModel):
+    parameters: ParameterRevisionRef
+    setup: SetupRevisionRef
+
+
 class DirectConfigRevisionSource(_WireModel):
     kind: Literal["direct_config_profile"] = "direct_config_profile"
     config: ConfigProfileSnapshot
@@ -1552,6 +1557,7 @@ __all__ = [
     "MeasurementSealCommand",
     "ParameterBindCommand",
     "ParameterConfigRevisionSource",
+    "ParameterResolveCommand",
     "ParameterRevisionList",
     "ParameterSaveCommand",
     "PayloadObjectReceipt",

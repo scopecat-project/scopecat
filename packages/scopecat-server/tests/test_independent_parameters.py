@@ -3,8 +3,12 @@
 from pathlib import Path
 
 import httpx2
+import pytest
 from fastapi.testclient import TestClient
 from scopecat.api.lab import LabClient
+from scopecat.application.author_project import AuthorProject
+from scopecat.application.experiment_plans import plan_definition, plan_launch_request
+from scopecat.application.launch import LaunchPreview
 from scopecat.application.launch_config import resolve_launch_config
 from scopecat.config.registry.records import BoundParameterRegistrySource
 from scopecat.daemon.client import DaemonClient
@@ -16,14 +20,17 @@ from scopecat.daemon.wire import (
     SetupSaveCommand,
 )
 from scopecat.records.config_context import ConfigContextRef
+from scopecat.records.experiment_plan import ExperimentPlanSave
 from scopecat.records.experimental_batch import ExperimentalBatchEdit
 from scopecat.records.launch_request import LaunchRequest
 from scopecat.records.parameter import ParameterSnapshot, ScalarParameterValue
 from scopecat.records.parameter_revision import ParameterRevision
 from scopecat.records.plan_ref import PlanConfigRef
+from scopecat.records.run import ParameterRunConfigSource
 from scopecat.records.sample import SampleRevisionDraft, SampleSelector
 from scopecat.records.scientific_scope import DeclaredBatch
 from scopecat.records.scientific_selection import (
+    ParameterConfiguration,
     SampleSubjectChoice,
     SavedConfiguration,
     ScientificSelection,
@@ -244,3 +251,108 @@ def test_prepared_inputs_share_subject_batch_and_working_point_resolution(
             assert context.reviewed.binding.samples[0].batch_id == sample.batch_id
             assert lab.config.registry().activation is None
             assert lab.parameters.get(parameters.id) == parameters
+            lab.setup.activate(setup)
+            collection = client.create_record_collection("Trial")
+            registry_before = lab.config.registry()
+            with (
+                AuthorProject(
+                    "http://testserver", transport=httpx2.MockTransport(send)
+                ) as session,
+                AuthorProject(
+                    "http://testserver", transport=httpx2.MockTransport(send)
+                ) as other,
+            ):
+                before = session.use(
+                    selection=context_selection,
+                    collection=collection.id,
+                    operator="alice",
+                )
+                selected = session.use(parameters=parameters)
+                assert selected.science.subject == before.science.subject
+                assert selected.science.batch == before.science.batch
+                assert (selected.collection, selected.operator) == (
+                    collection.id,
+                    "alice",
+                )
+                assert isinstance(
+                    selected.science.configuration, ParameterConfiguration
+                )
+                assert other.use(parameters="initial").science.subject.kind == "unbound"
+                assert session.selection == selected
+                with pytest.raises(
+                    ValueError, match="choose parameters or working_point"
+                ):
+                    session.use(parameters=parameters, working_point=None)
+                assert session.selection == selected
+                request = LaunchRequest(
+                    action="preview",
+                    experiment="test",
+                    version="1",
+                    selection=selected.science,
+                )
+                original = resolve_launch_config(lab, request)
+                source = original.reviewed.config_source
+                assert isinstance(source, ParameterRunConfigSource)
+                assert source.parameters == parameters.ref
+                assert source.setup == setup.ref
+                newer = session.parameters.save(
+                    name="revised",
+                    catalog=parameters.catalog,
+                    parameters=parameters.parameters.model_copy(
+                        update={"id": "revised"}
+                    ),
+                )
+                session.use(parameters=newer)
+                assert other.selection.science.configuration == ParameterConfiguration(
+                    ref=parameters.ref
+                )
+                target = setup.setup.domain_target
+                assert target is not None
+                changed = lab.setup.save(
+                    setup.setup.model_copy(
+                        update={
+                            "domain_target": target.model_copy(
+                                update={"id": "other-target"}
+                            ),
+                        }
+                    ),
+                    name="changed-setup",
+                )
+                lab.setup.activate(changed)
+                frozen = request.model_copy(update={"reviewed": original.reviewed})
+                assert resolve_launch_config(lab, frozen) == original
+                assert (
+                    resolve_launch_config(lab, request).reviewed.config_source != source
+                )
+                preview = LaunchPreview(
+                    experiment_id="test",
+                    request_hash=frozen.request_hash,
+                    reviewed=original.reviewed,
+                    point_count=1,
+                    summary="checked",
+                    definition_hash="sha256:" + "a" * 64,
+                )
+                definition = plan_definition(request, preview)
+                checked = runtime.application.manual_previews.record_preview(
+                    preview,
+                    cursor=runtime.application.manual_previews.cursor(),
+                )
+                assert checked.manual_state is not None
+                assert definition.selection.configuration == ParameterConfiguration(
+                    ref=parameters.ref, setup=setup.ref
+                )
+                plan = runtime.application.plans.save(
+                    ExperimentPlanSave(
+                        name="retained-inputs",
+                        definition=definition,
+                        saved_by="alice",
+                    )
+                )
+                assert plan.definition == definition
+                assert (
+                    resolve_launch_config(
+                        lab, plan_launch_request(plan, actor="alice")
+                    ).reviewed
+                    == original.reviewed
+                )
+            assert lab.config.registry() == registry_before

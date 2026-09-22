@@ -4,13 +4,14 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from scopecat.daemon.wire import ConfigContextResolveCommand
+from scopecat.daemon.wire import ConfigContextResolveCommand, ParameterResolveCommand
 from scopecat.records.experiment_plan import (
     ExperimentPlanDefinition,
     ExperimentPlanRevision,
     ExperimentPlanSave,
 )
 from scopecat.records.scientific_selection import (
+    ParameterConfiguration,
     SavedConfiguration,
     WorkingPointConfiguration,
     require_selection_binding,
@@ -55,6 +56,14 @@ class ExperimentPlanService:
             if entry.entry.content_hash != choice.ref.content_hash:
                 raise BackendConflict("plan configuration content hash does not match")
             config = entry.config
+        elif isinstance(choice, ParameterConfiguration):
+            assert choice.setup is not None
+            config = self.config.resolve_parameters(
+                ParameterResolveCommand(
+                    parameters=choice.ref,
+                    setup=choice.setup,
+                )
+            ).config
         elif isinstance(choice, WorkingPointConfiguration):
             context = self.config.resolve_context(
                 ConfigContextResolveCommand(

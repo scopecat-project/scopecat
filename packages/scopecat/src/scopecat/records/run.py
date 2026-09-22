@@ -10,8 +10,10 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from scopecat.kernel.run_outcome import RunOutcome, RunStatus, utc_now
 from scopecat.records.config import ConfigContentHash
 from scopecat.records.config_context import ContextRunConfigSource
+from scopecat.records.parameter_revision import ParameterRevisionRef
 from scopecat.records.sample import SampleBinding
 from scopecat.records.scientific_binding import ResolvedScientificBinding
+from scopecat.records.setup import SetupRevisionRef
 
 
 class ConfigRegistryRunConfigSource(BaseModel):
@@ -27,6 +29,16 @@ class ConfigRegistryRunConfigSource(BaseModel):
         ge=1,
         description=("Historical activation generation for the active selector only."),
     )
+
+
+class ParameterRunConfigSource(BaseModel):
+    """Exact independent inputs; carries no working-point calibration ownership."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    kind: Literal["parameter_revision"] = "parameter_revision"
+    parameters: ParameterRevisionRef
+    setup: SetupRevisionRef
+    content_hash: ConfigContentHash
 
 
 class AnalysisCandidateRunConfigSource(BaseModel):
@@ -54,6 +66,7 @@ class AnalysisCandidateRunConfigSource(BaseModel):
 
 type RunConfigSource = Annotated[
     ConfigRegistryRunConfigSource
+    | ParameterRunConfigSource
     | AnalysisCandidateRunConfigSource
     | ContextRunConfigSource,
     Field(discriminator="kind"),

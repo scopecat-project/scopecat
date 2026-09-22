@@ -79,6 +79,7 @@ from scopecat.records.experimental_batch import require_batch_match
 from scopecat.records.launch_rejection import AuthorLaunchRejected, LaunchRejection
 from scopecat.records.launch_request import LaunchRequest
 from scopecat.records.measurement import MeasurementRecord
+from scopecat.records.parameter_revision import ParameterRevision, ParameterRevisionRef
 from scopecat.records.parameter_update import ParameterUpdate
 from scopecat.records.plan_ref import ExperimentPlanRef, PlanAnalysisSource
 from scopecat.records.run import AnalysisCandidateRunConfigSource
@@ -87,6 +88,7 @@ from scopecat.records.scientific_scope import DeclaredBatch, UnscopedBatch
 from scopecat.records.scientific_selection import (
     ActiveConfiguration,
     CandidateConfiguration,
+    ParameterConfiguration,
     RegisteredTargetChoice,
     SampleSubjectChoice,
     ScientificSelection,
@@ -143,6 +145,8 @@ class AuthorProject(DaemonClient):
         Collection/operator updates preserve scientific defaults. Choosing a new
         sample or target starts a fresh scope; a working point supplies its exact
         sample and batch unless an explicit subject is supplied alongside it.
+        Independent parameters preserve subject/batch but replace working-point
+        ownership. Preview pins their exact inputs without saving a combined entry.
         Selection never activates configuration or submits hardware operations.
         """
         if self.is_closed:
@@ -175,6 +179,8 @@ class AuthorProject(DaemonClient):
                 )
             selected = ScientificSelection.model_validate(changes["selection"])
         else:
+            if "parameters" in changes and "working_point" in changes:
+                raise ValueError("choose parameters or working_point, not both")
             if "target" in changes and "sample" in changes:
                 raise ValueError("choose target or sample")
             subject_changed = "target" in changes or "sample" in changes
@@ -200,6 +206,19 @@ class AuthorProject(DaemonClient):
                     if sample is None
                     else SampleSubjectChoice(sample_id=str(sample))
                 )
+            if "parameters" in changes:
+                parameters = changes["parameters"]
+                if parameters is None:
+                    configuration = ActiveConfiguration()
+                else:
+                    ref = (
+                        self.parameters.get(parameters).ref
+                        if isinstance(parameters, str)
+                        else parameters.ref
+                        if isinstance(parameters, ParameterRevision)
+                        else ParameterRevisionRef.model_validate(parameters)
+                    )
+                    configuration = ParameterConfiguration(ref=ref)
             if "working_point" in changes:
                 point = changes["working_point"]
                 if point is None:

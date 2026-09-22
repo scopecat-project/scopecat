@@ -48,7 +48,9 @@ export function PreflightSummary({
           ? preview.reviewed.config_source.context.entry_id
           : preview.reviewed.config_source.kind === "analysis_candidate"
             ? `Candidate ${preview.reviewed.config_source.proposal_id}`
-            : preview.reviewed.config_source.entry_id}
+            : preview.reviewed.config_source.kind === "parameter_revision"
+              ? `Parameters ${preview.reviewed.config_source.parameters.revision_id} / Setup ${preview.reviewed.config_source.setup.revision_id}`
+              : preview.reviewed.config_source.entry_id}
       </p>
       <p>
         {entry.configuration_effect === "none"

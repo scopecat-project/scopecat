@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, Literal
 
 from scopecat.config.candidates import CandidateConfig
 from scopecat.config.scientific_binding import bind_scientific_evidence
+from scopecat.daemon.wire import ParameterResolveCommand
 from scopecat.records.config import ConfigProfileSnapshot
 from scopecat.records.config_context import ContextRunConfigSource
 from scopecat.records.configuration_fence import (
@@ -16,6 +17,7 @@ from scopecat.records.launch_request import LaunchConfigSource, LaunchRequest
 from scopecat.records.run import (
     AnalysisCandidateRunConfigSource,
     ConfigRegistryRunConfigSource,
+    ParameterRunConfigSource,
 )
 from scopecat.records.sample import SampleBinding, SampleRevision
 from scopecat.records.scientific_binding import ResolvedScientificBinding
@@ -23,6 +25,7 @@ from scopecat.records.scientific_scope import DeclaredBatch
 from scopecat.records.scientific_selection import (
     ActiveConfiguration,
     CandidateConfiguration,
+    ParameterConfiguration,
     RegisteredTargetChoice,
     ReviewedScientificSelection,
     SampleSubjectChoice,
@@ -164,6 +167,23 @@ def _resolve_configuration(
         candidate_binding = lab.config.client.get_run(
             expected.source_run_id
         ).snapshot.scientific_binding
+    elif isinstance(choice, ParameterConfiguration):
+        old = reviewed.config_source if reviewed is not None else None
+        if old is not None and (
+            not isinstance(old, ParameterRunConfigSource)
+            or old.parameters != choice.ref
+            or (choice.setup is not None and old.setup != choice.setup)
+        ):
+            raise ValueError("parameter selection differs from reviewed inputs")
+        setup = (
+            old.setup
+            if isinstance(old, ParameterRunConfigSource)
+            else choice.setup or lab.config.client.active_setup().revision.ref
+        )
+        resolved = lab.config.client.resolve_parameters(
+            ParameterResolveCommand(parameters=choice.ref, setup=setup)
+        )
+        config, source = resolved.config, resolved.config_source
     elif isinstance(choice, WorkingPointConfiguration):
         resolved = lab.config.resolve_context(choice.ref, overrides=choice.overrides)
         config, source = resolved.config, resolved.config_source
@@ -239,12 +259,22 @@ def launch_preflight_configuration(
 ) -> Literal["accepted", "selected_context"]:
     return (
         "selected_context"
-        if isinstance(source, ContextRunConfigSource | AnalysisCandidateRunConfigSource)
+        if isinstance(
+            source,
+            ContextRunConfigSource
+            | AnalysisCandidateRunConfigSource
+            | ParameterRunConfigSource,
+        )
         else "accepted"
     )
 
 
 def launch_preflight_meaning(source: LaunchConfigSource) -> str:
+    if isinstance(source, ParameterRunConfigSource):
+        return (
+            "Uses exact parameter and setup revisions for this run; "
+            "no calibration acceptance or default changes."
+        )
     if isinstance(source, AnalysisCandidateRunConfigSource):
         return (
             "Uses this exact saved candidate for this run; "

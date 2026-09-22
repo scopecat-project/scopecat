@@ -257,6 +257,12 @@ export function LaunchForm({
           </button>
         </p>
       )}
+      {draft.selection.configuration.kind === "parameters" && (
+        <p>
+          Using parameter revision {draft.selection.configuration.ref.revision_id}. The checked
+          preview retains the exact setup used. This does not accept calibration or change defaults.
+        </p>
+      )}
       {selectedContext ? (
         <div>
           <p>

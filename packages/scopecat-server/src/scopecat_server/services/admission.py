@@ -52,6 +52,7 @@ from scopecat.records.config_context import ContextRunConfigSource
 from scopecat.records.run import (
     AnalysisCandidateRunConfigSource,
     ConfigRegistryRunConfigSource,
+    ParameterRunConfigSource,
     RunConfigSource,
 )
 from scopecat.records.sample import SampleBinding
@@ -81,6 +82,7 @@ from scopecat_server.storage.sqlite.samples import SQLiteSampleStore
 from scopecat_server.storage.sqlite.target_catalog import TargetCatalogStore
 
 from ..errors import BackendConflict, BackendNotFound
+from .parameter_resolution import resolve_parameters
 from .point_plans import RunPointPlanService
 from .samples import SampleService
 from .scientific_binding import validate_scientific_binding
@@ -313,6 +315,18 @@ class AdmissionService:
             return self._resolve_registry_source(source)
         if isinstance(source, ContextRunConfigSource):
             return self._resolve_context_source(source)
+        if isinstance(source, ParameterRunConfigSource):
+            with self._control.sqlite.read_transaction() as connection:
+                resolved = resolve_parameters(
+                    connection,
+                    parameters=source.parameters,
+                    setup=source.setup,
+                )
+            if resolved.config_source != source:
+                raise BackendConflict(
+                    "run parameters do not match exact resolved inputs"
+                )
+            return resolved.config
         return self._resolve_candidate_source(source)
 
     def _resolve_context_source(
@@ -627,7 +641,7 @@ def _require_authoritative_domain_target(
 ) -> None:
     if submitted.domain_target != authoritative.domain_target:
         raise BackendConflict(
-            "run domain target configuration differs from the active configuration"
+            "run domain target configuration differs from the active setup"
         )
 
 
