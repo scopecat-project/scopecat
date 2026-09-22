@@ -31,6 +31,7 @@ from scopecat.config.contexts import (
     context_value_origins,
     missing_context_values,
 )
+from scopecat.config.parameter_resolution import validate_parameter_snapshot
 from scopecat.config.registry import service as config_registry_service
 from scopecat.config.registry.records import (
     CalibrationCohortMergeContribution,
@@ -79,7 +80,9 @@ from scopecat.daemon.wire import (
     ConfigSetupRebindPreviewCommand,
     DirectConfigRevisionSource,
     ManualConfigDraftRevisionSource,
+    ParameterBindCommand,
     ParameterConfigRevisionSource,
+    ParameterSaveCommand,
 )
 from scopecat.kernel.errors import (
     CheckFailed,
@@ -95,6 +98,11 @@ from scopecat.records.analysis import (
 from scopecat.records.calibration_scope import WorkingPointCalibrationScope
 from scopecat.records.config import ConfigProfileSnapshot, config_content_hash
 from scopecat.records.config_context import ConfigContextRef, ContextRunConfigSource
+from scopecat.records.parameter_revision import (
+    ParameterRevision,
+    ParameterRevisionContent,
+    parameter_revision_hash,
+)
 from scopecat.records.parameter_structure import (
     AddParameterColumn,
     ChangeParameterColumn,
@@ -116,6 +124,9 @@ from scopecat_server.storage.sqlite.calibration_cohorts import (
 from scopecat_server.storage.sqlite.config_operations import SQLiteConfigOperationStore
 from scopecat_server.storage.sqlite.config_registry import SQLiteConfigRegistryStore
 from scopecat_server.storage.sqlite.control_plane import SQLiteControlPlane
+from scopecat_server.storage.sqlite.parameter_revisions import (
+    ParameterRevisionRepository,
+)
 from scopecat_server.storage.sqlite.run_repository import SQLiteRunRepository
 
 from ..errors import BackendConflict, BackendNotFound
@@ -165,6 +176,81 @@ class ConfigService:
         self._automation = automation
         self._calibration_cohorts = calibration_cohorts
         self._mutation_lock = Lock()
+
+    def parameter_revisions(self) -> tuple[ParameterRevision, ...]:
+        with self._control.sqlite.read_connection() as connection:
+            return ParameterRevisionRepository(connection).list()
+
+    def parameter_revision(self, revision_id: str) -> ParameterRevision:
+        with self._control.sqlite.read_connection() as connection:
+            try:
+                return ParameterRevisionRepository(connection).get(revision_id)
+            except KeyError as error:
+                raise BackendNotFound("parameter revision was not found") from error
+
+    def save_parameters(self, command: ParameterSaveCommand) -> ParameterRevision:
+        with self._config_errors():
+            problems = validate_parameter_snapshot(command.catalog, command.parameters)
+            if problems:
+                raise CheckFailed(problems)
+            revision = ParameterRevision(
+                id=command.revision_id,
+                catalog=command.catalog,
+                parameters=command.parameters,
+                content_hash=parameter_revision_hash(
+                    command.catalog, command.parameters
+                ),
+                actor=command.actor,
+                note=command.note,
+            )
+            with self._control.write_transaction() as connection:
+                try:
+                    return ParameterRevisionRepository(connection).save(revision)
+                except ValueError as error:
+                    raise BackendConflict(str(error)) from error
+
+    def bind_parameters(self, command: ParameterBindCommand) -> ConfigEntryView:
+        """Resolve exact independent inputs; do not select setup or parameters."""
+        with (
+            self._mutation_lock,
+            self._config_errors(),
+            self._config_transaction() as (connection, services),
+        ):
+            try:
+                parameters = ParameterRevisionRepository(connection).get(
+                    command.parameters.revision_id
+                )
+                if parameters.ref != command.parameters:
+                    raise BackendConflict(
+                        "parameter reference does not match saved content"
+                    )
+                result = config_registry_service.save_config_revision(
+                    revision=config_registry_service.ConfigRevision(
+                        entry_id=command.entry_id,
+                        actor=command.actor,
+                        note=command.note,
+                        source=config_registry_service.ParameterConfigRevisionSource(
+                            parameters=ParameterRevisionContent(
+                                id=command.entry_id,
+                                system_id=command.system_id,
+                                catalog=parameters.catalog,
+                                parameters=parameters.parameters,
+                            ),
+                            setup=command.setup,
+                            origin=parameters.ref,
+                        ),
+                    ),
+                    unit_of_work=services.config_registry,
+                )
+                saved = config_registry_service.load_config_registry_entry_snapshot(
+                    entry_id=result.entry.id,
+                    unit_of_work=services.config_registry,
+                )
+                return ConfigEntryView(entry=saved.entry, config=saved.config)
+            except KeyError as error:
+                raise BackendNotFound(
+                    "parameter or setup revision was not found"
+                ) from error
 
     def preview_setup_rebind(
         self, command: ConfigSetupRebindPreviewCommand

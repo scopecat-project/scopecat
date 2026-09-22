@@ -4,7 +4,7 @@ Status: selected product direction and proposed implementation contracts, record
 2026-09-19 after the teaching-host trial. The entities and APIs proposed here are
 not all shipped; implementation status is recorded below. This document governs the next implementation slices; it does not
 relax current ownership checks. The [prebaseline data policy](../data-compatibility.md)
-retires the schema 68–74 migration exercises; current format 84 is not a supported
+retires the schema 68–74 migration exercises; current format 85 is not a supported
 baseline. All retained-evidence and recovery contracts below concern the current
 format, not a promise to read or upgrade earlier development stores.
 

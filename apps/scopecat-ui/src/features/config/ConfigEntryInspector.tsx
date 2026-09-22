@@ -116,7 +116,8 @@ export function ConfigEntryInspector({
             {latestActivation !== undefined
               ? "Restore default"
               : entry.source.kind === "direct_config_profile" ||
-                  entry.source.kind === "parameter_revision"
+                  entry.source.kind === "parameter_revision" ||
+                  entry.source.kind === "bound_parameters"
                 ? "Set as default"
                 : "Accept as default"}
           </button>
@@ -307,6 +308,17 @@ function EntryProvenance({
         <p>
           Parameters published against saved setup {source.setup.revision_id}. Setup selection was
           unchanged.
+        </p>
+      </div>
+    );
+  }
+  if (source.kind === "bound_parameters") {
+    return (
+      <div className={provenance}>
+        <p>
+          Parameter revision {source.parameters.revision_id} combined with setup{" "}
+          {source.setup.revision_id}. Preparing these inputs does not select a default or establish
+          calibration validity.
         </p>
       </div>
     );

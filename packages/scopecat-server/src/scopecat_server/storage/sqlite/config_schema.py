@@ -1,6 +1,10 @@
 """SQLite configuration-registry tables."""
 
 CONFIG_REGISTRY_TABLES_SQL = """
+CREATE TABLE IF NOT EXISTS parameter_revisions (
+    revision_id TEXT PRIMARY KEY,
+    record_json TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS configuration_setup_contents (
     content_hash TEXT PRIMARY KEY,
     setup_json TEXT NOT NULL

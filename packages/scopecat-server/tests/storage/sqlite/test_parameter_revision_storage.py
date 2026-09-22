@@ -16,12 +16,19 @@ from scopecat.config.registry.service import (
 from scopecat.kernel.errors import DataIntegrityError
 from scopecat.project import load_project
 from scopecat.records.config import config_content_hash
+from scopecat.records.parameter_revision import (
+    ParameterRevision,
+    parameter_revision_hash,
+)
 from scopecat_testkit.config_registry import load_config
 from scopecat_testkit.server.runtime import SQLiteTestRunRepository
 
 from scopecat_server.snapshots import create_snapshot, restore_snapshot
 from scopecat_server.storage.sqlite.config_registry import SQLiteConfigRegistryStore
 from scopecat_server.storage.sqlite.connection import SQLiteDatabase
+from scopecat_server.storage.sqlite.parameter_revisions import (
+    ParameterRevisionRepository,
+)
 from scopecat_server.storage.sqlite.project_store import SQLiteProjectStore
 
 
@@ -97,6 +104,36 @@ def test_parameters_share_exact_setup_and_survive_backup_restore(
             assert config_content_hash(
                 work.registry.read_config(ref)
             ) == config_content_hash(config)
+    restored.sqlite.close()
+
+
+def test_standalone_parameters_survive_backup_without_any_setup(tmp_path: Path) -> None:
+    root = tmp_path / "source"
+    root.mkdir()
+    (root / "scopecat.toml").write_text("[lab]\n")
+    store = _store(root)
+    config = load_config()
+    revision = ParameterRevision(
+        id="author-values",
+        catalog=config.parameter_catalog,
+        parameters=config.parameter_snapshot,
+        content_hash=parameter_revision_hash(
+            config.parameter_catalog, config.parameter_snapshot
+        ),
+        actor="author",
+    )
+    with store.sqlite.write_transaction() as connection:
+        assert ParameterRevisionRepository(connection).save(revision) == revision
+    store.sqlite.close()
+    create_snapshot(load_project(root / "scopecat.toml"), tmp_path / "backup")
+    restore_snapshot(tmp_path / "backup", tmp_path / "restored")
+    restored = _store(tmp_path / "restored")
+    with restored.sqlite.read_connection() as connection:
+        assert ParameterRevisionRepository(connection).get(revision.id) == revision
+    with restored.read_unit_of_work() as work:
+        assert not work.registry.list_entries()
+        assert not work.setups.list_revisions()
+        assert work.setups.read_current() is None
     restored.sqlite.close()
 
 

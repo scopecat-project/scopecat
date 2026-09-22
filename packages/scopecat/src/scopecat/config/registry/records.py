@@ -23,6 +23,7 @@ from scopecat.records.calibration_scope import (
 from scopecat.records.config import ConfigContentHash
 from scopecat.records.config_context import ConfigContextMetadata, ConfigContextRef
 from scopecat.records.content import Sha256ContentHash
+from scopecat.records.parameter_revision import ParameterRevisionRef
 from scopecat.records.setup import SetupRevisionRef
 
 _CONFIG_ACTIVATION_INTENT_CODEC = "scopecat.config-activation-intent.v1"
@@ -47,6 +48,14 @@ class ParameterConfigRegistrySource(_FrozenRegistryModel):
     """Parameter input composed against one exact saved executable setup."""
 
     kind: Literal["parameter_revision"] = "parameter_revision"
+    setup: SetupRevisionRef
+
+
+class BoundParameterRegistrySource(_FrozenRegistryModel):
+    """Execution combination of two independently saved exact revisions."""
+
+    kind: Literal["bound_parameters"] = "bound_parameters"
+    parameters: ParameterRevisionRef
     setup: SetupRevisionRef
 
 
@@ -332,6 +341,7 @@ class ContextConfigRegistrySource(_FrozenRegistryModel):
 
 ConfigRegistryEntrySource = Annotated[
     DirectConfigRegistrySource
+    | BoundParameterRegistrySource
     | ParameterConfigRegistrySource
     | ManualConfigDraftRegistrySource
     | CandidateConfigRegistrySource

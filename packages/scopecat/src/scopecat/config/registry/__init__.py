@@ -14,6 +14,7 @@ if TYPE_CHECKING:
         ConfigRegistryUnitOfWorkFactory,
     )
     from scopecat.config.registry.records import (
+        BoundParameterRegistrySource,
         CalibrationCohortMergeContribution,
         CalibrationCohortMergeRegistrySource,
         CandidateAcceptance,
@@ -68,6 +69,7 @@ if TYPE_CHECKING:
 
 
 _RECORD_EXPORTS = (
+    "BoundParameterRegistrySource",
     "CalibrationCohortMergeContribution",
     "CalibrationCohortMergeRegistrySource",
     "CandidateAcceptance",

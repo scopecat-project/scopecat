@@ -17,6 +17,7 @@ from scopecat.api.calibration_planner import CalibrationPlanningContext
 from scopecat.api.calibration_policy import CalibrationPublicationPolicyRegistry
 from scopecat.api.calibrations import LabCalibrationOperations
 from scopecat.api.instruments import LabInstrumentOperations
+from scopecat.api.parameter_revisions import LabParameterOperations
 from scopecat.api.plans import LabPlanOperations
 from scopecat.api.procedure_planner import ProcedurePlanningContext
 from scopecat.api.procedures import LabProcedureOperations
@@ -184,6 +185,7 @@ class LabClient:
             operator=operator,
         )
         self._setup = LabSetupOperations(self._client, operator=operator)
+        self._parameters = LabParameterOperations(self._client, operator=operator)
         self._control = LabControlOperations(self._client)
         self._instruments = LabInstrumentOperations(
             self._client,
@@ -266,6 +268,10 @@ class LabClient:
     @property
     def config(self) -> LabConfigOperations:
         return self._config
+
+    @property
+    def parameters(self) -> LabParameterOperations:
+        return self._parameters
 
     @property
     def control(self) -> LabControlOperations:

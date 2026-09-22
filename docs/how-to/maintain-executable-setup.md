@@ -17,6 +17,11 @@ that state. A partly initialized catalog is rejected rather than silently repair
 
 ## Prepare and review in Python
 
+For ordinary parameter authoring, start with
+[independent parameter revisions](independent-parameters.md): saving parameters
+does not require setup. The sequence below specifically initializes a global
+parameter default through the transitional registry API.
+
 For an empty laboratory, setup can be prepared before any parameter configuration:
 
 ```python

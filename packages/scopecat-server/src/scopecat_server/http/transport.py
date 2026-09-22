@@ -219,6 +219,9 @@ from scopecat.daemon.wire import (
     MeasurementHeaderCommand,
     MeasurementIngestReceipt,
     MeasurementSealCommand,
+    ParameterBindCommand,
+    ParameterRevisionList,
+    ParameterSaveCommand,
     PayloadObjectReceipt,
     RunAdmission,
     RunAttachmentCommand,
@@ -294,6 +297,7 @@ from scopecat.records.launch_rejection import LaunchRejectionResponse
 from scopecat.records.launch_request import LaunchRequest
 from scopecat.records.manual_preview import ManualPreviewFence, ManualPreviewValidity
 from scopecat.records.measurement_recording import MeasurementDatasetReceipt
+from scopecat.records.parameter_revision import ParameterRevision
 from scopecat.records.plan_ref import ExperimentPlanRef
 from scopecat.records.record_collection import (
     RecordCollection,
@@ -886,6 +890,22 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
             expected_content_hash=f"sha256:{hexdigest}",
             declared_size_bytes=_request_content_length(request),
         )
+
+    @app.get(f"{_API_PREFIX}/parameters/revisions")
+    def list_parameter_revisions() -> ParameterRevisionList:
+        return ParameterRevisionList(items=application.config.parameter_revisions())
+
+    @app.get(f"{_API_PREFIX}/parameters/revisions/{{revision_id:path}}")
+    def get_parameter_revision(revision_id: str) -> ParameterRevision:
+        return application.config.parameter_revision(revision_id)
+
+    @app.post(f"{_API_PREFIX}/parameters/revisions")
+    def save_parameter_revision(command: ParameterSaveCommand) -> ParameterRevision:
+        return application.config.save_parameters(command)
+
+    @app.post(f"{_API_PREFIX}/parameters/bindings")
+    def bind_parameter_revision(command: ParameterBindCommand) -> ConfigEntryView:
+        return application.config.bind_parameters(command)
 
     @app.get(f"{_API_PREFIX}/setup/templates")
     def configuration_templates() -> ConfigurationTemplateList:

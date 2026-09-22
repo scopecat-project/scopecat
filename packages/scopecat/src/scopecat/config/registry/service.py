@@ -38,6 +38,7 @@ from scopecat.config.registry.ports import (
     ConfigRegistryUnitOfWorkFactory,
 )
 from scopecat.config.registry.records import (
+    BoundParameterRegistrySource,
     CalibrationCohortMergeRegistrySource,
     CandidateAcceptance,
     CandidateConfigRegistrySource,
@@ -89,7 +90,10 @@ from scopecat.records.parameter_change import (
     ParameterChangeProposal,
     ParameterValueDelta,
 )
-from scopecat.records.parameter_revision import ParameterRevisionContent
+from scopecat.records.parameter_revision import (
+    ParameterRevisionContent,
+    ParameterRevisionRef,
+)
 from scopecat.records.run import (
     ConfigRegistryRunConfigSource,
     RunConfigSource,
@@ -124,6 +128,7 @@ class DirectConfigRevisionSource:
 class ParameterConfigRevisionSource:
     parameters: ParameterRevisionContent
     setup: SetupRevisionRef
+    origin: ParameterRevisionRef | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -459,7 +464,11 @@ def _save_config_revision_locked(
             catalog=parameters.catalog,
             parameters=parameters.parameters,
         )
-        entry_source = ParameterConfigRegistrySource(setup=setup.ref)
+        entry_source = (
+            BoundParameterRegistrySource(parameters=source.origin, setup=setup.ref)
+            if source.origin is not None
+            else ParameterConfigRegistrySource(setup=setup.ref)
+        )
         entry_id = _required_revision_entry_id(revision)
     elif isinstance(source, ManualConfigDraftRevisionSource):
         config, entry_source, deltas = _prepare_manual_config_draft_locked(
