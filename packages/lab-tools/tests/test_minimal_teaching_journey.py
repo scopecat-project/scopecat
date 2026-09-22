@@ -5,6 +5,7 @@ from pathlib import Path
 
 import httpx2
 import numpy as np
+import pytest
 
 import scopecat as sc
 from lab_teaching.parameters import Drive
@@ -31,6 +32,11 @@ def test_minimal_teaching_refresh_and_restart(tmp_path: Path, notebook_imports) 
             assert [entry.id for entry in session.catalog().entries] == [
                 "teaching.rabi"
             ]
+            assert session.config.registry().entries == ()
+            with pytest.raises(
+                httpx2.HTTPStatusError, match="Select a parameter branch"
+            ):
+                session.prepare("teaching.rabi")
             params = open_parameters(session)
             assert list(params) == ["teaching_drive"]
             params[Drive]["q0"].frequency = 5.148
@@ -85,7 +91,6 @@ def test_minimal_teaching_refresh_and_restart(tmp_path: Path, notebook_imports) 
             second = (
                 session.prepare(
                     "teaching.rabi",
-                    parameters=params,
                     scans={"amplitude": np.linspace(0, 0.8, 21)},
                 )
                 .run()
@@ -110,6 +115,7 @@ def test_minimal_teaching_refresh_and_restart(tmp_path: Path, notebook_imports) 
             )
             receipt = job.receipt
             run_id = run.id
+            assert session.config.registry().entries == ()
     finally:
         stop_project(project)
     start_project(project, timeout=120, static_dir=static_dir)
@@ -124,6 +130,7 @@ def test_minimal_teaching_refresh_and_restart(tmp_path: Path, notebook_imports) 
                 analyze_rabi(session, restored).pi_amplitude
                 == first_report.pi_amplitude
             )
+            assert session.config.registry().entries == ()
     finally:
         stop_project(project)
 

@@ -9,10 +9,7 @@ from scopecat.records.config import (
     RoutingGraph,
     Topology,
 )
-from scopecat.records.parameter_revision import ParameterRevisionContent
 from scopecat.records.setup import ExecutableSetupSnapshot
-
-from .parameters import Drive
 
 
 def initial_setup() -> ExecutableSetupSnapshot:
@@ -25,17 +22,5 @@ def initial_setup() -> ExecutableSetupSnapshot:
     )
 
 
-def initial_parameters() -> ParameterRevisionContent:
-    return ParameterRevisionContent(
-        id="teaching",
-        system_id="synthetic-teaching",
-        catalog=sc.parameter_catalog("teaching", Drive),
-        parameters=sc.parameter_snapshot(
-            "teaching-inputs",
-            tables={Drive: [Drive(id="q0", frequency=5.15)]},
-        ),
-    )
-
-
 def create_bootstrap(_project_root: Path) -> LabBootstrap:
-    return LabBootstrap(setup=initial_setup, parameter_defaults=initial_parameters)
+    return LabBootstrap(setup=initial_setup)

@@ -54,3 +54,11 @@ amplitudes = np.linspace(0.0, 0.8, 21)
 request = teaching_rabi(shots=64, seed=200)
 request.values["amplitude"] = sc.Scan(amplitudes)
 ```
+# 参数选择与启动
+
+教学服务启动只声明合成 setup，不创建实验室全局参数默认值。
+先运行 Notebook 的 `params = open_parameters(session)`，它会创建或打开教学参数分支并选择它。
+如果预览提示没有选择参数，运行该初始化 cell，或用
+`session.use(parameter_branch="teaching-table")` 重新选择已有分支。
+在工作台中从 **Measurement context → Choose parameter branch** 选择保存版本。
+参数保存、refresh 和历史读取都不需要发布全局默认配置。

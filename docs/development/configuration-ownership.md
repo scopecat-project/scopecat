@@ -124,6 +124,13 @@ Equipment-only startup creates no parameter default. The explicit runtime
 a `LabBootstrap` field or the generated authoring example. The optional initial
 parameter default is still a bridge to existing execution consumers, not a branch.
 
+Teaching bootstrap now uses equipment-only startup. Its author-owned parameter
+branches support the complete run/refresh/analysis/reopen journey with an empty
+combined configuration registry. Unknown-value and structural-history teaching
+tests use independent branches rather than synthetic working points. Starter
+virtual-instrument and reference integration projects still declare transitional
+defaults; their remaining consumers must be moved deliberately.
+
 Full-config `set_default` inputs,
 working-point entries, setup rebinding and full-config experiment-system builders
 remain transitional dependencies. Green tests for them do not close this issue.
