@@ -47,6 +47,8 @@ export function configSourceLabel(entry: ConfigRegistryEntry): string {
   switch (entry.source.kind) {
     case "direct_config_profile":
       return "Direct profile";
+    case "parameter_revision":
+      return "Parameter revision";
     case "manual_parameter_updates":
       return "Typed parameter edit";
     case "setup_rebind":
@@ -67,6 +69,8 @@ export function configSourceLabel(entry: ConfigRegistryEntry): string {
 
 function configSourceSearchTerms(source: ConfigProvenanceSource): Array<string | null | undefined> {
   switch (source.kind) {
+    case "parameter_revision":
+      return [source.setup.revision_id];
     case "direct_config_profile":
     case "manual_parameter_updates":
       return [];

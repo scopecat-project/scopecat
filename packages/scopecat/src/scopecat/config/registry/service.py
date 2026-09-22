@@ -48,6 +48,7 @@ from scopecat.config.registry.records import (
     ContextConfigRegistrySource,
     DirectConfigRegistrySource,
     ManualConfigDraftRegistrySource,
+    ParameterConfigRegistrySource,
     ResolvedCalibrationCohortMergeContribution,
     SetupRebindRegistrySource,
 )
@@ -88,6 +89,7 @@ from scopecat.records.parameter_change import (
     ParameterChangeProposal,
     ParameterValueDelta,
 )
+from scopecat.records.parameter_revision import ParameterRevisionContent
 from scopecat.records.run import (
     ConfigRegistryRunConfigSource,
     RunConfigSource,
@@ -116,6 +118,12 @@ class _ValidatedCandidateSource:
 @dataclass(frozen=True, slots=True)
 class DirectConfigRevisionSource:
     config: ConfigProfileSnapshot
+
+
+@dataclass(frozen=True, slots=True)
+class ParameterConfigRevisionSource:
+    parameters: ParameterRevisionContent
+    setup: SetupRevisionRef
 
 
 @dataclass(frozen=True, slots=True)
@@ -154,6 +162,7 @@ class CalibrationCohortMergeRevisionSource:
 
 type ConfigRevisionSource = (
     DirectConfigRevisionSource
+    | ParameterConfigRevisionSource
     | ManualConfigDraftRevisionSource
     | CandidateConfigRevisionSource
 )
@@ -385,7 +394,12 @@ def _bootstrap_executable_setup(
         or work.setups.list_revisions()
         or not isinstance(revision.source, DirectConfigRevisionSource)
     ):
-        raise ValueError("configuration registry has no initialized setup authority")
+        raise _registry_failure(
+            Conflict,
+            code="config_registry.setup_not_selected",
+            message="select an executable setup before publishing parameters",
+            location=_registry_model_location("setup"),
+        )
     setup = ExecutableSetupSnapshot.from_config(revision.source.config)
     saved = work.setups.save_revision(
         SetupRevision(
@@ -425,6 +439,27 @@ def _save_config_revision_locked(
     if isinstance(source, DirectConfigRevisionSource):
         config = source.config
         entry_source = DirectConfigRegistrySource()
+        entry_id = _required_revision_entry_id(revision)
+    elif isinstance(source, ParameterConfigRevisionSource):
+        from scopecat.config.resolution import compose_configuration
+
+        setup = work.setups.read_revision(source.setup.revision_id)
+        if setup.ref != source.setup:
+            raise _registry_failure(
+                Conflict,
+                code="config_registry.setup_reference_mismatch",
+                message="parameter publication requires an exact saved setup",
+                location=_registry_model_location("setup"),
+            )
+        parameters = source.parameters
+        config = compose_configuration(
+            setup.setup,
+            id=parameters.id,
+            system_id=parameters.system_id,
+            catalog=parameters.catalog,
+            parameters=parameters.parameters,
+        )
+        entry_source = ParameterConfigRegistrySource(setup=setup.ref)
         entry_id = _required_revision_entry_id(revision)
     elif isinstance(source, ManualConfigDraftRevisionSource):
         config, entry_source, deltas = _prepare_manual_config_draft_locked(

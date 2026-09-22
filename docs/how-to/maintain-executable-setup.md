@@ -26,24 +26,24 @@ lab.setup.activate(revision)
 
 Here `reviewed_setup` is an `ExecutableSetupSnapshot` supplied by the adapter and
 maintainer. Saving or selecting it does not create a parameter registry entry.
-To use the current full-snapshot execution API, explicitly compose parameters:
+Publish parameter definitions and values against that exact saved revision:
 
 ```python
-from scopecat.config.resolution import compose_configuration
-
-config = compose_configuration(
-    reviewed_setup,
-    id="initial-parameters",
+lab.config.set_parameter_default(
+    name="initial-parameters",
     system_id="lab",
+    setup=revision,
     catalog=author_parameter_catalog,
     parameters=reviewed_parameters,
 )
-lab.config.set_default(config)
 ```
 
-Composition validates without persistence; publishing selects the parameter
-default and leaves the already selected setup unchanged. The combined snapshot
-is a transitional carrier; see [configuration ownership](../development/configuration-ownership.md).
+The server loads the exact saved setup, validates the combination and records its
+reference as provenance. Publishing selects the parameter default and leaves setup
+selection unchanged. Select a compatible setup first; this API never bootstraps
+one implicitly. `compose_configuration` remains available for pure composition,
+and the full-snapshot `set_default` API remains transitional; see
+[configuration ownership](../development/configuration-ownership.md).
 
 Read the current setup and save a reviewed replacement:
 
