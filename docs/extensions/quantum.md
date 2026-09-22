@@ -19,6 +19,34 @@ candidate, because core may later split it around host-state changes. Repeated
 device-effective programs may share one scheduled representation; exact target
 entry ids and result mappings remain request-local.
 
+## Select pulse recipes per call
+
+Authors can select implementations on each program call:
+
+```python
+call = sequence("q0").with_recipes(RECIPES).with_shots(1024)
+result = context.use(call)
+```
+
+`RECIPES` is a `PulseRecipeProfile[ParameterSnapshot]`. Selection is local to
+the call and survives shot/compiler-input/recipe-parameter modifiers; it does
+not modify the reusable program definition or copy calibration values.
+`RecipeTargetCompiler` uses the call's selection ahead of its target-provided
+default. Pass `None` as that default when authors own recipe selection.
+Direct pulse/acquisition programs need no recipe profile; unresolved logical
+operations still require matching implementations.
+For repeated occurrences of one program in the same experiment, use the existing
+explicit call names, such as `sequence.call("baseline", "q0")` and
+`sequence.call("candidate", "q0")`, before selecting each call's recipes.
+
+Selection identity includes declared recipe data, lexical Python function
+source, defaults and captured values. It excludes process-local caches. Function
+source must be inspectable; transitive module dependencies remain the retained
+author revision's responsibility. Do not mutate profiles or callback globals
+after selection. Different profiles never share a materialization cache.
+Only compiled numerical artifacts reach instrument workers; selecting recipes
+does not let author code choose physical routes or bypass target limits.
+
 ## Keep continuous intent and sampled realization separate
 
 The canonical pulse scheduler retains requested boundaries as exact `Decimal`

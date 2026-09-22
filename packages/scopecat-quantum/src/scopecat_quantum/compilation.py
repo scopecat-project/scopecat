@@ -2,6 +2,7 @@
 
 from collections.abc import Mapping
 from dataclasses import dataclass
+from typing import cast
 
 from scopecat_quantum import authoring as quantum
 from scopecat_quantum._ids import PulseProgramId, TargetCompileEntryId
@@ -44,7 +45,7 @@ class RecipeTargetCompiler[ParametersT]:
 
     def __init__(
         self,
-        profile: PulseRecipeProfile[ParametersT],
+        profile: PulseRecipeProfile[ParametersT] | None,
         parameters: ParametersT,
         *,
         max_expanded_operations: int | None = None,
@@ -71,10 +72,19 @@ class RecipeTargetCompiler[ParametersT]:
         Both remain immutable; the cache keys retain the actual selected rows.
         """
         bound = quantum.bind(program, bindings)
-        implementations = self._profile.materialize_quantum(
+        profile = (
+            cast("PulseRecipeProfile[ParametersT]", program.recipes.profile)
+            if program.recipes is not None
+            else self._profile
+        )
+        if profile is None:
+            profile = PulseRecipeProfile[ParametersT]()
+        implementations = profile.materialize_quantum(
             self._parameters,
             bound.verified,
-            cache=self._cache,
+            cache=self._cache
+            if profile is self._profile
+            else PulseRecipeMaterializationCache(),
             scoped_parameters={**self._scoped_parameters, **(scoped_parameters or {})},
             max_expanded_operations=self._max_expanded_operations,
         )

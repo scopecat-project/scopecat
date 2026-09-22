@@ -52,6 +52,7 @@ from scopecat_quantum.recipe_parameters import (
     RecipeParameterBinding,
     recipe_parameter_input_ids,
 )
+from scopecat_quantum.recipe_selection import RecipeSelection, SelectableRecipes
 
 from ._analysis import (
     _summarize_fragment,
@@ -118,6 +119,28 @@ class QuantumProgramCall:
             key=self.domain_call.key,
         )
 
+    def with_recipes(self, recipes: SelectableRecipes, /) -> QuantumProgramCall:
+        """Select pulse implementations for this call, without copying parameters."""
+        selected = Program(
+            ir_id=self.program.ir_id,
+            body=self.program.body,
+            elements=self.program.elements,
+            entity_sets=self.program.entity_sets,
+            inputs=self.program.inputs,
+            results=self.program.results,
+            description=self.program.description,
+            recipe_parameter_bindings=self.program.recipe_parameter_bindings,
+            recipes=RecipeSelection(recipes),
+        )
+        return _program_call(
+            selected,
+            self.domain_call.id,
+            inputs=dict(self.arguments),
+            compiler_inputs=dict(self.compiler_arguments),
+            shots=self.shots,
+            key=self.domain_call.key,
+        )
+
     def with_compiler_inputs(self, **inputs: ComputeInput) -> QuantumProgramCall:
         """Bind typed lowering-only values without changing the Program ABI."""
 
@@ -179,6 +202,7 @@ class QuantumProgramCall:
             results=self.program.results,
             description=self.program.description,
             recipe_parameter_bindings=tuple(bindings),
+            recipes=self.program.recipes,
         )
         return _program_call(
             program,
@@ -234,6 +258,7 @@ class Program:
     results: ProgramResults
     description: str | None = None
     recipe_parameter_bindings: tuple[RecipeParameterBinding, ...] = ()
+    recipes: RecipeSelection | None = None
 
     @property
     def id(self) -> str:
@@ -281,6 +306,7 @@ class ProgramDefinition(Program):
             results=declaration.results,
             description=declaration.description,
             recipe_parameter_bindings=declaration.recipe_parameter_bindings,
+            recipes=declaration.recipes,
         )
         self._definition = definition
         self._contract = contract
