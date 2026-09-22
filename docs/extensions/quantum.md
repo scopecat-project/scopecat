@@ -35,6 +35,9 @@ not modify the reusable program definition or copy calibration values.
 default. Pass `None` as that default when authors own recipe selection.
 Direct pulse/acquisition programs need no recipe profile; unresolved logical
 operations still require matching implementations.
+For repeated occurrences of one program in the same experiment, use the existing
+explicit call names, such as `sequence.call("baseline", "q0")` and
+`sequence.call("candidate", "q0")`, before selecting each call's recipes.
 
 Selection identity includes declared recipe data, lexical Python function
 source, defaults and captured values. It excludes process-local caches. Function
