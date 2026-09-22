@@ -1,6 +1,6 @@
 # Back up and restore a stopped project
 
-This workflow supports the current development format only: schema **86** and
+This workflow supports the current development format only: schema **87** and
 snapshot format **1**. It is not an upgrade path or compatibility baseline; see the
 [data policy](../development/data-compatibility.md).
 

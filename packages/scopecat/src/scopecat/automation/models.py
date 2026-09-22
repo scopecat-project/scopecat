@@ -30,6 +30,7 @@ from scopecat.kernel.run_outcome import utc_now
 from scopecat.records.analysis import AnalysisInterpretationReference, AnalysisSubject
 from scopecat.records.config import ConfigContentHash
 from scopecat.records.content import Sha256ContentHash
+from scopecat.records.parameter_branch import ParameterBranch
 from scopecat.records.plan_ref import ExperimentPlanRef
 from scopecat.records.sample import SampleSelector
 from scopecat.records.scientific_binding import ResolvedScientificBinding
@@ -66,6 +67,7 @@ type ProcedureStepOperation = Literal[
     "analysis",
     "config_activation",
     "config_publish",
+    "parameter_publish",
     "interpretation",
 ]
 type ProcedureStepAttemptState = Literal[
@@ -173,6 +175,13 @@ class ConfigPublishOutputRef(_ProcedureModel):
     entry_content_hash: ConfigContentHash
 
 
+class ParameterBranchPublishOutputRef(_ProcedureModel):
+    """Retained accepted branch head, independent of later branch movement."""
+
+    kind: Literal["parameter_publish"] = "parameter_publish"
+    branch: ParameterBranch
+
+
 class InterpretationOutputRef(_ProcedureModel):
     """Exact typed judgment supplied for one durable interpretation step."""
 
@@ -197,6 +206,7 @@ type ProcedureStepOutputRef = Annotated[
     | AnalysisPublicationOutputRef
     | ConfigActivationOutputRef
     | ConfigPublishOutputRef
+    | ParameterBranchPublishOutputRef
     | InterpretationOutputRef,
     Field(discriminator="kind"),
 ]

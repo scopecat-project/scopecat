@@ -73,12 +73,23 @@ a completed publication must replay its receipt; partial cohort completion must
 not publish an implicit subset. A deliberate subset needs its own explicit
 request and verification scope.
 
+`LabProcedureContext.publish_parameter_candidate()` now connects the independent
+branch transaction to the durable step ledger. Its intent binds the captured
+branch generation/base, exact candidate and verification analyses and revision
+name. Completed steps retain and replay the accepted head; interrupted publication
+retries the same server command. Unknown outcomes require attention, and
+analysis-only recovery cannot carry attempted publication into a new procedure.
+The output and SQLite operation contract use development schema 87, with no
+prebaseline migration. This is the final publication primitive, not yet a
+replacement for target scheduling or cohort completeness/finalization policy.
+
 ## Remaining implementation order
 
 1. Expand retained-evidence regression coverage to automatic orchestration and
    recovery. The explicit two-target compose/reverify/publish path exists, but
    cohort scheduling and finalization still use the legacy model.
-2. Adapt durable orchestration/finalization to this contract, then retire replaced
+2. Build target-complete orchestration/finalization on the durable branch publish
+   step, then retire replaced
    DRAG working-point/cohort publication code and its obsolete tests together.
 3. Introduce a reusable teaching sandbox after the author workflow is coherent.
 

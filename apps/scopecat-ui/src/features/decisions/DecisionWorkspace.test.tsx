@@ -34,6 +34,30 @@ afterEach(() => {
 });
 
 describe("DecisionWorkspace", () => {
+  it("shows the retained parameter branch receipt as decision evidence", async () => {
+    const step = waitingStep();
+    step.inputs = [
+      {
+        kind: "parameter_publish",
+        branch: {
+          name: "daily",
+          generation: 4,
+          actor: "automation",
+          note: "",
+          revision: { revision_id: "joint-verified", content_hash: hash },
+        },
+      },
+    ];
+    vi.mocked(getProcedureSteps).mockResolvedValue({
+      procedure_run_id: "procedure-1",
+      items: [step],
+    });
+    renderWorkspace();
+    expect(
+      await screen.findByText("parameters · daily · generation 4 · joint-verified"),
+    ).toBeVisible();
+  });
+
   it("shows exact evidence and submits an identified structured judgment", async () => {
     renderWorkspace();
 

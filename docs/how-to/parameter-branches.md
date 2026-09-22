@@ -164,6 +164,42 @@ verified candidates or cohort publication is provided by this operation.
 The older `publish_to(working_point=...)` and `publish_default()` still serve
 legacy consumers; new branch workflows use `publish_to_branch()`.
 
+## Publish inside a durable procedure
+
+A registered procedure can use the same server validation and atomic branch
+publication without activating a full configuration:
+
+```python
+published = ctx.publish_parameter_candidate(
+    "publish-calibration",
+    candidate_ref,
+    proposal_id="joint-drive-calibration",
+    verification=verification_ref,
+    decision_output_id="decision",
+    branch=intent.destination,
+    name=intent.result_revision_id,
+    actor="calibration-worker",
+)
+```
+
+Here `candidate_ref` and `verification_ref` are exact retained analysis outputs
+from earlier steps. The procedure's typed intent must capture the destination
+`ParameterBranch` and result revision name at submission. Do not re-checkout a
+moving branch while replaying the procedure. Joint candidates still require a
+retained joint verification decision; this step does not imply target completeness.
+
+The step stores the entire accepted branch receipt. A completed step replays that
+receipt without reopening evidence or resolving today's head. If publication
+commits but its step result is not saved, repeating the same command recovers the
+historical publication. An unresolved transport failure requires attention;
+retry with the same intent, rather than choosing a newer destination. Changing
+the destination or evidence changes step identity. Analysis-only recovery into a
+different procedure excludes any attempted parameter publication, just as it
+excludes old configuration acceptance.
+
+This durable output uses development schema 87. Existing development stores are
+left untouched; use a fresh store rather than rewriting an older one.
+
 ## Scientific context remains separate
 
 Session branch selection and explicit branch-editor preparation preserve the

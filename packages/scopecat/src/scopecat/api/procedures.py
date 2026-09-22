@@ -34,6 +34,7 @@ from scopecat.automation import (
     InterpretationActorKind,
     InterpretationOutputRef,
     InterpretationRequest,
+    ParameterBranchPublishOutputRef,
     ProcedureCancelCommand,
     ProcedureContext,
     ProcedureRegistry,
@@ -87,6 +88,7 @@ from scopecat.daemon.wire import (
     ConfigEntryActivationCommand,
     ConfigPublishCommand,
     ConfigPublishReceipt,
+    ParameterBranchPublishCommand,
 )
 from scopecat.kernel.content_identity import content_fingerprint, stable_content_hash
 from scopecat.kernel.errors import RunIndeterminate
@@ -108,6 +110,10 @@ from scopecat.records.configuration_fence import ProcedureConfigurationFence
 from scopecat.records.content import Sha256ContentHash
 from scopecat.records.launch_request import LaunchRequest
 from scopecat.records.manual_preview import ManualPreviewFence
+from scopecat.records.parameter_branch import (
+    ParameterBranch,
+    ParameterBranchPublication,
+)
 from scopecat.records.parameter_change import ParameterChangeProposal
 from scopecat.records.plan_ref import ExperimentPlanRef, ProcedureChildSubmission
 from scopecat.records.run import RunConfigSource
@@ -662,6 +668,109 @@ class LabProcedureContext:
             intent_hash=intent_hash,
             effect=activate,
             inputs=inputs,
+        )
+
+    def publish_parameter_candidate(
+        self,
+        step_key: str,
+        candidate_ref: AnalysisPublicationOutputRef,
+        *,
+        proposal_id: str,
+        verification: AnalysisPublicationOutputRef,
+        decision_output_id: str,
+        branch: ParameterBranch,
+        name: str,
+        actor: str,
+        note: str = "",
+    ) -> ParameterBranchPublishOutputRef:
+        """Publish verified parameters to a captured head as a durable step.
+
+        Capture the destination in the procedure intent, not by checking out a
+        mutable head on each replay. The server validates the scientific proof.
+        """
+        if not isinstance(candidate_ref.subject, RunAnalysisSubject):
+            raise TypeError("candidate must identify an exact run analysis")
+        candidate_run_id = candidate_ref.subject.run_id
+        if not isinstance(verification.subject, ProjectAnalysisSubject):
+            raise TypeError("candidate verification must identify a project analysis")
+        intent_hash = stable_content_hash(
+            {
+                "codec": "scopecat.procedure-parameter-publish.v1",
+                "candidate": candidate_ref.model_dump(mode="json"),
+                "proposal_id": proposal_id,
+                "verification": verification.model_dump(mode="json"),
+                "decision_output_id": decision_output_id,
+                "branch": branch.name,
+                "generation": branch.generation,
+                "base": branch.revision.model_dump(mode="json"),
+                "name": name,
+                "actor": actor,
+                "note": note,
+            }
+        )
+
+        def publish(_operation_id: str) -> ParameterBranchPublishOutputRef:
+            proposal = _parameter_proposal(
+                self.published_analysis(candidate_ref), proposal_id
+            )
+            if (
+                proposal.source_run_id != candidate_run_id
+                or proposal.analysis_record_id != candidate_ref.analysis_record_id
+            ):
+                raise ValueError(
+                    "candidate proposal does not belong to its exact analysis reference"
+                )
+            decision = self.published_analysis(verification).fact(decision_output_id)
+            command = ParameterBranchPublishCommand(
+                name=branch.name,
+                expected_generation=branch.generation,
+                base=branch.revision,
+                run_id=proposal.source_run_id,
+                proposal_id=proposal.id,
+                verification=ProjectAnalysisDecisionReference(
+                    analysis_record_id=verification.analysis_record_id,
+                    output_id=decision_output_id,
+                    schema_id=decision.schema_id,
+                    schema_hash=decision.schema_hash,
+                ),
+                revision_id=name,
+                actor=actor,
+                note=note,
+            )
+            # The client retries the identical command; the server replays its
+            # historical receipt even when a later writer has advanced the head.
+            try:
+                receipt = self._config.client.publish_parameter_branch(command)
+            except (httpx2.HTTPError, DaemonUnavailableError, ValidationError) as error:
+                raise ProcedureNeedsAttention(
+                    "parameter publication outcome is unknown; retry this step "
+                    "with the same captured head and revision name"
+                ) from error
+            if (
+                receipt.name != command.name
+                or receipt.generation != command.expected_generation + 1
+                or receipt.previous != command.base
+                or receipt.revision.revision_id != command.revision_id
+                or receipt.actor != command.actor
+                or receipt.note != command.note
+                or receipt.publication
+                != ParameterBranchPublication(
+                    run_id=command.run_id,
+                    proposal_id=command.proposal_id,
+                    verification=command.verification,
+                )
+            ):
+                raise ProcedureNeedsAttention(
+                    "parameter publication receipt does not match intent"
+                )
+            return ParameterBranchPublishOutputRef(branch=receipt)
+
+        return self.step(
+            step_key,
+            operation="parameter_publish",
+            intent_hash=intent_hash,
+            effect=publish,
+            inputs=(candidate_ref, verification),
         )
 
     def accept_verified_candidate(

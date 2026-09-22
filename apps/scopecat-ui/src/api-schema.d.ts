@@ -6901,6 +6901,18 @@ export interface components {
             verification: components["schemas"]["ProjectAnalysisDecisionReference"];
         };
         /**
+         * ParameterBranchPublishOutputRef
+         * @description Retained accepted branch head, independent of later branch movement.
+         */
+        ParameterBranchPublishOutputRef: {
+            branch: components["schemas"]["ParameterBranch"];
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "parameter_publish";
+        };
+        /**
          * ParameterCatalog
          * @description Authored parameter schema in one shape-independent namespace.
          */
@@ -7812,8 +7824,8 @@ export interface components {
             step: components["schemas"]["ProcedureStepAttempt"];
         };
         /** @enum {string} */
-        ProcedureStepOperation: "run" | "analysis" | "config_activation" | "config_publish" | "interpretation";
-        ProcedureStepOutputRef: components["schemas"]["RunOutputRef"] | components["schemas"]["AnalysisPublicationOutputRef"] | components["schemas"]["ConfigActivationOutputRef"] | components["schemas"]["ConfigPublishOutputRef"] | components["schemas"]["InterpretationOutputRef"];
+        ProcedureStepOperation: "run" | "analysis" | "config_activation" | "config_publish" | "parameter_publish" | "interpretation";
+        ProcedureStepOutputRef: components["schemas"]["RunOutputRef"] | components["schemas"]["AnalysisPublicationOutputRef"] | components["schemas"]["ConfigActivationOutputRef"] | components["schemas"]["ConfigPublishOutputRef"] | components["schemas"]["ParameterBranchPublishOutputRef"] | components["schemas"]["InterpretationOutputRef"];
         /**
          * ProjectAnalysisDecisionReference
          * @description One exact typed fact interpreted as a project-level decision.

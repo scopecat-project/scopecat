@@ -59,7 +59,7 @@ CREATE TABLE IF NOT EXISTS procedure_step_attempts (
     operation TEXT NOT NULL CHECK (
         operation IN (
             'run', 'analysis', 'config_activation', 'config_publish',
-            'interpretation'
+            'interpretation', 'parameter_publish'
         )
     ),
     intent_hash TEXT NOT NULL,
