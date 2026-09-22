@@ -579,7 +579,9 @@ class PulseRecipeProfile[ParametersT]:
 
     def selection_identity(self) -> object:
         """Identify declarations, excluding process-local materialization caches."""
-        from scopecat_quantum.recipe_selection import recipe_definition_identity
+        from scopecat_quantum._recipe_definition_identity import (
+            recipe_definition_identity,
+        )
 
         return recipe_definition_identity(self._mappings)
 

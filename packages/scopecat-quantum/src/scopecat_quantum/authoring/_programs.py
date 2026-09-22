@@ -6,7 +6,7 @@ from __future__ import annotations
 import inspect
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Protocol, cast
+from typing import Protocol, cast
 
 from scopecat.authoring import (
     ComputeInput,
@@ -19,12 +19,6 @@ from scopecat.authoring.entity_selection import PerEntity
 from scopecat.domain.program import DomainProgramDef
 from scopecat.kernel.entity import EntityRef
 from scopecat.kernel.quantity import Quantity
-from scopecat.records.parameter import ParameterSnapshot
-
-from scopecat_quantum.recipe_selection import RecipeSelection
-
-if TYPE_CHECKING:
-    from scopecat_quantum.pulse_recipes import PulseRecipeProfile
 from scopecat.kernel.value_type_compatibility import (
     literal_scalar_type,
     require_assignable,
@@ -58,6 +52,7 @@ from scopecat_quantum.recipe_parameters import (
     RecipeParameterBinding,
     recipe_parameter_input_ids,
 )
+from scopecat_quantum.recipe_selection import RecipeSelection, SelectableRecipes
 
 from ._analysis import (
     _summarize_fragment,
@@ -124,9 +119,7 @@ class QuantumProgramCall:
             key=self.domain_call.key,
         )
 
-    def with_recipes(
-        self, recipes: PulseRecipeProfile[ParameterSnapshot], /
-    ) -> QuantumProgramCall:
+    def with_recipes(self, recipes: SelectableRecipes, /) -> QuantumProgramCall:
         """Select pulse implementations for this call, without copying parameters."""
         selected = Program(
             ir_id=self.program.ir_id,
