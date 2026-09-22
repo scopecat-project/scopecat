@@ -79,34 +79,23 @@ list of interfaces to preserve.
 | `35_awg_output_monitor.py` | Entityless AWG/scope diagnostic with temporary cable intent |
 | `50_ragged_scope_capture.py` | Point-varying oscilloscope record length and ragged waveform slicing |
 
-The application also registers one bounded q0/q1 DRAG calibration definition.
-Its project-side policy evaluates semantic freshness from a selected saved
-working point, admits immutable bounded cohorts, and runs independent durable
-procedures through baseline, fit, candidate, and verification. These automated
-members are verify-only: successful closure leaves each result pending a
-published freshness anchor and makes the complete cohort durable finalization
-work. The application selects an active binding from the exact DRAG
-definition to a fingerprinted automatic-publication policy while retaining it
-as a historical drain capability. The resident worker resolves that same policy
-after restart and calls `prepare_drag_beta_cohort_publication` through a narrow
-read-only facade. The preparation resolves each exact versioned verification
-checkpoint, rejects edits outside each target's owned beta cell, previews the
-common-base cell merge, and requires each verified candidate to retain the same
-semantic inputs in the merged result. The generic finalizer then performs one
-workspace-head-checked publication and records one published freshness anchor per
-contribution before freshness is evaluated in the same worker cycle.
-`publish_verified_drag_beta_cohort` remains the explicit operator/debug path;
-both paths derive the same deterministic plan, so an exact retry returns the
-original receipt rather than creating another parameter version. The lab default
-remains unchanged. Start the resident worker with an existing parameter entry:
+The application registers `drag_branch_calibration`, a bounded integration
+procedure over an explicitly requested q0/q1 target list. It captures independent
+parameter/setup inputs and a destination branch, fits each target, composes its
+proposals, remeasures every target under the combined values and publishes only
+after a complete positive decision. A one-target request uses the same pipeline.
 
-```console
-scopecat automation work . --working-point my-saved-working-point
-```
+`tests/test_typed_candidates.py` retains real-device-simulation evidence for
+restart after composition, lost publication responses, historical receipt replay
+after a later branch edit, missing/rejected targets and stale destinations.
+`ProjectAutomationWorker(lab.procedures)` dispatches submitted requests without
+legacy cohort policies. Setup and the lab default do not change.
 
-The worker follows that workspace head after publication. Omitting
-`--working-point` runs only catalog-scoped nonpublishing calibration checks; it
-does not create an implicit sample or enroll the DRAG publication workflow.
+The previous working-point cohort, semantic freshness projection and implicit
+q0-only rerun policy are retired. No replacement automatic freshness inference
+is claimed. See [automating parameter calibration](../../docs/how-to/automate-parameter-calibration.md)
+for the framework boundary. This simulation policy is not hardware validation of
+independence between logical targets.
 
 ## Source map
 

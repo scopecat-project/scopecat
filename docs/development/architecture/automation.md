@@ -133,33 +133,28 @@ this command and remains an operator concern.
 
 ## Present supported slice
 
-The original single-target reference DRAG procedure demonstrates the durable
-procedure boundary:
+The maintained reference `drag_branch_calibration` demonstrates a bounded request
+over explicit targets and independent parameters/setup:
 
-1. run a baseline scan against an exact configuration snapshot and source;
-2. publish the run-scoped fit and parameter proposal;
-3. run the candidate configuration with exact analysis provenance;
-4. publish a project-owned comparison and require an accepted decision;
-5. publish and activate that candidate using the exact proposal and decision.
+1. freeze the complete target set and destination branch in typed intent;
+2. acquire and fit each target from the same saved base;
+3. compose exact proposals through `combine_parameter_candidates()`;
+4. remeasure every requested target under the combined candidate;
+5. retain checked, missing and rejected targets in one joint policy decision;
+6. publish to the captured branch with `publish_parameter_candidate()` only after
+   positive complete verification.
 
-The procedure API can publish a verified candidate or activate one already-saved
-configuration entry with generation compare-and-swap and an exact operation
-receipt. Policy remains explicit in the procedure: only the project verification
-fact authorizes DRAG candidate acceptance. The production run remains outside
-the procedure, and final cleanup reactivates the exact starting entry instead of
-calling the interactive `undo()` helper. That helper first resolves history to
-an exact entry and then uses the ordinary idempotent activation operation; the
-relative history lookup itself is not a replayable procedure compensation.
+The branch publication step retains its accepted head and source/decision proof.
+It never activates equipment or a shared default. A completed step replays without
+reopening evidence; a committed publication with a lost response is retried by
+the same command and recovers its historical receipt even after later branch edits.
+Single-target requests use the same path without a synthetic merge.
 
-The bounded calibration path uses a second, verify-only DRAG procedure. Each
-cohort member performs the first four steps and closes successfully without
-publishing configuration. A cohort finalizer then composes the exact verified
-member proposals and publishes one revision for the whole cohort. The explicit
-API remains available for operator workflows; a cohort pinned to an exact
-automatic-publication policy is instead discovered by the resident project
-worker. The cohort owns one explicit working-point workspace. Its members may
-calibrate different logical entities of that sample, but cannot publish into
-another workspace or change the shared active configuration.
+The old DRAG default-publishing and verify-only cohort procedures, semantic merge
+policy and automatic-publication registry have been retired. Peer-insensitive
+freshness and implicit subset reruns are withdrawn, not mechanically translated.
+Generic full-config cohort services remain legacy implementation debt, documented
+below for their existing framework callers/tests.
 
 The procedure replay layer deliberately has no DAG representation, automatic
 retry policy, cron trigger, or dynamic loop checkpoint. A linear Python
@@ -167,6 +162,11 @@ procedure with durable step checkpoints remains the unit of execution; the flat
 bounded cohort admission layer described below does not add another run engine.
 
 ## One-shot schedules and project automation workers
+
+`ProjectAutomationWorker(lab.procedures)` dispatches submitted procedures and due
+schedules directly. Interval planning, calibration evaluation and legacy cohort
+finalization are optional explicit components, not prerequisites for a worker.
+New parameter-branch procedures carry their publication within their own ledger.
 
 A durable procedure schedule freezes one exact definition reference, canonical
 intent, and UTC due time. Materialization derives a stable request key from that
@@ -243,6 +243,11 @@ ready for another exact worker. If there is no next step, the procedure closes
 successfully. There is no mid-effect cancellation contract.
 
 ## Freshness evaluation and bounded calibration cohorts
+
+This section describes the remaining legacy full-config cohort API. The reference
+DRAG application no longer registers or recommends it. New branch workflows use
+explicit requested targets and joint verification; scientific freshness over
+independent parameter dependencies still needs a replacement design.
 
 The project application may also register a small immutable
 `CalibrationRegistry`. Each `CalibrationDefinition` owns a typed target

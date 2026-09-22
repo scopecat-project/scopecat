@@ -37,6 +37,7 @@ nav = [
     { "Use measurement data" = "how-to/use-measurement-data.md" },
     { "Compare retained runs" = "how-to/retained-run-comparison.md" },
     { "Manage configuration" = "how-to/manage-configuration.md" },
+    { "Automate parameter calibration" = "how-to/automate-parameter-calibration.md" },
     { "Maintain local application" = "how-to/maintain-application.md" },
     { "Maintain executable setup" = "how-to/maintain-executable-setup.md" },
     { "Start with dynamic parameters" = "how-to/declare-dynamic-parameters.md" },

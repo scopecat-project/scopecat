@@ -172,7 +172,7 @@ type _ScheduleOutcome = Literal["materialized", "conflict", "failure"]
 
 
 class ProjectAutomationWorker:
-    """Finalize, plan, materialize, and dispatch project-owned automation."""
+    """Dispatch durable procedures with optional laboratory planning policies."""
 
     __slots__ = (
         "_backoff_initial_seconds",
@@ -191,9 +191,9 @@ class ProjectAutomationWorker:
         self,
         operations: _ProjectAutomationOperations,
         *,
-        planner: _ProcedureIntervalPlanner,
-        calibration_evaluator: _CalibrationEvaluator,
-        calibration_finalizer: _CalibrationPublicationFinalizer,
+        planner: _ProcedureIntervalPlanner | None = None,
+        calibration_evaluator: _CalibrationEvaluator | None = None,
+        calibration_finalizer: _CalibrationPublicationFinalizer | None = None,
         worker_id: str | None = None,
         schedule_limit: int = _DEFAULT_BATCH_LIMIT,
         runnable_limit: int = _DEFAULT_BATCH_LIMIT,
@@ -233,7 +233,22 @@ class ProjectAutomationWorker:
     def cycle(self, stop: Event | None = None) -> ProjectAutomationCycleResult:
         """Run one bounded config-ordered project work cycle."""
 
-        publications = self._calibration_finalizer.cycle(stop)
+        publications = (
+            self._calibration_finalizer.cycle(stop)
+            if self._calibration_finalizer is not None
+            else CalibrationPublicationFinalizerCycleResult(
+                ready_items=0,
+                prepared_items=0,
+                published_items=0,
+                deferred_items=0,
+                attention_items=0,
+                reconciled_items=0,
+                superseded_items=0,
+                benign_races=0,
+                failures=0,
+                has_more=False,
+            )
+        )
         if stop is not None and stop.is_set():
             return _automation_cycle_result(
                 publications,
@@ -244,7 +259,7 @@ class ProjectAutomationWorker:
             )
         planning = (
             _empty_planner_cycle()
-            if publications.has_more
+            if publications.has_more or self._planner is None
             else self._planner.cycle(stop)
         )
         if stop is not None and stop.is_set():
@@ -257,7 +272,7 @@ class ProjectAutomationWorker:
             )
         calibrations = (
             _empty_calibration_cycle()
-            if publications.has_more
+            if publications.has_more or self._calibration_evaluator is None
             else self._calibration_evaluator.cycle(stop)
         )
         if stop is not None and stop.is_set():

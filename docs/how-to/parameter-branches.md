@@ -200,6 +200,9 @@ excludes old configuration acceptance.
 This durable output uses development schema 87. Existing development stores are
 left untouched; use a fresh store rather than rewriting an older one.
 
+For target selection, durable composition, joint verification and worker setup,
+see [Automate parameter calibration](automate-parameter-calibration.md).
+
 ## Scientific context remains separate
 
 Session branch selection and explicit branch-editor preparation preserve the

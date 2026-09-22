@@ -38,15 +38,7 @@ def create_application(_project_root: Path) -> LabApplication:
         failed_temperature_analysis,
         recovered_temperature_analysis,
     )
-    from reference_lab.workflows.drag_beta_automatic_publication import (
-        DRAG_BETA_PUBLICATION_POLICY_REGISTRY,
-    )
-    from reference_lab.workflows.drag_beta_freshness import (
-        DRAG_BETA_CALIBRATION_REGISTRY,
-    )
-    from reference_lab.workflows.drag_beta_procedure import (
-        drag_beta_verification_procedure,
-    )
+    from reference_lab.workflows.drag_branch_calibration import drag_branch_calibration
     from reference_lab.workflows.temperature_diagnostic import (
         temperature_diagnostic_procedure,
     )
@@ -68,10 +60,8 @@ def create_application(_project_root: Path) -> LabApplication:
             temperature_diagnostic_procedure,
             failed_temperature_analysis,
             recovered_temperature_analysis,
-            drag_beta_verification_procedure,
+            drag_branch_calibration,
         ),
-        calibrations=DRAG_BETA_CALIBRATION_REGISTRY,
-        calibration_publications=DRAG_BETA_PUBLICATION_POLICY_REGISTRY,
     )
 
 

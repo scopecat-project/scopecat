@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Literal, Protocol
+from typing import Literal, Protocol, cast
 from uuid import uuid4
 
 import httpx2
@@ -89,8 +89,13 @@ from scopecat.daemon.wire import (
     ConfigPublishCommand,
     ConfigPublishReceipt,
     ParameterBranchPublishCommand,
+    ParameterCandidateComposeCommand,
 )
-from scopecat.kernel.content_identity import content_fingerprint, stable_content_hash
+from scopecat.kernel.content_identity import (
+    content_fingerprint,
+    model_wire_content_hash,
+    stable_content_hash,
+)
 from scopecat.kernel.errors import RunIndeterminate
 from scopecat.kernel.ids import artifact_slug
 from scopecat.kernel.python_source import python_source_identity
@@ -114,7 +119,10 @@ from scopecat.records.parameter_branch import (
     ParameterBranch,
     ParameterBranchPublication,
 )
-from scopecat.records.parameter_change import ParameterChangeProposal
+from scopecat.records.parameter_change import (
+    ParameterChangeProposal,
+    ParameterProposalRef,
+)
 from scopecat.records.plan_ref import ExperimentPlanRef, ProcedureChildSubmission
 from scopecat.records.run import RunConfigSource
 from scopecat.records.sample import SampleSelector
@@ -670,6 +678,81 @@ class LabProcedureContext:
             inputs=inputs,
         )
 
+    def combine_parameter_candidates(
+        self,
+        step_key: str,
+        candidates: tuple[tuple[AnalysisPublicationOutputRef, str], ...],
+        *,
+        name: str,
+        note: str = "",
+    ) -> AnalysisPublicationOutputRef:
+        """Retain an exact composition as a replayable analysis step.
+
+        Each pair identifies an analysis and its proposal. This composes values,
+        not acceptance; measure and verify the combined candidate before publishing.
+        """
+        if len(candidates) < 2:
+            raise ValueError("composition requires at least two candidates")
+        if any(
+            not isinstance(ref.subject, RunAnalysisSubject) for ref, _ in candidates
+        ):
+            raise TypeError("candidates must identify exact run analyses")
+        identity = {
+            "codec": "scopecat.procedure-parameter-composition.v1",
+            "candidates": [
+                (ref.model_dump(mode="json"), proposal) for ref, proposal in candidates
+            ],
+            "name": name,
+            "note": note,
+        }
+
+        def compose(_operation_id: str) -> AnalysisPublicationOutputRef:
+            sources: list[ParameterProposalRef] = []
+            for ref, proposal_id in candidates:
+                proposal = _parameter_proposal(
+                    self.published_analysis(ref), proposal_id
+                )
+                if (
+                    RunAnalysisSubject(run_id=proposal.source_run_id) != ref.subject
+                    or proposal.analysis_record_id != ref.analysis_record_id
+                ):
+                    raise ValueError(
+                        "candidate proposal does not belong to its exact "
+                        "analysis reference"
+                    )
+                sources.append(
+                    ParameterProposalRef(
+                        run_id=proposal.source_run_id,
+                        proposal_id=proposal.id,
+                        analysis_record_id=proposal.analysis_record_id,
+                        content_hash=f"sha256:{model_wire_content_hash(proposal)}",
+                    )
+                )
+            command = ParameterCandidateComposeCommand(
+                name=name, note=note, sources=tuple(sources)
+            )
+            try:
+                receipt = self._config.client.compose_parameter_candidate(
+                    sources[0].run_id, command
+                )
+            except (httpx2.HTTPError, DaemonUnavailableError, ValidationError) as error:
+                raise ProcedureNeedsAttention(
+                    "parameter composition outcome is unknown; retry the same step"
+                ) from error
+            [proposal] = receipt.parameter_proposals
+            return AnalysisPublicationOutputRef(
+                subject=RunAnalysisSubject(run_id=sources[0].run_id),
+                analysis_record_id=proposal.analysis_record_id,
+            )
+
+        return self.step(
+            step_key,
+            operation="analysis",
+            intent_hash=f"sha256:{stable_content_hash(identity)}",
+            effect=compose,
+            inputs=tuple(ref for ref, _ in candidates),
+        )
+
     def publish_parameter_candidate(
         self,
         step_key: str,
@@ -693,7 +776,7 @@ class LabProcedureContext:
         candidate_run_id = candidate_ref.subject.run_id
         if not isinstance(verification.subject, ProjectAnalysisSubject):
             raise TypeError("candidate verification must identify a project analysis")
-        intent_hash = stable_content_hash(
+        intent_hash = "sha256:" + stable_content_hash(
             {
                 "codec": "scopecat.procedure-parameter-publish.v1",
                 "candidate": candidate_ref.model_dump(mode="json"),
@@ -1449,6 +1532,7 @@ def _analysis_implementation_fingerprint(
 
 
 def _analysis_argument_identity(value: object) -> object:
+    value_type = f"{type(value).__module__}.{type(value).__qualname__}"
     if isinstance(value, RunHandle):
         return {"kind": "run", "run_id": value.id}
     if isinstance(value, PublishedAnalysis):
@@ -1456,6 +1540,26 @@ def _analysis_argument_identity(value: object) -> object:
             "kind": "analysis",
             "subject": value.view.analysis.subject.model_dump(mode="json"),
             "analysis_record_id": value.id,
+        }
+    if isinstance(value, (tuple, list)):
+        return {
+            "kind": "sequence",
+            "type": value_type,
+            "items": [
+                _analysis_argument_identity(item)
+                for item in cast("tuple[object, ...] | list[object]", value)
+            ],
+        }
+    if isinstance(value, Mapping):
+        entries = [
+            [content_fingerprint(key), _analysis_argument_identity(item)]
+            for key, item in cast("Mapping[object, object]", value).items()
+        ]
+        entries.sort(key=lambda entry: stable_content_hash(entry[0]))
+        return {
+            "kind": "mapping",
+            "type": value_type,
+            "entries": entries,
         }
     return content_fingerprint(value)
 

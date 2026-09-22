@@ -2,9 +2,10 @@
 
 import shutil
 from collections.abc import Generator
-from dataclasses import dataclass, replace
+from dataclasses import replace
 from pathlib import Path
 
+import httpx2
 import pytest
 import scopecat as sc
 from scopecat.analysis.facts import ordinary_result_schema
@@ -12,15 +13,23 @@ from scopecat.api.parameter_candidates import (
     ParameterCandidate,
     VerifiedParameterCandidate,
 )
+from scopecat.api.project_worker import ProjectAutomationWorker
 from scopecat.application import LabApplication
-from scopecat.daemon.client import DaemonConflictError
+from scopecat.automation import (
+    AnalysisPublicationOutputRef,
+    ParameterBranchPublishOutputRef,
+    RunOutputRef,
+)
+from scopecat.daemon.client import DaemonClient, DaemonConflictError
 from scopecat.daemon.wire import (
     AnalysisParameterProposalOutputPayload,
     AnalysisSaveCommand,
+    ParameterBranchPublishCommand,
 )
 from scopecat.project import load_project
 from scopecat.records.analysis import analysis_record_id
 from scopecat.records.parameter import TableParameterValue
+from scopecat.records.parameter_branch import ParameterBranch
 from scopecat.records.run import (
     AnalysisCandidateRunConfigSource,
     ParameterRunConfigSource,
@@ -41,18 +50,19 @@ from reference_lab.workflows.drag_beta_experiment import drag_beta_experiment
 from reference_lab.workflows.drag_beta_verification import (
     DRAG_BETA_VERIFICATION_SCHEMA,
     drag_beta_candidate_verification,
-    evaluate_drag_beta_candidate,
+)
+from reference_lab.workflows.drag_branch_calibration import (
+    JOINT_DRAG_DECISION_SCHEMA,
+    DragBranchCalibrationIntent,
+    DragBranchCalibrationRejected,
+    drag_branch_calibration,
+    verify_joint_drag,
 )
 from reference_lab.workflows.production_drag_gate import production_drag_experiment
 
 from .conftest import ReferenceLabDaemon
 
 pytestmark = pytest.mark.usefixtures("reference_lab_author_imports")
-
-
-@dataclass(frozen=True)
-class _JointDragDecision:
-    accepted: bool
 
 
 @pytest.fixture
@@ -82,6 +92,170 @@ def candidate_daemon(
         yield ReferenceLabDaemon(url=endpoint.base_url, root=root)
     finally:
         stop_project(project)
+
+
+def test_joint_branch_procedure_recovers_after_restart_and_lost_publish_response(
+    candidate_daemon: ReferenceLabDaemon,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project = load_project(candidate_daemon.root / "scopecat.toml")
+    with create_application(candidate_daemon.root).connect(candidate_daemon.url) as lab:
+        config = bootstrap_config()
+        parameters = lab.parameters.save(
+            name="joint-base",
+            catalog=config.parameter_catalog,
+            parameters=config.parameter_snapshot,
+        )
+        destination = lab.parameters.create_branch("joint", revision=parameters)
+        setup = lab.setup.active()
+        registry = lab.config.registry()
+        sample = lab.samples.create(
+            "joint-chip",
+            kind="synthetic",
+            content=SampleRevisionDraft(display_name="Joint chip"),
+        )
+        intent = DragBranchCalibrationIntent(
+            targets=("q0", "q1"),
+            initial=lab.parameters.resolve(parameters),
+            destination=destination,
+            result_revision_id="joint-accepted",
+            actor="test",
+        )
+        procedure = lab.procedures.submit(
+            drag_branch_calibration, intent, request_key="joint", sample=sample.id
+        )
+        # Stop with the composition retained and both joint checks still missing.
+        lab.procedures.resume_snapshot(
+            procedure.snapshot, should_yield=lambda: len(procedure.steps().items) >= 5
+        )
+        assert procedure.state == "ready"
+        assert lab.parameters.checkout("joint").head == destination
+        before = {run.id for run in lab.runs().items}
+        assert len(before) == 2
+        procedure_id = procedure.id
+    stop_project(project)
+    restarted = start_project(project)
+    with create_application(candidate_daemon.root).connect(restarted.base_url) as lab:
+        procedure = lab.procedures.get(procedure_id)
+        original_publish = DaemonClient.publish_parameter_branch
+        commands: list[ParameterBranchPublishCommand] = []
+
+        def lose_response(
+            client: DaemonClient, command: ParameterBranchPublishCommand
+        ) -> ParameterBranch:
+            commands.append(command)
+            original_publish(client, command)
+            raise httpx2.ReadError("committed response lost")
+
+        with monkeypatch.context() as patch:
+            patch.setattr(DaemonClient, "publish_parameter_branch", lose_response)
+            dispatched = ProjectAutomationWorker(lab.procedures).cycle()
+            assert dispatched.procedures.dispatched == 1
+        assert procedure.state == "attention_required"
+        assert procedure.step("publish").state == "attention_required"
+        accepted = lab.parameters.checkout("joint").head
+        assert accepted.generation == destination.generation + 1
+        run_ids = {run.id for run in lab.runs().items}
+        assert len(run_ids) == 4 and before < run_ids
+        # An unrelated later edit must not make recovery target today's head.
+        advanced = lab.parameters.checkout("joint").save(
+            catalog=parameters.catalog,
+            parameters=parameters.parameters,
+            note="later edit",
+        )
+        procedure.retry_attention()
+        assert procedure.summary().outcome == "succeeded"
+        output = procedure.output("publish")
+        assert isinstance(output, ParameterBranchPublishOutputRef)
+        assert output.branch == accepted
+        assert lab.parameters.checkout("joint").head == advanced
+        assert {run.id for run in lab.runs().items} == run_ids
+        assert (
+            lab.procedures.submit(
+                drag_branch_calibration, intent, request_key="joint", sample=sample.id
+            ).id
+            == procedure_id
+        )
+        assert len(commands) == 1
+        assert all(
+            lab.get_run(run_id).samples[0].sample_id == sample.id for run_id in run_ids
+        )
+        verification = procedure.output("verify")
+        assert isinstance(verification, AnalysisPublicationOutputRef)
+        decision = lab.published_analysis(verification.analysis_record_id).fact_as(
+            "decision", JOINT_DRAG_DECISION_SCHEMA
+        )
+        assert decision.accepted and decision.checked == ("q0", "q1")
+        assert decision.missing == decision.rejected == ()
+        checks = [procedure.output(f"check-{target}") for target in intent.targets]
+        assert all(isinstance(check, RunOutputRef) for check in checks)
+        assert lab.config.registry() == registry and lab.setup.active() == setup
+        idle = ProjectAutomationWorker(lab.procedures).cycle()
+        assert idle.procedures.dispatched == 0
+        assert {run.id for run in lab.runs().items} == run_ids
+        # An incomplete policy input is retained as a rejection, never a subset success.
+        q0_baseline = procedure.output("baseline-q0")
+        q0_check = procedure.output("check-q0")
+        assert isinstance(q0_baseline, RunOutputRef) and isinstance(
+            q0_check, RunOutputRef
+        )
+        missing = lab.analyze(
+            verify_joint_drag(
+                targets=("q0", "q1"),
+                baselines={"q0": lab.get_run(q0_baseline.run_id)},
+                candidates={"q0": lab.get_run(q0_check.run_id)},
+                minimum_improvement=0.001,
+            )
+        ).fact_as("decision", JOINT_DRAG_DECISION_SCHEMA)
+        assert missing.missing == ("q1",) and not missing.accepted
+
+
+@pytest.mark.parametrize("reject", [True, False])
+def test_branch_procedure_rejection_and_stale_destination_do_not_publish(
+    candidate_daemon: ReferenceLabDaemon,
+    reject: bool,
+) -> None:
+    with create_application(candidate_daemon.root).connect(candidate_daemon.url) as lab:
+        config = bootstrap_config()
+        parameters = lab.parameters.save(
+            name="base",
+            catalog=config.parameter_catalog,
+            parameters=config.parameter_snapshot,
+        )
+        destination = lab.parameters.create_branch("daily", revision=parameters)
+        intent = DragBranchCalibrationIntent(
+            targets=("q0",),
+            initial=lab.parameters.resolve(parameters),
+            destination=destination,
+            result_revision_id="accepted",
+            actor="test",
+            minimum_improvement=1.0 if reject else 0.001,
+        )
+        procedure = lab.procedures.submit(
+            drag_branch_calibration, intent, request_key="calibrate"
+        )
+        if not reject:
+            destination = lab.parameters.checkout("daily").save(
+                catalog=parameters.catalog, parameters=parameters.parameters
+            )
+        with pytest.raises(
+            DragBranchCalibrationRejected if reject else DaemonConflictError,
+            match="Joint DRAG verification" if reject else "branch changed",
+        ):
+            procedure.resume()
+        assert procedure.summary().outcome == "failed"
+        assert lab.parameters.checkout("daily").head == destination
+        if reject:
+            verification = procedure.output("verify")
+            assert isinstance(verification, AnalysisPublicationOutputRef)
+            decision = lab.published_analysis(verification.analysis_record_id).fact_as(
+                "decision", JOINT_DRAG_DECISION_SCHEMA
+            )
+            assert decision.rejected == ("q0",) and decision.missing == ()
+            assert not any(
+                step.operation == "parameter_publish"
+                for step in procedure.steps().items
+            )
 
 
 def test_typed_candidates_retain_cells_and_independent_policy(
@@ -413,30 +587,13 @@ def test_drag_candidate_publishes_to_branch_and_runs_accepted_gate(
             )
         q0_check = lab.run(invocation, config=joint.config)
         q1_check = lab.run(drag_beta_experiment.build("q1"), config=joint.config)
-        q0_decision = evaluate_drag_beta_candidate(
-            baseline.measurements(), q0_check.measurements()
-        )
-        q1_decision = evaluate_drag_beta_candidate(
-            second_baseline.measurements(), q1_check.measurements(), qubit="q1"
-        )
-        context = lab.analysis("Joint DRAG verification")
-        for label, retained_run, role in (
-            ("baseline-q0", baseline, "baseline"),
-            ("baseline-q1", second_baseline, "baseline"),
-            ("candidate-q0", q0_check, "candidate"),
-            ("candidate-q1", q1_check, "candidate"),
-        ):
-            context.measurements(retained_run, id=label, role=role)
-        joint_verification = (
-            context.result()
-            .fact("q0", q0_decision, schema=DRAG_BETA_VERIFICATION_SCHEMA)
-            .fact("q1", q1_decision, schema=DRAG_BETA_VERIFICATION_SCHEMA)
-            .fact(
-                "decision",
-                _JointDragDecision(q0_decision.accepted and q1_decision.accepted),
-                schema=ordinary_result_schema(_JointDragDecision),
+        joint_verification = lab.analyze(
+            verify_joint_drag(
+                targets=("q0", "q1"),
+                baselines={"q0": baseline, "q1": second_baseline},
+                candidates={"q0": q0_check, "q1": q1_check},
+                minimum_improvement=0.001,
             )
-            .save()
         )
         joint_published = VerifiedParameterCandidate(
             joint, joint_verification

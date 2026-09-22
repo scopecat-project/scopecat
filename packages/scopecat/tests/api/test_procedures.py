@@ -18,10 +18,11 @@ from scopecat.api.analysis import Analysis, AnalysisContext, AnalysisStep
 from scopecat.api.procedures import (
     LabProcedureContext,
     ProcedureLabSession,
+    _analysis_argument_identity,
     _validate_run_analysis,
 )
 from scopecat.api.published_analysis import PublishedAnalysis
-from scopecat.api.run import RunHandle
+from scopecat.api.run import RunHandle, RunSession
 from scopecat.automation import (
     AnalysisPublicationOutputRef,
     ConfigActivationOutputRef,
@@ -82,6 +83,22 @@ from scopecat.records.parameter_revision import ParameterRevisionRef
 from scopecat.records.plan_ref import ProcedureChildSubmission
 from scopecat.records.run import RunConfigSource, RunSnapshot
 from scopecat.runs.selectors import RunSelector
+
+
+def test_nested_analysis_identity_preserves_run_and_container_types() -> None:
+    first = RunHandle(cast("RunSession", object()), "run-1")
+    reopened = RunHandle(cast("RunSession", object()), "run-1")
+    second = RunHandle(cast("RunSession", object()), "run-2")
+    assert _analysis_argument_identity({"q0": [first], "q1": (second,)}) == (
+        _analysis_argument_identity({"q1": (second,), "q0": [reopened]})
+    )
+    assert _analysis_argument_identity([first]) != _analysis_argument_identity((first,))
+    assert _analysis_argument_identity({1: first}) != _analysis_argument_identity(
+        {"1": first}
+    )
+    assert _analysis_argument_identity({"q0": first}) != _analysis_argument_identity(
+        {"q0": second}
+    )
 
 
 class _ImmediateProcedureContext:
@@ -677,6 +694,7 @@ def test_parameter_publication_step_replays_without_reopening_evidence() -> None
     assert output.branch.generation == 4
     [step] = durable.calls
     assert step.operation == "parameter_publish"
+    assert step.intent_hash.startswith("sha256:")
     assert step.inputs == (candidate, verification)
     replay = LabProcedureContext(
         cast(

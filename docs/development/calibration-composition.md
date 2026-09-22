@@ -1,9 +1,9 @@
 # Compose calibration candidates without inheriting acceptance
 
 Parameter composition, scientific verification and publication are different
-operations. The remaining reference DRAG cohort currently combines them through
-full-config registry records and a project-specific semantic-input policy. Its
-interfaces are not the target design for parameter branches.
+operations. The former reference DRAG cohort combined them through full-config
+registry records and a project-specific semantic-input policy. That reference
+implementation is retired; its interfaces are not the target design for branches.
 
 ## Parameter composition
 
@@ -22,8 +22,8 @@ This is a framework composition primitive, not an ordinary-author workflow for
 publishing calibration. It does not authenticate proposal sources, save anything,
 decide applicability or inherit verification. The legacy proposal adapter still
 checks exact source identities/full-config bases and delegates value composition
-to this core. It is retained for existing cohort consumers, not a compatibility
-requirement for future independent-parameter candidates.
+to this core. It remains in the legacy framework publication API and focused
+server tests, not as a compatibility requirement for independent-parameter candidates.
 
 ## Scientific verification
 
@@ -40,8 +40,8 @@ accepted proposals is not a positive decision for the combined result.
 
 Reusing individual verification instead of measuring the combination requires a
 separate, explicit composition policy that proves the relevant semantic inputs
-remain valid in the merged result. The reference DRAG semantic-input comparison
-is one fixture-specific policy, not a general independence theorem. Do not infer
+remain valid in the merged result. The retired DRAG semantic-input comparison
+was one fixture-specific policy, not a general independence theorem. Do not infer
 independence merely from different row keys, target IDs or disjoint edited cells.
 
 ## Publication and automation
@@ -80,18 +80,38 @@ name. Completed steps retain and replay the accepted head; interrupted publicati
 retries the same server command. Unknown outcomes require attention, and
 analysis-only recovery cannot carry attempted publication into a new procedure.
 The output and SQLite operation contract use development schema 87, with no
-prebaseline migration. This is the final publication primitive, not yet a
-replacement for target scheduling or cohort completeness/finalization policy.
+prebaseline migration.
+
+`combine_parameter_candidates()` retains composition as an analysis step. The
+replacement `drag_branch_calibration` procedure freezes an explicit nonempty,
+unique target list, exact resolved parameter/setup inputs, branch head and result
+revision name. It fits every requested target, composes the proposals, remeasures
+every target under that result, and retains checked/rejected/missing targets in
+one joint decision before publication. Partial execution remains visible in the
+step ledger and cannot publish. A deliberate single-target request uses the same
+pipeline with no artificial composition.
+
+The real-daemon journey stops after composition, restarts the daemon, resumes
+through `ProjectAutomationWorker`, loses a committed publication response, then
+recovers the historical receipt even after a later branch edit. Acquired runs are
+not repeated. Separate cases retain a negative scientific decision, reject an
+incomplete target set and reject a stale destination without publication.
+
+The old reference freshness evaluator, verify-only member procedure, semantic
+merge publisher and automatic-publication registration are removed with their
+obsolete tests. In particular, automatically excluding peer DRAG values from
+freshness and inferring q0-only reruns is **withdrawn**, not silently preserved.
+The new worker accepts submitted requests; it does not decide scientific freshness
+or widen/narrow their target scope. Legacy generic cohort APIs still have other
+framework test coverage and require a separate removal pass.
 
 ## Remaining implementation order
 
-1. Expand retained-evidence regression coverage to automatic orchestration and
-   recovery. The explicit two-target compose/reverify/publish path exists, but
-   cohort scheduling and finalization still use the legacy model.
-2. Build target-complete orchestration/finalization on the durable branch publish
-   step, then retire replaced
-   DRAG working-point/cohort publication code and its obsolete tests together.
-3. Introduce a reusable teaching sandbox after the author workflow is coherent.
+1. Define scientific freshness/applicability over explicit parameter dependencies,
+   subject, setup and policy; do not reuse the retired full-config projection.
+2. Retire unused generic working-point/cohort publication surfaces once their
+   remaining callers and retained-data contracts have been reviewed.
+3. Introduce a reusable teaching sandbox for this complete author workflow.
 
 Track the retirement in [#773](https://github.com/scopecat-project/scopecat/issues/773).
 No historical store rewrite or prebaseline migration is part of this work.

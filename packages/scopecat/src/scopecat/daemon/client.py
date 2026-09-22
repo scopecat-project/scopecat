@@ -2285,7 +2285,7 @@ class DaemonClient:
     def compose_parameter_candidate(
         self, run_id: str, command: ParameterCandidateComposeCommand
     ) -> AnalysisSaveReceipt:
-        return self._post_model(
+        return self._post_idempotent_model(
             f"{_API_PREFIX}/runs/{quote(run_id, safe='')}/parameter-compositions",
             command,
             AnalysisSaveReceipt,

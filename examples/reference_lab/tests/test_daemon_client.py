@@ -60,9 +60,7 @@ with LocalDaemonRuntime(
     pass
 forbidden = {{
     "reference_lab.lab",
-    "reference_lab.workflows.drag_beta_automatic_publication",
-    "reference_lab.workflows.drag_beta_freshness",
-    "reference_lab.workflows.drag_beta_procedure",
+    "reference_lab.workflows.drag_branch_calibration",
 }}
 loaded = forbidden.intersection(sys.modules)
 if loaded:
