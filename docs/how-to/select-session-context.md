@@ -1,6 +1,6 @@
 # Select an experimental context
 
-An author session can remember the sample, experimental batch, saved working point, record collection
+An author session can remember the sample, experimental batch, parameter branch, record collection
 and operator for its next requests. This selection belongs to that client. Two
 notebooks connected to the same daemon can make different selections without
 changing the lab's active configuration or another client's defaults.
@@ -8,7 +8,14 @@ changing the lab's active configuration or another client's defaults.
 ```python
 session = sc.notebook()
 collection = session.create_record_collection("Chip A · cooldown 3")
-session.use(working_point=working_point_ref, collection=collection.id, operator="Li")
+session.use(
+    sample="chip-a",
+    batch="cooldown-3",
+    parameter_branch="chip-a/daily",
+    collection=collection.id,
+    operator="Li",
+)
+params = session.params
 
 prepared = session.prepare(rabi())
 run = prepared.run().wait().result()
@@ -16,25 +23,32 @@ session.history()
 session.run(1)
 ```
 
-Here `working_point_ref` is an existing exact `ConfigContextRef`; see
-[parameter contexts](manage-configuration.md). Selecting it also selects its bound
-sample and batch. `rabi` is an experiment imported from your project. The same `use` API is
+The sample, batch and branch above are existing catalog entries; see
+[parameter branches](parameter-branches.md) for creation and editing. `rabi` is an
+experiment imported from your project. The same `use` API is
 available on `project.authoring()` and `AuthorProject` clients. Selection performs
 read-only validation; it does not run an experiment, activate configuration, or
-establish calibration validity.
+establish calibration validity. Selecting independent parameters or a subject does
+not require an executable setup. Preview checks equipment compatibility and
+execution support when you are ready to run.
+
+Existing working-point consumers can use `session.use(working_point=ref)` with an
+exact `ConfigContextRef`; see [parameter contexts](manage-configuration.md). This
+selects the point's bound sample and batch and still validates its owned evidence.
 
 ## Change one choice without resetting the others
 
 ```python
 session.use(operator="Wang")
-session.use(working_point=another_working_point_ref)
+session.use(parameter_branch="chip-a/trial")
 selected = session.selection
 ```
 
-Omitted fields remain selected. Switching working points selects the new point's
+Omitted fields remain selected. Changing the parameter branch retains the subject
+and batch. Switching working points selects the new point's
 sample and batch and retains the collection and operator. Selecting a sample or
-target on its own starts a new scientific scope and clears the previous working point
-and batch:
+target on its own starts a new scientific scope and clears the previous parameter
+branch, working point and batch:
 
 ```python
 session.use(sample="chip-b")
@@ -58,15 +72,20 @@ Existing explicit `prepare` arguments keep their meaning:
 
 ```python
 session.prepare(rabi(), parameters=other_parameters)
+session.prepare(rabi(), parameters=params, sample="chip-b", batch="cooldown-4")
 session.prepare(rabi(), context=another_working_point_ref, actor="Guest")
 session.prepare(rabi(), context=None, record_collection=None)
 ```
 
-An explicit `parameters`, `candidate`, `context` or `sample` selects the whole
-scientific scope for that request. It does not combine with an inherited sample
-or working point or batch. An explicitly supplied batch must agree with the
-chosen working point or candidate. Changing only the batch preserves the other
-scientific choices and validates their compatibility.
+An independent branch editor supplies parameter values while inheriting the
+session's subject and batch. Explicit `sample` or `target` arguments replace that
+subject for this preparation and reset its batch unless also supplied. Unsaved
+values are frozen for the run without advancing the branch. The editor cannot be
+combined with `selection`, `context` or separate `overrides`.
+
+A legacy working-point editor, `candidate` or `context` carries its own scientific
+scope. Its sample and batch must match that evidence. Selecting just a `sample`
+starts a new scope, while changing only the batch preserves the other choices.
 The selected operator and collection are inherited independently
 unless explicitly overridden. `context=None` deliberately uses the ordinary active
 configuration without the session's sample/working point. Clearing the collection

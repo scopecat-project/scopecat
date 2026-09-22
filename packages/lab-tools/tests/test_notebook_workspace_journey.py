@@ -38,6 +38,7 @@ import my_experiment.teaching as experiments
 from my_experiment.teaching import teaching_rabi as rabi
 from lab_teaching.session import open_parameters
 params = open_parameters(session)
+assert 'branch teaching-table' in repr(session)
 collection = session.create_record_collection("Notebook context")
 selected = session.use(collection=collection.id, operator="notebook-author")
 assert sc.notebook(root).selection == selected

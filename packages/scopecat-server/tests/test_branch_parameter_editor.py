@@ -7,9 +7,11 @@ import httpx2
 import pytest
 from fastapi.testclient import TestClient
 from scopecat.application.author_project import AuthorProject
-from scopecat.daemon.client import DaemonConflictError
+from scopecat.daemon.client import DaemonConflictError, DaemonNotFoundError
+from scopecat.daemon.wire import SampleCreateCommand
 from scopecat.kernel.errors import Conflict
 from scopecat.records.parameter import ParameterCatalog, ParameterSnapshot
+from scopecat.records.sample import SampleRevisionDraft
 
 from scopecat_server.runtime import LocalDaemonRuntime
 
@@ -49,12 +51,14 @@ def session(tmp_path: Path) -> Iterator[AuthorProject]:
 
 
 def test_table_structure_save_copy_rebase_and_fork(session: AuthorProject) -> None:
-    params = session.parameters.workspace("daily")
+    session.use(parameter_branch="daily")
+    params = session.params
     table = params.declare_table(
         "drive", key="id", columns={"id": str, "frequency": float, "amplitude": float}
     )
     table["q0"] = {"frequency": 5.0, "amplitude": 0.2}
     saved = params.save()
+    assert session.parameter_branch.head.revision == saved.ref
     assert params.save() == saved
     assert not params.diff()
     assert "Saved · parameter revision" in table.render_html()
@@ -80,6 +84,44 @@ def test_table_structure_save_copy_rebase_and_fork(session: AuthorProject) -> No
     assert detached.branch == "trial"
     assert session.parameters.checkout("daily").head.revision == merged.ref
     assert session.parameters.checkout("trial").head.revision == fork.ref
+    assert session.selection.parameter_branch == "daily"
+
+
+def test_session_edits_before_setup_and_rejects_invalid_selection_atomically(
+    session: AuthorProject,
+) -> None:
+    session.create_sample(
+        SampleCreateCommand(
+            operation_id="sample",
+            sample_id="chip",
+            kind="chip",
+            actor="author",
+            content=SampleRevisionDraft(display_name="Chip"),
+        )
+    )
+    session.use(sample="chip", parameter_branch="daily")
+    params = session.params
+    params.declare_table("drive", key="id", columns={"id": str, "frequency": float})[
+        "q0"
+    ] = {"frequency": None}
+    revision = params.save()
+    selected = session.selection
+    with pytest.raises(ValueError, match="reference differs"):
+        session.use(
+            parameters=revision.ref.model_copy(
+                update={"content_hash": "sha256:" + "0" * 64}
+            )
+        )
+    with pytest.raises(DaemonNotFoundError):
+        session.use(sample="missing")
+    assert session.selection == selected
+    assert session.params is params
+    # Editing succeeds with incomplete calibration and no executable setup.
+    with pytest.raises(DaemonNotFoundError, match="setup"):
+        params.preview()
+    session.use(parameter_branch=None)
+    assert session.selection.parameter_branch is None
+    assert session.selection.science.subject == selected.science.subject
 
 
 def test_unknown_values_can_be_saved_before_calibration(session: AuthorProject) -> None:

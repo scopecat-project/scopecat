@@ -3,7 +3,7 @@
 A revision is immutable declarations and values. A branch names an editing
 history. Neither owns equipment nor establishes calibration validity.
 
-With an initial parameter revision and a selected executable setup:
+With an initial parameter revision:
 
 ```python
 lab.parameters.create_branch("chip-a/daily", revision=initial)
@@ -14,13 +14,32 @@ params = session.params
 params["drive"]["q0"]["frequency"] = 5.15
 params.diff()
 version = params.save(note="Update readout calibration")
-prepared = session.prepare(experiment(), parameters=params)
 ```
 
 For editing alone, `params = lab.parameters.workspace("chip-a/daily")` needs no
 setup, sample or working point. Typed row views, scalars, declarations, schema
 changes, table import/export, `diff()`, `copy()` and `discard()` share the existing
 parameter editor implementation.
+
+`session.use(parameter_branch=...)` and `session.params` also work before any setup
+is installed or selected. Selection checks that the referenced parameters, subject
+and batch exist; it does not assert that the equipment can run them. You can save
+unknown values and incomplete calibration tables. Setup compatibility, required
+values and supported execution topology are checked when preparing an experiment.
+
+After selecting an executable setup, combine the editor with a measurement context:
+
+```python
+prepared = session.prepare(
+    experiment(), parameters=params, sample="chip-a", batch="cooldown-1"
+)
+```
+
+These arguments apply to this preparation only; they do not replace the session's
+subject or parameter branch. `target=...` selects a registered target instead of a
+sample. Omit subject/batch arguments to inherit session choices. Passing
+`sample=None` explicitly prepares without a sample. An editor cannot be combined
+with another configuration choice (`selection` or `context`) or separate overrides.
 
 Ordinary `params.save()` generates a revision ID and advances the current branch.
 An unchanged ordinary save returns the existing version. Saving never changes

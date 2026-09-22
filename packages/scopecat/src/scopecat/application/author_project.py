@@ -41,7 +41,10 @@ from scopecat.application.launch import (
     LaunchPreview,
     LaunchSubmission,
 )
-from scopecat.application.launch_config import resolve_launch_config
+from scopecat.application.launch_config import (
+    resolve_launch_config,
+    validate_editing_selection,
+)
 from scopecat.application.session_context import (
     INHERIT,
     SessionContext,
@@ -183,6 +186,8 @@ class AuthorProject(DaemonClient):
         sample and batch unless an explicit subject is supplied alongside it.
         Independent parameters preserve subject/batch but replace working-point
         ownership. Preview pins their exact inputs without saving a combined entry.
+        Independent parameter/subject selection requires no executable setup;
+        preview checks compatibility and execution support.
         Selection never activates configuration or submits hardware operations.
         """
         if self.is_closed:
@@ -305,16 +310,22 @@ class AuthorProject(DaemonClient):
             selected = ScientificSelection(
                 subject=subject, configuration=configuration, batch=batch
             )
-        # Validate before replacing session defaults. This performs no activation.
-        resolve_launch_config(
-            LabClient(self),
-            LaunchRequest(
-                action="preview",
-                experiment="selection",
-                version="1",
-                selection=selected,
-            ),
-        )
+        # Editing checks identities, not whether equipment can execute yet.
+        if isinstance(
+            selected.configuration, ActiveConfiguration | ParameterConfiguration
+        ):
+            validate_editing_selection(LabClient(self), selected)
+        else:
+            # These sources already own exact scientific/execution evidence.
+            resolve_launch_config(
+                LabClient(self),
+                LaunchRequest(
+                    action="preview",
+                    experiment="selection",
+                    version="1",
+                    selection=selected,
+                ),
+            )
         return selected
 
     @property
@@ -494,7 +505,16 @@ class AuthorProject(DaemonClient):
         ):
             if not isinstance(value, SessionDefault):
                 changes[key] = value
-        if parameters is not None or candidate is not None:
+        if isinstance(parameters, BranchParameterEditor) and candidate is None:
+            if "selection" in changes or "working_point" in changes or overrides:
+                raise ValueError(
+                    "parameter editor cannot be combined with "
+                    "selection, working_point or overrides"
+                )
+            science = self._select_science(
+                defaults.science, {**changes, "parameters": parameters.version.ref}
+            )
+        elif parameters is not None or candidate is not None:
             if changes or overrides:
                 raise ValueError(
                     "parameters/candidate already selects scientific context"

@@ -28,7 +28,9 @@ This preserves the selected subject, batch, operator and record collection.
 Independent parameters replace the configuration choice, not the whole context;
 they do not inherit a working point's calibration publication ownership. Choose
 either `parameters` or `working_point` in one `use` call. Other sessions are
-unaffected. The maintainer must already have selected an executable setup.
+unaffected. Selection and editing require no executable setup; the maintainer
+must select one before previewing or running an experiment. For repeated editing,
+use [a parameter branch and `session.params`](parameter-branches.md).
 
 Preview resolves the parameter revision and current setup through the common
 measurement resolver without creating a configuration-registry entry. Reviewed
