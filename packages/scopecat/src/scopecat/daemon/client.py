@@ -205,6 +205,7 @@ from scopecat.daemon.wire import (
     ParameterBranchCommitCommand,
     ParameterBranchHistory,
     ParameterBranchPage,
+    ParameterBranchPublishCommand,
     ParameterResolveCommand,
     ParameterRevisionList,
     ParameterSaveCommand,
@@ -1068,6 +1069,13 @@ class DaemonClient:
         return self._get_model(
             f"{_API_PREFIX}/parameters/revisions/{quote(revision_id, safe='')}",
             ParameterRevision,
+        )
+
+    def publish_parameter_branch(
+        self, command: ParameterBranchPublishCommand
+    ) -> ParameterBranch:
+        return self._post_idempotent_model(
+            f"{_API_PREFIX}/parameters/branch-publications", command, ParameterBranch
         )
 
     def parameter_revisions(self) -> ParameterRevisionList:

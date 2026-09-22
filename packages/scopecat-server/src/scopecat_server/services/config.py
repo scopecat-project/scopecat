@@ -83,6 +83,7 @@ from scopecat.daemon.wire import (
     ManualConfigDraftRevisionSource,
     ParameterBindCommand,
     ParameterBranchCommitCommand,
+    ParameterBranchPublishCommand,
     ParameterConfigRevisionSource,
     ParameterResolveCommand,
     ParameterSaveCommand,
@@ -102,7 +103,10 @@ from scopecat.records.analysis import (
 from scopecat.records.calibration_scope import WorkingPointCalibrationScope
 from scopecat.records.config import ConfigProfileSnapshot, config_content_hash
 from scopecat.records.config_context import ConfigContextRef, ContextRunConfigSource
-from scopecat.records.parameter_branch import ParameterBranch
+from scopecat.records.parameter_branch import (
+    ParameterBranch,
+    ParameterBranchPublication,
+)
 from scopecat.records.parameter_revision import (
     ParameterRevision,
     ParameterRevisionContent,
@@ -114,6 +118,7 @@ from scopecat.records.parameter_structure import (
 )
 from scopecat.records.run import (
     AnalysisCandidateRunConfigSource,
+    ParameterRunConfigSource,
     RunSnapshot,
 )
 
@@ -265,6 +270,91 @@ class ConfigService:
                 return branch
             except KeyError as error:
                 raise BackendNotFound("parameter revision was not found") from error
+            except ValueError as error:
+                raise BackendConflict(str(error)) from error
+
+    def publish_parameter_branch(
+        self, command: ParameterBranchPublishCommand
+    ) -> ParameterBranch:
+        """Commit exact candidate values and acceptance evidence with the head."""
+        intent = sha256_json_hash(command.model_dump(mode="json"))
+        with self._config_errors(), self._control.write_transaction() as connection:
+            branches = ParameterBranchRepository(connection)
+            revisions = ParameterRevisionRepository(connection)
+            try:
+                replay = branches.replay(
+                    command.name, command.expected_generation + 1, intent
+                )
+                if replay is not None:
+                    return replay
+                head = branches.get(command.name)
+                if (
+                    head.generation != command.expected_generation
+                    or head.revision != command.base
+                ):
+                    raise BackendConflict(
+                        "parameter branch changed; reload before publishing"
+                    )
+                base = revisions.get(command.base.revision_id)
+                baseline = self._runs.read_snapshot(command.run_id)
+                source = baseline.config_source
+                if (
+                    not isinstance(source, ParameterRunConfigSource)
+                    or source.parameters != command.base
+                    or source.overrides
+                    or baseline.outcome is None
+                    or baseline.outcome.result != "succeeded"
+                ):
+                    raise BackendConflict(
+                        "publication requires a successful baseline using the exact "
+                        "branch revision without unsaved overrides"
+                    )
+                candidate = config_registry_service.validate_candidate_source_records(
+                    storage=self._services.runs,
+                    run_id=command.run_id,
+                    proposal_id=command.proposal_id,
+                    acceptance=CrossRunCandidateAcceptance(
+                        decision=command.verification
+                    ),
+                )
+                if candidate.config.parameter_catalog != base.catalog:
+                    raise BackendConflict("candidate catalog differs from the branch")
+                self._analyses.validate_candidate_verification(
+                    command.verification,
+                    source_run_id=command.run_id,
+                    proposal_id=command.proposal_id,
+                )
+                revision = revisions.save(
+                    ParameterRevision(
+                        id=command.revision_id,
+                        catalog=base.catalog,
+                        parameters=candidate.config.parameter_snapshot,
+                        content_hash=parameter_revision_hash(
+                            base.catalog, candidate.config.parameter_snapshot
+                        ),
+                        actor=command.actor,
+                        note=command.note,
+                    )
+                )
+                published = ParameterBranch(
+                    name=head.name,
+                    generation=head.generation + 1,
+                    revision=revision.ref,
+                    previous=head.revision,
+                    actor=command.actor,
+                    note=command.note,
+                    publication=ParameterBranchPublication(
+                        run_id=command.run_id,
+                        proposal_id=command.proposal_id,
+                        verification=command.verification,
+                    ),
+                )
+                branches.append(published, intent)
+                return published
+            except KeyError as error:
+                raise BackendNotFound(
+                    "parameter branch or revision was not found"
+                ) from error
             except ValueError as error:
                 raise BackendConflict(str(error)) from error
 

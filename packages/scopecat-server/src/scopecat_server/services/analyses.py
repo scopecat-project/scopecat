@@ -438,13 +438,20 @@ class AnalysisService:
                 and source.base_config_content_hash == proposal.base_config_content_hash
                 and source.content_hash == config_content_hash(expected)
                 and snapshot.samples == baseline.samples
+                and snapshot.scientific_binding.subject
+                == baseline.scientific_binding.subject
+                and snapshot.scientific_binding.scenario
+                == baseline.scientific_binding.scenario
+                and snapshot.scientific_binding.setup_content_hash
+                == baseline.scientific_binding.setup_content_hash
                 and snapshot.outcome is not None
                 and snapshot.outcome.result == "succeeded"
             ):
                 return
         raise BackendConflict(
             "candidate verification requires an independent successful run using "
-            "this exact proposal and the same sample revision/workpoint"
+            "this exact proposal and the same sample revision/workpoint, target, "
+            "execution scenario and setup"
         )
 
     def validate_calibration_merge_verification(
