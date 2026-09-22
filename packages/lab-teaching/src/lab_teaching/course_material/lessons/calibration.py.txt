@@ -1,0 +1,151 @@
+"""可编辑的合成零点校准：模型、拟合、验证和流程都在本文件。"""
+
+from dataclasses import dataclass
+from typing import Self
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
+import scopecat as sc
+from scopecat.api.procedures import LabProcedureContext
+from scopecat.api.run import RunHandle
+from scopecat.daemon.views import ParameterResolution
+from scopecat.kernel.frozen import thaw_json_value
+from scopecat.records.parameter_branch import ParameterBranch
+
+
+class Sensor(sc.ParameterModel, table="sensor"):
+    id: sc.Param[str] = sc.param(key=True)
+    offset: sc.Magnitude[float] = sc.quantity(unit="arb")
+
+
+@sc.compute
+def setting(offset: sc.Quantity) -> float:
+    return float(offset.to("arb").value)
+
+
+@sc.compute
+def residual(offset: sc.Quantity, disturbance: float) -> float:
+    # 已声明的合成模型，不代表设备物理；独立验证可以施加未见过的扰动。
+    return float(offset.to("arb").value) - 0.24 + disturbance
+
+
+@sc.experiment(id="teaching.zero")
+def measure_zero(
+    _experiment: sc.ExperimentContext, disturbance: float = 0.0
+) -> dict[str, object]:
+    offset = sc.parameter_ref(Sensor.offset, "q0")
+    return {"setting": setting(offset), "residual": residual(offset, disturbance)}
+
+
+@sc.analysis_step(id="teaching.fit-zero")
+def fit_zero(context: sc.AnalysisContext) -> sc.Analysis:
+    data = context.measurements()
+    value = float(data["setting"].require_values()[0])
+    error = float(data["residual"].require_values()[0])
+    return (
+        context.result("合成零点拟合")
+        .fact("estimated_offset", value - error)
+        .propose(
+            "zero-offset",
+            sc.parameter_update(Sensor.offset, "q0", value - error),
+            reason="已声明的线性响应模型：当前设置减去实测残差",
+            evidence=("estimated_offset",),
+        )
+    )
+
+
+@dataclass(frozen=True)
+class Decision:
+    accepted: bool
+    before: float
+    after: float
+    tolerance: float
+
+
+DECISION = sc.AnalysisFactSchema("teaching.zero-decision.v1", Decision)
+
+
+@sc.analysis_step(id="teaching.verify-zero")
+def verify_zero(
+    context: sc.AnalysisContext,
+    *,
+    baseline: RunHandle,
+    candidate: RunHandle,
+    tolerance: float,
+) -> sc.Analysis:
+    before = context.measurements(baseline, id="baseline", role="baseline")
+    after = context.measurements(candidate, id="candidate", role="candidate")
+    old_error = abs(float(before["residual"].require_values()[0]))
+    new_error = abs(float(after["residual"].require_values()[0]))
+    return context.result("独立采集验证").fact(
+        "decision",
+        Decision(
+            new_error <= tolerance and new_error < old_error,
+            old_error,
+            new_error,
+            tolerance,
+        ),
+        schema=DECISION,
+    )
+
+
+class CalibrationIntent(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid", allow_inf_nan=False)
+
+    initial: ParameterResolution
+    destination: ParameterBranch
+    revision_name: str = Field(min_length=1)
+    disturbance: float = 0.002
+    tolerance: float = Field(default=0.01, gt=0)
+
+    @field_validator("initial", mode="before")
+    @classmethod
+    def thaw_initial(cls, value: object) -> object:
+        return thaw_json_value(value)
+
+    @model_validator(mode="after")
+    def check_base(self) -> Self:
+        if self.initial.config_source.parameters != self.destination.revision:
+            raise ValueError("初始参数必须来自捕获的目标分支")
+        if self.initial.config_source.overrides:
+            raise ValueError("请先保存参数；校准请求不能包含未保存修改")
+        return self
+
+
+@sc.procedure(id="teaching.calibrate-zero", version="1", intent=CalibrationIntent)
+def calibrate(ctx: LabProcedureContext, intent: CalibrationIntent) -> None:
+    baseline = ctx.run(
+        "baseline",
+        measure_zero.build(),
+        config=intent.initial.config,
+        config_source=intent.initial.config_source,
+    )
+    fit = ctx.analyze_run("fit", baseline, fit_zero())
+    candidate = ctx.published_analysis(fit).candidate_config("zero-offset")
+    check = ctx.run(
+        "check",
+        measure_zero.build(disturbance=intent.disturbance),
+        config=candidate,
+        inputs=(fit,),
+    )
+    verification = ctx.analyze_project(
+        "verify",
+        verify_zero(
+            baseline=ctx.run_handle(baseline),
+            candidate=ctx.run_handle(check),
+            tolerance=intent.tolerance,
+        ),
+        inputs=(baseline, check),
+    )
+    if not ctx.published_analysis(verification).fact_as("decision", DECISION).accepted:
+        raise ValueError("验证未通过，分支未发布；请查看 verify 步骤的 decision")
+    ctx.publish_parameter_candidate(
+        "publish",
+        fit,
+        proposal_id="zero-offset",
+        verification=verification,
+        decision_output_id="decision",
+        branch=intent.destination,
+        name=intent.revision_name,
+        actor="learner",
+    )

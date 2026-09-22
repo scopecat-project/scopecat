@@ -1,7 +1,9 @@
 # Scopecat synthetic tutorials
 
 Public, device-free tutorial resources: parameters, scans, complex computation,
-source refresh, retained analysis and grouped reads. Every sandbox topic includes
+source refresh, retained analysis, grouped reads and verified branch calibration.
+The calibration topic includes pause/resume and retained scientific rejection.
+Every sandbox topic includes
 a complete runnable Notebook and editable author source.
 
 Startup declares only the synthetic executable setup. Parameter definitions and

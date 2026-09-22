@@ -30,6 +30,7 @@ Each topic has its own environment and one complete Notebook:
 | `compute` | Return average complex IQ and read typed rows using a shared unit alias |
 | `refresh` | Edit defaults, refresh author code and import a newly added experiment |
 | `groups` | Analyze two groups from a retained scan and reopen their summaries |
+| `calibration` | Fit a synthetic zero offset, verify and publish to an independent branch; pause/resume and retain a rejected result |
 
 Open the generated project folder and select its `.venv` kernel. The first cell
 rejects the wrong interpreter. Run All before making one small change. The current

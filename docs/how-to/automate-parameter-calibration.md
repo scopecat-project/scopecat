@@ -1,5 +1,10 @@
 # Automate a complete parameter calibration
 
+For a complete runnable starting point, open the **参数校准与恢复** (`calibration`)
+[tutorial sandbox](../tutorials/teaching-sandboxes.md). Its local author module
+contains the synthetic model, fitting, acceptance policy and durable procedure.
+The notebook covers one target, pause/resume and rejection without publication.
+
 Use a registered durable procedure for one bounded calibration request. Capture
 the requested targets, saved parameter/setup inputs, destination branch head and
 result revision name in its typed intent. Pass the scientific subject when
@@ -110,4 +115,4 @@ This flow does not automatically declare calibrations fresh, select stale target
 or infer dependencies between samples. Those are explicit laboratory policies.
 The maintained simulation fixture `drag_branch_calibration` tests two-target joint
 remeasurement and recovery; it is developer evidence rather than a hardware recipe
-or an installed tutorial sandbox.
+or the installed single-target teaching model.

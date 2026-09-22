@@ -8,6 +8,7 @@ TOPICS = {
     "compute": "平均 IQ 与类型化读取",
     "refresh": "修改、刷新和新增实验",
     "groups": "分组分析与历史",
+    "calibration": "参数校准与恢复",
 }
 
 
@@ -34,6 +35,20 @@ def install_lesson(root: Path, topic: str) -> Path:
     if topic == "compute":
         _ = (root / "src/my_experiment/teaching.py").write_bytes(
             lesson.joinpath("compute_experiment.py.txt").read_bytes()
+        )
+    if topic == "calibration":
+        _ = (root / "src/my_experiment/calibration.py").write_bytes(
+            lesson.joinpath("calibration.py.txt").read_bytes()
+        )
+        (root / "src/my_experiment/teaching.py").unlink()
+        manifest = root / "scopecat.toml"
+        _ = manifest.write_text(
+            manifest.read_text(encoding="utf-8").replace(
+                "[lab.capabilities]",
+                "[lab.capabilities]\n"
+                'procedures = ["my_experiment.calibration:calibrate"]',
+            ),
+            encoding="utf-8",
         )
     if topic == "refresh":
         (root / "examples").mkdir()
