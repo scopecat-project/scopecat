@@ -74,6 +74,7 @@ from scopecat.records.calibration_scope import (
 from scopecat.records.config_context import ConfigContextRef
 from scopecat.records.run import ConfigRegistryRunConfigSource
 from scopecat.records.sample import SampleBinding, SampleRevisionDraft, SampleSelector
+from scopecat_testkit.config_registry import initialize_setup
 from scopecat_testkit.workflow_fixtures import load_config
 
 from scopecat_server import BackendConflict, BackendNotFound, LocalDaemonRuntime
@@ -122,9 +123,11 @@ def _harness(tmp_path: Path) -> _Harness:
     SQLiteProjectStore(sqlite, objects).bootstrap()
     runs = SQLiteRunRepository(sqlite, objects)
     config_registry = SQLiteConfigRegistryStore(sqlite, runs=runs)
+    config = load_config()
+    initialize_setup(config, unit_of_work=config_registry.write_unit_of_work)
     publish_config_revision(
         revision=ConfigRevision(
-            source=DirectConfigRevisionSource(load_config()),
+            source=DirectConfigRevisionSource(config),
             entry_id="calibration-baseline",
             actor="test",
         ),
