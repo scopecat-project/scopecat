@@ -11,11 +11,6 @@ from uuid import uuid4
 
 import httpx2
 
-from scopecat.api.calibration_finalizer import (
-    CalibrationPublicationFinalizerCycleResult,
-)
-from scopecat.api.calibration_planner import CalibrationEvaluatorCycleResult
-from scopecat.api.calibration_publication import CalibrationPublicationOutcomeUnknown
 from scopecat.api.procedure_planner import ProcedurePlannerCycleResult
 from scopecat.api.procedures import ProcedureHandle
 from scopecat.automation import (
@@ -73,21 +68,6 @@ class _ProcedureIntervalPlanner(Protocol):
     def cycle(self, stop: Event | None = None) -> ProcedurePlannerCycleResult: ...
 
 
-class _CalibrationEvaluator(Protocol):
-    """Project-side freshness evaluator invoked before due discovery."""
-
-    def cycle(self, stop: Event | None = None) -> CalibrationEvaluatorCycleResult: ...
-
-
-class _CalibrationPublicationFinalizer(Protocol):
-    """Project-side automatic finalizer invoked before config-sensitive planning."""
-
-    def cycle(
-        self,
-        stop: Event | None = None,
-    ) -> CalibrationPublicationFinalizerCycleResult: ...
-
-
 @dataclass(frozen=True, slots=True)
 class ScheduleMaterializationCycleResult:
     """Bounded due-schedule materialization outcomes."""
@@ -115,28 +95,17 @@ class ProcedureDispatchCycleResult:
 class ProjectAutomationCycleResult:
     """Exact phase outcomes observed during one project automation cycle."""
 
-    publications: CalibrationPublicationFinalizerCycleResult
     intervals: ProcedurePlannerCycleResult
-    calibrations: CalibrationEvaluatorCycleResult
     schedules: ScheduleMaterializationCycleResult
     procedures: ProcedureDispatchCycleResult
-
-    @property
-    def config_planning_blocked(self) -> bool:
-        """Whether unfinished publication work blocked config-sensitive planning."""
-
-        return self.publications.has_more
 
     @property
     def failure_count(self) -> int:
         """Count deterministic failures and drift requiring operator review."""
 
         return (
-            self.publications.failures
-            + self.intervals.failures
+            self.intervals.failures
             + self.intervals.drifted_schedules
-            + self.calibrations.failures
-            + self.calibrations.cohort_drifts
             + self.schedules.failures
             + self.procedures.failures
             + self.procedures.conflicts
@@ -150,19 +119,12 @@ class ProjectAutomationCycleResult:
     def benign_conflicts(self) -> int:
         """Count reconciled or retryable concurrency races across all phases."""
 
-        return (
-            self.publications.benign_races
-            + self.calibrations.admission_conflicts
-            + self.schedules.conflicts
-            + self.procedures.lease_conflicts
-        )
+        return self.schedules.conflicts + self.procedures.lease_conflicts
 
     @property
     def has_more(self) -> bool:
         return (
-            self.publications.has_more
-            or self.intervals.has_more
-            or self.calibrations.has_more
+            self.intervals.has_more
             or self.schedules.has_more
             or self.procedures.has_more
         )
@@ -172,13 +134,11 @@ type _ScheduleOutcome = Literal["materialized", "conflict", "failure"]
 
 
 class ProjectAutomationWorker:
-    """Dispatch durable procedures with optional laboratory planning policies."""
+    """Plan intervals and dispatch durable procedures and schedules."""
 
     __slots__ = (
         "_backoff_initial_seconds",
         "_backoff_max_seconds",
-        "_calibration_evaluator",
-        "_calibration_finalizer",
         "_due_traversal",
         "_operations",
         "_planner",
@@ -192,8 +152,6 @@ class ProjectAutomationWorker:
         operations: _ProjectAutomationOperations,
         *,
         planner: _ProcedureIntervalPlanner | None = None,
-        calibration_evaluator: _CalibrationEvaluator | None = None,
-        calibration_finalizer: _CalibrationPublicationFinalizer | None = None,
         worker_id: str | None = None,
         schedule_limit: int = _DEFAULT_BATCH_LIMIT,
         runnable_limit: int = _DEFAULT_BATCH_LIMIT,
@@ -217,8 +175,6 @@ class ProjectAutomationWorker:
 
         self._operations = operations
         self._planner = planner
-        self._calibration_evaluator = calibration_evaluator
-        self._calibration_finalizer = calibration_finalizer
         self._worker_id = selected_worker_id
         self._schedule_limit = schedule_limit
         self._runnable_limit = runnable_limit
@@ -231,75 +187,21 @@ class ProjectAutomationWorker:
         return self._worker_id
 
     def cycle(self, stop: Event | None = None) -> ProjectAutomationCycleResult:
-        """Run one bounded config-ordered project work cycle."""
+        """Plan intervals, materialize schedules and dispatch bounded work."""
 
-        publications = (
-            self._calibration_finalizer.cycle(stop)
-            if self._calibration_finalizer is not None
-            else CalibrationPublicationFinalizerCycleResult(
-                ready_items=0,
-                prepared_items=0,
-                published_items=0,
-                deferred_items=0,
-                attention_items=0,
-                reconciled_items=0,
-                superseded_items=0,
-                benign_races=0,
-                failures=0,
-                has_more=False,
-            )
-        )
-        if stop is not None and stop.is_set():
-            return _automation_cycle_result(
-                publications,
-                _empty_planner_cycle(),
-                _empty_calibration_cycle(),
-                _empty_schedule_cycle(),
-                _empty_procedure_cycle(),
-            )
-        planning = (
-            _empty_planner_cycle()
-            if publications.has_more or self._planner is None
-            else self._planner.cycle(stop)
-        )
-        if stop is not None and stop.is_set():
-            return _automation_cycle_result(
-                publications,
-                planning,
-                _empty_calibration_cycle(),
-                _empty_schedule_cycle(),
-                _empty_procedure_cycle(),
-            )
-        calibrations = (
-            _empty_calibration_cycle()
-            if publications.has_more or self._calibration_evaluator is None
-            else self._calibration_evaluator.cycle(stop)
-        )
-        if stop is not None and stop.is_set():
-            return _automation_cycle_result(
-                publications,
-                planning,
-                calibrations,
-                _empty_schedule_cycle(),
-                _empty_procedure_cycle(),
-            )
-        schedules = self._materialize_due(stop)
-        if stop is not None and stop.is_set():
-            return _automation_cycle_result(
-                publications,
-                planning,
-                calibrations,
-                schedules,
-                _empty_procedure_cycle(),
-            )
-
-        procedures = self._dispatch_runnable(stop)
-        return _automation_cycle_result(
-            publications,
-            planning,
-            calibrations,
-            schedules,
-            procedures,
+        planning = _empty_planner_cycle()
+        schedules = _empty_schedule_cycle()
+        procedures = _empty_procedure_cycle()
+        if (stop is None or not stop.is_set()) and self._planner is not None:
+            planning = self._planner.cycle(stop)
+        if stop is None or not stop.is_set():
+            schedules = self._materialize_due(stop)
+        if stop is None or not stop.is_set():
+            procedures = self._dispatch_runnable(stop)
+        return ProjectAutomationCycleResult(
+            intervals=planning,
+            schedules=schedules,
+            procedures=procedures,
         )
 
     def _materialize_due(
@@ -467,27 +369,6 @@ def _empty_planner_cycle() -> ProcedurePlannerCycleResult:
     )
 
 
-def _empty_calibration_cycle() -> CalibrationEvaluatorCycleResult:
-    return CalibrationEvaluatorCycleResult(
-        definitions=0,
-        selected_targets=0,
-        fresh_members=0,
-        pending_publication_members=0,
-        blocked_members=0,
-        suppressed_active_members=0,
-        suppressed_failed_members=0,
-        suppressed_attention_members=0,
-        ready_members=0,
-        admitted_members=0,
-        created_cohorts=0,
-        reconciled_cohorts=0,
-        admission_conflicts=0,
-        cohort_drifts=0,
-        failures=0,
-        has_more=False,
-    )
-
-
 def _empty_schedule_cycle() -> ScheduleMaterializationCycleResult:
     return ScheduleMaterializationCycleResult(
         discovered=0,
@@ -509,25 +390,7 @@ def _empty_procedure_cycle() -> ProcedureDispatchCycleResult:
     )
 
 
-def _automation_cycle_result(
-    publications: CalibrationPublicationFinalizerCycleResult,
-    planning: ProcedurePlannerCycleResult,
-    calibrations: CalibrationEvaluatorCycleResult,
-    schedules: ScheduleMaterializationCycleResult,
-    procedures: ProcedureDispatchCycleResult,
-) -> ProjectAutomationCycleResult:
-    return ProjectAutomationCycleResult(
-        publications=publications,
-        intervals=planning,
-        calibrations=calibrations,
-        schedules=schedules,
-        procedures=procedures,
-    )
-
-
 def _is_retryable_control_error(error: Exception) -> bool:
-    if isinstance(error, CalibrationPublicationOutcomeUnknown):
-        return True
     cause = _control_cause(error)
     if isinstance(cause, httpx2.TransportError):
         return True
@@ -565,7 +428,6 @@ def _automation_control_errors() -> tuple[type[Exception], ...]:
     return (
         ProcedureControlError,
         ProcedureLeaseLostError,
-        CalibrationPublicationOutcomeUnknown,
         DaemonClientError,
         httpx2.HTTPError,
     )

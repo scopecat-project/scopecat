@@ -164,8 +164,8 @@ bounded cohort admission layer described below does not add another run engine.
 ## One-shot schedules and project automation workers
 
 `ProjectAutomationWorker(lab.procedures)` dispatches submitted procedures and due
-schedules directly. Interval planning, calibration evaluation and legacy cohort
-finalization are optional explicit components, not prerequisites for a worker.
+schedules directly, with optional interval planning. Legacy cohort evaluation and
+finalization are no longer worker phases or constructor options.
 New parameter-branch procedures carry their publication within their own ledger.
 
 A durable procedure schedule freezes one exact definition reference, canonical
@@ -230,12 +230,12 @@ bump. Reusing a version with a different shell is reported as drift for an
 existing ordinal; future ordinals otherwise have no historical spec to compare.
 
 `--once` performs one bounded
-finalize-plan-evaluate-materialize-dispatch cycle for manual operation and
-testing, prints publication and procedure counters, and exits nonzero when the
+plan-materialize-dispatch cycle for manual operation and
+testing, prints interval, schedule and procedure counters, and exits nonzero when the
 cycle records a deterministic failure. The resident form polls with
 interruptible waits and exponential control-plane backoff. Shutdown stops new
 discovery, callbacks, mutations, or dispatch on `SIGINT` or `SIGTERM`. An
-already-started publication reconciliation or procedure effect completes; at the
+already-started procedure effect completes; at the
 next durable step boundary the underlying procedure worker releases the procedure
 ready for another exact worker. If there is no next step, the procedure closes
 successfully. There is no mid-effect cancellation contract.
@@ -330,15 +330,13 @@ traversal cursor. The hard 200-member first slice makes every evaluation bounded
 larger cohorts will require an explicit durable traversal policy rather than an
 in-memory cursor.
 
-The config-sensitive prefix of a worker cycle is automatic publication, interval
-planning, then calibration evaluation/admission. A completed publication is
-therefore visible to freshness evaluation in the same cycle. If the bounded
-publication page reports more work, the cycle raises a local planning barrier:
-it skips both interval planning and calibration admission against the soon-to-be
-obsolete parameter heads, while still materializing frozen due schedules and
-dispatching already-runnable procedures. Stop is checked before each project
-callback and durable call. Retryable transport and 5xx/429 control failures use
-the resident worker's interruptible exponential backoff. After an unknown
+The former worker-wide publication backlog barrier is retired. Independent
+parameter-branch procedures publish within their own durable ledger and fence
+their captured destination head; unrelated pending publication work does not
+suspend interval planning. The resident worker checks stop between phases and
+uses interruptible exponential backoff for retryable transport and 5xx/429
+control failures. The remaining legacy evaluator can still be called directly.
+After an unknown
 cohort-create transport outcome, the evaluator reopens the deterministic cohort
 ID; not-found retries the original transport error, while a different
 deterministic 4xx is fatal because the durable outcome cannot be classified

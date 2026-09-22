@@ -113,6 +113,14 @@ evaluators or publication registries. Removed declaration keys and the old
 and their stored records remain pending a separate retirement; this cutover does
 not delete queues, rewrite evidence or introduce a persistent-data migration.
 
+The shared `ProjectAutomationWorker` also no longer accepts legacy evaluator or
+finalizer components. Its cycle result contains only interval, schedule and
+procedure outcomes. The old global publication-backlog planning barrier and
+cohort-specific retry handling are retired; independent branch publication and
+unknown-outcome recovery belong to each durable procedure. Stop-before-cycle,
+stop-after-planning, bounded dispatch, lease races and transport backoff remain
+covered independently of the legacy cohort fixtures.
+
 ## Remaining implementation order
 
 1. Define scientific freshness/applicability over explicit parameter dependencies,
