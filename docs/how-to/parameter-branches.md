@@ -104,6 +104,28 @@ saved revision; it does not silently include an editor's unsaved buffer.
 
 ## Publish a verified candidate
 
+To combine candidates fitted from the same saved parameter revision:
+
+```python
+joint = q0_candidate.combine(q1_candidate, name="joint-drive-calibration")
+prepared = session.prepare(experiment(), candidate=joint)
+```
+
+This saves a new proposal with exact contributing run, analysis, proposal and
+content identities. The server reads retained proposals; local edits to their
+Python objects are not authoritative. Sources must share the exact saved
+parameter revision, setup and scientific subject/scenario, with no unsaved
+overrides. Conflicting cells reject the entire composition without publication.
+Supply all original candidates in one call; nested compositions are not supported.
+
+The returned candidate has **no inherited acceptance**. Collect new measurements
+using the joint candidate, then run a policy appropriate to the combined experiment.
+`joint.verify(check_result)` retains every contributing baseline along with the
+joint candidate data. A prior individual verification cannot publish the joint
+candidate. The framework checks evidence identity and scope; the laboratory's
+policy must decide whether its measurements cover the physical interactions that
+matter. Composition does not schedule measurements or advance a branch.
+
 After collecting independent candidate data and obtaining a retained positive
 policy decision, publish explicitly to a captured branch head:
 

@@ -310,6 +310,27 @@ def prepare_analysis(
             "parameter_proposals",
         )
     _validate_analysis_proposal_evidence(outputs, parameter_proposals)
+    for proposal in parameter_proposals:
+        if proposal.composition is not None:
+            from scopecat.config.parameter_composition import (
+                resolve_parameter_composition,
+            )
+
+            resolved = resolve_parameter_composition(
+                proposal.composition.sources,
+                anchor_run_id=run_id,
+                services=services,
+            )
+            if (
+                proposal.composition != resolved.provenance
+                or proposal.deltas != resolved.merged.deltas
+            ):
+                _raise_analysis_problem(
+                    "parameter_composition.value_mismatch",
+                    "composed proposal must match its retained sources "
+                    "and merged values",
+                    "parameter_proposals",
+                )
     if any(
         proposal.analysis_record_id != proposed_record_id
         for proposal in parameter_proposals
@@ -1095,6 +1116,11 @@ def _analysis_output_identity(output: AnalysisOutput) -> dict[str, object]:
             "reason": proposal.reason,
             "confidence": proposal.confidence,
             "deltas": proposal.deltas,
+            **(
+                {"composition": proposal.composition}
+                if proposal.composition is not None
+                else {}
+            ),
         }
     elif isinstance(output, AnalysisFactOutput):
         shared["produced_by"] = output.produced_by

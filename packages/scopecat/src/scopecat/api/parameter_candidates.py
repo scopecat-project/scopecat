@@ -34,7 +34,9 @@ from scopecat.daemon.wire import (
     ConfigContextPublishReceipt,
     ConfigPublishReceipt,
     ParameterBranchPublishCommand,
+    ParameterCandidateComposeCommand,
 )
+from scopecat.kernel.content_identity import model_wire_content_hash
 from scopecat.kernel.entity import EntityRef
 from scopecat.kernel.value_types import Table
 from scopecat.kernel.value_validation import coerce_literal
@@ -44,6 +46,7 @@ from scopecat.records.config import ConfigProfileSnapshot
 from scopecat.records.config_context import ConfigContextRef
 from scopecat.records.parameter import ParameterAtomValue
 from scopecat.records.parameter_branch import ParameterBranch
+from scopecat.records.parameter_change import ParameterProposalRef
 from scopecat.records.run import RunConfigSource
 
 
@@ -94,6 +97,37 @@ class ParameterCandidate:
             for cell in (delta.cells or ())
         )
 
+    def combine(
+        self, *others: ParameterCandidate, name: str, note: str = ""
+    ) -> ParameterCandidate:
+        """Save a joint candidate; individual verification is not inherited.
+
+        Sources must share exact independent parameters, setup and scientific
+        scope. Prepare and verify the returned candidate before publishing it.
+        """
+        proposals = (
+            self.config.parameter_proposal,
+            *(item.config.parameter_proposal for item in others),
+        )
+        saved = self.operations.client.compose_parameter_candidate(
+            self.config.source_run_id,
+            ParameterCandidateComposeCommand(
+                name=name,
+                note=note,
+                sources=tuple(
+                    ParameterProposalRef(
+                        run_id=proposal.source_run_id,
+                        proposal_id=proposal.id,
+                        analysis_record_id=proposal.analysis_record_id,
+                        content_hash=f"sha256:{model_wire_content_hash(proposal)}",
+                    )
+                    for proposal in proposals
+                ),
+            ),
+        )
+        [proposal] = saved.parameter_proposals
+        return ParameterCandidate(self.operations, CandidateConfig(proposal))
+
     def verify[ResultT](
         self, result: AnalysisResult[ResultT]
     ) -> VerifiedParameterCandidate:
@@ -128,6 +162,18 @@ class ParameterCandidate:
             default_key=f"verify-{self.name}-{publication.id}",
         )
         context.measurements(baseline, id="baseline", role="baseline")
+        composition = self.config.parameter_proposal.composition
+        if composition is not None:
+            for index, run_id in enumerate(
+                sorted(
+                    {source.run_id for source in composition.sources} - {baseline.id}
+                )
+            ):
+                context.measurements(
+                    RunHandle(self.operations, run_id),
+                    id=f"baseline-{index + 1}",
+                    role="baseline",
+                )
         context.measurements(run, id="candidate", role="candidate")
         decision = context.analysis_fact(
             publication,

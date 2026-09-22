@@ -67,6 +67,7 @@ from scopecat.daemon.wire import (
     AnalysisTableOutputPayload,
     InterpretationAnalysisInputPayload,
     MeasurementAnalysisInputPayload,
+    ParameterCandidateComposeCommand,
     PublishedAnalysisInputPayload,
     RunAttachmentCommand,
 )
@@ -607,6 +608,48 @@ class RunService:
             input_count=publication.input_count,
             output_count=publication.output_count,
         )
+
+    def compose_parameter_candidate(
+        self, run_id: str, command: ParameterCandidateComposeCommand
+    ) -> AnalysisSaveReceipt:
+        from scopecat.config.parameter_composition import resolve_parameter_composition
+        from scopecat.records.analysis import analysis_record_id
+        from scopecat.records.parameter_change import ParameterChangeProposal
+
+        with self._config_errors():
+            resolved = resolve_parameter_composition(
+                command.sources,
+                anchor_run_id=run_id,
+                services=self._services,
+            )
+            config = self._runs.read_config_profile_snapshot(run_id)
+            snapshot = self._runs.read_snapshot(run_id)
+            name = artifact_slug(command.name, fallback="composition")
+            proposal = ParameterChangeProposal(
+                id=name,
+                source_run_id=run_id,
+                analysis_record_id=analysis_record_id(name, 1),
+                base_config_id=config.id,
+                base_config_content_hash=snapshot.config_content_hash,
+                reason=command.note or "Compose retained parameter candidates",
+                deltas=resolved.merged.deltas,
+                composition=resolved.provenance,
+            )
+            return self.save_run_analysis(
+                run_id,
+                AnalysisSaveCommand(
+                    title=command.name,
+                    analysis_key=name,
+                    outputs=(
+                        AnalysisParameterProposalOutputPayload(
+                            kind="parameter_change_proposal",
+                            id=name,
+                            title=command.name,
+                            content=proposal,
+                        ),
+                    ),
+                ),
+            )
 
     def save_run_analysis(
         self,

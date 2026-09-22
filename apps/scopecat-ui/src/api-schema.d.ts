@@ -6961,6 +6961,7 @@ export interface components {
             base_config_content_hash: components["schemas"]["ConfigContentHash"];
             /** Base Config Id */
             base_config_id: string;
+            composition?: components["schemas"]["ParameterProposalComposition"] | null;
             /** Confidence */
             confidence?: number | null;
             /** Deltas */
@@ -7070,6 +7071,12 @@ export interface components {
             /** Table Id */
             table_id: string;
         };
+        /** ParameterProposalComposition */
+        ParameterProposalComposition: {
+            base: components["schemas"]["ParameterRevisionRef"];
+            /** Sources */
+            sources: components["schemas"]["ParameterProposalRef"][];
+        };
         /** ParameterProposalPage */
         ParameterProposalPage: {
             /**
@@ -7079,6 +7086,19 @@ export interface components {
             items: components["schemas"]["ParameterProposalView"][];
             /** Next Cursor */
             next_cursor?: number | null;
+            /** Run Id */
+            run_id: string;
+        };
+        /**
+         * ParameterProposalRef
+         * @description One exact retained contribution to a composed candidate.
+         */
+        ParameterProposalRef: {
+            /** Analysis Record Id */
+            analysis_record_id: string;
+            content_hash: components["schemas"]["Sha256ContentHash"];
+            /** Proposal Id */
+            proposal_id: string;
             /** Run Id */
             run_id: string;
         };

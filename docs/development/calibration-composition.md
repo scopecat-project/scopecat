@@ -53,9 +53,19 @@ old verified candidates. Prepared runs remain pinned, and publication changes
 neither equipment nor a shared default.
 
 Single-candidate `publish_to_branch()` already provides this transaction boundary.
-A merged candidate still needs durable multi-source provenance and verification
-of the merged result before this becomes a complete author workflow. The pure
-merge function is not that missing workflow.
+`ParameterCandidate.combine()` now saves a merged candidate under one contributing
+baseline, retaining exact run/analysis/proposal/content references for every source
+and their independent parameter base. The server resolves stored sources and
+recomputes the merge at the analysis publication boundary. Composition provenance
+participates in publication identity. Duplicate or nested sources, differing
+parameter/setup/subject/scenario inputs and forged values are rejected.
+
+The ordinary verification facade includes every contributing baseline. The server
+requires these baselines plus successful data using the exact joint candidate;
+individual acceptance is not inherited. Laboratory policy remains responsible for
+the measurement's scientific coverage. A real q0/q1 DRAG journey now fits separate
+proposals, composes them, remeasures each target under the joint parameters,
+retains both decisions and explicitly publishes the joint result to a branch.
 
 Automatic scheduling must additionally retain the requested targets, their
 completed/rejected/missing results and the exact finalization decision. Retrying
@@ -65,15 +75,12 @@ request and verification scope.
 
 ## Remaining implementation order
 
-1. Add a retained merged-candidate representation over exact independent parameter
-   revisions, including each contributing proposal and baseline source.
-2. Provide a minimal two-target integration journey: acquire separate proposals,
-   compose, verify the actual merged result, and publish to a captured branch.
-   Test source mismatch, cell conflict, rejected joint verification and stale-head
-   publication without adding a parallel legacy-config path.
-3. Adapt durable orchestration/finalization to this contract, then retire replaced
+1. Expand retained-evidence regression coverage to automatic orchestration and
+   recovery. The explicit two-target compose/reverify/publish path exists, but
+   cohort scheduling and finalization still use the legacy model.
+2. Adapt durable orchestration/finalization to this contract, then retire replaced
    DRAG working-point/cohort publication code and its obsolete tests together.
-4. Introduce a reusable teaching sandbox after the author workflow is coherent.
+3. Introduce a reusable teaching sandbox after the author workflow is coherent.
 
 Track the retirement in [#773](https://github.com/scopecat-project/scopecat/issues/773).
 No historical store rewrite or prebaseline migration is part of this work.

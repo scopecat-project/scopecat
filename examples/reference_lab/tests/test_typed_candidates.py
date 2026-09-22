@@ -2,7 +2,7 @@
 
 import shutil
 from collections.abc import Generator
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 import pytest
@@ -13,7 +13,13 @@ from scopecat.api.parameter_candidates import (
     VerifiedParameterCandidate,
 )
 from scopecat.application import LabApplication
+from scopecat.daemon.client import DaemonConflictError
+from scopecat.daemon.wire import (
+    AnalysisParameterProposalOutputPayload,
+    AnalysisSaveCommand,
+)
 from scopecat.project import load_project
+from scopecat.records.analysis import analysis_record_id
 from scopecat.records.parameter import TableParameterValue
 from scopecat.records.run import (
     AnalysisCandidateRunConfigSource,
@@ -35,12 +41,18 @@ from reference_lab.workflows.drag_beta_experiment import drag_beta_experiment
 from reference_lab.workflows.drag_beta_verification import (
     DRAG_BETA_VERIFICATION_SCHEMA,
     drag_beta_candidate_verification,
+    evaluate_drag_beta_candidate,
 )
 from reference_lab.workflows.production_drag_gate import production_drag_experiment
 
 from .conftest import ReferenceLabDaemon
 
 pytestmark = pytest.mark.usefixtures("reference_lab_author_imports")
+
+
+@dataclass(frozen=True)
+class _JointDragDecision:
+    accepted: bool
 
 
 @pytest.fixture
@@ -335,3 +347,107 @@ def test_drag_candidate_publishes_to_branch_and_runs_accepted_gate(
         assert lab.config.registry() == registry
         assert lab.setup.active() == setup
         assert lab.parameters.get(parameters.id) == parameters
+
+        # Fit another target from the same saved base, then verify the combination.
+        second_baseline = lab.run(drag_beta_experiment.build("q1"), config=resolved)
+        second_analysis = second_baseline.analyze(drag_beta_analysis(qubit="q1"))
+        joint = ParameterCandidate(lab.config, candidate).combine(
+            ParameterCandidate(lab.config, second_analysis.candidate_config()),
+            name="joint-drag",
+        )
+        provenance = joint.config.parameter_proposal.composition
+        assert provenance is not None and provenance.base == parameters.ref
+        assert {item.run_id for item in provenance.sources} == {
+            baseline.id,
+            second_baseline.id,
+        }
+        assert lab.config.candidate(baseline.id, joint.name).config == joint.config
+        first = ParameterCandidate(lab.config, candidate)
+        second = ParameterCandidate(lab.config, second_analysis.candidate_config())
+        assert first.combine(second, name="joint-drag").config == joint.config
+        with pytest.raises(DaemonConflictError, match="original candidates"):
+            joint.combine(second, name="nested")
+        with pytest.raises(DaemonConflictError, match="unique"):
+            first.combine(first, name="duplicate-contribution")
+        tampered = replace(
+            second,
+            config=replace(
+                second.config,
+                parameter_proposal=second.config.parameter_proposal.model_copy(
+                    update={"reason": "altered locally"}
+                ),
+            ),
+        )
+        with pytest.raises(DaemonConflictError, match="retained proposal"):
+            first.combine(tampered, name="tampered-source")
+        before = baseline.contents(role="record").items
+        forged = joint.config.parameter_proposal.model_copy(
+            update={
+                "id": "forged",
+                "analysis_record_id": analysis_record_id("forged", 1),
+                "deltas": candidate.parameter_proposal.deltas,
+            }
+        )
+        with pytest.raises(DaemonConflictError, match="merged values"):
+            lab.config.client.save_analysis(
+                baseline.id,
+                AnalysisSaveCommand(
+                    title="forged",
+                    analysis_key="forged",
+                    outputs=(
+                        AnalysisParameterProposalOutputPayload(
+                            kind="parameter_change_proposal",
+                            id="forged",
+                            title="forged",
+                            content=forged,
+                        ),
+                    ),
+                ),
+            )
+        assert baseline.contents(role="record").items == before
+        joint_branch = lab.parameters.create_branch("drag/joint", revision=parameters)
+        with pytest.raises(DaemonConflictError):
+            VerifiedParameterCandidate(joint, verification).publish_to_branch(
+                joint_branch,
+                name="not-jointly-verified",
+            )
+        q0_check = lab.run(invocation, config=joint.config)
+        q1_check = lab.run(drag_beta_experiment.build("q1"), config=joint.config)
+        q0_decision = evaluate_drag_beta_candidate(
+            baseline.measurements(), q0_check.measurements()
+        )
+        q1_decision = evaluate_drag_beta_candidate(
+            second_baseline.measurements(), q1_check.measurements(), qubit="q1"
+        )
+        context = lab.analysis("Joint DRAG verification")
+        for label, retained_run, role in (
+            ("baseline-q0", baseline, "baseline"),
+            ("baseline-q1", second_baseline, "baseline"),
+            ("candidate-q0", q0_check, "candidate"),
+            ("candidate-q1", q1_check, "candidate"),
+        ):
+            context.measurements(retained_run, id=label, role=role)
+        joint_verification = (
+            context.result()
+            .fact("q0", q0_decision, schema=DRAG_BETA_VERIFICATION_SCHEMA)
+            .fact("q1", q1_decision, schema=DRAG_BETA_VERIFICATION_SCHEMA)
+            .fact(
+                "decision",
+                _JointDragDecision(q0_decision.accepted and q1_decision.accepted),
+                schema=ordinary_result_schema(_JointDragDecision),
+            )
+            .save()
+        )
+        joint_published = VerifiedParameterCandidate(
+            joint, joint_verification
+        ).publish_to_branch(
+            joint_branch,
+            name="joint-drag-accepted",
+        )
+        assert (
+            lab.parameters.get(joint_published.revision.revision_id).parameters
+            == q0_check.config.parameter_snapshot
+        )
+        assert q1_check.config == q0_check.config
+        assert lab.config.registry() == registry
+        assert lab.setup.active() == setup

@@ -206,6 +206,7 @@ from scopecat.daemon.wire import (
     ParameterBranchHistory,
     ParameterBranchPage,
     ParameterBranchPublishCommand,
+    ParameterCandidateComposeCommand,
     ParameterResolveCommand,
     ParameterRevisionList,
     ParameterSaveCommand,
@@ -2279,6 +2280,15 @@ class DaemonClient:
             f"{_API_PREFIX}/runs/{quote(run_id, safe='')}/attachments",
             command,
             ContentEntry,
+        )
+
+    def compose_parameter_candidate(
+        self, run_id: str, command: ParameterCandidateComposeCommand
+    ) -> AnalysisSaveReceipt:
+        return self._post_model(
+            f"{_API_PREFIX}/runs/{quote(run_id, safe='')}/parameter-compositions",
+            command,
+            AnalysisSaveReceipt,
         )
 
     def parameter_proposals(

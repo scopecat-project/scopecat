@@ -80,8 +80,9 @@ expresses an obsolete requirement before removing it.
 
 The [calibration composition contract](calibration-composition.md) separates pure
 parameter merging from scientific acceptance and atomic publication. Its shared
-parameter-only merge core is implemented; retained multi-source candidates and
-joint verification remain prerequisites for replacing the old cohort workflow.
+parameter-only merge core, retained multi-source candidates and explicit joint
+verification are implemented. Durable orchestration and finalization remain to
+be replaced before the old cohort workflow can retire.
 
 1. Remove gallery recommendations from learning routes. Keep the former tutorial
    URL as a retirement notice. Stop adding or mechanically migrating old examples.

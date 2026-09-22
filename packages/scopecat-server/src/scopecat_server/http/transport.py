@@ -225,6 +225,7 @@ from scopecat.daemon.wire import (
     ParameterBranchHistory,
     ParameterBranchPage,
     ParameterBranchPublishCommand,
+    ParameterCandidateComposeCommand,
     ParameterResolveCommand,
     ParameterRevisionList,
     ParameterSaveCommand,
@@ -2193,6 +2194,12 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
             limit=limit,
             before=before,
         )
+
+    @app.post(f"{_API_PREFIX}/runs/{{run_id}}/parameter-compositions", status_code=201)
+    def compose_parameter_candidate(
+        run_id: str, command: ParameterCandidateComposeCommand
+    ) -> AnalysisSaveReceipt:
+        return application.runs.compose_parameter_candidate(run_id, command)
 
     @app.post(f"{_API_PREFIX}/runs/{{run_id}}/analyses", status_code=201)
     def save_run_analysis(

@@ -424,6 +424,12 @@ class AnalysisService:
             selector=proposal_id,
             services=self._services,
         )
+        if proposal.composition is not None and not {
+            source.run_id for source in proposal.composition.sources
+        }.issubset(input_run_ids):
+            raise BackendConflict(
+                "joint verification must include every contributing baseline"
+            )
         expected = resolve_candidate_config_snapshot(
             CandidateConfig(proposal), services=self._services
         )

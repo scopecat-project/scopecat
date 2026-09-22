@@ -7,6 +7,7 @@
           "analysis_record_id": "acceptance-analysis",
           "base_config_content_hash": "sha256:ada673b9384d907a13adb59231f3f2dbd9aa63f76115d7712e6e6c926ed93486",
           "base_config_id": "acceptance-parameters",
+          "composition": null,
           "confidence": null,
           "deltas": [
             {

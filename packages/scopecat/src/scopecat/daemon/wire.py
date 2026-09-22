@@ -93,6 +93,7 @@ from scopecat.records.parameter import ParameterCatalog, ParameterSnapshot
 from scopecat.records.parameter_branch import ParameterBranch
 from scopecat.records.parameter_change import (
     ParameterChangeProposal,
+    ParameterProposalRef,
     ParameterValueDelta,
 )
 from scopecat.records.parameter_revision import (
@@ -209,6 +210,12 @@ class ParameterBranchCommitCommand(_WireModel):
     expected_generation: int = Field(ge=0)
     source: ParameterSaveCommand | ParameterRevisionRef
     actor: NonEmptyText
+    note: str = ""
+
+
+class ParameterCandidateComposeCommand(_WireModel):
+    name: NonEmptyText
+    sources: tuple[ParameterProposalRef, ...] = Field(min_length=2, max_length=200)
     note: str = ""
 
 
@@ -1593,6 +1600,7 @@ __all__ = [
     "ParameterBranchHistory",
     "ParameterBranchPage",
     "ParameterBranchPublishCommand",
+    "ParameterCandidateComposeCommand",
     "ParameterConfigRevisionSource",
     "ParameterResolveCommand",
     "ParameterRevisionList",
