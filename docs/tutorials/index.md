@@ -5,8 +5,10 @@ descriptions.
 
 - [Edit and analyze a starter experiment](starter-authoring.md) continues the
   installed quickstart with parameters, scans, analysis and retained results.
-- [Tour the reference lab](reference-lab.md) runs a hardware-free lab with
-  direct instrument control and a complete calibration workflow.
+- [Runnable tutorial sandboxes](teaching-sandboxes.md) provide disposable
+  Notebooks for parameters, compute, source refresh and grouped analysis.
 
-The scripts in `examples/reference_lab/notebooks` are executable documentation
-and are covered by the reference-lab tests.
+Advanced device and calibration topics should gain focused sandboxes using the
+current public APIs. The old reference gallery is retired as teaching material;
+its remaining scripts are temporary integration-test inputs, not author examples
+to copy. See the [retirement inventory](../development/reference-gallery-retirement.md).

@@ -45,8 +45,8 @@ for either role.
 
 [Instrument extensions](../extensions/instruments.md) cover integrating devices;
 [quantum extensions](../extensions/quantum.md) cover domain-specific programs and
-targets. The [reference lab](../tutorials/reference-lab.md) is an integration
-example, not the first project template. Follow the
+targets. Retained reference implementations are test inputs, not recommended
+authoring patterns. Follow the
 [development documentation](../development/index.md) only when changing Scopecat
 itself.
 

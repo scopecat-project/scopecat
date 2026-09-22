@@ -1,13 +1,15 @@
 # Reference fixture ownership
 
 The public project has three distinct consumers. The public tutorial sandbox is the ordinary author learning entry; the CLI
-starter is the minimal virtual-instrument application. Targeted reference recipes demonstrate one advanced contract. The
-full reference laboratory validates integration, not beginner usability.
+starter is the minimal virtual-instrument application. The old reference gallery
+is retired as teaching material, including advanced author examples. Its remaining
+source temporarily supports integration tests. See the
+[behavior and retirement inventory](reference-gallery-retirement.md).
 
 | Current content | Responsibility | Direction |
 | --- | --- | --- |
 | Server `scaffold.py`, installed pilot verifier | Minimal public author workspace | Keep runnable without reference-lab installed; generated scripts use current APIs |
-| `reference_lab/notebooks/20*`, `21*`, `40*`, `50*` | Device/measurement examples | Keep individually documented; remove unrelated setup when extracting |
+| `reference_lab/notebooks` | Legacy integration inputs | Extract valid behavior, retire redundant scripts; write new lessons in topic sandboxes |
 | `reference_lab/quantum_compilation`, `quantum_runner`, `virtual_lab` | Quantum-to-device integration | Maintainer-owned fixture; not a mandatory author dependency |
 | `reference_lab/workflows/drag_beta_*` | Calibration, publication and recovery contracts | Preserve integrated evidence; do not teach these as the first acquisition |
 | `reference_lab/tests/unit` | Local scientific/compiler behavior | Prefer small fixtures without a daemon |
@@ -36,9 +38,11 @@ the shared response contains an unapproved proposal, with approval decoding test
 separately in the UI. Calibration publication and restoration remain covered by
 the dedicated DRAG integration workflows.
 
-The ordinary reference gallery still starts with transitional parameter defaults.
-Its calibration/default-publication consumers must migrate together before that
-bootstrap path can be removed; the acceptance fixture is not a second user mode.
+The legacy gallery still starts with transitional parameter defaults. Reassess
+its calibration/default-publication assertions against the new design; retain
+needed behaviors in focused tests and retire the old consumers. There is no
+requirement to port every script before removing bootstrap defaults. The
+acceptance fixture is not a second user mode.
 
 No private package may become a prerequisite for public CI or the installed
 starter. Shared test helpers belong in testkit only when independently reused;
@@ -88,13 +92,12 @@ verification now live in public. The author refresh, complex mean and grouped
 restart journeys move with their owner into `packages/lab-tools/tests`.
 Private code is not imported by public tests or deliveries.
 
-The reference lab's beginner/workspace-template role is retired. Its remaining
-four-qubit implementation is still an integration fixture, not replaced by the
-compute-only tutorials. Before deleting a reference module, identify replacement
-coverage for its channel routing, compiled buffers, shared physical claims or
-durable calibration/recovery contract. Keep a bounded set of full-system journeys
-while extracting generic cases into smaller fixtures; do not count moved folders
-or tutorial execution as replacement evidence for those device contracts.
+The reference lab's teaching/workspace-template role is retired. Preserve valid
+channel-routing, compiled-buffer, shared-claim and recovery behaviors in a bounded
+set of tests. Old notebook interfaces, fixed inventory shapes and global-default
+publication assertions are not automatically requirements. For each removal,
+identify replacement coverage or explain why the old assertion is obsolete;
+compute-only tutorials alone do not replace physical device evidence.
 
 The unknown-parameter declaration/freeze/structural-history journey now uses a
 compute-only tutorial daemon (`packages/lab-tools/tests/test_unknown_parameter_authoring.py`).

@@ -1,9 +1,10 @@
 # Analysis publication
 
-This page records the evolving durable-publication contract. The primary design
-test is the [reference-lab calibration workflow](../tutorials/reference-lab.md):
-users should be able to publish, review, accept, use, and undo a proposal without
-managing storage identities or revision mechanics directly.
+This page records the evolving durable-publication contract. Users should be
+able to publish evidence, review a proposal, explicitly choose its destination
+and recover prior values without managing storage identities directly. Legacy
+reference calibration workflows are test inputs to reassess, not the definition
+of this contract; see the [retirement inventory](../development/reference-gallery-retirement.md).
 
 An analysis publication provides a durable boundary for fitted values, reusable
 datasets, plots, reports, and proposed parameter changes that might otherwise
