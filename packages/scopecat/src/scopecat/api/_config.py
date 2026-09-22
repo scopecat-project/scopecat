@@ -59,6 +59,7 @@ from scopecat.daemon.wire import (
     ConfigSetupRebindPreviewCommand,
     DirectConfigRevisionSource,
     ManualConfigDraftRevisionSource,
+    ParameterConfigRevisionSource,
 )
 from scopecat.records.analysis import (
     AnalysisParameterProposalRecordOutput,
@@ -66,7 +67,8 @@ from scopecat.records.analysis import (
 )
 from scopecat.records.config import ConfigProfileSnapshot, config_content_hash
 from scopecat.records.config_context import ConfigContextRef
-from scopecat.records.parameter import ParameterSnapshot
+from scopecat.records.parameter import ParameterCatalog, ParameterSnapshot
+from scopecat.records.parameter_revision import ParameterRevisionContent
 from scopecat.records.run import (
     AnalysisCandidateRunConfigSource,
     ConfigRegistryRunConfigSource,
@@ -345,6 +347,40 @@ class LabConfigOperations:
                 base_generation=active.activation.generation,
                 candidate_id=candidate_id or f"{active.config.id}.draft",
                 updates=draft.updates,
+            )
+        )
+
+    def set_parameter_default(
+        self,
+        *,
+        name: str,
+        system_id: str,
+        setup: SetupRevision | SetupRevisionRef,
+        catalog: ParameterCatalog,
+        parameters: ParameterSnapshot,
+        note: str = "",
+    ) -> ConfigPublishReceipt:
+        """Publish parameter inputs against exact setup; never select setup.
+
+        An execution-compatible setup must already be selected. The server
+        resolves its content, validates the combination and saves its provenance.
+        """
+        return self.publish_config(
+            ConfigPublishCommand(
+                operation_id=_interactive_publish_operation_id(),
+                source=ParameterConfigRevisionSource(
+                    parameters=ParameterRevisionContent(
+                        id=name,
+                        system_id=system_id,
+                        catalog=catalog,
+                        parameters=parameters,
+                    ),
+                    setup=setup.ref if isinstance(setup, SetupRevision) else setup,
+                ),
+                entry_id=name,
+                actor=self.operator,
+                expected_generation=self._generation(),
+                note=note,
             )
         )
 

@@ -115,7 +115,8 @@ export function ConfigEntryInspector({
             )}
             {latestActivation !== undefined
               ? "Restore default"
-              : entry.source.kind === "direct_config_profile"
+              : entry.source.kind === "direct_config_profile" ||
+                  entry.source.kind === "parameter_revision"
                 ? "Set as default"
                 : "Accept as default"}
           </button>
@@ -297,6 +298,16 @@ function EntryProvenance({
           <strong className="text-[0.68rem]">Direct configuration profile</strong>
           <p className={provenanceCopy}>Saved from one complete config snapshot.</p>
         </div>
+      </div>
+    );
+  }
+  if (source.kind === "parameter_revision") {
+    return (
+      <div className={provenance}>
+        <p>
+          Parameters published against saved setup {source.setup.revision_id}. Setup selection was
+          unchanged.
+        </p>
       </div>
     );
   }

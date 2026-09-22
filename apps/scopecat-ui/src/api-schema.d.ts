@@ -3891,7 +3891,7 @@ export interface components {
             entry: components["schemas"]["ConfigRegistryEntry"];
             operation: components["schemas"]["ConfigPublishOperation"];
         };
-        ConfigPublishSource: components["schemas"]["DirectConfigRevisionSource"] | components["schemas"]["ManualConfigDraftRevisionSource"] | components["schemas"]["CandidateConfigRevisionSource"];
+        ConfigPublishSource: components["schemas"]["DirectConfigRevisionSource"] | components["schemas"]["ParameterConfigRevisionSource"] | components["schemas"]["ManualConfigDraftRevisionSource"] | components["schemas"]["CandidateConfigRevisionSource"];
         /** ConfigRegistryActivationRecord */
         ConfigRegistryActivationRecord: {
             /**
@@ -3942,7 +3942,7 @@ export interface components {
              */
             recorded_at?: string;
             /** Source */
-            source: components["schemas"]["DirectConfigRegistrySource"] | components["schemas"]["ManualConfigDraftRegistrySource"] | components["schemas"]["CandidateConfigRegistrySource"] | components["schemas"]["ContextConfigRegistrySource"] | components["schemas"]["SetupRebindRegistrySource"];
+            source: components["schemas"]["DirectConfigRegistrySource"] | components["schemas"]["ParameterConfigRegistrySource"] | components["schemas"]["ManualConfigDraftRegistrySource"] | components["schemas"]["CandidateConfigRegistrySource"] | components["schemas"]["ContextConfigRegistrySource"] | components["schemas"]["SetupRebindRegistrySource"];
         };
         /**
          * ConfigRegistryPage
@@ -6910,6 +6910,28 @@ export interface components {
             /** Source Run Id */
             source_run_id: string;
         };
+        /**
+         * ParameterConfigRegistrySource
+         * @description Parameter input composed against one exact saved executable setup.
+         */
+        ParameterConfigRegistrySource: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "parameter_revision";
+            setup: components["schemas"]["SetupRevisionRef"];
+        };
+        /** ParameterConfigRevisionSource */
+        ParameterConfigRevisionSource: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "parameter_revision";
+            parameters: components["schemas"]["ParameterRevisionContent"];
+            setup: components["schemas"]["SetupRevisionRef"];
+        };
         ParameterContract: components["schemas"]["ParameterValueContract"] | components["schemas"]["ParameterLookupUse"];
         /**
          * ParameterDefinition
@@ -6959,6 +6981,21 @@ export interface components {
         ParameterProposalView: {
             approval?: components["schemas"]["ParameterChangeApprovalRecord"] | null;
             proposal: components["schemas"]["ParameterChangeProposal-Output"];
+        };
+        /**
+         * ParameterRevisionContent
+         * @description Scientific parameter declarations/values and their snapshot labels.
+         *
+         *     Exact setup association belongs to the owning revision record. This payload
+         *     contains no instrument registry, topology, routing or connection settings.
+         */
+        ParameterRevisionContent: {
+            catalog: components["schemas"]["ParameterCatalog"];
+            /** Id */
+            id: string;
+            parameters: components["schemas"]["ParameterSnapshot"];
+            /** System Id */
+            system_id: string;
         };
         /**
          * ParameterSnapshot

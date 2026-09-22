@@ -49,13 +49,17 @@ setup revision. Reads reconstruct the existing full execution snapshot and verif
 the retained setup hash. Metadata differences are preserved, even when execution
 semantics are unchanged. Current-format backup/restore includes both parts.
 
-This is a storage split, not yet a parameter-only HTTP/Python registry API. The
-repository port still accepts and returns full configurations, and run evidence
+The HTTP publication source `parameter_revision` and Python
+`lab.config.set_parameter_default(...)` now accept only parameter content and an
+exact saved setup reference. Publication resolves that revision on the server,
+retains its identity as provenance and requires a compatible selected setup.
+It never initializes or selects setup implicitly. The repository port still
+accepts and returns full configurations, and run evidence
 still retains complete execution snapshots. Do not infer new calibration validity
 or compose historical parameters with the currently active setup on read.
 
-1. Introduce parameter-only registry inputs/revisions and explicit first-use
-   orchestration. Move maintained consumers and fixtures, then remove the special
+1. Move remaining maintained consumers and fixtures to parameter-only inputs and
+   explicit first-use orchestration, then remove the special
    case that initializes setup during the first full-config publication.
 2. Separate measurement-target binding from device setup where required by real
    consumers. Define compatibility and independent execution by resource overlap,

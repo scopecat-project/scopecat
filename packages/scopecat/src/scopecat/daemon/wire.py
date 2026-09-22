@@ -95,6 +95,7 @@ from scopecat.records.parameter_change import (
     ParameterChangeProposal,
     ParameterValueDelta,
 )
+from scopecat.records.parameter_revision import ParameterRevisionContent
 from scopecat.records.plan_ref import PlanConfigRef, ProcedureChildSubmission
 from scopecat.records.run import (
     RunConfigSource,
@@ -185,6 +186,12 @@ class SampleMutationReceipt(_WireModel):
     revision: SampleRevision
 
 
+class ParameterConfigRevisionSource(_WireModel):
+    kind: Literal["parameter_revision"] = "parameter_revision"
+    parameters: ParameterRevisionContent
+    setup: SetupRevisionRef
+
+
 class DirectConfigRevisionSource(_WireModel):
     kind: Literal["direct_config_profile"] = "direct_config_profile"
     config: ConfigProfileSnapshot
@@ -247,6 +254,7 @@ class CalibrationCohortMergeRevisionSource(_WireModel):
 
 type ConfigPublishSource = Annotated[
     DirectConfigRevisionSource
+    | ParameterConfigRevisionSource
     | ManualConfigDraftRevisionSource
     | CandidateConfigRevisionSource,
     Field(discriminator="kind"),
@@ -254,6 +262,7 @@ type ConfigPublishSource = Annotated[
 
 type ConfigRevisionSource = Annotated[
     DirectConfigRevisionSource
+    | ParameterConfigRevisionSource
     | ManualConfigDraftRevisionSource
     | CandidateConfigRevisionSource
     | CalibrationCohortMergeRevisionSource,
@@ -1514,6 +1523,7 @@ __all__ = [
     "MeasurementHeaderCommand",
     "MeasurementIngestReceipt",
     "MeasurementSealCommand",
+    "ParameterConfigRevisionSource",
     "PayloadObjectReceipt",
     "PublishedAnalysisInputPayload",
     "RunAdmission",

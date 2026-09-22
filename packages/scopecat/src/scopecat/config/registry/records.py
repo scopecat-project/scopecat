@@ -43,6 +43,13 @@ class DirectConfigRegistrySource(_FrozenRegistryModel):
     kind: Literal["direct_config_profile"] = "direct_config_profile"
 
 
+class ParameterConfigRegistrySource(_FrozenRegistryModel):
+    """Parameter input composed against one exact saved executable setup."""
+
+    kind: Literal["parameter_revision"] = "parameter_revision"
+    setup: SetupRevisionRef
+
+
 class ManualConfigDraftRegistrySource(_FrozenRegistryModel):
     """Provenance for typed parameter edits derived from an active entry."""
 
@@ -325,6 +332,7 @@ class ContextConfigRegistrySource(_FrozenRegistryModel):
 
 ConfigRegistryEntrySource = Annotated[
     DirectConfigRegistrySource
+    | ParameterConfigRegistrySource
     | ManualConfigDraftRegistrySource
     | CandidateConfigRegistrySource
     | ContextConfigRegistrySource

@@ -112,6 +112,17 @@ def test_setup_rebind_creates_explicit_unverified_branch(tmp_path: Path) -> None
         assert lab.config.active() == default
         assert lab.config.entry(original.entry.id).config == original.config
         assert selected.revision == revised
+        entries_before = lab.config.registry().entries
+        with pytest.raises(DaemonConflictError, match="setup"):
+            lab.config.set_parameter_default(
+                name="incompatible-parameters",
+                system_id=default.config.system.id,
+                setup=before.revision,
+                catalog=default.config.parameter_catalog,
+                parameters=default.config.parameter_snapshot,
+            )
+        assert lab.config.registry().entries == entries_before
+        assert lab.setup.active() == selected
         assert (
             lab.setup.activate(
                 revised,

@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 from scopecat.kernel.content_identity import sha256_json_hash
+from scopecat.kernel.errors import Conflict
 from scopecat.project import load_project
 from scopecat.records.execution_scenario import SoftwareExecutionScenario
 from scopecat.records.scientific_scope import setup_content_hash
@@ -232,7 +233,7 @@ def test_initial_config_does_not_repair_partial_setup_state(tmp_path: Path) -> N
     store = _store(tmp_path)
     with store.write_unit_of_work() as work:
         work.setups.save_revision(_revision("saved-without-activation"))
-    with pytest.raises(ValueError, match="no initialized setup authority"):
+    with pytest.raises(Conflict, match="select an executable setup"):
         publish_config_revision(
             revision=ConfigRevision(
                 source=DirectConfigRevisionSource(load_config()),

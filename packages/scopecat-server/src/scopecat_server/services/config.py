@@ -79,6 +79,7 @@ from scopecat.daemon.wire import (
     ConfigSetupRebindPreviewCommand,
     DirectConfigRevisionSource,
     ManualConfigDraftRevisionSource,
+    ParameterConfigRevisionSource,
 )
 from scopecat.kernel.errors import (
     CheckFailed,
@@ -1134,6 +1135,10 @@ def _config_revision(
     if isinstance(source, DirectConfigRevisionSource):
         revision_source = config_registry_service.DirectConfigRevisionSource(
             source.config
+        )
+    elif isinstance(source, ParameterConfigRevisionSource):
+        revision_source = config_registry_service.ParameterConfigRevisionSource(
+            parameters=source.parameters, setup=source.setup
         )
     elif isinstance(source, ManualConfigDraftRevisionSource):
         draft = source.draft
