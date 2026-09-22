@@ -15,8 +15,9 @@ source; installed historical environments and scientific data are untouched.
 | `05_sample_workflow.py` | Exact sample revision and analysis provenance | Retired. Dedicated sample binding/restart and sample-analysis isolation tests cover the behavior with equipment-only initialization and an empty parameter registry. |
 | `22_channel_map.py` | Routing and shared physical channels | Retired fixed-map presentation/test. Generic route completeness tests, compiled multiplexing constraints and real device journeys remain; exact four-qubit endpoint strings are fixture data, not a product contract. |
 | `10_direct_control.py`, `33_multichannel_dc_bias.py`, `35_awg_output_monitor.py`, `50_ragged_scope_capture.py` | Shared device ownership, physical routes, entityless diagnostics, ragged acquisition | Keep focused real-worker coverage. Add future device-topic sandboxes using current APIs rather than wrapping the old gallery. |
-| `20_flux_spectroscopy.py`, `23`–`26`, `28`–`29`, `31`–`32`, `34`, `36` | Compiled buffers, channel conflicts, signed IF/LO semantics, multiplexed readout, topology and inspection | Extract minimal compiler/runner inputs and keep a bounded full-device journey. Review duplicated recipes and hard-coded configuration assumptions instead of preserving their signatures. |
-| `27_channel_timing_candidate.py`, `30_drag_calibration.py`, `workflows/drag_beta_*` | Exact candidate lineage, independent verification, ownership of edited cells, conflict detection, durable publication/recovery | Specify these behaviors against independent parameter branches. Retire assertions requiring publication/restoration of a global active config; existing workflow structure and working-point APIs are not acceptance criteria. |
+| `23_q0_ramsey.py`, `26_parallel_multiplexed_ramsey.py`, `27_channel_timing_candidate.py`, `32_quantum_program_inspection.py`, `36_q0_fixed_if_lo_sweep.py` | Quantum execution, multiplexing, candidate lineage, layered preview and signed IF/LO semantics | Retired with duplicate gallery tests and unused probability-result experiment wrappers. Focused runner tests and shared acceptance retain execution evidence, as detailed below. |
+| `20_flux_spectroscopy.py`, `24`–`25`, `28`–`29`, `31`, `34` | Compiled buffers, channel conflicts, signed IF/LO semantics, multiplexed readout and topology | Extract minimal compiler/runner inputs and keep a bounded full-device journey. Review duplicated recipes and hard-coded configuration assumptions instead of preserving their signatures. |
+| `30_drag_calibration.py`, `workflows/drag_beta_*` | Exact candidate lineage, independent verification, ownership of edited cells, conflict detection, durable publication/recovery | Specify these behaviors against independent parameter branches. Retire assertions requiring publication/restoration of a global active config; existing workflow structure and working-point APIs are not acceptance criteria. |
 | `quantum_compilation`, `targets/list_mode`, `provider`, `virtual_lab` | Deterministic device/compiler integration | Retain only dependencies of named scientific/device tests; extract generic framework capabilities where justified. Compute-only teaching does not replace device evidence. |
 | Shared acceptance and `snapshot_roundtrip.py` | Real HTTP payloads and exact current-format recovery | Already use independent parameters/setup and an empty combined registry. Keep this evidence as legacy bootstrap consumers are removed. |
 
@@ -27,6 +28,17 @@ expresses an obsolete requirement before removing it.
 
 ### Retired generic cases: retained evidence
 
+- Reference `tests/unit/test_quantum_runner.py` retains actual bare-instrument
+  execution, compiled multiplexing constraints, batch-invariant IQ results and
+  selected-point preview across authored/logical/scheduled/physical layers with
+  no acquisition. Its fixed-IF host-effect test also executes the sweep and
+  checks three measured carriers (4.79, 4.80, 4.81 GHz) at -50 MHz IF.
+  Shared `acceptance.py` runs the parallel raw-IQ experiment and its timing
+  candidate, checks the exact analysis proposal source and leaves approval and
+  parameter/setup selection unchanged. This replaces the timing gallery's
+  provenance summary. The unused `q0_ramsey`, `parallel_two_qubit_ramsey` and
+  `ParallelRamseyDataset` wrappers are removed; reusable programs and the
+  `RamseyDataset` used by editable author code remain.
 - `packages/scopecat-server/tests/test_samples_runtime.py::test_sample_revision_and_run_binding_survive_restart`
   covers sample creation/revision, bound run identity and restart. Server
   `test_project_analysis_runtime.py::test_sample_analysis_is_scoped_to_runs_bound_to_that_sample`

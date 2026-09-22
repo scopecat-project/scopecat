@@ -69,20 +69,15 @@ list of interfaces to preserve.
 |---|---|
 | `10_direct_control.py` | Live typed clients and multi-device reservation without an experiment run |
 | `20_flux_spectroscopy.py` | Bias scan, complex traces, fit artifacts, and a parameter proposal |
-| `23_q0_ramsey.py` | First quantum delay scan |
 | `24_flux_ramsey.py` | Host DC bias composed with a quantum delay scan |
 | `25_entity_routed_ramsey.py` | Point-local entity selection over reusable quantum work |
-| `26_parallel_multiplexed_ramsey.py` | Parallel drives, shared readout, and two demodulation results |
-| `27_channel_timing_candidate.py` | Reviewed timing candidate used by a pinned run |
 | `28_channel_conflict_diagnostic.py` | Precise conflict on an overlapping physical drive route |
 | `29_channel_unavailable.py` | Entity-axis IQ traces, identity selection, provenance, and one unavailable demodulation channel |
 | `30_drag_calibration.py` | Calibration, cross-run candidate verification, acceptance, production use, and undo |
 | `31_topology_scaled_ramsey.py` | One connected-qubit-set program reused across chip topology and scale |
-| `32_quantum_program_inspection.py` | Authored, logical, scheduled, and physical quantum layers without execution |
 | `33_multichannel_dc_bias.py` | Profile/calibration join across two multichannel DC sources |
 | `34_xy_lo_sweep.py` | Shared LO scan, signed IF waveforms, shared clocks, and derived carrier records |
 | `35_awg_output_monitor.py` | Entityless AWG/scope diagnostic with temporary cable intent |
-| `36_q0_fixed_if_lo_sweep.py` | Host-controlled LO scan bounding a fixed-IF domain program |
 | `50_ragged_scope_capture.py` | Point-varying oscilloscope record length and ragged waveform slicing |
 
 The application also registers one bounded q0/q1 DRAG calibration definition.

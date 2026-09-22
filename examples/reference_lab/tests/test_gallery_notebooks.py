@@ -87,22 +87,6 @@ def test_awg_output_monitor_records_entityless_bench_capture(
     }
 
 
-def test_q0_ramsey_runs_on_the_reference_channels(
-    reference_lab_daemon: _ReferenceLabDaemon,
-    reference_lab_notebooks: Path,
-) -> None:
-    assert reference_lab_daemon.url.startswith("http://127.0.0.1:")
-    namespace = run_path(str(reference_lab_notebooks / "23_q0_ramsey.py"))
-    summary = cast("dict[str, object]", namespace["q0_ramsey_summary"])
-
-    assert summary == {
-        "points": 5,
-        "records": 5,
-        "probability_samples": 5,
-        "status": "completed",
-    }
-
-
 def test_flux_ramsey_composes_local_bias_and_quantum_channels(
     reference_lab_daemon: _ReferenceLabDaemon,
     reference_lab_notebooks: Path,
@@ -131,56 +115,6 @@ def test_entity_routed_ramsey_switches_channel_sets_by_point(
         "qubit_groups": 2,
         "status": "completed",
     }
-
-
-def test_parallel_ramsey_uses_two_drive_and_demod_channels(
-    reference_lab_daemon: _ReferenceLabDaemon,
-    reference_lab_notebooks: Path,
-) -> None:
-    assert reference_lab_daemon.url.startswith("http://127.0.0.1:")
-    namespace = run_path(
-        str(reference_lab_notebooks / "26_parallel_multiplexed_ramsey.py")
-    )
-    summary = cast("dict[str, object]", namespace["parallel_ramsey_summary"])
-
-    assert summary == {
-        "points": 3,
-        "records": 3,
-        "q0_samples": 3,
-        "q1_samples": 3,
-        "status": "completed",
-    }
-
-
-def test_fixed_if_lo_sweep_keeps_lo_outside_the_quantum_target(
-    reference_lab_daemon: _ReferenceLabDaemon,
-    reference_lab_notebooks: Path,
-) -> None:
-    assert reference_lab_daemon.url.startswith("http://127.0.0.1:")
-    namespace = run_path(str(reference_lab_notebooks / "36_q0_fixed_if_lo_sweep.py"))
-    summary = cast("dict[str, object]", namespace["q0_fixed_if_lo_sweep_summary"])
-
-    assert summary == {
-        "points": 3,
-        "signed_if_mhz": [-50.0],
-        "carrier_ghz": [4.79, 4.8, 4.81],
-        "status": "completed",
-    }
-
-
-def test_channel_timing_candidate_preserves_analysis_provenance(
-    reference_lab_daemon: _ReferenceLabDaemon,
-    reference_lab_notebooks: Path,
-) -> None:
-    assert reference_lab_daemon.url.startswith("http://127.0.0.1:")
-    namespace = run_path(
-        str(reference_lab_notebooks / "27_channel_timing_candidate.py")
-    )
-    summary = cast("dict[str, object]", namespace["channel_candidate_summary"])
-
-    assert summary["proposal_id"] == "q1-channel-delay"
-    assert summary["candidate_status"] == "completed"
-    assert summary["candidate_provenance"] is True
 
 
 def test_channel_conflict_names_the_logical_drive_route(
@@ -263,25 +197,6 @@ def test_topology_scaled_ramsey_resolves_one_connected_qubit_set(
         "tree_has_parallel_each": True,
         "status": "completed",
     }
-
-
-def test_quantum_program_exposes_compiled_inspection_layers(
-    reference_lab_daemon: _ReferenceLabDaemon,
-    reference_lab_notebooks: Path,
-) -> None:
-    assert reference_lab_daemon.url.startswith("http://127.0.0.1:")
-    namespace = run_path(
-        str(reference_lab_notebooks / "32_quantum_program_inspection.py")
-    )
-    summary = cast("dict[str, object]", namespace["program_inspection_summary"])
-
-    assert summary["program_id"] == "reference-lab.topology-scaled-ramsey"
-    assert summary["description_has_ports"] is True
-    assert summary["tree_has_parallel_each"] is True
-    assert summary["layers"] == ["authored", "logical", "scheduled", "physical"]
-    assert cast("int", summary["physical_matching_nodes"]) > 8
-    assert summary["physical_returned_nodes"] == 8
-    assert summary["snapshot_matches_artifact"] is True
 
 
 def test_drag_calibration_closes_the_reviewed_config_loop(
