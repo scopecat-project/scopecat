@@ -110,35 +110,41 @@ must be discoverable before accidental full materialization.
 publish conclusions and evidence, inspect a candidate without changing the
 default, then accept it deliberately.
 
-**Executable evidence:** `20_flux_spectroscopy.py`, `30_drag_calibration.py`, and
-analysis/configuration integration tests.
+**Executable evidence:** `test_typed_candidates.py` covers managed receipt-backed
+proposals and a real DRAG fit/candidate/verification journey using independent
+parameters and setup. Analysis/publication integration tests retain legacy
+publication fences. The DRAG gallery script is retired.
 
 **Success evidence:** calibration analysis has a source run, published outputs
 and report, the proposal cites evidence, a candidate run records proposal
 provenance, project analysis compares the exact baseline and candidate inputs,
-and only a passing verification creates one immutable default change.
+and verification alone changes no parameter branch, default or setup. Publication
+must be a separate explicit operation against an exact destination.
 
 **Design questions:** facts, artifacts, views, and proposals need distinct user
 meaning without exposing output ontology in the common happy path. Review must
 show scientific effect and scope, not just a structural configuration diff.
 
-## 6. Use an accepted change and undo it
+## 6. Publish verified parameters to an explicit branch
 
-**Target journey:** run production work with the accepted configuration, verify
-which accepted change was used, and restore the previous default without
-deleting evidence or history.
+**Target journey:** publish verified cells to a chosen parameter branch, then
+prepare production work with that exact saved revision. Retain proposal and
+verification provenance without changing equipment or unrelated selections.
 
-**Executable evidence:** the latter half of `30_drag_calibration.py` and
-configuration registry tests.
+**Current gap:** ordinary branch saves exist, but verified candidate publication
+still targets the legacy registry or working points. Neither ordinary `params.save()`
+nor passing a candidate to preparation establishes calibration acceptance.
 
-**Success evidence:** the production run's configuration matches the accepted
-content, undo activates the previous content, and both decisions remain in
-history.
+**Required evidence:** publication checks the destination generation, candidate
+base and edited-cell ownership; the retained decision names exact independent
+verification inputs. Advancing the branch and recording publication evidence
+must be atomic and retryable. Stale heads and incompatible catalogs reject without
+partial writes. A prepared run remains pinned when the branch advances.
 
-**Design questions:** “current default,” “candidate,” and “configuration used by
-this run” must be visually and linguistically distinct. Undo should communicate
-its prospective effect and resulting active state without requiring revision
-or generation IDs.
+**Design questions:** branch editing history and scientific calibration validity
+are separate. Define the applicability of a verified result before expanding
+cohort automation; do not carry forward the old global-default/restore workflow
+as the new publication contract.
 
 ## Updating the evaluations
 
