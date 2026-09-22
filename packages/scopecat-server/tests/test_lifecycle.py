@@ -19,6 +19,7 @@ from scopecat.daemon.endpoint import (
     daemon_record_path,
     read_daemon_endpoint_record,
 )
+from scopecat.kernel.errors import SessionClosedError
 from scopecat.project import (
     Project,
     load_instrument_backend_factory,
@@ -363,6 +364,18 @@ def test_cli_daemon_first_use_loop_uses_dynamic_port_and_cleans_record(
             assert scaled.measurements()["result"].require_values() == (1.0, 2.0, 1.0)
             assert author.params.version == saved
             assert author.config.registry().entries == ()
+            snapshot = scaled.snapshot
+            records = scaled.measurements().records
+            lazy = scaled.measurements()
+            run_ids = {item.run_id for item in author.list_runs().items}
+
+        # Handles retain their connection lifetime; detached values remain usable.
+        with pytest.raises(SessionClosedError, match=r"session\.run\(run_id\)"):
+            _ = scaled.status
+        with pytest.raises(SessionClosedError, match="session is closed"):
+            _ = lazy.records
+        assert snapshot.status == "completed"
+        assert len(records) == 3
 
         status = runner.invoke(app, ["status", str(tmp_path)])
         assert status.exit_code == 0, status.output
@@ -394,6 +407,10 @@ def test_cli_daemon_first_use_loop_uses_dynamic_port_and_cleans_record(
         with DaemonClient(restored_record.base_url) as client:
             assert client.measurement_preview(run_id) == preview
         with project.authoring() as author:
+            reopened = author.run(snapshot.run_id)
+            assert reopened.snapshot == snapshot
+            assert reopened.measurements().records == records
+            assert {item.run_id for item in author.list_runs().items} == run_ids
             retained = author.run(scan_run_id)
             assert author.config.registry().entries == ()
             assert retained.measurements()["result"].require_values() == (0.5, 1.0, 0.5)
