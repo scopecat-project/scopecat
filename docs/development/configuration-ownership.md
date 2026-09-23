@@ -73,7 +73,7 @@ mandatory property of every parameter edit. A shared setup hash alone proves
 neither physical conditions nor calibration validity. Current whole-setup scope
 checks remain conservative until narrower dependencies have concrete consumers.
 
-## Remaining changes, in order
+## Implemented storage and publication separation
 
 Since schema 84, the execution registry stores `ParameterRevisionContent` separately from
 content-addressed executable setup payloads. Entries retain an exact setup content
@@ -91,14 +91,17 @@ accepts and returns full configurations, and run evidence
 still retains complete execution snapshots. Do not infer new calibration validity
 or compose historical parameters with the currently active setup on read.
 
+## Remaining changes, in order
+
 1. Move remaining execution consumers away from requiring a global parameter
    default. First-use/scaffold declarations already separate setup and parameters;
    the optional default is still a transition. Do not mechanically replace every
    full-config call with `set_parameter_default`: saving parameters and selecting
    a global default are different operations.
-2. Separate measurement-target binding from device setup where required by real
-   consumers. Define compatibility and independent execution by resource overlap,
-   not by author-folder boundaries or a global parameter default.
+2. Subject identity and `TargetSetupBinding` are now separate. Extend the explicit
+   relationship beyond current single-member identity mappings when executable
+   consumers are ready. Define independent execution by resource overlap, not
+   author-folder boundaries or a global parameter default.
 3. Continue centralizing exact setup/binding/parameter/author revisions into
    execution inputs, with explicit incompatibility diagnostics and retained source
    identities. A schema-compatible value is not automatically a valid calibration
@@ -107,6 +110,8 @@ or compose historical parameters with the currently active setup on read.
    use the new owners. Rewrite tests around independent creation, selection,
    parameter updates, conflicts and historical result reopening; preserve useful
    scientific assertions rather than every old fixture/interface.
+
+## Maintained consumer progress
 
 Parameter publication no longer creates or activates setup, even for the first
 full-config publication into an empty store. Runtime first-use orchestration
@@ -143,6 +148,13 @@ transitional defaults. Reassess their requirements and extract necessary behavio
 into focused tests before retiring the old consumers; do not mechanically port
 the gallery to preserve its interfaces. Follow the
 [retirement inventory](reference-gallery-retirement.md).
+
+Verified candidate publication to parameter branches is now tested from an empty
+combined registry with independent setup and parameter initialization. The same
+test retains rejection, atomic rollback, retry, stale-head refusal and backup/restore
+assertions. The branch path does not require a global parameter default; this does
+not yet qualify parameter-producing background tasks. Follow the
+[parameter-flow contract](architecture/task-parameter-flow.md).
 
 Full-config `set_default` inputs,
 working-point entries, setup rebinding and full-config experiment-system builders

@@ -2,7 +2,10 @@
 
 Status: declared checks, stage previews, durable fixed task specifications,
 dependency-checked dispatch and sequential background advancement with task controls
-are implemented. Capability projections and large-scale scheduling remain requirements.
+are implemented. Bounded capability reports and sample/task workbench consumers
+also exist. Continuous maintenance, parameter flow and large-scale scheduling remain.
+See the [implementation order](../platform-status.md) and
+[parameter-flow contract](task-parameter-flow.md).
 
 ## Ownership
 
@@ -137,7 +140,8 @@ activate equipment. New observations/repairs need explicit new task intent.
 The workbench now has a retained calibration-task list and detail view with stage
 results, admission errors, frozen context and start/pause/cancel controls. Stage
 execution links reuse the procedure operator view for resource/worker status,
-review and cancellation. This is the first task consumer, not a capability panel.
+review and cancellation. Sample capability report consumers are described below;
+neither view is a continuously maintained health dashboard.
 
 `POST /api/v1/calibration-checks/report` evaluates explicit capability requirements
 for one exact context in one read transaction. It reuses indexed declarations,
@@ -212,8 +216,8 @@ Required next contracts:
 4. Worker/environment routing, resource/scientific grouping, fairness, task budgets
    and coalescing repeated maintenance requests. Closing a notebook must not own
    or cancel admitted background work.
-5. Sample capability panels using the same domain service; task operator controls
-   and execution drill-down are already available in the workbench.
+5. Continuous sample capability refresh and coverage beyond existing bounded
+   reports. Task controls and execution drill-down already exist in the workbench.
 
 The sample workspace now offers a bounded historical-context consumer: choose a
 measurement bound to the displayed sample revision, then evaluate an explicit
@@ -221,7 +225,8 @@ saved profile. The complete joint subject is retained, and parameter overrides
 or non-revision sources cannot supply an exact context. This does not yet provide
 a continuously refreshed sample health dashboard.
 
-The sample page also resolves a parameter branch and current or saved setup for
+The sample page also resolves a parameter branch or exact saved revision and a
+current or saved setup for
 one exact inline sample revision. The context endpoint reads branch/setup heads
 in one transaction and reuses parameter composition and scientific binding rules;
 it does not dispatch work or select global defaults. The Python API additionally

@@ -243,7 +243,7 @@ measured execution cost. Do not infer parallel safety from distinct target IDs.
 1. **Done:** check-only retained evidence using existing runs, analysis and durable
    procedures; passing and negative scientific outcomes leave the branch unchanged.
 2. **Partially implemented:** scoped checks, exact-context applicability and
-   selection from explicit complete histories, with inspectable reasons. Still
+   selection from explicit complete histories, with inspectable reasons.
    Explicit capability requirements/dependencies now produce a bounded report
    with separate own-evidence and prerequisite-availability verdicts. Resolved
    parameter dependency capture remains needed. Indexed scoped queries, server
@@ -256,8 +256,9 @@ measured execution cost. Do not infer parallel safety from distinct target IDs.
    and fenced start/pause/cancel controls are implemented. Parameter flow and bounded
    repair remain to be built. Keep
    planning separate from resource dispatch and scientific policy.
-4. Add check-first maintenance, batching/resource scheduling and workbench views
-   showing required/available/blocked capabilities with their evidence.
+4. Bounded sample/task reports already show required, available and blocked
+   capabilities with evidence. Add continuous refresh, check-first maintenance and
+   batching/resource scheduling. See the next [parameter-flow contract](architecture/task-parameter-flow.md).
 
 Use a small synthetic array with shared readout and several coupling edges as the
 next integration scenario. Establish an initial operating revision, inject local

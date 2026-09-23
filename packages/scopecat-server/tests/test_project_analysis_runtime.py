@@ -1362,11 +1362,15 @@ def test_verified_parameter_branch_publication_is_atomic_and_restorable(
 
     root = tmp_path / "source"
     with (
-        LocalDaemonRuntime(root, bootstrap_config=_config()) as runtime,
+        LocalDaemonRuntime(root) as runtime,
         TestClient(runtime.app()) as transport,
     ):
         lab = LabClient(_daemon_client(transport))
         initial = _config()
+        equipment = lab.setup.save(
+            ExecutableSetupSnapshot.from_config(initial), name="bench"
+        )
+        lab.setup.activate(equipment)
         revision = lab.parameters.save(
             name="baseline",
             catalog=initial.parameter_catalog,
@@ -1446,6 +1450,7 @@ def test_verified_parameter_branch_publication_is_atomic_and_restorable(
             actor="operator",
         )
         registry = lab.config.registry()
+        assert not registry.entries
         setup = lab.setup.active()
         rejected = (
             context.result()
