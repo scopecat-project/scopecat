@@ -33,11 +33,20 @@ from scopecat.records.parameter_revision import ParameterRevisionRef
 from scopecat.records.run import ParameterRunConfigSource, RunSnapshot
 from scopecat.records.sample import SampleBinding
 from scopecat.records.scientific_binding import (
+    EntityProjection,
     InlineSamplesSubject,
+    RegisteredTargetSubject,
     ResolvedScientificBinding,
+    TargetSetupBinding,
     UnboundSubject,
 )
+from scopecat.records.scientific_scope import (
+    MeasurementTarget,
+    TargetEntity,
+    TargetMember,
+)
 from scopecat.records.setup import SetupRevisionRef
+from scopecat.records.target_catalog import TargetRevisionRef
 
 START = datetime(2026, 9, 23, tzinfo=UTC)
 SCOPE = CalibrationScope("drive", ("q0", "q1"), "idle-v1", "residual-v1")
@@ -198,6 +207,88 @@ def test_all_recheck_reasons_are_retained_and_target_order_matters(
         "scenario_changed",
         "check_expired",
     }
+
+
+def test_changed_mapping_is_not_reused_even_when_subject_is_unchanged(
+    observation: tuple[RunSnapshot, CalibrationContext],
+) -> None:
+    measured, current = observation
+    mapping = TargetSetupBinding(
+        target=TargetRevisionRef(
+            catalog_id="lab",
+            target_id="chip",
+            revision=1,
+            content_hash=sha256_json_hash("chip"),
+        ),
+        setup_content_hash=current.setup_content_hash,
+        entities=(
+            EntityProjection(
+                target_entity=TargetEntity(member_id="device", entity_id="q0"),
+                runtime_entity_id="left",
+            ),
+        ),
+        connections=(),
+    )
+    sample = SampleBinding(
+        role="subject",
+        sample_id="chip",
+        revision=1,
+        content_hash=sha256_json_hash("sample"),
+        kind="chip",
+        display_name="Chip",
+    )
+    subject = RegisteredTargetSubject(
+        ref=mapping.target,
+        content=MeasurementTarget(
+            members=(
+                TargetMember(
+                    id="device",
+                    sample_id=sample.sample_id,
+                    revision=sample.revision,
+                    content_hash=sample.content_hash,
+                ),
+            )
+        ),
+        sample=sample,
+    )
+    measured = measured.model_copy(
+        update={
+            "scientific_binding": measured.scientific_binding.model_copy(
+                update={
+                    "subject": subject,
+                    "target_binding": mapping,
+                }
+            ),
+        }
+    )
+    changed_mapping = mapping.model_copy(
+        update={
+            "entities": (
+                mapping.entities[0].model_copy(update={"runtime_entity_id": "right"}),
+            )
+        }
+    )
+    changed = replace(current, subject=subject, target_binding=changed_mapping)
+    result = assess_calibration_check(
+        measured,
+        checked_scope=SCOPE,
+        requested_scope=SCOPE,
+        passed=True,
+        current=changed,
+        now=START + timedelta(minutes=1),
+        max_age=timedelta(hours=1),
+    )
+    assert result.status == "recheck"
+    assert result.reasons == ("target_binding_changed",)
+    selection = select_calibration_check(
+        (CheckEvidence(measured, SCOPE, "analysis", True),),
+        requested_scope=SCOPE,
+        current=changed,
+        now=START + timedelta(minutes=1),
+        max_age=timedelta(hours=1),
+        history_complete=True,
+    )
+    assert selection.reason == "no_matching_evidence"
 
 
 def test_missing_evidence_does_not_grant_readiness(

@@ -5,9 +5,36 @@ audited at `3ddaeb27b` after target catalog PR #625. This is the full execution 
 implemented. Authored/session and workbench selection are also implemented as
 described in the later stages below. It refines [experiment contexts](experiment-contexts.md).
 This design follows the [prebaseline data policy](../data-compatibility.md).
-Current format 76 is not a compatibility baseline; no old-format reader or
+Current format 93 is not a compatibility baseline; no old-format reader or
 migration obligation is introduced here. Coordinate shared source-side files
 with workspace publication.
+
+## Subject and setup binding
+
+`RegisteredTargetSubject` retains the exact target reference, definition and sample
+evidence. It no longer owns control addresses. `TargetSetupBinding` separately
+relates that target to an executable setup hash, with explicit entity and connection
+maps. Both the pure topology checker and retained execution evidence use the same
+mapping records. Changing a map does not change the scientific subject.
+
+`ResolvedScientificBinding.target_binding` carries this relationship through run,
+plan and procedure admission. The authority reconstructs it from retained evidence;
+missing or altered mappings are rejected. Procedure children and candidate
+verification preserve the relationship alongside the subject and setup.
+
+`CalibrationContext.target_binding` also retains the relationship. Applicability
+compares it independently and reports `target_binding_changed`; moving it out of
+the subject must not permit reuse under a different mapping. Indexed history uses
+the complete context. This is scientific applicability, separate from target identity.
+
+Schema 93 and scientific-binding codec v3 replace the development representation.
+Use a fresh development store; historical directories remain untouched. Registered
+execution still supports one member with an identity mapping. The general explicit
+mapping checker alone does not enable multi-member execution.
+
+Further convergence should unify scientific entity addresses and context resolution,
+then separate setup resource definitions from execution environment and target
+binding. Capability prerequisite policy remains distinct from task execution order.
 
 ## What must change in the existing path
 

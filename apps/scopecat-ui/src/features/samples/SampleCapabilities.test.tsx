@@ -75,6 +75,7 @@ it("requires an explicit measurement and retains the whole joint subject", async
   expect(JSON.parse(rendered.textContent)).toEqual({
     parameters: source.parameters,
     subject,
+    target_binding: null,
     setup_content_hash: "sha256:s",
     scenario: null,
   });

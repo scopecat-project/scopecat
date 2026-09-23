@@ -422,6 +422,7 @@ class LabProcedureContext:
                 )
             scientific_binding = ResolvedScientificBinding(
                 subject=inherited.subject,
+                target_binding=inherited.target_binding,
                 scenario=inherited.scenario,
                 config_content_hash=config_content_hash(selected_config),
                 setup_content_hash=inherited.setup_content_hash,

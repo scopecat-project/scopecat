@@ -48,7 +48,6 @@ it("preserves target connection endpoints when reviewed evidence becomes a reque
       kind: "chip",
       display_name: "A",
     },
-    projection: [],
   };
   expect(reviewedForRequest(reviewed)).toEqual(reviewed);
   reviewed.binding.subject.content.connections[0]!.endpoints.pop();

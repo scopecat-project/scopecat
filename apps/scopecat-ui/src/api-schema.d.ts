@@ -3046,6 +3046,7 @@ export interface components {
             scenario: components["schemas"]["SoftwareExecutionScenario"] | null;
             setup_content_hash: components["schemas"]["Sha256ContentHash"];
             subject: components["schemas"]["ResolvedSubject"];
+            target_binding?: components["schemas"]["TargetSetupBinding"] | null;
         };
         /** CalibrationContextResolution */
         CalibrationContextResolution: {
@@ -3410,7 +3411,7 @@ export interface components {
             scope: components["schemas"]["CalibrationScope"];
         };
         /** @enum {string} */
-        CheckReason: "analysis_missing" | "measurement_incomplete" | "parameters_unsaved" | "subject_unbound" | "capability_changed" | "targets_changed" | "conditions_changed" | "policy_changed" | "parameters_changed" | "subject_changed" | "setup_changed" | "scenario_changed" | "evidence_from_future" | "check_expired" | "within_spec" | "out_of_spec";
+        CheckReason: "analysis_missing" | "measurement_incomplete" | "parameters_unsaved" | "subject_unbound" | "capability_changed" | "targets_changed" | "conditions_changed" | "policy_changed" | "parameters_changed" | "subject_changed" | "target_binding_changed" | "setup_changed" | "scenario_changed" | "evidence_from_future" | "check_expired" | "within_spec" | "out_of_spec";
         /** CheckSelection */
         CheckSelection: {
             assessment?: components["schemas"]["CheckAssessment"] | null;
@@ -4504,6 +4505,18 @@ export interface components {
             /** Row Index */
             row_index?: number | null;
             source_cell?: components["schemas"]["ConfigCellRef"] | null;
+        };
+        /**
+         * ConnectionProjection
+         * @description A null member denotes an interconnection declared by the target.
+         */
+        ConnectionProjection: {
+            /** Connection Id */
+            connection_id: string;
+            /** Member Id */
+            member_id: string | null;
+            /** Runtime Connection Id */
+            runtime_connection_id: string;
         };
         /**
          * ContentEntry
@@ -8465,8 +8478,6 @@ export interface components {
              * @enum {string}
              */
             kind: "registered_target";
-            /** Projection */
-            projection: components["schemas"]["EntityProjection"][];
             ref: components["schemas"]["TargetRevisionRef"];
             sample: components["schemas"]["SampleBinding"];
         };
@@ -8593,14 +8604,15 @@ export interface components {
         ResolvedScientificBinding: {
             /**
              * Codec
-             * @default scopecat.scientific-binding.v2
+             * @default scopecat.scientific-binding.v3
              * @constant
              */
-            codec: "scopecat.scientific-binding.v2";
+            codec: "scopecat.scientific-binding.v3";
             config_content_hash: components["schemas"]["Sha256ContentHash"];
             scenario?: components["schemas"]["SoftwareExecutionScenario"] | null;
             setup_content_hash: components["schemas"]["Sha256ContentHash"];
             subject: components["schemas"]["ResolvedSubject"];
+            target_binding?: components["schemas"]["TargetSetupBinding"] | null;
         };
         ResolvedSubject: components["schemas"]["UnboundSubject"] | components["schemas"]["InlineSamplesSubject"] | components["schemas"]["RegisteredTargetSubject"];
         /** @constant */
@@ -10636,6 +10648,21 @@ export interface components {
             revision: number;
             /** Target Id */
             target_id: string;
+        };
+        /**
+         * TargetSetupBinding
+         * @description Exact target-to-control mapping for one executable setup.
+         *
+         *     This relationship is execution evidence, not part of the target definition.
+         *     Admission reconstructs it from the retained target and setup.
+         */
+        TargetSetupBinding: {
+            /** Connections */
+            connections: components["schemas"]["ConnectionProjection"][];
+            /** Entities */
+            entities: components["schemas"]["EntityProjection"][];
+            setup_content_hash: components["schemas"]["Sha256ContentHash"];
+            target: components["schemas"]["TargetRevisionRef"];
         };
         /** TcpipSocketInstrumentConnection */
         TcpipSocketInstrumentConnection: {

@@ -116,6 +116,7 @@ class CalibrationCheckAdmission:
         )
         expected = ResolvedScientificBinding(
             subject=request.context.subject,
+            target_binding=request.context.target_binding,
             scenario=request.context.scenario,
             config_content_hash=resolved.config_source.content_hash,
             setup_content_hash=request.context.setup_content_hash,
@@ -165,6 +166,7 @@ def _require_context(
             binding.subject,
             binding.setup_content_hash,
             binding.scenario,
+            binding.target_binding,
         )
         != request.context
     ):

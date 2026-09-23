@@ -63,6 +63,8 @@ def resolve_parameter_composition(
             or current.setup != source.setup
             or current.overrides
             or snapshot.scientific_binding.subject != anchor.scientific_binding.subject
+            or snapshot.scientific_binding.target_binding
+            != anchor.scientific_binding.target_binding
             or snapshot.scientific_binding.scenario
             != anchor.scientific_binding.scenario
         ):

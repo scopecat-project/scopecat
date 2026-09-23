@@ -30,12 +30,32 @@ class EntityProjection(_BindingModel):
     runtime_entity_id: str
 
 
+class ConnectionProjection(_BindingModel):
+    """A null member denotes an interconnection declared by the target."""
+
+    member_id: str | None
+    connection_id: str
+    runtime_connection_id: str
+
+
+class TargetSetupBinding(_BindingModel):
+    """Exact target-to-control mapping for one executable setup.
+
+    This relationship is execution evidence, not part of the target definition.
+    Admission reconstructs it from the retained target and setup.
+    """
+
+    target: TargetRevisionRef
+    setup_content_hash: Sha256ContentHash
+    entities: tuple[EntityProjection, ...]
+    connections: tuple[ConnectionProjection, ...]
+
+
 class RegisteredTargetSubject(_BindingModel):
     kind: Literal["registered_target"] = "registered_target"
     ref: TargetRevisionRef
     content: MeasurementTarget
     sample: SampleBinding
-    projection: tuple[EntityProjection, ...]
 
 
 type ResolvedSubject = Annotated[
@@ -45,8 +65,9 @@ type ResolvedSubject = Annotated[
 
 
 class ResolvedScientificBinding(_BindingModel):
-    codec: Literal["scopecat.scientific-binding.v2"] = "scopecat.scientific-binding.v2"
+    codec: Literal["scopecat.scientific-binding.v3"] = "scopecat.scientific-binding.v3"
     subject: ResolvedSubject
+    target_binding: TargetSetupBinding | None = None
     scenario: SoftwareExecutionScenario | None = None
     config_content_hash: Sha256ContentHash
     setup_content_hash: Sha256ContentHash

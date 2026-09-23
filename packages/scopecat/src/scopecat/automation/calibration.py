@@ -26,6 +26,7 @@ type CheckReason = Literal[
     "policy_changed",
     "parameters_changed",
     "subject_changed",
+    "target_binding_changed",
     "setup_changed",
     "scenario_changed",
     "evidence_from_future",
@@ -124,6 +125,7 @@ def assess_calibration_check(
             "policy_changed",
         ),
         (binding.subject, current.subject, "subject_changed"),
+        (binding.target_binding, current.target_binding, "target_binding_changed"),
         (binding.setup_content_hash, current.setup_content_hash, "setup_changed"),
         (binding.scenario, current.scenario, "scenario_changed"),
     )
@@ -182,6 +184,7 @@ _CONTEXT_CHANGES: frozenset[CheckReason] = frozenset(
         "policy_changed",
         "parameters_changed",
         "subject_changed",
+        "target_binding_changed",
         "setup_changed",
         "scenario_changed",
     }

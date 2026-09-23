@@ -116,7 +116,7 @@ authority. No earlier unrelated execution is silently adopted. Ready independent
 stages can be dispatched separately if another stage has an admission problem.
 
 The task and associations survive daemon restarts and current-format backup and
-restore. Current development schema 92 stores task controls and indexes running
+restore. Current development schema 93 stores task controls and indexes running
 tasks; use a fresh data directory
 for this format and retain older stores with their original environments.
 

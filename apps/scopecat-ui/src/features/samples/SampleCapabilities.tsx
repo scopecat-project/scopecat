@@ -38,6 +38,7 @@ export function SampleCapabilities({
       ? {
           parameters: source.parameters,
           subject: snapshot.scientific_binding.subject,
+          target_binding: snapshot.scientific_binding.target_binding ?? null,
           setup_content_hash: snapshot.scientific_binding.setup_content_hash,
           scenario: snapshot.scientific_binding.scenario ?? null,
         }

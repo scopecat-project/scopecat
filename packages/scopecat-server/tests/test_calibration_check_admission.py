@@ -140,7 +140,8 @@ def test_capability_context_retains_exact_registered_target(
         assert subject.kind == "registered_target"
         assert subject.ref == target.ref
         assert subject.sample.sample_id == "chip"
-        assert subject.projection
+        assert resolved.context.target_binding is not None
+        assert resolved.context.target_binding.entities
         mixed = query.model_dump(mode="json")
         mixed["samples"] = [
             SampleSelector(sample_id="chip", revision=1).model_dump(mode="json")

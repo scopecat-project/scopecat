@@ -7,11 +7,11 @@ from scopecat.config.target_projection import (
 from scopecat.records.config import ConfigProfileSnapshot, config_content_hash
 from scopecat.records.sample import SampleBinding
 from scopecat.records.scientific_binding import (
-    EntityProjection,
     InlineSamplesSubject,
     RegisteredTargetSubject,
     ResolvedScientificBinding,
     ResolvedSubject,
+    TargetSetupBinding,
     UnboundSubject,
 )
 from scopecat.records.scientific_scope import setup_content_hash
@@ -35,6 +35,7 @@ def bind_scientific_evidence(
         raise ValueError("scientific binding requires unique sample roles")
     samples = tuple(sorted(samples, key=lambda sample: sample.role))
     subject: ResolvedSubject
+    target_binding: TargetSetupBinding | None = None
     if target is not None:
         projection = project_single_member_target(
             target,
@@ -57,13 +58,12 @@ def bind_scientific_evidence(
             ref=target.ref,
             content=target.content,
             sample=sample,
-            projection=tuple(
-                EntityProjection(
-                    target_entity=entity.target_entity,
-                    runtime_entity_id=entity.runtime_entity_id,
-                )
-                for entity in projection.entities
-            ),
+        )
+        target_binding = TargetSetupBinding(
+            target=target.ref,
+            setup_content_hash=setup_content_hash(config),
+            entities=projection.entities,
+            connections=projection.connections,
         )
     elif samples:
         subject = InlineSamplesSubject(catalog_id=catalog_id, samples=samples)
@@ -71,6 +71,7 @@ def bind_scientific_evidence(
         subject = UnboundSubject()
     return ResolvedScientificBinding(
         subject=subject,
+        target_binding=target_binding,
         scenario=config.system.scenario,
         config_content_hash=config_content_hash(config),
         setup_content_hash=setup_content_hash(config),

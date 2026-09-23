@@ -347,7 +347,12 @@ def test_registered_binding_uses_projection_and_rejects_conflicting_sample() -> 
     )
     assert binding.subject.kind == "registered_target"
     assert binding.subject.ref == target.ref
-    assert binding.subject.projection[0].target_entity.member_id == "A"
+    assert binding.target_binding is not None
+    assert binding.target_binding.entities[0].target_entity.member_id == "A"
+    assert binding.target_binding.target == target.ref
+    assert binding.target_binding.setup_content_hash == binding.setup_content_hash
+    assert binding.target_binding.connections[0].runtime_connection_id == "edge"
+    assert "projection" not in binding.subject.model_dump()
     assert binding.sample_selectors()[0].role == "subject"
     with pytest.raises(ValueError, match="sample evidence"):
         bind_scientific_evidence(

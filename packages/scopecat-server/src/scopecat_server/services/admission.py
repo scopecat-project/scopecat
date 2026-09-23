@@ -257,6 +257,8 @@ class AdmissionService:
                 and (
                     parent.scientific_binding.subject
                     != submission.scientific_binding.subject
+                    or parent.scientific_binding.target_binding
+                    != submission.scientific_binding.target_binding
                     or parent.scientific_binding.setup_content_hash
                     != submission.scientific_binding.setup_content_hash
                 )
@@ -433,7 +435,10 @@ class AdmissionService:
         if not isinstance(source, AnalysisCandidateRunConfigSource):
             return
         original = self._runs.read_snapshot(source.source_run_id).scientific_binding
-        if original.subject != binding.subject:
+        if (
+            original.subject != binding.subject
+            or original.target_binding != binding.target_binding
+        ):
             raise BackendConflict(
                 "candidate requires its original scientific subject and batch; "
                 "copy estimates explicitly into a new working point instead"

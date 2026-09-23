@@ -219,6 +219,22 @@ def test_target_working_point_preview_and_http_submit_keep_exact_heads(
                 point_limit=1,
             ),
         )
+        mapping = submission.scientific_binding.target_binding
+        assert mapping is not None
+        for altered in (
+            None,
+            mapping.model_copy(update={"entities": ()}),
+            mapping.model_copy(update={"setup_content_hash": "sha256:" + "f" * 64}),
+        ):
+            with pytest.raises(DaemonConflictError, match="retained evidence"):
+                altered_binding = submission.scientific_binding.model_copy(
+                    update={"target_binding": altered}
+                )
+                client.submit_run(
+                    submission.model_copy(
+                        update={"scientific_binding": altered_binding}
+                    )
+                )
         admitted = client.submit_run(submission)
         assert admitted.snapshot.scientific_binding == checked.reviewed.binding
         assert admitted.snapshot.scientific_binding.subject == subject

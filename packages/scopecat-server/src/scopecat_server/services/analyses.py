@@ -444,6 +444,8 @@ class AnalysisService:
                 and snapshot.samples == baseline.samples
                 and snapshot.scientific_binding.subject
                 == baseline.scientific_binding.subject
+                and snapshot.scientific_binding.target_binding
+                == baseline.scientific_binding.target_binding
                 and snapshot.scientific_binding.scenario
                 == baseline.scientific_binding.scenario
                 and snapshot.scientific_binding.setup_content_hash

@@ -11,7 +11,7 @@ from scopecat.kernel.frozen import thaw_json_value
 from scopecat.records.content import Sha256ContentHash
 from scopecat.records.execution_scenario import SoftwareExecutionScenario
 from scopecat.records.parameter_revision import ParameterRevisionRef
-from scopecat.records.scientific_binding import ResolvedSubject
+from scopecat.records.scientific_binding import ResolvedSubject, TargetSetupBinding
 
 
 @dataclass(frozen=True)
@@ -36,6 +36,7 @@ class CalibrationContext:
     subject: ResolvedSubject
     setup_content_hash: Sha256ContentHash
     scenario: SoftwareExecutionScenario | None
+    target_binding: TargetSetupBinding | None = None
 
 
 class CalibrationCheckRequest(BaseModel):

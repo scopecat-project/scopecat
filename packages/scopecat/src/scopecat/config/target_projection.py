@@ -7,6 +7,7 @@ from typing import Literal
 from scopecat.kernel.entity import entity_identity
 from scopecat.records.config import Topology, TopologyConnection
 from scopecat.records.sample import SampleRevision
+from scopecat.records.scientific_binding import ConnectionProjection, EntityProjection
 from scopecat.records.scientific_scope import (
     MeasurementTarget,
     TargetEntity,
@@ -46,28 +47,13 @@ def validate_target_members(
 
 
 @dataclass(frozen=True, slots=True)
-class TargetEntityProjection:
-    target_entity: TargetEntity
-    runtime_entity_id: str
-
-
-@dataclass(frozen=True, slots=True)
-class TargetConnectionProjection:
-    """None member identifies an interconnection declared by the target."""
-
-    member_id: str | None
-    connection_id: str
-    runtime_connection_id: str
-
-
-@dataclass(frozen=True, slots=True)
 class TargetProjection:
     """Checked topology mapping only; not a run binding or execution permission."""
 
     target: TargetRevisionRef
     members: tuple[TargetMember, ...]
-    entities: tuple[TargetEntityProjection, ...]
-    connections: tuple[TargetConnectionProjection, ...]
+    entities: tuple[EntityProjection, ...]
+    connections: tuple[ConnectionProjection, ...]
 
 
 def project_target(
@@ -95,8 +81,8 @@ def project_target(
         raise ValueError(
             "entity and connection maps must cover exactly the target members"
         )
-    entity_rows: list[TargetEntityProjection] = []
-    connection_rows: list[TargetConnectionProjection] = []
+    entity_rows: list[EntityProjection] = []
+    connection_rows: list[ConnectionProjection] = []
     expected_entities: set[tuple[str | None, str]] = set()
     expected_edges: list[TopologyConnection] = []
     for member in members:
@@ -115,15 +101,21 @@ def project_target(
             )
         for entity in sorted(topology.entities, key=lambda item: item.id):
             entity_rows.append(
-                TargetEntityProjection(
-                    TargetEntity(member_id=member.id, entity_id=entity.id),
-                    names[entity.id],
+                EntityProjection(
+                    target_entity=TargetEntity(
+                        member_id=member.id, entity_id=entity.id
+                    ),
+                    runtime_entity_id=names[entity.id],
                 )
             )
             expected_entities.add((entity.kind, names[entity.id]))
         for edge in sorted(topology.connections, key=lambda item: item.id):
             connection_rows.append(
-                TargetConnectionProjection(member.id, edge.id, edge_names[edge.id])
+                ConnectionProjection(
+                    member_id=member.id,
+                    connection_id=edge.id,
+                    runtime_connection_id=edge_names[edge.id],
+                )
             )
             expected_edges.append(
                 TopologyConnection(
@@ -142,7 +134,11 @@ def project_target(
     for edge in sorted(target.content.connections, key=lambda item: item.id):
         left, right = edge.endpoints
         connection_rows.append(
-            TargetConnectionProjection(None, edge.id, interconnections[edge.id])
+            ConnectionProjection(
+                member_id=None,
+                connection_id=edge.id,
+                runtime_connection_id=interconnections[edge.id],
+            )
         )
         expected_edges.append(
             TopologyConnection(
@@ -186,7 +182,8 @@ class SingleMemberTargetProjection:
 
     target: TargetRevisionRef
     member: TargetMember
-    entities: tuple[TargetEntityProjection, ...]
+    entities: tuple[EntityProjection, ...]
+    connections: tuple[ConnectionProjection, ...]
     run_role: Literal["subject"] = "subject"
 
 
@@ -226,6 +223,7 @@ def project_single_member_target(
         target=target.ref,
         member=member,
         entities=projection.entities,
+        connections=projection.connections,
     )
 
 

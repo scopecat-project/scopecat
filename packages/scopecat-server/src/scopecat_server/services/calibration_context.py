@@ -88,6 +88,7 @@ class CalibrationContextService:
                     binding.subject,
                     binding.setup_content_hash,
                     binding.scenario,
+                    binding.target_binding,
                 ),
                 branch=branch,
                 setup=setup,
