@@ -52,8 +52,10 @@ Replace fixtures with explicit owner initialization while preserving scientific,
 conflict, resource and recovery assertions. Retire old entries after their
 maintained consumers have moved.
 
-The experiment-plan/comparison journey now uses equipment-only startup and
-independent parameters/setup, including branch edits after preview. Remaining
+The experiment-plan/comparison and registered-target journeys now share
+equipment-only startup and select independent parameters/setup, including branch
+edits after preview. Everyday-author acquisition also no longer needs default
+configuration startup; its explicit low-level snapshots remain valid inputs. Remaining
 legacy consumers still include the shared gallery daemon, combined configuration
 editing/default-selection APIs and working-point launch paths. Their presence is
 not evidence that new author workflows require those owners. Use the

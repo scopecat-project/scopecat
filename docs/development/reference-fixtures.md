@@ -48,6 +48,16 @@ parameter/setup selection; it is not a reason to keep working points forever.
 The comparison provider uses `comparison_selection(run.snapshot)` to retain
 source inputs instead of silently requiring a new global default.
 
+`independent_lab_daemon` now shares that equipment-only process among the plan,
+comparison, everyday-author and registered-target journeys. It copies no legacy
+notebooks and does not set `SCOPECAT_DAEMON_URL`; consumers receive the endpoint
+explicitly. `independent_parameters` saves a fresh named revision for each test
+that needs one. Target selection pins those parameters and the setup alongside
+the target reference; retained plans still execute after catalog/session changes.
+Everyday-author tests intentionally supply complete low-level snapshots, but no
+longer require an unrelated default configuration just to inspect unchanged state.
+These consumers assert that the combined registry stays empty.
+
 The legacy gallery still starts with transitional parameter defaults. Reassess
 its calibration/default-publication assertions against the new design; retain
 needed behaviors in focused tests and retire the old consumers. There is no

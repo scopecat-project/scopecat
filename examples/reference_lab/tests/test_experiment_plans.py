@@ -2,13 +2,10 @@
 
 from __future__ import annotations
 
-import shutil
 import time
-from collections.abc import Generator
 from uuid import uuid4
 
 import httpx2
-import pytest
 from pydantic import JsonValue, TypeAdapter
 from scopecat.api.lab import LabClient
 from scopecat.application.author_project import AuthorPreparedLaunch, AuthorProject
@@ -17,7 +14,6 @@ from scopecat.automation import RunOutputRef
 from scopecat.automation.wire import ProcedureSubmitCommand
 from scopecat.daemon.client import DaemonClient
 from scopecat.kernel.quantity import Quantity
-from scopecat.project import load_project
 from scopecat.records.comparison import (
     ComparisonInspection,
     ComparisonPublication,
@@ -30,52 +26,12 @@ from scopecat.records.parameter_revision import ParameterRevision
 from scopecat.records.plan_ref import PlanAnalysisSource
 from scopecat.records.run import ParameterRunConfigSource
 from scopecat.records.run_request import AxisValuesSourceRecord
-from scopecat_server.lifecycle import start_project, stop_project
-
-from reference_lab.configuration import EXAMPLE_ROOT, bootstrap_config
-
-
-@pytest.fixture(scope="module")
-def plan_daemon(tmp_path_factory: pytest.TempPathFactory) -> Generator[str]:
-    root = tmp_path_factory.mktemp("independent-plan-lab")
-    for name in ("src", "config"):
-        shutil.copytree(EXAMPLE_ROOT / name, root / name)
-    shutil.copy2(
-        EXAMPLE_ROOT / "fixtures/equipment_bootstrap.py",
-        root / "src/equipment_bootstrap.py",
-    )
-    (root / "scopecat.toml").write_text(
-        (EXAMPLE_ROOT / "scopecat.toml")
-        .read_text()
-        .replace(
-            "reference_lab.application:create_bootstrap",
-            "equipment_bootstrap:create_bootstrap",
-        )
-    )
-    project = load_project(root / "scopecat.toml")
-    endpoint = start_project(project)
-    try:
-        yield endpoint.base_url
-    finally:
-        stop_project(project)
-
-
-@pytest.fixture
-def parameters(plan_daemon: str) -> ParameterRevision:
-    config = bootstrap_config()
-    with LabClient(DaemonClient(plan_daemon)) as lab:
-        assert lab.config.registry().entries == ()
-        return lab.parameters.save(
-            name="plan-inputs-" + uuid4().hex,
-            catalog=config.parameter_catalog,
-            parameters=config.parameter_snapshot,
-        )
 
 
 def test_retained_analysis_plan_copy_revalidate_and_child_origin(
-    plan_daemon: str, parameters: ParameterRevision
+    independent_lab_daemon: str, independent_parameters: ParameterRevision
 ) -> None:
-    endpoint = plan_daemon
+    endpoint = independent_lab_daemon
     key = uuid4().hex
     with (
         AuthorProject(endpoint) as author,
@@ -85,10 +41,12 @@ def test_retained_analysis_plan_copy_revalidate_and_child_origin(
         ) as http,
     ):
         setup = lab.setup.active()
-        branch = lab.parameters.create_branch(f"plan-{key}", revision=parameters)
+        branch = lab.parameters.create_branch(
+            f"plan-{key}", revision=independent_parameters
+        )
         author.use(parameter_branch=branch.name, setup=setup.revision.ref)
         original_hash = lab.parameters.resolve(
-            parameters, setup=setup.revision.ref
+            independent_parameters, setup=setup.revision.ref
         ).config_source.content_hash
 
         def run_count() -> int:
@@ -225,8 +183,8 @@ def test_retained_analysis_plan_copy_revalidate_and_child_origin(
             assert copied.ref.plan_id != saved.ref.plan_id
             previewed = reopened.prepare_plan(copied.ref, actor="carol")
             lab.parameters.checkout(branch.name).save(
-                catalog=parameters.catalog,
-                parameters=parameters.parameters,
+                catalog=independent_parameters.catalog,
+                parameters=independent_parameters.parameters,
                 note="branch changes after the plan preview",
             )
             assert previewed.preview.plan_ref == copied.ref
@@ -236,7 +194,9 @@ def test_retained_analysis_plan_copy_revalidate_and_child_origin(
             submitted = previewed.submit(request_key=f"{key}-target")
             target = child(submitted.procedure_id)
             assert isinstance(target.snapshot.config_source, ParameterRunConfigSource)
-            assert target.snapshot.config_source.parameters == parameters.ref
+            assert (
+                target.snapshot.config_source.parameters == independent_parameters.ref
+            )
             assert target.snapshot.config_source.setup == setup.revision.ref
             assert author.get_procedure(submitted.procedure_id).plan_ref == copied.ref
             assert author.run_request(target.id).request.plan_ref == copied.ref
@@ -245,8 +205,8 @@ def test_retained_analysis_plan_copy_revalidate_and_child_origin(
             # After lease closure and another lab change, exact replay
             # still returns the original id.
             lab.parameters.checkout(branch.name).save(
-                catalog=parameters.catalog,
-                parameters=parameters.parameters,
+                catalog=independent_parameters.catalog,
+                parameters=independent_parameters.parameters,
                 note="second independent branch edit",
             )
             assert (
@@ -294,16 +254,16 @@ def test_retained_analysis_plan_copy_revalidate_and_child_origin(
 
 
 def test_plan_freezes_sample_parameters_and_setup_without_activation(
-    plan_daemon: str,
-    parameters: ParameterRevision,
+    independent_lab_daemon: str,
+    independent_parameters: ParameterRevision,
 ) -> None:
     from scopecat.records.sample import SampleRevisionDraft
     from scopecat.records.scientific_selection import ParameterConfiguration
 
     key = uuid4().hex
     with (
-        AuthorProject(plan_daemon) as author,
-        LabClient(DaemonClient(plan_daemon)) as lab,
+        AuthorProject(independent_lab_daemon) as author,
+        LabClient(DaemonClient(independent_lab_daemon)) as lab,
     ):
         setup = lab.setup.active()
         sample = lab.samples.create(
@@ -311,7 +271,9 @@ def test_plan_freezes_sample_parameters_and_setup_without_activation(
             kind="synthetic",
             content=SampleRevisionDraft(display_name="Plan sample revision one"),
         )
-        branch = lab.parameters.create_branch(f"sample-{key}", revision=parameters)
+        branch = lab.parameters.create_branch(
+            f"sample-{key}", revision=independent_parameters
+        )
         author.use(
             sample=sample.id, parameter_branch=branch.name, setup=setup.revision.ref
         )
@@ -325,26 +287,31 @@ def test_plan_freezes_sample_parameters_and_setup_without_activation(
             expected_revision=1,
         )
         lab.parameters.checkout(branch.name).save(
-            catalog=parameters.catalog,
-            parameters=parameters.parameters,
+            catalog=independent_parameters.catalog,
+            parameters=independent_parameters.parameters,
         )
         reopened = author.prepare_plan(saved.ref, actor="bob")
         assert reopened.preview.reviewed.binding == saved.definition.scientific_binding
         assert reopened.preview.reviewed.binding.samples[0].revision == 1
         selection = saved.definition.selection.configuration
         assert isinstance(selection, ParameterConfiguration)
-        assert selection.ref == parameters.ref and selection.setup == setup.revision.ref
+        assert (
+            selection.ref == independent_parameters.ref
+            and selection.setup == setup.revision.ref
+        )
         assert lab.setup.active() == setup
         assert lab.config.registry().entries == ()
 
 
 def test_authored_plan_freezes_default_structural_input_and_explicit_copy(
-    plan_daemon: str, parameters: ParameterRevision
+    independent_lab_daemon: str, independent_parameters: ParameterRevision
 ) -> None:
-    endpoint = plan_daemon
+    endpoint = independent_lab_daemon
     key = uuid4().hex
     with AuthorProject(endpoint) as author, LabClient(DaemonClient(endpoint)) as lab:
-        author.use(parameters=parameters.ref, setup=lab.setup.active().revision.ref)
+        author.use(
+            parameters=independent_parameters.ref, setup=lab.setup.active().revision.ref
+        )
         collection = author.create_record_collection("Plan runs")
         prepared = author.prepare("signal", actor="alice")
         assert prepared.request.inputs == {"polarity": "positive"}
@@ -386,14 +353,14 @@ def test_authored_plan_freezes_default_structural_input_and_explicit_copy(
 
 
 def test_multi_stage_plan_retains_scope_while_candidate_changes_configuration(
-    plan_daemon: str, parameters: ParameterRevision
+    independent_lab_daemon: str, independent_parameters: ParameterRevision
 ) -> None:
     from scopecat.records.sample import SampleRevisionDraft
 
     from reference_lab.application import create_application
     from reference_lab.configuration import EXAMPLE_ROOT
 
-    endpoint = plan_daemon
+    endpoint = independent_lab_daemon
     with (
         AuthorProject(endpoint) as author,
         create_application(EXAMPLE_ROOT).connect(endpoint) as lab,
@@ -405,7 +372,7 @@ def test_multi_stage_plan_retains_scope_while_candidate_changes_configuration(
         )
         author.use(
             sample=sample.id,
-            parameters=parameters.ref,
+            parameters=independent_parameters.ref,
             setup=lab.setup.active().revision.ref,
         )
         prepared = author.prepare("channel-timing")

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 import time
 
 import httpx2 as httpx
@@ -25,22 +24,28 @@ from scopecat.records.comparison import (
 )
 from scopecat.records.control_edit import ControlEdit
 from scopecat.records.launch_request import LaunchRequest
+from scopecat.records.parameter_revision import ParameterRevision
 from scopecat.records.run_request import AxisValuesSourceRecord
+from scopecat.records.scientific_selection import (
+    ParameterConfiguration,
+    ScientificSelection,
+)
 
 from reference_lab.comparison import FIT_SCHEMA, NEXT_INPUT_SCHEMA, REVIEW_SCHEMA
 from reference_lab.workflows.authored.comparison import MODEL
 
-pytestmark = pytest.mark.usefixtures("reference_lab_daemon")
 
-
-def test_two_retained_runs_fit_candidate_rejection_and_handoff() -> None:
-    url = os.environ["SCOPECAT_DAEMON_URL"]
+def test_two_retained_runs_fit_candidate_rejection_and_handoff(
+    independent_lab_daemon: str, independent_parameters: ParameterRevision
+) -> None:
+    url = independent_lab_daemon
     with (
         LabClient(DaemonClient(url)) as lab,
         httpx.Client(
             base_url=url, timeout=60, headers={"content-type": "application/json"}
         ) as http,
     ):
+        setup = lab.setup.active()
         frequencies = [sc.Quantity(value, "GHz") for value in (4.6, 4.7, 4.8, 4.9, 5.0)]
         catalog = LaunchCatalog.model_validate(
             http.get("/api/v1/experiment-launcher").json()
@@ -54,6 +59,11 @@ def test_two_retained_runs_fit_candidate_rejection_and_handoff() -> None:
             action="preview",
             experiment=entry.id,
             version=entry.version,
+            selection=ScientificSelection(
+                configuration=ParameterConfiguration(
+                    ref=independent_parameters.ref, setup=setup.revision.ref
+                )
+            ),
             control_edits={
                 "frequency": ControlEdit(
                     mode="scan",
@@ -119,7 +129,7 @@ def test_two_retained_runs_fit_candidate_rejection_and_handoff() -> None:
             run.measurements()["response"].require_values() for run in runs
         )
         original_requests = tuple(run.request for run in runs)
-        active = lab.config.active()
+        assert lab.config.registry().entries == ()
         run_ids = {run.id for run in lab.runs().items}
         procedure_ids = {item.id for item in lab.procedures.list().items}
         base = ComparisonRequest(
@@ -259,7 +269,8 @@ def test_two_retained_runs_fit_candidate_rejection_and_handoff() -> None:
         assert {run.id for run in lab.runs().items} == run_ids
         assert {item.id for item in lab.procedures.list().items} == procedure_ids
         assert source_procedure.snapshot == closed
-        assert lab.config.active() == active
+        assert lab.setup.active() == setup
+        assert lab.config.registry().entries == ()
         assert tuple(run.request for run in runs) == original_requests
         assert (
             tuple(run.measurements()["response"].require_values() for run in runs)

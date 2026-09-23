@@ -6,12 +6,18 @@ import sys
 from collections.abc import Generator
 from dataclasses import dataclass
 from pathlib import Path
+from uuid import uuid4
 
 import pytest
+from scopecat.api.lab import LabClient
+from scopecat.daemon.client import DaemonClient
 from scopecat.daemon.endpoint import DAEMON_URL_ENV
 from scopecat.project import load_project
+from scopecat.records.parameter_revision import ParameterRevision
 from scopecat_server.lifecycle import DaemonLifecycleError, start_project, stop_project
 from scopecat_testkit.project_loading import isolated_project_imports
+
+from reference_lab.configuration import bootstrap_config
 
 EXAMPLE_ROOT = Path(__file__).parents[1]
 
@@ -118,3 +124,42 @@ def reference_lab_author_imports() -> Generator[None]:
                     delattr(parent, "authored")
             else:
                 vars(parent)["authored"] = original_attribute
+
+
+@pytest.fixture(scope="session")
+def independent_lab_daemon(tmp_path_factory: pytest.TempPathFactory) -> Generator[str]:
+    """Share equipment without notebooks, defaults or endpoint env mutation."""
+    root = tmp_path_factory.mktemp("independent-reference-lab")
+    for name in ("src", "config"):
+        shutil.copytree(EXAMPLE_ROOT / name, root / name)
+    shutil.copy2(
+        EXAMPLE_ROOT / "fixtures/equipment_bootstrap.py",
+        root / "src/equipment_bootstrap.py",
+    )
+    (root / "scopecat.toml").write_text(
+        (EXAMPLE_ROOT / "scopecat.toml")
+        .read_text()
+        .replace(
+            "reference_lab.application:create_bootstrap",
+            "equipment_bootstrap:create_bootstrap",
+        )
+    )
+    project = load_project(root / "scopecat.toml")
+    endpoint = start_project(project)
+    try:
+        yield endpoint.base_url
+    finally:
+        stop_project(project)
+
+
+@pytest.fixture
+def independent_parameters(independent_lab_daemon: str) -> ParameterRevision:
+    """Give each consumer an explicit saved input without changing global state."""
+    config = bootstrap_config()
+    with LabClient(DaemonClient(independent_lab_daemon)) as lab:
+        assert lab.config.registry().entries == ()
+        return lab.parameters.save(
+            name="plan-inputs-" + uuid4().hex,
+            catalog=config.parameter_catalog,
+            parameters=config.parameter_snapshot,
+        )
