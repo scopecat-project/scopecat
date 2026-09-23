@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import override
 
+import pytest
 from scopecat_testkit.instrument_drivers import SignalInstrumentDriver
 from scopecat_testkit.instrument_host import TestRunInstrumentHost
 from scopecat_testkit.local_materialization import LocalEffectInspection
@@ -49,6 +50,11 @@ from scopecat.records.instrument import (
     state_member_identity,
 )
 from scopecat.records.measurement import MeasurementScalar
+from scopecat.records.parameter_read import (
+    HostParameterEvidence,
+    HostSuccessStateParameterRead,
+    ScalarExpressionReadEvidence,
+)
 from scopecat.sdk.domain.execution import DomainResidencyAddress
 from scopecat.sdk.instruments import (
     DriverAcquisition,
@@ -126,7 +132,10 @@ def test_coverage_iterator_is_consumed_after_each_checkpoint() -> None:
     assert delivered == [(0,), (1,)]
 
 
-def test_normal_completion_applies_success_state_after_point_coverage() -> None:
+@pytest.mark.parametrize("fail_evidence", [False, True])
+def test_normal_completion_applies_success_state_after_point_coverage(
+    fail_evidence: bool,
+) -> None:
     driver = SignalInstrumentDriver(instrument_id="source-0")
     program = LocalEffectInspection.at_point(
         AcceptedRunPoint(_logical_point_id("success_state-point"), {}),
@@ -135,15 +144,37 @@ def test_normal_completion_applies_success_state_after_point_coverage() -> None:
         resource_requirements=_requirements("source-0"),
     )
 
+    evidence = HostParameterEvidence(
+        success_state=HostSuccessStateParameterRead(
+            evidence=ScalarExpressionReadEvidence()
+        ),
+        binding=(),
+    )
+
+    def publish(value: HostParameterEvidence) -> None:
+        assert value == evidence
+        assert len(driver.applied) == 1
+        if fail_evidence:
+            raise RuntimeError("success evidence write failed")
+
     result = RunEffectInterpreter(
         run_id="success_state-run",
         coordinate_ids=(),
         instruments=TestRunInstrumentHost((driver,)),
+        publish_host_parameter_evidence=publish,
     ).run(
         complete_coverage_operations(program),
         points=program.points,
         success_state=(_gain_operation("source-0", 0.0),),
+        success_state_parameter_evidence=evidence,
     )
+
+    if fail_evidence:
+        assert len(driver.applied) == 1
+        assert [problem.code for problem in result.problems] == [
+            "run_effect_interpretation_failed"
+        ]
+        return
 
     assert not result.problems and not result.indeterminate
     assert len(driver.applied) == 2

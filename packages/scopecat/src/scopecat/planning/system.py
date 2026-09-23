@@ -13,6 +13,7 @@ from dataclasses import dataclass, field, replace
 from typing import cast
 
 from scopecat.compiler.bind import BoundDomainTarget, BoundPlan
+from scopecat.compiler.relations.parameter_reads import ParameterReadRecorder
 from scopecat.execution.local.program import (
     ApplyStateOperation,
     ComputeOperation,
@@ -101,7 +102,10 @@ from scopecat.records.instrument import (
     InstrumentStateSetting,
     InterfaceStateMemberTarget,
 )
-from scopecat.records.parameter_read import HostParameterEvidence
+from scopecat.records.parameter_read import (
+    HostParameterEvidence,
+    HostSuccessStateParameterRead,
+)
 from scopecat.sdk.domain.compiler import (
     DomainBatchCandidate,
     DomainBatchPreparationCost,
@@ -342,10 +346,12 @@ def _compile_system_program(
         if local_target is not None and execution_ordinals
         else None
     )
+    success_reads = ParameterReadRecorder()
     local_success_state = (
         materialize_local_success_state(
             bound,
             target=local_target,
+            parameter_reads=success_reads,
         )
         if local_target is not None
         else ()
@@ -424,6 +430,16 @@ def _compile_system_program(
         host=host,
         coverage=coverage,
         success_state=local_success_state,
+        success_state_parameter_evidence=(
+            HostParameterEvidence(
+                success_state=HostSuccessStateParameterRead(
+                    evidence=success_reads.snapshot()
+                ),
+                binding=local_target.bound.bindings.parameter_reads,
+            )
+            if local_success_state and local_target is not None
+            else None
+        ),
         points=point_catalog,
         measurements=measurements,
         point_schedule=logical.point_schedule,

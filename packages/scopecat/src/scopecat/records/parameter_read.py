@@ -2,7 +2,7 @@
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from scopecat.records.parameter import ScalarParameterValue
 
@@ -68,19 +68,36 @@ class BindingParameterRead(BaseModel):
     evidence: ScalarExpressionReadEvidence
 
 
+class HostSuccessStateParameterRead(BaseModel):
+    """Fixed completion state uses base parameters, independent of scan overlays."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+    coverage: Literal["host_success_state_materialization"] = (
+        "host_success_state_materialization"
+    )
+    parameter_scope: Literal["base_configuration"] = "base_configuration"
+    evidence: ScalarExpressionReadEvidence
+
+
 class HostParameterEvidence(BaseModel):
     """Bounded host preparation observations; never a completion proof."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
-    format: Literal["scopecat.host.parameter_reads.v1"] = (
-        "scopecat.host.parameter_reads.v1"
+    format: Literal["scopecat.host.parameter_reads.v2"] = (
+        "scopecat.host.parameter_reads.v2"
     )
-    entries: tuple[HostPointParameterRead, ...] = Field(min_length=1, max_length=256)
+    entries: tuple[HostPointParameterRead, ...] = Field(default=(), max_length=256)
+    success_state: HostSuccessStateParameterRead | None = None
     binding: tuple[BindingParameterRead, ...]
-    incomplete_reasons: tuple[str, ...] = (
-        "binding_structure_not_captured",
-        "success_state_not_captured",
-    )
+    incomplete_reasons: tuple[str, ...] = ("binding_structure_not_captured",)
+
+    @model_validator(mode="after")
+    def validate_scope(self) -> HostParameterEvidence:
+        if bool(self.entries) == (self.success_state is not None):
+            raise ValueError(
+                "host evidence requires either point entries or success state"
+            )
+        return self
 
 
 class HostParameterEvidenceRecord(BaseModel):

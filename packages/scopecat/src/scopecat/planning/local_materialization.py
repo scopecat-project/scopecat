@@ -98,7 +98,7 @@ def materialize_local_execution(
     }
     read_recorders = {ordinal: ParameterReadRecorder() for ordinal in ordinals}
     for recorder in read_recorders.values():
-        recorder.incomplete("resource_selection_not_captured")
+        recorder.incomplete("resource_topology_not_captured")
         recorder.incomplete("runtime_kernel_reads_not_captured")
     resources_by_ordinal = select_coverage_resources(
         program,
@@ -106,6 +106,7 @@ def materialize_local_execution(
         selected_points,
         params_by_ordinal,
         problems,
+        parameter_reads=read_recorders,
     )
     compute_nodes = tuple(
         node for node in logical.compute_nodes if node.id in program.live_compute_ids
@@ -318,6 +319,7 @@ def materialize_local_success_state(
     bound: BoundPlan,
     *,
     target: LocalTargetPlan,
+    parameter_reads: ParameterReadRecorder | None = None,
 ) -> tuple[ApplyStateOperation, ...]:
     """Materialize the fixed desired state applied after successful completion."""
 
@@ -325,10 +327,15 @@ def materialize_local_success_state(
     if authored_success_state is None:
         return ()
     problems: list[Problem] = []
+    ctx = EvalContext(
+        params=bound.environment.parameters, parameter_reads=parameter_reads
+    )
+    if parameter_reads is not None:
+        parameter_reads.incomplete("resource_topology_not_captured")
     resources = select_resources(
         target.bound.bindings,
         target.resource_ports,
-        ctx=EvalContext(params=bound.environment.parameters),
+        ctx=ctx,
         context="normal completion",
         problems=problems,
         selected_port_ids=frozenset(
@@ -346,7 +353,7 @@ def materialize_local_success_state(
                         "Scalar", target.bound.program.value_types[assignment.value_id]
                     ),
                     point_index=0,
-                    ctx=EvalContext(params=bound.environment.parameters),
+                    ctx=ctx,
                 )
             )
         except (ArithmeticError, KeyError, TypeError, ValueError) as error:

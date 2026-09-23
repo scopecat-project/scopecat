@@ -333,6 +333,7 @@ class RunEffectInterpreter:
         *,
         points: Sequence[AcceptedRunPoint],
         success_state: Sequence[ApplyStateOperation] = (),
+        success_state_parameter_evidence: HostParameterEvidence | None = None,
     ) -> effect_result.RunEffectResult:
         """Interpret the residual effect sequence exactly in program order."""
 
@@ -372,6 +373,11 @@ class RunEffectInterpreter:
                 and self.coverage_failure is None
             ):
                 self._check_cancellation()
+                if success_state_parameter_evidence is not None:
+                    self._execute_covered_operation(
+                        RunHostParameterEvidence(success_state_parameter_evidence)
+                    )
+                    self._check_cancellation()
                 if self._hardware.execute_success_state(success_state):
                     self._check_cancellation()
         except CheckFailed as error:

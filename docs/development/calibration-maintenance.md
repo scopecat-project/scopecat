@@ -239,8 +239,10 @@ whole-run completeness claim. Low-level callers that construct requests without
 capture get no fabricated empty attachment; reading absent evidence fails
 explicitly. Existing transition retention policy still controls durability.
 
-Host input materialization separately captures compute inputs, invocation arguments
-and state expressions per logical point, including effective overlay values.
+Host input materialization separately captures compute inputs, invocation arguments,
+state expressions and resource entity-selection expressions per logical point,
+including effective overlay values. Observing the entity query does not capture
+the routing/topology structure that maps it to physical equipment.
 `MaterializedLocalEffects.parameter_reads` retains these observations even when
 identical state writes are coalesced or an invariant initial probe is reused.
 `RunPointInspection.host_parameter_reads` exposes them for the inspected point;
@@ -256,13 +258,25 @@ the previous segment's evidence. Publication failure stops further effects.
 These are preparation observations, not proof of physical execution or point
 completion; a batch may include points never reached after an interruption.
 
+The v2 host envelope distinguishes point entries from a fixed success-state
+record. The latter explicitly uses `base_configuration`, has no point ordinal,
+and retains separate binding reads for any expressions already folded to literals.
+It is published only after successful point coverage, immediately before the
+success-state hardware operation. Failed/cancelled coverage does not publish it;
+failure to publish it prevents that hardware operation. Its presence still does
+not prove that the hardware accepted the requested state.
+
 Use the run repository's bounded `list_contents` with
 `kind="host-parameter-evidence"`, then
 `scopecat.runs.parameter_evidence.read_host_parameter_evidence` for each record.
 The existing content store and backup/restore machinery retain these records;
 no database schema or prebaseline migration path is introduced.
-Resource selection, runtime kernel reads, binding structure and success-state
-preparation remain explicitly outside this capture. Neither these records nor
+Runtime kernel reads and binding/topology structure remain explicitly outside
+this capture. Host compute receives resolved declared arguments, whose parameter
+reads are captured during preparation; arbitrary reads through Python closures,
+globals or files are not observable through that argument boundary. Keep the
+runtime-read gap explicit instead of treating a function call as complete coverage.
+Neither these records nor
 the domain attachment enable cross-revision reuse or whole-run completeness.
 
 Before selective invalidation, extend this coverage to scalar expressions,

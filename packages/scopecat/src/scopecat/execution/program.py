@@ -308,6 +308,11 @@ class RunProgram:
         repr=False,
         compare=False,
     )
+    success_state_parameter_evidence: HostParameterEvidence | None = field(
+        default=None,
+        repr=False,
+        compare=False,
+    )
     measurement_computes: tuple[BoundMeasurementCompute, ...] = field(
         default=(),
         repr=False,

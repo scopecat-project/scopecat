@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Annotated
 
 import pytest
@@ -13,12 +13,16 @@ from scopecat_testkit.materialized_effects import config_with_physical_resources
 import scopecat as sc
 from scopecat.authoring._module_context import DefinitionResource
 from scopecat.authoring.member_projection import StateProjector, StateTarget
+from scopecat.compiler.relations.context import ParameterRelationData
+from scopecat.compiler.relations.parameter_reads import ParameterReadRecorder
 from scopecat.execution.local.program import ApplyStateOperation
+from scopecat.kernel.value_types import Float, Scalar
 from scopecat.planning.local_materialization import (
     materialize_local_success_state,
     prepare_local_target,
 )
 from scopecat.program.bindings import EnsureStateIntent
+from scopecat.program.expressions import param
 from scopecat.program.logical import LogicalEnsureState
 from scopecat.program.state import StateBinding
 from scopecat.sdk.instruments import InterfaceRef, PropertyRef
@@ -193,18 +197,39 @@ def test_root_success_state_is_materialized_outside_point_effects() -> None:
         "level",
         "enabled",
     ]
+    # Exercise a residual parameter expression against the base context.
+    bound = replace(
+        bound,
+        environment=replace(
+            bound.environment,
+            parameters=ParameterRelationData(scalars={"idle_level": 0.25}),
+        ),
+        bindings=replace(
+            bound.bindings,
+            value_overrides={
+                **bound.bindings.value_overrides,
+                success_state.assignments[0].value_id: param(
+                    "idle_level", Scalar(Float())
+                ),
+            },
+        ),
+    )
     target = prepare_local_target(
         bound,
         product_use_ids=frozenset(),
         instrument_order=("source-device",),
     )
-    [operation] = materialize_local_success_state(bound, target=target)
+    reads = ParameterReadRecorder()
+    [operation] = materialize_local_success_state(
+        bound, target=target, parameter_reads=reads
+    )
+    assert reads.snapshot().scalars[0].value == 0.25
     assert operation.instrument_id == "source-device"
     assert [target.property_id for target in operation.targets] == [
         "level",
         "enabled",
     ]
-    assert operation.targets[0].value.root == 0.0
+    assert operation.targets[0].value.root == 0.25
 
 
 def test_root_success_state_accepts_a_typed_state_projector() -> None:

@@ -801,6 +801,7 @@ def _execute_instrument_effects(
         ),
         points=point_state.points,
         success_state=program.success_state,
+        success_state_parameter_evidence=program.success_state_parameter_evidence,
     )
     return result
 

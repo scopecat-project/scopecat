@@ -16,12 +16,17 @@ from scopecat.program.logical import (
     ValueDef,
 )
 from scopecat.records.measurement import MeasurementScalar
+from scopecat.runs.parameter_evidence import (
+    HOST_PARAMETER_EVIDENCE_KIND,
+    read_host_parameter_evidence,
+)
 from scopecat.sdk.instruments import (
     DriverAcquisition,
     DriverOutcome,
     DriverReadback,
     DriverSuccess,
 )
+from scopecat_testkit.bound_program import ProgramFixture
 from scopecat_testkit.server.execution import execute_bound_run
 from scopecat_testkit.server.runtime import sqlite_run_repository
 from scopecat_testkit.signal_instruments import TestSignalInstrument
@@ -241,14 +246,12 @@ def test_run_rejects_unexpected_instrument_results(tmp_path: Path) -> None:
     assert manifest.status == "failed"
 
 
-def test_keyboard_interrupt_commits_interrupted_terminal_run(tmp_path: Path) -> None:
-    instrument = InterruptingCollectInstrument()
+def _experiment_with_success_frequency(success_frequency: Quantity) -> ProgramFixture:
     experiment = load_experiment()
     [selected_state] = experiment.logical.program.bindings
-    success_frequency = Quantity(91.0, "GHz")
     success_value = LiteralScalarExpr(success_frequency)
     success_value_id = ValueId(SymbolId(scope=("success_state",), local_id="frequency"))
-    experiment = replace(
+    return replace(
         experiment,
         logical=replace(
             experiment.logical,
@@ -273,6 +276,41 @@ def test_keyboard_interrupt_commits_interrupted_terminal_run(tmp_path: Path) -> 
         ),
     )
 
+
+def test_success_state_evidence_has_base_scope_and_no_point_ordinal(
+    tmp_path: Path,
+) -> None:
+    instrument = TestSignalInstrument()
+    success_frequency = Quantity(91.0, "GHz")
+    manifest = execute_bound_run(
+        config=load_config(),
+        experiment=_experiment_with_success_frequency(success_frequency),
+        instruments=[instrument],
+        project_root=tmp_path,
+    )
+    repository = sqlite_run_repository(tmp_path)
+    records = repository.list_contents(
+        manifest.run_id, limit=100, kind=HOST_PARAMETER_EVIDENCE_KIND
+    ).items
+    evidences = [
+        read_host_parameter_evidence(repository, manifest.run_id, record.id).evidence
+        for record in records
+    ]
+    [success] = [
+        evidence for evidence in evidences if evidence.success_state is not None
+    ]
+    assert success.entries == ()
+    assert success.success_state is not None
+    assert success.success_state.parameter_scope == "base_configuration"
+    assert success_frequency in [
+        assignment.value for assignment in instrument.applied_requests[-1].scoped_values
+    ]
+
+
+def test_keyboard_interrupt_commits_interrupted_terminal_run(tmp_path: Path) -> None:
+    instrument = InterruptingCollectInstrument()
+    success_frequency = Quantity(91.0, "GHz")
+    experiment = _experiment_with_success_frequency(success_frequency)
     with pytest.raises(KeyboardInterrupt, match="operator cancelled"):
         execute_bound_run(
             config=load_config(),
@@ -284,6 +322,15 @@ def test_keyboard_interrupt_commits_interrupted_terminal_run(tmp_path: Path) -> 
     repository = sqlite_run_repository(tmp_path)
     snapshot = repository.list_runs()[0]
     assert snapshot.status == "interrupted"
+    assert all(
+        read_host_parameter_evidence(
+            repository, snapshot.run_id, record.id
+        ).evidence.success_state
+        is None
+        for record in repository.list_contents(
+            snapshot.run_id, limit=100, kind=HOST_PARAMETER_EVIDENCE_KIND
+        ).items
+    )
     [dataset] = repository.list_contents(
         snapshot.run_id,
         limit=100,
