@@ -150,6 +150,12 @@ restart, previously managed ready procedures are eligible to resume; running
 calibration tasks also recover admitted stages awaiting worker handoff. Other
 CLI procedures are not automatically adopted. An observed nonzero worker exit
 pauses automatic dispatch until an explicit `Dispatch existing procedure` request.
+Workspace resolution, state lookup and process-start failures likewise pause only
+the affected procedure. The manager continues with other queued work, and an
+explicit dispatch reports failures for its requested procedure rather than an
+unrelated queue member. The exception and procedure ID are logged for inspection.
+Automatic task handoffs register ownership; the worker loop scans the queue once
+per tick instead of rescanning it for each handoff.
 Attention and closed procedures leave the manager. This is process management, not a
 hardware recovery or procedure cancellation protocol. Daemon shutdown does not
 forcibly kill hardware workers.

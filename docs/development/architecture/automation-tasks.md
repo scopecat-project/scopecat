@@ -170,6 +170,13 @@ worker manager bounds concurrent subprocesses across tasks; leases and resource
 waits retain hardware admission. This is not a fairness or scientific grouping
 scheduler. Preserve serial task execution until those contracts are explicit.
 
+Worker startup failures are isolated per procedure, including unavailable author
+workspaces and failed state lookup. They pause the affected member without aborting
+the scan of independent work. Only explicit procedure dispatch retries it; normal
+task handoffs preserve that pause. Handoffs register ownership without performing
+another whole-queue scan. This removes repeated scans when many task stages wait
+for workers, while retaining the shared subprocess limit and resource admission.
+
 Required next contracts:
 
 1. Larger-history traversal and panel refresh policies beyond the bounded history

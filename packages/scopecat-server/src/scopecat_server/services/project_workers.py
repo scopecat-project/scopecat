@@ -22,6 +22,10 @@ from scopecat.runtime_binding import load_runtime_binding
 _LOG = logging.getLogger(__name__)
 
 
+class ProcedureDispatchError(RuntimeError):
+    """One admitted procedure could not reach its worker."""
+
+
 class ProjectProcedureWorkers:
     def __init__(
         self,
@@ -101,7 +105,10 @@ class ProjectProcedureWorkers:
                 del self._children[procedure_id]
             managed[procedure_id] = "active"
             self._save()
-            self._tick()
+            errors = self._tick()
+            error = errors.get(procedure_id)
+            if error is not None:
+                raise ProcedureDispatchError(str(error)) from error
 
     def tick(self) -> None:
         with self._lock:
@@ -115,10 +122,11 @@ class ProjectProcedureWorkers:
             if procedure_id not in managed:
                 managed[procedure_id] = "active"
                 self._save()
-            self._tick()
+            # The worker loop scans once per tick, not once per queued task stage.
 
-    def _tick(self) -> None:
+    def _tick(self) -> dict[str, Exception]:
         managed = self._load()
+        errors: dict[str, Exception] = {}
         for key, child in tuple(self._children.items()):
             code = child.poll()
             if code is not None:
@@ -127,21 +135,30 @@ class ProjectProcedureWorkers:
                     managed[key] = "paused"
                     self._save()
         for key in tuple(managed):
-            state = self.state(key)
+            try:
+                state = self.state(key)
+                if (
+                    state == "ready"
+                    and managed[key] != "paused"
+                    and key not in self._children
+                ):
+                    if len(self._children) >= self.max_workers:
+                        break
+                    self._spawn(key)
+            except Exception as error:
+                # A broken workspace or one failed spawn must not prevent
+                # independent admitted procedures from reaching their workers.
+                if managed[key] == "paused":
+                    continue
+                managed[key] = "paused"
+                self._save()
+                errors[key] = error
+                _LOG.exception("Procedure worker dispatch paused: %s", key)
+                continue
             if state in {"closed", "attention_required"}:
                 del managed[key]
                 self._save()
-                continue
-            if state != "ready" or managed[key] == "paused" or key in self._children:
-                continue
-            if len(self._children) >= self.max_workers:
-                break
-            try:
-                self._spawn(key)
-            except OSError:
-                managed[key] = "paused"
-                self._save()
-                raise
+        return errors
 
     def _spawn(self, procedure_id: str) -> None:
         root = self.resolve_root(procedure_id) if self.resolve_root else self.root()

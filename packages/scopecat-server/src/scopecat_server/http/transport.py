@@ -365,7 +365,10 @@ from scopecat_server.http.procedure_operator import (
 )
 from scopecat_server.retained_request import AnalysisCall, ComparisonCall
 from scopecat_server.services.calibration_task_runner import CalibrationTaskRunner
-from scopecat_server.services.project_workers import ProjectProcedureWorkers
+from scopecat_server.services.project_workers import (
+    ProcedureDispatchError,
+    ProjectProcedureWorkers,
+)
 from scopecat_server.services.revision_workers import RevisionWorkers
 from scopecat_server.storage.sqlite.author_revision_repository import (
     AuthorRevisionConflict,
@@ -801,7 +804,7 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
             return LaunchSubmission(procedure_id=procedure_id)
         try:
             project_workers.dispatch(procedure_id)
-        except OSError as error:
+        except (OSError, ProcedureDispatchError) as error:
             return LaunchSubmission(
                 procedure_id=procedure_id, dispatch_error=str(error)
             )

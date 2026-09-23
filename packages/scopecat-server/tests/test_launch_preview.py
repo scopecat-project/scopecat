@@ -213,7 +213,10 @@ def test_worker_loads_manifest_file_and_supports_empty_project(
     )
 
 
-def test_admission_survives_dispatch_failure(tmp_path: Path) -> None:
+@pytest.mark.parametrize("routing", [False, True])
+def test_admission_survives_dispatch_failure(tmp_path: Path, routing: bool) -> None:
+    from scopecat_server.services.project_workers import ProcedureDispatchError
+
     automation = SimpleNamespace(get=Mock(return_value=SimpleNamespace(state="ready")))
     app = create_app(
         cast(
@@ -242,7 +245,9 @@ def test_admission_survives_dispatch_failure(tmp_path: Path) -> None:
         ),
         patch(
             "scopecat_server.http.transport.ProjectProcedureWorkers.dispatch",
-            side_effect=OSError("cannot spawn"),
+            side_effect=ProcedureDispatchError("cannot spawn")
+            if routing
+            else OSError("cannot spawn"),
         ),
     ):
         run.return_value = SimpleNamespace(
@@ -254,6 +259,68 @@ def test_admission_survives_dispatch_failure(tmp_path: Path) -> None:
         )
     assert result.status_code == 200
     assert result.json() == {"procedure_id": "p1", "dispatch_error": "cannot spawn"}
+
+
+@pytest.mark.parametrize("failure", ["route", "spawn", "state"])
+def test_worker_failure_isolated_and_not_attributed_to_another_dispatch(
+    tmp_path: Path,
+    failure: str,
+) -> None:
+    from scopecat_server.services.project_workers import (
+        ProcedureDispatchError,
+        ProjectProcedureWorkers,
+    )
+
+    def state(key: str) -> str:
+        if key == "broken" and failure == "state":
+            raise ValueError("missing procedure")
+        return "ready"
+
+    def root(key: str) -> Path:
+        if key == "broken" and failure == "route":
+            raise ValueError("missing author workspace")
+        return tmp_path
+
+    manager = ProjectProcedureWorkers(lambda: tmp_path, state, resolve_root=root)
+    manager.manage("broken")
+    child = Mock()
+    child.poll.return_value = None
+
+    def spawn(args: list[str], **_kwargs: object) -> Mock:
+        if args[-1] == "broken" and failure == "spawn":
+            raise OSError("cannot spawn")
+        return child
+
+    with patch(
+        "scopecat_server.services.project_workers.subprocess.Popen", side_effect=spawn
+    ) as launch:
+        # Dispatching a healthy procedure also encounters the previously queued
+        # broken one. Only the broken one pauses; the healthy caller succeeds.
+        manager.dispatch("healthy")
+        assert manager.snapshot("broken").management == "paused"
+        assert manager.snapshot("healthy").worker_running
+        count = launch.call_count
+        manager.manage("broken")
+        manager.tick()
+        assert launch.call_count == count
+        with pytest.raises(ProcedureDispatchError):
+            manager.dispatch("broken")
+    restored = ProjectProcedureWorkers(lambda: tmp_path, state, resolve_root=root)
+    with patch.object(restored, "_spawn") as launch:
+        restored.tick()
+    assert all(call.args[0] != "broken" for call in launch.call_args_list)
+
+
+def test_background_handoffs_scan_workers_once_per_tick(tmp_path: Path) -> None:
+    from scopecat_server.services.project_workers import ProjectProcedureWorkers
+
+    state = Mock(return_value="waiting_for_input")
+    manager = ProjectProcedureWorkers(lambda: tmp_path, state)
+    for index in range(40):
+        manager.manage(f"p{index}")
+    state.assert_not_called()
+    manager.tick()
+    assert state.call_count == 40
 
 
 def test_dispatch_deduplicates_live_workers(tmp_path: Path) -> None:
