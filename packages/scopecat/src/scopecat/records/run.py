@@ -8,6 +8,9 @@ from typing import Annotated, Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from scopecat.kernel.run_outcome import RunOutcome, RunStatus, utc_now
+from scopecat.records.candidate_input import (
+    AnalysisCandidateRunConfigSource as AnalysisCandidateRunConfigSource,
+)
 from scopecat.records.config import ConfigContentHash
 from scopecat.records.config_context import ContextRunConfigSource
 from scopecat.records.measurement_context import MeasurementContext
@@ -42,29 +45,6 @@ class ParameterRunConfigSource(BaseModel):
     setup: SetupRevisionRef
     content_hash: ConfigContentHash
     overrides: tuple[ParameterUpdate, ...] = Field(default=(), max_length=256)
-
-
-class AnalysisCandidateRunConfigSource(BaseModel):
-    """Analysis candidate resolved for one run without becoming the default."""
-
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    kind: Literal["analysis_candidate"] = "analysis_candidate"
-    source_run_id: str
-    analysis_record_id: str
-    proposal_id: str
-    base_config_content_hash: ConfigContentHash
-    content_hash: ConfigContentHash
-
-    @model_validator(mode="after")
-    def validate_identity(self) -> AnalysisCandidateRunConfigSource:
-        if (
-            not self.source_run_id
-            or not self.analysis_record_id
-            or not self.proposal_id
-        ):
-            raise ValueError("analysis candidate run source identity must be non-empty")
-        return self
 
 
 type RunConfigSource = Annotated[
@@ -119,12 +99,14 @@ class RunSnapshot(BaseModel):
 
     @property
     def measurement_context(self) -> MeasurementContext | None:
-        """Exact saved inputs, or None for candidates, overrides and unsaved config.
+        """Exact saved/candidate inputs, or None for overrides and unsaved config.
 
         This derives evidence from the retained run, never current branch heads.
         A context alone says nothing about execution success or calibration.
         """
         source = self.config_source
+        if isinstance(source, AnalysisCandidateRunConfigSource):
+            return MeasurementContext.from_binding(source, self.scientific_binding)
         if not isinstance(source, ParameterRunConfigSource) or source.overrides:
             return None
         return MeasurementContext.from_binding(

@@ -28,14 +28,15 @@ then load and select a saved capability profile. Load older runs in the sample's
 run list if the measurement you need is not yet available in the selector.
 
 This entry does not require a calibration task. It evaluates the chosen profile
-using the measurement's saved parameter revision, setup, complete subject and
+using the measurement's saved parameter revision or exact candidate, setup, complete subject and
 scenario. Joint measurements retain every sample in their subject; choosing one
 sample's page does not turn joint evidence into a single-sample claim. Expand
 the subject details to inspect that binding before evaluating the profile.
 
-The measurement must use an exact saved parameter revision without overrides
-and belong to the displayed sample revision. Candidate and older configuration
-sources cannot supply this context. Selecting a different measurement clears
+The measurement must use a saved revision without overrides or an exact retained
+candidate and belong to the displayed sample revision. Unsaved configuration
+sources cannot supply this context. Candidate inputs are labeled with their proposal
+and source run; they do not inherit saved-revision applicability. Selecting a different measurement clears
 the previous report, including while the new context is loading or fails to load.
 The evaluation time is current, but its requested context is historical: this
 does not assess today's branch head, setup or overall sample readiness.
@@ -255,7 +256,7 @@ actually evaluated. Supply either `profile` or `requirements`, not both.
 
 Profiles belong to the selected project data store, are available through the
 HTTP API without importing author Python, and survive current-format backup and
-restore. Current schema 95 retains their storage; use a fresh development data directory and
+restore. Current schema 96 retains their storage; use a fresh development data directory and
 retain older stores with their original environments. A saved profile is a
 report policy, not an automatic maintenance schedule or complete sample policy.
 

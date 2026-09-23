@@ -6595,7 +6595,8 @@ export interface components {
          *     complete execution provenance, nor proof of calibration applicability.
          */
         MeasurementContext: {
-            parameters: components["schemas"]["ParameterRevisionRef"];
+            /** Parameters */
+            parameters: components["schemas"]["ParameterRevisionRef"] | components["schemas"]["AnalysisCandidateRunConfigSource"];
             scenario: components["schemas"]["SoftwareExecutionScenario"] | null;
             setup_content_hash: components["schemas"]["Sha256ContentHash"];
             subject: components["schemas"]["ResolvedSubject"];
@@ -6608,13 +6609,14 @@ export interface components {
         MeasurementContextResolution: {
             branch?: components["schemas"]["ParameterBranch"] | null;
             context: components["schemas"]["MeasurementContext"];
-            setup: components["schemas"]["SetupRevisionRef"];
+            setup: components["schemas"]["SetupRevisionRef"] | null;
         };
         /** MeasurementContextResolve */
         MeasurementContextResolve: {
             /** Branch */
             branch?: string | null;
-            parameters?: components["schemas"]["ParameterRevisionRef"] | null;
+            /** Parameters */
+            parameters?: components["schemas"]["ParameterRevisionRef"] | components["schemas"]["AnalysisCandidateRunConfigSource"] | null;
             /**
              * Samples
              * @default []

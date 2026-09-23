@@ -52,11 +52,12 @@ calibration history query. Execution storage still owns the durable intent and
 effects; this slice adds no second scientific-data store or migration.
 
 The server validates declarations before admitting a new procedure: the exact
-parameter revision must exist and compose with the current setup, and the declared
+parameter revision must compose with the current setup, or the exact candidate
+must resolve from its retained proposal under compatible setup authority. The declared
 subject and software scenario must match authoritative evidence. Physical checks
 require a subject. Procedure sample selection and any explicit scientific binding
 must agree with the declaration. The designated child measurement must use the
-declared parameter revision without overrides and the exact declared context.
+declared saved revision without overrides or exact candidate and declared context.
 An exact request retry returns the retained request before rechecking mutable
 authority; it does not authorize new measurements against an obsolete setup.
 
@@ -222,7 +223,8 @@ Required next contracts:
 The sample workspace now offers a bounded historical-context consumer: choose a
 measurement bound to the displayed sample revision, then evaluate an explicit
 saved profile. The complete joint subject is retained, and parameter overrides
-or non-revision sources cannot supply an exact context. This does not yet provide
+or unsaved sources cannot supply an exact context; exact retained candidates now
+can, preserving their source identity. This does not yet provide
 a continuously refreshed sample health dashboard.
 
 The sample page also resolves a parameter branch or exact saved revision and a

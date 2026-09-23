@@ -13,6 +13,7 @@ from scopecat.daemon.wire import (
     RunCancellationReceipt,
     RunSubmission,
 )
+from scopecat.project_state import ProjectStateServices
 from scopecat.runtime_binding import load_runtime_binding
 
 from scopecat_server.services.calibration_checks import CalibrationCheckQueries
@@ -61,6 +62,7 @@ class DaemonApplication:
         project_id: str,
         deployment_id: str,
         project_store: SQLiteProjectStore,
+        services: ProjectStateServices,
         config: ConfigService,
         setup: SetupService,
         analyses: AnalysisService,
@@ -123,7 +125,7 @@ class DaemonApplication:
             project_store.sqlite, self.calibration_checks
         )
         self.measurement_context = MeasurementContextService(
-            project_store.sqlite, samples, self.targets
+            project_store.sqlite, samples, self.targets, services
         )
 
         self.procedure_schedules = procedure_schedules

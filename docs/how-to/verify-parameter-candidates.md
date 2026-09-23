@@ -116,8 +116,9 @@ discarding the chain; restoring its analysis records preserves the ordered sourc
 where conflicting edits are rejected rather than applied in sequence.
 
 This is the retained candidate flow, not yet automatic parameter flow between
-background calibration-task stages. Saved task check contexts currently require
-an exact saved parameter revision.
+background calibration-task stages. A fixed check can now capture the candidate
+through `lab.resolve_context(candidate=combined).context`; binding an output that
+will only exist after another stage finishes remains separate work.
 
 Preview retains the exact candidate, scientific binding and executable setup
 content. A parameter-only default change does not invalidate that fixed candidate;

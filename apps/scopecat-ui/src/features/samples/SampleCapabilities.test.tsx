@@ -82,6 +82,26 @@ it("requires an explicit measurement and retains the whole joint subject", async
   expect(screen.getByText(/historical context/)).toBeInTheDocument();
 });
 
+it("retains candidate identity instead of treating its values as a saved revision", async () => {
+  const candidate = {
+    kind: "analysis_candidate",
+    source_run_id: "baseline",
+    proposal_id: "refined",
+    analysis_record_id: "fit",
+    base_config_content_hash: "sha256:base",
+    content_hash: "sha256:result",
+  };
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => Response.json({ snapshot: { ...snapshot, config_source: candidate } })),
+  );
+  mount();
+  fireEvent.change(screen.getByLabelText("Measurement context"), { target: { value: "r1" } });
+  const rendered = await screen.findByTestId("context");
+  expect(JSON.parse(rendered.textContent).parameters).toEqual(candidate);
+  expect(screen.getByText(/refined \(candidate from baseline\)/)).toBeInTheDocument();
+});
+
 it.each([
   { ...snapshot, config_source: null },
   { ...snapshot, config_source: { ...source, overrides: [{ parameter: "drive", value: 1 }] } },

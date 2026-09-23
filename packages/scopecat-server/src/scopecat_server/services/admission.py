@@ -7,14 +7,6 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 
 from scopecat.automation.wire import procedure_step_operation_id
-from scopecat.config.candidates import (
-    CandidateConfig,
-    resolve_candidate_config_snapshot,
-)
-from scopecat.config.changes import (
-    load_parameter_change_proposal,
-    parameter_change_proposal_record_ref,
-)
 from scopecat.config.contexts import apply_context_overrides
 from scopecat.config.registry import service as config_registry_service
 from scopecat.config.registry.records import ContextConfigRegistrySource
@@ -38,10 +30,6 @@ from scopecat.kernel.problems import (
 )
 from scopecat.kernel.run_outcome import RunOutcome
 from scopecat.project_state import ProjectStateServices
-from scopecat.records.analysis import (
-    AnalysisParameterProposalRecordOutput,
-    AnalysisRecord,
-)
 from scopecat.records.config import (
     ConfigProfileSnapshot,
     DomainTargetBinding,
@@ -62,11 +50,11 @@ from scopecat.records.scientific_binding import (
 )
 from scopecat.records.setup import ActiveSetupView, ExecutableSetupSnapshot
 from scopecat.runs.admission import build_run_admission
-from scopecat.runs.refs import record_content_ref
 from scopecat.runs.repository import (
     TerminalRunCommit,
 )
 
+from scopecat_server.services.candidate_resolution import resolve_candidate_input
 from scopecat_server.storage.sqlite.automation import (
     AutomationNotFound,
     SQLiteAutomationStore,
@@ -445,58 +433,9 @@ class AdmissionService:
             )
 
     def _resolve_candidate_source(
-        self,
-        source: AnalysisCandidateRunConfigSource,
+        self, source: AnalysisCandidateRunConfigSource
     ) -> ConfigProfileSnapshot:
-        try:
-            proposal = load_parameter_change_proposal(
-                run_id=source.source_run_id,
-                selector=source.proposal_id,
-                services=self._services,
-            )
-            if (
-                proposal.id != source.proposal_id
-                or proposal.analysis_record_id != source.analysis_record_id
-                or proposal.base_config_content_hash != source.base_config_content_hash
-            ):
-                raise BackendConflict(
-                    "analysis candidate source does not match its durable proposal"
-                )
-            analysis = self._runs.read_model(
-                source.source_run_id,
-                record_content_ref(
-                    record_id=source.analysis_record_id,
-                    kind="analysis",
-                ),
-                AnalysisRecord,
-            )
-            if (
-                analysis.subject.kind != "run"
-                or analysis.subject.run_id != source.source_run_id
-                or not _analysis_references_proposal(
-                    analysis,
-                    proposal_id=proposal.id,
-                )
-            ):
-                raise BackendConflict(
-                    "analysis candidate proposal does not belong to its analysis"
-                )
-            resolved = resolve_candidate_config_snapshot(
-                CandidateConfig(parameter_proposal=proposal),
-                services=self._services,
-            )
-            if config_content_hash(resolved) != source.content_hash:
-                raise BackendConflict(
-                    "analysis candidate source does not match its resolved "
-                    "configuration"
-                )
-            return resolved
-        except BackendConflict:
-            raise
-        except ProblemFailure as error:
-            raise BackendConflict(
-                "analysis candidate config source cannot be resolved"
-            ) from error
+        return resolve_candidate_input(source, self._services)
 
     def resolve_attention(
         self,
@@ -590,23 +529,6 @@ class _InstrumentInventoryEntry:
     exclusivity_key: str
     driver_id: str
     connection: InstrumentConnection
-
-
-def _analysis_references_proposal(
-    analysis: AnalysisRecord,
-    *,
-    proposal_id: str,
-) -> bool:
-    expected_ref = parameter_change_proposal_record_ref(proposal_id)
-    for output in analysis.outputs:
-        if not isinstance(output, AnalysisParameterProposalRecordOutput):
-            continue
-        if (
-            output.content.proposal_id == proposal_id
-            and output.content.record_ref == expected_ref
-        ):
-            return True
-    return False
 
 
 def _require_authoritative_instrument_inventory(

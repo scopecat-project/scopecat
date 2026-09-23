@@ -37,6 +37,7 @@ from scopecat.daemon.calibration_checks import (
 from scopecat.daemon.wire import RunSubmission
 from scopecat.kernel.errors import NotFound
 from scopecat.kernel.frozen import thaw_json_value
+from scopecat.project_state import ProjectStateServices
 from scopecat.records.analysis import (
     AnalysisFactRecordOutput,
     AnalysisRecord,
@@ -46,6 +47,8 @@ from scopecat.records.calibration_check import (
     CalibrationCheckRequest,
     CalibrationCheckResult,
 )
+from scopecat.records.candidate_input import AnalysisCandidateRunConfigSource
+from scopecat.records.config import config_content_hash
 from scopecat.records.measurement_context import MeasurementContext
 from scopecat.records.run import ParameterRunConfigSource, RunConfigSource
 from scopecat.records.sample import SampleSelector
@@ -57,6 +60,7 @@ from scopecat.runs.refs import record_content_ref
 from scopecat.sdk.compute import PYTHON_JSON_CODEC
 
 from scopecat_server.errors import BackendConflict
+from scopecat_server.services.candidate_resolution import resolve_candidate_input
 from scopecat_server.services.parameter_resolution import resolve_parameters
 from scopecat_server.services.samples import SampleService
 from scopecat_server.services.scientific_binding import validate_scientific_binding
@@ -85,9 +89,15 @@ def declared_check(intent: Mapping[str, object]) -> CalibrationCheckRequest | No
 
 
 class CalibrationCheckAdmission:
-    def __init__(self, samples: SampleService, targets: TargetCatalogStore) -> None:
+    def __init__(
+        self,
+        samples: SampleService,
+        targets: TargetCatalogStore,
+        services: ProjectStateServices,
+    ) -> None:
         self._samples = samples
         self._targets = targets
+        self._services = services
 
     def validate(
         self,
@@ -109,16 +119,28 @@ class CalibrationCheckAdmission:
             != request.context.setup_content_hash
         ):
             raise BackendConflict("check setup differs from current authority")
-        resolved = resolve_parameters(
-            connection,
-            parameters=request.context.parameters,
-            setup=current.revision.ref,
-        )
+        parameters = request.context.parameters
+        if isinstance(parameters, AnalysisCandidateRunConfigSource):
+            config = resolve_candidate_input(parameters, self._services)
+            original = self._services.runs.read_snapshot(parameters.source_run_id)
+            if (
+                MeasurementContext.from_binding(parameters, original.scientific_binding)
+                != request.context
+            ):
+                raise BackendConflict(
+                    "candidate check differs from its original context"
+                )
+        else:
+            config = resolve_parameters(
+                connection,
+                parameters=parameters,
+                setup=current.revision.ref,
+            ).config
         expected = ResolvedScientificBinding(
             subject=request.context.subject,
             target_binding=request.context.target_binding,
             scenario=request.context.scenario,
-            config_content_hash=resolved.config_source.content_hash,
+            config_content_hash=config_content_hash(config),
             setup_content_hash=request.context.setup_content_hash,
         )
         if isinstance(expected.subject, UnboundSubject) and expected.scenario is None:
@@ -127,7 +149,7 @@ class CalibrationCheckAdmission:
             )
         validate_scientific_binding(
             expected,
-            resolved.config,
+            config,
             sample_service=self._samples,
             targets=self._targets,
         )
@@ -158,12 +180,13 @@ def _require_context(
     source: RunConfigSource | None,
     binding: ResolvedScientificBinding,
 ) -> None:
-    if (
-        not isinstance(source, ParameterRunConfigSource)
-        or source.overrides
-        or MeasurementContext.from_binding(source.parameters, binding)
-        != request.context
-    ):
+    if isinstance(source, AnalysisCandidateRunConfigSource):
+        observed = MeasurementContext.from_binding(source, binding)
+    elif isinstance(source, ParameterRunConfigSource) and not source.overrides:
+        observed = MeasurementContext.from_binding(source.parameters, binding)
+    else:
+        observed = None
+    if observed != request.context:
         raise BackendConflict("check measurement differs from admitted declaration")
 
 

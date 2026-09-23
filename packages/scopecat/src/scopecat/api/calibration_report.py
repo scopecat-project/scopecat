@@ -4,6 +4,7 @@ from html import escape
 from typing import override
 
 from scopecat.daemon.calibration_checks import CalibrationReport
+from scopecat.records.parameter_revision import ParameterRevisionRef
 
 
 class CalibrationReportView(CalibrationReport):
@@ -100,8 +101,14 @@ class CalibrationReportView(CalibrationReport):
                 + "</ul></details>"
             )
         context = self.context
+        parameters = context.parameters
+        parameter_label = (
+            parameters.revision_id
+            if isinstance(parameters, ParameterRevisionRef)
+            else f"{parameters.proposal_id} (candidate from {parameters.source_run_id})"
+        )
         context_text = (
-            f"Parameters: {context.parameters.revision_id} "
+            f"Parameters: {parameter_label} "
             f"({context.parameters.content_hash})\n"
             f"Setup: {context.setup_content_hash}\n"
             f"Subject: {context.subject.model_dump_json()}\n"

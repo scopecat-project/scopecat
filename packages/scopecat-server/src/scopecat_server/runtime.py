@@ -195,6 +195,7 @@ class LocalDaemonRuntime:
                 checks=CalibrationCheckAdmission(
                     samples,
                     TargetCatalogStore(sqlite, catalog_id=project_store.identity()),
+                    services,
                 ),
             )
 
@@ -271,6 +272,7 @@ class LocalDaemonRuntime:
             )
             startup_stage("services composed; constructing daemon application")
             application = DaemonApplication(
+                services=services,
                 project_root=self.project_root,
                 project_id=project_id,
                 deployment_id=deployment_id,

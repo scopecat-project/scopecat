@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { contextParameterLabel } from "../launch/context-parameters";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient, apiData } from "../../api-client";
 import type { ProjectRun } from "../../types";
@@ -34,9 +35,12 @@ export function SampleCapabilities({
     (sample) => sample.sample_id === sampleId && sample.revision === revision,
   );
   const context =
-    snapshot && belongs && source?.kind === "parameter_revision" && source.overrides.length === 0
+    snapshot &&
+    belongs &&
+    (source?.kind === "analysis_candidate" ||
+      (source?.kind === "parameter_revision" && source.overrides.length === 0))
       ? {
-          parameters: source.parameters,
+          parameters: source.kind === "analysis_candidate" ? source : source.parameters,
           subject: snapshot.scientific_binding.subject,
           target_binding: snapshot.scientific_binding.target_binding ?? null,
           setup_content_hash: snapshot.scientific_binding.setup_content_hash,
@@ -84,14 +88,15 @@ export function SampleCapabilities({
       {snapshot && !context && (
         <p role="alert">
           This measurement does not provide an exact saved parameter context for this sample
-          revision. Measurements with parameter overrides or candidate configurations cannot be used
+          revision. Measurements with parameter overrides or unsaved configurations cannot be used
           here.
         </p>
       )}
       {context && (
         <section key={runId} aria-label="Selected capability context">
           <p>
-            Parameters: {context.parameters.revision_id} · Setup: {context.setup_content_hash}
+            Parameters: {contextParameterLabel(context.parameters)} · Setup:{" "}
+            {context.setup_content_hash}
           </p>
           <p>
             Scenario:{" "}

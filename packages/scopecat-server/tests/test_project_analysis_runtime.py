@@ -1421,6 +1421,7 @@ def test_verified_parameter_branch_publication_is_atomic_and_restorable(
             ),
         )
         intermediate_id = None
+        candidate_context = None
         if sequential:
             # Stage two really consumed stage one's candidate, then refined the
             # same cell. No intermediate value is published to the daily branch.
@@ -1452,6 +1453,10 @@ def test_verified_parameter_branch_publication_is_atomic_and_restorable(
             with pytest.raises(DaemonConflictError, match="independent parameters"):
                 second.then(first, name="wrong-order")
             chained = first.then(second, name="sequence")
+            candidate_context = lab.resolve_context(candidate=chained)
+            assert candidate_context.branch is None and candidate_context.setup is None
+            with pytest.raises(ValueError, match="not both"):
+                lab.resolve_context(candidate=chained, branch="daily")
             candidate = chained.config
             proposal = candidate.parameter_proposal
             assert proposal.composition is not None
@@ -1498,6 +1503,12 @@ def test_verified_parameter_branch_publication_is_atomic_and_restorable(
                 ),
             )
         context = lab.analysis("Verify branch", key="branch-verification")
+        if sequential:
+            assert candidate_context is not None
+            assert (
+                lab.get_run(candidate_id).snapshot.measurement_context
+                == candidate_context.context
+            )
         context.measurements(baseline, id="baseline", role="baseline")
         if intermediate_id is not None:
             context.measurements(

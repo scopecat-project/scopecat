@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { contextParameterLabel } from "../launch/context-parameters";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import type { MethodResponse } from "openapi-fetch";
 import { apiClient, apiData } from "../../api-client";
@@ -222,8 +223,8 @@ export function CurrentCapabilities({
             {resolution.branch
               ? `Branch ${resolution.branch.name} · generation ${resolution.branch.generation} · `
               : "Exact saved "}
-            parameters {resolution.context.parameters.revision_id} · setup{" "}
-            {resolution.setup.revision_id}
+            parameters {contextParameterLabel(resolution.context.parameters)} · setup{" "}
+            {resolution.setup?.revision_id ?? resolution.context.setup_content_hash}
           </p>
           <p>
             These versions are now frozen for this report. Resolve again to capture changes to a

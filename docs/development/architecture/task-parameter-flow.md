@@ -9,7 +9,9 @@ completed candidate-backed stages into one candidate against the initial saved
 revision. Each stage must consume the preceding exact candidate. A new independent
 measurement must verify the final candidate before branch publication. Schema 95
 retains ordered sources and revalidates their net values. This does not yet add
-task output bindings, candidate check contexts or automatic stage admission.
+task output bindings or automatic stage admission. Candidate contexts are now
+supported by the shared resolver, check admission, child-input matching, retained
+evidence and workbench consumers. They remain distinct from saved revision contexts.
 
 ## Existing primitives
 
@@ -49,9 +51,9 @@ ordinary saves and losing provenance.
 
 ## Decisions before the task wire contract
 
-- Extend shared input resolution, admission and evidence to cover candidates.
-  Current `MeasurementContext` covers saved revisions without overrides. Do not
-  add a task-only context or pretend candidates are already saved revisions.
+- Shared input resolution, admission and evidence now cover exact candidates and
+  saved revisions without overrides. Use this same context when binding future
+  stage outputs; do not add a task-only context or disguise candidates as revisions.
 - Define typed parameter outputs and binding receipts, not general Python object
   graphs or arbitrary JSON paths.
 - Distinguish sequential ancestry from common-base sibling composition. Later

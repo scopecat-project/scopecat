@@ -54,16 +54,38 @@ the context is unbound; this does not establish physical sample capability.
 
 ## Read a context from an existing measurement
 
+For a retained candidate, resolve its original context directly:
+
+```python
+candidate = author.config.candidate(source_run_id, "coarse-then-fine")
+receipt = lab.resolve_context(candidate=candidate)
+report = lab.calibration_checks.report(
+    context=receipt.context, profile="daily-readiness"
+)
+```
+
+Do not pass a branch, saved parameters, setup or subject override with a candidate.
+The server validates the exact retained proposal and resolved content, preserving
+its original subject, setup hash, scenario and mapping. Both receipt selections
+are `None`: no current setup or branch is substituted. The context's parameter
+input is explicitly an `analysis_candidate`, not a saved parameter revision.
+Checks can declare this context before running the verification measurement.
+Actual admission still checks the current setup authority.
+
+Candidate evidence applies only to that exact candidate context. Matching values
+or publishing those values as a saved revision do not automatically transfer the
+check's applicability to another context.
+
 ```python
 context = run.snapshot.measurement_context
 if context is None:
-    raise ValueError("This run does not use exact saved parameters without overrides")
+    raise ValueError("This run does not retain an exact saved or candidate input")
 report = lab.calibration_checks.report(context=context, profile="daily-readiness")
 ```
 
-This property uses only retained evidence. Candidate configurations, temporary
-parameter overrides and configurations without an independent saved parameter
-revision return `None`. A context does not imply that the measurement succeeded,
+This property uses only retained evidence, including exact candidate inputs.
+Temporary parameter overrides and configurations without a saved revision or
+retained candidate return `None`. A context does not imply that the measurement succeeded,
 that its calibration is valid, or that hardware execution is authorized.
 
 Code that already owns an exact parameter revision and resolved binding can use

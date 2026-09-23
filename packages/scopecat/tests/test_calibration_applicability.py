@@ -195,16 +195,44 @@ def test_run_context_uses_retained_inputs_and_excludes_unsaved_parameters(
                 )
             }
         ),
-        AnalysisCandidateRunConfigSource(
-            source_run_id="prior",
-            analysis_record_id="analysis",
-            proposal_id="proposal",
-            base_config_content_hash=source.content_hash,
-            content_hash=source.content_hash,
-        ),
     ):
         changed = measured.model_copy(update={"config_source": unsaved})
         assert changed.measurement_context is None
+
+    candidate = AnalysisCandidateRunConfigSource(
+        source_run_id="prior",
+        analysis_record_id="analysis",
+        proposal_id="proposal",
+        base_config_content_hash=source.content_hash,
+        content_hash=source.content_hash,
+    )
+    retained = measured.model_copy(update={"config_source": candidate})
+    assert retained.measurement_context == replace(current, parameters=candidate)
+    assert (
+        RunSnapshot.model_validate_json(retained.model_dump_json()).measurement_context
+        == retained.measurement_context
+    )
+    verdict = assess_calibration_check(
+        retained,
+        checked_scope=SCOPE,
+        requested_scope=SCOPE,
+        passed=True,
+        current=current,
+        now=START + timedelta(minutes=1),
+        max_age=timedelta(hours=1),
+    )
+    assert verdict.status == "recheck"
+    assert verdict.reasons == ("parameters_changed",)
+    exact = assess_calibration_check(
+        retained,
+        checked_scope=SCOPE,
+        requested_scope=SCOPE,
+        passed=True,
+        current=replace(current, parameters=candidate),
+        now=START + timedelta(minutes=1),
+        max_age=timedelta(hours=1),
+    )
+    assert exact.status == "usable"
 
 
 def test_all_recheck_reasons_are_retained_and_target_order_matters(

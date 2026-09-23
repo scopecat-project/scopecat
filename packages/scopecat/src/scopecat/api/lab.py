@@ -16,6 +16,7 @@ from scopecat.api.apparatus_history import LabApparatusOperations
 from scopecat.api.calibration_checks import LabCalibrationChecks
 from scopecat.api.calibration_tasks import LabCalibrationTasks
 from scopecat.api.instruments import LabInstrumentOperations
+from scopecat.api.parameter_candidates import ParameterCandidate
 from scopecat.api.parameter_revisions import LabParameterOperations
 from scopecat.api.plans import LabPlanOperations
 from scopecat.api.procedure_planner import ProcedurePlanningContext
@@ -48,6 +49,7 @@ from scopecat.planning.preview_models import ExperimentPreview
 from scopecat.planning.system import ExperimentSystemBuilder
 from scopecat.program.values import MetadataValue
 from scopecat.records.analysis import SampleAnalysisSubject
+from scopecat.records.candidate_input import AnalysisCandidateRunConfigSource
 from scopecat.records.config import ConfigProfileSnapshot
 from scopecat.records.config_context import ConfigContextRef
 from scopecat.records.experimental_batch import ExperimentalBatch
@@ -301,17 +303,29 @@ class LabClient:
         self,
         *,
         branch: str | None = None,
-        parameters: ParameterRevision | ParameterRevisionRef | None = None,
+        parameters: ParameterRevision
+        | ParameterRevisionRef
+        | AnalysisCandidateRunConfigSource
+        | None = None,
+        candidate: ParameterCandidate | None = None,
         samples: tuple[SampleSelector, ...] = (),
         setup: SetupRevision | SetupRevisionRef | None = None,
         target: TargetRevisionRef | None = None,
     ) -> MeasurementContextResolution:
         """Capture exact saved scientific inputs without changing live selections.
 
-        Choose a branch or exact saved parameters. Branch and active setup heads
+        Choose a branch, saved parameters or a retained candidate. Candidates keep
+        their original subject/setup; do not supply replacement selections.
+        Branch and active setup heads
         are resolved together. The receipt retains
         their versions; no experiment is imported or hardware acquired.
         """
+        if candidate is not None:
+            if parameters is not None or branch is not None:
+                raise ValueError("choose candidate or saved parameters, not both")
+            _, candidate_source = self.config.resolve_with_source(candidate.config)
+            assert isinstance(candidate_source, AnalysisCandidateRunConfigSource)
+            parameters = candidate_source
         return self._client.resolve_measurement_context(
             MeasurementContextResolve(
                 branch=branch,

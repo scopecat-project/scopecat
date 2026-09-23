@@ -28,6 +28,12 @@ from scopecat.automation.calibration_tasks import (
     CalibrationTaskProgress,
     CalibrationTaskStage,
 )
+from scopecat.config.candidates import (
+    CandidateConfig,
+    resolve_candidate_config_from_snapshot,
+)
+from scopecat.config.changes import parameter_change_proposal_from_updates
+from scopecat.config.parameters import replace_scalar_parameter
 from scopecat.config.scientific_binding import bind_scientific_evidence
 from scopecat.control.models import RunPlanSummary
 from scopecat.daemon.calibration_checks import (
@@ -55,6 +61,7 @@ from scopecat.daemon.measurement_context import (
 )
 from scopecat.daemon.wire import (
     AnalysisFactOutputPayload,
+    AnalysisParameterProposalOutputPayload,
     AnalysisSaveCommand,
     ParameterBranchCommitCommand,
     ParameterResolveCommand,
@@ -64,6 +71,7 @@ from scopecat.daemon.wire import (
     SetupActivateCommand,
     SetupSaveCommand,
 )
+from scopecat.kernel.quantity import Quantity
 from scopecat.project import load_project
 from scopecat.records.analysis import AnalysisFact, RunAnalysisSubject
 from scopecat.records.calibration_check import (
@@ -75,8 +83,11 @@ from scopecat.records.calibration_policy import (
     CalibrationProfile,
     CalibrationRequirement,
 )
+from scopecat.records.candidate_input import AnalysisCandidateRunConfigSource
+from scopecat.records.config import config_content_hash
 from scopecat.records.execution_scenario import SoftwareExecutionScenario
 from scopecat.records.measurement_context import MeasurementContext
+from scopecat.records.parameter_revision import ParameterRevisionRef
 from scopecat.records.plan_ref import ProcedureChildSubmission
 from scopecat.records.run_request import RunRequest
 from scopecat.records.sample import SampleRevisionDraft, SampleSelector
@@ -104,6 +115,7 @@ def test_capability_context_retains_exact_registered_target(
 ) -> None:
     runtime, declaration, _ = check_case
     app = runtime.application
+    assert isinstance(declaration.context.parameters, ParameterRevisionRef)
     app.config.commit_parameter_branch(
         ParameterBranchCommitCommand(
             name="target-branch",
@@ -216,6 +228,7 @@ def test_current_capability_context_freezes_branch_and_setup(
 ) -> None:
     runtime, declaration, child = check_case
     app = runtime.application
+    assert isinstance(declaration.context.parameters, ParameterRevisionRef)
     before = app.config.parameter_branch_heads(limit=100, after=None)
     direct = app.measurement_context.resolve(
         MeasurementContextResolve(
@@ -327,6 +340,7 @@ def test_current_capability_context_freezes_branch_and_setup(
             )
             assert response.status_code == status
     assert app.setup.current().revision.ref == resolved.setup
+    assert resolved.setup is not None
     explicit = app.measurement_context.resolve(
         query.model_copy(update={"setup": resolved.setup})
     )
@@ -557,6 +571,134 @@ def _command(declaration: CalibrationCheckRequest) -> ProcedureSubmitCommand:
         intent={"calibration_check": declaration.model_dump(mode="json")},
         samples=(SampleSelector(sample_id="chip", revision=1),),
     )
+
+
+@pytest.mark.parametrize("wrong_input", [False, True])
+def test_candidate_context_is_resolved_admitted_and_bound_to_child(
+    check_case: CheckCase,
+    wrong_input: bool,
+) -> None:
+    runtime, declaration, child = check_case
+    app = runtime.application
+    baseline = app.submit_run(child)
+    proposal = parameter_change_proposal_from_updates(
+        source_run_id=baseline.run_id,
+        source_config=child.config,
+        analysis_title="fit",
+        analysis_record_id="analysis-fit-r1",
+        proposal_id="frequency",
+        updates=(replace_scalar_parameter("drive_frequency", Quantity(5.1, "GHz")),),
+        reason="candidate context fixture",
+        confidence=None,
+    )
+    app.runs.save_run_analysis(
+        baseline.run_id,
+        AnalysisSaveCommand(
+            title="fit",
+            analysis_key="fit",
+            outputs=(
+                AnalysisParameterProposalOutputPayload(
+                    kind="parameter_change_proposal",
+                    id="frequency",
+                    title="Frequency",
+                    content=proposal,
+                ),
+            ),
+        ),
+    )
+    config = resolve_candidate_config_from_snapshot(
+        CandidateConfig(proposal),
+        source_config=child.config,
+    )
+    source = AnalysisCandidateRunConfigSource(
+        source_run_id=baseline.run_id,
+        proposal_id=proposal.id,
+        analysis_record_id=proposal.analysis_record_id,
+        base_config_content_hash=proposal.base_config_content_hash,
+        content_hash=config_content_hash(config),
+    )
+    captured = app.measurement_context.resolve(
+        MeasurementContextResolve(parameters=source)
+    )
+    assert captured.branch is None and captured.setup is None
+    assert captured.context == replace(declaration.context, parameters=source)
+    with pytest.raises(BackendConflict, match="resolved configuration"):
+        app.measurement_context.resolve(
+            MeasurementContextResolve(
+                parameters=source.model_copy(
+                    update={"content_hash": "sha256:" + "f" * 64}
+                )
+            )
+        )
+    with pytest.raises(BackendConflict, match="original subject and setup"):
+        app.measurement_context.resolve(
+            MeasurementContextResolve(
+                parameters=source,
+                samples=(SampleSelector(sample_id="chip", revision=1),),
+            )
+        )
+    declared = declaration.model_copy(update={"context": captured.context})
+    with pytest.raises(BackendConflict, match="original context"):
+        app.automation.submit(
+            _command(
+                declared.model_copy(
+                    update={
+                        "context": replace(captured.context, subject=UnboundSubject()),
+                    }
+                )
+            )
+        )
+    parent = app.automation.submit(_command(declared)).run
+    page = app.calibration_checks.query(CalibrationCheckQuery(context=captured.context))
+    assert len(page.items) == 1
+    assert page.items[0].request == declared
+    lease = app.automation.acquire_lease(
+        ProcedureWorkerLeaseAcquireCommand(
+            procedure_run_id=parent.procedure_run_id,
+            worker_id="test",
+            expected_run_revision=parent.revision,
+        )
+    )
+    if not wrong_input:
+        child = child.model_copy(
+            update={
+                "config": config,
+                "config_source": source,
+                "scientific_binding": child.scientific_binding.model_copy(
+                    update={
+                        "config_content_hash": source.content_hash,
+                    }
+                ),
+            }
+        )
+    child = child.model_copy(
+        update={
+            "submission_id": procedure_step_operation_id(
+                parent.procedure_run_id, "measure"
+            ),
+            "procedure_child": ProcedureChildSubmission(
+                procedure_run_id=parent.procedure_run_id,
+                step_key="measure",
+            ),
+        }
+    )
+    app.automation.begin_step(
+        ProcedureStepBeginCommand(
+            procedure_run_id=parent.procedure_run_id,
+            lease_token=lease.lease.lease_token,
+            expected_run_revision=lease.run.revision,
+            step_key="measure",
+            operation="run",
+            intent_hash="sha256:" + child.intent_content_hash,
+        )
+    )
+    if wrong_input:
+        with pytest.raises(BackendConflict, match="admitted declaration"):
+            app.submit_run(child)
+    else:
+        admitted = app.submit_run(child)
+        snapshot = app.runs.get_run(admitted.run_id).snapshot
+        assert snapshot.measurement_context == captured.context
 
 
 def test_rejects_invalid_declarations_without_queueing(check_case: CheckCase) -> None:

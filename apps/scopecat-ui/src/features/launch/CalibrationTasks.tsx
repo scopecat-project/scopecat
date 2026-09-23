@@ -4,6 +4,7 @@ import { apiClient, apiData } from "../../api-client";
 import type { components } from "../../api-schema";
 import type { MethodResponse } from "openapi-fetch";
 import { CalibrationEvidence } from "./CalibrationEvidence";
+import { contextParameterLabel } from "./context-parameters";
 
 type TaskControl = components["schemas"]["CalibrationTaskControl"];
 type TaskView = MethodResponse<typeof apiClient, "get", "/api/v1/calibration-tasks/{task_id}">;
@@ -280,7 +281,7 @@ function TaskDetail({
                     <summary>Frozen measurement context</summary>
                     <dl className="text-sm space-y-1 break-all">
                       <dt>Parameters</dt>
-                      <dd>{planned.check.context.parameters.revision_id}</dd>
+                      <dd>{contextParameterLabel(planned.check.context.parameters)}</dd>
                       <dt>Measurement subject</dt>
                       <dd>{subjectName(planned.check.context.subject)}</dd>
                       <dt>Execution scenario</dt>
