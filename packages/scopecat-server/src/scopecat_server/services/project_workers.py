@@ -11,11 +11,16 @@ import logging
 import subprocess
 import sys
 from collections.abc import Callable
+from datetime import UTC, datetime
+from hashlib import sha256
 from pathlib import Path
 from threading import Event, Lock, Thread
 from typing import Literal, cast
 
-from scopecat.daemon.procedure_views import ProcedureDispatchView
+from scopecat.daemon.procedure_views import (
+    ProcedureDispatchView,
+    ProcedureWorkerFailure,
+)
 from scopecat.kernel.interaction_timing import record_timing
 from scopecat.runtime_binding import load_runtime_binding
 
@@ -47,6 +52,36 @@ class ProjectProcedureWorkers:
 
     def _path(self) -> Path:
         return load_runtime_binding(self.root()).data_root / "console-procedures.json"
+
+    def _worker_dir(self, procedure_id: str) -> Path:
+        key = sha256(procedure_id.encode("utf-8")).hexdigest()
+        return self._path().parent / "procedure-workers" / key
+
+    def _failure(self, procedure_id: str) -> ProcedureWorkerFailure | None:
+        path = self._worker_dir(procedure_id) / "failure.json"
+        return (
+            ProcedureWorkerFailure.model_validate_json(path.read_text(encoding="utf-8"))
+            if path.exists()
+            else None
+        )
+
+    def _record_failure(
+        self, procedure_id: str, failure: ProcedureWorkerFailure
+    ) -> None:
+        path = self._worker_dir(procedure_id) / "failure.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        temporary = path.with_suffix(".tmp")
+        temporary.write_text(failure.model_dump_json(), encoding="utf-8")
+        temporary.replace(path)
+
+    @staticmethod
+    def _exit_failure(code: int) -> ProcedureWorkerFailure:
+        return ProcedureWorkerFailure(
+            kind="process_exit",
+            message=f"Worker exited with code {code}.",
+            observed_at=datetime.now(UTC),
+            exit_code=code,
+        )
 
     def _load(self) -> dict[str, str]:
         if self._managed is None:
@@ -89,12 +124,17 @@ class ProjectProcedureWorkers:
             management = self._load().get(procedure_id, "unmanaged")
             child = self._children.get(procedure_id)
             code = child.poll() if child is not None else None
+            failure = self._failure(procedure_id)
             # Report an observed failed exit immediately; tick persists it.
             if child is not None and code is not None and code != 0:
                 management = "paused"
+                failure = self._exit_failure(code)
+            log_path = self._worker_dir(procedure_id) / "worker.log"
             return ProcedureDispatchView(
                 management=cast("Literal['unmanaged', 'active', 'paused']", management),
                 worker_running=child is not None and code is None,
+                failure=failure,
+                log_path=str(log_path) if log_path.exists() else None,
             )
 
     def dispatch(self, procedure_id: str) -> None:
@@ -104,6 +144,7 @@ class ProjectProcedureWorkers:
             if child is not None and child.poll() is not None:
                 del self._children[procedure_id]
             managed[procedure_id] = "active"
+            (self._worker_dir(procedure_id) / "failure.json").unlink(missing_ok=True)
             self._save()
             errors = self._tick()
             error = errors.get(procedure_id)
@@ -132,6 +173,7 @@ class ProjectProcedureWorkers:
             if code is not None:
                 del self._children[key]
                 if code != 0 and key in managed:
+                    self._record_failure(key, self._exit_failure(code))
                     managed[key] = "paused"
                     self._save()
         for key in tuple(managed):
@@ -151,6 +193,14 @@ class ProjectProcedureWorkers:
                 if managed[key] == "paused":
                     continue
                 managed[key] = "paused"
+                self._record_failure(
+                    key,
+                    ProcedureWorkerFailure(
+                        kind="dispatch",
+                        message=str(error),
+                        observed_at=datetime.now(UTC),
+                    ),
+                )
                 self._save()
                 errors[key] = error
                 _LOG.exception("Procedure worker dispatch paused: %s", key)
@@ -162,7 +212,7 @@ class ProjectProcedureWorkers:
 
     def _spawn(self, procedure_id: str) -> None:
         root = self.resolve_root(procedure_id) if self.resolve_root else self.root()
-        log_path = load_runtime_binding(root).data_root / "console-worker.log"
+        log_path = self._worker_dir(procedure_id) / "worker.log"
         log_path.parent.mkdir(parents=True, exist_ok=True)
         record_timing("procedure_dispatch", procedure_id=procedure_id)
         with log_path.open("ab") as log:

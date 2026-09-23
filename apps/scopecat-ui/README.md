@@ -160,7 +160,13 @@ Attention and closed procedures leave the manager. This is process management, n
 hardware recovery or procedure cancellation protocol. Daemon shutdown does not
 forcibly kill hardware workers.
 
-Process output goes to `.scopecat/console-worker.log`. A failed spawn retains the
+Process output goes to `procedure-workers/<id-hash>/worker.log` under the daemon's
+data root, keeping independent executions separate. The operator view exposes the
+exact path and the latest worker failure (message, observation time and exit code,
+when applicable). Failure observations are retained in a sibling `failure.json`
+across daemon restart. Explicit dispatch clears the old diagnostic, while logs
+remain append-only across retries. Previous shared logs are left untouched. These
+are operational diagnostics, not scientific outcome records. A failed spawn retains the
 procedure ID and reports `dispatch_error`. The progress view offers explicit
 dispatch and links to exact child runs and analysis publications; its procedure ID
 remains in the URL. Configuration acceptance stays in the declared procedure and review policy.

@@ -1,4 +1,5 @@
 import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { cp, mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -179,7 +180,16 @@ retainedProcedureTest(
           contentType: "application/json",
         });
       }
-      for (const name of ["daemon.log", "console-worker.log"]) {
+      const logs = ["daemon.log"];
+      if (selectedId)
+        logs.push(
+          join(
+            "procedure-workers",
+            createHash("sha256").update(selectedId).digest("hex"),
+            "worker.log",
+          ),
+        );
+      for (const name of logs) {
         const body = await readFile(join(project, ".scopecat", name)).catch((failure: unknown) =>
           Buffer.from(`Log unavailable: ${String(failure)}`),
         );

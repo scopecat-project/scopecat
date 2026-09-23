@@ -7884,6 +7884,9 @@ export interface components {
          * @description Observation of existing process management, not execution authority.
          */
         ProcedureDispatchView: {
+            failure?: components["schemas"]["ProcedureWorkerFailure"] | null;
+            /** Log Path */
+            log_path?: string | null;
             /**
              * Management
              * @enum {string}
@@ -8084,6 +8087,26 @@ export interface components {
         /** @enum {string} */
         ProcedureStepOperation: "run" | "analysis" | "config_activation" | "config_publish" | "parameter_publish" | "interpretation";
         ProcedureStepOutputRef: components["schemas"]["RunOutputRef"] | components["schemas"]["AnalysisPublicationOutputRef"] | components["schemas"]["ConfigActivationOutputRef"] | components["schemas"]["ConfigPublishOutputRef"] | components["schemas"]["ParameterBranchPublishOutputRef"] | components["schemas"]["InterpretationOutputRef"];
+        /**
+         * ProcedureWorkerFailure
+         * @description Last process-management failure; separate from scientific outcome.
+         */
+        ProcedureWorkerFailure: {
+            /** Exit Code */
+            exit_code?: number | null;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "dispatch" | "process_exit";
+            /** Message */
+            message: string;
+            /**
+             * Observed At
+             * Format: date-time
+             */
+            observed_at: string;
+        };
         /**
          * ProjectAnalysisDecisionReference
          * @description One exact typed fact interpreted as a project-level decision.

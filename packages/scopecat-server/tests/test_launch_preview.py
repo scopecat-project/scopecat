@@ -298,6 +298,8 @@ def test_worker_failure_isolated_and_not_attributed_to_another_dispatch(
         # broken one. Only the broken one pauses; the healthy caller succeeds.
         manager.dispatch("healthy")
         assert manager.snapshot("broken").management == "paused"
+        failure_view = manager.snapshot("broken").failure
+        assert failure_view is not None and failure_view.kind == "dispatch"
         assert manager.snapshot("healthy").worker_running
         count = launch.call_count
         manager.manage("broken")
@@ -306,6 +308,7 @@ def test_worker_failure_isolated_and_not_attributed_to_another_dispatch(
         with pytest.raises(ProcedureDispatchError):
             manager.dispatch("broken")
     restored = ProjectProcedureWorkers(lambda: tmp_path, state, resolve_root=root)
+    assert restored.snapshot("broken").failure is not None
     with patch.object(restored, "_spawn") as launch:
         restored.tick()
     assert all(call.args[0] != "broken" for call in launch.call_args_list)
@@ -321,6 +324,29 @@ def test_background_handoffs_scan_workers_once_per_tick(tmp_path: Path) -> None:
     state.assert_not_called()
     manager.tick()
     assert state.call_count == 40
+
+
+def test_worker_logs_are_per_execution_and_preserve_previous_output(
+    tmp_path: Path,
+) -> None:
+    from scopecat_server.services.project_workers import ProjectProcedureWorkers
+
+    manager = ProjectProcedureWorkers(lambda: tmp_path, lambda _: "ready")
+    previous = manager._path().parent / "console-worker.log"
+    previous.parent.mkdir(parents=True, exist_ok=True)
+    previous.write_text("retained old output", encoding="utf-8")
+    child = Mock()
+    child.poll.return_value = None
+    with patch(
+        "scopecat_server.services.project_workers.subprocess.Popen", return_value=child
+    ):
+        manager.dispatch("first/experiment")
+        manager.dispatch("second/experiment")
+    first = manager.snapshot("first/experiment").log_path
+    second = manager.snapshot("second/experiment").log_path
+    assert first is not None and second is not None and first != second
+    assert Path(first).is_file() and Path(second).is_file()
+    assert previous.read_text(encoding="utf-8") == "retained old output"
 
 
 def test_dispatch_deduplicates_live_workers(tmp_path: Path) -> None:
@@ -400,11 +426,16 @@ def test_failed_process_requires_explicit_dispatch_even_after_restart(
         child.poll.return_value = 1
         manager.tick()
         restored = ProjectProcedureWorkers(lambda: tmp_path, lambda _: "ready")
+        failure = restored.snapshot("p1").failure
+        assert failure is not None and failure.exit_code == 1
+        assert restored.snapshot("p1").log_path is not None
         restored.tick()
         restored.manage("p1")  # task handoff must not undo the failed-worker pause
         spawn.assert_called_once()
+        child.poll.return_value = None
         restored.dispatch("p1")
         assert spawn.call_count == 2
+        assert restored.snapshot("p1").failure is None
 
 
 def test_review_arriving_before_previous_worker_exit_is_not_lost(

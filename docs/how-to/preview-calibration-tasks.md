@@ -160,8 +160,8 @@ not reset that worker pause. Waiting input or attention also stops sequential
 advancement until resolved through the procedure's existing controls.
 
 An unavailable author workspace or worker-start failure pauses that execution;
-other tasks can still reach their workers. Inspect the procedure ID and error in
-the daemon/worker logs, restore its code workspace or environment, then use
+other tasks can still reach their workers. Open its execution to see the retained
+worker diagnostic and exact log path, restore its code workspace or environment, then use
 **Dispatch existing procedure**. This retries the admitted execution rather than
 creating a replacement check.
 
