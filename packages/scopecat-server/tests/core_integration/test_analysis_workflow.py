@@ -17,8 +17,10 @@ from scopecat.analysis.service import (
     AnalysisDatasetOutput,
     AnalysisFigureOutput,
     AnalysisTableOutput,
+    ConfigurationAnalysisInput,
     PublishedAnalysisOutputInput,
 )
+from scopecat.api._remote import analysis_input_payload
 from scopecat.config.registry import service as config_registry_service
 from scopecat.kernel.errors import CheckFailed, NotFound
 from scopecat.measurements.results import Dataset
@@ -39,9 +41,11 @@ from scopecat.records.analysis import (
     AnalysisPublishedOutputReference,
     AnalysisTableRecordOutput,
     AnalysisTableViewSpec,
+    ConfigurationAnalysisRecordInput,
     PublishedAnalysisRecordInput,
     RunAnalysisSubject,
 )
+from scopecat.records.config import config_content_hash
 from scopecat.runs.refs import record_content_ref
 from scopecat_testkit.config_registry import activate_candidate_config, initialize_setup
 from scopecat_testkit.server.in_process_lab import in_process_lab
@@ -56,6 +60,7 @@ from scopecat_testkit.server.signal_testkit import (
 )
 from scopecat_testkit.workflow_fixtures import load_config, load_invocation
 
+from scopecat_server.services.runs import analysis_input_from_payload
 from scopecat_server.storage.sqlite.run_repository import (
     PreparedContentPublication,
     SQLiteRunRepository,
@@ -269,6 +274,54 @@ def test_analysis_trace_records_its_analysis_dependency(tmp_path: Path) -> None:
     stored_execution = stored_executions[0]
     assert isinstance(stored_execution, dict)
     assert stored_execution["id"] == "_dataset_size"
+
+
+def test_analysis_configuration_access_is_retained_and_round_trips(
+    tmp_path: Path,
+) -> None:
+    run = execute_signal_run(
+        config=load_config(), experiment=load_invocation(), project_root=tmp_path
+    )
+    handle = in_process_lab(tmp_path, config=load_config()).get_run(run.run_id)
+    context = sc.AnalysisContext(run=handle)
+    assert context.result().inputs == ()
+    config = context.config
+    assert context.config == config
+    analysis = context.result("Configuration access", key="configuration-access").fact(
+        "count", len(config.parameter_snapshot.values)
+    )
+    [dependency] = analysis.inputs
+    assert isinstance(dependency, ConfigurationAnalysisInput)
+    assert dependency.content_hash == config_content_hash(handle.config)
+    assert analysis_input_from_payload(analysis_input_payload(dependency)) == dependency
+    published = analysis.save()
+    [retained] = handle.published_analysis(published.id).inputs
+    assert isinstance(retained, ConfigurationAnalysisRecordInput)
+    assert retained.run_id == handle.id
+    assert retained.content_hash == dependency.content_hash
+    assert retained.kind == "configuration_snapshot"
+    assert analysis.save().id == published.id
+
+
+@pytest.mark.parametrize("field", ["content_hash", "codec", "target"])
+def test_analysis_rejects_incorrect_configuration_identity(
+    tmp_path: Path, field: str
+) -> None:
+    run = execute_signal_run(
+        config=load_config(), experiment=load_invocation(), project_root=tmp_path
+    )
+    handle = in_process_lab(tmp_path, config=load_config()).get_run(run.run_id)
+    context = sc.AnalysisContext(run=handle)
+    _ = context.config
+    analysis = context.result("Invalid configuration", key="invalid-config").fact(
+        "value", 1
+    )
+    [dependency] = analysis.inputs
+    tampered = replace(dependency, **{field: "incorrect"})
+    with pytest.raises(CheckFailed) as error:
+        replace(analysis, inputs=(tampered,)).save()
+    assert error.value.problems[0].code == "analysis_configuration_input_mismatch"
+    assert handle.analysis_summaries().items == ()
 
 
 def test_analysis_trace_records_one_native_structured_result(

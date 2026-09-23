@@ -65,6 +65,7 @@ from scopecat.daemon.wire import (
     AnalysisSaveCommand,
     AnalysisSaveReceipt,
     AnalysisTableOutputPayload,
+    ConfigurationAnalysisInputPayload,
     InterpretationAnalysisInputPayload,
     MeasurementAnalysisInputPayload,
     ParameterCandidateComposeCommand,
@@ -139,11 +140,23 @@ if TYPE_CHECKING:
 
 def analysis_input_from_payload(item: AnalysisInputPayload) -> AnalysisInput:
     from scopecat.analysis.service import (
+        ConfigurationAnalysisInput,
         InterpretationAnalysisInput,
         MeasurementAnalysisInput,
         PublishedAnalysisOutputInput,
     )
 
+    if isinstance(item, ConfigurationAnalysisInputPayload):
+        return ConfigurationAnalysisInput(
+            id=item.id,
+            run_id=item.run_id,
+            target=item.target,
+            content_hash=item.content_hash,
+            codec=item.codec,
+            role=item.role,
+            title=item.title,
+            metadata=item.metadata,
+        )
     if isinstance(item, MeasurementAnalysisInputPayload):
         return MeasurementAnalysisInput(
             id=item.id,

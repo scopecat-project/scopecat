@@ -102,6 +102,7 @@ from scopecat.kernel.python_source import python_source_identity
 from scopecat.kernel.run_outcome import utc_now
 from scopecat.program.values import MetadataValue
 from scopecat.records.analysis import (
+    ConfigurationAnalysisRecordInput,
     InterpretationAnalysisRecordInput,
     MeasurementAnalysisRecordInput,
     ProjectAnalysisDecisionReference,
@@ -1644,7 +1645,9 @@ def _validate_analysis_upstreams(
     }
     actual_inputs: set[str] = set()
     for item in published.inputs:
-        if isinstance(item, MeasurementAnalysisRecordInput):
+        if isinstance(
+            item, MeasurementAnalysisRecordInput | ConfigurationAnalysisRecordInput
+        ):
             actual_inputs.add(RunOutputRef(run_id=item.run_id).model_dump_json())
         elif isinstance(item, InterpretationAnalysisRecordInput):
             actual_inputs.add(item.source.model_dump_json())

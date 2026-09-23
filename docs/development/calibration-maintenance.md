@@ -281,6 +281,10 @@ the domain attachment enable cross-revision reuse or whole-run completeness.
 
 Before selective invalidation, extend this coverage to scalar expressions,
 runtime reads, selections and derived queries outside recipe preparation.
+Analysis `context.config` access now retains and validates the complete run
+configuration as an immutable publication input. This supplies conservative
+snapshot provenance; individual analysis parameter reads and arbitrary Python
+dependencies remain unknown. See [analysis configuration inputs](../concepts/analysis-publication.md#configuration-inputs).
 Query membership matters:
 adding a row matching a filter can change a result without editing an earlier
 returned cell. Preparation and runtime/analysis reads need clearly stated coverage.

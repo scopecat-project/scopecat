@@ -472,6 +472,11 @@ class _AnalysisInputPayload(_WireModel):
     metadata: dict[str, JsonValue] | None = None
 
 
+class ConfigurationAnalysisInputPayload(_AnalysisInputPayload):
+    kind: Literal["configuration_snapshot"] = "configuration_snapshot"
+    run_id: NonEmptyText
+
+
 class MeasurementAnalysisInputPayload(_AnalysisInputPayload):
     kind: Literal["measurement_dataset"] = "measurement_dataset"
     run_id: NonEmptyText
@@ -489,6 +494,7 @@ class InterpretationAnalysisInputPayload(_AnalysisInputPayload):
 
 type AnalysisInputPayload = Annotated[
     MeasurementAnalysisInputPayload
+    | ConfigurationAnalysisInputPayload
     | PublishedAnalysisInputPayload
     | InterpretationAnalysisInputPayload,
     Field(discriminator="kind"),
@@ -1372,6 +1378,7 @@ __all__ = [
     "ConfigRevisionSource",
     "ConfigSetupRebindCommand",
     "ConfigSetupRebindPreviewCommand",
+    "ConfigurationAnalysisInputPayload",
     "ConfigurationTemplateImportCommand",
     "ConfigurationTemplateImportResult",
     "ConfigurationTemplateList",

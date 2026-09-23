@@ -40,6 +40,7 @@ from scopecat.measurements.datasets import MEASUREMENT_DATASET_CODEC
 from scopecat.project_state import ProjectStateServices
 from scopecat.records.analysis import (
     ANALYSIS_ARTIFACT_CODEC,
+    CONFIGURATION_ANALYSIS_INPUT_CODEC,
     AnalysisArtifactRecordOutput,
     AnalysisArtifactReference,
     AnalysisDatasetDerivation,
@@ -67,6 +68,7 @@ from scopecat.records.analysis import (
     AnalysisTableRecordOutput,
     AnalysisTableView,
     AnalysisTableViewSpec,
+    ConfigurationAnalysisRecordInput,
     InterpretationAnalysisRecordInput,
     MeasurementAnalysisRecordInput,
     ProjectAnalysisSubject,
@@ -86,6 +88,21 @@ from scopecat.runs.refs import (
 )
 
 _PROJECT_ANALYSIS_SUBJECT = ProjectAnalysisSubject()
+
+
+@dataclass(frozen=True)
+class ConfigurationAnalysisInput:
+    """Conservative identity of a run configuration accessed by analysis code."""
+
+    id: str
+    run_id: str
+    target: str
+    content_hash: str
+    codec: str
+    role: str
+    kind: Literal["configuration_snapshot"] = "configuration_snapshot"
+    title: str | None = None
+    metadata: Mapping[str, object] | None = None
 
 
 @dataclass(frozen=True)
@@ -133,6 +150,7 @@ class InterpretationAnalysisInput:
 
 type AnalysisInput = (
     MeasurementAnalysisInput
+    | ConfigurationAnalysisInput
     | PublishedAnalysisOutputInput
     | InterpretationAnalysisInput
 )
@@ -663,6 +681,11 @@ def _validate_project_analysis_inputs(
     for index, input_ref in enumerate(inputs):
         if isinstance(input_ref, InterpretationAnalysisInput):
             continue
+        if isinstance(input_ref, ConfigurationAnalysisInput):
+            snapshot = storage.read_snapshot(input_ref.run_id)
+            _require_completed_project_input_run(snapshot.status, index=index)
+            _validate_configuration_analysis_input(services, input_ref, index=index)
+            continue
         if isinstance(input_ref, MeasurementAnalysisInput):
             snapshot = storage.read_snapshot(input_ref.run_id)
             _require_completed_project_input_run(snapshot.status, index=index)
@@ -690,6 +713,29 @@ def _require_completed_project_input_run(status: str, *, index: int) -> None:
         _raise_analysis_problem(
             "project_analysis_input_run_incomplete",
             "project analysis run inputs must belong to completed runs",
+            "inputs",
+            index,
+        )
+
+
+def _validate_configuration_analysis_input(
+    services: ProjectStateServices,
+    input_ref: ConfigurationAnalysisInput,
+    *,
+    index: int,
+) -> None:
+    from scopecat.records.config import config_content_hash
+    from scopecat.runs.refs import CONFIG_PROFILE_SNAPSHOT_REF
+
+    config = services.runs.read_config_profile_snapshot(input_ref.run_id)
+    if (
+        input_ref.target != CONFIG_PROFILE_SNAPSHOT_REF
+        or input_ref.codec != CONFIGURATION_ANALYSIS_INPUT_CODEC
+        or input_ref.content_hash != config_content_hash(config)
+    ):
+        _raise_analysis_problem(
+            "analysis_configuration_input_mismatch",
+            "configuration input must match its exact retained run snapshot",
             "inputs",
             index,
         )
@@ -871,6 +917,16 @@ def _validate_analysis_inputs(
                 "inputs",
                 index,
             )
+        if isinstance(input_ref, ConfigurationAnalysisInput):
+            if input_ref.run_id != run_id:
+                _raise_analysis_problem(
+                    "analysis_input_run_invalid",
+                    "configuration input must belong to this run",
+                    "inputs",
+                    index,
+                )
+            _validate_configuration_analysis_input(services, input_ref, index=index)
+            continue
         if isinstance(input_ref, MeasurementAnalysisInput):
             if input_ref.run_id != run_id:
                 snapshot = storage.read_snapshot(input_ref.run_id)
@@ -1067,7 +1123,11 @@ def _analysis_publication_hash(
                 "target": item.target,
                 "id": item.id,
                 "run_id": (
-                    item.run_id if isinstance(item, MeasurementAnalysisInput) else None
+                    item.run_id
+                    if isinstance(
+                        item, MeasurementAnalysisInput | ConfigurationAnalysisInput
+                    )
+                    else None
                 ),
                 "kind": item.kind,
                 "content_hash": item.content_hash,
@@ -1076,7 +1136,11 @@ def _analysis_publication_hash(
                 "title": item.title,
                 "metadata": validate_json_metadata(item.metadata or {}),
                 "source": (
-                    None if isinstance(item, MeasurementAnalysisInput) else item.source
+                    None
+                    if isinstance(
+                        item, MeasurementAnalysisInput | ConfigurationAnalysisInput
+                    )
+                    else item.source
                 ),
             }
             for item in inputs
@@ -1140,9 +1204,14 @@ def _analysis_record_inputs(
         validated_metadata = (
             validate_json_metadata(metadata) if metadata is not None else None
         )
-        if isinstance(input_ref, MeasurementAnalysisInput):
+        if isinstance(input_ref, MeasurementAnalysisInput | ConfigurationAnalysisInput):
+            record_type = (
+                MeasurementAnalysisRecordInput
+                if isinstance(input_ref, MeasurementAnalysisInput)
+                else ConfigurationAnalysisRecordInput
+            )
             record_inputs.append(
-                MeasurementAnalysisRecordInput(
+                record_type(
                     id=input_ref.id,
                     run_id=input_ref.run_id,
                     target=input_ref.target,

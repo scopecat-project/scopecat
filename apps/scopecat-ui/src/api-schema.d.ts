@@ -2657,7 +2657,7 @@ export interface components {
             subject: components["schemas"]["AnalysisSubject"];
             title: components["schemas"]["_NonEmptyText"];
         };
-        AnalysisRecordInput: components["schemas"]["MeasurementAnalysisRecordInput"] | components["schemas"]["PublishedAnalysisRecordInput"] | components["schemas"]["InterpretationAnalysisRecordInput"];
+        AnalysisRecordInput: components["schemas"]["MeasurementAnalysisRecordInput"] | components["schemas"]["ConfigurationAnalysisRecordInput"] | components["schemas"]["PublishedAnalysisRecordInput"] | components["schemas"]["InterpretationAnalysisRecordInput"];
         AnalysisRecordOutput: components["schemas"]["AnalysisFactRecordOutput"] | components["schemas"]["AnalysisDatasetRecordOutput"] | components["schemas"]["AnalysisArtifactRecordOutput"] | components["schemas"]["AnalysisTableRecordOutput"] | components["schemas"]["AnalysisFigureRecordOutput"] | components["schemas"]["AnalysisParameterProposalRecordOutput"];
         AnalysisSubject: components["schemas"]["RunAnalysisSubject"] | components["schemas"]["ProjectAnalysisSubject"] | components["schemas"]["SampleAnalysisSubject"];
         /**
@@ -4453,6 +4453,26 @@ export interface components {
         ConfigSetupRebindPreviewCommand: {
             base: components["schemas"]["ConfigContextRef"];
             setup: components["schemas"]["SetupRevisionRef"];
+        };
+        /**
+         * ConfigurationAnalysisRecordInput
+         * @description Whole run configuration access; no individual-field coverage claim.
+         */
+        ConfigurationAnalysisRecordInput: {
+            codec: components["schemas"]["_NonEmptyText"];
+            content_hash: components["schemas"]["_NonEmptyText"];
+            id: components["schemas"]["_NonEmptyText"];
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "configuration_snapshot";
+            metadata?: components["schemas"]["JsonMetadata"] | null;
+            role: components["schemas"]["_NonEmptyText"];
+            run_id: components["schemas"]["_NonEmptyText"];
+            target: components["schemas"]["_NonEmptyText"];
+            /** Title */
+            title?: string | null;
         };
         "ConfigurationChoice-Input": components["schemas"]["ActiveConfiguration"] | components["schemas"]["ParameterConfiguration-Input"] | components["schemas"]["SavedConfiguration"] | components["schemas"]["WorkingPointConfiguration-Input"] | components["schemas"]["CandidateConfiguration"];
         "ConfigurationChoice-Output": components["schemas"]["ActiveConfiguration"] | components["schemas"]["ParameterConfiguration-Output"] | components["schemas"]["SavedConfiguration"] | components["schemas"]["WorkingPointConfiguration-Output"] | components["schemas"]["CandidateConfiguration"];

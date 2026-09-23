@@ -36,6 +36,7 @@ from scopecat.records.analysis import (
     AnalysisFactRecordOutput,
     AnalysisInterpretationReference,
     AnalysisRecord,
+    ConfigurationAnalysisRecordInput,
     InterpretationAnalysisRecordInput,
     MeasurementAnalysisRecordInput,
     ProjectAnalysisDecisionReference,
@@ -253,6 +254,7 @@ class AnalysisService:
 
     def _save(self, command: AnalysisSaveCommand) -> AnalysisSaveReceipt:
         from scopecat.analysis.service import (
+            ConfigurationAnalysisInput,
             InterpretationAnalysisInput,
             MeasurementAnalysisInput,
             prepare_project_analysis,
@@ -278,7 +280,9 @@ class AnalysisService:
             for input_ref in inputs:
                 if isinstance(input_ref, InterpretationAnalysisInput):
                     continue
-                if isinstance(input_ref, MeasurementAnalysisInput):
+                if isinstance(
+                    input_ref, MeasurementAnalysisInput | ConfigurationAnalysisInput
+                ):
                     input_run_ids.add(input_ref.run_id)
                     continue
                 subject = input_ref.source.subject
@@ -515,7 +519,10 @@ class AnalysisService:
         lineage = visited | {view.entry.id}
         run_ids: set[str] = set()
         for input_ref in view.analysis.inputs:
-            if isinstance(input_ref, MeasurementAnalysisRecordInput):
+            if isinstance(
+                input_ref,
+                MeasurementAnalysisRecordInput | ConfigurationAnalysisRecordInput,
+            ):
                 run_ids.add(input_ref.run_id)
                 continue
             if isinstance(input_ref, InterpretationAnalysisRecordInput):

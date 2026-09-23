@@ -838,6 +838,16 @@ class _AnalysisRecordInput(BaseModel):
     metadata: JsonMetadata | None = None
 
 
+CONFIGURATION_ANALYSIS_INPUT_CODEC = "scopecat.analysis-configuration-input.v1"
+
+
+class ConfigurationAnalysisRecordInput(_AnalysisRecordInput):
+    """Whole run configuration access; no individual-field coverage claim."""
+
+    kind: Literal["configuration_snapshot"] = "configuration_snapshot"
+    run_id: _NonEmptyText
+
+
 class MeasurementAnalysisRecordInput(_AnalysisRecordInput):
     """One exact measurement dataset owned by a run."""
 
@@ -868,6 +878,7 @@ class PublishedAnalysisRecordInput(_AnalysisRecordInput):
 
 type AnalysisRecordInput = Annotated[
     MeasurementAnalysisRecordInput
+    | ConfigurationAnalysisRecordInput
     | PublishedAnalysisRecordInput
     | InterpretationAnalysisRecordInput,
     Field(discriminator="kind"),
