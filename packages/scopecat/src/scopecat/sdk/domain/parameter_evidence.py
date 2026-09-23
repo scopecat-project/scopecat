@@ -36,7 +36,17 @@ def attach_domain_input_reads(
         raise ValueError(
             "domain input reads must cover exactly the selected points and inputs"
         )
-    record = DomainInputParameterEvidence(entries=entries)
+    binding = context.inputs.binding_parameter_reads
+    missing = tuple(
+        f"{phase}_binding_not_captured"
+        for phase in ("frontend", "specialization")
+        if phase not in {read.phase for read in binding}
+    )
+    record = DomainInputParameterEvidence(
+        entries=entries,
+        binding=binding,
+        incomplete_reasons=(*missing, "binding_structure_not_captured"),
+    )
     return {**target_intent, _KEY: cast("JsonValue", record.model_dump(mode="json"))}
 
 

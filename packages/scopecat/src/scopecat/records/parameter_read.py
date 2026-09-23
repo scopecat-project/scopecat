@@ -46,12 +46,25 @@ class DomainInputParameterRead(BaseModel):
     evidence: ScalarExpressionReadEvidence
 
 
+class BindingParameterRead(BaseModel):
+    """Whole-program reads during binding against the base configuration.
+
+    These are not point-local reads or dependencies attributed to one domain call.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+    phase: Literal["frontend", "specialization"]
+    parameter_scope: Literal["base_configuration"] = "base_configuration"
+    coverage: Literal["whole_program_expressions"] = "whole_program_expressions"
+    evidence: ScalarExpressionReadEvidence
+
+
 class DomainInputParameterEvidence(BaseModel):
     """Input materialization coverage, separate from target-internal reads."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
-    format: Literal["scopecat.domain-input-reads.v1"] = "scopecat.domain-input-reads.v1"
+    format: Literal["scopecat.domain-input-reads.v2"] = "scopecat.domain-input-reads.v2"
     coverage: Literal["domain_input_materialization"] = "domain_input_materialization"
     entries: tuple[DomainInputParameterRead, ...]
-    # Binding may already have folded parameter expressions before this phase.
-    incomplete_reasons: tuple[str, ...] = ("upstream_binding_not_captured",)
+    binding: tuple[BindingParameterRead, ...] = ()
+    incomplete_reasons: tuple[str, ...]

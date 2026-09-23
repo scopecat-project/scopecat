@@ -38,6 +38,7 @@ from scopecat.compiler.relations.context import ParameterRelationData
 from scopecat.compiler.relations.evaluation import (
     normalize_relation_parameter_import,
 )
+from scopecat.compiler.relations.parameter_reads import ParameterReadRecorder
 from scopecat.compiler.relations.verification import (
     ExpressionImportNamespace,
     ExpressionTypeBindings,
@@ -71,6 +72,7 @@ from scopecat.program.table_values import (
 )
 from scopecat.records.config import ConfigProfileSnapshot, Topology
 from scopecat.records.parameter import ParameterCatalog
+from scopecat.records.parameter_read import BindingParameterRead
 
 
 @dataclass(frozen=True, slots=True)
@@ -155,9 +157,11 @@ def _lower_logical_program(
         type_bindings=type_bindings,
     )
     topology_entity_sets = _resolve_topology_entity_sets(logical, topology)
+    recorder = ParameterReadRecorder()
     static_evaluator = StaticRelationEvaluator(
         environment.parameters,
         {resolution.source: resolution for resolution in topology_entity_sets.values()},
+        parameter_reads=recorder,
     )
     products = lower_products(
         static_evaluator,
@@ -228,6 +232,9 @@ def _lower_logical_program(
         product_defs=products.product_defs,
         product_uses=product_uses,
         record_uses=tuple(record_uses),
+        parameter_reads=(
+            BindingParameterRead(phase="frontend", evidence=recorder.snapshot()),
+        ),
     )
 
 

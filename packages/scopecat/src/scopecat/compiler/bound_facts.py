@@ -50,6 +50,7 @@ from scopecat.program.measurement_contracts import (
 )
 from scopecat.program.measurement_types import MeasurementVariableRole
 from scopecat.program.value_graph import OperationId
+from scopecat.records.parameter_read import BindingParameterRead
 
 
 def _empty_value_overrides() -> dict[ValueId, ScalarExpr]:
@@ -152,6 +153,7 @@ class BoundProgramFacts:
     product_defs: tuple[ProductDef, ...] = ()
     product_uses: tuple[ProductUse, ...] = ()
     record_uses: tuple[BoundRecordUse, ...] = ()
+    parameter_reads: tuple[BindingParameterRead, ...] = ()
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "value_overrides", dict(self.value_overrides))

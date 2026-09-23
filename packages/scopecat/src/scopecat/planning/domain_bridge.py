@@ -99,6 +99,7 @@ def make_domain_batch_request(
             parameter_reads=parameter_reads,
         ),
         parameter_reads=tuple(parameter_reads),
+        binding_parameter_reads=bound_points.bound_plan.bindings.parameter_reads,
     )
     selected_points = tuple(
         bound_points.point_domain.points[ordinal] for ordinal in point_ordinals

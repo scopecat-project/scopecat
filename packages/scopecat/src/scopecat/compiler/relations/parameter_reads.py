@@ -25,6 +25,17 @@ class ParameterReadRecorder:
         if reason not in self._incomplete:
             self._incomplete.append(reason)
 
+    def include(self, evidence: ScalarExpressionReadEvidence) -> None:
+        """Retain dependencies of expressions already folded in this fact set."""
+        for scalar in evidence.scalars:
+            if scalar not in self._scalars:
+                self._scalars.append(scalar)
+        for keyed in evidence.keyed:
+            if keyed not in self._keyed:
+                self._keyed.append(keyed)
+        for reason in evidence.incomplete_reasons:
+            self.incomplete(reason)
+
     def scalar(self, name: str, value: CellValue) -> None:
         try:
             read = ScalarParameterValue.model_validate({"id": name, "value": value})

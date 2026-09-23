@@ -538,7 +538,8 @@ def test_measurement_plan_and_build_close_the_complete_public_sdk_declaration(
         (entry.point_ordinal, entry.input_kind, entry.input_id)
         for entry in retained.entries
     ] == [(0, "program", "count"), (1, "program", "count")]
-    assert retained.incomplete_reasons == ("upstream_binding_not_captured",)
+    assert [entry.phase for entry in retained.binding] == ["frontend", "specialization"]
+    assert retained.incomplete_reasons == ("binding_structure_not_captured",)
     assert prepared.state_requirements == (
         DomainStateRequirement(
             address=guard_enabled,

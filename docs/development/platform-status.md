@@ -117,9 +117,11 @@ execution and automatic selective repair are not established by this scenario.
   capture hooks, with checked-context propagation, effective-point isolation and
   explicit incomplete coverage. Domain program/compiler input materialization
   now captures per-point reads automatically; the public preparation builder
-  retains them in invocation intents without private adapter assembly. Earlier
-  binding, host compute/state and analysis remain uncovered. Extend capture to
-  these phases and selection
+  retains them in invocation intents without private adapter assembly. Frontend
+  static evaluation and constant specialization now retain whole-program,
+  base-configuration reads alongside point-local input reads, including across
+  repeated specialization and ledger reopening. Binding structure/membership,
+  host compute/state and analysis remain uncovered. Extend capture to these phases and selection
   membership; supplement it with schema/context and declared physical interactions
   before selective reuse.
 - Add bounded check-first repair after dependencies can explain invalidation.

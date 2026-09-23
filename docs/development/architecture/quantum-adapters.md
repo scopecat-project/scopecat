@@ -237,13 +237,21 @@ current selected batch, including reordered points and sub-batches.
 
 Use `scopecat.sdk.domain.parameter_evidence.read_domain_input_reads(intent)` after
 reopening a run's invocation record. The attachment format is
-`scopecat.domain-input-reads.v1`; its coverage is `domain_input_materialization`.
-It explicitly retains `upstream_binding_not_captured`, since values may have
-been folded before input materialization. Per-input evidence also marks whole
+`scopecat.domain-input-reads.v2`; its coverage is `domain_input_materialization`.
+Its separate `binding` entries retain frontend and specialization expression
+reads before constant folding. These describe whole-program reads against the
+base configuration; do not compare them against a point override or attribute
+all of them to a single domain input. The same binding evidence accompanies
+sub-batches without being relabeled as point-local evidence.
+Missing binding phases remain explicit, and `binding_structure_not_captured`
+records the still-uncovered schema/topology/overlay-membership boundary.
+Per-input evidence also marks whole
 table selection or unresolved coverage. Missing evidence from a manually built
 request or a low-level invocation is not an empty dependency set. The same
 write-ahead/batched/abnormal-only retention limits above apply, and invocation
 evidence still does not assert successful hardware execution.
+The v1 development attachment has no fallback reader or migration; historical
+stores remain untouched.
 
 ## Circuit transformation contract
 

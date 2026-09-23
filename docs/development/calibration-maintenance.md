@@ -221,11 +221,20 @@ is covered by the invocation fingerprint and survives ledger reopening. Its
 reader is `scopecat.sdk.domain.parameter_evidence.read_domain_input_reads`.
 Sub-batches retain their actual logical ordinals, not batch-local indices.
 
-The attachment declares `domain_input_materialization` coverage and retains
-`upstream_binding_not_captured`: earlier binding may have folded parameters
-before this phase. Whole-table inputs carry their own incomplete reason. This
-does not cover host compute/state preparation, target-internal reads, analysis,
-or physical interaction dependencies. Those integrations remain before any
+The attachment declares `domain_input_materialization` coverage. It additionally
+retains `frontend` and `specialization` expression reads from binding, so turning
+a parameter into a literal no longer drops that observed dependency. These
+binding entries explicitly use `base_configuration` and
+`whole_program_expressions` scope: they describe the complete program's observed
+reads, not reads attributed to an individual input or domain invocation. Keep
+them separate from effective point values. Re-specializing an already folded
+fact set preserves its earlier reads; it is not a fresh rebind to another config.
+
+Missing binding phases are reported individually. `binding_structure_not_captured`
+remains because catalog/schema, topology and overlay-row membership are not
+fully represented by expression reads. Whole-table inputs carry their own
+incomplete reason. This does not cover host compute/state preparation,
+target-internal reads, analysis, or physical interaction dependencies. Those integrations remain before any
 whole-run completeness claim. Low-level callers that construct requests without
 capture get no fabricated empty attachment; reading absent evidence fails
 explicitly. Existing transition retention policy still controls durability.

@@ -2,6 +2,8 @@ from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 
+import pytest
+from scopecat.compiler.bound_specialization import specialize_bound_facts
 from scopecat.compiler.parameter_overlays import PointParameterOverlay
 from scopecat.compiler.point_domain import PointDomain
 from scopecat.config.environment import build_config_environment
@@ -37,7 +39,8 @@ from scopecat_server.storage.sqlite.project_store import SQLiteProjectStore
 from scopecat_server.storage.sqlite.run_repository import SQLiteRunRepository
 
 
-def test_point_input_reads_survive_ledger_reopen(tmp_path: Path) -> None:
+@pytest.mark.parametrize("fold", [False, True])
+def test_point_input_reads_survive_ledger_reopen(tmp_path: Path, fold: bool) -> None:
     frequency = Scalar(QuantityType(dimension="frequency"))
     execution = DomainExecutionFixture(
         id="compile",
@@ -46,12 +49,18 @@ def test_point_input_reads_survive_ledger_reopen(tmp_path: Path) -> None:
             dialect_id="test",
             dialect_version="1",
             body=object(),
-            input_ports=(DomainInputPort("frequency", frequency),),
+            input_ports=(
+                DomainInputPort("frequency", frequency),
+                DomainInputPort("reference", frequency),
+            ),
         ),
         inputs={
             "frequency": parameter_lookup(
                 READOUT_FREQUENCY_LOOKUP, key={"device_id": "r0"}
-            )
+            ),
+            "reference": parameter_lookup(
+                READOUT_FREQUENCY_LOOKUP, key={"device_id": "r1"}
+            ),
         },
     )
     spec = program_fixture(
@@ -78,6 +87,13 @@ def test_point_input_reads_survive_ledger_reopen(tmp_path: Path) -> None:
         build_config_environment(config_with_physical_resources({})),
         parameters=parameters(),
     )
+    if fold:
+        spec = replace(
+            spec,
+            bindings=specialize_bound_facts(
+                spec.logical, spec.bindings, parameters=environment.parameters
+            ),
+        )
     bound = bind_program_facts(spec, environment)
     context = make_domain_batch_request(
         make_domain_call_view(bound, execution.id, ()),
@@ -119,12 +135,29 @@ def test_point_input_reads_survive_ledger_reopen(tmp_path: Path) -> None:
     assert isinstance(saved.transition, DomainJobInvocationTransition)
     evidence = read_domain_input_reads(saved.transition.intent)
     assert evidence.entries == context.inputs.parameter_reads
-    assert [entry.point_ordinal for entry in evidence.entries] == [1, 0]
-    assert [entry.evidence.keyed[0].cells[0].value for entry in evidence.entries] == [
-        Quantity(6.2, "GHz"),
-        Quantity(5.9, "GHz"),
-    ]
-    assert evidence.incomplete_reasons == ("upstream_binding_not_captured",)
+    assert [entry.point_ordinal for entry in evidence.entries] == [1, 1, 0, 0]
+    if fold:
+        assert all(entry.evidence.keyed == () for entry in evidence.entries)
+        [binding] = evidence.binding
+        assert binding.parameter_scope == "base_configuration"
+        [read] = binding.evidence.keyed
+        assert read.key[0].value == "r1"
+        assert (
+            read.cells[0].value
+            == environment.parameters.lookup_row(
+                "readout_devices", {"device_id": "r1"}
+            )["frequency"]
+        )
+    else:
+        assert [
+            entry.evidence.keyed[0].cells[0].value
+            for entry in evidence.entries
+            if entry.input_id == "frequency"
+        ] == [Quantity(6.2, "GHz"), Quantity(5.9, "GHz")]
+    assert "frontend_binding_not_captured" in evidence.incomplete_reasons
+    assert ("specialization_binding_not_captured" in evidence.incomplete_reasons) == (
+        not fold
+    )
     assert saved.transition.intent.target_intent["profile"] == "lab"
     assert reopened.read_current(limit=10).items[0].state == "invocation_unknown"
     subset = make_domain_batch_request(
@@ -134,5 +167,6 @@ def test_point_input_reads_survive_ledger_reopen(tmp_path: Path) -> None:
         legal_cut_offsets=(1,),
         batch_ordinal=8,
     )
-    assert subset.inputs.parameter_reads == (evidence.entries[0],)
+    assert subset.inputs.parameter_reads == evidence.entries[:2]
+    assert subset.inputs.binding_parameter_reads == evidence.binding
     assert context.inputs.parameter_reads == evidence.entries
