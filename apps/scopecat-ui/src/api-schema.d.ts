@@ -3063,6 +3063,7 @@ export interface components {
              */
             samples: components["schemas"]["SampleSelector"][];
             setup?: components["schemas"]["SetupRevisionRef"] | null;
+            target?: components["schemas"]["TargetRevisionRef"] | null;
         };
         /**
          * CalibrationProfile

@@ -38,6 +38,7 @@ from scopecat.records.calibration_check import (
 )
 from scopecat.records.sample import SampleSelector
 from scopecat.records.setup import SetupRevisionRef
+from scopecat.records.target_catalog import TargetRevisionRef
 
 
 @dataclass(frozen=True)
@@ -141,6 +142,7 @@ class LabCalibrationChecks:
         branch: str,
         samples: tuple[SampleSelector, ...] = (),
         setup: SetupRevisionRef | None = None,
+        target: TargetRevisionRef | None = None,
     ) -> CalibrationContextResolution:
         """Capture branch/setup heads for exact samples without execution."""
         return self._client.resolve_calibration_context(
@@ -148,6 +150,7 @@ class LabCalibrationChecks:
                 branch=branch,
                 samples=samples,
                 setup=setup,
+                target=target,
             )
         )
 

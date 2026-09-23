@@ -49,8 +49,11 @@ generation, parameter revision, setup revision and scenario. Select a saved
 profile below it to inspect evidence. No measurement, task or global-default
 change is required.
 
-This form uses the displayed sample revision as one inline `subject`. It does not
-substitute for a registered target or a joint subject. The Python API can specify
+The subject selector offers the displayed sample revision as one inline `subject`
+or a registered single-member target referencing that revision. Target options
+show each catalog entry's latest exact revision; use **Load more target choices**
+to inspect later pages. The Python API can resolve older target revisions too.
+The form does not substitute a single sample for a joint subject. The Python API can specify
 multiple exact sample revisions and roles:
 
 ```python
@@ -66,10 +69,25 @@ report = lab.calibration_checks.report(
 report
 ```
 
+To retain registered target identity and its entity projection:
+
+```python
+target = lab.target("chip-target", revision=2)
+resolved = lab.calibration_checks.resolve_context(branch="daily", target=target.ref)
+```
+
+Pass either `target` or inline `samples`. The resolver checks the target's catalog,
+revision and content hash, resolves its exact sample members and uses the shared
+setup-topology projection. A later target revision does not change an already
+captured reference. The current projection supports one member and no connections;
+multi-member or connected targets are rejected, not flattened into inline samples.
+Registered and inline subjects are different contexts even when they name the
+same physical sample, so evidence is not silently reused between them.
+
 An optional `setup=SetupRevisionRef(...)` selects a saved setup; omission reads
 current setup authority. Branch and active setup heads are read in one database
 snapshot. Supplied sample revisions must be exact and are resolved through the
-sample registry. With no samples the context is unbound, which supports software
+sample registry. With neither samples nor a target the context is unbound, supporting software
 scenarios but does not establish physical sample capability. Scenario comes from
 the resolved setup rather than a separate simulation flag.
 

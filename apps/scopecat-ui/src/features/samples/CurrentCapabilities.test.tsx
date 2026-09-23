@@ -16,9 +16,26 @@ afterEach(() => {
 it("resolves explicit choices and clears the captured context before a failed refresh", async () => {
   const bodies: unknown[] = [];
   let fail = false;
+  const targetRef = {
+    catalog_id: "catalog",
+    target_id: "target",
+    revision: 2,
+    content_hash: "sha256:t",
+  };
   vi.stubGlobal(
     "fetch",
     vi.fn(async (request: Request) => {
+      if (new URL(request.url).pathname.endsWith("measurement-targets"))
+        return Response.json({
+          items: [
+            {
+              ref: targetRef,
+              name: "Registered chip",
+              content: { members: [{ sample_id: "chip", revision: 2 }], connections: [] },
+            },
+          ],
+          next_cursor: null,
+        });
       if (request.method === "GET")
         return Response.json({ items: [{ id: "saved-setup", content_hash: "sha256:s" }] });
       bodies.push(await request.json());
@@ -50,9 +67,21 @@ it("resolves explicit choices and clears the captured context before a failed re
       branch: "daily",
       setup: { revision_id: "saved-setup", content_hash: "sha256:s" },
       samples: [{ sample_id: "chip", revision: 2, role: "subject" }],
+      target: null,
     },
   ]);
   expect(screen.getByText(/generation 3/)).toBeInTheDocument();
+  await screen.findByRole("option", { name: "Registered chip · target · r2" });
+  fireEvent.change(screen.getByLabelText("Measurement subject"), { target: { value: "target:2" } });
+  expect(screen.queryByText("Profile inspector")).not.toBeInTheDocument();
+  fireEvent.click(screen.getByText("Resolve capability context"));
+  await screen.findByText("Profile inspector");
+  expect(bodies[1]).toEqual({
+    branch: "daily",
+    setup: { revision_id: "saved-setup", content_hash: "sha256:s" },
+    samples: [],
+    target: targetRef,
+  });
   fireEvent.change(screen.getByLabelText("Setup for capability context"), {
     target: { value: "" },
   });
@@ -60,10 +89,11 @@ it("resolves explicit choices and clears the captured context before a failed re
   fail = true;
   fireEvent.click(screen.getByText("Resolve capability context"));
   await screen.findByRole("alert");
-  expect(bodies[1]).toEqual({
+  expect(bodies[2]).toEqual({
     branch: "daily",
     setup: null,
-    samples: [{ sample_id: "chip", revision: 2, role: "subject" }],
+    samples: [],
+    target: targetRef,
   });
   expect(screen.queryByText("Profile inspector")).not.toBeInTheDocument();
 });

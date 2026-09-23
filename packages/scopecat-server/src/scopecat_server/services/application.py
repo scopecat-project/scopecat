@@ -123,7 +123,7 @@ class DaemonApplication:
             project_store.sqlite, self.calibration_checks
         )
         self.calibration_context = CalibrationContextService(
-            project_store.sqlite, samples, self.targets.catalog_id
+            project_store.sqlite, samples, self.targets
         )
 
         self.procedure_schedules = procedure_schedules

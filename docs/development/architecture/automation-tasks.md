@@ -218,7 +218,9 @@ one exact inline sample revision. The context endpoint reads branch/setup heads
 in one transaction and reuses parameter composition and scientific binding rules;
 it does not dispatch work or select global defaults. The Python API additionally
 supports joint inline samples and unbound software scenarios. Registered-target
-selection remains separate. Returned contexts freeze the observed versions;
+selection retains exact catalog-qualified references and uses the shared
+single-member/no-connections projection; unsupported targets are rejected.
+Returned contexts freeze the observed versions;
 report refresh and context re-resolution are distinct actions.
 
 Validate these with a small synthetic array: full tune-up, local drift, one failed

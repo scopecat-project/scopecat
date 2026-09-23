@@ -77,6 +77,12 @@ from scopecat.records.plan_ref import ProcedureChildSubmission
 from scopecat.records.run_request import RunRequest
 from scopecat.records.sample import SampleRevisionDraft, SampleSelector
 from scopecat.records.scientific_binding import UnboundSubject
+from scopecat.records.scientific_scope import MeasurementTarget, TargetMember
+from scopecat.records.target_catalog import (
+    TargetCreateCommand,
+    TargetReviseCommand,
+    TargetRevisionDraft,
+)
 from scopecat.sdk.compute import PYTHON_JSON_CODEC
 from scopecat_testkit.workflow_fixtures import load_config
 
@@ -87,6 +93,117 @@ from scopecat_server.snapshots import create_snapshot, restore_snapshot
 from scopecat_server.storage.sqlite.calibration_checks import CheckRequestPage
 
 type CheckCase = tuple[LocalDaemonRuntime, CalibrationCheckRequest, RunSubmission]
+
+
+def test_capability_context_retains_exact_registered_target(
+    check_case: CheckCase,
+) -> None:
+    runtime, declaration, _ = check_case
+    app = runtime.application
+    app.config.commit_parameter_branch(
+        ParameterBranchCommitCommand(
+            name="target-branch",
+            expected_generation=0,
+            source=declaration.context.parameters,
+            actor="test",
+        )
+    )
+    sample = app.samples.revision("chip", 1)
+    target = app.targets.create(
+        TargetCreateCommand(
+            catalog_id=app.targets.catalog_id,
+            target_id="target",
+            draft=TargetRevisionDraft(
+                name="Chip target",
+                actor="test",
+                content=MeasurementTarget(
+                    members=(
+                        TargetMember(
+                            id="A",
+                            sample_id="chip",
+                            revision=1,
+                            content_hash=sample.content_hash,
+                        ),
+                    ),
+                ),
+            ),
+        )
+    )
+    query = CalibrationContextResolve(branch="target-branch", target=target.ref)
+    with TestClient(runtime.app()) as client:
+        response = client.post(
+            "/api/v1/calibration-checks/context", json=query.model_dump(mode="json")
+        )
+        assert response.status_code == 200, response.text
+        resolved = CalibrationContextResolution.model_validate(response.json())
+        subject = resolved.context.subject
+        assert subject.kind == "registered_target"
+        assert subject.ref == target.ref
+        assert subject.sample.sample_id == "chip"
+        assert subject.projection
+        mixed = query.model_dump(mode="json")
+        mixed["samples"] = [
+            SampleSelector(sample_id="chip", revision=1).model_dump(mode="json")
+        ]
+        assert (
+            client.post("/api/v1/calibration-checks/context", json=mixed).status_code
+            == 422
+        )
+    revised = app.targets.revise(
+        TargetReviseCommand(
+            expected=target.ref,
+            draft=TargetRevisionDraft(
+                name="Renamed", actor="test", content=target.content
+            ),
+        )
+    )
+    assert app.calibration_context.resolve(query).context.subject == subject
+    latest = app.calibration_context.resolve(
+        query.model_copy(update={"target": revised.ref})
+    ).context.subject
+    assert latest.kind == "registered_target" and latest.ref == revised.ref
+    partner = app.samples.create(
+        SampleCreateCommand(
+            operation_id="partner",
+            sample_id="partner",
+            kind="chip",
+            actor="test",
+            content=SampleRevisionDraft(
+                display_name="Partner", topology=sample.content.topology
+            ),
+        )
+    ).revision
+    joint = app.targets.create(
+        TargetCreateCommand(
+            catalog_id=app.targets.catalog_id,
+            target_id="joint",
+            draft=TargetRevisionDraft(
+                name="Joint",
+                actor="test",
+                content=MeasurementTarget(
+                    members=(
+                        *target.content.members,
+                        TargetMember(
+                            id="B",
+                            sample_id="partner",
+                            revision=partner.revision,
+                            content_hash=partner.content_hash,
+                        ),
+                    ),
+                ),
+            ),
+        )
+    )
+    with pytest.raises(BackendConflict, match="one target member"):
+        app.calibration_context.resolve(query.model_copy(update={"target": joint.ref}))
+    for reference in (
+        target.ref.model_copy(update={"catalog_id": "elsewhere"}),
+        target.ref.model_copy(update={"content_hash": "sha256:" + "a" * 64}),
+    ):
+        with pytest.raises(BackendConflict):
+            app.calibration_context.resolve(
+                query.model_copy(update={"target": reference})
+            )
 
 
 def test_current_capability_context_freezes_branch_and_setup(
