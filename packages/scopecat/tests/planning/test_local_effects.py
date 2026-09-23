@@ -1,3 +1,4 @@
+import pytest
 from scopecat_testkit.bound_program import (
     ComputeNodeFixture,
     compute_result,
@@ -46,10 +47,11 @@ from scopecat.kernel.resource_identity import logical_resource_port_id
 from scopecat.kernel.state import PayloadRef
 from scopecat.kernel.symbols import SymbolId
 from scopecat.kernel.value_data import CellValue
-from scopecat.kernel.value_types import Int, Payload, Scalar
+from scopecat.kernel.value_types import Int, Payload, Scalar, String
 from scopecat.kernel.value_types import Quantity as QuantityType
 from scopecat.program.expressions import (
     parameter_lookup,
+    point_col,
 )
 from scopecat.program.logical import (
     ImplementationId,
@@ -209,15 +211,19 @@ def test_separated_state_groups_have_distinct_operation_ids() -> None:
     assert states[0].operation_id != states[1].operation_id
 
 
-def test_materialized_effects_contract_summarizes_compute_payload_boundary() -> None:
-    def build_waveform() -> dict[str, object]:
+@pytest.mark.parametrize("point_key", [False, True])
+def test_materialized_effects_contract_summarizes_compute_payload_boundary(
+    point_key: bool,
+) -> None:
+    def build_waveform(frequency: Quantity) -> dict[str, object]:
+        del frequency
         return {"kind": "waveform"}
 
     operation_id = OperationId(SymbolId(local_id="build-waveform"))
     result_id = operation_result_id(operation_id)
     drive = logical_resource_port_id("drive")
     spec = program_fixture(
-        point_domain=_point_domain("index", Scalar(Int()), (0,)),
+        point_domain=_point_domain("device_id", Scalar(String()), ("r0",)),
         invocations=[
             instrument_invocation(
                 id="play-waveform",
@@ -249,8 +255,17 @@ def test_materialized_effects_contract_summarizes_compute_payload_boundary() -> 
                     id=result_id,
                     value_type=Scalar(Payload("waveform_bundle")),
                 ),
-                input_types={},
-                inputs={},
+                input_types={"frequency": Scalar(QuantityType(dimension="frequency"))},
+                inputs={
+                    "frequency": parameter_lookup(
+                        READOUT_FREQUENCY_LOOKUP,
+                        key={
+                            "device_id": point_col("device_id", Scalar(String()))
+                            if point_key
+                            else "r0"
+                        },
+                    )
+                },
             )
         ],
     )
@@ -262,6 +277,16 @@ def test_materialized_effects_contract_summarizes_compute_payload_boundary() -> 
     )
 
     [step] = operations_of_type(preview, ComputeOperation, point_index=0)
+    [read] = preview.parameter_reads
+    if point_key:
+        assert read.evidence.keyed[0].cells[0].value == Quantity(5.95, "GHz")
+    else:
+        assert read.evidence.keyed == ()
+        assert any(
+            lookup.cells[0].value == Quantity(5.95, "GHz")
+            for binding in preview.binding_parameter_reads
+            for lookup in binding.evidence.keyed
+        )
     assert step.payload_slot is not None
     assert (
         preview.points[0].ordinal,

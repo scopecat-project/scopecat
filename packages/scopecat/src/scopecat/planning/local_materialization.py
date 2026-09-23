@@ -9,6 +9,7 @@ from typing import Protocol, cast
 from scopecat.compiler.bind import BoundPlan
 from scopecat.compiler.diagnostics import compiler_problem
 from scopecat.compiler.relations.context import EvalContext
+from scopecat.compiler.relations.parameter_reads import ParameterReadRecorder
 from scopecat.compiler.value_resolution import BoundValueResolver
 from scopecat.execution.local.program import ApplyStateOperation, CollectOperation
 from scopecat.execution.program import RunCoverageEffect
@@ -60,6 +61,7 @@ from scopecat.program.logical import (
     LogicalInvocation,
     LogicalStateAssignment,
 )
+from scopecat.records.parameter_read import HostPointParameterRead
 from scopecat.sdk.payloads import EMPTY_PAYLOAD_CODECS, PayloadCodecRegistry
 
 
@@ -94,6 +96,10 @@ def materialize_local_execution(
     params_by_ordinal = {
         ordinal: bound_points.point_parameters[ordinal] for ordinal in ordinals
     }
+    read_recorders = {ordinal: ParameterReadRecorder() for ordinal in ordinals}
+    for recorder in read_recorders.values():
+        recorder.incomplete("resource_selection_not_captured")
+        recorder.incomplete("runtime_kernel_reads_not_captured")
     resources_by_ordinal = select_coverage_resources(
         program,
         target.resource_ports,
@@ -143,6 +149,7 @@ def materialize_local_execution(
             ctx=EvalContext(
                 params=point_params,
                 point_row=point.row,
+                parameter_reads=read_recorders[ordinal],
             ),
             demanded_payload_results=demanded_payload_results,
             problems=problems,
@@ -189,6 +196,7 @@ def materialize_local_execution(
                     ctx=EvalContext(
                         params=params_by_ordinal[ordinal],
                         point_row=point.row,
+                        parameter_reads=read_recorders[ordinal],
                     ),
                     payload_ids=payload_ids_by_ordinal[ordinal],
                     known_compute_results=known_compute_results,
@@ -216,6 +224,7 @@ def materialize_local_execution(
                             point,
                             point_params,
                             problems=problems,
+                            parameter_reads=read_recorders[ordinal],
                         )
                     ),
                     point_uid=point.logical_id.value,
@@ -266,6 +275,7 @@ def materialize_local_execution(
                         point,
                         point_params,
                         problems=problems,
+                        parameter_reads=read_recorders[ordinal],
                     )
                 ),
                 point_uid=point.logical_id.value,
@@ -294,6 +304,13 @@ def materialize_local_execution(
     return MaterializedLocalEffects(
         compute_operations=tuple(compute_effects),
         effect_operations=tuple(tuple(items) for items in effect_operations),
+        parameter_reads=tuple(
+            HostPointParameterRead(
+                point_ordinal=ordinal, evidence=read_recorders[ordinal].snapshot()
+            )
+            for ordinal in ordinals
+        ),
+        binding_parameter_reads=program.parameter_reads,
     )
 
 

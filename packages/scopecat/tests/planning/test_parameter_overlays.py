@@ -145,6 +145,13 @@ def test_point_parameter_overlay_replaces_only_one_existing_cell() -> None:
         row["frequency"] for row in environment.parameters.table_rows("readout_devices")
     ]
     plan = materialize_local_execution(bind_program_facts(spec, environment))
+    assert [read.point_ordinal for read in plan.parameter_reads] == list(
+        range(len(plan.points))
+    )
+    assert [read.evidence.keyed[0].cells[0].value for read in plan.parameter_reads] == [
+        Quantity(5.9, "GHz"),
+        Quantity(6.2, "GHz"),
+    ]
     without_overlay = materialize_local_execution(
         bind_program_facts(
             replace(

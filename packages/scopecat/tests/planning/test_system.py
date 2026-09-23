@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Iterator, Sequence
+from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass, field, replace
 from typing import Annotated, Literal, Never, cast
 
@@ -1459,6 +1459,10 @@ def test_point_invariant_state_reuses_only_the_initial_probe(
         for operation in coverage
         if isinstance(operation, RunCoverageEffect)
     ] == [0]
+    inspected = plan.coverage.inspect(299)
+    assert inspected is not None
+    assert [read.point_ordinal for read in inspected.host_parameter_reads] == [299]
+    assert materialized_ordinals == [(0,)]
 
 
 def test_large_plan_preview_samples_edges_without_hiding_total_point_count() -> None:
@@ -2373,8 +2377,11 @@ def test_planned_settings_budget_preserves_jobs_and_stream_order(
         operations: Iterator[RunCoveredOperation],
         *,
         validator: system_module._CoverageValidator,
+        inspect_local: Callable[[MaterializedLocalEffects], None] | None = None,
     ) -> Iterator[RunCoveredOperation]:
-        for operation in original(operations, validator=validator):
+        for operation in original(
+            operations, validator=validator, inspect_local=inspect_local
+        ):
             observed.append(operation)
             if isinstance(operation, RunCoverageEffect) and isinstance(
                 operation.operation, ApplyStateOperation

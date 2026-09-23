@@ -847,10 +847,13 @@ def _validated_coverage(
     operations: Iterable[RunCoveredOperation | _MaterializedLocalCoverage],
     *,
     validator: _CoverageValidator,
+    inspect_local: Callable[[MaterializedLocalEffects], None] | None = None,
 ) -> Iterator[RunCoveredOperation]:
     for operation in operations:
         if isinstance(operation, _MaterializedLocalCoverage):
             validator.register_local_coverage(operation.effects)
+            if inspect_local is not None:
+                inspect_local(operation.effects)
             continue
         validator.validate(operation)
         yield operation
@@ -997,6 +1000,7 @@ def _compile_coverage(
             key=candidate.coordinates,
             ordinals=(selected_ordinal,),
         )
+        local_inspections: list[MaterializedLocalEffects] = []
         selected_operations = _validated_coverage(
             _coverage_operations(
                 compiler=compiler,
@@ -1026,6 +1030,7 @@ def _compile_coverage(
                 ),
                 catalog=catalog,
             ),
+            inspect_local=local_inspections.append,
         )
         jobs: list[RunDomainJob] = []
         settings: list[PlannedInstrumentSetting] = []
@@ -1065,6 +1070,10 @@ def _compile_coverage(
             jobs=tuple(jobs),
             planned_settings=tuple(settings),
             planned_settings_truncated=settings_truncated,
+            host_parameter_reads=tuple(
+                read for local in local_inspections for read in local.parameter_reads
+            ),
+            binding_parameter_reads=selected_bound_points.bound_plan.bindings.parameter_reads,
         )
 
     def accept_all(
@@ -1344,6 +1353,11 @@ def _materialize_local_coverage(
             *initial_probe.effects.compute_operations,
             *remaining.compute_operations,
         ),
+        parameter_reads=(
+            *initial_probe.effects.parameter_reads,
+            *remaining.parameter_reads,
+        ),
+        binding_parameter_reads=remaining.binding_parameter_reads,
         effect_operations=tuple(
             (*initial, *rest)
             for initial, rest in zip(
@@ -1386,6 +1400,12 @@ def _retarget_invariant_local_probe(
 
     return MaterializedLocalEffects(
         compute_operations=(),
+        parameter_reads=tuple(
+            read.model_copy(update={"point_ordinal": ordinal})
+            for ordinal in point_ordinals
+            for read in probe.effects.parameter_reads
+        ),
+        binding_parameter_reads=probe.effects.binding_parameter_reads,
         effect_operations=tuple(
             tuple(
                 retarget(covered, ordinal)
@@ -1586,6 +1606,8 @@ def _coalesce_host_state(
         anchors.remove(regions[0][0])
     return MaterializedLocalEffects(
         compute_operations=local_effects.compute_operations,
+        parameter_reads=local_effects.parameter_reads,
+        binding_parameter_reads=local_effects.binding_parameter_reads,
         effect_operations=tuple(
             tuple(effect for effect in group if effect.point_index in anchors)
             for group in local_effects.effect_operations

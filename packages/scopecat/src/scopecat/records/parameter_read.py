@@ -46,6 +46,15 @@ class DomainInputParameterRead(BaseModel):
     evidence: ScalarExpressionReadEvidence
 
 
+class HostPointParameterRead(BaseModel):
+    """Observed host input expressions before effect coalescing, for one point."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+    point_ordinal: int = Field(ge=0)
+    coverage: Literal["host_input_materialization"] = "host_input_materialization"
+    evidence: ScalarExpressionReadEvidence
+
+
 class BindingParameterRead(BaseModel):
     """Whole-program reads during binding against the base configuration.
 

@@ -23,6 +23,7 @@ from scopecat.planning.measurement_projection import (
     project_run_point_catalog,
 )
 from scopecat.planning.point_materialization import prepare_bound_points
+from scopecat.records.parameter_read import BindingParameterRead, HostPointParameterRead
 from scopecat.sdk.payloads import EMPTY_PAYLOAD_CODECS, PayloadCodecRegistry
 
 
@@ -34,6 +35,8 @@ class LocalEffectInspection:
     effects: tuple[RunCoverageEffect, ...]
     resource_order: tuple[str, ...]
     resource_requirements: tuple[ResourceRequirement, ...]
+    parameter_reads: tuple[HostPointParameterRead, ...] = ()
+    binding_parameter_reads: tuple[BindingParameterRead, ...] = ()
 
     @classmethod
     def at_point(
@@ -104,6 +107,8 @@ def materialize_local_execution(
         effects=ordered_effects,
         resource_order=resource_order,
         resource_requirements=claims,
+        parameter_reads=lowered.parameter_reads,
+        binding_parameter_reads=lowered.binding_parameter_reads,
     )
 
 

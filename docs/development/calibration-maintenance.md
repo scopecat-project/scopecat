@@ -233,11 +233,24 @@ fact set preserves its earlier reads; it is not a fresh rebind to another config
 Missing binding phases are reported individually. `binding_structure_not_captured`
 remains because catalog/schema, topology and overlay-row membership are not
 fully represented by expression reads. Whole-table inputs carry their own
-incomplete reason. This does not cover host compute/state preparation,
+incomplete reason. This persisted attachment does not cover host preparation,
 target-internal reads, analysis, or physical interaction dependencies. Those integrations remain before any
 whole-run completeness claim. Low-level callers that construct requests without
 capture get no fabricated empty attachment; reading absent evidence fails
 explicitly. Existing transition retention policy still controls durability.
+
+Host input materialization separately captures compute inputs, invocation arguments
+and state expressions per logical point, including effective overlay values.
+`MaterializedLocalEffects.parameter_reads` retains these observations even when
+identical state writes are coalesced or an invariant initial probe is reused.
+`RunPointInspection.host_parameter_reads` exposes them for the inspected point;
+`binding_parameter_reads` separately retains base-configuration expression reads
+that may already have been folded into literals. These host records are currently
+transient plan/inspection evidence, not durable run evidence. Resource selection,
+runtime kernel reads and success-state preparation remain outside this capture;
+the host records explicitly flag the first two gaps. A fenced host-evidence
+publication path is still needed before run records can claim this coverage.
+Neither this inspection nor the domain attachment enables cross-revision reuse.
 
 Before selective invalidation, extend this coverage to scalar expressions,
 runtime reads, selections and derived queries outside recipe preparation.
