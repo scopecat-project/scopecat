@@ -24,7 +24,7 @@ def test_bootstrap_creates_the_complete_project_store_and_is_idempotent(
     store.bootstrap()
     store.bootstrap()
 
-    assert store.schema_version() == 89
+    assert store.schema_version() == 90
     with sqlite3.connect(database) as connection:
         journal_mode = connection.execute("PRAGMA journal_mode").fetchone()
         tables = {
@@ -107,7 +107,8 @@ def test_bootstrap_creates_the_complete_project_store_and_is_idempotent(
         "closed_at",
     } <= procedure_run_columns
     assert {name for name in tables if name.startswith("calibration_")} == {
-        "calibration_check_requests"
+        "calibration_check_requests",
+        "calibration_tasks",
     }
     assert not any(name.startswith("calibration_") for name in triggers)
 
@@ -349,7 +350,7 @@ def test_bootstrap_refuses_v52_without_execution_segments(
     store = SQLiteProjectStore(SQLiteDatabase(database), tmp_path / "objects")
     with pytest.raises(
         SchemaVersionError,
-        match="version: 52; expected 89",
+        match="version: 52; expected 90",
     ):
         store.bootstrap()
 
@@ -415,7 +416,7 @@ def test_current_schema_read_keeps_one_snapshot_during_checkpoint(
         project_store, "_has_project_schema", checkpoint_after_schema_read
     )
     try:
-        assert store.schema_version() == 89
+        assert store.schema_version() == 90
         with pytest.raises(SchemaVersionError, match="version: 99"):
             store.schema_version()
     finally:
@@ -445,7 +446,7 @@ def test_reopening_current_test_store_does_not_copy_disappearing_wal(
         try:
             assert (
                 SQLiteProjectStore(second.sqlite, tmp_path / "objects").schema_version()
-                == 89
+                == 90
             )
             assert copies == []
         finally:

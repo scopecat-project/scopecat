@@ -1,8 +1,8 @@
 # Automation: domain tasks above durable execution
 
-Status: declared calibration checks and read-only staged task previews are
-implemented. Durable task dispatch, capability projections and large-scale
-scheduling below remain requirements, not claims about the current worker.
+Status: declared checks, stage previews, durable fixed task specifications and
+explicit dependency-checked stage dispatch are implemented. Automatic task
+advancement, capability projections and large-scale scheduling remain requirements.
 
 ## Ownership
 
@@ -106,6 +106,23 @@ or infer combined scientific readiness. Those contracts precede automatic
 calibration/repair. Plans can span contexts but do not switch live equipment.
 See [previewing staged work](../../how-to/preview-calibration-tasks.md).
 
+`lab.calibration_tasks.create` separately persists an immutable plan and one exact
+procedure call per stage. `dispatch(task_id, stage_id)` re-evaluates prerequisites,
+uses normal procedure admission and records the association in the same write
+transaction. A stage gets one procedure; retries return that association before
+rechecking mutable authority. Different ready stages are separate admissions, so
+one admission failure does not roll back progress on an independent stage.
+Schema 90 retains tasks and associations across restart and backup/restore without
+introducing prebaseline migration. Stored scientific evidence remains in procedures,
+runs and analyses. Task creation validates declarations structurally; equipment and
+parameter authority are checked when each stage is actually dispatched.
+
+The first task service has no automatic polling, repair attempts or implicit
+parameter flow. Existing workers execute admitted procedures; callers currently
+choose when to dispatch each newly ready stage. Plans spanning setups do not
+automatically activate equipment. New observations/repairs need explicit new task
+intent. These limits precede task-level cancellation, scheduling and repair policy.
+
 ## Panel requirements
 
 Sample/target panels need scoped capability status, evidence time and parameter
@@ -131,10 +148,10 @@ Required next contracts:
 1. Larger-history traversal and panel refresh policies beyond the bounded history
    facade. Pages have read-snapshot consistency and a final batch comparison;
    consumers must still use write-time authority checks when acting on observations.
-2. Persist the preview's task/stage/target relationships with frozen intent, then
-   add independently dispatchable units, prerequisite enforcement and bounded
-   repair loops. Explicit partial-completion projections now exist. Avoid one
-   giant procedure containing every target and an unbounded maintenance loop.
+2. Add automatic advancement, task-level controls and bounded repair loops to the
+   persisted exact stages and dependency-checked dispatch primitive. Explicit
+   partial-completion projections exist. Avoid one giant procedure containing
+   every target and an unbounded maintenance loop.
 3. Capability dependency and parameter-read contracts, including query membership
    and physical interactions. Exact revision matching remains conservative until
    reuse can be explained from complete dependencies.

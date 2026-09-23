@@ -263,27 +263,28 @@ class CalibrationCheckQueries:
             )
 
     def preview_task(self, preview: CalibrationTaskPreview) -> CalibrationTaskProgress:
-        executions: dict[str, tuple[ProcedureRun, CheckEvidence | None]] = {}
         with self._sqlite.read_transaction() as connection:
-            for stage in preview.plan.stages:
-                procedure_id = preview.executions.get(stage.id)
-                if procedure_id is None:
-                    continue
-                try:
-                    run = self._procedures.read_run_in_transaction(
-                        connection, procedure_id
-                    )
-                except AutomationNotFound as error:
-                    raise BackendConflict(
-                        "task stage execution was not found"
-                    ) from error
-                view = self._view(connection, run)
-                if view.request != stage.check:
-                    raise BackendConflict(
-                        f"task stage {stage.id!r} differs from its declared check"
-                    )
-                executions[stage.id] = (run, view.evidence)
-            return assess_calibration_task(preview.plan, executions)
+            return self.preview_in_transaction(connection, preview)
+
+    def preview_in_transaction(
+        self, connection: sqlite3.Connection, preview: CalibrationTaskPreview
+    ) -> CalibrationTaskProgress:
+        executions: dict[str, tuple[ProcedureRun, CheckEvidence | None]] = {}
+        for stage in preview.plan.stages:
+            procedure_id = preview.executions.get(stage.id)
+            if procedure_id is None:
+                continue
+            try:
+                run = self._procedures.read_run_in_transaction(connection, procedure_id)
+            except AutomationNotFound as error:
+                raise BackendConflict("task stage execution was not found") from error
+            view = self._view(connection, run)
+            if view.request != stage.check:
+                raise BackendConflict(
+                    f"task stage {stage.id!r} differs from its declared check"
+                )
+            executions[stage.id] = (run, view.evidence)
+        return assess_calibration_task(preview.plan, executions)
 
     def observe(
         self, observation: CalibrationCheckObservation

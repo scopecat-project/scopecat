@@ -1,7 +1,8 @@
 """Declared checks are admitted against authority before executing laboratory code."""
 
 import sqlite3
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Generator, Iterator
+from contextlib import contextmanager
 from dataclasses import replace
 from pathlib import Path
 from unittest.mock import patch
@@ -34,6 +35,13 @@ from scopecat.daemon.calibration_checks import (
     CalibrationCheckQuery,
     CalibrationTaskPreview,
 )
+from scopecat.daemon.calibration_tasks import (
+    CalibrationTaskCall,
+    CalibrationTaskCreate,
+    CalibrationTaskDispatch,
+    CalibrationTaskListQuery,
+    CalibrationTaskView,
+)
 from scopecat.daemon.wire import (
     AnalysisFactOutputPayload,
     AnalysisSaveCommand,
@@ -44,6 +52,7 @@ from scopecat.daemon.wire import (
     SetupActivateCommand,
     SetupSaveCommand,
 )
+from scopecat.project import load_project
 from scopecat.records.analysis import AnalysisFact, RunAnalysisSubject
 from scopecat.records.calibration_check import (
     CalibrationCheckRequest,
@@ -60,6 +69,7 @@ from scopecat.sdk.compute import PYTHON_JSON_CODEC
 from scopecat_testkit.workflow_fixtures import load_config
 
 from scopecat_server import BackendConflict, LocalDaemonRuntime
+from scopecat_server.snapshots import create_snapshot, restore_snapshot
 from scopecat_server.storage.sqlite.calibration_checks import CheckRequestPage
 
 type CheckCase = tuple[LocalDaemonRuntime, CalibrationCheckRequest, RunSubmission]
@@ -69,6 +79,12 @@ type CheckCase = tuple[LocalDaemonRuntime, CalibrationCheckRequest, RunSubmissio
 def check_case(
     tmp_path: Path,
 ) -> Iterator[CheckCase]:
+    with _check_case(tmp_path) as case:
+        yield case
+
+
+@contextmanager
+def _check_case(tmp_path: Path) -> Generator[CheckCase]:
     config = load_config()
     with LocalDaemonRuntime(tmp_path, bootstrap_config=config) as runtime:
         app = runtime.application
@@ -491,11 +507,124 @@ def test_task_preview_binds_exact_checks_without_submitting_work(
     assert app.automation.list(ProcedureRunListQuery()) == before
 
 
+def _task(declaration: CalibrationCheckRequest) -> CalibrationTaskCreate:
+    command = _command(declaration)
+    return CalibrationTaskCreate(
+        task_id="round-1",
+        plan=CalibrationTaskPlan(
+            stages=(
+                CalibrationTaskStage(id="a", check=declaration),
+                CalibrationTaskStage(id="b", check=declaration),
+                CalibrationTaskStage(
+                    id="after-a", check=declaration, depends_on=("a",)
+                ),
+            )
+        ),
+        calls={
+            stage: CalibrationTaskCall(
+                definition=command.definition,
+                intent=command.intent,
+                samples=command.samples,
+            )
+            for stage in ("a", "b", "after-a")
+        },
+    )
+
+
+def test_task_dispatch_is_atomic_and_does_not_admit_unready_stages(
+    check_case: CheckCase,
+) -> None:
+    runtime, declaration, _ = check_case
+    app = runtime.application
+    spec = _task(declaration)
+    tasks = app.calibration_tasks
+    created = tasks.create(spec)
+    assert tasks.create(spec) == created
+    altered_call = spec.calls["a"].model_copy(
+        update={
+            "definition": spec.calls["a"].definition.model_copy(update={"version": "2"})
+        }
+    )
+    with pytest.raises(BackendConflict, match="different specification"):
+        tasks.create(
+            spec.model_copy(update={"calls": {**spec.calls, "a": altered_call}})
+        )
+    with pytest.raises(BackendConflict, match="prerequisites"):
+        tasks.dispatch(
+            CalibrationTaskDispatch(task_id=spec.task_id, stage_id="after-a")
+        )
+    dispatch = CalibrationTaskDispatch(task_id=spec.task_id, stage_id="a")
+    with (
+        patch.object(
+            tasks._store,
+            "update",
+            side_effect=RuntimeError("interrupted task association"),
+        ),
+        pytest.raises(RuntimeError, match="interrupted task association"),
+    ):
+        tasks.dispatch(dispatch)
+    assert tasks.get(spec.task_id).task.executions == {}
+    assert app.automation.list(ProcedureRunListQuery()).items == ()
+    assert app.calibration_checks.query(CalibrationCheckQuery()).items == ()
+    with TestClient(runtime.app()) as client:
+        first = client.post(
+            "/api/v1/calibration-tasks/dispatch", json=dispatch.model_dump(mode="json")
+        )
+        assert first.status_code == 200, first.text
+        admitted = CalibrationTaskView.model_validate(first.json())
+        assert (
+            client.post(
+                "/api/v1/calibration-tasks/dispatch",
+                json=dispatch.model_dump(mode="json"),
+            ).json()
+            == first.json()
+        )
+        assert client.get("/api/v1/calibration-tasks/round-1").status_code == 200
+    assert set(admitted.task.executions) == {"a"}
+    assert len(app.automation.list(ProcedureRunListQuery()).items) == 1
+    independent = tasks.dispatch(
+        CalibrationTaskDispatch(task_id=spec.task_id, stage_id="b")
+    )
+    assert set(independent.task.executions) == {"a", "b"}
+    assert tasks.list(CalibrationTaskListQuery()).items == (independent.task,)
+
+
+def test_task_survives_restart_and_current_format_restore(tmp_path: Path) -> None:
+    source = tmp_path / "source"
+    source.mkdir()
+    manifest = source / "scopecat.toml"
+    manifest.write_text("[lab]\n")
+    with _check_case(source) as (runtime, declaration, _):
+        spec = _task(declaration)
+        runtime.application.calibration_tasks.create(spec)
+        command = CalibrationTaskDispatch(task_id=spec.task_id, stage_id="a")
+        retained = runtime.application.calibration_tasks.dispatch(command)
+    with LocalDaemonRuntime(source) as restarted:
+        assert restarted.application.calibration_tasks.get(spec.task_id) == retained
+        assert restarted.application.calibration_tasks.dispatch(command) == retained
+    create_snapshot(load_project(manifest), tmp_path / "snapshot")
+    restore_snapshot(tmp_path / "snapshot", tmp_path / "restored")
+    with LocalDaemonRuntime(tmp_path / "restored") as restored:
+        tasks = restored.application.calibration_tasks
+        assert tasks.get(spec.task_id) == retained
+        assert tasks.create(spec) == retained
+        assert tasks.dispatch(command) == retained
+        assert set(
+            tasks.dispatch(
+                CalibrationTaskDispatch(task_id=spec.task_id, stage_id="b")
+            ).task.executions
+        ) == {"a", "b"}
+
+
 def test_exact_retry_survives_setup_change(check_case: CheckCase) -> None:
     runtime, declaration, _ = check_case
     app = runtime.application
     command = _command(declaration)
     parent = app.automation.submit(command).run
+    spec = _task(declaration)
+    app.calibration_tasks.create(spec)
+    dispatched = CalibrationTaskDispatch(task_id=spec.task_id, stage_id="a")
+    retained = app.calibration_tasks.dispatch(dispatched)
     current = app.setup.current()
     changed = app.setup.save(
         SetupSaveCommand(
@@ -523,6 +652,15 @@ def test_exact_retry_survives_setup_change(check_case: CheckCase) -> None:
         )
     )
     assert app.automation.submit(command).run == parent
+    assert app.calibration_tasks.dispatch(dispatched) == retained
+    with pytest.raises(BackendConflict, match="check setup"):
+        app.calibration_tasks.dispatch(
+            CalibrationTaskDispatch(task_id=spec.task_id, stage_id="b")
+        )
+    assert (
+        app.calibration_tasks.get(spec.task_id).task.executions
+        == retained.task.executions
+    )
     with pytest.raises(BackendConflict, match="check setup"):
         app.automation.submit(command.model_copy(update={"request_key": "new"}))
 

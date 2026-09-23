@@ -147,6 +147,50 @@ try:
                 assert budgeted.complete
                 assert budgeted.scanned == len(exact.requests)
                 expected_runs += 2
+                from scopecat.api.calibration_tasks import task_call
+                from scopecat.daemon.client import DaemonConflictError
+                import pytest
+
+                resolved = lab.parameters.resolve(namespace["accepted"].revision)
+                intents = {
+                    "good": check_request(initial=resolved),
+                    "bad": check_request(initial=resolved, disturbance=0.25),
+                    "after-good": check_request(initial=resolved),
+                    "after-bad": check_request(initial=resolved),
+                }
+                plan = CalibrationTaskPlan(stages=tuple(
+                    CalibrationTaskStage(
+                        id=key, check=intent.calibration_check,
+                        depends_on=(key.removeprefix("after-"),)
+                                   if key.startswith("after-") else (),
+                    ) for key, intent in intents.items()
+                ))
+                tasks = lab.calibration_tasks
+                created = tasks.create("teaching-round", plan, calls={
+                    key: task_call(check_zero, intent)
+                    for key, intent in intents.items()
+                })
+                assert created.progress.ready == ("good", "bad")
+                with pytest.raises(DaemonConflictError, match="prerequisites"):
+                    tasks.dispatch("teaching-round", "after-good")
+                for key in ("good", "bad"):
+                    task = tasks.dispatch("teaching-round", key)
+                    lab.procedures.get(task.task.executions[key]).resume()
+                progressed = tasks.get("teaching-round")
+                assert progressed.progress.ready == ("after-good",)
+                assert tuple(stage.state for stage in progressed.progress.stages) == (
+                    "passed", "rejected", "ready", "blocked",
+                )
+                with pytest.raises(DaemonConflictError, match="prerequisites"):
+                    tasks.dispatch("teaching-round", "after-bad")
+                followup = tasks.dispatch("teaching-round", "after-good")
+                lab.procedures.get(followup.task.executions["after-good"]).resume()
+                finished = tasks.get("teaching-round")
+                assert finished.progress.complete and not finished.progress.successful
+                assert len(finished.task.executions) == 3
+                assert tasks.dispatch("teaching-round", "good").task == finished.task
+                assert tasks.list().items == (finished.task,)
+                expected_runs += 3
             assert len(lab.runs().items) == expected_runs
             assert lab.config.registry().entries == ()
             outcomes = {r.summary().outcome for r in lab.procedures.list().items}

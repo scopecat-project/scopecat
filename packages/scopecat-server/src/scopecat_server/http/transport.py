@@ -95,6 +95,13 @@ from scopecat.daemon.calibration_checks import (
     CalibrationCheckQuery,
     CalibrationTaskPreview,
 )
+from scopecat.daemon.calibration_tasks import (
+    CalibrationTaskCreate,
+    CalibrationTaskDispatch,
+    CalibrationTaskListQuery,
+    CalibrationTaskPage,
+    CalibrationTaskView,
+)
 from scopecat.daemon.endpoint import (
     DAEMON_SHUTDOWN_PATH,
     DAEMON_SHUTDOWN_TOKEN_HEADER,
@@ -1723,6 +1730,29 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
     ) -> ProcedureScheduleMaterializeReceipt:
         _require_procedure_schedule_id(schedule_id, command.schedule_id)
         return application.procedure_schedules.materialize(command)
+
+    @app.post(f"{_API_PREFIX}/calibration-tasks")
+    def create_calibration_task(command: CalibrationTaskCreate) -> CalibrationTaskView:
+        return application.calibration_tasks.create(command)
+
+    @app.post(f"{_API_PREFIX}/calibration-tasks/dispatch")
+    def dispatch_calibration_task(
+        command: CalibrationTaskDispatch,
+    ) -> CalibrationTaskView:
+        return application.calibration_tasks.dispatch(command)
+
+    @app.get(f"{_API_PREFIX}/calibration-tasks")
+    def list_calibration_tasks(
+        limit: Annotated[int, Query(ge=1, le=200)] = 50,
+        cursor: Annotated[int | None, Query(ge=1)] = None,
+    ) -> CalibrationTaskPage:
+        return application.calibration_tasks.list(
+            CalibrationTaskListQuery(limit=limit, cursor=cursor)
+        )
+
+    @app.get(f"{_API_PREFIX}/calibration-tasks/{{task_id:path}}")
+    def get_calibration_task(task_id: str) -> CalibrationTaskView:
+        return application.calibration_tasks.get(task_id)
 
     @app.post(f"{_API_PREFIX}/calibration-tasks/preview")
     def preview_calibration_task(

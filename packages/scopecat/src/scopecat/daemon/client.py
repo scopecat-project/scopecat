@@ -82,6 +82,13 @@ from scopecat.daemon.calibration_checks import (
     CalibrationCheckQuery,
     CalibrationTaskPreview,
 )
+from scopecat.daemon.calibration_tasks import (
+    CalibrationTaskCreate,
+    CalibrationTaskDispatch,
+    CalibrationTaskListQuery,
+    CalibrationTaskPage,
+    CalibrationTaskView,
+)
 from scopecat.daemon.hardware_receipt_wire import (
     decode_collect_receipt,
     decode_run_hardware_receipt,
@@ -593,6 +600,36 @@ class DaemonClient:
             f"{_API_PREFIX}/procedures",
             command,
             ProcedureSubmitReceipt,
+        )
+
+    def create_calibration_task(
+        self, command: CalibrationTaskCreate
+    ) -> CalibrationTaskView:
+        return self._post_model(
+            f"{_API_PREFIX}/calibration-tasks", command, CalibrationTaskView
+        )
+
+    def get_calibration_task(self, task_id: str) -> CalibrationTaskView:
+        return self._get_model(
+            f"{_API_PREFIX}/calibration-tasks/{quote(task_id, safe='')}",
+            CalibrationTaskView,
+        )
+
+    def list_calibration_tasks(
+        self, query: CalibrationTaskListQuery
+    ) -> CalibrationTaskPage:
+        params: dict[str, str | int] = {"limit": query.limit}
+        if query.cursor is not None:
+            params["cursor"] = query.cursor
+        return self._get_model(
+            f"{_API_PREFIX}/calibration-tasks", CalibrationTaskPage, params=params
+        )
+
+    def dispatch_calibration_task(
+        self, command: CalibrationTaskDispatch
+    ) -> CalibrationTaskView:
+        return self._post_model(
+            f"{_API_PREFIX}/calibration-tasks/dispatch", command, CalibrationTaskView
         )
 
     def preview_calibration_task(

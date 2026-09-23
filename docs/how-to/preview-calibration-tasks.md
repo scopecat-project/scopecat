@@ -1,4 +1,4 @@
-# Preview staged calibration work
+# Plan and dispatch staged calibration work
 
 Use a stage plan to inspect prerequisites and partial progress before building a
 dispatcher. Each stage represents one declared check on its exact target, setup,
@@ -70,8 +70,60 @@ experiment consumed predecessor outputs, or certification of combined device
 readiness. Use check applicability for age/context reuse and normal server
 admission for subsequent actions.
 
-This initial API previews at most 256 stages. It does not save a task, submit work,
-retry, switch setups, publish parameters or schedule parallel acquisition. Keep
-the plan in author code for now. Durable task identity, stage dispatch and bounded
-repair policies are the next implementation layer; existing procedure records
-remain durable independently of this preview.
+Preview is read-only and supports at most 256 stages. To retain the plan and
+enforce prerequisites when submitting stages, use `lab.calibration_tasks`.
+
+## Save a task and dispatch a stage
+
+Capture each procedure's exact definition and typed intent with `task_call`.
+These intents must declare precisely the checks used in the plan above. For a
+physical sample, pass its exact `SampleSelector` tuple through `samples=`, as with
+ordinary procedure submission.
+
+```python
+from scopecat.api.calibration_tasks import task_call
+
+task = lab.calibration_tasks.create(
+    "cooldown-7/check-round-1",
+    plan,
+    calls={
+        "q0-drive": task_call(check_drive, q0_intent),
+        "q1-drive": task_call(check_drive, q1_intent),
+        "joint-check": task_call(check_joint, joint_intent),
+    },
+)
+task = lab.calibration_tasks.dispatch("cooldown-7/check-round-1", "q0-drive")
+procedure_id = task.task.executions["q0-drive"]
+
+# A configured procedure worker can execute the admitted stage in the background.
+# For supervised notebook execution, use the existing procedure handle:
+lab.procedures.get(procedure_id).resume()
+task = lab.calibration_tasks.get("cooldown-7/check-round-1")
+print(task.progress.ready)
+```
+
+Creating a task saves intent without admitting any procedures. Definition identity,
+intent and stage dependencies cannot be edited under the same task ID. Retrying
+the same create request returns the existing task; a different specification
+conflicts. `list()` discovers retained tasks after reconnecting.
+
+`dispatch(task_id, stage_id)` checks prerequisites against retained evidence,
+applies normal parameter/setup/subject admission, submits the procedure and saves
+its stage association in one write transaction. An interrupted transaction leaves
+neither a procedure nor an association. Repeated dispatch returns the same
+procedure, even after authority changes; new stages still require current
+authority. No earlier unrelated execution is silently adopted. Ready independent
+stages can be dispatched separately if another stage has an admission problem.
+
+The task and associations survive daemon restarts and current-format backup and
+restore. Development schema 90 introduces their storage; use a fresh data directory
+for this format and retain older stores with their original environments.
+
+This API enforces dependencies at dispatch, but does not poll and dispatch future
+stages automatically. It does not switch setups, transfer predecessor outputs
+into later intents, refresh parameter branches, retry rejected stages or publish
+combined readiness. Calls are fixed at task creation. A repair or new observation
+needs a new task specification and ID. Cancellation of an already admitted
+procedure still uses the procedure API; unsubmitted stages remain unsubmitted.
+Automatic task advancement, task-level controls and bounded repair policies are
+the next layer above this admission primitive.

@@ -14,6 +14,7 @@ from scopecat.api._runner import _DaemonRunner
 from scopecat.api.analysis import AnalysisContext, AnalysisStep
 from scopecat.api.apparatus_history import LabApparatusOperations
 from scopecat.api.calibration_checks import LabCalibrationChecks
+from scopecat.api.calibration_tasks import LabCalibrationTasks
 from scopecat.api.instruments import LabInstrumentOperations
 from scopecat.api.parameter_revisions import LabParameterOperations
 from scopecat.api.plans import LabPlanOperations
@@ -282,6 +283,10 @@ class LabClient:
     @property
     def calibration_checks(self) -> LabCalibrationChecks:
         return LabCalibrationChecks(self._client)
+
+    @property
+    def calibration_tasks(self) -> LabCalibrationTasks:
+        return LabCalibrationTasks(self._client)
 
     def health(self) -> DaemonHealth:
         return self._control.health()

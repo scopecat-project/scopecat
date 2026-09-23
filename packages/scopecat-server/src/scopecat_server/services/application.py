@@ -16,6 +16,7 @@ from scopecat.daemon.wire import (
 from scopecat.runtime_binding import load_runtime_binding
 
 from scopecat_server.services.calibration_checks import CalibrationCheckQueries
+from scopecat_server.services.calibration_tasks import CalibrationTaskService
 from scopecat_server.storage.sqlite.apparatus_history import ApparatusHistoryStore
 from scopecat_server.storage.sqlite.experiment_plan_repository import (
     ExperimentPlanRepository,
@@ -112,6 +113,9 @@ class DaemonApplication:
         self.calibration_checks = CalibrationCheckQueries(
             project_store.sqlite,
             SQLiteRunRepository(project_store.sqlite, project_store.objects.root),
+        )
+        self.calibration_tasks = CalibrationTaskService(
+            project_store.sqlite, automation, self.calibration_checks
         )
 
         self.procedure_schedules = procedure_schedules
