@@ -80,6 +80,8 @@ from scopecat.daemon.calibration_checks import (
     CalibrationCheckObservationResult,
     CalibrationCheckPage,
     CalibrationCheckQuery,
+    CalibrationContextResolution,
+    CalibrationContextResolve,
     CalibrationProfile,
     CalibrationProfilePage,
     CalibrationProfileRecord,
@@ -677,6 +679,15 @@ class DaemonClient:
     def calibration_report(self, query: CalibrationReportQuery) -> CalibrationReport:
         return self._post_model(
             f"{_API_PREFIX}/calibration-checks/report", query, CalibrationReport
+        )
+
+    def resolve_calibration_context(
+        self, query: CalibrationContextResolve
+    ) -> CalibrationContextResolution:
+        return self._post_model(
+            f"{_API_PREFIX}/calibration-checks/context",
+            query,
+            CalibrationContextResolution,
         )
 
     def save_calibration_profile(

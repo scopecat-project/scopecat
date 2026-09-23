@@ -271,6 +271,13 @@ try:
                 assert saved_report.profile_id == "teaching-v1"
                 assert saved_report.items[0].selection.status == "usable"
                 assert "teaching-v1" in saved_report._repr_html_()
+                subject = report.context.subject
+                assert subject.kind == "unbound"
+                captured = checks.resolve_context(
+                    branch=namespace["trial"],
+                )
+                assert captured.branch.name == namespace["trial"]
+                assert captured.context.subject == subject
                 assert report.items[1].selection.assessment.reasons == (
                     "check_expired",
                 )

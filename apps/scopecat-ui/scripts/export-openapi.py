@@ -15,6 +15,7 @@ OUTPUT = Path(__file__).parent.parent / ".generated" / "ui-api.openapi.json"
 _OPERATIONS = {
     ("/api/v1/procedures/{procedure_run_id}/worker-log", "get"),
     ("/api/v1/calibration-checks/report", "post"),
+    ("/api/v1/calibration-checks/context", "post"),
     ("/api/v1/calibration-profiles", "get"),
     ("/api/v1/calibration-profiles", "post"),
     ("/api/v1/calibration-profiles/{profile_id}", "get"),

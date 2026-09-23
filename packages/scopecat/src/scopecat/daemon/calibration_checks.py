@@ -20,8 +20,31 @@ from scopecat.records.calibration_check import (
     CalibrationContext,
     CalibrationScope,
 )
+from scopecat.records.parameter_branch import ParameterBranch
+from scopecat.records.sample import SampleSelector
+from scopecat.records.setup import SetupRevisionRef
 
 MAX_CHECK_OBSERVATIONS = 2000
+
+
+class CalibrationContextResolve(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    branch: str = Field(min_length=1)
+    setup: SetupRevisionRef | None = None
+    samples: tuple[SampleSelector, ...] = Field(default=(), max_length=32)
+
+    @model_validator(mode="after")
+    def exact_samples(self) -> CalibrationContextResolve:
+        if any(sample.revision is None for sample in self.samples):
+            raise ValueError("select exact sample revisions for a capability context")
+        return self
+
+
+class CalibrationContextResolution(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    context: CalibrationContext
+    branch: ParameterBranch
+    setup: SetupRevisionRef
 
 
 class CalibrationRequirement(BaseModel):

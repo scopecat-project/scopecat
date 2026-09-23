@@ -141,6 +141,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/calibration-checks/context": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Resolve Calibration Context */
+        post: operations["resolve_calibration_context_api_v1_calibration_checks_context_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/calibration-checks/report": {
         parameters: {
             query?: never;
@@ -3029,6 +3046,23 @@ export interface components {
             scenario: components["schemas"]["SoftwareExecutionScenario"] | null;
             setup_content_hash: components["schemas"]["Sha256ContentHash"];
             subject: components["schemas"]["ResolvedSubject"];
+        };
+        /** CalibrationContextResolution */
+        CalibrationContextResolution: {
+            branch: components["schemas"]["ParameterBranch"];
+            context: components["schemas"]["CalibrationContext"];
+            setup: components["schemas"]["SetupRevisionRef"];
+        };
+        /** CalibrationContextResolve */
+        CalibrationContextResolve: {
+            /** Branch */
+            branch: string;
+            /**
+             * Samples
+             * @default []
+             */
+            samples: components["schemas"]["SampleSelector"][];
+            setup?: components["schemas"]["SetupRevisionRef"] | null;
         };
         /**
          * CalibrationProfile
@@ -11106,6 +11140,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AuthorWorkspaceCatalog"];
+                };
+            };
+        };
+    };
+    resolve_calibration_context_api_v1_calibration_checks_context_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CalibrationContextResolve"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalibrationContextResolution"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

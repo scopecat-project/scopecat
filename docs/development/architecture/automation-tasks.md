@@ -211,7 +211,15 @@ The sample workspace now offers a bounded historical-context consumer: choose a
 measurement bound to the displayed sample revision, then evaluate an explicit
 saved profile. The complete joint subject is retained, and parameter overrides
 or non-revision sources cannot supply an exact context. This does not yet provide
-a current-context selector or a continuously refreshed sample health dashboard.
+a continuously refreshed sample health dashboard.
+
+The sample page also resolves a parameter branch and current or saved setup for
+one exact inline sample revision. The context endpoint reads branch/setup heads
+in one transaction and reuses parameter composition and scientific binding rules;
+it does not dispatch work or select global defaults. The Python API additionally
+supports joint inline samples and unbound software scenarios. Registered-target
+selection remains separate. Returned contexts freeze the observed versions;
+report refresh and context re-resolution are distinct actions.
 
 Validate these with a small synthetic array: full tune-up, local drift, one failed
 resource, unaffected progress, restart and explicit partial results. Add a sample

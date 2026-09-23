@@ -40,6 +40,45 @@ the previous report, including while the new context is loading or fails to load
 The evaluation time is current, but its requested context is historical: this
 does not assess today's branch head, setup or overall sample readiness.
 
+## Resolve a branch and setup without a previous measurement
+
+In the sample workspace, expand **Capability evidence from a parameter branch**.
+Enter the branch name, choose the current active setup or a saved setup, then
+click **Resolve capability context**. The result shows the captured branch
+generation, parameter revision, setup revision and scenario. Select a saved
+profile below it to inspect evidence. No measurement, task or global-default
+change is required.
+
+This form uses the displayed sample revision as one inline `subject`. It does not
+substitute for a registered target or a joint subject. The Python API can specify
+multiple exact sample revisions and roles:
+
+```python
+from scopecat.records.sample import SampleSelector
+
+resolved = lab.calibration_checks.resolve_context(
+    branch="daily",
+    samples=(SampleSelector(sample_id="chip-a", revision=2),),
+)
+report = lab.calibration_checks.report(
+    context=resolved.context, profile="two-qubit-daily-v1"
+)
+report
+```
+
+An optional `setup=SetupRevisionRef(...)` selects a saved setup; omission reads
+current setup authority. Branch and active setup heads are read in one database
+snapshot. Supplied sample revisions must be exact and are resolved through the
+sample registry. With no samples the context is unbound, which supports software
+scenarios but does not establish physical sample capability. Scenario comes from
+the resolved setup rather than a separate simulation flag.
+
+The returned context is frozen: evaluating it again refreshes evidence and age,
+but does not follow later branch or setup changes. Resolve again to capture new
+versions. Editing the form or starting another resolution clears the previous
+report, including when resolution fails. This is an advisory observation, not a
+publication fence or permission to execute hardware.
+
 ## Query from Python
 
 Provide a resolved `CalibrationContext` and the requirements you want to inspect.

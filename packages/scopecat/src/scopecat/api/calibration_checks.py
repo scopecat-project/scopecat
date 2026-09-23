@@ -20,6 +20,8 @@ from scopecat.daemon.calibration_checks import (
     MAX_CHECK_OBSERVATIONS,
     CalibrationCheckObservation,
     CalibrationCheckQuery,
+    CalibrationContextResolution,
+    CalibrationContextResolve,
     CalibrationProfile,
     CalibrationProfilePage,
     CalibrationProfileRecord,
@@ -34,6 +36,8 @@ from scopecat.records.calibration_check import (
     CalibrationContext,
     CalibrationScope,
 )
+from scopecat.records.sample import SampleSelector
+from scopecat.records.setup import SetupRevisionRef
 
 
 @dataclass(frozen=True)
@@ -130,6 +134,22 @@ class LabCalibrationChecks:
                 )
             )
         return CalibrationReportView.model_validate(report, from_attributes=True)
+
+    def resolve_context(
+        self,
+        *,
+        branch: str,
+        samples: tuple[SampleSelector, ...] = (),
+        setup: SetupRevisionRef | None = None,
+    ) -> CalibrationContextResolution:
+        """Capture branch/setup heads for exact samples without execution."""
+        return self._client.resolve_calibration_context(
+            CalibrationContextResolve(
+                branch=branch,
+                samples=samples,
+                setup=setup,
+            )
+        )
 
     def save_profile(
         self,

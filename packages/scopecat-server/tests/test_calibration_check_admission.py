@@ -35,6 +35,8 @@ from scopecat.daemon.calibration_checks import (
     CalibrationCheckObservationResult,
     CalibrationCheckPage,
     CalibrationCheckQuery,
+    CalibrationContextResolution,
+    CalibrationContextResolve,
     CalibrationProfile,
     CalibrationProfileReportQuery,
     CalibrationReport,
@@ -54,6 +56,7 @@ from scopecat.daemon.calibration_tasks import (
 from scopecat.daemon.wire import (
     AnalysisFactOutputPayload,
     AnalysisSaveCommand,
+    ParameterBranchCommitCommand,
     ParameterResolveCommand,
     ParameterSaveCommand,
     RunSubmission,
@@ -84,6 +87,84 @@ from scopecat_server.snapshots import create_snapshot, restore_snapshot
 from scopecat_server.storage.sqlite.calibration_checks import CheckRequestPage
 
 type CheckCase = tuple[LocalDaemonRuntime, CalibrationCheckRequest, RunSubmission]
+
+
+def test_current_capability_context_freezes_branch_and_setup(
+    check_case: CheckCase,
+) -> None:
+    runtime, declaration, child = check_case
+    app = runtime.application
+    head = app.config.commit_parameter_branch(
+        ParameterBranchCommitCommand(
+            name="daily",
+            expected_generation=0,
+            source=declaration.context.parameters,
+            actor="test",
+        )
+    )
+    query = CalibrationContextResolve(
+        branch="daily", samples=(SampleSelector(sample_id="chip", revision=1),)
+    )
+    with TestClient(runtime.app()) as client:
+        response = client.post(
+            "/api/v1/calibration-checks/context", json=query.model_dump(mode="json")
+        )
+        assert response.status_code == 200, response.text
+        resolved = CalibrationContextResolution.model_validate(response.json())
+        assert resolved.context == declaration.context
+        assert resolved.branch == head
+        assert resolved.setup == app.setup.current().revision.ref
+        invalid = query.model_dump(mode="json")
+        invalid["samples"][0]["revision"] = None
+        assert (
+            client.post("/api/v1/calibration-checks/context", json=invalid).status_code
+            == 422
+        )
+        assert (
+            client.post(
+                "/api/v1/calibration-checks/context",
+                json={
+                    **query.model_dump(mode="json"),
+                    "branch": "missing",
+                },
+            ).status_code
+            == 404
+        )
+    changed = app.config.save_parameters(
+        ParameterSaveCommand(
+            revision_id="next-parameters",
+            catalog=child.config.parameter_catalog,
+            parameters=child.config.parameter_snapshot,
+            actor="test",
+        )
+    )
+    app.config.commit_parameter_branch(
+        ParameterBranchCommitCommand(
+            name="daily",
+            expected_generation=1,
+            source=changed.ref,
+            actor="test",
+        )
+    )
+    refreshed = app.calibration_context.resolve(query)
+    assert refreshed.branch.generation == 2
+    assert refreshed.context.parameters == changed.ref
+    assert resolved.context.parameters == declaration.context.parameters
+    assert app.setup.current().revision.ref == resolved.setup
+    explicit = app.calibration_context.resolve(
+        query.model_copy(update={"setup": resolved.setup})
+    )
+    assert explicit == refreshed
+    with pytest.raises(BackendConflict, match="reference differs"):
+        app.calibration_context.resolve(
+            query.model_copy(
+                update={
+                    "setup": resolved.setup.model_copy(
+                        update={"content_hash": "sha256:" + "a" * 64},
+                    )
+                }
+            )
+        )
 
 
 def test_capability_profiles_are_immutable_and_survive_backup(tmp_path: Path) -> None:
