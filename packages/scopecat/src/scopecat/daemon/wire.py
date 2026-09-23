@@ -202,6 +202,7 @@ class ParameterBranchCommitCommand(_WireModel):
 
 class ParameterCandidateComposeCommand(_WireModel):
     name: NonEmptyText
+    mode: Literal["parallel", "sequential"] = "parallel"
     sources: tuple[ParameterProposalRef, ...] = Field(min_length=2, max_length=200)
     note: str = ""
 

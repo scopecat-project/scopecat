@@ -1,7 +1,7 @@
 # Data formats before the compatibility baseline
 
 Scopecat has **no designated persistent-data compatibility baseline yet**. Current
-schema **94** is a development format identifier, not the start of a compatibility
+schema **95** is a development format identifier, not the start of a compatibility
 promise. The target, setup, calibration and application ownership models must
 settle before a supported baseline is explicitly designated with its formats,
 retained fixtures, supported operations and upgrade policy.
@@ -13,6 +13,11 @@ snapshot, plan, source manifest or codec. A successful historical test does not
 turn that format into a supported baseline.
 
 ## What remains supported now
+
+Schema 95 adds explicit parallel/sequential candidate composition provenance.
+Sequential sources retain their order and exact predecessor consumption; their
+net changes are revalidated on publication. Use a fresh development store rather
+than rewriting schema 94 data. Configuration export and setup codecs are unchanged.
 
 - The current build operates on its current format and rejects other formats.
 - [Stopped-project backup and restore](../how-to/backup-and-restore.md) retains and

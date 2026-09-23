@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Protocol, cast
+from typing import Literal, Protocol, cast
 from uuid import uuid4
 
 from scopecat.analysis.facts import ordinary_result_schema
@@ -105,6 +105,28 @@ class ParameterCandidate:
         Sources must share exact independent parameters, setup and scientific
         scope. Prepare and verify the returned candidate before publishing it.
         """
+        return self._compose(others, name=name, note=note, mode="parallel")
+
+    def then(
+        self, *later: ParameterCandidate, name: str, note: str = ""
+    ) -> ParameterCandidate:
+        """Retain a sequential chain as one candidate against the original base.
+
+        Each later proposal must come from a successful measurement using the
+        immediately preceding exact candidate. Later stages may refine the same
+        cells. This records completed work, not scheduling; independently verify
+        the returned candidate before publishing it to the original branch.
+        """
+        return self._compose(later, name=name, note=note, mode="sequential")
+
+    def _compose(
+        self,
+        others: tuple[ParameterCandidate, ...],
+        *,
+        name: str,
+        note: str,
+        mode: Literal["parallel", "sequential"],
+    ) -> ParameterCandidate:
         proposals = (
             self.config.parameter_proposal,
             *(item.config.parameter_proposal for item in others),
@@ -113,6 +135,7 @@ class ParameterCandidate:
             self.config.source_run_id,
             ParameterCandidateComposeCommand(
                 name=name,
+                mode=mode,
                 note=note,
                 sources=tuple(
                     ParameterProposalRef(

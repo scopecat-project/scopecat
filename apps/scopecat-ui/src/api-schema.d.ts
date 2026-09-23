@@ -7543,6 +7543,12 @@ export interface components {
         /** ParameterProposalComposition */
         ParameterProposalComposition: {
             base: components["schemas"]["ParameterRevisionRef"];
+            /**
+             * Mode
+             * @default parallel
+             * @enum {string}
+             */
+            mode: "parallel" | "sequential";
             /** Sources */
             sources: components["schemas"]["ParameterProposalRef"][];
         };

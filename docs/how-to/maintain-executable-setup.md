@@ -10,7 +10,7 @@ the session or workbench page; registered targets carry their own binding to the
 setup's control addresses. Laboratory bootstrap code should omit the retired
 `primary_entity_id` argument. Control topology and routing remain explicit.
 
-Current development storage is schema 94; exported configuration documents use
+Current development storage is schema 95; exported configuration documents use
 `scopecat.config_snapshot.v11`. Use fresh development data directories rather than
 rewriting old stores. Historical data and old environments may be retained for
 archival reading; no earlier development format is a compatibility baseline.

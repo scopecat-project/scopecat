@@ -2,23 +2,33 @@
 
 from collections.abc import Sequence
 from dataclasses import dataclass
+from typing import Literal
 
 from scopecat.config.candidate_merges import (
     ParameterMergeResult,
     merge_parameter_deltas,
 )
+from scopecat.config.candidates import (
+    CandidateConfig,
+    resolve_candidate_config_from_snapshot,
+)
 from scopecat.config.changes import load_parameter_change_proposal
+from scopecat.config.parameter_updates import parameter_cell_edits
 from scopecat.kernel.content_identity import model_wire_content_hash
 from scopecat.kernel.errors import CheckFailed
 from scopecat.kernel.problems import ProblemPhase, model_location, problem
 from scopecat.project_state import ProjectStateServices
+from scopecat.records.config import config_content_hash
 from scopecat.records.parameter_change import (
     ParameterProposalComposition,
     ParameterProposalRef,
     ParameterValueDelta,
 )
 from scopecat.records.parameter_content import ParameterContent
-from scopecat.records.run import ParameterRunConfigSource
+from scopecat.records.run import (
+    AnalysisCandidateRunConfigSource,
+    ParameterRunConfigSource,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -32,13 +42,22 @@ def resolve_parameter_composition(
     *,
     anchor_run_id: str,
     services: ProjectStateServices,
+    mode: Literal["parallel", "sequential"] = "parallel",
 ) -> ResolvedParameterComposition:
-    """Only a shared saved base and scientific scope permit value composition.
+    """Resolve sibling edits or an ordered chain back to one saved base.
 
     This resolves stored proposals, never caller-supplied deltas or acceptance.
     It neither verifies the joint candidate nor changes any branch.
     """
-    canonical = tuple(sorted(sources, key=lambda item: (item.run_id, item.proposal_id)))
+    canonical = (
+        tuple(sources)
+        if mode == "sequential"
+        else tuple(sorted(sources, key=lambda item: (item.run_id, item.proposal_id)))
+    )
+    if len(canonical) < 2 or len(canonical) > 200:
+        raise _composition_error("composition requires between 2 and 200 sources")
+    if mode == "sequential" and canonical[0].run_id != anchor_run_id:
+        raise _composition_error("sequential composition must start at its anchor")
     identities = {(item.run_id, item.proposal_id) for item in canonical}
     if len(identities) != len(canonical):
         raise _composition_error("composition sources must be unique")
@@ -52,16 +71,27 @@ def resolve_parameter_composition(
         )
     config = services.runs.read_config_profile_snapshot(anchor_run_id)
     changes: list[tuple[ParameterValueDelta, ...]] = []
+    expected: AnalysisCandidateRunConfigSource | None = None
+    final_config = config
     for ref in canonical:
         snapshot = services.runs.read_snapshot(ref.run_id)
         current = snapshot.config_source
+        matches_input = (
+            current == expected
+            if expected is not None
+            else (
+                isinstance(current, ParameterRunConfigSource)
+                and current.parameters == source.parameters
+                and current.setup == source.setup
+                and not current.overrides
+            )
+        )
         if (
             snapshot.outcome is None
             or snapshot.outcome.result != "succeeded"
-            or not isinstance(current, ParameterRunConfigSource)
-            or current.parameters != source.parameters
-            or current.setup != source.setup
-            or current.overrides
+            or not matches_input
+            or snapshot.scientific_binding.setup_content_hash
+            != anchor.scientific_binding.setup_content_hash
             or snapshot.scientific_binding.subject != anchor.scientific_binding.subject
             or snapshot.scientific_binding.target_binding
             != anchor.scientific_binding.target_binding
@@ -69,8 +99,8 @@ def resolve_parameter_composition(
             != anchor.scientific_binding.scenario
         ):
             raise _composition_error(
-                "composition sources require the same exact parameters, "
-                "setup and scientific scope"
+                "composition sources require the declared parameter input, "
+                "same setup and scientific scope"
             )
         proposal = load_parameter_change_proposal(
             run_id=ref.run_id,
@@ -92,7 +122,46 @@ def resolve_parameter_composition(
                 "combine original candidates in one call, not nested compositions"
             )
         changes.append(proposal.deltas)
-    provenance = ParameterProposalComposition(base=source.parameters, sources=canonical)
+        if mode == "sequential":
+            final_config = resolve_candidate_config_from_snapshot(
+                CandidateConfig(proposal),
+                source_config=services.runs.read_config_profile_snapshot(ref.run_id),
+            )
+            expected = AnalysisCandidateRunConfigSource(
+                source_run_id=ref.run_id,
+                analysis_record_id=ref.analysis_record_id,
+                proposal_id=ref.proposal_id,
+                base_config_content_hash=proposal.base_config_content_hash,
+                content_hash=config_content_hash(final_config),
+            )
+    provenance = ParameterProposalComposition(
+        base=source.parameters, sources=canonical, mode=mode
+    )
+    if mode == "sequential":
+        deltas: list[ParameterValueDelta] = []
+        for before in config.parameter_snapshot.values:
+            after = final_config.parameter_snapshot.get(before.id)
+            definition = config.parameter_catalog.get(before.id)
+            assert after is not None and definition is not None
+            if before != after:
+                deltas.append(
+                    ParameterValueDelta(
+                        parameter_id=before.id,
+                        before=before,
+                        after=after,
+                        cells=parameter_cell_edits(definition, before, after),
+                    )
+                )
+        if not deltas:
+            raise _composition_error(
+                "sequential composition has no net parameter changes"
+            )
+        return ResolvedParameterComposition(
+            provenance=provenance,
+            merged=ParameterMergeResult(
+                parameters=final_config.parameter_snapshot, deltas=tuple(deltas)
+            ),
+        )
     return ResolvedParameterComposition(
         provenance=provenance,
         merged=merge_parameter_deltas(

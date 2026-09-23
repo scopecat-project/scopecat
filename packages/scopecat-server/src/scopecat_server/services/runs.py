@@ -621,6 +621,7 @@ class RunService:
                 command.sources,
                 anchor_run_id=run_id,
                 services=self._services,
+                mode=command.mode,
             )
             config = self._runs.read_config_profile_snapshot(run_id)
             snapshot = self._runs.read_snapshot(run_id)

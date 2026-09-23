@@ -26,6 +26,17 @@ without inheriting the old working-point publication model.
 
 ## Scientific verification
 
+Sequential candidates use `ParameterCandidate.then()` rather than sibling merge.
+Schema 95 records an explicit composition mode and ordered exact sources. The
+resolver checks each successful run's source against the preceding candidate,
+including its full resolved hash and scientific scope. It applies each retained
+proposal to that run's snapshot and computes net deltas against the initial saved
+base. Analysis publication recomputes the chain, rejecting forged net values.
+Later stages may refine the same cells; parallel merge conflict rules are unchanged.
+Only flat chains of original proposals are supported. No branch is moved by this
+operation, and a net-zero chain produces no candidate. See the
+[author workflow](../how-to/verify-parameter-candidates.md#refine-a-candidate-in-a-later-experiment).
+
 Two proposals changing different cells can still interact physically. For
 example, independently chosen q0 and q1 drive settings can affect a shared
 readout or a coupled evolution. Absence of a cell conflict says nothing about

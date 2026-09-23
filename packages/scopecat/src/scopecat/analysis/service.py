@@ -320,6 +320,7 @@ def prepare_analysis(
                 proposal.composition.sources,
                 anchor_run_id=run_id,
                 services=services,
+                mode=proposal.composition.mode,
             )
             if (
                 proposal.composition != resolved.provenance

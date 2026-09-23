@@ -1350,8 +1350,9 @@ def test_typed_candidate_policy_uses_retained_decision_and_workpoint(
         assert lab.config.active().entry.id != "wrong-point"
 
 
+@pytest.mark.parametrize("sequential", [False, True])
 def test_verified_parameter_branch_publication_is_atomic_and_restorable(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, sequential: bool
 ) -> None:
     from scopecat.daemon.wire import ParameterBranchPublishCommand
 
@@ -1419,8 +1420,89 @@ def test_verified_parameter_branch_publication_is_atomic_and_restorable(
                 }
             ),
         )
+        intermediate_id = None
+        if sequential:
+            # Stage two really consumed stage one's candidate, then refined the
+            # same cell. No intermediate value is published to the daily branch.
+            intermediate_id = candidate_id
+            refinement = parameter_change_proposal_from_updates(
+                source_run_id=intermediate_id,
+                source_config=config,
+                analysis_title="fit",
+                analysis_record_id="analysis-fit-r1",
+                proposal_id="refined-frequency",
+                updates=(
+                    replace_scalar_parameter("drive_frequency", Quantity(5.2, "GHz")),
+                ),
+                reason="second stage refinement",
+                confidence=None,
+            )
+            runtime.application.runs.save_run_analysis(
+                intermediate_id, _analysis_command(refinement)
+            )
+            first = ParameterCandidate(lab.config, candidate)
+            second = ParameterCandidate(
+                lab.config,
+                lab.get_run(intermediate_id)
+                .published_analysis("fit")
+                .candidate_config(),
+            )
+            with pytest.raises(DaemonConflictError, match="declared parameter input"):
+                first.combine(second, name="not-siblings")
+            with pytest.raises(DaemonConflictError, match="independent parameters"):
+                second.then(first, name="wrong-order")
+            chained = first.then(second, name="sequence")
+            candidate = chained.config
+            proposal = candidate.parameter_proposal
+            assert proposal.composition is not None
+            assert proposal.composition.mode == "sequential"
+            assert [item.run_id for item in proposal.composition.sources] == [
+                baseline_id,
+                intermediate_id,
+            ]
+            assert proposal.deltas[0].before == resolved.config.parameter_snapshot.get(
+                "drive_frequency"
+            )
+            assert proposal.deltas[0].after == refinement.deltas[0].after
+            forged = proposal.model_copy(
+                update={
+                    "id": "forged",
+                    "analysis_record_id": "analysis-forged-r1",
+                    "deltas": first.config.parameter_proposal.deltas,
+                }
+            )
+            with pytest.raises(DaemonConflictError, match="merged values"):
+                lab.config.client.save_analysis(
+                    baseline_id,
+                    AnalysisSaveCommand(
+                        title="forged",
+                        analysis_key="forged",
+                        outputs=(
+                            AnalysisParameterProposalOutputPayload(
+                                kind="parameter_change_proposal",
+                                id="forged",
+                                title="forged",
+                                content=forged,
+                            ),
+                        ),
+                    ),
+                )
+            assert lab.parameters.checkout("daily").head == branch
+            config, source = lab.config.resolve_with_source(candidate)
+            candidate_id = _complete_signal_run(
+                runtime,
+                submission_id="final-candidate",
+                signal=1.2,
+                submission=_submission("final-candidate").model_copy(
+                    update={"config": config, "config_source": source}
+                ),
+            )
         context = lab.analysis("Verify branch", key="branch-verification")
         context.measurements(baseline, id="baseline", role="baseline")
+        if intermediate_id is not None:
+            context.measurements(
+                lab.get_run(intermediate_id), id="intermediate", role="baseline"
+            )
         context.measurements(
             lab.get_run(candidate_id), id="candidate", role="candidate"
         )
@@ -1452,6 +1534,35 @@ def test_verified_parameter_branch_publication_is_atomic_and_restorable(
         registry = lab.config.registry()
         assert not registry.entries
         setup = lab.setup.active()
+        if intermediate_id is not None:
+            incomplete = lab.analysis("Missing stage", key="missing-stage")
+            incomplete.measurements(baseline, id="baseline", role="baseline")
+            incomplete.measurements(
+                lab.get_run(candidate_id), id="candidate", role="candidate"
+            )
+            missing = (
+                incomplete.result()
+                .fact(
+                    "decision",
+                    _CandidateDecision(accepted=True),
+                    schema=_CANDIDATE_DECISION_SCHEMA,
+                )
+                .save()
+            )
+            with pytest.raises(
+                DaemonConflictError, match="every contributing baseline"
+            ):
+                lab.config.client.publish_parameter_branch(
+                    command.model_copy(
+                        update={
+                            "verification": command.verification.model_copy(
+                                update={
+                                    "analysis_record_id": missing.id,
+                                }
+                            ),
+                        }
+                    )
+                )
         rejected = (
             context.result()
             .fact(
@@ -1528,6 +1639,16 @@ def test_verified_parameter_branch_publication_is_atomic_and_restorable(
             recovered.application.config.parameter_revision("accepted").parameters
             == config.parameter_snapshot
         )
+        if sequential:
+            with TestClient(recovered.app()) as transport:
+                restored_lab = LabClient(_daemon_client(transport))
+                retained = (
+                    restored_lab.get_run(baseline_id)
+                    .published_analysis("sequence")
+                    .candidate_config()
+                )
+                assert retained.parameter_proposal == proposal
+                assert restored_lab.config.resolve_with_source(retained)[0] == config
 
 
 def test_verified_candidates_publish_to_independent_working_points(

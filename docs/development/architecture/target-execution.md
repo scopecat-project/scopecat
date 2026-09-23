@@ -5,7 +5,7 @@ audited at `3ddaeb27b` after target catalog PR #625. This is the full execution 
 implemented. Authored/session and workbench selection are also implemented as
 described in the later stages below. It refines [experiment contexts](experiment-contexts.md).
 This design follows the [prebaseline data policy](../data-compatibility.md).
-Current format 94 is not a compatibility baseline; no old-format reader or
+Current format 95 is not a compatibility baseline; no old-format reader or
 migration obligation is introduced here. Coordinate shared source-side files
 with workspace publication.
 

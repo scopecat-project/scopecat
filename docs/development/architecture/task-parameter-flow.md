@@ -2,7 +2,14 @@
 
 Status: implementation contract under development. Fixed check tasks and candidate
 verification/publication exist; automatic parameter-producing task stages do not.
-This document declares neither a wire format nor a supported data baseline.
+No automatic task-flow wire contract or supported data baseline is declared here.
+
+The first implemented lineage slice is `first.then(second, name=...)`: it resolves
+completed candidate-backed stages into one candidate against the initial saved
+revision. Each stage must consume the preceding exact candidate. A new independent
+measurement must verify the final candidate before branch publication. Schema 95
+retains ordered sources and revalidates their net values. This does not yet add
+task output bindings, candidate check contexts or automatic stage admission.
 
 ## Existing primitives
 
@@ -49,9 +56,12 @@ ordinary saves and losing provenance.
   graphs or arbitrary JSON paths.
 - Distinguish sequential ancestry from common-base sibling composition. Later
   stages can intentionally refine earlier cells; retain sibling conflict checks.
+  This distinction is implemented for flat retained proposal chains.
 - Define final lineage verification/publication. Reuse exact-source, subject/setup
   and optimistic checks; current single-candidate publication does not already
-  validate an arbitrary multi-stage chain.
+  validate an arbitrary multi-stage chain. The flat-chain resolver now reduces
+  validated sources to one original-base candidate. Verification must include all
+  contributing source runs plus new data using that aggregate candidate.
 
 Start with two linear stages and serialized publication. General fan-in, adaptive
 loops and repair follow a retained, explainable path. Capability prerequisites,

@@ -115,6 +115,7 @@ class ParameterProposalRef(BaseModel):
 class ParameterProposalComposition(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     base: ParameterRevisionRef
+    mode: Literal["parallel", "sequential"] = "parallel"
     sources: tuple[ParameterProposalRef, ...] = Field(min_length=2, max_length=200)
 
 
