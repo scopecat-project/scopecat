@@ -7,6 +7,7 @@ from dataclasses import dataclass
 
 from scopecat.compiler.relations.context import EvalContext, ParameterRelationData
 from scopecat.compiler.relations.evaluation import evaluate_scalar, evaluate_table_value
+from scopecat.compiler.relations.parameter_reads import ParameterReadRecorder
 from scopecat.compiler.relations.verification import (
     ExpressionTypeBindings,
     verify_scalar_expression,
@@ -40,6 +41,7 @@ class StaticRelationEvaluator:
         TopologyEntitySetSource | TopologyConnectionSetSource,
         TopologyTableResolution,
     ]
+    parameter_reads: ParameterReadRecorder | None = None
 
     def scalar(
         self,
@@ -57,7 +59,11 @@ class StaticRelationEvaluator:
         )
         return evaluate_scalar(
             verified,
-            EvalContext(params=self.parameters, inputs=dict(inputs)),
+            EvalContext(
+                params=self.parameters,
+                inputs=dict(inputs),
+                parameter_reads=self.parameter_reads,
+            ),
             bindings=selected_bindings,
             expected_type=expected_type,
         )
@@ -76,5 +82,9 @@ class StaticRelationEvaluator:
         return evaluate_table_value(
             source,
             value_type,
-            EvalContext(params=self.parameters, inputs=dict(inputs)),
+            EvalContext(
+                params=self.parameters,
+                inputs=dict(inputs),
+                parameter_reads=self.parameter_reads,
+            ),
         )

@@ -24,6 +24,7 @@ from scopecat.measurements.records import EntityAcquisitionCohortPlan
 from scopecat.planning.routing import ResourcePortManifest
 from scopecat.program.expressions import ComputeResultScalarExpr, ScalarExpr
 from scopecat.program.logical import LogicalStateAssignment
+from scopecat.records.parameter_read import BindingParameterRead, HostPointParameterRead
 from scopecat.sdk.payloads import PayloadCodecRegistry
 
 type EvaluatedEffectValue = CellValue | ComputeResultScalarExpr
@@ -108,6 +109,8 @@ class MaterializedLocalEffects:
 
     compute_operations: tuple[RunCoverageEffect, ...]
     effect_operations: tuple[tuple[RunCoverageEffect, ...], ...]
+    parameter_reads: tuple[HostPointParameterRead, ...] = ()
+    binding_parameter_reads: tuple[BindingParameterRead, ...] = ()
 
 
 def local_operation_resource_requirements(

@@ -780,6 +780,7 @@ def _execute_instrument_effects(
         ),
         cancellation_requested=session.cancellation_requested,
         domain_job_transitions=session.domain_job_transitions,
+        publish_host_parameter_evidence=session.publish_host_parameter_evidence,
         completed_point_count=start_point_count,
         completed_point_indices=recovered_point_indices,
     )
@@ -800,6 +801,7 @@ def _execute_instrument_effects(
         ),
         points=point_state.points,
         success_state=program.success_state,
+        success_state_parameter_evidence=program.success_state_parameter_evidence,
     )
     return result
 

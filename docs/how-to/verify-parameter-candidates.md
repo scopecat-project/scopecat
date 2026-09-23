@@ -73,6 +73,54 @@ Reopen a candidate with `author.config.candidate(source_run_id, "rabi-carrier")`
 Names belong to a source run, not a lab-wide latest pointer. Reopen its independent
 analysis by run and publication ID and call `candidate.verify(result)` again.
 
+## Refine a candidate in a later experiment
+
+Capture the destination branch before acquiring the initial baseline, and use its
+exact revision for that baseline. Keep this captured head until final publication:
+
+```python
+daily = author.parameters.checkout("daily").head
+author.use(parameters=daily.revision)
+```
+
+After staging `first` from the baseline analysis, prepare the next calibration
+with `candidate=first`. Stage `second` from that new run's managed analysis using
+the same `author.config.stage(...)` API. It may refine a cell already changed by
+`first`. Then retain the chain:
+
+```python
+combined = first.then(second, name="coarse-then-fine")
+final_run = author.prepare("verify_rabi", candidate=combined).run().wait().result()
+final_check = author.analyze_as(
+    final_run.id,
+    "my_lab.analysis:verify_rabi",
+    Verification,
+    arguments={"maximum_error": 0.02},
+)
+verified = combined.verify(final_check)
+published = verified.publish_to_branch(daily, name="coarse-fine-accepted")
+```
+
+`then()` records work that has already run; it does not schedule experiments. Every
+later source run must have consumed the immediately preceding exact candidate.
+Values copied into another revision, matching numbers from an unrelated run, and
+reversed stages do not qualify. Pass original proposals in order for a longer
+chain: `first.then(second, third, name=...)`; nested compositions are not supported.
+A chain with no net change is rejected instead of manufacturing a proposal.
+
+Intermediate candidates do not move `daily`. The final verification includes every
+contributing source run and new data using the aggregate candidate. Earlier positive
+decisions are not inherited. A concurrent branch edit blocks publication without
+discarding the chain; restoring its analysis records preserves the ordered sources.
+`combine()` remains the separate operation for sibling proposals from one base,
+where conflicting edits are rejected rather than applied in sequence.
+
+This API retains a completed candidate chain. A fixed check can capture it through
+`lab.resolve_context(candidate=combined).context`. For an output that will only
+exist after a prerequisite finishes, use an explicit
+[task candidate edge](preview-calibration-tasks.md#bind-a-prerequisites-candidate-output).
+That edge binds input; it does not automatically aggregate a chain or publish it.
+
 Preview retains the exact candidate, scientific binding and executable setup
 content. A parameter-only default change does not invalidate that fixed candidate;
 a changed executable setup or a relevant manual instrument mutation still requires

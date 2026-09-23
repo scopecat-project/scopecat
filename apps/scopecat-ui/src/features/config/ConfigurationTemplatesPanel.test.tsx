@@ -18,7 +18,6 @@ const config = {
   id: "reference",
   system: {
     id: "system",
-    primary_entity_id: "q0",
     topology: { entities: [] },
     instrument_registry: { instruments: [] },
     routing: { roles: [], routes: [] },

@@ -15,6 +15,11 @@ from scopecat.inspection import (
 )
 from scopecat.program.parameters import ParameterContract
 from scopecat.records.costs import RunCompilationCost
+from scopecat.records.parameter_read import (
+    BindingParameterRead,
+    HostParameterEvidence,
+    HostPointParameterRead,
+)
 from scopecat.sdk.payloads import PayloadCodecRegistry
 
 if TYPE_CHECKING:
@@ -91,7 +96,14 @@ class RunCoverageCheckpoint:
             raise ValueError("coverage checkpoint points must be non-empty and unique")
 
 
-type RunCoveredOperation = RunCoverageCheckpoint | RunCoverageEffect | RunDomainJob
+@dataclass(frozen=True, slots=True)
+class RunHostParameterEvidence:
+    evidence: HostParameterEvidence
+
+
+type RunCoveredOperation = (
+    RunCoverageCheckpoint | RunCoverageEffect | RunDomainJob | RunHostParameterEvidence
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -104,6 +116,8 @@ class RunPointInspection:
     planned_settings: tuple[PlannedInstrumentSetting, ...] = ()
     planned_setting_limit: int = PLANNED_INSTRUMENT_SETTING_LIMIT
     planned_settings_truncated: bool = False
+    host_parameter_reads: tuple[HostPointParameterRead, ...] = ()
+    binding_parameter_reads: tuple[BindingParameterRead, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -291,6 +305,11 @@ class RunProgram:
     )
     success_state: tuple[ApplyStateOperation, ...] = field(
         default=(),
+        repr=False,
+        compare=False,
+    )
+    success_state_parameter_evidence: HostParameterEvidence | None = field(
+        default=None,
         repr=False,
         compare=False,
     )

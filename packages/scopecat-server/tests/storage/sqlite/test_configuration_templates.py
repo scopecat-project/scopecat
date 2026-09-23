@@ -23,9 +23,6 @@ from scopecat_testkit.server.runtime import SQLiteTestRunRepository
 from scopecat_server.errors import BackendConflict, BackendNotFound
 from scopecat_server.instruments.actors import InstrumentActorRegistry
 from scopecat_server.services.setup import SetupService
-from scopecat_server.storage.sqlite.calibration_cohorts import (
-    SQLiteCalibrationCohortStore,
-)
 from scopecat_server.storage.sqlite.config_registry import SQLiteConfigRegistryStore
 from scopecat_server.storage.sqlite.connection import SQLiteDatabase
 from scopecat_server.storage.sqlite.control_plane import SQLiteControlPlane
@@ -54,7 +51,6 @@ def services(root: Path) -> tuple[SetupService, SQLiteConfigRegistryStore]:
         control=SQLiteControlPlane(database),
         config_registry=registry,
         actors=InstrumentActorRegistry(),
-        calibration_cohorts=SQLiteCalibrationCohortStore(database),
         templates=(template,),
     )
     return service, registry

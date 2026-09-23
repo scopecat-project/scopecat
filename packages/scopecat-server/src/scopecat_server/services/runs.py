@@ -65,8 +65,10 @@ from scopecat.daemon.wire import (
     AnalysisSaveCommand,
     AnalysisSaveReceipt,
     AnalysisTableOutputPayload,
+    ConfigurationAnalysisInputPayload,
     InterpretationAnalysisInputPayload,
     MeasurementAnalysisInputPayload,
+    ParameterCandidateComposeCommand,
     PublishedAnalysisInputPayload,
     RunAttachmentCommand,
 )
@@ -138,11 +140,23 @@ if TYPE_CHECKING:
 
 def analysis_input_from_payload(item: AnalysisInputPayload) -> AnalysisInput:
     from scopecat.analysis.service import (
+        ConfigurationAnalysisInput,
         InterpretationAnalysisInput,
         MeasurementAnalysisInput,
         PublishedAnalysisOutputInput,
     )
 
+    if isinstance(item, ConfigurationAnalysisInputPayload):
+        return ConfigurationAnalysisInput(
+            id=item.id,
+            run_id=item.run_id,
+            target=item.target,
+            content_hash=item.content_hash,
+            codec=item.codec,
+            role=item.role,
+            title=item.title,
+            metadata=item.metadata,
+        )
     if isinstance(item, MeasurementAnalysisInputPayload):
         return MeasurementAnalysisInput(
             id=item.id,
@@ -607,6 +621,49 @@ class RunService:
             input_count=publication.input_count,
             output_count=publication.output_count,
         )
+
+    def compose_parameter_candidate(
+        self, run_id: str, command: ParameterCandidateComposeCommand
+    ) -> AnalysisSaveReceipt:
+        from scopecat.config.parameter_composition import resolve_parameter_composition
+        from scopecat.records.analysis import analysis_record_id
+        from scopecat.records.parameter_change import ParameterChangeProposal
+
+        with self._config_errors():
+            resolved = resolve_parameter_composition(
+                command.sources,
+                anchor_run_id=run_id,
+                services=self._services,
+                mode=command.mode,
+            )
+            config = self._runs.read_config_profile_snapshot(run_id)
+            snapshot = self._runs.read_snapshot(run_id)
+            name = artifact_slug(command.name, fallback="composition")
+            proposal = ParameterChangeProposal(
+                id=name,
+                source_run_id=run_id,
+                analysis_record_id=analysis_record_id(name, 1),
+                base_config_id=config.id,
+                base_config_content_hash=snapshot.config_content_hash,
+                reason=command.note or "Compose retained parameter candidates",
+                deltas=resolved.merged.deltas,
+                composition=resolved.provenance,
+            )
+            return self.save_run_analysis(
+                run_id,
+                AnalysisSaveCommand(
+                    title=command.name,
+                    analysis_key=name,
+                    outputs=(
+                        AnalysisParameterProposalOutputPayload(
+                            kind="parameter_change_proposal",
+                            id=name,
+                            title=command.name,
+                            content=proposal,
+                        ),
+                    ),
+                ),
+            )
 
     def save_run_analysis(
         self,

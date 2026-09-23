@@ -57,11 +57,7 @@ export function configSourceLabel(entry: ConfigRegistryEntry): string {
       return "Explicit setup rebind";
     case "parameter_context":
       if (entry.source.rebind) return "Working point setup rebind";
-      return entry.source.publication?.kind === "calibration_cohort_merge"
-        ? "Calibration cohort merge"
-        : entry.source.publication
-          ? "Verified working point"
-          : "Parameter context";
+      return entry.source.publication ? "Verified working point" : "Parameter context";
     case "candidate_config":
       return "Candidate config";
     default:
@@ -92,33 +88,6 @@ function configSourceSearchTerms(source: ConfigProvenanceSource): Array<string |
       ];
     case "candidate_config":
       return [source.run_id, source.proposal_id];
-    case "calibration_cohort_merge":
-      return [
-        source.cohort_id,
-        source.spec_hash,
-        source.candidate_id,
-        source.base.entry_id,
-        source.base.content_hash,
-        source.composition_policy_ref.id,
-        source.composition_policy_ref.version,
-        source.composition_policy_ref.fingerprint,
-        source.automatic_publication_policy_id,
-        source.automatic_publication_policy_version,
-        source.automatic_publication_policy_fingerprint,
-        ...source.contributions.flatMap((contribution) => [
-          contribution.member_id,
-          contribution.proof.kind,
-          contribution.proof.evidence_step.procedure_run_id,
-          contribution.proof.evidence_step.step_key,
-          contribution.proof.baseline_run_id,
-          contribution.proof.candidate_run_id,
-          contribution.proof.proposal_id,
-          contribution.proof.fit_analysis_record_id,
-          contribution.proof.decision.analysis_record_id,
-          contribution.proof.decision.output_id,
-          contribution.result_input_fingerprint,
-        ]),
-      ];
     default:
       return assertNever(source);
   }

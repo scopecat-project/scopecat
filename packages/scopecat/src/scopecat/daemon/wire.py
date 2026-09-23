@@ -21,27 +21,18 @@ from pydantic import (
 )
 
 from scopecat.analysis.dataset_wire import DerivedDatasetPayload
-from scopecat.automation.calibrations import (
-    CalibrationPublicationPolicyRef,
-    CalibrationSuccessRef,
-)
 from scopecat.config.inventory import InstrumentInventoryChange
 from scopecat.config.parameter_updates import ParameterUpdate
 from scopecat.config.registry.records import (
-    CalibrationCohortMergeContribution,
-    CalibrationCohortMergeRegistrySource,
-    CalibrationPublicationOperation,
     CandidateAcceptance,
     CandidateConfigRegistrySource,
     ConfigActivationOperation,
-    ConfigCompositionPolicyRef,
     ConfigContextPublishOperation,
     ConfigPublishOperation,
     ConfigRegistryActivationRecord,
     ConfigRegistryEntry,
     ContextConfigRegistrySource,
     CrossRunCandidateAcceptance,
-    canonical_calibration_merge_contributions,
     config_activation_intent_hash,
     config_publish_intent_hash,
 )
@@ -66,10 +57,6 @@ from scopecat.records.analysis import (
     SampleAnalysisSubject,
     analysis_record_id,
 )
-from scopecat.records.calibration_scope import (
-    CalibrationConfigSourceRef,
-    WorkingPointCalibrationScope,
-)
 from scopecat.records.config import (
     ConfigContentHash,
     ConfigProfileSnapshot,
@@ -93,8 +80,10 @@ from scopecat.records.parameter import ParameterCatalog, ParameterSnapshot
 from scopecat.records.parameter_branch import ParameterBranch
 from scopecat.records.parameter_change import (
     ParameterChangeProposal,
+    ParameterProposalRef,
     ParameterValueDelta,
 )
+from scopecat.records.parameter_read import HostParameterEvidence
 from scopecat.records.parameter_revision import (
     ParameterRevision,
     ParameterRevisionContent,
@@ -212,6 +201,13 @@ class ParameterBranchCommitCommand(_WireModel):
     note: str = ""
 
 
+class ParameterCandidateComposeCommand(_WireModel):
+    name: NonEmptyText
+    mode: Literal["parallel", "sequential"] = "parallel"
+    sources: tuple[ParameterProposalRef, ...] = Field(min_length=2, max_length=200)
+    note: str = ""
+
+
 class ParameterBranchHistory(_WireModel):
     items: tuple[ParameterBranch, ...]
 
@@ -274,48 +270,6 @@ class CandidateConfigRevisionSource(_WireModel):
     acceptance: CandidateAcceptance
 
 
-class CalibrationCohortMergeRevisionSource(_WireModel):
-    """Compose individually verified cohort proposals against one exact base."""
-
-    kind: Literal["calibration_cohort_merge"] = "calibration_cohort_merge"
-    cohort_id: NonEmptyText
-    spec_hash: Sha256ContentHash
-    automatic_publication: CalibrationPublicationPolicyRef | None = None
-    composition_policy_ref: ConfigCompositionPolicyRef
-    merge_policy: Literal["common_base_cells_v1"] = "common_base_cells_v1"
-    base: CalibrationConfigSourceRef
-    candidate_id: NonEmptyText
-    contributions: tuple[CalibrationCohortMergeContribution, ...] = Field(
-        min_length=1,
-        max_length=200,
-    )
-    expected_result_content_hash: ConfigContentHash
-
-    @field_validator("contributions")
-    @classmethod
-    def canonicalize_contributions(
-        cls,
-        value: tuple[CalibrationCohortMergeContribution, ...],
-    ) -> tuple[CalibrationCohortMergeContribution, ...]:
-        return canonical_calibration_merge_contributions(value)
-
-    @model_validator(mode="after")
-    def validate_automatic_publication(
-        self,
-    ) -> CalibrationCohortMergeRevisionSource:
-        if not isinstance(self.base.scope, WorkingPointCalibrationScope):
-            raise ValueError("calibration publication requires a working point")
-        policy = self.automatic_publication
-        if (
-            policy is not None
-            and policy.composition_policy != self.composition_policy_ref
-        ):
-            raise ValueError(
-                "automatic publication and merge composition policies must match"
-            )
-        return self
-
-
 type ConfigPublishSource = Annotated[
     DirectConfigRevisionSource
     | ParameterConfigRevisionSource
@@ -328,8 +282,7 @@ type ConfigRevisionSource = Annotated[
     DirectConfigRevisionSource
     | ParameterConfigRevisionSource
     | ManualConfigDraftRevisionSource
-    | CandidateConfigRevisionSource
-    | CalibrationCohortMergeRevisionSource,
+    | CandidateConfigRevisionSource,
     Field(discriminator="kind"),
 ]
 
@@ -382,151 +335,6 @@ class ConfigPublishReceipt(_WireModel):
             raise ValueError(
                 "config publish receipt operation, entry, and activation do not match"
             )
-        return self
-
-
-class CalibrationPublicationCommand(_WireModel):
-    """Publish one verified calibration cohort under its finalization fence."""
-
-    operation_id: NonEmptyText
-    source: CalibrationCohortMergeRevisionSource
-    actor: NonEmptyText
-    expected_finalization_revision: int | None = Field(default=None, ge=1)
-    entry_id: NonEmptyText
-    note: str = ""
-
-    @model_validator(mode="after")
-    def validate_calibration_contract(self) -> CalibrationPublicationCommand:
-        automatic_merge = self.source.automatic_publication is not None
-        if automatic_merge and self.expected_finalization_revision is None:
-            raise ValueError(
-                "automatic calibration publication requires an expected "
-                "finalization revision"
-            )
-        if not automatic_merge and self.expected_finalization_revision is not None:
-            raise ValueError(
-                "expected finalization revision is only valid for automatic "
-                "calibration publications"
-            )
-        return self
-
-    @property
-    def source_intent_hash(self) -> Sha256ContentHash:
-        identity = {
-            "codec": _CONFIG_PUBLISH_SOURCE_INTENT_CODEC,
-            "source": self.source.model_dump(mode="json"),
-        }
-        return f"sha256:{stable_content_hash(identity)}"
-
-    @property
-    def intent_hash(self) -> Sha256ContentHash:
-        # The finalization revision is an execution fence, not publication
-        # meaning. A retry from a newer ready occurrence keeps the operation.
-        identity = {
-            "codec": "scopecat.calibration-publication-intent.v1",
-            "command": self.model_dump(
-                mode="json", exclude={"operation_id", "expected_finalization_revision"}
-            ),
-        }
-        return f"sha256:{stable_content_hash(identity)}"
-
-
-class CalibrationPublicationReceipt(_WireModel):
-    """Config publication plus the effective successes anchored by that commit."""
-
-    operation: CalibrationPublicationOperation
-    entry: ConfigRegistryEntry
-    deltas: tuple[ParameterValueDelta, ...] = ()
-    calibration_successes: tuple[CalibrationSuccessRef, ...]
-
-    @field_validator("calibration_successes")
-    @classmethod
-    def canonicalize_calibration_successes(
-        cls,
-        value: tuple[CalibrationSuccessRef, ...],
-    ) -> tuple[CalibrationSuccessRef, ...]:
-        selected = tuple(
-            sorted(
-                value,
-                key=lambda success: (
-                    success.attempt.member_id,
-                    success.attempt.procedure_run_id,
-                ),
-            )
-        )
-        identities = (
-            tuple(success.attempt.member_id for success in selected),
-            tuple(success.attempt.procedure_run_id for success in selected),
-        )
-        if any(len(items) != len(set(items)) for items in identities):
-            raise ValueError(
-                "calibration publication success identities must be unique"
-            )
-        return selected
-
-    @model_validator(mode="after")
-    def validate_calibration_identity(self) -> CalibrationPublicationReceipt:
-        context_source = self.entry.source
-        if not isinstance(
-            context_source, ContextConfigRegistrySource
-        ) or not isinstance(
-            context_source.publication, CalibrationCohortMergeRegistrySource
-        ):
-            raise ValueError(
-                "calibration publication requires a working-point cohort merge"
-            )
-        source = context_source.publication
-        scope = source.base.scope
-        if (
-            not isinstance(scope, WorkingPointCalibrationScope)
-            or context_source.context.workspace_id != scope.workspace_id
-            or context_source.context.sample != scope.sample
-        ):
-            raise ValueError(
-                "calibration publication owner differs from its working point"
-            )
-        if (
-            context_source.context.base != source.base.context_ref
-            or self.operation.base != source.base
-            or self.operation.entry_id != self.entry.id
-            or self.operation.actor != self.entry.actor
-            or self.operation.note != self.entry.note
-        ):
-            raise ValueError(
-                "calibration publication does not follow its exact working point"
-            )
-        contributions = {item.member_id: item for item in source.contributions}
-        successes = {
-            success.attempt.member_id: success for success in self.calibration_successes
-        }
-        if successes.keys() != contributions.keys():
-            raise ValueError("merge publication must cover every contribution")
-        for member_id, contribution in contributions.items():
-            success = successes[member_id]
-            publication = success.publication
-            result_source = (
-                None if publication is None else publication.result_config_source
-            )
-            if (
-                publication is None
-                or success.attempt.cohort_id != source.cohort_id
-                or success.attempt.procedure_run_id
-                != contribution.proof.evidence_step.procedure_run_id
-                or success.base_config_source != source.base
-                or contribution.result_input_fingerprint
-                != publication.result_input_fingerprint
-                or publication.operation_id != self.operation.operation_id
-                or publication.source_intent_hash != self.operation.source_intent_hash
-                or result_source is None
-                or result_source.entry_id != self.entry.id
-                or result_source.config_ref != self.entry.config_ref
-                or result_source.content_hash != self.entry.content_hash
-                or result_source.scope != source.base.scope
-                or publication.published_at != self.operation.recorded_at
-            ):
-                raise ValueError(
-                    "merge success does not match its working-point receipt"
-                )
         return self
 
 
@@ -664,6 +472,11 @@ class _AnalysisInputPayload(_WireModel):
     metadata: dict[str, JsonValue] | None = None
 
 
+class ConfigurationAnalysisInputPayload(_AnalysisInputPayload):
+    kind: Literal["configuration_snapshot"] = "configuration_snapshot"
+    run_id: NonEmptyText
+
+
 class MeasurementAnalysisInputPayload(_AnalysisInputPayload):
     kind: Literal["measurement_dataset"] = "measurement_dataset"
     run_id: NonEmptyText
@@ -681,6 +494,7 @@ class InterpretationAnalysisInputPayload(_AnalysisInputPayload):
 
 type AnalysisInputPayload = Annotated[
     MeasurementAnalysisInputPayload
+    | ConfigurationAnalysisInputPayload
     | PublishedAnalysisInputPayload
     | InterpretationAnalysisInputPayload,
     Field(discriminator="kind"),
@@ -1011,6 +825,10 @@ class ExecutorHeartbeat(_WireModel):
 
 class _FencedCommand(_WireModel):
     lease_id: NonEmptyText
+
+
+class RunHostParameterEvidenceCommand(_FencedCommand):
+    evidence: HostParameterEvidence
 
 
 class RunCoverageState(_WireModel):
@@ -1548,9 +1366,6 @@ __all__ = [
     "AnalysisTableOutputPayload",
     "AttentionResolutionCommand",
     "AttentionResolutionReceipt",
-    "CalibrationCohortMergeRevisionSource",
-    "CalibrationPublicationCommand",
-    "CalibrationPublicationReceipt",
     "CandidateConfigRevisionSource",
     "ConfigActivationReceipt",
     "ConfigContextPublishCommand",
@@ -1563,6 +1378,7 @@ __all__ = [
     "ConfigRevisionSource",
     "ConfigSetupRebindCommand",
     "ConfigSetupRebindPreviewCommand",
+    "ConfigurationAnalysisInputPayload",
     "ConfigurationTemplateImportCommand",
     "ConfigurationTemplateImportResult",
     "ConfigurationTemplateList",
@@ -1593,6 +1409,7 @@ __all__ = [
     "ParameterBranchHistory",
     "ParameterBranchPage",
     "ParameterBranchPublishCommand",
+    "ParameterCandidateComposeCommand",
     "ParameterConfigRevisionSource",
     "ParameterResolveCommand",
     "ParameterRevisionList",
@@ -1612,6 +1429,7 @@ __all__ = [
     "RunDomainJobTransitionItem",
     "RunDomainJobTransitionPage",
     "RunDomainJobTransitionView",
+    "RunHostParameterEvidenceCommand",
     "RunInstrumentProvisionCommand",
     "RunInstrumentProvisionReceipt",
     "RunRecoveryGroupCommitCommand",

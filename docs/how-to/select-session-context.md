@@ -3,7 +3,7 @@
 An author session can remember the sample, experimental batch, parameter branch, record collection
 and operator for its next requests. This selection belongs to that client. Two
 notebooks connected to the same daemon can make different selections without
-changing the lab's active configuration or another client's defaults.
+changing equipment authority or another client's selection.
 
 ```python
 session = sc.notebook()
@@ -32,10 +32,6 @@ establish calibration validity. Selecting independent parameters or a subject do
 not require an executable setup. Preview checks equipment compatibility and
 execution support when you are ready to run.
 
-Existing working-point consumers can use `session.use(working_point=ref)` with an
-exact `ConfigContextRef`; see [parameter contexts](manage-configuration.md). This
-selects the point's bound sample and batch and still validates its owned evidence.
-
 ## Change one choice without resetting the others
 
 ```python
@@ -45,8 +41,7 @@ selected = session.selection
 ```
 
 Omitted fields remain selected. Changing the parameter branch retains the subject
-and batch. Switching working points selects the new point's
-sample and batch and retains the collection and operator. Selecting a sample or
+and batch. Selecting a sample or
 target on its own starts a new scientific scope and clears the previous parameter
 branch, working point and batch:
 
@@ -55,7 +50,7 @@ session.use(sample="chip-b")
 session.use(target=exact_target_ref)
 ```
 
-A mismatched sample/working-point pair or missing collection is rejected; a failed
+An unknown parameter revision or missing collection is rejected; a failed
 update leaves all previous selections intact. `selection` is an immutable snapshot.
 A later `use` call affects only future preparations; already prepared requests,
 submitted jobs and retained results keep their original selection. The ordinary
@@ -78,8 +73,7 @@ Existing explicit `prepare` arguments keep their meaning:
 ```python
 session.prepare(rabi(), parameters=other_parameters)
 session.prepare(rabi(), parameters=params, sample="chip-b", batch="cooldown-4")
-session.prepare(rabi(), context=another_working_point_ref, actor="Guest")
-session.prepare(rabi(), context=None, record_collection=None)
+session.prepare(rabi(), parameters=params, actor="Guest", record_collection=None)
 ```
 
 An independent branch editor supplies parameter values while inheriting the
@@ -88,16 +82,15 @@ subject for this preparation and reset its batch unless also supplied. Unsaved
 values are frozen for the run without advancing the branch. The editor cannot be
 combined with `selection`, `context` or separate `overrides`.
 
-A legacy working-point editor, `candidate` or `context` carries its own scientific
-scope. Its sample and batch must match that evidence. Selecting just a `sample`
+A `candidate` carries its own scientific scope. Its sample and batch must match
+that evidence. Selecting just a `sample`
 starts a new scope, while changing only the batch preserves the other choices.
 The selected operator and collection are inherited independently
-unless explicitly overridden. `context=None` deliberately uses the ordinary active
-configuration without the session's sample/working point. Clearing the collection
+unless explicitly overridden. Clearing the collection
 for one request uses the default record collection. None of these overrides changes
 `session.selection`.
 
-A saved recipe has its own frozen scientific scope.
+A saved plan has its own frozen scientific scope.
 `session.prepare_plan(ref)` uses that scope and inherits only the current operator
 and collection. Both may be explicitly overridden for that execution. The plan
 retains its original batch regardless of the session default. An explicit `batch`
@@ -114,12 +107,11 @@ legacy store-wide number/history without changing the selection. A session with
 no collection selected keeps the previous store-wide behavior. See
 [record collections](record-collections.md) for stable addresses and current-format recovery.
 
-Python/Notebook clients and the workbench support existing single-sample
-working points. Declared batch/cooldown applicability is covered by
-[experimental batches](experimental-batches.md). Multi-sample assemblies, setup
-applicability and multiple code workspaces remain pending. A collection named
-“cooldown 3” is not proof that a previous
-calibration applies in that cooldown.
+For declared batch scope, see [experimental batches](experimental-batches.md).
+Registered subjects and their current execution limits are described in
+[measurement targets](register-measurement-targets.md). Equipment selection is
+separate from parameter ownership. A collection named “cooldown 3” is not proof
+that a previous calibration applies in that cooldown.
 
 ## Select context in the workbench
 
@@ -132,12 +124,13 @@ measurement or changes another page's selection.
 
 These selections survive switching experiments, refreshing author code and moving
 between console views. **Reset launch draft** resets experiment inputs and detaches
-a saved recipe while keeping the page's sample, batch, collection and operator.
+a saved plan while keeping the page's sample, batch, collection and operator.
 Reloading the browser or connecting to a different project starts a new selection;
 separate tabs do not share mutable defaults. This is still one connected code
 workspace, not a multi-workspace application selector.
 
-Select a saved working point through **Configuration → Use for next experiment**.
+For remaining legacy consumers, select a saved working point through
+**Configuration → Use for next experiment**.
 Its exact sample revision and batch become the selected scope. Those fields are
 read-only while bound; **Use lab default** releases the working point while keeping
 sample/batch selection. When saving a working-point copy, **Choose experimental
@@ -146,9 +139,8 @@ starting estimates, not new calibration evidence.
 
 Opening a saved plan retains its sample revision and batch, while collection and
 operator remain the destination page's choices. Opening a plan restores its frozen scientific scope independently of the page's
-previous sample or batch. Imported analysis
-suggestions retain the current operator and collection; without an explicit
-working point they clear the old scientific scope.
+previous sample or batch. Candidate inputs retain their source scientific scope;
+operator and collection remain separate destination choices.
 
 Every selection edit invalidates the preview. **Preview** validates it through the
 same launch contract used by Python; only **Start acquisition** admits a procedure.

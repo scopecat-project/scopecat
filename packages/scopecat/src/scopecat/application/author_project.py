@@ -105,6 +105,7 @@ from scopecat.records.scientific_selection import (
     UnboundSubjectChoice,
     WorkingPointConfiguration,
 )
+from scopecat.records.setup import SetupRevision, SetupRevisionRef
 from scopecat.records.target_catalog import TargetRevisionRef
 
 if TYPE_CHECKING:
@@ -151,12 +152,14 @@ class AuthorProject(DaemonClient):
         """Read this client's current defaults without refreshing code or state."""
         if self._parameter_branch is None:
             return self._selection
+        configuration = self._selection.science.configuration
+        assert isinstance(configuration, ParameterConfiguration)
         return self._selection.model_copy(
             update={
                 "science": self._selection.science.model_copy(
                     update={
-                        "configuration": ParameterConfiguration(
-                            ref=self._parameter_branch.head.revision
+                        "configuration": configuration.model_copy(
+                            update={"ref": self._parameter_branch.head.revision}
                         ),
                     }
                 ),
@@ -186,6 +189,8 @@ class AuthorProject(DaemonClient):
         sample and batch unless an explicit subject is supplied alongside it.
         Independent parameters preserve subject/batch but replace working-point
         ownership. Preview pins their exact inputs without saving a combined entry.
+        Setup may be pinned alongside independent parameters; setup=None resolves
+        active authority at the next preview. Branch edits retain this choice.
         Independent parameter/subject selection requires no executable setup;
         preview checks compatibility and execution support.
         Selection never activates configuration or submits hardware operations.
@@ -281,7 +286,12 @@ class AuthorProject(DaemonClient):
                         if isinstance(parameters, ParameterRevision)
                         else ParameterRevisionRef.model_validate(parameters)
                     )
-                    configuration = ParameterConfiguration(ref=ref)
+                    configuration = ParameterConfiguration(
+                        ref=ref,
+                        setup=configuration.setup
+                        if isinstance(configuration, ParameterConfiguration)
+                        else None,
+                    )
             if "working_point" in changes:
                 point = changes["working_point"]
                 if point is None:
@@ -300,6 +310,19 @@ class AuthorProject(DaemonClient):
                         if source.sample.batch_id is None
                         else DeclaredBatch(id=source.sample.batch_id)
                     )
+            if "setup" in changes:
+                if not isinstance(configuration, ParameterConfiguration):
+                    raise ValueError("setup selection requires independent parameters")
+                setup = changes["setup"]
+                configuration = configuration.model_copy(
+                    update={
+                        "setup": None
+                        if setup is None
+                        else setup.ref
+                        if isinstance(setup, SetupRevision)
+                        else SetupRevisionRef.model_validate(setup),
+                    }
+                )
             if "batch" in changes:
                 batch_id = changes["batch"]
                 batch = (
@@ -574,7 +597,12 @@ class AuthorProject(DaemonClient):
                 batch=batch_scope,
             )
         if parameters is not None:
-            frozen = parameters.freeze()
+            frozen = (
+                parameters.freeze(setup=science.configuration.setup)
+                if isinstance(parameters, BranchParameterEditor)
+                and isinstance(science.configuration, ParameterConfiguration)
+                else parameters.freeze()
+            )
             source = frozen.config_source
             if isinstance(source, ParameterRunConfigSource):
                 return science.model_copy(

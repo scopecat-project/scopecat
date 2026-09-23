@@ -234,7 +234,17 @@ def test_prepared_check_returns_configuration_problems_without_preview(
     invalid_config = config.model_copy(
         update={
             "system": config.system.model_copy(
-                update={"primary_entity_id": "missing-entity"}
+                update={
+                    "routing": config.system.routing.model_copy(
+                        update={
+                            "routes": [
+                                config.system.routing.routes[0].model_copy(
+                                    update={"instrument_id": "missing"}
+                                )
+                            ]
+                        }
+                    )
+                }
             )
         }
     )

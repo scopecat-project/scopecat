@@ -1,7 +1,5 @@
 """A real daemon retains acquisition across an explicit new analysis procedure."""
 
-import shutil
-from collections.abc import Generator
 from pathlib import Path
 
 import pytest
@@ -11,30 +9,14 @@ from scopecat.automation import (
     RunOutputRef,
 )
 from scopecat.daemon.client import DaemonClient, DaemonConflictError
-from scopecat.project import load_project
-from scopecat_server.lifecycle import start_project, stop_project
+from scopecat.records.parameter_revision import ParameterRevision
 
 from reference_lab.configuration import EXAMPLE_ROOT
 
 
-@pytest.fixture(scope="module")
-def reference_lab_daemon(tmp_path_factory: pytest.TempPathFactory) -> Generator[str]:
-    root = tmp_path_factory.mktemp("analysis-recovery")
-    for name in ("config", "src"):
-        shutil.copytree(EXAMPLE_ROOT / name, root / name)
-    shutil.copy2(EXAMPLE_ROOT / "scopecat.toml", root / "scopecat.toml")
-    project = load_project(root / "scopecat.toml")
-    with pytest.MonkeyPatch.context() as patch:
-        patch.delenv("SCOPECAT_DAEMON_URL", raising=False)
-        endpoint = start_project(project)
-    try:
-        yield endpoint.base_url
-    finally:
-        stop_project(project)
-
-
 def test_failed_analysis_recovers_without_reacquisition(
-    reference_lab_daemon: str,
+    independent_lab_daemon: str,
+    independent_parameters: ParameterRevision,
 ) -> None:
     from reference_lab.application import create_application
     from reference_lab.workflows.analysis_recovery import (
@@ -45,10 +27,15 @@ def test_failed_analysis_recovers_without_reacquisition(
         TemperatureDiagnosticIntent,
     )
 
-    with create_application(Path(EXAMPLE_ROOT)).connect(reference_lab_daemon) as lab:
+    with create_application(Path(EXAMPLE_ROOT)).connect(independent_lab_daemon) as lab:
+        setup = lab.setup.active()
+        inputs = lab.parameters.resolve(
+            independent_parameters, setup=setup.revision.ref
+        )
+        before_runs = {run.id for run in lab.runs().items}
         source = lab.procedures.submit(
             failed_temperature_analysis,
-            TemperatureDiagnosticIntent(initial_config=lab.config.active().config),
+            TemperatureDiagnosticIntent(initial_config=inputs.config),
             request_key="known-software-failure",
         )
         with pytest.raises(ValueError, match="demonstration software analysis failure"):
@@ -62,7 +49,7 @@ def test_failed_analysis_recovers_without_reacquisition(
         retained = lab.get_run(acquired.run_id)
         original_measurements = retained.measurements()["temperature"].require_values()
         run_ids = {run.id for run in lab.runs().items}
-        assert len(run_ids) == 1
+        assert run_ids - before_runs == {acquired.run_id}
 
         available = lab.procedures.recovery_availability(
             TEMPERATURE_ANALYSIS_RECOVERY, source.id
@@ -72,7 +59,7 @@ def test_failed_analysis_recovers_without_reacquisition(
         assert plan is not None
         assert plan.recovery.retained_run == acquired
         assert plan.recovery.definition == original.definition
-        with DaemonClient(reference_lab_daemon) as raw:
+        with DaemonClient(independent_lab_daemon) as raw:
             forged = plan.recovery.model_copy(
                 update={"revision": original.revision + 1}
             )
@@ -110,7 +97,7 @@ def test_failed_analysis_recovers_without_reacquisition(
             == recovery.id
         )
         with (
-            DaemonClient(reference_lab_daemon) as raw,
+            DaemonClient(independent_lab_daemon) as raw,
             pytest.raises(DaemonConflictError, match="different intent"),
         ):
             raw.submit_procedure(
@@ -141,3 +128,5 @@ def test_failed_analysis_recovers_without_reacquisition(
         assert isinstance(kelvin, float)
         assert kelvin > 0
         assert publication.inputs
+        assert lab.setup.active() == setup
+        assert lab.config.registry().entries == ()

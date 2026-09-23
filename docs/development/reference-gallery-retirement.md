@@ -18,8 +18,8 @@ source; installed historical environments and scientific data are untouched.
 | `23_q0_ramsey.py`, `26_parallel_multiplexed_ramsey.py`, `27_channel_timing_candidate.py`, `32_quantum_program_inspection.py`, `36_q0_fixed_if_lo_sweep.py` | Quantum execution, multiplexing, candidate lineage, layered preview and signed IF/LO semantics | Retired with duplicate gallery tests and unused probability-result experiment wrappers. Focused runner tests and shared acceptance retain execution evidence, as detailed below. |
 | `20_flux_spectroscopy.py`, `24`–`25`, `28`–`29`, `31`, `34` | Compiled buffers, channel conflicts, signed IF/LO semantics, multiplexed readout and topology | Extract minimal compiler/runner inputs and keep a bounded full-device journey. Review duplicated recipes and hard-coded configuration assumptions instead of preserving their signatures. |
 | `30_drag_calibration.py` | DRAG acquisition, fit and uncertainty display, exact candidate lineage and independent verification | Retired. `test_typed_candidates.py` retains the real-device simulation and analysis with independent parameters/setup and no default mutation. Global publication/restore is no longer a required author journey. |
-| `workflows/drag_beta_*` | Independent verification, ownership of edited cells, conflict detection, durable publication/recovery | Retained integration dependencies, not recommended author code. Single-candidate branch publication now exists; rebuild a minimal calibration fixture before replacing legacy cohort/automatic publication consumers. |
-| `drag_beta_calibration_procedure`, `DragBetaProcedureIntent`, active-generation request key | Single-target fit, verify, explicitly publish and use accepted gate values | Retired the unused default-publishing procedure, registration, intent and mock acceptance graph. The real DRAG test now publishes to an explicit branch and executes the standard-gate fixture with the exact accepted revision. Verify-only cohort members and composition policies remain. |
+| `workflows/drag_beta_*` | Independent verification, ownership of edited cells, conflict detection, durable publication/recovery | Acquisition, fit and scientific scoring remain focused integration dependencies. Old freshness, verify-only procedure, semantic-merge publisher and automatic-publication registry are retired. `drag_branch_calibration` and real-daemon tests cover target-complete joint remeasurement, retained rejection, exact branch publication and restart/lost-response recovery. |
+| `drag_beta_calibration_procedure`, `DragBetaProcedureIntent`, active-generation request key | Single-target fit, verify, explicitly publish and use accepted gate values | Retired the default-publishing procedure and later verify-only cohort members. The real DRAG test publishes to an explicit branch and executes the standard-gate fixture with the exact accepted revision. |
 | `quantum_compilation`, `targets/list_mode`, `provider`, `virtual_lab` | Deterministic device/compiler integration | Retain only dependencies of named scientific/device tests; extract generic framework capabilities where justified. Compute-only teaching does not replace device evidence. |
 | Shared acceptance and `snapshot_roundtrip.py` | Real HTTP payloads and exact current-format recovery | Already use independent parameters/setup and an empty combined registry. Keep this evidence as legacy bootstrap consumers are removed. |
 
@@ -80,27 +80,26 @@ expresses an obsolete requirement before removing it.
 
 The [calibration composition contract](calibration-composition.md) separates pure
 parameter merging from scientific acceptance and atomic publication. Its shared
-parameter-only merge core is implemented; retained multi-source candidates and
-joint verification remain prerequisites for replacing the old cohort workflow.
+parameter-only merge core, retained multi-source candidates and explicit joint
+verification, durable target-complete orchestration and branch finalization are
+implemented. The old reference cohort workflow is retired. Its peer-insensitive
+freshness and implicit subset selection are withdrawn; redesigned applicability
+and freshness remain work. The generic legacy cohort backend is also retired;
+do not treat its removal as a pending prerequisite for current task development.
 
 1. Remove gallery recommendations from learning routes. Keep the former tutorial
    URL as a retirement notice. Stop adding or mechanically migrating old examples.
 2. Remove redundant presentation scripts and fixture-shape assertions. Extract
    remaining generic behavior into existing starter/teaching/core tests.
-3. Define candidate verification/publication on independent parameter branches:
-   retain exact source and verification evidence, require an explicit publication
-   decision, and reject conflicting head/cell changes. Derive requirements from
-   these behaviors, not from the old DRAG procedure implementation.
-   [Issue #778](https://github.com/scopecat-project/scopecat/issues/778) tracks
-   atomic single-candidate publication and its retained verification evidence.
-4. Build a focused calibration fixture and, when the API is usable, a new
-   calibration-topic sandbox. Remove replaced DRAG/default-config workflows and
-   their unused dependencies in the same functional change.
-   Single-target acquisition through branch publication and accepted-gate
-   execution now has a focused real-daemon test. The former global-default
-   procedure is retired. Multi-target composition, durable automation and
-   applicability still require their own replacement design; they are not
-   implicitly satisfied by this single-candidate path.
+3. Candidate verification and branch publication are implemented, including
+   parallel/sequential composition, joint verification, generation conflicts and
+   lost-response recovery. Keep these scientific invariants when removing old
+   consumers; do not rebuild them from the old DRAG procedure interface.
+4. The `calibration`, `joint-calibration` and `task-calibration` sandboxes now own
+   the generic teaching journeys. The focused DRAG fixture still owns actual
+   simulated device acquisition and accepted-gate execution. Remove other
+   replaced consumers and unused dependencies as their coverage is accounted for.
+   Selective applicability, automatic repair and continuous freshness remain work.
 5. Remove legacy bootstrap and combined-config APIs once valid behaviors have
    new owners. An obsolete gallery consumer is a retirement task, not a reason
    to retain a compatibility layer.

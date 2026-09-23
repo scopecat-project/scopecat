@@ -136,7 +136,11 @@ def validate_recovery_source(
     for attempt in attempts:
         if attempt.procedure_run_id != source.procedure_run_id:
             raise ValueError("recovery attempt belongs to another procedure")
-        if attempt.operation in {"config_activation", "config_publish"}:
+        if attempt.operation in {
+            "config_activation",
+            "config_publish",
+            "parameter_publish",
+        }:
             raise ValueError("recovery excludes attempted configuration acceptance")
         if attempt != failed and attempt.state != "succeeded":
             raise ValueError(

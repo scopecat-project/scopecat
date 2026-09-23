@@ -82,7 +82,7 @@ def test_init_creates_runnable_python_project_and_does_not_overwrite(
     bootstrap = project.load_bootstrap()
     assert bootstrap.parameter_defaults is None
     assert bootstrap.setup is not None
-    assert bootstrap.setup().primary_entity_id == "subject"
+    assert "primary_entity_id" not in bootstrap.setup().model_dump()
     assert project.instrument_backend_spec is not None
     create_backend = load_instrument_backend_factory(
         project.instrument_backend_spec,

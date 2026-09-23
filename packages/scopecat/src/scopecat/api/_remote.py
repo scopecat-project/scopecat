@@ -22,6 +22,7 @@ from scopecat.analysis.service import (
     AnalysisOutput,
     AnalysisParameterProposalOutput,
     AnalysisTableOutput,
+    ConfigurationAnalysisInput,
     InterpretationAnalysisInput,
     MeasurementAnalysisInput,
     SavedAnalysis,
@@ -44,6 +45,7 @@ from scopecat.daemon.wire import (
     AnalysisParameterProposalOutputPayload,
     AnalysisSaveCommand,
     AnalysisTableOutputPayload,
+    ConfigurationAnalysisInputPayload,
     InterpretationAnalysisInputPayload,
     MeasurementAnalysisInputPayload,
     PublishedAnalysisInputPayload,
@@ -338,8 +340,13 @@ def analysis_input_payload(value: AnalysisInput) -> AnalysisInputPayload:
     metadata = (
         None if value.metadata is None else validate_json_metadata(value.metadata)
     )
-    if isinstance(value, MeasurementAnalysisInput):
-        return MeasurementAnalysisInputPayload(
+    if isinstance(value, MeasurementAnalysisInput | ConfigurationAnalysisInput):
+        payload_type = (
+            MeasurementAnalysisInputPayload
+            if isinstance(value, MeasurementAnalysisInput)
+            else ConfigurationAnalysisInputPayload
+        )
+        return payload_type(
             id=value.id,
             run_id=value.run_id,
             target=value.target,

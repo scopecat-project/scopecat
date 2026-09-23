@@ -9,16 +9,24 @@ from scopecat.records.config import (
     RoutingGraph,
     Topology,
 )
+from scopecat.records.execution_scenario import SoftwareExecutionScenario
 from scopecat.records.setup import ExecutableSetupSnapshot
 
 
 def initial_setup() -> ExecutableSetupSnapshot:
     return ExecutableSetupSnapshot(
-        primary_entity_id="q0",
         topology=Topology(entities=[sc.EntityRef(id="q0", kind="logical_qubit")]),
         instrument_registry=InstrumentRegistry(instruments=[]),
         routing=RoutingGraph(routes=[]),
         domain_target=None,
+        scenario=SoftwareExecutionScenario(
+            id="teaching-compute",
+            label="教学合成计算",
+            model_id="teaching.author-compute",
+            model_version="1",
+            capabilities=("author-defined-scalar-response",),
+            limitations=("无设备或量子动力学模拟；模型语义由专题源码定义",),
+        ),
     )
 
 

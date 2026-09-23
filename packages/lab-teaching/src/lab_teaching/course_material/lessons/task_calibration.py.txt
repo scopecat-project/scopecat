@@ -1,0 +1,176 @@
+"""后台阶段负责拟合；收尾流程重新测量组合结果并决定是否发布。"""
+
+import math
+
+from my_experiment.calibration import Sensor
+from my_experiment.joint_calibration import (
+    JOINT_DECISION,
+    JointIntent,
+    Target,
+    measure_coupled,
+    verify_joint,
+)
+from pydantic import BaseModel, ConfigDict, field_validator
+
+import scopecat as sc
+from scopecat.analysis.calibration import CHECK_RESULT
+from scopecat.api.calibration_tasks import task_call
+from scopecat.api.lab import LabClient
+from scopecat.api.procedures import LabProcedureContext
+from scopecat.automation.calibration_tasks import (
+    CalibrationTaskInputs,
+    CalibrationTaskPlan,
+    CalibrationTaskStage,
+)
+from scopecat.daemon.calibration_tasks import CalibrationTaskCall, CalibrationTaskView
+from scopecat.daemon.views import ParameterResolution
+from scopecat.kernel.frozen import thaw_json_value
+from scopecat.records.calibration_check import (
+    CalibrationCheckRequest,
+    CalibrationCheckResult,
+    CalibrationScope,
+)
+
+
+class FitIntent(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+    calibration_check: CalibrationCheckRequest
+    initial: ParameterResolution
+    target: Target
+    coupling: float
+
+    @field_validator("initial", mode="before")
+    @classmethod
+    def thaw_initial(cls, value: object) -> object:
+        return thaw_json_value(value)
+
+
+@sc.analysis_step(id="teaching.task-fit")
+def fit_input(
+    context: sc.AnalysisContext,
+    *,
+    target: Target,
+    scope: CalibrationScope,
+) -> sc.Analysis:
+    data = context.measurements()
+    value = float(data["setting"].require_values()[0])
+    error = float(data["residual"].require_values()[0])
+    estimate = value - error
+    # 这个检查只判断线性拟合输入是否可用，不声称新参数已经达标。
+    usable = math.isfinite(estimate) and 0.0 <= estimate <= 1.0
+    result = context.result("拟合输入检查").fact(
+        "check",
+        CalibrationCheckResult(scope, usable),
+        schema=CHECK_RESULT,
+    )
+    if usable:
+        result = result.propose(
+            "zero-offset",
+            sc.parameter_update(Sensor.offset, target, estimate),
+            reason="线性模型估计；尚需在组合参数下独立验证",
+        )
+    return result
+
+
+@sc.procedure(id="teaching.task-fit", version="1", intent=FitIntent)
+def fit_stage(ctx: LabProcedureContext, intent: FitIntent) -> None:
+    run = ctx.run(
+        "measure",
+        measure_coupled.build(intent.target, intent.coupling),
+        config=intent.initial.config,
+        config_source=intent.initial.config_source,
+    )
+    ctx.analyze_run(
+        "assess",
+        run,
+        fit_input(target=intent.target, scope=intent.calibration_check.scope),
+    )
+
+
+class FinishIntent(JointIntent):
+    calibration_task: CalibrationTaskInputs | None = None
+
+
+@sc.procedure(id="teaching.task-finalize", version="1", intent=FinishIntent)
+def finalize(ctx: LabProcedureContext, intent: FinishIntent) -> None:
+    inputs = intent.calibration_task
+    if inputs is None:
+        raise ValueError("请通过后台标定任务提交此流程")
+    combined = ctx.combine_parameter_candidates(
+        "compose",
+        tuple((inputs.analysis(t), "zero-offset") for t in intent.targets),
+        name="joint-zero",
+    )
+    candidate = ctx.published_analysis(combined).candidate_config("joint-zero")
+    baselines = {t: inputs.measurement(t) for t in intent.targets}
+    checks = {
+        t: ctx.run(
+            f"verify-{t}",
+            measure_coupled.build(t, intent.coupling, intent.disturbance),
+            config=candidate,
+            inputs=(combined,),
+        )
+        for t in intent.targets
+    }
+    verification = ctx.analyze_project(
+        "verify-joint",
+        verify_joint(
+            targets=intent.targets,
+            baselines={t: ctx.run_handle(r) for t, r in baselines.items()},
+            checks={t: ctx.run_handle(r) for t, r in checks.items()},
+            tolerance=intent.tolerance,
+        ),
+        inputs=(*baselines.values(), *checks.values()),
+    )
+    decision = ctx.published_analysis(verification).fact_as("decision", JOINT_DECISION)
+    if not decision.accepted:
+        raise ValueError(f"联合验证拒绝 {decision.rejected}；参数分支未发布")
+    ctx.publish_parameter_candidate(
+        "publish",
+        combined,
+        proposal_id="joint-zero",
+        verification=verification,
+        decision_output_id="decision",
+        branch=intent.destination,
+        name=intent.revision_name,
+        actor="learner",
+    )
+
+
+def create_task(
+    lab: LabClient, task_id: str, intent: FinishIntent
+) -> CalibrationTaskView:
+    context = lab.resolve_context(
+        parameters=intent.destination.revision,
+        setup=intent.initial.config_source.setup,
+    ).context
+    stages: list[CalibrationTaskStage] = []
+    calls: dict[str, CalibrationTaskCall] = {}
+    for target in intent.targets:
+        check = CalibrationCheckRequest(
+            scope=CalibrationScope(
+                "teaching.fit-input",
+                (target,),
+                "synthetic-linear-fit",
+                "finite-offset-in-unit-interval-v1",
+            ),
+            context=context,
+            measurement_step="measure",
+            analysis_step="assess",
+        )
+        stages.append(CalibrationTaskStage(id=target, check=check))
+        calls[target] = task_call(
+            fit_stage,
+            FitIntent(
+                calibration_check=check,
+                initial=intent.initial,
+                target=target,
+                coupling=intent.coupling,
+            ),
+        )
+    return lab.calibration_tasks.create(
+        task_id,
+        CalibrationTaskPlan(stages=tuple(stages)),
+        calls=calls,
+        finalization=task_call(finalize, intent),
+    )

@@ -13,10 +13,10 @@ from scopecat.api._remote import RemoteRunOperations
 from scopecat.api._runner import _DaemonRunner
 from scopecat.api.analysis import AnalysisContext, AnalysisStep
 from scopecat.api.apparatus_history import LabApparatusOperations
-from scopecat.api.calibration_planner import CalibrationPlanningContext
-from scopecat.api.calibration_policy import CalibrationPublicationPolicyRegistry
-from scopecat.api.calibrations import LabCalibrationOperations
+from scopecat.api.calibration_checks import LabCalibrationChecks
+from scopecat.api.calibration_tasks import LabCalibrationTasks
 from scopecat.api.instruments import LabInstrumentOperations
+from scopecat.api.parameter_candidates import ParameterCandidate
 from scopecat.api.parameter_revisions import LabParameterOperations
 from scopecat.api.plans import LabPlanOperations
 from scopecat.api.procedure_planner import ProcedurePlanningContext
@@ -29,10 +29,13 @@ from scopecat.api.samples import LabSampleOperations, SampleHandle, SampleOperat
 from scopecat.api.setup import LabSetupOperations
 from scopecat.authoring.experiments import Experiment, ExperimentInvocation
 from scopecat.automation import ProcedureRegistry, ProcedureScheduleRegistry
-from scopecat.automation.calibration_definition import CalibrationRegistry
 from scopecat.config.candidates import CandidateConfig
 from scopecat.control.models import ControlRunState
 from scopecat.daemon.client import DaemonClient
+from scopecat.daemon.measurement_context import (
+    MeasurementContextResolution,
+    MeasurementContextResolve,
+)
 from scopecat.daemon.views import (
     ConfigContextResolution,
     DaemonHealth,
@@ -46,12 +49,15 @@ from scopecat.planning.preview_models import ExperimentPreview
 from scopecat.planning.system import ExperimentSystemBuilder
 from scopecat.program.values import MetadataValue
 from scopecat.records.analysis import SampleAnalysisSubject
+from scopecat.records.candidate_input import AnalysisCandidateRunConfigSource
 from scopecat.records.config import ConfigProfileSnapshot
 from scopecat.records.config_context import ConfigContextRef
 from scopecat.records.experimental_batch import ExperimentalBatch
+from scopecat.records.parameter_revision import ParameterRevision, ParameterRevisionRef
 from scopecat.records.record_collection import RecordCollection
 from scopecat.records.run import RunConfigSource
 from scopecat.records.sample import SampleSelector
+from scopecat.records.setup import SetupRevision, SetupRevisionRef
 from scopecat.records.target_catalog import (
     TargetCatalogPage,
     TargetCreateCommand,
@@ -171,8 +177,6 @@ class LabClient:
         procedure_schedules: (
             ProcedureScheduleRegistry[ProcedurePlanningContext] | None
         ) = None,
-        calibrations: CalibrationRegistry[CalibrationPlanningContext] | None = None,
-        calibration_publications: CalibrationPublicationPolicyRegistry | None = None,
         operator: str = "operator",
     ) -> None:
         self._owns_client = isinstance(daemon, str)
@@ -209,20 +213,6 @@ class LabClient:
                 procedure_schedules
                 if procedure_schedules is not None
                 else ProcedureScheduleRegistry()
-            ),
-        )
-        self._calibrations = LabCalibrationOperations(
-            client=self._client,
-            config=self._config,
-            procedures=self._procedures,
-            publication_session=self,
-            registry=(
-                calibrations if calibrations is not None else CalibrationRegistry()
-            ),
-            publication_registry=(
-                calibration_publications
-                if calibration_publications is not None
-                else CalibrationPublicationPolicyRegistry()
             ),
         )
 
@@ -299,11 +289,54 @@ class LabClient:
         return self._procedures
 
     @property
-    def calibrations(self) -> LabCalibrationOperations:
-        return self._calibrations
+    def calibration_checks(self) -> LabCalibrationChecks:
+        return LabCalibrationChecks(self._client)
+
+    @property
+    def calibration_tasks(self) -> LabCalibrationTasks:
+        return LabCalibrationTasks(self._client)
 
     def health(self) -> DaemonHealth:
         return self._control.health()
+
+    def resolve_context(
+        self,
+        *,
+        branch: str | None = None,
+        parameters: ParameterRevision
+        | ParameterRevisionRef
+        | AnalysisCandidateRunConfigSource
+        | None = None,
+        candidate: ParameterCandidate | None = None,
+        samples: tuple[SampleSelector, ...] = (),
+        setup: SetupRevision | SetupRevisionRef | None = None,
+        target: TargetRevisionRef | None = None,
+    ) -> MeasurementContextResolution:
+        """Capture exact saved scientific inputs without changing live selections.
+
+        Choose a branch, saved parameters or a retained candidate. Candidates keep
+        their original subject/setup; do not supply replacement selections.
+        Branch and active setup heads
+        are resolved together. The receipt retains
+        their versions; no experiment is imported or hardware acquired.
+        """
+        if candidate is not None:
+            if parameters is not None or branch is not None:
+                raise ValueError("choose candidate or saved parameters, not both")
+            _, candidate_source = self.config.resolve_with_source(candidate.config)
+            assert isinstance(candidate_source, AnalysisCandidateRunConfigSource)
+            parameters = candidate_source
+        return self._client.resolve_measurement_context(
+            MeasurementContextResolve(
+                branch=branch,
+                parameters=parameters.ref
+                if isinstance(parameters, ParameterRevision)
+                else parameters,
+                samples=samples,
+                setup=setup.ref if isinstance(setup, SetupRevision) else setup,
+                target=target,
+            )
+        )
 
     def targets(
         self, *, limit: int = 100, before: int | None = None

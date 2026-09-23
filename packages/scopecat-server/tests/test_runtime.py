@@ -97,6 +97,7 @@ from scopecat.daemon.wire import (
     RunCoverageAdvanceCommand,
     RunDomainJobTransitionBatchCommand,
     RunDomainJobTransitionItem,
+    RunHostParameterEvidenceCommand,
     RunRecoveryGroupCommitCommand,
     RunSubmission,
     SetupActivateCommand,
@@ -170,12 +171,21 @@ from scopecat.records.parameter import ScalarParameterValue
 from scopecat.records.parameter_change import (
     ParameterChangeProposal,
 )
+from scopecat.records.parameter_read import (
+    HostParameterEvidence,
+    HostPointParameterRead,
+    ScalarExpressionReadEvidence,
+)
 from scopecat.records.run import ConfigRegistryRunConfigSource, RunSnapshot
 from scopecat.records.run_request import RunRequest
 from scopecat.records.setup import (
     ActiveSetupView,
     ExecutableSetupSnapshot,
     SetupRevisionRef,
+)
+from scopecat.runs.parameter_evidence import (
+    HOST_PARAMETER_EVIDENCE_KIND,
+    read_host_parameter_evidence,
 )
 from scopecat.runs.refs import dataset_content_ref, record_content_ref
 from scopecat_testkit.domain import domain_execution_identity
@@ -4685,6 +4695,108 @@ def test_effect_and_terminal_publication_roll_back_with_control(
         assert _control_run(runtime, admission.run_id).state == "leased"
 
 
+def test_host_parameter_evidence_is_fenced_idempotent_and_survives_restart(
+    tmp_path: Path,
+) -> None:
+    submission = _submission("host-evidence")
+    evidence = HostParameterEvidence(
+        entries=(
+            HostPointParameterRead(
+                point_ordinal=0,
+                evidence=ScalarExpressionReadEvidence(
+                    incomplete_reasons=("runtime_kernel_reads_not_captured",)
+                ),
+            ),
+        ),
+        binding=(),
+    )
+    with LocalDaemonRuntime(tmp_path, bootstrap_config=_config()) as runtime:
+        admission = runtime.application.submit_run(submission)
+        run_id = admission.run_id
+        lease = runtime.application.executor.start_executor(
+            run_id, ExecutorStartRequest(executor_id="first")
+        )
+        command = RunHostParameterEvidenceCommand(
+            lease_id=lease.lease_id, evidence=evidence
+        )
+        with TestClient(runtime.app()) as client:
+            url = f"/api/v1/runs/{run_id}/host-parameter-evidence"
+            first = client.post(url, json=command.model_dump(mode="json"))
+            assert first.status_code == 200, first.text
+            assert (
+                client.post(url, json=command.model_dump(mode="json")).json()
+                == first.json()
+            )
+            invalid = command.model_copy(update={"lease_id": "stale"})
+            assert (
+                client.post(url, json=invalid.model_dump(mode="json")).status_code
+                == 409
+            )
+            invalid = command.model_copy(
+                update={
+                    "evidence": evidence.model_copy(
+                        update={
+                            "entries": (
+                                evidence.entries[0].model_copy(
+                                    update={"point_ordinal": 1}
+                                ),
+                            )
+                        }
+                    )
+                }
+            )
+            assert (
+                client.post(url, json=invalid.model_dump(mode="json")).status_code
+                == 409
+            )
+        repository = _run_repository(tmp_path)
+        [entry] = repository.list_contents(
+            run_id, limit=10, kind=HOST_PARAMETER_EVIDENCE_KIND
+        ).items
+        assert (
+            read_host_parameter_evidence(repository, run_id, entry.id).evidence
+            == evidence
+        )
+        assert (
+            runtime.application.executor.run_coverage(run_id).completed_point_count == 0
+        )
+
+    with LocalDaemonRuntime(tmp_path) as reopened:
+        repository = _run_repository(tmp_path)
+        old = read_host_parameter_evidence(repository, run_id, entry.id)
+        assert old.segment_id == lease.segment_id
+        assert old.evidence == evidence
+        with pytest.raises(BackendConflict):
+            reopened.application.executor.publish_host_parameter_evidence(
+                run_id, command
+            )
+        reopened.application.resolve_attention(
+            run_id,
+            AttentionResolutionCommand.continue_run(
+                run_contract_fingerprint=submission.intent_content_hash
+            ),
+        )
+        next_lease = reopened.application.executor.start_executor(
+            run_id, ExecutorStartRequest(executor_id="second")
+        )
+        second = reopened.application.executor.publish_host_parameter_evidence(
+            run_id, command.model_copy(update={"lease_id": next_lease.lease_id})
+        )
+        assert second.id != entry.id
+        assert (
+            len(
+                repository.list_contents(
+                    run_id, limit=10, kind=HOST_PARAMETER_EVIDENCE_KIND
+                ).items
+            )
+            == 2
+        )
+        assert (
+            read_host_parameter_evidence(repository, run_id, second.id).segment_id
+            == next_lease.segment_id
+        )
+
+
 def test_restart_quarantines_executor_until_operator_reconciles(
     tmp_path: Path,
 ) -> None:
@@ -5591,7 +5703,7 @@ def test_admission_does_not_fence_parameter_default_publication(
         assert runtime.application.setup.current().activation.generation == 1
 
 
-def test_setup_save_rejects_unknown_executable_entity(tmp_path: Path) -> None:
+def test_setup_save_rejects_unknown_route_instrument(tmp_path: Path) -> None:
     with LocalDaemonRuntime(tmp_path, bootstrap_config=_config()) as runtime:
         current = runtime.application.setup.current()
         with pytest.raises(BackendConflict):
@@ -5600,7 +5712,19 @@ def test_setup_save_rejects_unknown_executable_entity(tmp_path: Path) -> None:
                     revision_id="invalid-setup",
                     actor="operator",
                     setup=current.revision.setup.model_copy(
-                        update={"primary_entity_id": "missing"}
+                        update={
+                            "routing": current.revision.setup.routing.model_copy(
+                                update={
+                                    "routes": [
+                                        current.revision.setup.routing.routes[
+                                            0
+                                        ].model_copy(
+                                            update={"instrument_id": "missing"}
+                                        )
+                                    ]
+                                }
+                            )
+                        }
                     ),
                 )
             )

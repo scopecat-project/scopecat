@@ -141,6 +141,126 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/calibration-checks/report": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Calibration Report */
+        post: operations["calibration_report_api_v1_calibration_checks_report_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/calibration-profiles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Calibration Profiles */
+        get: operations["list_calibration_profiles_api_v1_calibration_profiles_get"];
+        put?: never;
+        /** Save Calibration Profile */
+        post: operations["save_calibration_profile_api_v1_calibration_profiles_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/calibration-profiles/{profile_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Calibration Profile */
+        get: operations["get_calibration_profile_api_v1_calibration_profiles__profile_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/calibration-profiles/{profile_id}/report": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Report Calibration Profile */
+        post: operations["report_calibration_profile_api_v1_calibration_profiles__profile_id__report_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/calibration-tasks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Calibration Tasks */
+        get: operations["list_calibration_tasks_api_v1_calibration_tasks_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/calibration-tasks/{task_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Calibration Task */
+        get: operations["get_calibration_task_api_v1_calibration_tasks__task_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/calibration-tasks/control": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Control Calibration Task */
+        post: operations["control_calibration_task_api_v1_calibration_tasks_control_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/config-registry": {
         parameters: {
             query?: never;
@@ -840,6 +960,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/measurement-context/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Resolve Measurement Context */
+        post: operations["resolve_measurement_context_api_v1_measurement_context_resolve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/measurement-targets": {
         parameters: {
             query?: never;
@@ -883,6 +1020,23 @@ export interface paths {
         };
         /** List Parameter Branches */
         get: operations["list_parameter_branches_api_v1_parameters_branches_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/parameters/revisions/{revision_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Parameter Revision */
+        get: operations["get_parameter_revision_api_v1_parameters_revisions__revision_id__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1004,6 +1158,23 @@ export interface paths {
         put?: never;
         /** Submit Procedure Step Input */
         post: operations["submit_procedure_step_input_api_v1_procedures__procedure_run_id__steps__step_key__attempts__attempt__input_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/procedures/{procedure_run_id}/worker-log": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Procedure Worker Log */
+        get: operations["get_procedure_worker_log_api_v1_procedures__procedure_run_id__worker_log_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -2486,7 +2657,7 @@ export interface components {
             subject: components["schemas"]["AnalysisSubject"];
             title: components["schemas"]["_NonEmptyText"];
         };
-        AnalysisRecordInput: components["schemas"]["MeasurementAnalysisRecordInput"] | components["schemas"]["PublishedAnalysisRecordInput"] | components["schemas"]["InterpretationAnalysisRecordInput"];
+        AnalysisRecordInput: components["schemas"]["MeasurementAnalysisRecordInput"] | components["schemas"]["ConfigurationAnalysisRecordInput"] | components["schemas"]["PublishedAnalysisRecordInput"] | components["schemas"]["InterpretationAnalysisRecordInput"];
         AnalysisRecordOutput: components["schemas"]["AnalysisFactRecordOutput"] | components["schemas"]["AnalysisDatasetRecordOutput"] | components["schemas"]["AnalysisArtifactRecordOutput"] | components["schemas"]["AnalysisTableRecordOutput"] | components["schemas"]["AnalysisFigureRecordOutput"] | components["schemas"]["AnalysisParameterProposalRecordOutput"];
         AnalysisSubject: components["schemas"]["RunAnalysisSubject"] | components["schemas"]["ProjectAnalysisSubject"] | components["schemas"]["SampleAnalysisSubject"];
         /**
@@ -2858,52 +3029,291 @@ export interface components {
             setup: components["schemas"]["SetupRevisionRef"];
         };
         /**
-         * CalibrationCohortMergeRegistrySource
-         * @description Durable provenance for an individually verified cohort composition.
+         * CalibrationCheckRequest
+         * @description Durable declaration stored as a procedure intent's calibration_check field.
+         *
+         *     Execution step addresses locate evidence; they do not define capability
+         *     identity. This initial adapter supports one measurement and one analysis.
          */
-        CalibrationCohortMergeRegistrySource: {
-            automatic_publication_policy_fingerprint?: components["schemas"]["Sha256ContentHash"] | null;
-            automatic_publication_policy_id?: components["schemas"]["_NonEmptyText"] | null;
-            automatic_publication_policy_version?: components["schemas"]["_NonEmptyText"] | null;
-            base: components["schemas"]["CalibrationConfigSourceRef"];
-            candidate_id: components["schemas"]["_NonEmptyText"];
-            cohort_id: components["schemas"]["_NonEmptyText"];
-            composition_policy_ref: components["schemas"]["ConfigCompositionPolicyRef"];
-            /** Contributions */
-            contributions: components["schemas"]["ResolvedCalibrationCohortMergeContribution"][];
+        CalibrationCheckRequest: {
+            /** Analysis Step */
+            analysis_step: string;
             /**
-             * Kind
-             * @default calibration_cohort_merge
+             * Codec
+             * @default scopecat.calibration-check.v1
              * @constant
              */
-            kind: "calibration_cohort_merge";
+            codec: "scopecat.calibration-check.v1";
+            context: components["schemas"]["MeasurementContext"];
+            /** Measurement Step */
+            measurement_step: string;
             /**
-             * Merge Policy
-             * @default common_base_cells_v1
-             * @constant
+             * Result Output
+             * @default check
              */
-            merge_policy: "common_base_cells_v1";
-            spec_hash: components["schemas"]["Sha256ContentHash"];
+            result_output: string;
+            scope: components["schemas"]["CalibrationScope"];
         };
         /**
-         * CalibrationConfigSourceRef
-         * @description Exact saved configuration and its calibration ownership scope.
+         * CalibrationProfile
+         * @description Immutable named requirements, evaluated against a separately chosen context.
          */
-        CalibrationConfigSourceRef: {
-            /** Config Ref */
-            config_ref: string;
-            content_hash: components["schemas"]["ConfigContentHash"];
-            /** Entry Id */
-            entry_id: string;
+        CalibrationProfile: {
             /**
-             * Kind
-             * @default config_registry
-             * @constant
+             * Description
+             * @default
              */
-            kind: "config_registry";
-            scope?: components["schemas"]["CalibrationScope"];
+            description: string;
+            /** Id */
+            id: string;
+            /** Requirements */
+            requirements: components["schemas"]["CalibrationRequirement"][];
         };
-        CalibrationScope: components["schemas"]["CatalogCalibrationScope"] | components["schemas"]["WorkingPointCalibrationScope"];
+        /** CalibrationProfilePage */
+        CalibrationProfilePage: {
+            /** Items */
+            items: components["schemas"]["CalibrationProfileRecord"][];
+            /** Next Cursor */
+            next_cursor?: number | null;
+        };
+        /** CalibrationProfileRecord */
+        CalibrationProfileRecord: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            profile: components["schemas"]["CalibrationProfile"];
+        };
+        /** CalibrationProfileReportQuery */
+        CalibrationProfileReportQuery: {
+            context: components["schemas"]["MeasurementContext"];
+            /**
+             * History Limit
+             * @default 50
+             */
+            history_limit: number;
+            /** Requirement Ids */
+            requirement_ids?: string[] | null;
+        };
+        /**
+         * CalibrationReport
+         * @description Advisory evidence snapshot for explicit requirements, not sample health.
+         */
+        CalibrationReport: {
+            context: components["schemas"]["MeasurementContext"];
+            /** Items */
+            items: components["schemas"]["CalibrationRequirementStatus"][];
+            /**
+             * Observed At
+             * Format: date-time
+             */
+            observed_at: string;
+            /** Profile Id */
+            profile_id?: string | null;
+        };
+        /** CalibrationReportQuery */
+        CalibrationReportQuery: {
+            context: components["schemas"]["MeasurementContext"];
+            /**
+             * History Limit
+             * @default 50
+             */
+            history_limit: number;
+            /** Requirements */
+            requirements: components["schemas"]["CalibrationRequirement"][];
+        };
+        /**
+         * CalibrationRequirement
+         * @description One explicitly requested capability; no inferred physical dependencies.
+         */
+        CalibrationRequirement: {
+            /**
+             * Depends On
+             * @default []
+             */
+            depends_on: string[];
+            /** Id */
+            id: string;
+            /**
+             * Max Age
+             * Format: duration
+             */
+            max_age: string;
+            scope: components["schemas"]["CalibrationScope"];
+        };
+        /** CalibrationRequirementStatus */
+        CalibrationRequirementStatus: {
+            availability: components["schemas"]["CapabilityAvailability"];
+            /** Incomplete Reasons */
+            incomplete_reasons: ("scan_limit" | "unresolved_checks")[];
+            requirement: components["schemas"]["CalibrationRequirement"];
+            /** Scanned */
+            scanned: number;
+            selection: components["schemas"]["CheckSelection"];
+            /** Unresolved Procedures */
+            unresolved_procedures: string[];
+        };
+        /**
+         * CalibrationScope
+         * @description A capability and ordered target addresses within a resolved subject.
+         *
+         *     Conditions and policy versions are explicit laboratory contracts, not
+         *     inferred physical state. Update them when relevant semantics change.
+         */
+        CalibrationScope: {
+            /** Capability */
+            capability: string;
+            /** Conditions */
+            conditions: string;
+            /** Policy Version */
+            policy_version: string;
+            /** Targets */
+            targets: string[];
+        };
+        /** CalibrationStageProgress */
+        CalibrationStageProgress: {
+            /**
+             * Blocked By
+             * @default []
+             */
+            blocked_by: string[];
+            evidence?: components["schemas"]["CheckEvidence"] | null;
+            /** Id */
+            id: string;
+            /** Procedure Run Id */
+            procedure_run_id?: string | null;
+            state: components["schemas"]["CalibrationStageState"];
+        };
+        /** @enum {string} */
+        CalibrationStageState: "ready" | "waiting" | "blocked" | "queued" | "running" | "attention_required" | "waiting_for_input" | "passed" | "rejected" | "failed" | "cancelled" | "incomplete";
+        /** CalibrationTaskCall */
+        "CalibrationTaskCall-Output": {
+            definition: components["schemas"]["ProcedureDefinitionRef"];
+            intent: components["schemas"]["ProcedureIntent-Output"];
+            /**
+             * Samples
+             * @default []
+             */
+            samples: components["schemas"]["SampleSelector"][];
+        };
+        /** CalibrationTaskControl */
+        CalibrationTaskControl: {
+            /**
+             * Action
+             * @enum {string}
+             */
+            action: "start" | "pause" | "cancel";
+            /** Actor */
+            actor: string;
+            /** Expected Revision */
+            expected_revision: number;
+            /** Reason */
+            reason: string;
+            /** Task Id */
+            task_id: string;
+        };
+        /** CalibrationTaskCreate */
+        "CalibrationTaskCreate-Output": {
+            /** Calls */
+            calls: {
+                [key: string]: components["schemas"]["CalibrationTaskCall-Output"];
+            };
+            finalization?: components["schemas"]["CalibrationTaskCall-Output"] | null;
+            plan: components["schemas"]["CalibrationTaskPlan"];
+            /** Task Id */
+            task_id: string;
+        };
+        /** CalibrationTaskPage */
+        CalibrationTaskPage: {
+            /** Items */
+            items: components["schemas"]["CalibrationTaskRecord"][];
+            /** Next Cursor */
+            next_cursor?: number | null;
+        };
+        /**
+         * CalibrationTaskPlan
+         * @description Explicit checks and candidate edges; admission freezes each stage's input.
+         */
+        CalibrationTaskPlan: {
+            /** Stages */
+            stages: components["schemas"]["CalibrationTaskStage"][];
+        };
+        /**
+         * CalibrationTaskProgress
+         * @description Observed execution progress; not scientific readiness or dispatch authority.
+         */
+        CalibrationTaskProgress: {
+            /** Complete */
+            complete: boolean;
+            /** Ready */
+            ready: string[];
+            /** Stages */
+            stages: components["schemas"]["CalibrationStageProgress"][];
+            /** Successful */
+            successful: boolean;
+        };
+        /** CalibrationTaskRecord */
+        CalibrationTaskRecord: {
+            /**
+             * Control Revision
+             * @default 1
+             */
+            control_revision: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Dispatch Errors */
+            dispatch_errors?: {
+                [key: string]: string;
+            };
+            /** Executions */
+            executions?: {
+                [key: string]: string;
+            };
+            /** Finalization Error */
+            finalization_error?: string | null;
+            /** Finalization Run Id */
+            finalization_run_id?: string | null;
+            last_control?: components["schemas"]["CalibrationTaskControl"] | null;
+            /**
+             * Mode
+             * @default manual
+             * @enum {string}
+             */
+            mode: "manual" | "running" | "paused" | "cancelled" | "finished";
+            /** Resolved Checks */
+            resolved_checks?: {
+                [key: string]: components["schemas"]["CalibrationCheckRequest"];
+            };
+            specification: components["schemas"]["CalibrationTaskCreate-Output"];
+        };
+        /**
+         * CalibrationTaskStage
+         * @description A fixed check, or a template whose parameter input comes from a prior stage.
+         *
+         *     Candidate binding replaces only check.context.parameters; all other fields
+         *     stay fixed. Until binding, that parameter input is not execution evidence.
+         */
+        CalibrationTaskStage: {
+            candidate_from?: components["schemas"]["StageCandidateOutput"] | null;
+            check: components["schemas"]["CalibrationCheckRequest"];
+            /**
+             * Depends On
+             * @default []
+             */
+            depends_on: string[];
+            /** Id */
+            id: string;
+        };
+        /** CalibrationTaskView */
+        CalibrationTaskView: {
+            finalization?: components["schemas"]["ProcedureRun"] | null;
+            progress: components["schemas"]["CalibrationTaskProgress"];
+            task: components["schemas"]["CalibrationTaskRecord"];
+        };
         /** CandidateConfigRegistrySource */
         CandidateConfigRegistrySource: {
             /** Acceptance */
@@ -2941,15 +3351,14 @@ export interface components {
             source: components["schemas"]["AnalysisCandidateRunConfigSource"];
         };
         /**
-         * CatalogCalibrationScope
-         * @description Saved inputs for nonpublishing checks; no implicit parameter owner.
+         * CapabilityAvailability
+         * @description Advisory availability under an explicit, validated dependency graph.
          */
-        CatalogCalibrationScope: {
-            /**
-             * @description discriminator enum property added by openapi-typescript
-             * @enum {string}
-             */
-            kind: "catalog";
+        CapabilityAvailability: {
+            /** Blocked By */
+            blocked_by: string[];
+            /** Status */
+            status: components["schemas"]["CheckStatus"] | "blocked";
         };
         /** ChangeParameterColumn */
         ChangeParameterColumn: {
@@ -2984,6 +3393,45 @@ export interface components {
             /** Parameter Id */
             parameter_id: string;
         };
+        /** CheckAssessment */
+        CheckAssessment: {
+            /** Reasons */
+            reasons: components["schemas"]["CheckReason"][];
+            /** Run Id */
+            run_id: string;
+            status: components["schemas"]["CheckStatus"];
+        };
+        /**
+         * CheckEvidence
+         * @description Read projection of a retained check, including attempts without a result.
+         *
+         *     Scope comes from the analysis (or the original check request if unfinished).
+         *     The caller resolves the analysis belonging to this measurement. References
+         *     are retained for inspection, not authenticated by this pure selector.
+         */
+        CheckEvidence: {
+            /** Analysis Record Id */
+            analysis_record_id: string | null;
+            measurement: components["schemas"]["RunSnapshot"];
+            /** Passed */
+            passed: boolean | null;
+            scope: components["schemas"]["CalibrationScope"];
+        };
+        /** @enum {string} */
+        CheckReason: "analysis_missing" | "measurement_incomplete" | "parameters_unsaved" | "subject_unbound" | "capability_changed" | "targets_changed" | "conditions_changed" | "policy_changed" | "parameters_changed" | "subject_changed" | "target_binding_changed" | "setup_changed" | "scenario_changed" | "evidence_from_future" | "check_expired" | "within_spec" | "out_of_spec";
+        /** CheckSelection */
+        CheckSelection: {
+            assessment?: components["schemas"]["CheckAssessment"] | null;
+            evidence?: components["schemas"]["CheckEvidence"] | null;
+            /**
+             * Reason
+             * @enum {string}
+             */
+            reason: "latest_matching" | "no_matching_evidence" | "ambiguous_latest" | "incomplete_history";
+            status: components["schemas"]["CheckStatus"];
+        };
+        /** @enum {string} */
+        CheckStatus: "usable" | "out_of_spec" | "recheck" | "unknown";
         /**
          * CollectReceipt
          * @description Explicit outcome reported after one collection command.
@@ -3673,25 +4121,6 @@ export interface components {
             /** Row Index */
             row_index?: number | null;
         };
-        /**
-         * ConfigCompositionEvidenceStepRef
-         * @description Self-contained exact checkpoint in one contribution procedure.
-         */
-        ConfigCompositionEvidenceStepRef: {
-            /** Attempt */
-            attempt: number;
-            procedure_run_id: components["schemas"]["_NonEmptyText"];
-            step_key: components["schemas"]["_NonEmptyText"];
-        };
-        /**
-         * ConfigCompositionPolicyRef
-         * @description Exact project-owned policy that selected one config composition.
-         */
-        ConfigCompositionPolicyRef: {
-            fingerprint: components["schemas"]["Sha256ContentHash"];
-            id: components["schemas"]["_NonEmptyText"];
-            version: components["schemas"]["_NonEmptyText"];
-        };
         ConfigContentHash: string;
         /**
          * ConfigContextMetadata
@@ -4025,6 +4454,26 @@ export interface components {
             base: components["schemas"]["ConfigContextRef"];
             setup: components["schemas"]["SetupRevisionRef"];
         };
+        /**
+         * ConfigurationAnalysisRecordInput
+         * @description Whole run configuration access; no individual-field coverage claim.
+         */
+        ConfigurationAnalysisRecordInput: {
+            codec: components["schemas"]["_NonEmptyText"];
+            content_hash: components["schemas"]["_NonEmptyText"];
+            id: components["schemas"]["_NonEmptyText"];
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "configuration_snapshot";
+            metadata?: components["schemas"]["JsonMetadata"] | null;
+            role: components["schemas"]["_NonEmptyText"];
+            run_id: components["schemas"]["_NonEmptyText"];
+            target: components["schemas"]["_NonEmptyText"];
+            /** Title */
+            title?: string | null;
+        };
         "ConfigurationChoice-Input": components["schemas"]["ActiveConfiguration"] | components["schemas"]["ParameterConfiguration-Input"] | components["schemas"]["SavedConfiguration"] | components["schemas"]["WorkingPointConfiguration-Input"] | components["schemas"]["CandidateConfiguration"];
         "ConfigurationChoice-Output": components["schemas"]["ActiveConfiguration"] | components["schemas"]["ParameterConfiguration-Output"] | components["schemas"]["SavedConfiguration"] | components["schemas"]["WorkingPointConfiguration-Output"] | components["schemas"]["CandidateConfiguration"];
         /** ConfigurationTemplateImportCommand */
@@ -4085,6 +4534,18 @@ export interface components {
             source_cell?: components["schemas"]["ConfigCellRef"] | null;
         };
         /**
+         * ConnectionProjection
+         * @description A null member denotes an interconnection declared by the target.
+         */
+        ConnectionProjection: {
+            /** Connection Id */
+            connection_id: string;
+            /** Member Id */
+            member_id: string | null;
+            /** Runtime Connection Id */
+            runtime_connection_id: string;
+        };
+        /**
          * ContentEntry
          * @description One content-addressable catalog entry.
          */
@@ -4122,8 +4583,7 @@ export interface components {
              * @enum {string}
              */
             kind: "parameter_context";
-            /** Publication */
-            publication?: components["schemas"]["CandidateConfigRegistrySource"] | components["schemas"]["CalibrationCohortMergeRegistrySource"] | null;
+            publication?: components["schemas"]["CandidateConfigRegistrySource"] | null;
             rebind?: components["schemas"]["SetupRebindRegistrySource"] | null;
         };
         /**
@@ -4489,8 +4949,6 @@ export interface components {
         ExecutableSetupSnapshot: {
             domain_target: components["schemas"]["DomainTargetBinding"] | null;
             instrument_registry: components["schemas"]["InstrumentRegistry"];
-            /** Primary Entity Id */
-            primary_entity_id: string;
             routing: components["schemas"]["RoutingGraph"];
             scenario?: components["schemas"]["SoftwareExecutionScenario"] | null;
             topology: components["schemas"]["Topology"];
@@ -6167,6 +6625,44 @@ export interface components {
             real: number;
         };
         /**
+         * MeasurementContext
+         * @description Frozen inputs using a saved revision or an exact retained candidate.
+         *
+         *     Mutable branch choices and resolution receipts are separate. This is not the
+         *     complete execution provenance, nor proof of calibration applicability.
+         */
+        MeasurementContext: {
+            /** Parameters */
+            parameters: components["schemas"]["ParameterRevisionRef"] | components["schemas"]["AnalysisCandidateRunConfigSource"];
+            scenario: components["schemas"]["SoftwareExecutionScenario"] | null;
+            setup_content_hash: components["schemas"]["Sha256ContentHash"];
+            subject: components["schemas"]["ResolvedSubject"];
+            target_binding?: components["schemas"]["TargetSetupBinding"] | null;
+        };
+        /**
+         * MeasurementContextResolution
+         * @description Exact inputs; candidates have no branch/setup selection receipt.
+         */
+        MeasurementContextResolution: {
+            branch?: components["schemas"]["ParameterBranch"] | null;
+            context: components["schemas"]["MeasurementContext"];
+            setup: components["schemas"]["SetupRevisionRef"] | null;
+        };
+        /** MeasurementContextResolve */
+        MeasurementContextResolve: {
+            /** Branch */
+            branch?: string | null;
+            /** Parameters */
+            parameters?: components["schemas"]["ParameterRevisionRef"] | components["schemas"]["AnalysisCandidateRunConfigSource"] | null;
+            /**
+             * Samples
+             * @default []
+             */
+            samples: components["schemas"]["SampleSelector"][];
+            setup?: components["schemas"]["SetupRevisionRef"] | null;
+            target?: components["schemas"]["TargetRevisionRef"] | null;
+        };
+        /**
          * MeasurementDataset
          * @description A complete planned schema paired with its current ordered record set.
          */
@@ -6901,6 +7397,18 @@ export interface components {
             verification: components["schemas"]["ProjectAnalysisDecisionReference"];
         };
         /**
+         * ParameterBranchPublishOutputRef
+         * @description Retained accepted branch head, independent of later branch movement.
+         */
+        ParameterBranchPublishOutputRef: {
+            branch: components["schemas"]["ParameterBranch"];
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "parameter_publish";
+        };
+        /**
          * ParameterCatalog
          * @description Authored parameter schema in one shape-independent namespace.
          */
@@ -6961,6 +7469,7 @@ export interface components {
             base_config_content_hash: components["schemas"]["ConfigContentHash"];
             /** Base Config Id */
             base_config_id: string;
+            composition?: components["schemas"]["ParameterProposalComposition"] | null;
             /** Confidence */
             confidence?: number | null;
             /** Deltas */
@@ -7070,6 +7579,18 @@ export interface components {
             /** Table Id */
             table_id: string;
         };
+        /** ParameterProposalComposition */
+        ParameterProposalComposition: {
+            base: components["schemas"]["ParameterRevisionRef"];
+            /**
+             * Mode
+             * @default parallel
+             * @enum {string}
+             */
+            mode: "parallel" | "sequential";
+            /** Sources */
+            sources: components["schemas"]["ParameterProposalRef"][];
+        };
         /** ParameterProposalPage */
         ParameterProposalPage: {
             /**
@@ -7079,6 +7600,19 @@ export interface components {
             items: components["schemas"]["ParameterProposalView"][];
             /** Next Cursor */
             next_cursor?: number | null;
+            /** Run Id */
+            run_id: string;
+        };
+        /**
+         * ParameterProposalRef
+         * @description One exact retained contribution to a composed candidate.
+         */
+        ParameterProposalRef: {
+            /** Analysis Record Id */
+            analysis_record_id: string;
+            content_hash: components["schemas"]["Sha256ContentHash"];
+            /** Proposal Id */
+            proposal_id: string;
             /** Run Id */
             run_id: string;
         };
@@ -7594,6 +8128,9 @@ export interface components {
          * @description Observation of existing process management, not execution authority.
          */
         ProcedureDispatchView: {
+            failure?: components["schemas"]["ProcedureWorkerFailure"] | null;
+            /** Log Path */
+            log_path?: string | null;
             /**
              * Management
              * @enum {string}
@@ -7792,8 +8329,42 @@ export interface components {
             step: components["schemas"]["ProcedureStepAttempt"];
         };
         /** @enum {string} */
-        ProcedureStepOperation: "run" | "analysis" | "config_activation" | "config_publish" | "interpretation";
-        ProcedureStepOutputRef: components["schemas"]["RunOutputRef"] | components["schemas"]["AnalysisPublicationOutputRef"] | components["schemas"]["ConfigActivationOutputRef"] | components["schemas"]["ConfigPublishOutputRef"] | components["schemas"]["InterpretationOutputRef"];
+        ProcedureStepOperation: "run" | "analysis" | "config_activation" | "config_publish" | "parameter_publish" | "interpretation";
+        ProcedureStepOutputRef: components["schemas"]["RunOutputRef"] | components["schemas"]["AnalysisPublicationOutputRef"] | components["schemas"]["ConfigActivationOutputRef"] | components["schemas"]["ConfigPublishOutputRef"] | components["schemas"]["ParameterBranchPublishOutputRef"] | components["schemas"]["InterpretationOutputRef"];
+        /**
+         * ProcedureWorkerFailure
+         * @description Last process-management failure; separate from scientific outcome.
+         */
+        ProcedureWorkerFailure: {
+            /** Exit Code */
+            exit_code?: number | null;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "dispatch" | "process_exit";
+            /** Message */
+            message: string;
+            /**
+             * Observed At
+             * Format: date-time
+             */
+            observed_at: string;
+        };
+        /**
+         * ProcedureWorkerLog
+         * @description Bounded UTF-8 rendering of one execution's recent process output.
+         */
+        ProcedureWorkerLog: {
+            /** Available */
+            available: boolean;
+            /** Text */
+            text: string;
+            /** Total Bytes */
+            total_bytes: number;
+            /** Truncated */
+            truncated: boolean;
+        };
         /**
          * ProjectAnalysisDecisionReference
          * @description One exact typed fact interpreted as a project-level decision.
@@ -7976,8 +8547,6 @@ export interface components {
              * @enum {string}
              */
             kind: "registered_target";
-            /** Projection */
-            projection: components["schemas"]["EntityProjection"][];
             ref: components["schemas"]["TargetRevisionRef"];
             sample: components["schemas"]["SampleBinding"];
         };
@@ -8080,15 +8649,6 @@ export interface components {
             /** Next Cursor */
             next_cursor?: number | null;
         };
-        /**
-         * ResolvedCalibrationCohortMergeContribution
-         * @description Server-resolved exact outputs behind one wire contribution.
-         */
-        ResolvedCalibrationCohortMergeContribution: {
-            member_id: components["schemas"]["_NonEmptyText"];
-            proof: components["schemas"]["ResolvedVerifiedParameterProposalProofV1"];
-            result_input_fingerprint: components["schemas"]["Sha256ContentHash"];
-        };
         /** ResolvedRunDomainView */
         ResolvedRunDomainView: {
             /**
@@ -8113,34 +8673,17 @@ export interface components {
         ResolvedScientificBinding: {
             /**
              * Codec
-             * @default scopecat.scientific-binding.v2
+             * @default scopecat.scientific-binding.v3
              * @constant
              */
-            codec: "scopecat.scientific-binding.v2";
+            codec: "scopecat.scientific-binding.v3";
             config_content_hash: components["schemas"]["Sha256ContentHash"];
             scenario?: components["schemas"]["SoftwareExecutionScenario"] | null;
             setup_content_hash: components["schemas"]["Sha256ContentHash"];
             subject: components["schemas"]["ResolvedSubject"];
+            target_binding?: components["schemas"]["TargetSetupBinding"] | null;
         };
         ResolvedSubject: components["schemas"]["UnboundSubject"] | components["schemas"]["InlineSamplesSubject"] | components["schemas"]["RegisteredTargetSubject"];
-        /**
-         * ResolvedVerifiedParameterProposalProofV1
-         * @description Server-resolved exact lineage behind one accepted proposal proof.
-         */
-        ResolvedVerifiedParameterProposalProofV1: {
-            baseline_run_id: components["schemas"]["_NonEmptyText"];
-            candidate_run_id: components["schemas"]["_NonEmptyText"];
-            decision: components["schemas"]["ProjectAnalysisDecisionReference"];
-            evidence_step: components["schemas"]["ConfigCompositionEvidenceStepRef"];
-            fit_analysis_record_id: components["schemas"]["_NonEmptyText"];
-            /**
-             * Kind
-             * @default verified_parameter_proposal_v1
-             * @constant
-             */
-            kind: "verified_parameter_proposal_v1";
-            proposal_id: components["schemas"]["_NonEmptyText"];
-        };
         /** @constant */
         ResourceKind: "instrument";
         /** @enum {string} */
@@ -9917,6 +10460,16 @@ export interface components {
                 [key: string]: components["schemas"]["pydantic__types__JsonValue"];
             };
         };
+        /**
+         * StageCandidateOutput
+         * @description Candidate from the exact analysis adopted by a prerequisite check.
+         */
+        StageCandidateOutput: {
+            /** Proposal Id */
+            proposal_id: string;
+            /** Stage Id */
+            stage_id: string;
+        };
         StateLiteral: boolean | number | string | components["schemas"]["scopecat__kernel__quantity__Quantity"] | components["schemas"]["PayloadRef"];
         StateMemberTarget: components["schemas"]["InterfaceStateMemberTarget"] | components["schemas"]["DeviceStateMemberTarget"];
         /**
@@ -10049,8 +10602,6 @@ export interface components {
             id: string;
             instrument_registry: components["schemas"]["InstrumentRegistry"];
             parameter_catalog: components["schemas"]["ParameterCatalog"];
-            /** Primary Entity Id */
-            primary_entity_id: string;
             routing?: components["schemas"]["RoutingGraph"];
             scenario?: components["schemas"]["SoftwareExecutionScenario"] | null;
             topology: components["schemas"]["Topology"];
@@ -10174,6 +10725,21 @@ export interface components {
             revision: number;
             /** Target Id */
             target_id: string;
+        };
+        /**
+         * TargetSetupBinding
+         * @description Exact target-to-control mapping for one executable setup.
+         *
+         *     This relationship is execution evidence, not part of the target definition.
+         *     Admission reconstructs it from the retained target and setup.
+         */
+        TargetSetupBinding: {
+            /** Connections */
+            connections: components["schemas"]["ConnectionProjection"][];
+            /** Entities */
+            entities: components["schemas"]["EntityProjection"][];
+            setup_content_hash: components["schemas"]["Sha256ContentHash"];
+            target: components["schemas"]["TargetRevisionRef"];
         };
         /** TcpipSocketInstrumentConnection */
         TcpipSocketInstrumentConnection: {
@@ -10367,20 +10933,6 @@ export interface components {
              * @enum {string}
              */
             retention: "retained" | "unavailable_active_quota";
-        };
-        /**
-         * WorkingPointCalibrationScope
-         * @description One stable workspace and the exact physical scope it owns.
-         */
-        WorkingPointCalibrationScope: {
-            /**
-             * @description discriminator enum property added by openapi-typescript
-             * @enum {string}
-             */
-            kind: "working_point";
-            sample: components["schemas"]["SampleBinding"];
-            /** Workspace Id */
-            workspace_id: string;
         };
         /** WorkingPointConfiguration */
         "WorkingPointConfiguration-Input": {
@@ -10693,6 +11245,266 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AuthorWorkspaceCatalog"];
+                };
+            };
+        };
+    };
+    calibration_report_api_v1_calibration_checks_report_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CalibrationReportQuery"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalibrationReport"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_calibration_profiles_api_v1_calibration_profiles_get: {
+        parameters: {
+            query?: {
+                cursor?: number | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalibrationProfilePage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    save_calibration_profile_api_v1_calibration_profiles_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CalibrationProfile"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalibrationProfileRecord"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_calibration_profile_api_v1_calibration_profiles__profile_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                profile_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalibrationProfileRecord"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    report_calibration_profile_api_v1_calibration_profiles__profile_id__report_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                profile_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CalibrationProfileReportQuery"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalibrationReport"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_calibration_tasks_api_v1_calibration_tasks_get: {
+        parameters: {
+            query?: {
+                cursor?: number | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalibrationTaskPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_calibration_task_api_v1_calibration_tasks__task_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                task_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalibrationTaskView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    control_calibration_task_api_v1_calibration_tasks_control_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CalibrationTaskControl"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalibrationTaskView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -12061,6 +12873,39 @@ export interface operations {
             };
         };
     };
+    resolve_measurement_context_api_v1_measurement_context_resolve_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MeasurementContextResolve"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MeasurementContextResolution"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_targets_api_v1_measurement_targets_get: {
         parameters: {
             query?: {
@@ -12145,6 +12990,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ParameterBranchPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_parameter_revision_api_v1_parameters_revisions__revision_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                revision_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ParameterRevision"];
                 };
             };
             /** @description Validation Error */
@@ -12380,6 +13256,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProcedureStepInputSubmitReceipt"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_procedure_worker_log_api_v1_procedures__procedure_run_id__worker_log_get: {
+        parameters: {
+            query?: {
+                max_bytes?: number;
+            };
+            header?: never;
+            path: {
+                procedure_run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProcedureWorkerLog"];
                 };
             };
             /** @description Validation Error */

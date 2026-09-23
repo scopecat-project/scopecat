@@ -5,25 +5,10 @@ from __future__ import annotations
 import sqlite3
 from collections.abc import Generator
 from contextlib import contextmanager
-from dataclasses import dataclass, replace
-from datetime import UTC, datetime
+from dataclasses import replace
 from threading import Lock
 
-from scopecat.automation.calibrations import (
-    CalibrationCohortMember,
-    CalibrationConfigSourceRef,
-    CalibrationSuccessPublication,
-    CalibrationSuccessRef,
-    calibration_freshness_fingerprint,
-)
-from scopecat.automation.models import (
-    AnalysisPublicationOutputRef,
-    ProcedureStepAttempt,
-    RunOutputRef,
-)
 from scopecat.config.changes import (
-    PreparedParameterChangeApproval,
-    load_parameter_change_proposal,
     prepare_parameter_change_approval,
 )
 from scopecat.config.contexts import (
@@ -34,17 +19,11 @@ from scopecat.config.contexts import (
 from scopecat.config.parameter_resolution import validate_parameter_snapshot
 from scopecat.config.registry import service as config_registry_service
 from scopecat.config.registry.records import (
-    CalibrationCohortMergeContribution,
-    CalibrationPublicationOperation,
     ConfigActivationOperation,
-    ConfigCompositionEvidenceStepRef,
     ConfigContextPublishOperation,
     ConfigPublishOperation,
-    ConfigRegistryEntry,
     ContextConfigRegistrySource,
     CrossRunCandidateAcceptance,
-    ResolvedCalibrationCohortMergeContribution,
-    ResolvedVerifiedParameterProposalProofV1,
 )
 from scopecat.config.structure import (
     ParameterStructurePlan,
@@ -65,8 +44,6 @@ from scopecat.daemon.views import (
     ParameterResolution,
 )
 from scopecat.daemon.wire import (
-    CalibrationPublicationCommand,
-    CalibrationPublicationReceipt,
     CandidateConfigRevisionSource,
     ConfigActivationReceipt,
     ConfigContextPublishCommand,
@@ -96,11 +73,6 @@ from scopecat.kernel.errors import (
     NotFound,
 )
 from scopecat.project_state import ProjectStateServices
-from scopecat.records.analysis import (
-    ProjectAnalysisDecisionReference,
-    ProjectAnalysisSubject,
-)
-from scopecat.records.calibration_scope import WorkingPointCalibrationScope
 from scopecat.records.config import ConfigProfileSnapshot, config_content_hash
 from scopecat.records.config_context import ConfigContextRef, ContextRunConfigSource
 from scopecat.records.parameter_branch import (
@@ -117,20 +89,9 @@ from scopecat.records.parameter_structure import (
     ChangeParameterColumn,
 )
 from scopecat.records.run import (
-    AnalysisCandidateRunConfigSource,
     ParameterRunConfigSource,
-    RunSnapshot,
 )
 
-from scopecat_server.storage.sqlite.automation import (
-    AutomationNotFound,
-    SQLiteAutomationStore,
-)
-from scopecat_server.storage.sqlite.calibration_cohorts import (
-    CalibrationCohortConflict,
-    CalibrationCohortNotFound,
-    SQLiteCalibrationCohortStore,
-)
 from scopecat_server.storage.sqlite.config_operations import SQLiteConfigOperationStore
 from scopecat_server.storage.sqlite.config_registry import SQLiteConfigRegistryStore
 from scopecat_server.storage.sqlite.control_plane import SQLiteControlPlane
@@ -146,22 +107,6 @@ from .parameter_resolution import resolve_parameters
 from .samples import SampleService
 
 
-@dataclass(frozen=True, slots=True)
-class _CalibrationMergeMemberProof:
-    member: CalibrationCohortMember
-    contribution: CalibrationCohortMergeContribution
-    resolved: ResolvedCalibrationCohortMergeContribution
-    succeeded_at: datetime
-    approval: PreparedParameterChangeApproval
-
-
-@dataclass(frozen=True, slots=True)
-class _PreparedCalibrationMerge:
-    revision_source: config_registry_service.CalibrationCohortMergeRevisionSource
-    base_config_source: CalibrationConfigSourceRef
-    members: tuple[_CalibrationMergeMemberProof, ...]
-
-
 class ConfigService:
     """Own config-registry commands and their in-process serialization."""
 
@@ -174,8 +119,6 @@ class ConfigService:
         runs: SQLiteRunRepository,
         services: ProjectStateServices,
         analyses: AnalysisService,
-        automation: SQLiteAutomationStore,
-        calibration_cohorts: SQLiteCalibrationCohortStore,
         samples: SampleService,
     ) -> None:
         self._samples = samples
@@ -185,8 +128,7 @@ class ConfigService:
         self._runs = runs
         self._services = services
         self._analyses = analyses
-        self._automation = automation
-        self._calibration_cohorts = calibration_cohorts
+
         self._mutation_lock = Lock()
 
     def parameter_revisions(self) -> tuple[ParameterRevision, ...]:
@@ -492,7 +434,7 @@ class ConfigService:
         with (
             self._mutation_lock,
             self._config_errors(),
-            self._config_transaction() as (connection, services),
+            self._config_transaction() as (_connection, services),
         ):
             try:
                 self._validate_structure_evidence(command.structure_plan)
@@ -513,9 +455,7 @@ class ConfigService:
                     advance=command.advance,
                     unit_of_work=services.config_registry,
                 )
-                self._calibration_cohorts.supersede_working_point_in_transaction(
-                    connection, entry=snapshot.entry
-                )
+
                 return ConfigEntryView(entry=snapshot.entry, config=snapshot.config)
             except ValueError as error:
                 raise BackendConflict(str(error)) from error
@@ -675,22 +615,6 @@ class ConfigService:
                 )
             return receipt
 
-    def get_calibration_publication_operation(
-        self,
-        operation_id: str,
-    ) -> CalibrationPublicationReceipt:
-        with self._config_errors():
-            receipt = self._config_operations.find(operation_id)
-            if receipt is None:
-                raise BackendNotFound(
-                    f"calibration publication operation was not found: {operation_id}"
-                )
-            if not isinstance(receipt, CalibrationPublicationReceipt):
-                raise BackendConflict(
-                    f"config operation is not a calibration publication: {operation_id}"
-                )
-            return receipt
-
     def get_context_publish_operation(
         self, operation_id: str
     ) -> ConfigContextPublishReceipt:
@@ -814,9 +738,7 @@ class ConfigService:
                 deltas=candidate.deltas,
             )
             self._config_operations.commit_in_transaction(connection, receipt)
-            self._calibration_cohorts.supersede_working_point_in_transaction(
-                connection, entry=saved.entry
-            )
+
             return receipt
 
     def publish_config(
@@ -828,82 +750,6 @@ class ConfigService:
         receipt = self._publish_revision(command)
         assert type(receipt) is ConfigPublishReceipt
         return receipt
-
-    def publish_calibration(
-        self,
-        command: CalibrationPublicationCommand,
-    ) -> CalibrationPublicationReceipt:
-        """Publish one verified cohort and finalize it in the same commit."""
-
-        with (
-            self._mutation_lock,
-            self._config_errors(),
-            self._config_transaction() as (connection, services),
-        ):
-            existing = self._config_operations.find_in_transaction(
-                connection, command.operation_id
-            )
-            if existing is not None:
-                if (
-                    not isinstance(existing, CalibrationPublicationReceipt)
-                    or existing.operation.intent_hash != command.intent_hash
-                ):
-                    raise BackendConflict("config operation id has a different intent")
-                return existing
-            merge = self._prepare_calibration_merge(connection, command)
-            try:
-                result = config_registry_service.publish_calibration_context(
-                    source=merge.revision_source,
-                    entry_id=command.entry_id,
-                    actor=command.actor,
-                    note=command.note,
-                    unit_of_work=services.config_registry,
-                )
-            except ValueError as error:
-                raise BackendConflict(str(error)) from error
-            self._publish_calibration_merge_approvals(
-                connection, merge, actor=command.actor
-            )
-            operation = CalibrationPublicationOperation(
-                operation_id=command.operation_id,
-                intent_hash=command.intent_hash,
-                source_intent_hash=command.source_intent_hash,
-                base=command.source.base,
-                entry_id=command.entry_id,
-                actor=command.actor,
-                note=command.note,
-                recorded_at=result.entry.recorded_at,
-            )
-            successes = _calibration_successes(
-                merge, operation=operation, result_entry=result.entry
-            )
-            receipt = CalibrationPublicationReceipt(
-                operation=operation,
-                entry=result.entry,
-                deltas=result.deltas,
-                calibration_successes=successes,
-            )
-            self._config_operations.commit_in_transaction(connection, receipt)
-            for success in successes:
-                self._calibration_cohorts.insert_success_publication_in_transaction(
-                    connection, success
-                )
-            source = command.source
-            if source.automatic_publication is not None:
-                revision = command.expected_finalization_revision
-                assert revision is not None
-                self._calibration_cohorts.complete_publication_in_transaction(
-                    connection,
-                    cohort_id=source.cohort_id,
-                    policy=source.automatic_publication,
-                    expected_revision=revision,
-                    operation_id=operation.operation_id,
-                    at=operation.recorded_at,
-                )
-            self._calibration_cohorts.supersede_working_point_in_transaction(
-                connection, entry=result.entry
-            )
-            return receipt
 
     def _publish_revision(
         self,
@@ -987,269 +833,6 @@ class ConfigService:
                 )
                 self._config_operations.commit_in_transaction(connection, receipt)
             return receipt
-
-    def _prepare_calibration_merge(
-        self,
-        connection: sqlite3.Connection,
-        command: CalibrationPublicationCommand,
-    ) -> _PreparedCalibrationMerge:
-        """Resolve every immutable proof before publishing any logical state."""
-
-        source = command.source
-
-        try:
-            cohort = self._calibration_cohorts.read_in_transaction(
-                connection,
-                source.cohort_id,
-            )
-            members = self._calibration_cohorts.list_members_in_transaction(
-                connection,
-                source.cohort_id,
-            )
-        except CalibrationCohortNotFound as error:
-            raise BackendConflict(
-                "calibration merge must identify an exact durable cohort"
-            ) from error
-        base = cohort.spec.config_source
-        if (
-            cohort.spec_hash != source.spec_hash
-            or cohort.spec.automatic_publication != source.automatic_publication
-            or (
-                source.automatic_publication is not None
-                and source.automatic_publication.composition_policy
-                != source.composition_policy_ref
-            )
-            or base != source.base
-        ):
-            raise BackendConflict(
-                "calibration merge cohort or base config does not match its source"
-            )
-        if source.automatic_publication is not None:
-            expected_revision = command.expected_finalization_revision
-            assert expected_revision is not None
-            try:
-                finalization = (
-                    self._calibration_cohorts.read_finalization_in_transaction(
-                        connection,
-                        source.cohort_id,
-                    )
-                )
-            except CalibrationCohortNotFound as error:
-                raise BackendConflict(
-                    "automatic calibration publication state was not found"
-                ) from error
-            if (
-                finalization.policy != source.automatic_publication
-                or finalization.base_config_source != base
-                or finalization.state != "ready"
-                or finalization.revision != expected_revision
-                or finalization.available_at is None
-                or finalization.available_at > datetime.now(UTC)
-            ):
-                raise BackendConflict(
-                    "automatic calibration publication is not eligible"
-                )
-
-        contributions = {
-            contribution.member_id: contribution
-            for contribution in source.contributions
-        }
-        if set(contributions) != {member.spec.member_id for member in members}:
-            raise BackendConflict(
-                "calibration merge contributions must cover every cohort member"
-            )
-
-        proofs: list[_CalibrationMergeMemberProof] = []
-        resolved: list[ResolvedCalibrationCohortMergeContribution] = []
-        for member in members:
-            contribution = contributions[member.spec.member_id]
-            evidence_ref = contribution.proof.evidence_step
-            if (
-                evidence_ref.procedure_run_id != member.procedure_run_id
-                or member.spec.definition.success_policy != "published_result"
-            ):
-                raise BackendConflict(
-                    "calibration merge contribution does not match its cohort member"
-                )
-            try:
-                parent = self._automation.read_run_in_transaction(
-                    connection,
-                    member.procedure_run_id,
-                )
-                evidence_step = self._automation.read_step_attempt_in_transaction(
-                    connection,
-                    evidence_ref.procedure_run_id,
-                    evidence_ref.step_key,
-                    evidence_ref.attempt,
-                )
-            except AutomationNotFound as error:
-                raise BackendConflict(
-                    "calibration merge contribution step proof was not found"
-                ) from error
-            if (
-                parent.state != "closed"
-                or parent.closure is None
-                or parent.closure.status != "succeeded"
-                or parent.request_key != member.request_key
-                or parent.definition != member.spec.procedure
-                or parent.intent != member.spec.intent
-                or parent.samples != cohort.spec.config_source.scope.sample_selectors()
-            ):
-                raise BackendConflict(
-                    "calibration merge member procedure must be closed succeeded"
-                )
-            _, evidence_step_run_ids = _validate_calibration_evidence_step(
-                evidence_step,
-                evidence_ref,
-                contribution.proof.decision,
-            )
-            analysis_run_ids = self._analyses.calibration_merge_verification_run_ids(
-                contribution.proof.decision
-            )
-            if set(analysis_run_ids) != set(evidence_step_run_ids):
-                raise BackendConflict(
-                    "calibration merge evidence step and project analysis inputs "
-                    "do not match"
-                )
-            try:
-                evidence_runs = (
-                    self._runs.read_snapshot_in_transaction(
-                        connection,
-                        analysis_run_ids[0],
-                    ),
-                    self._runs.read_snapshot_in_transaction(
-                        connection,
-                        analysis_run_ids[1],
-                    ),
-                )
-                baseline_run, candidate_run = _resolve_calibration_evidence_runs(
-                    evidence_runs,
-                    base,
-                )
-                candidate_source = candidate_run.config_source
-                assert isinstance(
-                    candidate_source,
-                    AnalysisCandidateRunConfigSource,
-                )
-                proposal = load_parameter_change_proposal(
-                    run_id=baseline_run.run_id,
-                    selector=candidate_source.proposal_id,
-                    services=self._services,
-                )
-            except NotFound as error:
-                raise BackendConflict(
-                    "calibration merge run or proposal proof was not found"
-                ) from error
-            if (
-                baseline_run.outcome is None
-                or baseline_run.outcome.result != "succeeded"
-                or candidate_run.outcome is None
-                or candidate_run.outcome.result != "succeeded"
-                or candidate_source.source_run_id != baseline_run.run_id
-                or candidate_source.base_config_content_hash != base.content_hash
-                or proposal.id != candidate_source.proposal_id
-                or proposal.source_run_id != baseline_run.run_id
-                or proposal.analysis_record_id != candidate_source.analysis_record_id
-                or proposal.base_config_content_hash != base.content_hash
-            ):
-                raise BackendConflict(
-                    "calibration merge proposal does not match its exact baseline"
-                )
-            self._analyses.validate_calibration_merge_verification(
-                contribution.proof.decision,
-                source_run_id=baseline_run.run_id,
-                fit_analysis_record_id=candidate_source.analysis_record_id,
-                proposal_id=proposal.id,
-                candidate_run_id=candidate_run.run_id,
-                base_config_content_hash=base.content_hash,
-            )
-            resolved_contribution = ResolvedCalibrationCohortMergeContribution(
-                member_id=member.spec.member_id,
-                proof=ResolvedVerifiedParameterProposalProofV1(
-                    evidence_step=evidence_ref,
-                    baseline_run_id=baseline_run.run_id,
-                    fit_analysis_record_id=candidate_source.analysis_record_id,
-                    proposal_id=proposal.id,
-                    candidate_run_id=candidate_run.run_id,
-                    decision=contribution.proof.decision,
-                ),
-                result_input_fingerprint=contribution.result_input_fingerprint,
-            )
-            approval = prepare_parameter_change_approval(
-                run_id=baseline_run.run_id,
-                selector=proposal.id,
-                services=self._services,
-                actor=command.actor,
-                note=command.note,
-            )
-            resolved.append(resolved_contribution)
-            proofs.append(
-                _CalibrationMergeMemberProof(
-                    member=member,
-                    contribution=contribution,
-                    resolved=resolved_contribution,
-                    succeeded_at=parent.closure.closed_at,
-                    approval=approval,
-                )
-            )
-
-        return _PreparedCalibrationMerge(
-            revision_source=(
-                config_registry_service.CalibrationCohortMergeRevisionSource(
-                    cohort_id=source.cohort_id,
-                    spec_hash=source.spec_hash,
-                    automatic_publication_policy_id=(
-                        None
-                        if source.automatic_publication is None
-                        else source.automatic_publication.id
-                    ),
-                    automatic_publication_policy_version=(
-                        None
-                        if source.automatic_publication is None
-                        else source.automatic_publication.version
-                    ),
-                    automatic_publication_policy_fingerprint=(
-                        None
-                        if source.automatic_publication is None
-                        else source.automatic_publication.fingerprint
-                    ),
-                    composition_policy_ref=source.composition_policy_ref,
-                    merge_policy=source.merge_policy,
-                    base=source.base,
-                    candidate_id=source.candidate_id,
-                    contributions=tuple(resolved),
-                    expected_result_content_hash=(source.expected_result_content_hash),
-                )
-            ),
-            base_config_source=base,
-            members=tuple(proofs),
-        )
-
-    def _publish_calibration_merge_approvals(
-        self,
-        connection: sqlite3.Connection,
-        merge: _PreparedCalibrationMerge,
-        *,
-        actor: str,
-    ) -> None:
-        for proof in merge.members:
-            publication = proof.approval.publication
-            if publication is None:
-                continue
-            prepared = self._runs.prepare_content_publication(publication)
-            self._runs.publish_prepared_content_in_transaction(connection, prepared)
-            self._control.append_event_in_transaction(
-                connection,
-                DurableEventInput(
-                    run_id=proof.resolved.proof.baseline_run_id,
-                    kind="parameter_proposal_approved",
-                    payload={
-                        "proposal_id": proof.resolved.proof.proposal_id,
-                        "actor": actor,
-                    },
-                    occurred_at=proof.approval.approval.approved_at,
-                ),
-            )
 
     def preview_config_draft(
         self,
@@ -1396,7 +979,6 @@ class ConfigService:
         except NotFound as error:
             raise BackendNotFound(str(error)) from error
         except (
-            CalibrationCohortConflict,
             CheckFailed,
             Conflict,
             DataIntegrityError,
@@ -1438,122 +1020,3 @@ def _config_revision(
         actor=command.actor,
         note=command.note,
     )
-
-
-def _validate_calibration_evidence_step(
-    attempt: ProcedureStepAttempt,
-    reference: ConfigCompositionEvidenceStepRef,
-    decision: ProjectAnalysisDecisionReference,
-) -> tuple[AnalysisPublicationOutputRef, tuple[str, str]]:
-    output = attempt.output
-    if (
-        attempt.procedure_run_id != reference.procedure_run_id
-        or attempt.step_key != reference.step_key
-        or attempt.attempt != reference.attempt
-        or attempt.state != "succeeded"
-        or output is None
-    ):
-        raise BackendConflict(
-            "calibration merge contribution requires a successful evidence step"
-        )
-    if (
-        attempt.operation != "analysis"
-        or not isinstance(output, AnalysisPublicationOutputRef)
-        or output.subject != ProjectAnalysisSubject()
-        or output.analysis_record_id != decision.analysis_record_id
-    ):
-        raise BackendConflict(
-            "calibration merge evidence step must publish its exact project decision"
-        )
-    run_ids = tuple(
-        item.run_id for item in attempt.inputs if isinstance(item, RunOutputRef)
-    )
-    if len(attempt.inputs) != 2 or len(run_ids) != 2 or len(set(run_ids)) != 2:
-        raise BackendConflict(
-            "calibration merge evidence step must reference two distinct runs"
-        )
-    return output, run_ids
-
-
-def _resolve_calibration_evidence_runs(
-    runs: tuple[RunSnapshot, RunSnapshot],
-    base: CalibrationConfigSourceRef,
-) -> tuple[RunSnapshot, RunSnapshot]:
-    baseline_runs = tuple(
-        run
-        for run in runs
-        if isinstance(run.config_source, ContextRunConfigSource)
-        and _matches_calibration_base(run.config_source, base)
-    )
-    candidate_runs = tuple(
-        run
-        for run in runs
-        if isinstance(run.config_source, AnalysisCandidateRunConfigSource)
-    )
-    if len(baseline_runs) != 1 or len(candidate_runs) != 1:
-        raise BackendConflict(
-            "calibration merge verification must uniquely identify its exact "
-            "baseline and candidate runs"
-        )
-    assert isinstance(base.scope, WorkingPointCalibrationScope)
-    baseline, candidate = baseline_runs[0], candidate_runs[0]
-    if (
-        baseline.samples != (base.scope.sample,)
-        or candidate.samples != baseline.samples
-    ):
-        raise BackendConflict(
-            "calibration evidence differs from its exact working-point sample"
-        )
-    return baseline, candidate
-
-
-def _matches_calibration_base(
-    source: ContextRunConfigSource, base: CalibrationConfigSourceRef
-) -> bool:
-    return (
-        source.context == base.context_ref
-        and source.content_hash == base.content_hash
-        and isinstance(base.scope, WorkingPointCalibrationScope)
-        and source.sample == base.scope.sample
-        and not source.overrides
-    )
-
-
-def _calibration_successes(
-    merge: _PreparedCalibrationMerge,
-    *,
-    operation: CalibrationPublicationOperation,
-    result_entry: ConfigRegistryEntry,
-) -> tuple[CalibrationSuccessRef, ...]:
-    result_source = CalibrationConfigSourceRef(
-        entry_id=result_entry.id,
-        config_ref=result_entry.config_ref,
-        content_hash=result_entry.content_hash,
-        scope=merge.base_config_source.scope,
-    )
-    successes: list[CalibrationSuccessRef] = []
-    for proof in merge.members:
-        attempt = proof.member.attempt_ref
-        publication = CalibrationSuccessPublication(
-            operation_id=operation.operation_id,
-            source_intent_hash=operation.source_intent_hash,
-            result_input_fingerprint=(proof.contribution.result_input_fingerprint),
-            result_freshness_fingerprint=calibration_freshness_fingerprint(
-                definition=attempt.definition,
-                target=attempt.target,
-                procedure=attempt.procedure,
-                input_fingerprint=proof.contribution.result_input_fingerprint,
-                dependencies=attempt.dependencies,
-            ),
-            result_config_source=result_source,
-            published_at=operation.recorded_at,
-        )
-        successes.append(
-            CalibrationSuccessRef(
-                attempt=attempt,
-                base_config_source=merge.base_config_source,
-                succeeded_at=proof.succeeded_at,
-                publication=publication,
-            )
-        )
-    return tuple(successes)

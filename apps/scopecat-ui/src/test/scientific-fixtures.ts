@@ -6,7 +6,7 @@ export function reviewedFixture(
   return {
     config_source,
     binding: {
-      codec: "scopecat.scientific-binding.v2",
+      codec: "scopecat.scientific-binding.v3",
       config_content_hash: config_source.content_hash,
       setup_content_hash: `sha256:${"e".repeat(64)}`,
       subject:

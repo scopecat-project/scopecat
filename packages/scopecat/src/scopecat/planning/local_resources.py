@@ -11,6 +11,7 @@ from scopecat.compiler.bound_facts import BoundProgramFacts
 from scopecat.compiler.diagnostics import compiler_problem
 from scopecat.compiler.point_domain import MaterializedPoint
 from scopecat.compiler.relations.context import EvalContext, ParameterRelationData
+from scopecat.compiler.relations.parameter_reads import ParameterReadRecorder
 from scopecat.kernel.entity import EntityRef
 from scopecat.kernel.interface_identity import InterfaceId
 from scopecat.kernel.problems import Problem, model_location
@@ -49,6 +50,8 @@ def select_coverage_resources(
     points: Sequence[MaterializedPoint],
     params_by_ordinal: Mapping[int, ParameterRelationData],
     problems: list[Problem],
+    *,
+    parameter_reads: Mapping[int, ParameterReadRecorder],
 ) -> dict[int, Mapping[LogicalResourcePortId, ResourceEntitySelection]]:
     """Evaluate point-local entities over the target's static port manifests."""
 
@@ -59,6 +62,7 @@ def select_coverage_resources(
             point,
             params_by_ordinal[point.logical_ordinal],
             problems,
+            parameter_reads[point.logical_ordinal],
         )
         for point in points
     }
@@ -227,11 +231,14 @@ def _select_point_resources(
     point: MaterializedPoint,
     params: ParameterRelationData,
     problems: list[Problem],
+    parameter_reads: ParameterReadRecorder,
 ) -> Mapping[LogicalResourcePortId, ResourceEntitySelection]:
     return select_resources(
         program,
         resource_ports,
-        ctx=EvalContext(params=params, point_row=point.row),
+        ctx=EvalContext(
+            params=params, point_row=point.row, parameter_reads=parameter_reads
+        ),
         context=f"point {point.logical_ordinal}",
         problems=problems,
     )

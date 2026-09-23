@@ -16,6 +16,7 @@ from scopecat.records.execution import (
     DomainJobCheckpoint,
     RecoveryGroupCompletion,
 )
+from scopecat.records.parameter_read import HostParameterEvidence
 from scopecat.records.run import RunSnapshot
 from scopecat.runs.repository import TerminalRunCommit
 from scopecat.sdk.domain.invocation import DomainInvocationIntent
@@ -127,6 +128,9 @@ class ExecutionSession:
     measurements: MeasurementDatasetWriter
     instruments: RunInstrumentHost
     domain_job_transitions: RunDomainJobTransitionWriter | None = None
+    publish_host_parameter_evidence: Callable[[HostParameterEvidence], None] | None = (
+        None
+    )
     coverage: RunCoverageWriter | None = None
     recovery_groups: RunRecoveryGroupWriter | None = None
     domain_proposals: RunDomainProposalWriter | None = None

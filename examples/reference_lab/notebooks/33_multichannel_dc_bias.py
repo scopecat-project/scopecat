@@ -6,7 +6,7 @@ import numpy as np
 import scopecat as sc
 
 from reference_lab.configuration import EXAMPLE_ROOT
-from reference_lab.notebook import show
+from reference_lab.notebook import gallery_inputs, show
 from reference_lab.workflows.multichannel_bias import (
     MULTICHANNEL_DC_BIAS,
     OPERATE_PROFILE,
@@ -14,7 +14,8 @@ from reference_lab.workflows.multichannel_bias import (
 
 # %%
 with sc.open_project(EXAMPLE_ROOT).connect(operator="gallery") as lab:
-    config = lab.resolve_config()
+    inputs = gallery_inputs(lab)
+    config = inputs.config
     flux_routes = [
         (route.instrument_id, endpoint)
         for route in config.routing.routes
@@ -22,7 +23,7 @@ with sc.open_project(EXAMPLE_ROOT).connect(operator="gallery") as lab:
         if endpoint.interface_id == "scopecat.dc_source/v3"
         and endpoint.entity_id is not None
     ]
-    run = lab.run(MULTICHANNEL_DC_BIAS)
+    run = lab.run(MULTICHANNEL_DC_BIAS, config=inputs)
     data = run.measurements()
     physical_bias_mv = {
         entity.id: round(data[record].require_quantities("mV")[0].value, 6)

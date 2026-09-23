@@ -7,13 +7,14 @@ import scopecat as sc
 from scopecat_quantum.pulses import PulseValidationError
 
 from reference_lab.configuration import EXAMPLE_ROOT
-from reference_lab.notebook import show
+from reference_lab.notebook import gallery_inputs, show
 from reference_lab.workflows.ramsey_experiments import conflicting_drive
 
 # %%
 try:
     with sc.open_project(EXAMPLE_ROOT).connect(operator="gallery") as lab:
-        lab.preview(conflicting_drive.build())
+        inputs = gallery_inputs(lab)
+        lab.preview(conflicting_drive.build(), config=inputs)
 except PulseValidationError as error:
     conflict_codes = [issue.code for issue in error.issues]
     conflict_messages = [issue.message for issue in error.issues]

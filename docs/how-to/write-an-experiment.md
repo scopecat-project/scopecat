@@ -35,6 +35,10 @@ required: omit the default and supply a value in the launch form or in
 runtime inputs that are not owned by a control. Experiments without numeric
 controls need no `ControlSet`.
 
+Named scalar aliases such as `type Target = Literal["q0", "q1"]` work in
+these inputs too: use `target: Target` to share a readable contract while keeping
+the same choices in the launch form.
+
 For example, this declaration appears in the catalog before a qubit is selected:
 
 ```python

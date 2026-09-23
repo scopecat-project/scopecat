@@ -7,19 +7,18 @@ from typing import TYPE_CHECKING
 
 from scopecat.application import LabBootstrap
 
-from reference_lab.configuration import initial_parameters, initial_setup
+from reference_lab.configuration import initial_setup
 
 if TYPE_CHECKING:
     from scopecat.application import LabApplication
 
 
 def create_bootstrap(project_root: Path) -> LabBootstrap:
-    """Expose only config construction to the daemon process."""
+    """Initialize equipment authority; callers prepare parameters explicitly."""
 
     config_dir = project_root / "config"
     return LabBootstrap(
         setup=lambda: initial_setup(config_dir),
-        parameter_defaults=initial_parameters,
     )
 
 
@@ -38,15 +37,7 @@ def create_application(_project_root: Path) -> LabApplication:
         failed_temperature_analysis,
         recovered_temperature_analysis,
     )
-    from reference_lab.workflows.drag_beta_automatic_publication import (
-        DRAG_BETA_PUBLICATION_POLICY_REGISTRY,
-    )
-    from reference_lab.workflows.drag_beta_freshness import (
-        DRAG_BETA_CALIBRATION_REGISTRY,
-    )
-    from reference_lab.workflows.drag_beta_procedure import (
-        drag_beta_verification_procedure,
-    )
+    from reference_lab.workflows.drag_branch_calibration import drag_branch_calibration
     from reference_lab.workflows.temperature_diagnostic import (
         temperature_diagnostic_procedure,
     )
@@ -68,10 +59,8 @@ def create_application(_project_root: Path) -> LabApplication:
             temperature_diagnostic_procedure,
             failed_temperature_analysis,
             recovered_temperature_analysis,
-            drag_beta_verification_procedure,
+            drag_branch_calibration,
         ),
-        calibrations=DRAG_BETA_CALIBRATION_REGISTRY,
-        calibration_publications=DRAG_BETA_PUBLICATION_POLICY_REGISTRY,
     )
 
 

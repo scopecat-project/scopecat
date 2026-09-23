@@ -116,7 +116,9 @@ def test_link_changes_only_recovery_hash_and_old_json_remains_readable():
     assert procedure_intent_hash(REF, {}, recovery=recovery) != source.intent_hash
 
 
-@pytest.mark.parametrize("operation", ["config_activation", "config_publish"])
+@pytest.mark.parametrize(
+    "operation", ["config_activation", "config_publish", "parameter_publish"]
+)
 def test_any_acceptance_attempt_is_excluded(operation: str) -> None:
     recovery, source, attempts, run = _facts()
     forbidden = attempts[1].model_copy(

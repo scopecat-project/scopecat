@@ -190,6 +190,34 @@ from `run.domain_jobs()` results (or an invocation transition from
 `run.domain_job_transitions()`). It does not load author code or re-run queries. An absent
 attachment is an explicit error, not an inferred empty dependency set.
 
+The current attachment format is `scopecat.quantum.parameter_evidence.v2`, with
+coverage explicitly limited to `recipe_keyed_query_values`. Each declarative
+lookup retains its resolved query key and selected stored value cells as a public
+`KeyedParameterRead`. Indirect lookups used to form another lookup's key are
+included in `resolution.parameter_reads`, including on a cached pulse-body hit.
+These records do not require the author's row classes to decode.
+
+```python
+from scopecat.config.parameter_reads import compare_parameter_reads
+
+changes = compare_parameter_reads(resolution.parameter_reads, effective_snapshot)
+```
+
+Supply the effective snapshot for that recipe's scope, including candidate or
+point overrides. The comparison reports missing tables, missing/ambiguous keyed
+membership and changed columns. It ignores unselected rows and unread columns;
+a newly duplicated matching key still invalidates the unique-row read. Selected
+values use exact scalar identity, so tiny numeric edits are not silently treated
+as unchanged. Key matching retains the query's quantity-comparison semantics.
+
+An empty difference list only describes the recorded reads. It is not complete
+measurement dependency coverage or permission to reuse calibration: schema,
+implementation/context changes, arbitrary Python reads, runtime/analysis reads
+and physical interactions remain separate. Filtered selections require a future
+query-membership contract; they must not be represented as a list of earlier
+returned cells. The retired v1 development attachment is not given a fallback
+reader or migration; historical stores remain untouched.
+
 Retention follows the target's `DomainTransitionPolicy`: use `write_ahead` to retain the
 invocation before effects. `batched` admits a loss window; `abnormal_only` omits ordinary
 synchronous successes and therefore cannot promise complete parameter evidence. A saved
@@ -198,6 +226,32 @@ invocation proves the compiled intent, not successful device execution or measur
 The new private execution adapter must still attach these entries and verify that its
 device preparation, pulse inputs and measurement records use the same effective point
 parameters. The ledger integration alone does not establish that physical invariant.
+
+Core domain-input evidence is separate from those target-internal recipe entries.
+Normal planning automatically records program/compiler input expression reads for
+each logical point. `DomainPreparationBuilder.build(...)` attaches this evidence
+under `scopecat.domain.parameter_reads` before computing invocation identity; the
+adapter does not assemble or copy it. Exact point/input coverage is checked and
+an existing attachment cannot be overwritten. The framework retains only the
+current selected batch, including reordered points and sub-batches.
+
+Use `scopecat.sdk.domain.parameter_evidence.read_domain_input_reads(intent)` after
+reopening a run's invocation record. The attachment format is
+`scopecat.domain-input-reads.v2`; its coverage is `domain_input_materialization`.
+Its separate `binding` entries retain frontend and specialization expression
+reads before constant folding. These describe whole-program reads against the
+base configuration; do not compare them against a point override or attribute
+all of them to a single domain input. The same binding evidence accompanies
+sub-batches without being relabeled as point-local evidence.
+Missing binding phases remain explicit, and `binding_structure_not_captured`
+records the still-uncovered schema/topology/overlay-membership boundary.
+Per-input evidence also marks whole
+table selection or unresolved coverage. Missing evidence from a manually built
+request or a low-level invocation is not an empty dependency set. The same
+write-ahead/batched/abnormal-only retention limits above apply, and invocation
+evidence still does not assert successful hardware execution.
+The v1 development attachment has no fallback reader or migration; historical
+stores remain untouched.
 
 ## Circuit transformation contract
 

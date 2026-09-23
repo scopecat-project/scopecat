@@ -126,7 +126,8 @@ def test_preview_freezes_registered_target_and_hash_rejects_binding_swap() -> No
     frozen = request.model_copy(update={"reviewed": resolved.reviewed})
     binding = resolved.reviewed.binding
     assert binding.subject.kind == "registered_target"
-    assert binding.subject.projection[0].target_entity.member_id == "A"
+    assert binding.target_binding is not None
+    assert binding.target_binding.entities[0].target_entity.member_id == "A"
     assert binding.samples[0].role == "subject"
     state["head"] = cast("SampleRevision", state["head"]).model_copy(
         update={"revision": 2}

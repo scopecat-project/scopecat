@@ -8,6 +8,7 @@ from scopecat_testkit.workflow_fixtures import load_config
 from scopecat.config.scientific_binding import bind_scientific_evidence
 from scopecat.config.target_projection import (
     project_single_member_target,
+    project_target,
     validate_target_members,
 )
 from scopecat.kernel.entity import EntityRef
@@ -73,6 +74,112 @@ def _target(content: MeasurementTarget) -> TargetRevision:
         actor="operator",
         recorded_at=datetime.now(UTC),
     )
+
+
+@pytest.mark.parametrize(
+    "change", [None, "collision", "missing", "edge_collision", "wrong_link", "extra"]
+)
+def test_explicit_connected_projection_keeps_member_addresses(
+    change: str | None,
+) -> None:
+    a, b = _sample(), _sample("chip-b")
+    target = _target(
+        MeasurementTarget(
+            members=(_member(b, "B"), _member(a)),
+            connections=(
+                TargetConnection(
+                    id="bus",
+                    kind="link",
+                    endpoints=(
+                        TargetEntity(member_id="A", entity_id="q1"),
+                        TargetEntity(member_id="B", entity_id="q0"),
+                    ),
+                ),
+            ),
+        )
+    )
+    entities = {
+        "A": {"q0": "left0", "q1": "left1"},
+        "B": {"q0": "right0", "q1": "right1"},
+    }
+    connections = {"A": {"edge": "left-edge"}, "B": {"edge": "right-edge"}}
+    interconnections = {"bus": "bus-edge"}
+    runtime = Topology(
+        entities=[
+            EntityRef(id=name, kind="qubit")
+            for name in ("left0", "left1", "right0", "right1")
+        ],
+        connections=[
+            TopologyConnection(
+                id="left-edge", kind="coupling", endpoints=("left0", "left1")
+            ),
+            TopologyConnection(
+                id="right-edge", kind="coupling", endpoints=("right0", "right1")
+            ),
+            TopologyConnection(
+                id="bus-edge", kind="link", endpoints=("right0", "left1")
+            ),
+        ],
+    )
+    if change == "collision":
+        entities["B"]["q0"] = "left0"
+    elif change == "missing":
+        del entities["B"]["q0"]
+    elif change == "edge_collision":
+        interconnections["bus"] = "left-edge"
+    elif change == "wrong_link":
+        runtime.connections[-1] = runtime.connections[-1].model_copy(
+            update={"endpoints": ("left0", "right0")}
+        )
+    elif change == "extra":
+        runtime.entities.append(EntityRef(id="spectator", kind="qubit"))
+
+    def project():
+        return project_target(
+            target,
+            catalog_id="local:catalog",
+            samples={(a.sample_id, 1): a, (b.sample_id, 1): b},
+            execution_topology=runtime,
+            entities=entities,
+            connections=connections,
+            interconnections=interconnections,
+        )
+
+    if change is not None:
+        errors = {
+            "collision": "distinct runtime IDs",
+            "missing": "cover its exact topology",
+            "edge_collision": "distinct runtime IDs",
+            "wrong_link": "execution topology does not match",
+            "extra": "execution topology does not match",
+        }
+        with pytest.raises(ValueError, match=errors[change]):
+            project()
+        return
+    result = project()
+    assert result.target == target.ref
+    assert tuple(member.id for member in result.members) == ("A", "B")
+    assert [
+        (
+            row.target_entity.member_id,
+            row.target_entity.entity_id,
+            row.runtime_entity_id,
+        )
+        for row in result.entities
+    ] == [
+        ("A", "q0", "left0"),
+        ("A", "q1", "left1"),
+        ("B", "q0", "right0"),
+        ("B", "q1", "right1"),
+    ]
+    assert [
+        (row.member_id, row.connection_id, row.runtime_connection_id)
+        for row in result.connections
+    ] == [
+        ("A", "edge", "left-edge"),
+        ("B", "edge", "right-edge"),
+        (None, "bus", "bus-edge"),
+    ]
 
 
 def test_projection_preserves_exact_reference_and_member_to_subject_mapping() -> None:
@@ -171,7 +278,9 @@ def test_registered_assemblies_validate_but_have_no_single_member_projection() -
         )
 
 
-@pytest.mark.parametrize("change", ["entity_kind", "connection", "subset"])
+@pytest.mark.parametrize(
+    "change", ["entity_kind", "connection", "connection_entity", "subset"]
+)
 def test_projection_rejects_changed_execution_topology(change: str) -> None:
     sample = _sample()
     target = _target(MeasurementTarget(members=(_member(sample),)))
@@ -181,6 +290,10 @@ def test_projection_rejects_changed_execution_topology(change: str) -> None:
         runtime.entities[0] = EntityRef(id="q1", kind="resonator")
     elif change == "connection":
         runtime.connections = []
+    elif change == "connection_entity":
+        runtime.connections[0] = runtime.connections[0].model_copy(
+            update={"entity_id": "q0"}
+        )
     else:
         runtime = Topology(entities=[EntityRef(id="q0", kind="qubit")])
     with pytest.raises(ValueError, match="execution topology does not match"):
@@ -234,7 +347,12 @@ def test_registered_binding_uses_projection_and_rejects_conflicting_sample() -> 
     )
     assert binding.subject.kind == "registered_target"
     assert binding.subject.ref == target.ref
-    assert binding.subject.projection[0].target_entity.member_id == "A"
+    assert binding.target_binding is not None
+    assert binding.target_binding.entities[0].target_entity.member_id == "A"
+    assert binding.target_binding.target == target.ref
+    assert binding.target_binding.setup_content_hash == binding.setup_content_hash
+    assert binding.target_binding.connections[0].runtime_connection_id == "edge"
+    assert "projection" not in binding.subject.model_dump()
     assert binding.sample_selectors()[0].role == "subject"
     with pytest.raises(ValueError, match="sample evidence"):
         bind_scientific_evidence(

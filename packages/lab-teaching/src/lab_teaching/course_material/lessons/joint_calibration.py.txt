@@ -1,0 +1,200 @@
+"""两个合成通道的联合校准。故意让耦合项只在两行参数同时改变时出现。"""
+
+from dataclasses import dataclass
+from typing import Literal
+
+from my_experiment.calibration import (
+    DECISION,
+    CalibrationIntent,
+    Sensor,
+    fit_zero,
+    setting,
+    verify_zero,
+)
+from pydantic import Field, field_validator
+
+import scopecat as sc
+from scopecat.api.procedures import LabProcedureContext
+from scopecat.api.run import RunHandle
+from scopecat.automation import AnalysisPublicationOutputRef, RunOutputRef
+
+type Target = Literal["q0", "q1"]
+
+
+@sc.compute
+def coupled_residual(
+    own: sc.Quantity,
+    peer: sc.Quantity,
+    coupling: float,
+    disturbance: float,
+) -> float:
+    a, b = float(own.to("arb").value), float(peer.to("arb").value)
+    return a - 0.24 + coupling * (a - 0.1) * (b - 0.1) + disturbance
+
+
+@sc.experiment(id="teaching.coupled-zero")
+def measure_coupled(
+    _experiment: sc.ExperimentContext,
+    target: Target,
+    coupling: float,
+    disturbance: float = 0.0,
+) -> dict[str, object]:
+    own = sc.parameter_ref(Sensor.offset, target)
+    peer = sc.parameter_ref(Sensor.offset, "q1" if target == "q0" else "q0")
+    return {
+        "setting": setting(own),
+        "residual": coupled_residual(own, peer, coupling, disturbance),
+    }
+
+
+class JointIntent(CalibrationIntent):
+    targets: tuple[Target, ...] = Field(
+        default=("q0", "q1"), min_length=2, max_length=2
+    )
+    coupling: float = Field(default=0.0, ge=0)
+
+    @field_validator("targets")
+    @classmethod
+    def unique_targets(cls, value: tuple[Target, ...]) -> tuple[Target, ...]:
+        if len(set(value)) != len(value):
+            raise ValueError("每个目标只能请求一次")
+        return tuple(sorted(value))
+
+
+@dataclass(frozen=True)
+class JointDecision:
+    accepted: bool
+    requested: tuple[str, ...]
+    checked: tuple[str, ...]
+    missing: tuple[str, ...]
+    rejected: tuple[str, ...]
+
+
+JOINT_DECISION = sc.AnalysisFactSchema("teaching.joint-zero-decision.v1", JointDecision)
+
+
+@sc.analysis_step(id="teaching.verify-joint-zero")
+def verify_joint(
+    context: sc.AnalysisContext,
+    *,
+    targets: tuple[Target, ...],
+    baselines: dict[Target, RunHandle],
+    checks: dict[Target, RunHandle],
+    tolerance: float,
+) -> sc.Analysis:
+    if not targets or len(set(targets)) != len(targets):
+        raise ValueError("验证目标必须非空且不重复")
+    if (set(baselines) | set(checks)) - set(targets):
+        raise ValueError("验证输入包含未请求的目标")
+    residuals: dict[str, float] = {}
+    checked: list[str] = []
+    rejected: list[str] = []
+    for target in targets:
+        before = (
+            context.measurements(baselines[target], id=f"baseline-{target}")
+            if target in baselines
+            else None
+        )
+        after = (
+            context.measurements(checks[target], id=f"check-{target}")
+            if target in checks
+            else None
+        )
+        if before is None or after is None:
+            continue
+        old_error = abs(float(before["residual"].require_values()[0]))
+        new_error = abs(float(after["residual"].require_values()[0]))
+        checked.append(target)
+        if new_error > tolerance or new_error >= old_error:
+            rejected.append(target)
+        residuals[target] = new_error
+    missing = tuple(target for target in targets if target not in checked)
+    result = context.result("联合设置下的完整验证")
+    for target, error in residuals.items():
+        result = result.fact(f"residual-{target}", error)
+    return result.fact(
+        "decision",
+        JointDecision(
+            not missing and not rejected,
+            targets,
+            tuple(checked),
+            missing,
+            tuple(rejected),
+        ),
+        schema=JOINT_DECISION,
+    )
+
+
+@sc.procedure(id="teaching.calibrate-joint-zero", version="1", intent=JointIntent)
+def calibrate_joint(ctx: LabProcedureContext, intent: JointIntent) -> None:
+    baselines: dict[Target, RunOutputRef] = {}
+    fits: list[tuple[AnalysisPublicationOutputRef, str]] = []
+    for target in intent.targets:
+        baseline = ctx.run(
+            f"baseline-{target}",
+            measure_coupled.build(target, intent.coupling),
+            config=intent.initial.config,
+            config_source=intent.initial.config_source,
+        )
+        baselines[target] = baseline
+        fit = ctx.analyze_run(f"fit-{target}", baseline, fit_zero(target=target))
+        fits.append((fit, "zero-offset"))
+        candidate = ctx.published_analysis(fit).candidate_config("zero-offset")
+        check = ctx.run(
+            f"individual-{target}",
+            measure_coupled.build(target, intent.coupling, intent.disturbance),
+            config=candidate,
+            inputs=(fit,),
+        )
+        decision = ctx.analyze_project(
+            f"individual-decision-{target}",
+            verify_zero(
+                baseline=ctx.run_handle(baseline),
+                candidate=ctx.run_handle(check),
+                tolerance=intent.tolerance,
+            ),
+            inputs=(baseline, check),
+        )
+        if not ctx.published_analysis(decision).fact_as("decision", DECISION).accepted:
+            raise ValueError(f"{target} 单独验证失败，停止本次请求")
+
+    combined = ctx.combine_parameter_candidates(
+        "compose", tuple(fits), name="joint-zero"
+    )
+    candidate = ctx.published_analysis(combined).candidate_config("joint-zero")
+    checks: dict[Target, RunOutputRef] = {}
+    for target in intent.targets:
+        checks[target] = ctx.run(
+            f"joint-{target}",
+            measure_coupled.build(target, intent.coupling, intent.disturbance),
+            config=candidate,
+            inputs=(combined,),
+        )
+    verification = ctx.analyze_project(
+        "verify-joint",
+        verify_joint(
+            targets=intent.targets,
+            baselines={
+                target: ctx.run_handle(run) for target, run in baselines.items()
+            },
+            checks={target: ctx.run_handle(run) for target, run in checks.items()},
+            tolerance=intent.tolerance,
+        ),
+        inputs=(*baselines.values(), *checks.values()),
+    )
+    if (
+        not ctx.published_analysis(verification)
+        .fact_as("decision", JOINT_DECISION)
+        .accepted
+    ):
+        raise ValueError("联合验证失败；不发布，也不偷偷发布其中一个目标")
+    ctx.publish_parameter_candidate(
+        "publish",
+        combined,
+        proposal_id="joint-zero",
+        verification=verification,
+        decision_output_id="decision",
+        branch=intent.destination,
+        name=intent.revision_name,
+        actor="learner",
+    )

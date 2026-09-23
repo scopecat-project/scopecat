@@ -26,7 +26,7 @@ export function AnalysisPublicationView({
           <ul className="m-0 grid list-none gap-2 p-0">
             {analysis.inputs.map((input) => {
               const runId =
-                input.kind === "measurement_dataset"
+                input.kind === "measurement_dataset" || input.kind === "configuration_snapshot"
                   ? input.run_id
                   : input.kind !== "interpretation" && input.source.subject.kind === "run"
                     ? input.source.subject.run_id
@@ -67,7 +67,8 @@ export function AnalysisPublicationView({
                     <code title={input.source.response_hash}>
                       {input.source.procedure_run_id}:{input.source.step_key}
                     </code>
-                  ) : input.kind !== "measurement_dataset" ? (
+                  ) : input.kind !== "measurement_dataset" &&
+                    input.kind !== "configuration_snapshot" ? (
                     <code
                       className="mt-1 block overflow-hidden text-ellipsis whitespace-nowrap text-text-dim"
                       title={`${input.source.analysis_record_id}:${input.source.output_id}`}

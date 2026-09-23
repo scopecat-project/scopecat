@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict
@@ -11,12 +12,34 @@ from scopecat.automation.wire import ProcedureStepAttemptPage
 from scopecat.daemon.views import RunDetail
 
 
+class ProcedureWorkerFailure(BaseModel):
+    """Last process-management failure; separate from scientific outcome."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+    kind: Literal["dispatch", "process_exit"]
+    message: str
+    observed_at: datetime
+    exit_code: int | None = None
+
+
+class ProcedureWorkerLog(BaseModel):
+    """Bounded UTF-8 rendering of one execution's recent process output."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+    available: bool
+    text: str
+    total_bytes: int
+    truncated: bool
+
+
 class ProcedureDispatchView(BaseModel):
     """Observation of existing process management, not execution authority."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
     management: Literal["unmanaged", "active", "paused"]
     worker_running: bool
+    failure: ProcedureWorkerFailure | None = None
+    log_path: str | None = None
 
 
 class ProcedureChildRunView(BaseModel):

@@ -19,6 +19,21 @@ that work: identities, scientific meaning needed to interpret an output,
 relations between outputs, content hashes, provenance, and attachment to the
 owning run, sample, or project scope.
 
+## Configuration inputs
+
+Reading `context.config` retains the source run's complete configuration snapshot
+as a `configuration_snapshot` input in the next `context.result()` publication.
+Repeated access retains one input. Saving checks the run, snapshot reference,
+codec and content hash against the retained run configuration; changing the lab's
+current parameters does not change that source. This input also appears in the
+analysis input list and follows the run through procedure and project lineage.
+
+This is whole-snapshot access evidence, not a record of individual fields read
+or a proof of complete Python dependencies. Reads through external objects,
+closures or files remain untracked. Analyses that never access `context.config`
+do not receive a fabricated configuration input. This evidence does not enable
+cross-parameter-version reuse.
+
 ## Durable output ontology
 
 Every output has a stable, analysis-local `id`. An analysis publishes five

@@ -27,6 +27,7 @@ from scopecat.compiler.bound_facts import (
 from scopecat.compiler.point_domain import (
     PointDomain,
 )
+from scopecat.compiler.relations.context import ParameterRelationData
 from scopecat.config.environment import build_config_environment
 from scopecat.execution.local.program import (
     ApplyStateOperation,
@@ -40,11 +41,18 @@ from scopecat.kernel.resource_identity import (
     LogicalResourcePortId,
     logical_resource_port_id,
 )
-from scopecat.kernel.value_types import Entity, Float, Scalar
+from scopecat.kernel.value_types import Entity, Float, Scalar, String
 from scopecat.kernel.value_types import Quantity as QuantityType
 from scopecat.measurements.products import ProductDef
-from scopecat.program.expressions import ScalarExpr, lit
+from scopecat.program.expressions import (
+    ParameterLookupUse,
+    ScalarExpr,
+    lit,
+    parameter_lookup,
+    point_col,
+)
 from scopecat.program.logical import AcquireEffect
+from scopecat.program.point_domain import point_axis_values
 from scopecat.records.config import (
     ConfigProfileSnapshot,
 )
@@ -303,6 +311,62 @@ def test_logical_state_bindings_reach_required_instrument() -> None:
         (requirement.kind, requirement.id)
         for requirement in single_plan.resource_requirements
     ] == [("instrument", "source-0")]
+
+
+def test_resource_entity_queries_retain_point_local_parameter_reads() -> None:
+    text_type = Scalar(String())
+    source = _port("source")
+    lookup = ParameterLookupUse(
+        table_id="routes",
+        key_input_types=(("site", text_type),),
+        literal_key_columns=frozenset(),
+        column_id="entity",
+        result_type=text_type,
+    )
+    program = program_fixture(
+        point_domain=PointDomain(
+            axes=(point_axis_values("site", text_type, ("left", "right")),)
+        ),
+        resource_requirements=(
+            LogicalResourceRequirement(
+                port_id=source,
+                capabilities=(InterfaceRef("test.set_level/v1"),),
+                entity_uses=(
+                    parameter_lookup(
+                        lookup, key={"site": point_col("site", text_type)}
+                    ),
+                ),
+            ),
+        ),
+        state=(
+            state_property(
+                source,
+                interface_id="test.set_level/v1",
+                property_id="level",
+                value=_number(1.0),
+            ),
+        ),
+    )
+    environment = replace(
+        build_config_environment(_split_instrument_config()),
+        parameters=ParameterRelationData(
+            tables={
+                "routes": [
+                    {"site": "left", "entity": "q0"},
+                    {"site": "right", "entity": "q1"},
+                ]
+            }
+        ),
+    )
+    plan = materialize_local_execution(bind_program_facts(program, environment))
+    assert [read.evidence.keyed[0].cells[0].value for read in plan.parameter_reads] == [
+        "q0",
+        "q1",
+    ]
+    assert [read.point_ordinal for read in plan.parameter_reads] == [0, 1]
+    for read in plan.parameter_reads:
+        assert "resource_selection_not_captured" not in read.evidence.incomplete_reasons
+        assert "resource_topology_not_captured" in read.evidence.incomplete_reasons
 
 
 def test_logical_state_does_not_broadcast_across_instruments() -> None:

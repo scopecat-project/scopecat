@@ -21,7 +21,5 @@ class LabCapabilities:
     experiment_system: str | None = None
     procedures: tuple[str, ...] = ()
     procedure_schedules: tuple[str, ...] = ()
-    calibrations: str | None = None
-    calibration_publications: str | None = None
     launch_provider: str | None = None
     comparison_provider: str | None = None

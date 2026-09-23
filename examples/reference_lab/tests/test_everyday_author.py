@@ -1,7 +1,5 @@
 """The shared author inputs pass through real admission, storage and analysis."""
 
-import os
-
 import numpy as np
 import pytest
 
@@ -16,14 +14,15 @@ from reference_lab.workflows.exploratory_signal import (
     exploratory_signal,
 )
 
-pytestmark = pytest.mark.usefixtures("reference_lab_daemon")
 
-
-def test_everyday_author_retained_inputs_and_unknown_consumer() -> None:
+def test_everyday_author_retained_inputs_and_unknown_consumer(
+    independent_lab_daemon: str,
+) -> None:
     application = create_application(EXAMPLE_ROOT)
-    endpoint = os.environ["SCOPECAT_DAEMON_URL"]
+    endpoint = independent_lab_daemon
     with application.connect(endpoint) as lab:
-        active = lab.config.active()
+        setup = lab.setup.active()
+        assert lab.config.registry().entries == ()
         inputs = everyday_author_inputs()
         with pytest.raises((ValueError, KeyError), match="drive_carrier_frequency"):
             lab.preview(exploratory_signal.build(), config=inputs.missing)
@@ -51,11 +50,13 @@ def test_everyday_author_retained_inputs_and_unknown_consumer() -> None:
         with pytest.raises(ValueError, match="No retained values"):
             flat.analyze(exploratory_mean(minimum=0.5))
         assert {item.id for item in lab.runs().items} == run_ids
-        assert lab.config.active() == active
+        assert lab.setup.active() == setup
+        assert lab.config.registry().entries == ()
     with application.connect(endpoint) as lab:
         reopened = lab.get_run(acquired.peaked)
         assert reopened.snapshot == original
         np.testing.assert_array_equal(
             reopened.measurements()["result"].require_values(), values
         )
-        assert lab.config.active() == active
+        assert lab.setup.active() == setup
+        assert lab.config.registry().entries == ()

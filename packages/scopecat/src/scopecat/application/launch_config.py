@@ -169,7 +169,10 @@ def resolve_launch_config(
     require_selection_binding(request.selection, binding)
     if retained is not None and binding != retained:
         raise ValueError("scientific evidence changed since preview")
-    if candidate_binding is not None and binding.subject != candidate_binding.subject:
+    if candidate_binding is not None and (
+        binding.subject != candidate_binding.subject
+        or binding.target_binding != candidate_binding.target_binding
+    ):
         raise ValueError("candidate requires its original exact scientific subject")
     return ResolvedLaunchScience(
         config=config,

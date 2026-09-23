@@ -45,6 +45,7 @@ from scopecat.analysis.service import (
     AnalysisOutput,
     AnalysisParameterProposalOutput,
     AnalysisTableOutput,
+    ConfigurationAnalysisInput,
     InterpretationAnalysisInput,
     MeasurementAnalysisInput,
     PublishedAnalysisOutputInput,
@@ -76,6 +77,7 @@ from scopecat.measurements.dataset import Dataset, ExperimentResultView
 from scopecat.measurements.datasets import MEASUREMENT_DATASET_CODEC
 from scopecat.records.analysis import (
     ANALYSIS_ARTIFACT_CODEC,
+    CONFIGURATION_ANALYSIS_INPUT_CODEC,
     AnalysisArtifactRecordOutput,
     AnalysisDatasetDerivation,
     AnalysisDatasetRecordOutput,
@@ -96,9 +98,10 @@ from scopecat.records.analysis import (
     analysis_record_id,
     is_analysis_rows,
 )
-from scopecat.records.config import ConfigProfileSnapshot
+from scopecat.records.config import ConfigProfileSnapshot, config_content_hash
 from scopecat.records.content import Sha256ContentHash
 from scopecat.records.parameter_change import ParameterChangeProposal
+from scopecat.runs.refs import CONFIG_PROFILE_SNAPSHOT_REF
 from scopecat.sdk.compute import (
     PYTHON_JSON_CODEC,
     compute_capture_names_internal,
@@ -707,7 +710,19 @@ class AnalysisContext:
 
     @property
     def config(self) -> ConfigProfileSnapshot:
-        return self._required_run().config
+        run = self._required_run()
+        config = run.config
+        self._retain_input(
+            ConfigurationAnalysisInput(
+                id="run-configuration",
+                run_id=run.id,
+                target=CONFIG_PROFILE_SNAPSHOT_REF,
+                content_hash=config_content_hash(config),
+                codec=CONFIGURATION_ANALYSIS_INPUT_CODEC,
+                role="configuration",
+            )
+        )
+        return config
 
     @property
     def run_id(self) -> str:

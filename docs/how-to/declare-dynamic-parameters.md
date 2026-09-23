@@ -1,12 +1,12 @@
 # Start with a dynamic parameter table
 
 An exploratory Notebook can declare a table without a Python class. Given an
-existing author session and named working context:
+existing author session and named parameter branch:
 
 ```python
 import scopecat as sc
 
-params = author.config.workspace(context="my-working-point")
+params = author.parameters.workspace("my-parameter-branch")
 drive = params.declare_table(
     "drive",
     key="qubit",

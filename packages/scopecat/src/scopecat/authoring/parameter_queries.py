@@ -30,8 +30,10 @@ from scopecat.kernel.value_validation import coerce_literal
 from scopecat.records.parameter import (
     ParameterAtomValue,
     ParameterSnapshot,
+    ScalarParameterValue,
     TableParameterValue,
 )
+from scopecat.records.parameter_read import KeyedParameterRead
 
 
 def _value(
@@ -73,14 +75,33 @@ class QueryInput:
 
 @dataclass(frozen=True, slots=True)
 class ParameterQueryResult:
-    """Resolved inputs and their selected scientific source (transient evidence)."""
+    """Resolved inputs and retained query-value evidence."""
 
     snapshot_id: str
     table: str
     key: QueryMapping[ParameterAtomValue]
     fields: QueryMapping[str]
     values: QueryMapping[ParameterAtomValue]
+    read: KeyedParameterRead
     key_sources: tuple[ParameterQueryResult, ...] = ()
+
+
+def query_parameter_reads(
+    sources: Mapping[str, tuple[ParameterQueryResult, ...]],
+) -> tuple[KeyedParameterRead, ...]:
+    """Include indirect keys; shared expressions need only one retained read."""
+    reads: list[KeyedParameterRead] = []
+
+    def visit(source: ParameterQueryResult) -> None:
+        for parent in source.key_sources:
+            visit(parent)
+        if source.read not in reads:
+            reads.append(source.read)
+
+    for group in sources.values():
+        for source in group:
+            visit(source)
+    return tuple(reads)
 
 
 @dataclass(slots=True)
@@ -172,6 +193,17 @@ class ParameterProjection:
             FrozenMapping(key.items()),
             self.fields,
             FrozenMapping(values.items()),
+            KeyedParameterRead(
+                table=table,
+                key=tuple(
+                    ScalarParameterValue(id=name, value=value)
+                    for name, value in key.items()
+                ),
+                cells=tuple(
+                    ScalarParameterValue(id=name, value=selected[name])
+                    for name in dict.fromkeys(self.fields.values())
+                ),
+            ),
             tuple(key_sources),
         )
 
@@ -340,6 +372,10 @@ def _expression_value(
 class ParameterInputsResult:
     values: Mapping[str, ParameterAtomValue]
     sources: Mapping[str, tuple[ParameterQueryResult, ...]]
+
+    @property
+    def parameter_reads(self) -> tuple[KeyedParameterRead, ...]:
+        return query_parameter_reads(self.sources)
 
 
 @dataclass(frozen=True, slots=True)

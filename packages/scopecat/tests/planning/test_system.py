@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Iterator, Sequence
+from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass, field, replace
 from typing import Annotated, Literal, Never, cast
 
@@ -58,6 +58,7 @@ from scopecat.execution.program import (
     RunCoverageEffect,
     RunCoveredOperation,
     RunDomainJob,
+    RunHostParameterEvidence,
 )
 from scopecat.kernel.errors import CheckFailed, ProviderContractError
 from scopecat.kernel.instrument_members import InterfaceRef
@@ -1459,6 +1460,20 @@ def test_point_invariant_state_reuses_only_the_initial_probe(
         for operation in coverage
         if isinstance(operation, RunCoverageEffect)
     ] == [0]
+    inspected = plan.coverage.inspect(299)
+    evidence_batches = [
+        operation.evidence
+        for operation in coverage
+        if isinstance(operation, RunHostParameterEvidence)
+    ]
+    assert [
+        read.point_ordinal for batch in evidence_batches for read in batch.entries
+    ] == list(range(300))
+    assert all(len(batch.entries) <= 256 for batch in evidence_batches)
+    assert isinstance(coverage[0], RunHostParameterEvidence)
+    assert inspected is not None
+    assert [read.point_ordinal for read in inspected.host_parameter_reads] == [299]
+    assert materialized_ordinals == [(0,)]
 
 
 def test_large_plan_preview_samples_edges_without_hiding_total_point_count() -> None:
@@ -1683,7 +1698,7 @@ def test_domain_and_local_state_retain_declared_order_in_each_batch() -> None:
     consequential = tuple(
         operation
         for operation in plan.coverage
-        if not isinstance(operation, RunCoverageCheckpoint)
+        if not isinstance(operation, RunCoverageCheckpoint | RunHostParameterEvidence)
     )
 
     assert [type(operation) for operation in consequential] == [
@@ -1710,7 +1725,7 @@ def test_stable_host_state_prepares_a_domain_segment_once() -> None:
     consequential = tuple(
         operation
         for operation in coverage
-        if not isinstance(operation, RunCoverageCheckpoint)
+        if not isinstance(operation, RunCoverageCheckpoint | RunHostParameterEvidence)
     )
     assert [type(operation) for operation in consequential] == [
         RunCoverageEffect,
@@ -2373,8 +2388,11 @@ def test_planned_settings_budget_preserves_jobs_and_stream_order(
         operations: Iterator[RunCoveredOperation],
         *,
         validator: system_module._CoverageValidator,
+        inspect_local: Callable[[MaterializedLocalEffects], None] | None = None,
     ) -> Iterator[RunCoveredOperation]:
-        for operation in original(operations, validator=validator):
+        for operation in original(
+            operations, validator=validator, inspect_local=inspect_local
+        ):
             observed.append(operation)
             if isinstance(operation, RunCoverageEffect) and isinstance(
                 operation.operation, ApplyStateOperation

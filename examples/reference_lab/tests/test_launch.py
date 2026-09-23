@@ -10,6 +10,7 @@ from dataclasses import dataclass
 import httpx2
 import pytest
 from pydantic import ValidationError
+from scopecat.api.lab import LabClient
 from scopecat.api.run import RunHandle
 from scopecat.application import LabApplication
 from scopecat.application.launch import LaunchCatalog, LaunchPreview, LaunchSubmission
@@ -21,24 +22,28 @@ from scopecat.planning.preflight import ExactQuantity, PreflightStage, UnknownQu
 from scopecat.project import Project, load_project
 from scopecat.records.launch_request import LaunchRequest
 from scopecat.records.measurement import MeasurementScalar
-from scopecat.records.run import ConfigRegistryRunConfigSource
+from scopecat.records.run import ParameterRunConfigSource
+from scopecat.records.scientific_selection import (
+    ParameterConfiguration,
+    ScientificSelection,
+)
 from scopecat_server.lifecycle import start_project, stop_project
 from scopecat_testkit.project_loading import isolated_project_imports
 
-from reference_lab.configuration import EXAMPLE_ROOT
+from reference_lab.configuration import EXAMPLE_ROOT, bootstrap_config
 
 
 @dataclass(frozen=True)
 class _Daemon:
     url: str
+    selection: ScientificSelection
 
 
 @pytest.fixture(scope="module")
 def reference_lab_daemon(
     tmp_path_factory: pytest.TempPathFactory,
 ) -> Generator[_Daemon]:
-    # Gallery notebooks may accept new defaults in their session daemon. Launcher
-    # scenarios have their own project so a default request has a stable base.
+    # Separate projects exercise endpoint isolation and setup authority changes.
     roots = [
         tmp_path_factory.mktemp(name) for name in ("foreign-project", "launch-project")
     ]
@@ -59,7 +64,22 @@ def reference_lab_daemon(
             patch.setenv(DAEMON_URL_ENV, foreign_endpoint.base_url)
             endpoint = start_project(project)
         try:
-            yield _Daemon(endpoint.base_url)
+            with LabClient(DaemonClient(endpoint.base_url)) as lab:
+                config = bootstrap_config()
+                parameters = lab.parameters.save(
+                    name="launcher-inputs",
+                    catalog=config.parameter_catalog,
+                    parameters=config.parameter_snapshot,
+                )
+                selection = ScientificSelection(
+                    configuration=ParameterConfiguration(
+                        ref=parameters.ref, setup=lab.setup.active().revision.ref
+                    )
+                )
+                assert lab.config.registry().entries == ()
+            yield _Daemon(endpoint.base_url, selection)
+            with LabClient(DaemonClient(endpoint.base_url)) as lab:
+                assert lab.config.registry().entries == ()
         finally:
             stop_project(project)
     finally:
@@ -146,10 +166,13 @@ def test_real_http_preview_shares_catalog_and_never_admits_acquisition(
             (item.id, item.title, item.controls) for item in expected.entries
         ]
         before = client.list_runs()
-        active = lab.config.active()
+        setup = lab.setup.active()
         selected_entry = next(item for item in catalog.entries if item.id == experiment)
         request = LaunchRequest(
-            action="preview", experiment=experiment, version=selected_entry.version
+            action="preview",
+            selection=reference_lab_daemon.selection,
+            experiment=experiment,
+            version=selected_entry.version,
         )
         response = http.post(
             "/api/v1/experiment-launcher/preview", json=request.model_dump(mode="json")
@@ -224,10 +247,14 @@ def test_real_http_preview_shares_catalog_and_never_admits_acquisition(
         assert preview.point_count == (
             1 if experiment == "reference_lab.temperature_diagnostic" else 2
         )
-        assert isinstance(preview.reviewed.config_source, ConfigRegistryRunConfigSource)
-        assert preview.reviewed.config_source.entry_id == active.entry.id
+        assert isinstance(preview.reviewed.config_source, ParameterRunConfigSource)
+        choice = reference_lab_daemon.selection.configuration
+        assert isinstance(choice, ParameterConfiguration)
+        assert preview.reviewed.config_source.parameters == choice.ref
+        assert preview.reviewed.config_source.setup == setup.revision.ref
         assert client.list_runs() == before
-        assert lab.config.active() == active
+        assert lab.setup.active() == setup
+        assert lab.config.registry().entries == ()
 
 
 def test_submission_fences_new_stale_work_but_replays_exact_admission(
@@ -245,18 +272,38 @@ def test_submission_fences_new_stale_work_but_replays_exact_admission(
             if item.id == "reference_lab.temperature_diagnostic"
         )
         request = LaunchRequest(
-            action="preview", experiment=entry.id, version=entry.version
+            action="preview",
+            selection=reference_lab_daemon.selection,
+            experiment=entry.id,
+            version=entry.version,
         )
         preview = provider(lab, request)
         assert isinstance(preview, LaunchPreview)
         command = submit_request(request, preview, "launch-retry")
         admitted = provider(lab, command)
         assert isinstance(admitted, LaunchSubmission)
-        original_config = lab.config.active().config
-        lab.config.set_default(original_config)
-        assert provider(lab, command) == admitted
-        with pytest.raises(DaemonConflictError, match="active configuration changed"):
-            provider(lab, submit_request(request, preview, "new-stale-request"))
+        original_setup = lab.setup.active().revision
+        target = original_setup.setup.domain_target
+        assert target is not None
+        changed_setup = lab.setup.save(
+            original_setup.setup.model_copy(
+                update={
+                    "domain_target": target.model_copy(
+                        update={"id": "changed-launch-target"}
+                    )
+                }
+            ),
+            name="changed-launch-setup",
+        )
+        lab.setup.activate(changed_setup)
+        try:
+            assert provider(lab, command) == admitted
+            with pytest.raises(
+                DaemonConflictError, match="setup differs from current authority"
+            ):
+                provider(lab, submit_request(request, preview, "new-stale-request"))
+        finally:
+            lab.setup.activate(original_setup)
         changed = request.model_copy(update={"actor": "another-operator"})
         with pytest.raises(ValidationError, match="request changed"):
             submit_request(changed, preview, "launch-retry")
@@ -290,11 +337,14 @@ def test_candidate_uses_existing_review_state_and_retains_result_references(
     assert provider is not None
     with launch_application.connect(reference_lab_daemon.url) as lab:
         request = LaunchRequest(
-            action="preview", experiment="channel-timing", version="1"
+            action="preview",
+            selection=reference_lab_daemon.selection,
+            experiment="channel-timing",
+            version="1",
         )
         preview = provider(lab, request)
         assert isinstance(preview, LaunchPreview)
-        before = lab.config.active()
+        before = lab.setup.active()
         admitted = provider(
             lab, submit_request(request, preview, "launch-reviewed-candidate")
         )
@@ -312,7 +362,7 @@ def test_candidate_uses_existing_review_state_and_retains_result_references(
         )
         assert preview.preflight is not None
         assert [stage.configuration for stage in preview.preflight.stages] == [
-            "accepted",
+            "selected_context",
             "proposed_candidate",
         ]
         for stage in preview.preflight.stages:
@@ -329,7 +379,8 @@ def test_candidate_uses_existing_review_state_and_retains_result_references(
         )
         handle.resume()
         assert handle.state == "closed"
-        assert lab.config.active() == before
+        assert lab.setup.active() == before
+        assert lab.config.registry().entries == ()
 
 
 def test_http_submission_dispatches_the_same_durable_diagnostic(
@@ -351,7 +402,10 @@ def test_http_submission_dispatches_the_same_durable_diagnostic(
             if item.id == "reference_lab.temperature_diagnostic"
         )
         request = LaunchRequest(
-            action="preview", experiment=entry.id, version=entry.version
+            action="preview",
+            selection=reference_lab_daemon.selection,
+            experiment=entry.id,
+            version=entry.version,
         )
         preview_response = http.post(
             "/api/v1/experiment-launcher/preview",
@@ -400,7 +454,9 @@ def test_noop_candidate_preview_reports_reason_without_admitting_work(
             base_url=reference_lab_daemon.url, trust_env=False, timeout=30
         ) as http,
     ):
-        original = lab.config.active().config
+        choice = reference_lab_daemon.selection.configuration
+        assert isinstance(choice, ParameterConfiguration)
+        original = lab.parameters.resolve(choice.ref, setup=choice.setup).config
         parameters, _ = materialize_parameter_updates(
             catalog=original.parameter_catalog,
             base=original.parameter_snapshot,
@@ -413,27 +469,31 @@ def test_noop_candidate_preview_reports_reason_without_admitting_work(
             ),
             candidate_id="already-at-requested-delay",
         )
-        lab.config.set_default(
-            original.model_copy(update={"parameter_snapshot": parameters})
+        saved = lab.parameters.save(
+            name="already-at-requested-delay",
+            catalog=original.parameter_catalog,
+            parameters=parameters,
         )
-        try:
-            before = client.list_runs()
-            response = http.post(
-                "/api/v1/experiment-launcher/preview",
-                json={
-                    "action": "preview",
-                    "experiment": "channel-timing",
-                    "version": "1",
-                },
-            )
-            assert response.status_code == 422, response.text
-            assert (
-                "parameter change proposal does not change the base snapshot"
-                in response.text
-            )
-            assert client.list_runs() == before
-        finally:
-            lab.config.set_default(original)
+        selection = ScientificSelection(
+            configuration=ParameterConfiguration(ref=saved.ref, setup=choice.setup)
+        )
+        before = client.list_runs()
+        response = http.post(
+            "/api/v1/experiment-launcher/preview",
+            json={
+                "action": "preview",
+                "experiment": "channel-timing",
+                "version": "1",
+                "selection": selection.model_dump(mode="json"),
+            },
+        )
+        assert response.status_code == 422, response.text
+        assert (
+            "parameter change proposal does not change the base snapshot"
+            in response.text
+        )
+        assert client.list_runs() == before
+        assert lab.config.registry().entries == ()
 
 
 def test_http_controls_persist_one_source_and_match_notebook_edits(
@@ -473,6 +533,7 @@ def test_http_controls_persist_one_source_and_match_notebook_edits(
             )
             request = LaunchRequest(
                 action="preview",
+                selection=reference_lab_daemon.selection,
                 experiment=entry.id,
                 version=entry.version,
                 control_edits={

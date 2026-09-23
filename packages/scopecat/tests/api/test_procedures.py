@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import cast
+from typing import cast, override
 
 import httpx2
 import pytest
@@ -18,10 +18,11 @@ from scopecat.api.analysis import Analysis, AnalysisContext, AnalysisStep
 from scopecat.api.procedures import (
     LabProcedureContext,
     ProcedureLabSession,
+    _analysis_argument_identity,
     _validate_run_analysis,
 )
 from scopecat.api.published_analysis import PublishedAnalysis
-from scopecat.api.run import RunHandle
+from scopecat.api.run import RunHandle, RunSession
 from scopecat.automation import (
     AnalysisPublicationOutputRef,
     ConfigActivationOutputRef,
@@ -29,6 +30,7 @@ from scopecat.automation import (
     InterpretationOutputRef,
     InterpretationRequest,
     InterpretationResponse,
+    ParameterBranchPublishOutputRef,
     ProcedureContext,
     ProcedureStepOperation,
     ProcedureStepOutputRef,
@@ -58,6 +60,7 @@ from scopecat.daemon.wire import (
     ConfigActivationReceipt,
     ConfigPublishCommand,
     ConfigPublishReceipt,
+    ParameterBranchPublishCommand,
 )
 from scopecat.kernel.quantity import Quantity
 from scopecat.records.analysis import (
@@ -71,10 +74,31 @@ from scopecat.records.analysis import (
 )
 from scopecat.records.config import ConfigProfileSnapshot, config_content_hash
 from scopecat.records.content import ContentEntry, Sha256ContentHash
+from scopecat.records.parameter_branch import (
+    ParameterBranch,
+    ParameterBranchPublication,
+)
 from scopecat.records.parameter_change import ParameterChangeProposal
+from scopecat.records.parameter_revision import ParameterRevisionRef
 from scopecat.records.plan_ref import ProcedureChildSubmission
 from scopecat.records.run import RunConfigSource, RunSnapshot
 from scopecat.runs.selectors import RunSelector
+
+
+def test_nested_analysis_identity_preserves_run_and_container_types() -> None:
+    first = RunHandle(cast("RunSession", object()), "run-1")
+    reopened = RunHandle(cast("RunSession", object()), "run-1")
+    second = RunHandle(cast("RunSession", object()), "run-2")
+    assert _analysis_argument_identity({"q0": [first], "q1": (second,)}) == (
+        _analysis_argument_identity({"q1": (second,), "q0": [reopened]})
+    )
+    assert _analysis_argument_identity([first]) != _analysis_argument_identity((first,))
+    assert _analysis_argument_identity({1: first}) != _analysis_argument_identity(
+        {"1": first}
+    )
+    assert _analysis_argument_identity({"q0": first}) != _analysis_argument_identity(
+        {"q0": second}
+    )
 
 
 class _ImmediateProcedureContext:
@@ -605,6 +629,180 @@ def test_run_analysis_rejects_durable_upstream_mismatch() -> None:
                 RunOutputRef(run_id=run_id),
                 RunOutputRef(run_id="run-unpublished-upstream"),
             ),
+        )
+
+
+class _BranchPublishConfig(_PublishConfig):
+    def __init__(self, error: Exception | None = None) -> None:
+        super().__init__()
+        self.client = self
+        self.error = error
+        self.branch_commands: list[ParameterBranchPublishCommand] = []
+
+    def publish_parameter_branch(
+        self, command: ParameterBranchPublishCommand
+    ) -> ParameterBranch:
+        self.branch_commands.append(command)
+        if self.error is not None:
+            raise self.error
+        return ParameterBranch(
+            name=command.name,
+            generation=command.expected_generation + 1,
+            revision=ParameterRevisionRef(
+                revision_id=command.revision_id, content_hash="sha256:" + "2" * 64
+            ),
+            previous=command.base,
+            actor=command.actor,
+            note=command.note,
+            publication=ParameterBranchPublication(
+                run_id=command.run_id,
+                proposal_id=command.proposal_id,
+                verification=command.verification,
+            ),
+        )
+
+
+def _branch_destination() -> ParameterBranch:
+    return ParameterBranch(
+        name="daily",
+        generation=3,
+        revision=ParameterRevisionRef(
+            revision_id="base", content_hash="sha256:" + "1" * 64
+        ),
+        actor="alice",
+    )
+
+
+def test_parameter_publication_step_replays_without_reopening_evidence() -> None:
+    durable = _RecordingProcedureContext()
+    config = _BranchPublishConfig()
+    context, candidate, verification, proposal = _verified_candidate_context(
+        durable, config
+    )
+    output = context.publish_parameter_candidate(
+        "publish",
+        candidate,
+        proposal_id=proposal.id,
+        verification=verification,
+        decision_output_id="decision",
+        branch=_branch_destination(),
+        name="accepted",
+        actor="automation",
+    )
+    assert isinstance(output, ParameterBranchPublishOutputRef)
+    assert output.branch.previous == _branch_destination().revision
+    assert output.branch.generation == 4
+    [step] = durable.calls
+    assert step.operation == "parameter_publish"
+    assert step.intent_hash.startswith("sha256:")
+    assert step.inputs == (candidate, verification)
+    replay = LabProcedureContext(
+        cast(
+            "ProcedureContext",
+            cast("object", _SucceededStepProcedureContext(step, output)),
+        ),
+        runner=cast("_DaemonRunner", object()),
+        config=cast("LabConfigOperations", object()),
+        session=_UnavailableAnalysisSession(),
+    )
+    assert (
+        replay.publish_parameter_candidate(
+            "publish",
+            candidate,
+            proposal_id=proposal.id,
+            verification=verification,
+            decision_output_id="decision",
+            branch=_branch_destination(),
+            name="accepted",
+            actor="automation",
+        )
+        == output
+    )
+    assert len(config.branch_commands) == 1
+    with pytest.raises(AssertionError):
+        replay.publish_parameter_candidate(
+            "publish",
+            candidate,
+            proposal_id=proposal.id,
+            verification=verification,
+            decision_output_id="decision",
+            branch=_branch_destination().model_copy(update={"generation": 4}),
+            name="accepted",
+            actor="automation",
+        )
+
+
+def test_parameter_publication_unknown_outcome_requires_attention() -> None:
+    config = _BranchPublishConfig(httpx2.ReadError("response lost"))
+    context, candidate, verification, proposal = _verified_candidate_context(
+        _RecordingProcedureContext(), config
+    )
+    with pytest.raises(ProcedureNeedsAttention, match="outcome is unknown"):
+        context.publish_parameter_candidate(
+            "publish",
+            candidate,
+            proposal_id=proposal.id,
+            verification=verification,
+            decision_output_id="decision",
+            branch=_branch_destination(),
+            name="accepted",
+            actor="automation",
+        )
+    assert len(config.branch_commands) == 1
+
+
+def test_parameter_publication_known_conflict_is_not_an_unknown_outcome() -> None:
+    error = DaemonConflictError(
+        "stale head",
+        response=httpx2.Response(
+            409,
+            request=httpx2.Request(
+                "POST", "http://daemon/parameters/branch-publications"
+            ),
+        ),
+    )
+    config = _BranchPublishConfig(error)
+    context, candidate, verification, proposal = _verified_candidate_context(
+        _RecordingProcedureContext(), config
+    )
+    with pytest.raises(DaemonConflictError, match="stale head"):
+        context.publish_parameter_candidate(
+            "publish",
+            candidate,
+            proposal_id=proposal.id,
+            verification=verification,
+            decision_output_id="decision",
+            branch=_branch_destination(),
+            name="accepted",
+            actor="automation",
+        )
+
+
+def test_parameter_publication_wrong_receipt_requires_attention() -> None:
+    class WrongReceipt(_BranchPublishConfig):
+        @override
+        def publish_parameter_branch(
+            self, command: ParameterBranchPublishCommand
+        ) -> ParameterBranch:
+            return (
+                super()
+                .publish_parameter_branch(command)
+                .model_copy(update={"generation": 99})
+            )
+
+    context, candidate, verification, proposal = _verified_candidate_context(
+        _RecordingProcedureContext(), WrongReceipt()
+    )
+    with pytest.raises(ProcedureNeedsAttention, match="receipt does not match"):
+        context.publish_parameter_candidate(
+            "publish",
+            candidate,
+            proposal_id=proposal.id,
+            verification=verification,
+            decision_output_id="decision",
+            branch=_branch_destination(),
+            name="accepted",
+            actor="automation",
         )
 
 

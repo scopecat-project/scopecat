@@ -93,7 +93,6 @@ function configSnapshot({
     id: `profile-${scalar.value}-${table.length}`,
     system: {
       id: "system",
-      primary_entity_id: "q0",
       topology: {
         entities: [],
       },

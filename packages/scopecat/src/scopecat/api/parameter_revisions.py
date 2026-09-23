@@ -346,14 +346,18 @@ class BranchParameterEditor(ParameterEditor):
         self._load(merged)
 
     @override
-    def freeze(self) -> ParameterResolution:
+    def freeze(
+        self, *, setup: SetupRevision | SetupRevisionRef | None = None
+    ) -> ParameterResolution:
         if self._structure:
             raise ValueError(
                 "Save parameter structure changes before preparing an experiment"
             )
         return self._branch.operations.resolve(
-            self._revision, overrides=self._updates()
+            self._revision, setup=setup, overrides=self._updates()
         )
 
-    def preview(self) -> ParameterResolution:
-        return self.freeze()
+    def preview(
+        self, *, setup: SetupRevision | SetupRevisionRef | None = None
+    ) -> ParameterResolution:
+        return self.freeze(setup=setup)

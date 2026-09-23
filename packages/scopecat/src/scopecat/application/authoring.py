@@ -42,7 +42,7 @@ from scopecat.application.launch_config import (
 from scopecat.authoring.experiments import Experiment
 from scopecat.automation.definition import RegisteredProcedure
 from scopecat.automation.models import ProcedureDefinitionRef, procedure_intent_hash
-from scopecat.daemon.views import ConfigContextResolution
+from scopecat.daemon.views import ConfigContextResolution, ParameterResolution
 from scopecat.kernel.content_identity import sha256_json_hash
 from scopecat.kernel.errors import CheckFailed
 from scopecat.kernel.frozen import thaw_json_value
@@ -229,6 +229,7 @@ class AuthorExperiment:
         | ConfigProfileSnapshot
         | ConfigContextRef
         | ConfigContextResolution
+        | ParameterResolution
         | None = None,
         edits: Mapping[str, ControlScalar | AxisSpec] | None = None,
         inputs: Mapping[str, JsonValue] | None = None,
@@ -255,6 +256,7 @@ class AuthorExperiment:
         | ConfigProfileSnapshot
         | ConfigContextRef
         | ConfigContextResolution
+        | ParameterResolution
         | None = None,
         edits: Mapping[str, ControlScalar | AxisSpec] | None = None,
         inputs: Mapping[str, JsonValue] | None = None,

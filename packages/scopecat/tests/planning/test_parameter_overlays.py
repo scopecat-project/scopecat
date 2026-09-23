@@ -42,6 +42,10 @@ from scopecat.kernel.resource_identity import logical_resource_port_id
 from scopecat.kernel.value_data import CellValue, Row
 from scopecat.kernel.value_types import Quantity as QuantityType
 from scopecat.kernel.value_types import Scalar, String, Table, TableColumn
+from scopecat.planning.domain_bridge import (
+    make_domain_batch_request,
+    make_domain_call_view,
+)
 from scopecat.planning.point_materialization import prepare_bound_points
 from scopecat.program.expressions import (
     param,
@@ -53,6 +57,7 @@ from scopecat.program.point_domain import (
     point_axis_values,
 )
 from scopecat.program.table_values import ParameterTableSource
+from scopecat.records.parameter_read import DomainInputParameterRead
 
 _PARAMETER_TYPES = PARAMETER_TYPES
 _DEVICE_ID = Scalar(String())
@@ -140,6 +145,13 @@ def test_point_parameter_overlay_replaces_only_one_existing_cell() -> None:
         row["frequency"] for row in environment.parameters.table_rows("readout_devices")
     ]
     plan = materialize_local_execution(bind_program_facts(spec, environment))
+    assert [read.point_ordinal for read in plan.parameter_reads] == list(
+        range(len(plan.points))
+    )
+    assert [read.evidence.keyed[0].cells[0].value for read in plan.parameter_reads] == [
+        Quantity(5.9, "GHz"),
+        Quantity(6.2, "GHz"),
+    ]
     without_overlay = materialize_local_execution(
         bind_program_facts(
             replace(
@@ -196,11 +208,18 @@ def test_domain_compiler_table_is_point_scoped_after_overlay() -> None:
         parameters=parameters(),
     )
     bound_points = prepare_bound_points(bind_program_facts(spec, environment))
+    reads: list[DomainInputParameterRead] = []
     [(input_id, bound_values)] = bound_points.bind_domain_inputs(
         execution.id,
         "compiler",
         ("rows",),
         (0, 1),
+        parameter_reads=reads,
+    )
+    assert [entry.point_ordinal for entry in reads] == [0, 1]
+    assert all(
+        entry.evidence.incomplete_reasons == ("table_selection:readout_devices",)
+        for entry in reads
     )
     bound_tables = cast("tuple[tuple[Row, ...], ...]", bound_values)
 
@@ -252,6 +271,18 @@ def test_domain_input_materializes_with_its_port_type() -> None:
 
     assert input_id == "frequency"
     assert bound_values == (Quantity(value=5.0, unit="GHz"),)
+    batch = make_domain_batch_request(
+        make_domain_call_view(bound_points.bound_plan, execution.id, ()),
+        bound_points,
+        (0,),
+        legal_cut_offsets=(1,),
+        batch_ordinal=0,
+    )
+    assert batch.inputs.parameter_reads is not None
+    [entry] = batch.inputs.parameter_reads
+    assert entry.point_ordinal == 0
+    assert entry.input_id == "frequency"
+    assert entry.evidence.scalars[0].value == Quantity(5000, "MHz")
 
 
 def test_point_parameter_overlay_residualizes_parameter_lookup() -> None:

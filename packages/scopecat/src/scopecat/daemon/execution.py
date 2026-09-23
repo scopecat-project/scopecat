@@ -31,6 +31,7 @@ from scopecat.daemon.wire import (
     RunDomainJobTransitionItem,
     RunHardwareBatchCommand,
     RunHardwareFinishCommand,
+    RunHostParameterEvidenceCommand,
     RunInstrumentProvisionCommand,
     RunInstrumentProvisionReceipt,
     RunRecoveryGroupCommitCommand,
@@ -69,6 +70,7 @@ from scopecat.records.measurement_recording import (
     MeasurementDatasetReceipt,
     MeasurementDatasetSeal,
 )
+from scopecat.records.parameter_read import HostParameterEvidence
 from scopecat.records.run import RunSnapshot
 from scopecat.runs.repository import TerminalRunCommit
 from scopecat.sdk.domain.invocation import DomainInvocationIntent
@@ -188,6 +190,14 @@ def _daemon_execution_session(
         if not authority.cancellation_requested():
             instruments.provision()
 
+    def publish_host_parameter_evidence(evidence: HostParameterEvidence) -> None:
+        client.publish_host_parameter_evidence(
+            authority.run_id,
+            RunHostParameterEvidenceCommand(
+                lease_id=authority.fence(), evidence=evidence
+            ),
+        )
+
     return ExecutionSession(
         accepted=snapshot,
         begin=begin,
@@ -195,6 +205,7 @@ def _daemon_execution_session(
         measurements=measurements,
         instruments=instruments,
         domain_job_transitions=domain_job_transitions,
+        publish_host_parameter_evidence=publish_host_parameter_evidence,
         coverage=coverage,
         recovery_groups=recovery_groups,
         domain_proposals=domain_proposals,

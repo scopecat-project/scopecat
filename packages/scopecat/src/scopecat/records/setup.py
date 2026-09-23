@@ -25,7 +25,6 @@ class _SetupModel(BaseModel):
 
 
 class ExecutableSetupSnapshot(_SetupModel):
-    primary_entity_id: str
     topology: Topology
     instrument_registry: InstrumentRegistry
     routing: RoutingGraph
@@ -36,7 +35,6 @@ class ExecutableSetupSnapshot(_SetupModel):
     def validate_structure(self) -> ExecutableSetupSnapshot:
         SystemSpec(
             id="setup-validation",
-            primary_entity_id=self.primary_entity_id,
             topology=self.topology,
             instrument_registry=self.instrument_registry,
             routing=self.routing,
@@ -67,7 +65,7 @@ class ExecutableSetupSnapshot(_SetupModel):
         """Exact payload identity, including descriptive metadata."""
         return sha256_json_hash(
             {
-                "codec": "scopecat.setup-revision.v2",
+                "codec": "scopecat.setup-revision.v3",
                 "setup": self.model_dump(mode="json"),
             }
         )
@@ -92,7 +90,7 @@ def executable_setup_content_hash(
             "routing": {"roles": {"__all__": {"description"}}},
         },
     )
-    return sha256_json_hash({"codec": "scopecat.setup-content.v2", "system": system})
+    return sha256_json_hash({"codec": "scopecat.setup-content.v3", "system": system})
 
 
 class SetupRevisionRef(_SetupModel):

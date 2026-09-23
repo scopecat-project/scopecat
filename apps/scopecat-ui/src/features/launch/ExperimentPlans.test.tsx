@@ -46,7 +46,7 @@ function plan(id: string, name: string): PlanRevision {
         batch: { kind: "unscoped" },
       },
       scientific_binding: {
-        codec: "scopecat.scientific-binding.v2",
+        codec: "scopecat.scientific-binding.v3",
         config_content_hash: `sha256:${"d".repeat(64)}`,
         setup_content_hash: `sha256:${"e".repeat(64)}`,
         subject: { kind: "unbound" },
@@ -101,7 +101,17 @@ const targetPlan: PlanRevision = {
           kind: "chip",
           display_name: "Chip",
         },
-        projection: [
+      },
+      target_binding: {
+        target: {
+          catalog_id: "project-a",
+          target_id: "device-target",
+          revision: 3,
+          content_hash: `sha256:${"f".repeat(64)}`,
+        },
+        setup_content_hash: first.definition.scientific_binding.setup_content_hash,
+        connections: [],
+        entities: [
           { target_entity: { member_id: "device", entity_id: "q0" }, runtime_entity_id: "q0" },
         ],
       },

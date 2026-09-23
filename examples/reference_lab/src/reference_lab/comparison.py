@@ -15,7 +15,11 @@ from scopecat.api.comparison import comparison_inputs, save_comparison
 from scopecat.api.lab import LabClient
 from scopecat.api.published_analysis import PublishedAnalysis
 from scopecat.application.authoring import AuthorExperiment
-from scopecat.application.comparison import ComparisonHandoff, ComparisonResult
+from scopecat.application.comparison import (
+    ComparisonHandoff,
+    ComparisonResult,
+    comparison_selection,
+)
 from scopecat.kernel.quantity import Quantity
 from scopecat.records.analysis import (
     AnalysisDatasetViewSource,
@@ -220,6 +224,7 @@ def comparison_provider(lab: LabClient, request: ComparisonRequest) -> Compariso
                 experiment=suggestion.experiment,
                 version=suggestion.version,
                 actor=request.actor,
+                selection=comparison_selection(run.snapshot),
                 control_edits={
                     "frequency": ControlEdit(mode="fixed", value=suggestion.frequency)
                 },

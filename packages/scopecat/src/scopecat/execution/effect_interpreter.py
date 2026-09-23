@@ -24,6 +24,7 @@ from scopecat.execution.program import (
     RunCoverageEffect,
     RunCoveredOperation,
     RunDomainJob,
+    RunHostParameterEvidence,
 )
 from scopecat.execution.services import RunDomainJobTransitionWriter
 from scopecat.kernel.errors import CheckFailed
@@ -37,6 +38,7 @@ from scopecat.records.execution import (
     InstrumentStateActionEvidenceLog,
 )
 from scopecat.records.instrument import InstrumentStateSnapshot
+from scopecat.records.parameter_read import HostParameterEvidence
 from scopecat.sdk.domain.evidence import DomainExecutionEvidence
 from scopecat.sdk.domain.execution import DomainTransitionPolicy
 from scopecat.sdk.domain.runtime import (
@@ -272,6 +274,8 @@ class RunEffectInterpreter:
         payload_codecs: PayloadCodecRegistry = EMPTY_PAYLOAD_CODECS,
         cancellation_requested: Callable[[], bool] = _never_cancel,
         domain_job_transitions: RunDomainJobTransitionWriter | None = None,
+        publish_host_parameter_evidence: Callable[[HostParameterEvidence], None]
+        | None = None,
         completed_point_count: int = 0,
         completed_point_indices: Sequence[int] = (),
     ) -> None:
@@ -311,6 +315,7 @@ class RunEffectInterpreter:
         self._instruments = instrument_host
         self._cancellation_requested = cancellation_requested
         self._domain_job_transitions = domain_job_transitions
+        self._publish_host_parameter_evidence = publish_host_parameter_evidence
         self._recorded_domain_invocations: set[str] = set()
         self._unrecorded_completed_domain_attempts: dict[
             str,
@@ -328,6 +333,7 @@ class RunEffectInterpreter:
         *,
         points: Sequence[AcceptedRunPoint],
         success_state: Sequence[ApplyStateOperation] = (),
+        success_state_parameter_evidence: HostParameterEvidence | None = None,
     ) -> effect_result.RunEffectResult:
         """Interpret the residual effect sequence exactly in program order."""
 
@@ -367,6 +373,11 @@ class RunEffectInterpreter:
                 and self.coverage_failure is None
             ):
                 self._check_cancellation()
+                if success_state_parameter_evidence is not None:
+                    self._execute_covered_operation(
+                        RunHostParameterEvidence(success_state_parameter_evidence)
+                    )
+                    self._check_cancellation()
                 if self._hardware.execute_success_state(success_state):
                     self._check_cancellation()
         except CheckFailed as error:
@@ -543,6 +554,10 @@ class RunEffectInterpreter:
 
     def _execute_covered_operation(self, operation: RunCoveredOperation) -> None:
         match operation:
+            case RunHostParameterEvidence():
+                if self._publish_host_parameter_evidence is None:
+                    raise RuntimeError("host preparation requires an evidence writer")
+                self._publish_host_parameter_evidence(operation.evidence)
             case RunCoverageCheckpoint():
                 raise AssertionError("coverage checkpoint bypassed coverage sequencing")
             case RunDomainJob():

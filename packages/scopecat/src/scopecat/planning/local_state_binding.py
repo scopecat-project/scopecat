@@ -12,6 +12,7 @@ from scopecat.compiler.bind import BoundPlan
 from scopecat.compiler.diagnostics import compiler_problem
 from scopecat.compiler.point_domain import MaterializedPoint
 from scopecat.compiler.relations.context import EvalContext, ParameterRelationData
+from scopecat.compiler.relations.parameter_reads import ParameterReadRecorder
 from scopecat.compiler.value_resolution import resolve_bound_value
 from scopecat.execution.local.program import (
     ApplyStateOperation,
@@ -72,8 +73,11 @@ def evaluate_state_records(
     params: ParameterRelationData,
     *,
     problems: list[Problem],
+    parameter_reads: ParameterReadRecorder | None = None,
 ) -> tuple[StateRecord, ...]:
-    ctx = EvalContext(params=params, point_row=point.row)
+    ctx = EvalContext(
+        params=params, point_row=point.row, parameter_reads=parameter_reads
+    )
     try:
         return (
             evaluate_state_assignment(

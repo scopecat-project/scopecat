@@ -135,3 +135,11 @@ the old preview before acquisition.
 This draft remains in the open workbench when navigating between pages. Changing
 the connected catalog clears it. It does not change another notebook's selection
 or any already admitted measurement.
+
+Adapter developers can validate explicit member-to-runtime topology maps with
+`scopecat.config.target_projection.project_target()`. This catches collisions
+such as two samples both declaring `q0` and checks intra-sample and inter-sample
+connections against the supplied setup topology. See the
+[projection contract](../development/architecture/target-execution.md#explicit-multi-member-topology-checks).
+This check does not enable multi-member execution or change the workbench's
+single-member admission boundary.

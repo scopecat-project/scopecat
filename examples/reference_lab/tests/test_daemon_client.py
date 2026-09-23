@@ -16,6 +16,7 @@ from reference_lab.backend import create_backend
 from reference_lab.configuration import (
     EXAMPLE_ROOT,
     bootstrap_config,
+    initial_parameters,
 )
 
 
@@ -28,12 +29,8 @@ def test_reference_lab_manifest_discovers_separate_bootstrap_and_application() -
     assert project.application_spec == "reference_lab.application:create_application"
     assert project.instrument_backend_spec == "reference_lab.backend:create_backend"
     assert bootstrap.setup is not None
-    assert bootstrap.parameter_defaults is not None
-    assert bootstrap.setup().primary_entity_id == bootstrap_config().primary_entity_id
-    assert (
-        bootstrap.parameter_defaults().parameters
-        == bootstrap_config().parameter_snapshot
-    )
+    assert bootstrap.parameter_defaults is None
+    assert bootstrap.setup().topology == bootstrap_config().topology
 
 
 def test_reference_lab_daemon_bootstrap_keeps_execution_callbacks_cold(
@@ -59,10 +56,9 @@ with LocalDaemonRuntime(
 ):
     pass
 forbidden = {{
+    "reference_lab.parameters",
     "reference_lab.lab",
-    "reference_lab.workflows.drag_beta_automatic_publication",
-    "reference_lab.workflows.drag_beta_freshness",
-    "reference_lab.workflows.drag_beta_procedure",
+    "reference_lab.workflows.drag_branch_calibration",
 }}
 loaded = forbidden.intersection(sys.modules)
 if loaded:
@@ -96,12 +92,12 @@ def test_reference_lab_application_loads_selected_project_system(
 
     assert application.build_experiment_system is not None
     assert bootstrap.setup is not None
-    assert bootstrap.parameter_defaults is not None
+    assert bootstrap.parameter_defaults is None
     equipment = bootstrap.setup()
     assert equipment.instrument_registry.instruments[0].exclusivity_key == (
         "selected/pump-source"
     )
-    parameters = bootstrap.parameter_defaults()
+    parameters = initial_parameters()
     selected_config = compose_configuration(
         equipment,
         id=parameters.id,

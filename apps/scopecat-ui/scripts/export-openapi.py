@@ -13,6 +13,17 @@ from scopecat_server.services.application import DaemonApplication
 OUTPUT = Path(__file__).parent.parent / ".generated" / "ui-api.openapi.json"
 
 _OPERATIONS = {
+    ("/api/v1/parameters/revisions/{revision_id}", "get"),
+    ("/api/v1/procedures/{procedure_run_id}/worker-log", "get"),
+    ("/api/v1/calibration-checks/report", "post"),
+    ("/api/v1/measurement-context/resolve", "post"),
+    ("/api/v1/calibration-profiles", "get"),
+    ("/api/v1/calibration-profiles", "post"),
+    ("/api/v1/calibration-profiles/{profile_id}", "get"),
+    ("/api/v1/calibration-profiles/{profile_id}/report", "post"),
+    ("/api/v1/calibration-tasks", "get"),
+    ("/api/v1/calibration-tasks/{task_id}", "get"),
+    ("/api/v1/calibration-tasks/control", "post"),
     ("/api/v1/parameters/branches", "get"),
     ("/api/v1/author-workspaces", "get"),
     ("/api/v1/measurement-targets", "get"),

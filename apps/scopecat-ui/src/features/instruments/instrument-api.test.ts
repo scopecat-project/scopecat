@@ -522,7 +522,6 @@ function activeConfig(): ActiveConfig {
     id: "lab",
     system: {
       id: "system",
-      primary_entity_id: "q0",
       topology: { entities: [] },
       instrument_registry: {
         instruments: [

@@ -54,7 +54,8 @@ from my_lab.authored.signal import signal
 request = signal(gain=1.0, polarity="positive")
 request.values["frequency"] = sc.Scan(sc.Quantity(f, "GHz") for f in (5.0, 5.1, 5.2))
 with project.authoring() as author:
-    parameters = author.config.workspace(context="my-sample-start")
+    author.use(parameter_branch="experiment")
+    parameters = author.params
     checked = author.prepare(request, parameters=parameters)
     alternative = request.copy()
     alternative.values["frequency"] = sc.Quantity(5.1, "GHz")
@@ -255,7 +256,7 @@ with project.authoring() as author:
     job = author.reopen(receipt)
     run = job.result()
     values = run.measurements()["result"].require_values()
-    parameters = author.config.workspace(context="my-sample-next")
+    parameters = author.parameters.workspace("experiment")
 ```
 
 `run`, datasets and variables use the open session for lazy reads. Already

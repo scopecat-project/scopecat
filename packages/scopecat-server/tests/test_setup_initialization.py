@@ -25,7 +25,6 @@ def test_setup_first_then_parameters_preserves_independent_authority(
     tmp_path: Path,
 ) -> None:
     setup = ExecutableSetupSnapshot(
-        primary_entity_id="",
         topology=Topology(),
         instrument_registry=InstrumentRegistry(instruments=[]),
         routing=RoutingGraph(),

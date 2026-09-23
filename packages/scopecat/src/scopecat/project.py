@@ -424,8 +424,6 @@ def _expand_adapter(
                     *declaration.procedures,
                     *declaration.procedure_schedules,
                     declaration.experiment_system,
-                    declaration.calibrations,
-                    declaration.calibration_publications,
                     declaration.launch_provider,
                     declaration.comparison_provider,
                 ):
@@ -734,8 +732,6 @@ def _parse_capabilities(value: object) -> LabCapabilities:
     sequence_fields = {"author_modules", "procedures", "procedure_schedules"}
     object_fields = {
         "experiment_system",
-        "calibrations",
-        "calibration_publications",
         "launch_provider",
         "comparison_provider",
     }
@@ -778,8 +774,6 @@ def _parse_capabilities(value: object) -> LabCapabilities:
         procedures=sequences["procedures"],
         procedure_schedules=sequences["procedure_schedules"],
         experiment_system=objects["experiment_system"],
-        calibrations=objects["calibrations"],
-        calibration_publications=objects["calibration_publications"],
         launch_provider=objects["launch_provider"],
         comparison_provider=objects["comparison_provider"],
     )

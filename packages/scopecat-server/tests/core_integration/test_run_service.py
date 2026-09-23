@@ -1011,7 +1011,17 @@ def test_check_compiles_authoring_once(
     invalid_config = config.model_copy(
         update={
             "system": config.system.model_copy(
-                update={"primary_entity_id": "missing-entity"}
+                update={
+                    "routing": config.system.routing.model_copy(
+                        update={
+                            "routes": [
+                                config.system.routing.routes[0].model_copy(
+                                    update={"instrument_id": "missing"}
+                                )
+                            ]
+                        }
+                    )
+                }
             )
         }
     )
@@ -1022,6 +1032,6 @@ def test_check_compiles_authoring_once(
         config=invalid_config,
         services=sqlite_project_services(tmp_path),
     )
-    assert result.problems[0].code == "configuration.unknown_primary_entity"
+    assert result.problems[0].code == "configuration.unknown_resource_route_instrument"
 
     assert authoring_compiles == 1

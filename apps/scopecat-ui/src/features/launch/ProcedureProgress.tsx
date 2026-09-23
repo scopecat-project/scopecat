@@ -1,4 +1,5 @@
 import { PlanOrigin } from "./PlanOrigin";
+import { ProcedureWorkerLog } from "./ProcedureWorkerLog";
 import { ComparisonLink } from "../analyses/ComparisonLink";
 import { useState } from "react";
 import { useInfiniteQuery } from "@tanstack/react-query";
@@ -96,6 +97,21 @@ export function ProcedureProgress({ procedureId }: { procedureId: string }) {
                   ? "Managed by the console; ready work can continue when a worker is available."
                   : "No console worker is assigned to this admitted procedure."}
           </p>
+          {view.dispatch.failure && (
+            <div role="alert" className="space-y-1">
+              <p>Worker diagnostic: {view.dispatch.failure.message}</p>
+              <p>
+                Observed at {view.dispatch.failure.observed_at}. The retained execution outcome is
+                shown separately.
+              </p>
+            </div>
+          )}
+          {view.dispatch.log_path && (
+            <p className="break-all">
+              Worker log: <code>{view.dispatch.log_path}</code>
+            </p>
+          )}
+          <ProcedureWorkerLog procedureId={procedureId} />
           {run.recovery && (
             <p>
               Recovery from{" "}

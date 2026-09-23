@@ -2,16 +2,14 @@
 
 from __future__ import annotations
 
-import os
 import time
 from uuid import uuid4
 
 import httpx2
-import pytest
 from pydantic import JsonValue, TypeAdapter
 from scopecat.api.lab import LabClient
 from scopecat.application.author_project import AuthorPreparedLaunch, AuthorProject
-from scopecat.application.comparison import ComparisonHandoff
+from scopecat.application.comparison import ComparisonHandoff, comparison_selection
 from scopecat.automation import RunOutputRef
 from scopecat.automation.wire import ProcedureSubmitCommand
 from scopecat.daemon.client import DaemonClient
@@ -24,14 +22,16 @@ from scopecat.records.comparison import (
 )
 from scopecat.records.control_edit import ControlEdit
 from scopecat.records.experiment_plan import ExperimentPlanSave
+from scopecat.records.parameter_revision import ParameterRevision
 from scopecat.records.plan_ref import PlanAnalysisSource
+from scopecat.records.run import ParameterRunConfigSource
 from scopecat.records.run_request import AxisValuesSourceRecord
 
-pytestmark = pytest.mark.usefixtures("reference_lab_daemon")
 
-
-def test_retained_analysis_plan_copy_revalidate_and_child_origin() -> None:
-    endpoint = os.environ["SCOPECAT_DAEMON_URL"]
+def test_retained_analysis_plan_copy_revalidate_and_child_origin(
+    independent_lab_daemon: str, independent_parameters: ParameterRevision
+) -> None:
+    endpoint = independent_lab_daemon
     key = uuid4().hex
     with (
         AuthorProject(endpoint) as author,
@@ -40,7 +40,14 @@ def test_retained_analysis_plan_copy_revalidate_and_child_origin() -> None:
             base_url=endpoint, timeout=60, headers={"content-type": "application/json"}
         ) as http,
     ):
-        original_active = lab.config.active()
+        setup = lab.setup.active()
+        branch = lab.parameters.create_branch(
+            f"plan-{key}", revision=independent_parameters
+        )
+        author.use(parameter_branch=branch.name, setup=setup.revision.ref)
+        original_hash = lab.parameters.resolve(
+            independent_parameters, setup=setup.revision.ref
+        ).config_source.content_hash
 
         def run_count() -> int:
             body = TypeAdapter(dict[str, JsonValue]).validate_json(
@@ -175,62 +182,53 @@ def test_retained_analysis_plan_copy_revalidate_and_child_origin() -> None:
             )
             assert copied.ref.plan_id != saved.ref.plan_id
             previewed = reopened.prepare_plan(copied.ref, actor="carol")
-            try:
-                lab.config.set_default(
-                    original_active.config.model_copy(
-                        update={"id": f"plan-lab-default-{key}"}
-                    ),
-                    entry_id=f"plan-default-{key}",
-                )
-                assert previewed.preview.plan_ref == copied.ref
-                assert (
-                    previewed.preview.reviewed.config_source.content_hash
-                    == original_active.entry.content_hash
-                )
-                submitted = previewed.submit(request_key=f"{key}-target")
-                target = child(submitted.procedure_id)
-                assert (
-                    author.get_procedure(submitted.procedure_id).plan_ref == copied.ref
-                )
-                assert author.run_request(target.id).request.plan_ref == copied.ref
-                assert (
-                    target.snapshot.config_content_hash
-                    == original_active.entry.content_hash
-                )
-                assert copied.definition.source == saved.definition.source
-                # After lease closure and another lab change, exact replay
-                # still returns the original id.
-                lab.config.activate_entry(
-                    original_active.entry.id,
-                    operation_id=f"{key}-restore",
-                    expected_generation=lab.config.active().activation.generation,
-                )
-                assert (
-                    previewed.submit(request_key=f"{key}-target").procedure_id
-                    == submitted.procedure_id
-                )
-                admitted = author.get_procedure(submitted.procedure_id)
-                forged = ProcedureSubmitCommand(
-                    request_key=f"{key}-forged",
-                    definition=admitted.definition,
-                    intent=admitted.intent,
-                    samples=admitted.samples,
-                    plan_ref=copied.ref,
-                )
-                rejection = http.post(
-                    "/api/v1/procedures", content=forged.model_dump_json()
-                )
-                assert rejection.status_code in (409, 422), rejection.text
-                assert "checked launch request" in rejection.text
-                assert run_count() == original_count + 1
-            finally:
-                active = lab.config.active()
-                if active.entry.id != original_active.entry.id:
-                    lab.config.activate_entry(
-                        original_active.entry.id,
-                        operation_id=f"{key}-finally",
-                        expected_generation=active.activation.generation,
-                    )
+            lab.parameters.checkout(branch.name).save(
+                catalog=independent_parameters.catalog,
+                parameters=independent_parameters.parameters,
+                note="branch changes after the plan preview",
+            )
+            assert previewed.preview.plan_ref == copied.ref
+            assert (
+                previewed.preview.reviewed.config_source.content_hash == original_hash
+            )
+            submitted = previewed.submit(request_key=f"{key}-target")
+            target = child(submitted.procedure_id)
+            assert isinstance(target.snapshot.config_source, ParameterRunConfigSource)
+            assert (
+                target.snapshot.config_source.parameters == independent_parameters.ref
+            )
+            assert target.snapshot.config_source.setup == setup.revision.ref
+            assert author.get_procedure(submitted.procedure_id).plan_ref == copied.ref
+            assert author.run_request(target.id).request.plan_ref == copied.ref
+            assert target.snapshot.config_content_hash == original_hash
+            assert copied.definition.source == saved.definition.source
+            # After lease closure and another lab change, exact replay
+            # still returns the original id.
+            lab.parameters.checkout(branch.name).save(
+                catalog=independent_parameters.catalog,
+                parameters=independent_parameters.parameters,
+                note="second independent branch edit",
+            )
+            assert (
+                previewed.submit(request_key=f"{key}-target").procedure_id
+                == submitted.procedure_id
+            )
+            admitted = author.get_procedure(submitted.procedure_id)
+            forged = ProcedureSubmitCommand(
+                request_key=f"{key}-forged",
+                definition=admitted.definition,
+                intent=admitted.intent,
+                samples=admitted.samples,
+                plan_ref=copied.ref,
+            )
+            rejection = http.post(
+                "/api/v1/procedures", content=forged.model_dump_json()
+            )
+            assert rejection.status_code in (409, 422), rejection.text
+            assert "checked launch request" in rejection.text
+            assert run_count() == original_count + 1
+            assert lab.setup.active() == setup
+            assert lab.config.registry().entries == ()
         lab.plans.delete(saved.ref)
         assert lab.plans.get(saved.ref).model_dump_json() == frozen
         assert author.run_request(primary.id) == old_request
@@ -255,65 +253,65 @@ def test_retained_analysis_plan_copy_revalidate_and_child_origin() -> None:
         assert response.status_code == 409, response.text
 
 
-def test_plan_freezes_active_sample_and_named_context_without_activation() -> None:
-    from scopecat.records.config_context import ConfigContextRef
+def test_plan_freezes_sample_parameters_and_setup_without_activation(
+    independent_lab_daemon: str,
+    independent_parameters: ParameterRevision,
+) -> None:
     from scopecat.records.sample import SampleRevisionDraft
+    from scopecat.records.scientific_selection import ParameterConfiguration
 
-    endpoint = os.environ["SCOPECAT_DAEMON_URL"]
     key = uuid4().hex
-    with AuthorProject(endpoint) as author, LabClient(DaemonClient(endpoint)) as lab:
-        active = lab.config.active()
+    with (
+        AuthorProject(independent_lab_daemon) as author,
+        LabClient(DaemonClient(independent_lab_daemon)) as lab,
+    ):
+        setup = lab.setup.active()
         sample = lab.samples.create(
             f"plan-sample-{key}",
             kind="synthetic",
             content=SampleRevisionDraft(display_name="Plan sample revision one"),
         )
-        plain = author.prepare(
-            "reference_lab.frequency_amplitude", sample=sample.id
-        ).save_plan("Exact sample", saved_by="alice")
-        assert plain.definition.scientific_binding.samples
-        assert plain.definition.scientific_binding.samples[0].revision == 1
-        context_entry = lab.config.save_context(
-            entry_id=f"plan-context-{key}",
-            base=ConfigContextRef(
-                entry_id=active.entry.id, content_hash=active.entry.content_hash
-            ),
-            sample=sample.selector(revision=1),
-            working_point_id="bias-a",
-            label="Sample bias A",
+        branch = lab.parameters.create_branch(
+            f"sample-{key}", revision=independent_parameters
         )
-        context = ConfigContextRef(
-            entry_id=context_entry.entry.id,
-            content_hash=context_entry.entry.content_hash,
+        author.use(
+            sample=sample.id, parameter_branch=branch.name, setup=setup.revision.ref
         )
-        contextual = author.prepare(
-            "reference_lab.frequency_amplitude", context=context
-        ).save_plan("Exact working point", saved_by="alice")
+        saved = author.prepare("reference_lab.frequency_amplitude").save_plan(
+            "Exact sample and parameters",
+            saved_by="alice",
+        )
         lab.samples.revise(
             sample.id,
             SampleRevisionDraft(display_name="Plan sample revision two"),
             expected_revision=1,
         )
-        for saved in (plain, contextual):
-            reopened = author.prepare_plan(saved.ref, actor="bob")
-            assert (
-                reopened.preview.reviewed.binding == saved.definition.scientific_binding
-            )
-            assert reopened.preview.reviewed.binding.samples
-            assert reopened.preview.reviewed.binding.samples[0].revision == 1
-        assert contextual.definition.selection.configuration.kind == "working_point"
-        assert contextual.definition.selection.configuration.ref == context
-        assert contextual.definition.scientific_binding.samples
-        assert (
-            contextual.definition.scientific_binding.samples[0].context_id == "bias-a"
+        lab.parameters.checkout(branch.name).save(
+            catalog=independent_parameters.catalog,
+            parameters=independent_parameters.parameters,
         )
-        assert lab.config.active().activation == active.activation
+        reopened = author.prepare_plan(saved.ref, actor="bob")
+        assert reopened.preview.reviewed.binding == saved.definition.scientific_binding
+        assert reopened.preview.reviewed.binding.samples[0].revision == 1
+        selection = saved.definition.selection.configuration
+        assert isinstance(selection, ParameterConfiguration)
+        assert (
+            selection.ref == independent_parameters.ref
+            and selection.setup == setup.revision.ref
+        )
+        assert lab.setup.active() == setup
+        assert lab.config.registry().entries == ()
 
 
-def test_authored_plan_freezes_default_structural_input_and_explicit_copy() -> None:
-    endpoint = os.environ["SCOPECAT_DAEMON_URL"]
+def test_authored_plan_freezes_default_structural_input_and_explicit_copy(
+    independent_lab_daemon: str, independent_parameters: ParameterRevision
+) -> None:
+    endpoint = independent_lab_daemon
     key = uuid4().hex
     with AuthorProject(endpoint) as author, LabClient(DaemonClient(endpoint)) as lab:
+        author.use(
+            parameters=independent_parameters.ref, setup=lab.setup.active().revision.ref
+        )
         collection = author.create_record_collection("Plan runs")
         prepared = author.prepare("signal", actor="alice")
         assert prepared.request.inputs == {"polarity": "positive"}
@@ -354,13 +352,15 @@ def test_authored_plan_freezes_default_structural_input_and_explicit_copy() -> N
         assert lab.plans.get(saved.ref).definition.inputs == {"polarity": "positive"}
 
 
-def test_multi_stage_plan_retains_scope_while_candidate_changes_configuration() -> None:
+def test_multi_stage_plan_retains_scope_while_candidate_changes_configuration(
+    independent_lab_daemon: str, independent_parameters: ParameterRevision
+) -> None:
     from scopecat.records.sample import SampleRevisionDraft
 
     from reference_lab.application import create_application
     from reference_lab.configuration import EXAMPLE_ROOT
 
-    endpoint = os.environ["SCOPECAT_DAEMON_URL"]
+    endpoint = independent_lab_daemon
     with (
         AuthorProject(endpoint) as author,
         create_application(EXAMPLE_ROOT).connect(endpoint) as lab,
@@ -370,7 +370,12 @@ def test_multi_stage_plan_retains_scope_while_candidate_changes_configuration() 
             kind="synthetic",
             content=SampleRevisionDraft(display_name="Timing chip"),
         )
-        prepared = author.prepare("channel-timing", sample=sample.id)
+        author.use(
+            sample=sample.id,
+            parameters=independent_parameters.ref,
+            setup=lab.setup.active().revision.ref,
+        )
+        prepared = author.prepare("channel-timing")
         plan = prepared.save_plan("Timing review", saved_by="alice")
         reopened = author.prepare_plan(plan.ref)
         receipt = reopened.submit(request_key=f"timing-plan-{uuid4().hex}")
@@ -392,4 +397,11 @@ def test_multi_stage_plan_retains_scope_while_candidate_changes_configuration() 
             != source.snapshot.config_content_hash
         )
         assert source.request.plan_ref == candidate.request.plan_ref == plan.ref
+        followup = comparison_selection(candidate.snapshot)
+        assert followup.configuration.kind == "candidate"
+        assert followup.configuration.source == candidate.snapshot.config_source
+        assert followup.subject.kind == "sample"
+        assert (
+            followup.subject.sample_id == sample.id and followup.subject.revision == 1
+        )
         handle.cancel(actor="alice", reason="Plan execution evidence checked")

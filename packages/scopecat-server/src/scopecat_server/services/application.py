@@ -13,8 +13,13 @@ from scopecat.daemon.wire import (
     RunCancellationReceipt,
     RunSubmission,
 )
+from scopecat.project_state import ProjectStateServices
 from scopecat.runtime_binding import load_runtime_binding
 
+from scopecat_server.services.calibration_checks import CalibrationCheckQueries
+from scopecat_server.services.calibration_profiles import CalibrationProfileService
+from scopecat_server.services.calibration_tasks import CalibrationTaskService
+from scopecat_server.services.measurement_context import MeasurementContextService
 from scopecat_server.storage.sqlite.apparatus_history import ApparatusHistoryStore
 from scopecat_server.storage.sqlite.experiment_plan_repository import (
     ExperimentPlanRepository,
@@ -23,6 +28,7 @@ from scopecat_server.storage.sqlite.experimental_batches import ExperimentalBatc
 from scopecat_server.storage.sqlite.project_store import SQLiteProjectStore
 from scopecat_server.storage.sqlite.record_collections import RecordCollectionStore
 from scopecat_server.storage.sqlite.research_projects import ResearchProjectStore
+from scopecat_server.storage.sqlite.run_repository import SQLiteRunRepository
 from scopecat_server.storage.sqlite.target_catalog import TargetCatalogStore
 
 from ..command_payloads import CommandPayloadService
@@ -30,7 +36,6 @@ from .admission import AdmissionService
 from .analyses import AnalysisService
 from .author_workspaces import AuthorWorkspaceServices
 from .automation import AutomationService
-from .calibration_cohorts import CalibrationCohortService
 from .config import ConfigService
 from .executor import ExecutorService
 from .experiment_plans import ExperimentPlanService
@@ -57,6 +62,7 @@ class DaemonApplication:
         project_id: str,
         deployment_id: str,
         project_store: SQLiteProjectStore,
+        services: ProjectStateServices,
         config: ConfigService,
         setup: SetupService,
         analyses: AnalysisService,
@@ -68,7 +74,6 @@ class DaemonApplication:
         lease_supervisor: OwnershipLeaseSupervisor,
         reviews: ReviewService,
         automation: AutomationService,
-        calibration_cohorts: CalibrationCohortService,
         procedure_schedules: ProcedureScheduleService,
         point_plans: RunPointPlanService,
         samples: SampleService,
@@ -109,7 +114,20 @@ class DaemonApplication:
         self.payloads = payloads
         self.reviews = reviews
         self.automation = automation
-        self.calibration_cohorts = calibration_cohorts
+        self.calibration_checks = CalibrationCheckQueries(
+            project_store.sqlite,
+            SQLiteRunRepository(project_store.sqlite, project_store.objects.root),
+        )
+        self.calibration_tasks = CalibrationTaskService(
+            project_store.sqlite, automation, self.calibration_checks, services
+        )
+        self.calibration_profiles = CalibrationProfileService(
+            project_store.sqlite, self.calibration_checks
+        )
+        self.measurement_context = MeasurementContextService(
+            project_store.sqlite, samples, self.targets, services
+        )
+
         self.procedure_schedules = procedure_schedules
         self.point_plans = point_plans
         self.samples = samples

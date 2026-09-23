@@ -17,6 +17,15 @@ authors can edit the authored fit/helper and its model version, then select
 public data types in `scopecat.records.comparison` and provider/handoff types in
 `scopecat.application.comparison`.
 
+When a provider suggests a follow-up experiment, use
+`comparison_selection(primary.snapshot)` from that module as the new
+`LaunchRequest.selection`. It retains exact parameter/setup or candidate inputs,
+subject revision and batch instead of resolving today's global defaults. The
+reference provider uses this path, including in equipment-only projects without
+a parameter default. The suggestion still needs a new checked preview and normal
+execution admission; retaining inputs does not approve a candidate or permit
+execution under obsolete equipment authority.
+
 The optional `scopecat.api.comparison.comparison_inputs` helper checks one
 real scalar coordinate and observable per point. It rejects arrays, unavailable
 or nonfinite values, incompatible units, stale hashes and unfinished inputs.

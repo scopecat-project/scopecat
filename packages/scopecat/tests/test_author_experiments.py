@@ -138,8 +138,6 @@ def test_application_replace_preserves_discovered_authors_without_reloading(
     assert copied.launch_provider is application.launch_provider
     assert copied.procedures is application.procedures
     assert copied.procedure_schedules is application.procedure_schedules
-    assert copied.calibrations is application.calibrations
-    assert copied.calibration_publications is application.calibration_publications
     assert copied.procedures.refs == tuple(
         item.ref for item in copied.authors.procedures
     )
@@ -201,8 +199,9 @@ def test_project_loading_pins_complete_revision_into_discovered_procedures(
     assert loading_workspace.get() == "legacy"
 
 
+@pytest.mark.parametrize("use_alias", [False, True])
 def test_author_scalar_schema_and_binding_use_the_same_declaration(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, use_alias: bool
 ) -> None:
     from pydantic import ValidationError
 
@@ -210,13 +209,19 @@ def test_author_scalar_schema_and_binding_use_the_same_declaration(
     name = "scalar_author"
     (tmp_path / f"{name}.py").write_text(
         SOURCE.replace(
-            "import scopecat as sc", "import scopecat as sc\nfrom typing import Literal"
+            "import scopecat as sc",
+            "import scopecat as sc\nfrom typing import Literal\n"
+            'type Mode = Literal["short", "long"]\ntype Alias = Mode',
         )
         .replace(
             "experiment: sc.ExperimentContext)",
             'experiment: sc.ExperimentContext, *, target: str = "q0", '
             "shots: int = 32, gain: float = 1.0, enabled: bool = True, "
-            'mode: Literal["short", "long"] = "short")',
+            + (
+                'mode: Alias = "short")'
+                if use_alias
+                else 'mode: Literal["short", "long"] = "short")'
+            ),
         )
         .replace("return LEVEL.ref", "return LEVEL.ref + shots * gain"),
         encoding="utf-8",

@@ -22,7 +22,6 @@ def setup_config(revision: SetupRevision) -> ConfigProfileSnapshot:
         id=revision.id,
         system=SystemSpec(
             id=revision.id,
-            primary_entity_id=setup.primary_entity_id,
             topology=setup.topology,
             instrument_registry=setup.instrument_registry,
             routing=setup.routing,

@@ -104,6 +104,28 @@ saved revision; it does not silently include an editor's unsaved buffer.
 
 ## Publish a verified candidate
 
+To combine candidates fitted from the same saved parameter revision:
+
+```python
+joint = q0_candidate.combine(q1_candidate, name="joint-drive-calibration")
+prepared = session.prepare(experiment(), candidate=joint)
+```
+
+This saves a new proposal with exact contributing run, analysis, proposal and
+content identities. The server reads retained proposals; local edits to their
+Python objects are not authoritative. Sources must share the exact saved
+parameter revision, setup and scientific subject/scenario, with no unsaved
+overrides. Conflicting cells reject the entire composition without publication.
+Supply all original candidates in one call; nested compositions are not supported.
+
+The returned candidate has **no inherited acceptance**. Collect new measurements
+using the joint candidate, then run a policy appropriate to the combined experiment.
+`joint.verify(check_result)` retains every contributing baseline along with the
+joint candidate data. A prior individual verification cannot publish the joint
+candidate. The framework checks evidence identity and scope; the laboratory's
+policy must decide whether its measurements cover the physical interactions that
+matter. Composition does not schedule measurements or advance a branch.
+
 After collecting independent candidate data and obtaining a retained positive
 policy decision, publish explicitly to a captured branch head:
 
@@ -142,6 +164,45 @@ verified candidates or cohort publication is provided by this operation.
 The older `publish_to(working_point=...)` and `publish_default()` still serve
 legacy consumers; new branch workflows use `publish_to_branch()`.
 
+## Publish inside a durable procedure
+
+A registered procedure can use the same server validation and atomic branch
+publication without activating a full configuration:
+
+```python
+published = ctx.publish_parameter_candidate(
+    "publish-calibration",
+    candidate_ref,
+    proposal_id="joint-drive-calibration",
+    verification=verification_ref,
+    decision_output_id="decision",
+    branch=intent.destination,
+    name=intent.result_revision_id,
+    actor="calibration-worker",
+)
+```
+
+Here `candidate_ref` and `verification_ref` are exact retained analysis outputs
+from earlier steps. The procedure's typed intent must capture the destination
+`ParameterBranch` and result revision name at submission. Do not re-checkout a
+moving branch while replaying the procedure. Joint candidates still require a
+retained joint verification decision; this step does not imply target completeness.
+
+The step stores the entire accepted branch receipt. A completed step replays that
+receipt without reopening evidence or resolving today's head. If publication
+commits but its step result is not saved, repeating the same command recovers the
+historical publication. An unresolved transport failure requires attention;
+retry with the same intent, rather than choosing a newer destination. Changing
+the destination or evidence changes step identity. Analysis-only recovery into a
+different procedure excludes any attempted parameter publication, just as it
+excludes old configuration acceptance.
+
+This durable output uses development schema 88. Existing development stores are
+left untouched; use a fresh store rather than rewriting an older one.
+
+For target selection, durable composition, joint verification and worker setup,
+see [Automate parameter calibration](automate-parameter-calibration.md).
+
 ## Scientific context remains separate
 
 Session branch selection and explicit branch-editor preparation preserve the
@@ -152,10 +213,9 @@ carry no enforced sample/cooldown applicability or calibration acceptance.
 
 The low-level `checkout(...).save(catalog=..., parameters=...)` remains available
 for programmatic full-snapshot producers; ordinary authors use `params.save()`.
-The old `session.config.workspace(context=...)` still serves maintained
-working-point consumers, but new teaching uses the independent branch backend
+The [legacy combined configuration API](manage-configuration.md) remains for its
+maintained working-point consumers. New author workflows use independent branches
 without fabricating samples or working points.
 
-Default branch selection, scientific working-point consolidation, graphical
-branch editing and equipment/target/binding separation remain follow-up work.
+Automatic default-branch selection and graphical branch editing remain follow-up work.
 No prebaseline data migration or historical-file rewriting is introduced.

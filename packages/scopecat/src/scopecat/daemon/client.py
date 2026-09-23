@@ -61,26 +61,7 @@ from scopecat.automation import (
     ProcedureWorkerLeaseReleaseCommand,
     ProcedureWorkerLeaseReleaseReceipt,
 )
-from scopecat.automation.calibration_wire import (
-    CalibrationCohortCreateCommand,
-    CalibrationCohortCreateReceipt,
-    CalibrationCohortGetReceipt,
-    CalibrationCohortListQuery,
-    CalibrationCohortMemberListQuery,
-    CalibrationCohortMemberPage,
-    CalibrationCohortPage,
-    CalibrationPublicationAttentionCommand,
-    CalibrationPublicationAttentionReceipt,
-    CalibrationPublicationDeferCommand,
-    CalibrationPublicationDeferReceipt,
-    CalibrationPublicationGetReceipt,
-    CalibrationPublicationReadyPage,
-    CalibrationPublicationReadyQuery,
-    CalibrationPublicationRetryCommand,
-    CalibrationPublicationRetryReceipt,
-    CalibrationStatusQuery,
-    CalibrationStatusReceipt,
-)
+from scopecat.automation.calibration_tasks import CalibrationTaskProgress
 from scopecat.automation.wire import (
     ProcedureStepResourceWaitCommand,
     ProcedureStepResourceWaitReceipt,
@@ -94,9 +75,32 @@ from scopecat.control.models import (
     EventPage,
     RunExecutionSegmentPage,
 )
+from scopecat.daemon.calibration_checks import (
+    CalibrationCheckObservation,
+    CalibrationCheckObservationResult,
+    CalibrationCheckPage,
+    CalibrationCheckQuery,
+    CalibrationProfilePage,
+    CalibrationProfileReportQuery,
+    CalibrationReport,
+    CalibrationReportQuery,
+    CalibrationTaskPreview,
+)
+from scopecat.daemon.calibration_tasks import (
+    CalibrationTaskControl,
+    CalibrationTaskCreate,
+    CalibrationTaskDispatch,
+    CalibrationTaskListQuery,
+    CalibrationTaskPage,
+    CalibrationTaskView,
+)
 from scopecat.daemon.hardware_receipt_wire import (
     decode_collect_receipt,
     decode_run_hardware_receipt,
+)
+from scopecat.daemon.measurement_context import (
+    MeasurementContextResolution,
+    MeasurementContextResolve,
 )
 from scopecat.daemon.points import (
     RunDomainDecisionCommand,
@@ -167,8 +171,6 @@ from scopecat.daemon.wire import (
     AnalysisSaveReceipt,
     AttentionResolutionCommand,
     AttentionResolutionReceipt,
-    CalibrationPublicationCommand,
-    CalibrationPublicationReceipt,
     ConfigActivationReceipt,
     ConfigContextPublishCommand,
     ConfigContextPublishReceipt,
@@ -206,6 +208,7 @@ from scopecat.daemon.wire import (
     ParameterBranchHistory,
     ParameterBranchPage,
     ParameterBranchPublishCommand,
+    ParameterCandidateComposeCommand,
     ParameterResolveCommand,
     ParameterRevisionList,
     ParameterSaveCommand,
@@ -222,6 +225,7 @@ from scopecat.daemon.wire import (
     RunDomainJobTransitionPage,
     RunHardwareBatchCommand,
     RunHardwareFinishCommand,
+    RunHostParameterEvidenceCommand,
     RunInstrumentProvisionCommand,
     RunInstrumentProvisionReceipt,
     RunRecoveryGroupCommitCommand,
@@ -262,6 +266,10 @@ from scopecat.records.author_revision import (
     AuthorRevisionBundle,
     AuthorRevisionRef,
     AuthorRevisionState,
+)
+from scopecat.records.calibration_policy import (
+    CalibrationProfile,
+    CalibrationProfileRecord,
 )
 from scopecat.records.config import ConfigProfileSnapshot
 from scopecat.records.config_context import ConfigContextRef
@@ -608,147 +616,115 @@ class DaemonClient:
             ProcedureSubmitReceipt,
         )
 
-    def query_calibration_status(
-        self,
-        query: CalibrationStatusQuery,
-    ) -> CalibrationStatusReceipt:
-        return self._post_idempotent_model(
-            f"{_API_PREFIX}/calibration-status/query",
-            query,
-            CalibrationStatusReceipt,
+    def create_calibration_task(
+        self, command: CalibrationTaskCreate
+    ) -> CalibrationTaskView:
+        return self._post_model(
+            f"{_API_PREFIX}/calibration-tasks", command, CalibrationTaskView
         )
 
-    def create_calibration_cohort(
-        self,
-        command: CalibrationCohortCreateCommand,
-    ) -> CalibrationCohortCreateReceipt:
-        return self._post_idempotent_model(
-            f"{_API_PREFIX}/calibration-cohorts",
-            command,
-            CalibrationCohortCreateReceipt,
-        )
-
-    def get_calibration_cohort(
-        self,
-        cohort_id: str,
-    ) -> CalibrationCohortGetReceipt:
+    def get_calibration_task(self, task_id: str) -> CalibrationTaskView:
         return self._get_model(
-            (f"{_API_PREFIX}/calibration-cohorts/by-id/{quote(cohort_id, safe='')}"),
-            CalibrationCohortGetReceipt,
+            f"{_API_PREFIX}/calibration-tasks/{quote(task_id, safe='')}",
+            CalibrationTaskView,
         )
 
-    def list_calibration_cohorts(
-        self,
-        query: CalibrationCohortListQuery,
-    ) -> CalibrationCohortPage:
-        params: dict[str, str | int] = {"limit": query.limit}
-        if query.cursor is not None:
-            params["cursor"] = query.cursor
-        if query.fanout_scope is not None:
-            params["fanout_scope"] = query.fanout_scope
-        return self._get_model(
-            f"{_API_PREFIX}/calibration-cohorts",
-            CalibrationCohortPage,
-            params=params,
-        )
-
-    def list_calibration_cohort_members(
-        self,
-        query: CalibrationCohortMemberListQuery,
-    ) -> CalibrationCohortMemberPage:
+    def list_calibration_tasks(
+        self, query: CalibrationTaskListQuery
+    ) -> CalibrationTaskPage:
         params: dict[str, str | int] = {"limit": query.limit}
         if query.cursor is not None:
             params["cursor"] = query.cursor
         return self._get_model(
-            (
-                f"{_API_PREFIX}/calibration-cohort-members/by-cohort/"
-                f"{quote(query.cohort_id, safe='')}"
-            ),
-            CalibrationCohortMemberPage,
-            params=params,
+            f"{_API_PREFIX}/calibration-tasks", CalibrationTaskPage, params=params
         )
 
-    def list_ready_calibration_publications(
+    def dispatch_calibration_task(
+        self, command: CalibrationTaskDispatch
+    ) -> CalibrationTaskView:
+        return self._post_model(
+            f"{_API_PREFIX}/calibration-tasks/dispatch", command, CalibrationTaskView
+        )
+
+    def control_calibration_task(
+        self, command: CalibrationTaskControl
+    ) -> CalibrationTaskView:
+        return self._post_model(
+            f"{_API_PREFIX}/calibration-tasks/control", command, CalibrationTaskView
+        )
+
+    def preview_calibration_task(
+        self, preview: CalibrationTaskPreview
+    ) -> CalibrationTaskProgress:
+        return self._post_model(
+            f"{_API_PREFIX}/calibration-tasks/preview",
+            preview,
+            CalibrationTaskProgress,
+        )
+
+    def observe_calibration_checks(
         self,
-        query: CalibrationPublicationReadyQuery,
-    ) -> CalibrationPublicationReadyPage:
-        return self._post_idempotent_model(
-            f"{_API_PREFIX}/calibration-publications/ready/query",
+        observation: CalibrationCheckObservation,
+    ) -> CalibrationCheckObservationResult:
+        return self._post_model(
+            f"{_API_PREFIX}/calibration-checks/observe",
+            observation,
+            CalibrationCheckObservationResult,
+        )
+
+    def query_calibration_checks(
+        self, query: CalibrationCheckQuery
+    ) -> CalibrationCheckPage:
+        return self._post_model(
+            f"{_API_PREFIX}/calibration-checks/query",
             query,
-            CalibrationPublicationReadyPage,
+            CalibrationCheckPage,
         )
 
-    def get_calibration_publication(
-        self,
-        cohort_id: str,
-    ) -> CalibrationPublicationGetReceipt:
+    def calibration_report(self, query: CalibrationReportQuery) -> CalibrationReport:
+        return self._post_model(
+            f"{_API_PREFIX}/calibration-checks/report", query, CalibrationReport
+        )
+
+    def resolve_measurement_context(
+        self, query: MeasurementContextResolve
+    ) -> MeasurementContextResolution:
+        return self._post_model(
+            f"{_API_PREFIX}/measurement-context/resolve",
+            query,
+            MeasurementContextResolution,
+        )
+
+    def save_calibration_profile(
+        self, profile: CalibrationProfile
+    ) -> CalibrationProfileRecord:
+        return self._post_model(
+            f"{_API_PREFIX}/calibration-profiles", profile, CalibrationProfileRecord
+        )
+
+    def get_calibration_profile(self, identity: str) -> CalibrationProfileRecord:
         return self._get_model(
-            (
-                f"{_API_PREFIX}/calibration-publications/by-cohort/"
-                f"{quote(cohort_id, safe='')}"
-            ),
-            CalibrationPublicationGetReceipt,
+            f"{_API_PREFIX}/calibration-profiles/{quote(identity, safe='')}",
+            CalibrationProfileRecord,
         )
 
-    def publish_calibration(
-        self,
-        command: CalibrationPublicationCommand,
-    ) -> CalibrationPublicationReceipt:
-        return self._post_idempotent_model(
-            f"{_API_PREFIX}/calibration-publications/operations",
-            command,
-            CalibrationPublicationReceipt,
-        )
-
-    def calibration_publication_operation(
-        self,
-        operation_id: str,
-    ) -> CalibrationPublicationReceipt:
+    def list_calibration_profiles(
+        self, limit: int, cursor: int | None
+    ) -> CalibrationProfilePage:
+        params: dict[str, str | int] = {"limit": limit}
+        if cursor is not None:
+            params["cursor"] = cursor
         return self._get_model(
-            (
-                f"{_API_PREFIX}/calibration-publications/operations/"
-                f"{quote(operation_id, safe='')}"
-            ),
-            CalibrationPublicationReceipt,
+            f"{_API_PREFIX}/calibration-profiles", CalibrationProfilePage, params=params
         )
 
-    def require_calibration_publication_attention(
-        self,
-        command: CalibrationPublicationAttentionCommand,
-    ) -> CalibrationPublicationAttentionReceipt:
+    def report_calibration_profile(
+        self, identity: str, query: CalibrationProfileReportQuery
+    ) -> CalibrationReport:
         return self._post_model(
-            (
-                f"{_API_PREFIX}/calibration-publication-attentions/"
-                f"{quote(command.cohort_id, safe='')}"
-            ),
-            command,
-            CalibrationPublicationAttentionReceipt,
-        )
-
-    def retry_calibration_publication(
-        self,
-        command: CalibrationPublicationRetryCommand,
-    ) -> CalibrationPublicationRetryReceipt:
-        return self._post_model(
-            (
-                f"{_API_PREFIX}/calibration-publication-retries/"
-                f"{quote(command.cohort_id, safe='')}"
-            ),
-            command,
-            CalibrationPublicationRetryReceipt,
-        )
-
-    def defer_calibration_publication(
-        self,
-        command: CalibrationPublicationDeferCommand,
-    ) -> CalibrationPublicationDeferReceipt:
-        return self._post_model(
-            (
-                f"{_API_PREFIX}/calibration-publication-deferrals/"
-                f"{quote(command.cohort_id, safe='')}"
-            ),
-            command,
-            CalibrationPublicationDeferReceipt,
+            f"{_API_PREFIX}/calibration-profiles/{quote(identity, safe='')}/report",
+            query,
+            CalibrationReport,
         )
 
     def list_procedures(
@@ -2281,6 +2257,15 @@ class DaemonClient:
             ContentEntry,
         )
 
+    def compose_parameter_candidate(
+        self, run_id: str, command: ParameterCandidateComposeCommand
+    ) -> AnalysisSaveReceipt:
+        return self._post_idempotent_model(
+            f"{_API_PREFIX}/runs/{quote(run_id, safe='')}/parameter-compositions",
+            command,
+            AnalysisSaveReceipt,
+        )
+
     def parameter_proposals(
         self,
         run_id: str,
@@ -2475,6 +2460,17 @@ class DaemonClient:
             f"{_API_PREFIX}/runs/{quote(run_id, safe='')}/execution-segments",
             RunExecutionSegmentPage,
             params=params,
+        )
+
+    def publish_host_parameter_evidence(
+        self,
+        run_id: str,
+        command: RunHostParameterEvidenceCommand,
+    ) -> ContentEntry:
+        return self._post_idempotent_model(
+            f"{_API_PREFIX}/runs/{quote(run_id, safe='')}/host-parameter-evidence",
+            command,
+            ContentEntry,
         )
 
     def advance_run_coverage(

@@ -5,8 +5,9 @@
         "approval": null,
         "proposal": {
           "analysis_record_id": "acceptance-analysis",
-          "base_config_content_hash": "sha256:ada673b9384d907a13adb59231f3f2dbd9aa63f76115d7712e6e6c926ed93486",
+          "base_config_content_hash": "sha256:669dadde2e128c5f12b6abcf126e7078b9dc546d2af6e006934cfc5b8429981d",
           "base_config_id": "acceptance-parameters",
+          "composition": null,
           "confidence": null,
           "deltas": [
             {
@@ -695,7 +696,7 @@
         "code_revision": {
           "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
         },
-        "config_source_hash": "sha256:b72194b3f7b0b56ac3397a5a61a14f16e80941f466a8e65c64ab618e19afb9e9",
+        "config_source_hash": "sha256:c514882183105ecc295309febae63ea34d6846592fc56f1561c48b461250894c",
         "request_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
       },
       "event_id": 1
@@ -706,7 +707,7 @@
       "scope_basis": "One authored run; all selected points.",
       "stages": [
         {
-          "config_content_hash": "sha256:ada673b9384d907a13adb59231f3f2dbd9aa63f76115d7712e6e6c926ed93486",
+          "config_content_hash": "sha256:669dadde2e128c5f12b6abcf126e7078b9dc546d2af6e006934cfc5b8429981d",
           "configuration": "selected_context",
           "configuration_meaning": "Uses exact parameter and setup revisions for this run; no calibration acceptance or default changes.",
           "costs": [
@@ -798,16 +799,17 @@
     "resources": [],
     "reviewed": {
       "binding": {
-        "codec": "scopecat.scientific-binding.v2",
-        "config_content_hash": "sha256:ada673b9384d907a13adb59231f3f2dbd9aa63f76115d7712e6e6c926ed93486",
+        "codec": "scopecat.scientific-binding.v3",
+        "config_content_hash": "sha256:669dadde2e128c5f12b6abcf126e7078b9dc546d2af6e006934cfc5b8429981d",
         "scenario": null,
-        "setup_content_hash": "sha256:812feca4f5b8ca2aacd28e29032c69b84f4cea4cdb2e74895660dfe0436a2289",
+        "setup_content_hash": "sha256:4c94daa4144d07cc5bd371065543ff5a8f8e0bef2a819c08967be373fc766bf7",
         "subject": {
           "kind": "unbound"
-        }
+        },
+        "target_binding": null
       },
       "config_source": {
-        "content_hash": "sha256:ada673b9384d907a13adb59231f3f2dbd9aa63f76115d7712e6e6c926ed93486",
+        "content_hash": "sha256:669dadde2e128c5f12b6abcf126e7078b9dc546d2af6e006934cfc5b8429981d",
         "kind": "parameter_revision",
         "overrides": [],
         "parameters": {
@@ -815,8 +817,8 @@
           "revision_id": "acceptance-parameters"
         },
         "setup": {
-          "content_hash": "sha256:86d52ff730334a8090f4e7e383ac8c2755fa3164b218df0d114946f7f58836f2",
-          "revision_id": "setup-86d52ff730334a8090f4e7e383ac8c2755fa3164b218df0d114946f7f58836f2"
+          "content_hash": "sha256:c0ad8e8fe9bee06718eaf9da8358a397048668cf33988390bed8935d636f9537",
+          "revision_id": "setup-c0ad8e8fe9bee06718eaf9da8358a397048668cf33988390bed8935d636f9537"
         }
       }
     },
@@ -1087,7 +1089,7 @@
         "code_revision": {
           "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
         },
-        "config_source_hash": "sha256:b72194b3f7b0b56ac3397a5a61a14f16e80941f466a8e65c64ab618e19afb9e9",
+        "config_source_hash": "sha256:c514882183105ecc295309febae63ea34d6846592fc56f1561c48b461250894c",
         "request_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
       },
       "event_id": 1
@@ -1098,7 +1100,7 @@
       "scope_basis": "One authored run; all selected points.",
       "stages": [
         {
-          "config_content_hash": "sha256:ada673b9384d907a13adb59231f3f2dbd9aa63f76115d7712e6e6c926ed93486",
+          "config_content_hash": "sha256:669dadde2e128c5f12b6abcf126e7078b9dc546d2af6e006934cfc5b8429981d",
           "configuration": "selected_context",
           "configuration_meaning": "Uses exact parameter and setup revisions for this run; no calibration acceptance or default changes.",
           "costs": [
@@ -1190,16 +1192,17 @@
     "resources": [],
     "reviewed": {
       "binding": {
-        "codec": "scopecat.scientific-binding.v2",
-        "config_content_hash": "sha256:ada673b9384d907a13adb59231f3f2dbd9aa63f76115d7712e6e6c926ed93486",
+        "codec": "scopecat.scientific-binding.v3",
+        "config_content_hash": "sha256:669dadde2e128c5f12b6abcf126e7078b9dc546d2af6e006934cfc5b8429981d",
         "scenario": null,
-        "setup_content_hash": "sha256:812feca4f5b8ca2aacd28e29032c69b84f4cea4cdb2e74895660dfe0436a2289",
+        "setup_content_hash": "sha256:4c94daa4144d07cc5bd371065543ff5a8f8e0bef2a819c08967be373fc766bf7",
         "subject": {
           "kind": "unbound"
-        }
+        },
+        "target_binding": null
       },
       "config_source": {
-        "content_hash": "sha256:ada673b9384d907a13adb59231f3f2dbd9aa63f76115d7712e6e6c926ed93486",
+        "content_hash": "sha256:669dadde2e128c5f12b6abcf126e7078b9dc546d2af6e006934cfc5b8429981d",
         "kind": "parameter_revision",
         "overrides": [],
         "parameters": {
@@ -1207,8 +1210,8 @@
           "revision_id": "acceptance-parameters"
         },
         "setup": {
-          "content_hash": "sha256:86d52ff730334a8090f4e7e383ac8c2755fa3164b218df0d114946f7f58836f2",
-          "revision_id": "setup-86d52ff730334a8090f4e7e383ac8c2755fa3164b218df0d114946f7f58836f2"
+          "content_hash": "sha256:c0ad8e8fe9bee06718eaf9da8358a397048668cf33988390bed8935d636f9537",
+          "revision_id": "setup-c0ad8e8fe9bee06718eaf9da8358a397048668cf33988390bed8935d636f9537"
         }
       }
     },
@@ -1769,7 +1772,7 @@
         "code_revision": {
           "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
         },
-        "config_source_hash": "sha256:b72194b3f7b0b56ac3397a5a61a14f16e80941f466a8e65c64ab618e19afb9e9",
+        "config_source_hash": "sha256:c514882183105ecc295309febae63ea34d6846592fc56f1561c48b461250894c",
         "request_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
       },
       "event_id": 1
@@ -1780,7 +1783,7 @@
       "scope_basis": "One authored run; all selected points.",
       "stages": [
         {
-          "config_content_hash": "sha256:ada673b9384d907a13adb59231f3f2dbd9aa63f76115d7712e6e6c926ed93486",
+          "config_content_hash": "sha256:669dadde2e128c5f12b6abcf126e7078b9dc546d2af6e006934cfc5b8429981d",
           "configuration": "selected_context",
           "configuration_meaning": "Uses exact parameter and setup revisions for this run; no calibration acceptance or default changes.",
           "costs": [
@@ -1888,16 +1891,17 @@
     ],
     "reviewed": {
       "binding": {
-        "codec": "scopecat.scientific-binding.v2",
-        "config_content_hash": "sha256:ada673b9384d907a13adb59231f3f2dbd9aa63f76115d7712e6e6c926ed93486",
+        "codec": "scopecat.scientific-binding.v3",
+        "config_content_hash": "sha256:669dadde2e128c5f12b6abcf126e7078b9dc546d2af6e006934cfc5b8429981d",
         "scenario": null,
-        "setup_content_hash": "sha256:812feca4f5b8ca2aacd28e29032c69b84f4cea4cdb2e74895660dfe0436a2289",
+        "setup_content_hash": "sha256:4c94daa4144d07cc5bd371065543ff5a8f8e0bef2a819c08967be373fc766bf7",
         "subject": {
           "kind": "unbound"
-        }
+        },
+        "target_binding": null
       },
       "config_source": {
-        "content_hash": "sha256:ada673b9384d907a13adb59231f3f2dbd9aa63f76115d7712e6e6c926ed93486",
+        "content_hash": "sha256:669dadde2e128c5f12b6abcf126e7078b9dc546d2af6e006934cfc5b8429981d",
         "kind": "parameter_revision",
         "overrides": [],
         "parameters": {
@@ -1905,8 +1909,8 @@
           "revision_id": "acceptance-parameters"
         },
         "setup": {
-          "content_hash": "sha256:86d52ff730334a8090f4e7e383ac8c2755fa3164b218df0d114946f7f58836f2",
-          "revision_id": "setup-86d52ff730334a8090f4e7e383ac8c2755fa3164b218df0d114946f7f58836f2"
+          "content_hash": "sha256:c0ad8e8fe9bee06718eaf9da8358a397048668cf33988390bed8935d636f9537",
+          "revision_id": "setup-c0ad8e8fe9bee06718eaf9da8358a397048668cf33988390bed8935d636f9537"
         }
       }
     },

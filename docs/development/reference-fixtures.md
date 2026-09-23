@@ -28,9 +28,11 @@ mapping is irrelevant. Use the full virtual plant for shared claims, channel
 routing, compiled buffers and recovery interactions. Mocking these boundaries
 would remove the evidence the tests exist to provide.
 
-The shared acceptance capture and snapshot roundtrip use
-`reference_lab/fixtures/equipment_bootstrap.py` in their disposable projects.
-This fixture starts equipment without publishing parameter defaults. Capture
+The reference application's standard bootstrap now starts equipment without
+publishing parameter defaults or importing the parameter-table declarations.
+The temporary `equipment_bootstrap.py` fixture and manifest-rewriting paths are
+retired; shared acceptance capture, snapshot roundtrip and author/device tests use
+the same standard manifest in disposable projects. Capture
 saves an independent parameter revision and selects its exact setup for previews
 and runs; recovery compares both owners as well as retained scientific results.
 The combined registry remains empty. Candidate acquisition is not approval:
@@ -38,11 +40,92 @@ the shared response contains an unapproved proposal, with approval decoding test
 separately in the UI. Calibration publication and restoration remain covered by
 the dedicated DRAG integration workflows.
 
-The legacy gallery still starts with transitional parameter defaults. Reassess
-its calibration/default-publication assertions against the new design; retain
-needed behaviors in focused tests and retire the old consumers. There is no
-requirement to port every script before removing bootstrap defaults. The
-acceptance fixture is not a second user mode.
+The experiment-plan journey (`tests/test_experiment_plans.py`) now also starts
+with equipment only. It explicitly selects independent parameters/setup and
+keeps the combined registry empty while testing comparison handoff, saved-plan
+copy/replay, exact sample revisions, structural inputs and candidate child scope.
+Branch edits replace the former global-default activation/restore exercise.
+The old working-point-specific assertion is replaced by exact independent
+parameter/setup selection; it is not a reason to keep working points forever.
+The comparison provider uses `comparison_selection(run.snapshot)` to retain
+source inputs instead of silently requiring a new global default.
+
+`independent_lab_daemon` now shares that equipment-only process among the plan,
+comparison, everyday-author, session and registered-target journeys. It copies no legacy
+notebooks and does not set `SCOPECAT_DAEMON_URL`; consumers receive the endpoint
+explicitly. `independent_parameters` saves a fresh named revision for each test
+that needs one. Target selection pins those parameters and the setup alongside
+the target reference; retained plans still execute after catalog/session changes.
+Everyday-author tests intentionally supply complete low-level snapshots, but no
+longer require an unrelated default configuration just to inspect unchanged state.
+These consumers assert that the combined registry stays empty.
+
+Session isolation now uses two distinct parameter revisions with one shared setup.
+It retains failed-selection atomicity, frozen preparation, explicit scientific
+overrides, per-collection numeric lookup and saved-plan destination/actor inheritance.
+Parameter editors do not own sample selection; a supplied editor preserves the
+session's subject instead of importing a working point's bundled sample.
+
+Batch and parameter-context journeys also use this equipment-only fixture.
+The same saved values may be selected in different cooldowns without asserting
+calibration validity. Frozen plans and candidate provenance still retain their
+original batch; candidate execution cannot relabel that evidence. This replaces
+the old requirement to copy a working point before selecting a new batch.
+Parameter-context tests retain numerical response changes, override/replay,
+forged-source rejection and immutable history using independent revisions.
+Launch replay keeps exact sample/setup/parameter inputs after branch edits.
+`AuthorExperiment.prepare/run` accepts `ParameterResolution` explicitly in its
+typed API, matching the underlying runner and preserving exact provenance.
+Their duplicate unknown-parameter test is covered by the tutorial journey below;
+parameter ownership itself no longer implies a sample or working-point scope.
+
+Managed notebook recovery also uses independent parameter branches and explicit
+setup selection. It tests frozen unsaved edits, stale-editor conflicts, reopening
+the receipt in a fresh Python process and recovering one admission after a lost
+response. Reopening distinguishes the current branch head from the exact saved
+base of the run's overrides; no working-point latest/original lookup is needed.
+Exploration/reanalysis tests use the same equipment-only daemon while intentionally
+retaining their explicit low-level snapshots and descriptive context labels.
+Those labels carry provenance, not parameter ownership or validity. Both journeys
+keep the combined registry empty.
+
+The copied-author launch suite owns a separate equipment-only daemon because it
+edits source files and observes live worker batches. Explicit parameter/setup
+selection now covers HTTP and Python launch, modified Ramsey timing, typed/editable
+requests, required-input diagnostics, source refresh, saved plans, bounded inspection
+and reconnecting to an ongoing preview. Overrides retain independent parameter
+provenance through the worker boundary. Changing a daily branch does not invalidate
+an exact reviewed launch; idempotent submission and new execution both retain its
+original inputs. This replaces the former global-default invalidation assertion.
+
+The analysis-recovery journey shares the independent daemon instead of starting
+another default-configured process. Its procedure receives an explicit resolved
+snapshot. Tests still verify one original acquisition, no reacquisition during
+recovery, unchanged failed-procedure history, exact recovery provenance and
+idempotency/conflict checks. Run counts compare against the existing store rather
+than assuming the service belongs to only one test.
+
+The launcher suite starts two equipment-only daemons to retain foreign-endpoint
+isolation coverage. Only the target daemon receives explicit parameter revisions;
+catalog, preflight, control edits, candidate review and HTTP dispatch do not rely
+on a global parameter default. Its stale-preview test now changes executable
+setup authority: new work from the old review is rejected, while replay of an
+existing admission remains idempotent. No-op candidate diagnostics use a separate
+saved parameter revision rather than temporarily changing a global default.
+Selecting inputs is not scientific acceptance; preflight reports selected context
+and proposed candidate separately.
+
+The retained device gallery now also starts with equipment only. Acquisition and
+preview scripts explicitly call the maintainer-owned `gallery_inputs(lab)` helper,
+which saves an immutable fixture revision per script run and resolves it against
+the current setup without selecting defaults. Direct instrument control needs no parameter
+revision. Routing, waveform, resource-conflict, independent-channel failure and
+ragged-data assertions remain in place; the fixture checks that the combined
+registry stays empty and setup stays unchanged. This helper is acceptance code,
+not a replacement teaching template or a second user mode. The reference
+application no longer exposes transitional defaults. `initial_parameters()` and
+`bootstrap_config()` remain explicit fixture-data builders for callers that need
+saved inputs or complete low-level execution snapshots.
 
 No private package may become a prerequisite for public CI or the installed
 starter. Shared test helpers belong in testkit only when independently reused;
@@ -102,8 +185,11 @@ compute-only tutorials alone do not replace physical device evidence.
 The unknown-parameter declaration/freeze/structural-history journey now uses a
 compute-only tutorial daemon (`packages/lab-tools/tests/test_unknown_parameter_authoring.py`).
 Its former reference-lab test and probe module are removed. The same assertions
-cover unknown consumption, frozen requests and retained old contexts without the
-four-qubit device/quantum setup.
+cover unknown consumption, frozen requests and retained scientific snapshots without
+the four-qubit device/quantum setup. The remaining legacy structure-context test is
+also retired: this tutorial journey now adds an unknown column to an existing
+table and checks both unconsumed-column execution and consumed-column rejection.
+Working-point structure-origin metadata is no longer an author workflow contract.
 
 ## Explicit process fixtures
 

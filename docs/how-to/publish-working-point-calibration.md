@@ -57,5 +57,7 @@ is valid for another sample, another batch, an apparatus object, or a complete
 multi-object calibration program. `publish_default()` remains an explicit operation
 for changing the application-wide default.
 
-For a registered policy that repeatedly evaluates freshness and publishes bounded
-cohorts, use [working-point automation](automate-working-point-calibration.md).
+For new automated workflows, use independent parameter branches and
+[joint calibration procedures](automate-parameter-calibration.md). The former
+working-point cohort enrollment is retired; automatic freshness inference is not
+part of the new default worker.

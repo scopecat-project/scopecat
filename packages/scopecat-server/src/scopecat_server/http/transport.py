@@ -74,28 +74,7 @@ from scopecat.automation import (
     ProcedureWorkerLeaseReleaseCommand,
     ProcedureWorkerLeaseReleaseReceipt,
 )
-from scopecat.automation.calibration_wire import (
-    CalibrationCohortCreateCommand,
-    CalibrationCohortCreateReceipt,
-    CalibrationCohortGetQuery,
-    CalibrationCohortGetReceipt,
-    CalibrationCohortListQuery,
-    CalibrationCohortMemberListQuery,
-    CalibrationCohortMemberPage,
-    CalibrationCohortPage,
-    CalibrationPublicationAttentionCommand,
-    CalibrationPublicationAttentionReceipt,
-    CalibrationPublicationDeferCommand,
-    CalibrationPublicationDeferReceipt,
-    CalibrationPublicationGetQuery,
-    CalibrationPublicationGetReceipt,
-    CalibrationPublicationReadyPage,
-    CalibrationPublicationReadyQuery,
-    CalibrationPublicationRetryCommand,
-    CalibrationPublicationRetryReceipt,
-    CalibrationStatusQuery,
-    CalibrationStatusReceipt,
-)
+from scopecat.automation.calibration_tasks import CalibrationTaskProgress
 from scopecat.automation.wire import (
     ProcedureStepResourceWaitCommand,
     ProcedureStepResourceWaitReceipt,
@@ -109,6 +88,25 @@ from scopecat.control.models import (
     EventPage,
     RunExecutionSegmentPage,
 )
+from scopecat.daemon.calibration_checks import (
+    CalibrationCheckObservation,
+    CalibrationCheckObservationResult,
+    CalibrationCheckPage,
+    CalibrationCheckQuery,
+    CalibrationProfilePage,
+    CalibrationProfileReportQuery,
+    CalibrationReport,
+    CalibrationReportQuery,
+    CalibrationTaskPreview,
+)
+from scopecat.daemon.calibration_tasks import (
+    CalibrationTaskControl,
+    CalibrationTaskCreate,
+    CalibrationTaskDispatch,
+    CalibrationTaskListQuery,
+    CalibrationTaskPage,
+    CalibrationTaskView,
+)
 from scopecat.daemon.endpoint import (
     DAEMON_SHUTDOWN_PATH,
     DAEMON_SHUTDOWN_TOKEN_HEADER,
@@ -117,6 +115,10 @@ from scopecat.daemon.hardware_receipt_wire import (
     HARDWARE_RECEIPT_MEDIA_TYPE,
     encode_collect_receipt,
     encode_run_hardware_receipt,
+)
+from scopecat.daemon.measurement_context import (
+    MeasurementContextResolution,
+    MeasurementContextResolve,
 )
 from scopecat.daemon.points import (
     ResolvedRunDomainView,
@@ -130,7 +132,7 @@ from scopecat.daemon.points import (
     RunPointPlanCloseCommand,
     RunPointPlanView,
 )
-from scopecat.daemon.procedure_views import ProcedureOperatorView
+from scopecat.daemon.procedure_views import ProcedureOperatorView, ProcedureWorkerLog
 from scopecat.daemon.reviews import (
     ReviewCompileCommand,
     ReviewCompileReceipt,
@@ -186,8 +188,6 @@ from scopecat.daemon.wire import (
     AnalysisSaveReceipt,
     AttentionResolutionCommand,
     AttentionResolutionReceipt,
-    CalibrationPublicationCommand,
-    CalibrationPublicationReceipt,
     ConfigActivationReceipt,
     ConfigContextPublishCommand,
     ConfigContextPublishReceipt,
@@ -225,6 +225,7 @@ from scopecat.daemon.wire import (
     ParameterBranchHistory,
     ParameterBranchPage,
     ParameterBranchPublishCommand,
+    ParameterCandidateComposeCommand,
     ParameterResolveCommand,
     ParameterRevisionList,
     ParameterSaveCommand,
@@ -241,6 +242,7 @@ from scopecat.daemon.wire import (
     RunDomainJobTransitionPage,
     RunHardwareBatchCommand,
     RunHardwareFinishCommand,
+    RunHostParameterEvidenceCommand,
     RunInstrumentProvisionCommand,
     RunInstrumentProvisionReceipt,
     RunRecoveryGroupCommitCommand,
@@ -278,6 +280,10 @@ from scopecat.records.author_revision import (
     AuthorRevisionState,
 )
 from scopecat.records.author_workspace import AuthorWorkspaceCatalog
+from scopecat.records.calibration_policy import (
+    CalibrationProfile,
+    CalibrationProfileRecord,
+)
 from scopecat.records.comparison import ComparisonRequest
 from scopecat.records.config import ConfigProfileSnapshot
 from scopecat.records.config_context import ConfigContextRef
@@ -369,7 +375,11 @@ from scopecat_server.http.procedure_operator import (
     read_procedure_operator,
 )
 from scopecat_server.retained_request import AnalysisCall, ComparisonCall
-from scopecat_server.services.project_workers import ProjectProcedureWorkers
+from scopecat_server.services.calibration_task_runner import CalibrationTaskRunner
+from scopecat_server.services.project_workers import (
+    ProcedureDispatchError,
+    ProjectProcedureWorkers,
+)
 from scopecat_server.services.revision_workers import RevisionWorkers
 from scopecat_server.storage.sqlite.author_revision_repository import (
     AuthorRevisionConflict,
@@ -437,10 +447,15 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI) -> AsyncGenerator[None]:
+        task_runner = CalibrationTaskRunner(
+            application.calibration_tasks, project_workers
+        )
         project_workers.start()
+        task_runner.start()
         try:
             yield
         finally:
+            task_runner.stop()
             project_workers.stop()
             application.author_revisions.close()
             retained_workers.close()
@@ -800,7 +815,7 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
             return LaunchSubmission(procedure_id=procedure_id)
         try:
             project_workers.dispatch(procedure_id)
-        except OSError as error:
+        except (OSError, ProcedureDispatchError) as error:
             return LaunchSubmission(
                 procedure_id=procedure_id, dispatch_error=str(error)
             )
@@ -834,6 +849,14 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
         return read_procedure_operator(
             application, project_workers, procedure_run_id, cursor=cursor
         )
+
+    @app.get(f"{_API_PREFIX}/procedures/{{procedure_run_id}}/worker-log")
+    def get_procedure_worker_log(
+        procedure_run_id: str,
+        max_bytes: Annotated[int, Query(ge=1, le=65536)] = 16384,
+    ) -> ProcedureWorkerLog:
+        application.automation.get(procedure_run_id)
+        return project_workers.read_log(procedure_run_id, max_bytes)
 
     @app.get(f"{_API_PREFIX}/health")
     def health() -> DaemonHealth:
@@ -1688,102 +1711,6 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
     ) -> ProcedureSubmitReceipt:
         return application.automation.submit(command)
 
-    @app.post(f"{_API_PREFIX}/calibration-status/query")
-    def query_calibration_status(
-        query: CalibrationStatusQuery,
-    ) -> CalibrationStatusReceipt:
-        return application.calibration_cohorts.status(query)
-
-    @app.post(f"{_API_PREFIX}/calibration-cohorts", status_code=201)
-    def create_calibration_cohort(
-        command: CalibrationCohortCreateCommand,
-    ) -> CalibrationCohortCreateReceipt:
-        return application.calibration_cohorts.create(command)
-
-    @app.get(f"{_API_PREFIX}/calibration-cohorts")
-    def list_calibration_cohorts(
-        limit: Annotated[int, Query(ge=1, le=200)] = 50,
-        cursor: Annotated[int | None, Query(ge=1)] = None,
-        fanout_scope: Annotated[str | None, Query(min_length=1)] = None,
-    ) -> CalibrationCohortPage:
-        return application.calibration_cohorts.list(
-            CalibrationCohortListQuery(
-                limit=limit,
-                cursor=cursor,
-                fanout_scope=fanout_scope,
-            )
-        )
-
-    @app.get(f"{_API_PREFIX}/calibration-cohort-members/by-cohort/{{cohort_id:path}}")
-    def list_calibration_cohort_members(
-        cohort_id: str,
-        limit: Annotated[int, Query(ge=1, le=200)] = 50,
-        cursor: Annotated[int | None, Query(ge=0)] = None,
-    ) -> CalibrationCohortMemberPage:
-        return application.calibration_cohorts.list_members(
-            CalibrationCohortMemberListQuery(
-                cohort_id=cohort_id,
-                limit=limit,
-                cursor=cursor,
-            )
-        )
-
-    @app.get(f"{_API_PREFIX}/calibration-cohorts/by-id/{{cohort_id:path}}")
-    def get_calibration_cohort(cohort_id: str) -> CalibrationCohortGetReceipt:
-        return application.calibration_cohorts.get(
-            CalibrationCohortGetQuery(cohort_id=cohort_id)
-        )
-
-    @app.post(f"{_API_PREFIX}/calibration-publications/ready/query")
-    def list_ready_calibration_publications(
-        query: CalibrationPublicationReadyQuery,
-    ) -> CalibrationPublicationReadyPage:
-        return application.calibration_cohorts.ready_publications(query)
-
-    @app.get(f"{_API_PREFIX}/calibration-publications/by-cohort/{{cohort_id:path}}")
-    def get_calibration_publication(
-        cohort_id: str,
-    ) -> CalibrationPublicationGetReceipt:
-        return application.calibration_cohorts.get_publication(
-            CalibrationPublicationGetQuery(cohort_id=cohort_id)
-        )
-
-    @app.get(f"{_API_PREFIX}/calibration-publications/operations/{{operation_id:path}}")
-    def get_calibration_publication_operation(
-        operation_id: str,
-    ) -> CalibrationPublicationReceipt:
-        return application.config.get_calibration_publication_operation(operation_id)
-
-    @app.post(f"{_API_PREFIX}/calibration-publications/operations")
-    def publish_calibration(
-        command: CalibrationPublicationCommand,
-    ) -> CalibrationPublicationReceipt:
-        return application.config.publish_calibration(command)
-
-    @app.post(f"{_API_PREFIX}/calibration-publication-attentions/{{cohort_id:path}}")
-    def require_calibration_publication_attention(
-        cohort_id: str,
-        command: CalibrationPublicationAttentionCommand,
-    ) -> CalibrationPublicationAttentionReceipt:
-        _require_calibration_publication_cohort_id(cohort_id, command.cohort_id)
-        return application.calibration_cohorts.require_publication_attention(command)
-
-    @app.post(f"{_API_PREFIX}/calibration-publication-retries/{{cohort_id:path}}")
-    def retry_calibration_publication(
-        cohort_id: str,
-        command: CalibrationPublicationRetryCommand,
-    ) -> CalibrationPublicationRetryReceipt:
-        _require_calibration_publication_cohort_id(cohort_id, command.cohort_id)
-        return application.calibration_cohorts.retry_publication(command)
-
-    @app.post(f"{_API_PREFIX}/calibration-publication-deferrals/{{cohort_id:path}}")
-    def defer_calibration_publication(
-        cohort_id: str,
-        command: CalibrationPublicationDeferCommand,
-    ) -> CalibrationPublicationDeferReceipt:
-        _require_calibration_publication_cohort_id(cohort_id, command.cohort_id)
-        return application.calibration_cohorts.defer_publication(command)
-
     @app.post(f"{_API_PREFIX}/procedure-schedules", status_code=201)
     def create_procedure_schedule(
         command: ProcedureScheduleCreateCommand,
@@ -1834,6 +1761,85 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
     ) -> ProcedureScheduleMaterializeReceipt:
         _require_procedure_schedule_id(schedule_id, command.schedule_id)
         return application.procedure_schedules.materialize(command)
+
+    @app.post(f"{_API_PREFIX}/calibration-tasks")
+    def create_calibration_task(command: CalibrationTaskCreate) -> CalibrationTaskView:
+        return application.calibration_tasks.create(command)
+
+    @app.post(f"{_API_PREFIX}/calibration-tasks/dispatch")
+    def dispatch_calibration_task(
+        command: CalibrationTaskDispatch,
+    ) -> CalibrationTaskView:
+        return application.calibration_tasks.dispatch(command)
+
+    @app.post(f"{_API_PREFIX}/calibration-tasks/control")
+    def control_calibration_task(
+        command: CalibrationTaskControl,
+    ) -> CalibrationTaskView:
+        return application.calibration_tasks.control(command)
+
+    @app.get(f"{_API_PREFIX}/calibration-tasks")
+    def list_calibration_tasks(
+        limit: Annotated[int, Query(ge=1, le=200)] = 50,
+        cursor: Annotated[int | None, Query(ge=1)] = None,
+    ) -> CalibrationTaskPage:
+        return application.calibration_tasks.list(
+            CalibrationTaskListQuery(limit=limit, cursor=cursor)
+        )
+
+    @app.get(f"{_API_PREFIX}/calibration-tasks/{{task_id:path}}")
+    def get_calibration_task(task_id: str) -> CalibrationTaskView:
+        return application.calibration_tasks.get(task_id)
+
+    @app.post(f"{_API_PREFIX}/calibration-tasks/preview")
+    def preview_calibration_task(
+        preview: CalibrationTaskPreview,
+    ) -> CalibrationTaskProgress:
+        return application.calibration_checks.preview_task(preview)
+
+    @app.post(f"{_API_PREFIX}/calibration-checks/query")
+    def query_calibration_checks(query: CalibrationCheckQuery) -> CalibrationCheckPage:
+        return application.calibration_checks.query(query)
+
+    @app.post(f"{_API_PREFIX}/calibration-checks/observe")
+    def observe_calibration_checks(
+        observation: CalibrationCheckObservation,
+    ) -> CalibrationCheckObservationResult:
+        return application.calibration_checks.observe(observation)
+
+    @app.post(f"{_API_PREFIX}/calibration-checks/report")
+    def calibration_report(query: CalibrationReportQuery) -> CalibrationReport:
+        return application.calibration_checks.report(query)
+
+    @app.post(f"{_API_PREFIX}/measurement-context/resolve")
+    def resolve_measurement_context(
+        query: MeasurementContextResolve,
+    ) -> MeasurementContextResolution:
+        return application.measurement_context.resolve(query)
+
+    @app.post(f"{_API_PREFIX}/calibration-profiles")
+    def save_calibration_profile(
+        profile: CalibrationProfile,
+    ) -> CalibrationProfileRecord:
+        return application.calibration_profiles.save(profile)
+
+    @app.get(f"{_API_PREFIX}/calibration-profiles")
+    def list_calibration_profiles(
+        limit: Annotated[int, Query(ge=1, le=200)] = 50,
+        cursor: Annotated[int | None, Query(ge=1)] = None,
+    ) -> CalibrationProfilePage:
+        return application.calibration_profiles.list(limit, cursor)
+
+    @app.get(f"{_API_PREFIX}/calibration-profiles/{{profile_id}}")
+    def get_calibration_profile(profile_id: str) -> CalibrationProfileRecord:
+        return application.calibration_profiles.get(profile_id)
+
+    @app.post(f"{_API_PREFIX}/calibration-profiles/{{profile_id}}/report")
+    def report_calibration_profile(
+        profile_id: str,
+        query: CalibrationProfileReportQuery,
+    ) -> CalibrationReport:
+        return application.calibration_profiles.report(profile_id, query)
 
     @app.get(f"{_API_PREFIX}/procedures")
     def list_procedures(
@@ -2194,6 +2200,12 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
             before=before,
         )
 
+    @app.post(f"{_API_PREFIX}/runs/{{run_id}}/parameter-compositions", status_code=201)
+    def compose_parameter_candidate(
+        run_id: str, command: ParameterCandidateComposeCommand
+    ) -> AnalysisSaveReceipt:
+        return application.runs.compose_parameter_candidate(run_id, command)
+
     @app.post(f"{_API_PREFIX}/runs/{{run_id}}/analyses", status_code=201)
     def save_run_analysis(
         run_id: str,
@@ -2492,6 +2504,13 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
             before=before,
         )
 
+    @app.post(f"{_API_PREFIX}/runs/{{run_id}}/host-parameter-evidence")
+    def publish_host_parameter_evidence(
+        run_id: str,
+        command: RunHostParameterEvidenceCommand,
+    ) -> ContentEntry:
+        return application.executor.publish_host_parameter_evidence(run_id, command)
+
     @app.post(f"{_API_PREFIX}/runs/{{run_id}}/coverage/advance")
     def advance_run_coverage(
         run_id: str,
@@ -2787,17 +2806,6 @@ def _require_procedure_run_id(
         raise HTTPException(
             status_code=422,
             detail="path procedure_run_id must match request body",
-        )
-
-
-def _require_calibration_publication_cohort_id(
-    path_cohort_id: str,
-    body_cohort_id: str,
-) -> None:
-    if path_cohort_id != body_cohort_id:
-        raise HTTPException(
-            status_code=422,
-            detail="path cohort_id must match request body",
         )
 
 

@@ -225,3 +225,15 @@ def test_point_domain_center_reads_base_parameter_before_point_overlay() -> None
     assert isinstance(input_expression, PointColumnScalarExpr)
     assert input_expression.name == "frequency"
     assert input_expression.value_type == frequency
+    [captured] = specialized.parameter_reads
+    assert captured.phase == "specialization"
+    assert captured.parameter_scope == "base_configuration"
+    assert captured.evidence.keyed[0].cells[0].value == QuantityValue(5.95, "GHz")
+    assert (
+        "symbolic_overlay:readout_devices.frequency"
+        in captured.evidence.incomplete_reasons
+    )
+    again = specialize_bound_facts(
+        program.logical, specialized, parameters=parameters()
+    )
+    assert again.parameter_reads == specialized.parameter_reads

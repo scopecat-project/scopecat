@@ -1,13 +1,12 @@
 """A notebook selection keeps target evidence through real saved-plan execution."""
 
-import os
 from pathlib import Path
 from uuid import uuid4
 
-import pytest
 from scopecat.api.lab import LabClient
 from scopecat.application.author_project import AuthorProject
 from scopecat.daemon.client import DaemonClient
+from scopecat.records.parameter_revision import ParameterRevision
 from scopecat.records.sample import SampleRevisionDraft
 from scopecat.records.scientific_scope import MeasurementTarget, TargetMember
 from scopecat.records.target_catalog import (
@@ -16,25 +15,25 @@ from scopecat.records.target_catalog import (
     TargetRevisionDraft,
 )
 
-pytestmark = pytest.mark.usefixtures("reference_lab_daemon")
-
 
 def test_target_plan_keeps_exact_reviewed_binding_after_catalog_and_session_changes(
     tmp_path: Path,
+    independent_lab_daemon: str,
+    independent_parameters: ParameterRevision,
 ):
-    endpoint = os.environ["SCOPECAT_DAEMON_URL"]
+    endpoint = independent_lab_daemon
     key = uuid4().hex
     with (
         AuthorProject(endpoint, receipts=tmp_path) as session,
         LabClient(DaemonClient(endpoint)) as lab,
     ):
-        active = lab.config.active()
+        setup = lab.setup.active()
         sample = lab.samples.create(
             f"target-{key}",
             kind="synthetic",
             content=SampleRevisionDraft(
                 display_name="Target chip",
-                topology=active.config.system.topology,
+                topology=setup.revision.setup.topology,
             ),
         )
         revision = lab.samples.revision(sample.id, 1)
@@ -58,7 +57,11 @@ def test_target_plan_keeps_exact_reviewed_binding_after_catalog_and_session_chan
                 ),
             )
         )
-        session.use(target=target.ref.target_id)
+        session.use(
+            target=target.ref.target_id,
+            parameters=independent_parameters.ref,
+            setup=setup.revision.ref,
+        )
         prepared = session.prepare("signal")
         binding = prepared.preview.reviewed.binding
         assert binding.subject.kind == "registered_target"
@@ -87,4 +90,5 @@ def test_target_plan_keeps_exact_reviewed_binding_after_catalog_and_session_chan
         assert parent is not None
         assert parent.scientific_binding == binding
         assert run.samples == binding.samples
-        assert lab.config.active() == active
+        assert lab.setup.active() == setup
+        assert lab.config.registry().entries == ()

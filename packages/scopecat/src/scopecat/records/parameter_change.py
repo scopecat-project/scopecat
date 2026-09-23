@@ -18,7 +18,9 @@ from pydantic import (
 from scopecat.kernel.frozen import FrozenMapping
 from scopecat.kernel.run_outcome import utc_now
 from scopecat.records.config import ConfigContentHash
+from scopecat.records.content import Sha256ContentHash
 from scopecat.records.parameter import ParameterAtomValue, StoredParameterValue
+from scopecat.records.parameter_revision import ParameterRevisionRef
 
 
 class ParameterChangeApprovalRecord(BaseModel):
@@ -100,6 +102,23 @@ class ParameterValueDelta(BaseModel):
         return self
 
 
+class ParameterProposalRef(BaseModel):
+    """One exact retained contribution to a composed candidate."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    run_id: str = Field(min_length=1)
+    proposal_id: str = Field(min_length=1)
+    analysis_record_id: str = Field(min_length=1)
+    content_hash: Sha256ContentHash
+
+
+class ParameterProposalComposition(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    base: ParameterRevisionRef
+    mode: Literal["parallel", "sequential"] = "parallel"
+    sources: tuple[ParameterProposalRef, ...] = Field(min_length=2, max_length=200)
+
+
 class ParameterChangeProposal(BaseModel):
     """Immutable parameter changes proposed against one source config."""
 
@@ -116,6 +135,7 @@ class ParameterChangeProposal(BaseModel):
     reason: str
     confidence: float | None = Field(default=None, ge=0, le=1)
     evidence_output_ids: tuple[str, ...] = ()
+    composition: ParameterProposalComposition | None = None
     deltas: tuple[ParameterValueDelta, ...] = Field(min_length=1)
     proposed_at: datetime = Field(default_factory=utc_now)
 

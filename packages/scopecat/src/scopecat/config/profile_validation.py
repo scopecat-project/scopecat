@@ -74,21 +74,6 @@ def validate_config_profile(
 ) -> tuple[Problem, ...]:
     problems: list[Problem] = []
 
-    entity_ids = {entity.id for entity in config.topology.entities}
-    if (
-        config.primary_entity_id
-        and entity_ids
-        and config.primary_entity_id not in entity_ids
-    ):
-        problems.append(
-            _problem(
-                "unknown_primary_entity",
-                "primary_entity_id references an unknown entity "
-                f"{config.primary_entity_id}",
-                ("system", "primary_entity_id"),
-            )
-        )
-
     problems.extend(_routing_route_problems(config))
 
     if include_parameter_values:

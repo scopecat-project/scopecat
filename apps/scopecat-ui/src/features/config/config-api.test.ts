@@ -109,7 +109,6 @@ describe("config registry reads", () => {
     expect(detail.config).not.toHaveProperty("raw");
     expect(detail.summary).toEqual({
       id: "profile-a",
-      primaryEntityId: "q0",
       parameterCount: 1,
       instrumentCount: 1,
     });
@@ -262,7 +261,7 @@ describe("config snapshot import boundary", () => {
     expect(
       parseConfigProfileJson(
         JSON.stringify({
-          format_version: "scopecat.config_snapshot.v10",
+          format_version: "scopecat.config_snapshot.v11",
           ...config,
         }),
       ),
@@ -316,7 +315,6 @@ function configProfile(id: string): ConfigProfileSnapshot {
     id,
     system: {
       id: "system",
-      primary_entity_id: "q0",
       topology: {
         entities: [{ id: "q0", kind: "logical_qubit", metadata: {} }],
       },

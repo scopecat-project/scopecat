@@ -122,7 +122,23 @@ from cancellation completion; a waiting child's cancellation leaves its resource
 owner running. Unknown child effects require reconciliation, and both explicit
 dispatch and launch admission replay enforce the same server-side gate.
 
-The server manages project processes for explicitly dispatched procedures, with
+`CalibrationTasks` lists durable check plans and polls their stage progress. It
+shows retained admission errors and frozen measurement contexts, offers fenced
+start/pause/cancel controls, and opens existing procedure details for execution
+inspection. Task controls require an actor and reason; a conflict refreshes the
+view without replaying the command. Cancelling a task stops future admission and
+does not claim its admitted hardware work has stopped. Task URLs use `?task=...#launch`.
+This is a task operator view, not a sample capability/health projection or plan editor.
+
+Each task stage also exposes `CalibrationEvidence`, a read-only report using the
+stage's exact frozen scope/context and an explicitly entered maximum age. It queries
+matching checks across retained tasks and shows selection reasons, truncated or
+unresolved history, evaluation time and record links. Edits or failed refreshes
+clear the previous verdict. There is no automatic age policy, branch-head following
+or sample-wide readiness inference; report refresh is explicit.
+
+The server manages project processes for explicitly dispatched procedures and
+stages of running calibration tasks, with
 at most two live workers. A worker runs the normal durable `resume` operation
 until closure, attention, or interpretation input, then exits. Waiting for review
 consumes no process. The manager observes submitted review input and wakes ready
@@ -130,19 +146,40 @@ procedures; HTTP disconnects do not cancel execution. Durable leases remain the
 authority across processes.
 
 Manager membership is retained in `.scopecat/console-procedures.json`. On daemon
-restart, only previously managed, ready procedures are eligible to resume; other
+restart, previously managed ready procedures are eligible to resume; running
+calibration tasks also recover admitted stages awaiting worker handoff. Other
 CLI procedures are not automatically adopted. An observed nonzero worker exit
 pauses automatic dispatch until an explicit `Dispatch existing procedure` request.
+Workspace resolution, state lookup and process-start failures likewise pause only
+the affected procedure. The manager continues with other queued work, and an
+explicit dispatch reports failures for its requested procedure rather than an
+unrelated queue member. The exception and procedure ID are logged for inspection.
+Automatic task handoffs register ownership; the worker loop scans the queue once
+per tick instead of rescanning it for each handoff.
 Attention and closed procedures leave the manager. This is process management, not a
 hardware recovery or procedure cancellation protocol. Daemon shutdown does not
 forcibly kill hardware workers.
 
-Process output goes to `.scopecat/console-worker.log`. A failed spawn retains the
+Process output goes to `procedure-workers/<id-hash>/worker.log` under the daemon's
+data root, keeping independent executions separate. The operator view exposes the
+exact path and the latest worker failure (message, observation time and exit code,
+when applicable). Failure observations are retained in a sibling `failure.json`
+across daemon restart. Explicit dispatch clears the old diagnostic, while logs
+remain append-only across retries. Previous shared logs are left untouched. These
+are operational diagnostics, not scientific outcome records. A failed spawn retains the
 procedure ID and reports `dispatch_error`. The progress view offers explicit
 dispatch and links to exact child runs and analysis publications; its procedure ID
 remains in the URL. Configuration acceptance stays in the declared procedure and review policy.
 The generic GUI does not accept calibration parameters itself. Existing projects
 without a provider show an empty state.
+
+**Recent worker output** reads that execution's log on demand and offers explicit
+refresh. The daemon verifies the retained procedure ID and serves only its own
+derived log path, never a caller-supplied path. Reads are bounded to a byte tail
+(16 KiB by default, 64 KiB maximum); the response distinguishes absent/empty logs
+and reports file size and truncation. Text is decoded as UTF-8 with replacement
+for partial or invalid characters, and rendered as plain text. Full logs remain
+available at the displayed path. Log output does not determine scientific status.
 
 Decision review renders retained run, sample and project analysis publications
 inline, including curves, facts and proposed parameter differences. Table changes

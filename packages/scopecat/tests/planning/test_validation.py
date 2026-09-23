@@ -48,12 +48,11 @@ def test_domain_target_instruments_must_be_unique() -> None:
         ConfigProfileSnapshot.model_validate(config_data)
 
 
-def test_primary_entity_must_be_declared_in_topology() -> None:
+def test_setup_no_longer_accepts_a_primary_measurement_entity() -> None:
     config_data = load_config().model_dump(mode="json")
     config_data["system"]["primary_entity_id"] = "missing"
-    config = ConfigProfileSnapshot.model_validate(config_data)
-
-    assert "configuration.unknown_primary_entity" in _problem_codes(config)
+    with pytest.raises(ValidationError, match="primary_entity_id"):
+        ConfigProfileSnapshot.model_validate(config_data)
 
 
 def test_resource_route_must_reference_registered_instrument() -> None:

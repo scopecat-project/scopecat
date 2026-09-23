@@ -50,6 +50,35 @@ ON procedure_runs(
     sequence
 );
 
+CREATE TABLE IF NOT EXISTS calibration_check_requests (
+    sequence INTEGER PRIMARY KEY REFERENCES procedure_runs(sequence) ON DELETE CASCADE,
+    scope_hash TEXT NOT NULL,
+    context_hash TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS calibration_tasks (
+    sequence INTEGER PRIMARY KEY AUTOINCREMENT,
+    task_id TEXT NOT NULL UNIQUE,
+    mode TEXT NOT NULL,
+    record_json TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS calibration_profiles (
+    sequence INTEGER PRIMARY KEY AUTOINCREMENT,
+    profile_id TEXT NOT NULL UNIQUE,
+    record_json TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS calibration_tasks_mode_sequence
+ON calibration_tasks(mode, sequence);
+
+CREATE INDEX IF NOT EXISTS calibration_checks_scope_sequence
+ON calibration_check_requests(scope_hash, sequence);
+CREATE INDEX IF NOT EXISTS calibration_checks_context_sequence
+ON calibration_check_requests(context_hash, sequence);
+CREATE INDEX IF NOT EXISTS calibration_checks_scope_context_sequence
+ON calibration_check_requests(scope_hash, context_hash, sequence);
+
 CREATE TABLE IF NOT EXISTS procedure_step_attempts (
     sequence INTEGER PRIMARY KEY AUTOINCREMENT,
     procedure_run_id TEXT NOT NULL
@@ -59,7 +88,7 @@ CREATE TABLE IF NOT EXISTS procedure_step_attempts (
     operation TEXT NOT NULL CHECK (
         operation IN (
             'run', 'analysis', 'config_activation', 'config_publish',
-            'interpretation'
+            'interpretation', 'parameter_publish'
         )
     ),
     intent_hash TEXT NOT NULL,

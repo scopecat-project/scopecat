@@ -44,9 +44,6 @@ from scopecat_server.instruments.actors import (
     InstrumentActorShutdown,
 )
 from scopecat_server.setup_access import setup_config
-from scopecat_server.storage.sqlite.calibration_cohorts import (
-    SQLiteCalibrationCohortStore,
-)
 from scopecat_server.storage.sqlite.config_registry import SQLiteConfigRegistryStore
 from scopecat_server.storage.sqlite.control_plane import SQLiteControlPlane
 from scopecat_server.storage.sqlite.parameter_revisions import (
@@ -61,13 +58,12 @@ class SetupService:
         control: SQLiteControlPlane,
         config_registry: SQLiteConfigRegistryStore,
         actors: InstrumentActorRegistry,
-        calibration_cohorts: SQLiteCalibrationCohortStore,
         templates: tuple[ConfigurationTemplate, ...] = (),
     ) -> None:
         self._control = control
         self._registry = config_registry
         self._actors = actors
-        self._cohorts = calibration_cohorts
+
         self._mutation_lock = Lock()
         self.initialize_templates(templates)
 
@@ -248,11 +244,7 @@ class SetupService:
                             occurred_at=result.activation.recorded_at,
                         ),
                     )
-                    self._cohorts.supersede_setup_in_transaction(
-                        connection,
-                        config=setup_config(result.revision),
-                        at=result.activation.recorded_at,
-                    )
+
                     # The writer lock and setup generation CAS still fence old readers.
                     if retirement is not None:
                         retirement.release_gate()

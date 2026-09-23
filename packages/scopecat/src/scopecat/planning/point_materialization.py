@@ -25,6 +25,7 @@ from scopecat.compiler.relations.evaluation import (
     evaluate_scalar,
     evaluate_table_value,
 )
+from scopecat.compiler.relations.parameter_reads import ParameterReadRecorder
 from scopecat.compiler.value_resolution import BoundValueResolver, ProgramValue
 from scopecat.kernel.entity import EntityRef
 from scopecat.kernel.errors import CheckFailed
@@ -42,6 +43,7 @@ from scopecat.kernel.value_types import Scalar, Table, ValueType
 from scopecat.kernel.value_validation import ValueValidationError, coerce_literal
 from scopecat.program.expressions import ArrayExpr, LiteralArrayExpr, ScalarExpr
 from scopecat.program.logical import LogicalDomainExecution
+from scopecat.records.parameter_read import DomainInputParameterRead
 
 
 @dataclass(frozen=True, slots=True)
@@ -63,6 +65,8 @@ class MaterializedBoundPoints:
         input_kind: Literal["program", "compiler"],
         input_ids: Sequence[str],
         ordinals: Sequence[int],
+        *,
+        parameter_reads: list[DomainInputParameterRead] | None = None,
     ) -> tuple[tuple[str, tuple[object, ...]], ...]:
         """Evaluate selected domain inputs for selected logical ordinals."""
 
@@ -104,6 +108,7 @@ class MaterializedBoundPoints:
                 selected_input_ids,
                 parameters=parameters,
                 problems=problems,
+                parameter_reads=parameter_reads,
             )
             if input_values is not None:
                 for input_id, value in input_values:
@@ -359,6 +364,7 @@ def _domain_inputs(
     *,
     parameters: ParameterRelationData,
     problems: list[Problem],
+    parameter_reads: list[DomainInputParameterRead] | None = None,
 ) -> tuple[tuple[str, object], ...] | None:
     input_values: list[tuple[str, object]] = []
     failed = False
@@ -371,6 +377,7 @@ def _domain_inputs(
             point=point,
             parameters=parameters,
             problems=problems,
+            parameter_reads=parameter_reads,
         )
         if not success:
             failed = True
@@ -390,10 +397,14 @@ def _materialize_domain_execution_input(
     point: MaterializedPoint,
     parameters: ParameterRelationData,
     problems: list[Problem],
+    parameter_reads: list[DomainInputParameterRead] | None = None,
 ) -> tuple[bool, object]:
     """Evaluate one selected domain input at one logical point."""
 
-    context = EvalContext(params=parameters, point_row=point.row)
+    recorder = ParameterReadRecorder() if parameter_reads is not None else None
+    context = EvalContext(
+        params=parameters, point_row=point.row, parameter_reads=recorder
+    )
     value_ids = dict(
         execution.inputs if input_kind == "program" else execution.compiler_inputs
     )
@@ -424,6 +435,15 @@ def _materialize_domain_execution_input(
                 input_name,
             ),
         )
+        if parameter_reads is not None and recorder is not None:
+            parameter_reads.append(
+                DomainInputParameterRead(
+                    point_ordinal=point.logical_ordinal,
+                    input_kind=input_kind,
+                    input_id=input_name,
+                    evidence=recorder.snapshot(),
+                )
+            )
         return True, _unwrap_domain_input(value)
     except (ArithmeticError, KeyError, TypeError, ValueError) as error:
         problems.append(

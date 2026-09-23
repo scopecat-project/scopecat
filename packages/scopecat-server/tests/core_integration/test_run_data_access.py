@@ -81,7 +81,11 @@ def test_workflow_run_data_access_reads_runs_artifacts_and_datasets(
     assert run_config.id == "simple-scan-profile"
     assert run_request.experiment_id == "test.workflow_scan"
     assert artifacts == ()
-    assert [entry.id for entry in contents] == [
+    [host_evidence] = [
+        entry for entry in contents if entry.kind == "host-parameter-evidence"
+    ]
+    assert host_evidence.role == "record"
+    assert [entry.id for entry in contents if entry != host_evidence] == [
         "raw-measurements",
         "instrument-state-evidence",
         "compilation-cost",

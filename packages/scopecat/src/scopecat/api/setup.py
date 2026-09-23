@@ -36,8 +36,8 @@ class LabSetupOperations:
         """Save reviewed setup and complete parameters, without activating either.
 
         Use a stable name to retry. Select the returned setup explicitly and use
-        parameters with session.use(parameters=result.parameters), or use
-        result.selection to retain the exact imported setup as well.
+        parameters with session.use(parameters=result.parameters, setup=result.setup),
+        or use result.selection to retain the exact imported setup as well.
         """
         return self.client.import_configuration_template(
             ConfigurationTemplateImportCommand(

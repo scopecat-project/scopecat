@@ -14,7 +14,6 @@ import numpy as np
 import pyarrow as pa
 import pytest
 from fastapi.testclient import TestClient
-from pydantic import ValidationError
 from scopecat.analysis.datasets import DerivedDataset, derived_dataset
 from scopecat.analysis.facts import AnalysisFactSchema, ordinary_result_schema
 from scopecat.analysis.service import MeasurementAnalysisInput
@@ -22,46 +21,12 @@ from scopecat.api.analysis import Analysis, AnalysisContext, analysis_step
 from scopecat.api.lab import LabClient
 from scopecat.api.parameter_candidates import ParameterCandidate
 from scopecat.api.published_analysis import PublishedAnalysis
-from scopecat.automation import (
-    AnalysisPublicationOutputRef,
-    CalibrationCohortCreateCommand,
-    CalibrationCohortMember,
-    CalibrationCohortMemberSpec,
-    CalibrationCohortSpec,
-    CalibrationConfigSourceRef,
-    CalibrationDefinitionRef,
-    CalibrationForcedDueReason,
-    CalibrationPublicationAttentionCommand,
-    CalibrationPublicationDeferCommand,
-    CalibrationPublicationGetQuery,
-    CalibrationPublicationPolicyRef,
-    CalibrationPublicationReadyQuery,
-    CalibrationStatusQuery,
-    CalibrationSuccessRef,
-    CalibrationTargetRef,
-    CalibrationWorkingPointSupersession,
-    ProcedureCloseCommand,
-    ProcedureDefinitionRef,
-    ProcedureStepBeginCommand,
-    ProcedureStepCompleteCommand,
-    ProcedureWorkerLeaseAcquireCommand,
-    RunOutputRef,
-    calibration_freshness_fingerprint,
-    calibration_key,
-    scoped_calibration_target,
-)
-from scopecat.config.candidate_merges import merge_common_base_parameter_proposals
 from scopecat.config.changes import parameter_change_proposal_from_updates
 from scopecat.config.documents import load_config_snapshot_document
 from scopecat.config.parameters import replace_scalar_parameter
 from scopecat.config.registry import (
-    CalibrationCohortMergeContribution,
-    CalibrationCohortMergeRegistrySource,
     CandidateConfigRegistrySource,
-    ConfigCompositionEvidenceStepRef,
-    ConfigCompositionPolicyRef,
     CrossRunCandidateAcceptance,
-    VerifiedParameterProposalProofV1,
 )
 from scopecat.config.registry.records import ContextConfigRegistrySource
 from scopecat.config.scientific_binding import bind_scientific_evidence
@@ -80,13 +45,8 @@ from scopecat.daemon.client import (
 from scopecat.daemon.wire import (
     AnalysisParameterProposalOutputPayload,
     AnalysisSaveCommand,
-    CalibrationCohortMergeRevisionSource,
-    CalibrationPublicationCommand,
-    CalibrationPublicationReceipt,
     CandidateConfigRevisionSource,
     ConfigPublishCommand,
-    ConfigPublishReceipt,
-    DirectConfigRevisionSource,
     ExecutorStartRequest,
     MeasurementFlushCommand,
     MeasurementHeaderCommand,
@@ -112,12 +72,10 @@ from scopecat.records.analysis import (
     AnalysisRecord,
     MeasurementAnalysisRecordInput,
     ProjectAnalysisDecisionReference,
-    ProjectAnalysisSubject,
     PublishedAnalysisRecordInput,
     RunAnalysisSubject,
     SampleAnalysisSubject,
 )
-from scopecat.records.calibration_scope import WorkingPointCalibrationScope
 from scopecat.records.config import (
     ConfigProfileSnapshot,
 )
@@ -142,20 +100,14 @@ from scopecat.records.measurement_recording import (
 from scopecat.records.parameter_change import (
     ParameterChangeProposal,
 )
-from scopecat.records.run import ConfigRegistryRunConfigSource, RunSnapshot
 from scopecat.records.run_request import RunRequest
 from scopecat.records.sample import SampleRevisionDraft, SampleSelector
 from scopecat.records.setup import ExecutableSetupSnapshot
 
-from scopecat_server import BackendConflict, BackendNotFound, LocalDaemonRuntime
-from scopecat_server.storage.sqlite.calibration_cohorts import (
-    CalibrationCohortConflict,
-    SQLiteCalibrationCohortStore,
-)
+from scopecat_server import BackendConflict, LocalDaemonRuntime
 from scopecat_server.storage.sqlite.control_plane import (
     SQLiteControlPlane,
 )
-from scopecat_server.storage.sqlite.run_repository import SQLiteRunRepository
 
 _FIXTURE = (
     Path(__file__).parents[3]
@@ -1177,1107 +1129,6 @@ def test_candidate_acceptance_requires_matching_cross_run_verification(
                 )
 
 
-@dataclass(frozen=True, slots=True)
-class _CalibrationMergeFixture:
-    command: CalibrationPublicationCommand
-    members: tuple[CalibrationCohortMember, ...]
-    baseline_run_ids: tuple[str, ...]
-    calibration_keys: tuple[str, ...]
-
-
-_CALIBRATION_DEFINITION_HASH = "sha256:" + "1" * 64
-_CALIBRATION_PROCEDURE_HASH = "sha256:" + "2" * 64
-_CALIBRATION_INPUT_HASH = "sha256:" + "3" * 64
-_CALIBRATION_SPEC_POLICY_HASH = "sha256:" + "4" * 64
-
-
-def _calibration_member_spec(
-    target_id: str, base: CalibrationConfigSourceRef
-) -> CalibrationCohortMemberSpec:
-    definition = CalibrationDefinitionRef(
-        id="tests.drag-calibration",
-        version="1",
-        fingerprint=_CALIBRATION_DEFINITION_HASH,
-        success_policy="published_result",
-    )
-    target = scoped_calibration_target(
-        CalibrationTargetRef(kind="qubit", id=target_id), base
-    )
-    procedure = ProcedureDefinitionRef(
-        id="tests.drag-calibration-procedure",
-        version="1",
-        fingerprint=_CALIBRATION_PROCEDURE_HASH,
-    )
-    return CalibrationCohortMemberSpec(
-        member_id=f"drag-{target_id}",
-        calibration_key=calibration_key(definition.id, target),
-        definition=definition,
-        target=target,
-        procedure=procedure,
-        intent={"target": target_id},
-        input_fingerprint=_CALIBRATION_INPUT_HASH,
-        freshness_fingerprint=calibration_freshness_fingerprint(
-            definition=definition,
-            target=target,
-            procedure=procedure,
-            input_fingerprint=_CALIBRATION_INPUT_HASH,
-            dependencies=(),
-        ),
-        due_reasons=(CalibrationForcedDueReason(reason="integration test"),),
-    )
-
-
-def _prepare_calibration_merge(
-    runtime: LocalDaemonRuntime,
-    lab: LabClient,
-    *,
-    suffix: str,
-    reverse_verification_inputs: bool = False,
-    target_ids: tuple[str, ...] = ("q0", "q1"),
-    automatic_publication: bool = False,
-) -> _CalibrationMergeFixture:
-    active = runtime.application.config.get_active_config()
-    sample = lab.samples.create(
-        f"calibration-sample-{suffix}",
-        kind="synthetic",
-        content=SampleRevisionDraft(display_name=f"Calibration {suffix}"),
-    )
-    saved = lab.config.save_context(
-        entry_id=f"calibration-point-{suffix}",
-        base=ConfigContextRef(
-            entry_id=active.entry.id, content_hash=active.entry.content_hash
-        ),
-        sample=SampleSelector(sample_id=sample.id, revision=1),
-        working_point_id="parked",
-        label="Parked",
-    )
-    assert isinstance(saved.entry.source, ContextConfigRegistrySource)
-    base = CalibrationConfigSourceRef(
-        entry_id=saved.entry.id,
-        config_ref=saved.entry.config_ref,
-        content_hash=saved.entry.content_hash,
-        scope=WorkingPointCalibrationScope(
-            workspace_id=saved.entry.source.context.workspace_id,
-            sample=saved.entry.source.context.sample,
-        ),
-    )
-    run_base = lab.config.resolve_context(base.context_ref).config_source
-    specs = tuple(_calibration_member_spec(target_id, base) for target_id in target_ids)
-    composition_policy = ConfigCompositionPolicyRef(
-        id="tests.drag-composition",
-        version="1",
-        fingerprint=_CALIBRATION_SPEC_POLICY_HASH,
-    )
-    publication_policy = (
-        CalibrationPublicationPolicyRef(
-            id="tests.drag-automatic-publication",
-            version="1",
-            fingerprint="sha256:" + "5" * 64,
-            calibration=specs[0].definition,
-            composition_policy=composition_policy,
-        )
-        if automatic_publication
-        else None
-    )
-    status = runtime.application.calibration_cohorts.status(
-        CalibrationStatusQuery(
-            calibration_keys=tuple(item.calibration_key for item in specs),
-            fanout_scope="calibration-workers",
-        )
-    ).snapshot
-    created = runtime.application.calibration_cohorts.create(
-        CalibrationCohortCreateCommand(
-            cohort_id=f"merge-cohort-{suffix}",
-            spec=CalibrationCohortSpec(
-                definition=specs[0].definition,
-                automatic_publication=publication_policy,
-                config_source=base,
-                fanout_scope=status.fanout_scope,
-                max_in_flight=len(specs),
-                observed_fanout_active_count=status.fanout_active_count,
-                evaluated_at=status.observed_at,
-                observations=status.statuses,
-                members=specs,
-            ),
-        )
-    )
-
-    contributions: list[CalibrationCohortMergeContribution] = []
-    proposals: list[ParameterChangeProposal] = []
-    baseline_run_ids: list[str] = []
-    for index, member in enumerate(created.members):
-        target = member.spec.target.id
-        baseline_submission = _submission(f"{suffix}-baseline-{target}").model_copy(
-            update={
-                "config_source": run_base,
-                "request": RunRequest(
-                    experiment_id="scratch", samples=base.scope.sample_selectors()
-                ),
-            }
-        )
-        baseline_run_id = _complete_signal_run(
-            runtime,
-            submission_id=f"{suffix}-baseline-{target}",
-            signal=0.8 + index / 10,
-            submission=baseline_submission,
-        )
-        proposal = _analysis_proposal(baseline_run_id)
-        runtime.application.runs.save_run_analysis(
-            baseline_run_id,
-            _analysis_command(proposal),
-        )
-        baseline = lab.get_run(baseline_run_id)
-        fit = baseline.published_analysis("fit")
-        candidate_config, candidate_source = lab.config.resolve_with_source(
-            fit.candidate_config()
-        )
-        assert candidate_source is not None
-        candidate_run_id = _complete_signal_run(
-            runtime,
-            submission_id=f"{suffix}-candidate-{target}",
-            signal=1.1 + index / 10,
-            submission=_submission(f"{suffix}-candidate-{target}").model_copy(
-                update={
-                    "config": candidate_config,
-                    "config_source": candidate_source,
-                    "request": RunRequest(
-                        experiment_id="scratch", samples=base.scope.sample_selectors()
-                    ),
-                }
-            ),
-        )
-        verification_context = lab.analysis(
-            f"Calibration verification {target}",
-            key=f"{suffix}-verification-{target}",
-        )
-        verification_context.measurements(
-            baseline,
-            id="baseline",
-            role="baseline",
-        )
-        verification_context.measurements(
-            lab.get_run(candidate_run_id),
-            id="candidate",
-            role="candidate",
-        )
-        verification = (
-            verification_context.result()
-            .fact(
-                "decision",
-                _CandidateDecision(accepted=True),
-                schema=_CANDIDATE_DECISION_SCHEMA,
-            )
-            .save()
-        )
-        decision = verification.fact("decision")
-
-        baseline_output = RunOutputRef(run_id=baseline_run_id)
-        fit_output = AnalysisPublicationOutputRef(
-            subject=RunAnalysisSubject(run_id=baseline_run_id),
-            analysis_record_id=fit.id,
-        )
-        candidate_output = RunOutputRef(run_id=candidate_run_id)
-        verification_output = AnalysisPublicationOutputRef(
-            subject=ProjectAnalysisSubject(),
-            analysis_record_id=verification.id,
-        )
-        verification_inputs = (
-            (candidate_output, baseline_output)
-            if reverse_verification_inputs
-            else (baseline_output, candidate_output)
-        )
-        outputs = (
-            ("baseline", baseline_output, ()),
-            ("fit", fit_output, (baseline_output,)),
-            ("candidate", candidate_output, (fit_output,)),
-            (
-                "verification",
-                verification_output,
-                verification_inputs,
-            ),
-        )
-        automation = runtime.application.automation
-        acquired = automation.acquire_lease(
-            ProcedureWorkerLeaseAcquireCommand(
-                procedure_run_id=member.procedure_run_id,
-                worker_id=f"merge-worker-{target}",
-                expected_run_revision=1,
-            )
-        )
-        procedure_run = acquired.run
-        evidence_step: ConfigCompositionEvidenceStepRef | None = None
-        for step_index, (step_key, output, inputs) in enumerate(outputs):
-            begun = automation.begin_step(
-                ProcedureStepBeginCommand(
-                    procedure_run_id=member.procedure_run_id,
-                    lease_token=acquired.lease.lease_token,
-                    expected_run_revision=procedure_run.revision,
-                    step_key=step_key,
-                    operation=output.kind,
-                    intent_hash=f"sha256:{step_index + 5:x}".ljust(71, "0"),
-                    inputs=inputs,
-                )
-            )
-            completed = automation.complete_step(
-                ProcedureStepCompleteCommand(
-                    procedure_run_id=member.procedure_run_id,
-                    lease_token=acquired.lease.lease_token,
-                    expected_run_revision=begun.run.revision,
-                    step_key=begun.step.step_key,
-                    attempt=begun.step.attempt,
-                    expected_step_revision=begun.step.revision,
-                    output=output,
-                )
-            )
-            procedure_run = completed.run
-            if step_key == "verification":
-                evidence_step = ConfigCompositionEvidenceStepRef(
-                    procedure_run_id=member.procedure_run_id,
-                    step_key=completed.step.step_key,
-                    attempt=completed.step.attempt,
-                )
-        automation.close(
-            ProcedureCloseCommand(
-                procedure_run_id=member.procedure_run_id,
-                lease_token=acquired.lease.lease_token,
-                expected_run_revision=procedure_run.revision,
-                status="succeeded",
-            )
-        )
-        assert evidence_step is not None
-        contributions.append(
-            CalibrationCohortMergeContribution(
-                member_id=member.spec.member_id,
-                proof=VerifiedParameterProposalProofV1(
-                    evidence_step=evidence_step,
-                    decision=ProjectAnalysisDecisionReference(
-                        analysis_record_id=verification.id,
-                        output_id="decision",
-                        schema_id=decision.schema_id,
-                        schema_hash=decision.schema_hash,
-                    ),
-                ),
-                result_input_fingerprint=(f"sha256:{index + 10:x}".ljust(71, "0")),
-            )
-        )
-        proposals.append(proposal)
-        baseline_run_ids.append(baseline_run_id)
-
-    candidate_id = f"merged-calibration-{suffix}"
-    merged = merge_common_base_parameter_proposals(
-        proposals,
-        base_config=active.config,
-        candidate_id=candidate_id,
-    )
-    source = CalibrationCohortMergeRevisionSource(
-        cohort_id=created.cohort.cohort_id,
-        spec_hash=created.cohort.spec_hash,
-        automatic_publication=publication_policy,
-        composition_policy_ref=composition_policy,
-        base=base,
-        candidate_id=candidate_id,
-        contributions=tuple(contributions),
-        expected_result_content_hash=merged.content_hash,
-    )
-    expected_finalization_revision = None
-    if publication_policy is not None:
-        finalization = runtime.application.calibration_cohorts.get_publication(
-            CalibrationPublicationGetQuery(cohort_id=created.cohort.cohort_id)
-        ).finalization
-        assert finalization.state == "ready"
-        expected_finalization_revision = finalization.revision
-    return _CalibrationMergeFixture(
-        command=CalibrationPublicationCommand(
-            operation_id=f"publish:calibration-merge:{suffix}",
-            source=source,
-            actor="calibration-finalizer",
-            expected_finalization_revision=expected_finalization_revision,
-            entry_id=f"calibration-merge-{suffix}",
-        ),
-        members=created.members,
-        baseline_run_ids=tuple(baseline_run_ids),
-        calibration_keys=tuple(item.calibration_key for item in specs),
-    )
-
-
-def _approval_count(
-    runtime: LocalDaemonRuntime,
-    baseline_run_ids: tuple[str, ...],
-) -> int:
-    return sum(
-        len(
-            runtime.application.runs.list_run_contents(
-                run_id,
-                kind="parameter_change_approval_record",
-            ).items
-        )
-        for run_id in baseline_run_ids
-    )
-
-
-def _publication_side_effects(
-    runtime: LocalDaemonRuntime,
-    fixture: _CalibrationMergeFixture,
-) -> tuple[object, ...]:
-    status = runtime.application.calibration_cohorts.status(
-        CalibrationStatusQuery(
-            calibration_keys=fixture.calibration_keys,
-            fanout_scope="calibration-workers",
-        )
-    ).snapshot
-    return (
-        runtime.application.config.get_config_registry(),
-        runtime.application.config.get_config_activation_history(),
-        _events(runtime),
-        _approval_count(runtime, fixture.baseline_run_ids),
-        tuple(item.latest_success for item in status.statuses),
-    )
-
-
-def test_calibration_merge_publishes_one_replayable_atomic_revision(
-    tmp_path: Path,
-) -> None:
-    with (
-        LocalDaemonRuntime(tmp_path, bootstrap_config=_config()) as runtime,
-        TestClient(runtime.app()) as transport,
-    ):
-        client = _daemon_client(transport)
-        fixture = _prepare_calibration_merge(
-            runtime,
-            LabClient(client),
-            suffix="ok",
-            reverse_verification_inputs=True,
-        )
-        source = fixture.command.source
-        assert isinstance(source, CalibrationCohortMergeRevisionSource)
-        reversed_payload = fixture.command.model_dump(mode="python")
-        reversed_payload["source"]["contributions"] = tuple(
-            reversed(source.contributions)
-        )
-        reversed_command = CalibrationPublicationCommand.model_validate(
-            reversed_payload
-        )
-        assert reversed_command == fixture.command
-        assert fixture.command.expected_finalization_revision is None
-
-        receipt = client.publish_calibration(fixture.command)
-
-        with sqlite3.connect(runtime.state_dir / "control.sqlite3") as connection:
-            operation_kind = connection.execute(
-                "SELECT kind FROM config_operations WHERE operation_id = ?",
-                (fixture.command.operation_id,),
-            ).fetchone()
-        assert operation_kind is not None
-        assert operation_kind[0] == "publish_calibration"
-        with pytest.raises(BackendConflict, match="not a config publication"):
-            runtime.application.config.get_config_publish_operation(
-                fixture.command.operation_id
-            )
-        with pytest.raises(BackendConflict, match="different intent"):
-            runtime.application.config.publish_config(
-                ConfigPublishCommand(
-                    operation_id=fixture.command.operation_id,
-                    source=DirectConfigRevisionSource(config=_config()),
-                    actor="operator",
-                    expected_generation=1,
-                    entry_id="cross-kind-collision",
-                )
-            )
-
-        assert receipt.operation.base == source.base
-        assert runtime.application.config.get_active_config().activation.generation == 1
-        assert (
-            runtime.application.config.latest_context(source.base.context_ref).entry
-            == receipt.entry
-        )
-        assert receipt.entry.content_hash == source.expected_result_content_hash
-        assert isinstance(receipt.entry.source, ContextConfigRegistrySource)
-        publication = receipt.entry.source.publication
-        assert isinstance(publication, CalibrationCohortMergeRegistrySource)
-        resolved_proofs = tuple(
-            contribution.proof for contribution in publication.contributions
-        )
-        assert tuple(proof.kind for proof in resolved_proofs) == (
-            "verified_parameter_proposal_v1",
-            "verified_parameter_proposal_v1",
-        )
-        assert (
-            tuple(proof.baseline_run_id for proof in resolved_proofs)
-            == fixture.baseline_run_ids
-        )
-        assert tuple(proof.proposal_id for proof in resolved_proofs) == (
-            "drive-frequency",
-            "drive-frequency",
-        )
-        assert all(
-            proof.evidence_step.step_key == "verification" for proof in resolved_proofs
-        )
-        assert len(receipt.calibration_successes) == 2
-        assert tuple(
-            success.attempt.member_id for success in receipt.calibration_successes
-        ) == ("drag-q0", "drag-q1")
-        assert all(
-            success.publication is not None
-            and success.publication.operation_id == fixture.command.operation_id
-            and success.publication.result_config_source.entry_id == receipt.entry.id
-            for success in receipt.calibration_successes
-        )
-        assert (
-            CalibrationPublicationReceipt(
-                operation=receipt.operation,
-                entry=receipt.entry,
-                deltas=receipt.deltas,
-                calibration_successes=tuple(reversed(receipt.calibration_successes)),
-            )
-            == receipt
-        )
-        with pytest.raises(ValidationError, match="cover every contribution"):
-            CalibrationPublicationReceipt(
-                operation=receipt.operation,
-                entry=receipt.entry,
-                deltas=receipt.deltas,
-                calibration_successes=receipt.calibration_successes[:1],
-            )
-        first_success, second_success = receipt.calibration_successes
-        assert first_success.publication is not None
-        wrong_operation_success = first_success.model_copy(
-            update={
-                "publication": first_success.publication.model_copy(
-                    update={"operation_id": "different-operation"}
-                )
-            }
-        )
-        wrong_source_success = first_success.model_copy(
-            update={
-                "publication": first_success.publication.model_copy(
-                    update={"source_intent_hash": "sha256:" + "f" * 64}
-                )
-            }
-        )
-        wrong_result_success = first_success.model_copy(
-            update={
-                "publication": first_success.publication.model_copy(
-                    update={
-                        "result_config_source": (
-                            first_success.publication.result_config_source.model_copy(
-                                update={"entry_id": "different-result"}
-                            )
-                        )
-                    }
-                )
-            }
-        )
-        for invalid_success in (
-            wrong_operation_success,
-            wrong_source_success,
-            wrong_result_success,
-        ):
-            with pytest.raises(ValidationError, match="does not match"):
-                CalibrationPublicationReceipt(
-                    operation=receipt.operation,
-                    entry=receipt.entry,
-                    deltas=receipt.deltas,
-                    calibration_successes=(invalid_success, second_success),
-                )
-        assert len(runtime.application.config.get_config_registry().entries) == 3
-        assert _approval_count(runtime, fixture.baseline_run_ids) == 2
-        assert (
-            len(
-                [
-                    event
-                    for event in _events(runtime).items
-                    if event.kind == "parameter_proposal_approved"
-                ]
-            )
-            == 2
-        )
-        projected = runtime.application.calibration_cohorts.status(
-            CalibrationStatusQuery(
-                calibration_keys=fixture.calibration_keys,
-                fanout_scope="calibration-workers",
-            )
-        ).snapshot.statuses
-        assert all(
-            item.latest_success is not None
-            and item.latest_success.is_effective
-            and item.latest_success.publication is not None
-            and item.latest_success.publication.operation_id
-            == fixture.command.operation_id
-            for item in projected
-        )
-        assert client.publish_calibration(reversed_command) == receipt
-
-    with (
-        LocalDaemonRuntime(tmp_path) as restarted,
-        TestClient(restarted.app()) as transport,
-    ):
-        client = _daemon_client(transport)
-        assert (
-            client.calibration_publication_operation(fixture.command.operation_id)
-            == receipt
-        )
-        # The workspace head advanced; replay wins before live proof and CAS checks.
-        assert client.publish_calibration(fixture.command) == receipt
-
-
-def test_single_member_calibration_merge_is_atomic_and_replayable(
-    tmp_path: Path,
-) -> None:
-    with (
-        LocalDaemonRuntime(tmp_path, bootstrap_config=_config()) as runtime,
-        TestClient(runtime.app()) as transport,
-    ):
-        client = _daemon_client(transport)
-        fixture = _prepare_calibration_merge(
-            runtime,
-            LabClient(client),
-            suffix="single",
-            target_ids=("q0",),
-        )
-        source = fixture.command.source
-        assert isinstance(source, CalibrationCohortMergeRevisionSource)
-        assert len(source.contributions) == 1
-
-        receipt = client.publish_calibration(fixture.command)
-
-        assert receipt.operation.base == source.base
-        assert runtime.application.config.get_active_config().activation.generation == 1
-        assert (
-            runtime.application.config.latest_context(source.base.context_ref).entry
-            == receipt.entry
-        )
-        assert receipt.entry.content_hash == source.expected_result_content_hash
-        assert len(receipt.calibration_successes) == 1
-        success = receipt.calibration_successes[0]
-        assert success.attempt.member_id == "drag-q0"
-        assert success.publication is not None
-        assert success.publication.operation_id == fixture.command.operation_id
-        assert success.publication.result_config_source.entry_id == receipt.entry.id
-        assert len(runtime.application.config.get_config_registry().entries) == 3
-        assert _approval_count(runtime, fixture.baseline_run_ids) == 1
-        assert (
-            len(
-                [
-                    event
-                    for event in _events(runtime).items
-                    if event.kind == "parameter_proposal_approved"
-                ]
-            )
-            == 1
-        )
-        status = runtime.application.calibration_cohorts.status(
-            CalibrationStatusQuery(
-                calibration_keys=fixture.calibration_keys,
-                fanout_scope="calibration-workers",
-            )
-        ).snapshot.statuses
-        assert len(status) == 1
-        projected_success = status[0].latest_success
-        assert projected_success == success
-        assert projected_success is not None
-        assert projected_success.is_effective
-
-        after_publish = _publication_side_effects(runtime, fixture)
-        assert client.publish_calibration(fixture.command) == receipt
-        assert _publication_side_effects(runtime, fixture) == after_publish
-
-    with (
-        LocalDaemonRuntime(tmp_path) as restarted,
-        TestClient(restarted.app()) as transport,
-    ):
-        client = _daemon_client(transport)
-        assert (
-            client.calibration_publication_operation(fixture.command.operation_id)
-            == receipt
-        )
-        assert client.publish_calibration(fixture.command) == receipt
-        assert len(restarted.application.config.get_config_registry().entries) == 3
-        assert _approval_count(restarted, fixture.baseline_run_ids) == 1
-
-
-def test_automatic_calibration_merge_completes_ready_work_atomically(
-    tmp_path: Path,
-) -> None:
-    with (
-        LocalDaemonRuntime(tmp_path, bootstrap_config=_config()) as runtime,
-        TestClient(runtime.app()) as transport,
-    ):
-        client = _daemon_client(transport)
-        fixture = _prepare_calibration_merge(
-            runtime,
-            LabClient(client),
-            suffix="automatic",
-            automatic_publication=True,
-        )
-        source = fixture.command.source
-        assert isinstance(source, CalibrationCohortMergeRevisionSource)
-        policy = source.automatic_publication
-        assert policy is not None
-
-        before = client.get_calibration_publication(source.cohort_id).finalization
-        assert before.state == "ready"
-        assert fixture.command.expected_finalization_revision == before.revision
-        page = client.list_ready_calibration_publications(
-            CalibrationPublicationReadyQuery(capabilities=(policy,))
-        )
-        assert tuple(item.cohort.cohort_id for item in page.items) == (
-            source.cohort_id,
-        )
-
-        receipt = client.publish_calibration(fixture.command)
-
-        completed = client.get_calibration_publication(source.cohort_id).finalization
-        assert completed.state == "published"
-        assert completed.revision == before.revision + 1
-        assert completed.publication is not None
-        assert completed.publication.operation_id == fixture.command.operation_id
-        assert completed.publication.published_at == receipt.operation.recorded_at
-        assert (
-            client.list_ready_calibration_publications(
-                CalibrationPublicationReadyQuery(capabilities=(policy,))
-            ).items
-            == ()
-        )
-        assert len(receipt.calibration_successes) == 2
-        assert isinstance(receipt.entry.source, ContextConfigRegistrySource)
-        entry_source = receipt.entry.source.publication
-        assert isinstance(entry_source, CalibrationCohortMergeRegistrySource)
-        assert entry_source.automatic_publication_policy_id == policy.id
-        assert entry_source.automatic_publication_policy_version == policy.version
-        assert (
-            entry_source.automatic_publication_policy_fingerprint == policy.fingerprint
-        )
-
-        after = _publication_side_effects(runtime, fixture)
-        # Model a committed response that the worker did not observe. Operation
-        # replay must win before the now-stale finalization fence is inspected.
-        assert client.publish_calibration(fixture.command) == receipt
-        assert _publication_side_effects(runtime, fixture) == after
-        assert (
-            client.get_calibration_publication(source.cohort_id).finalization
-            == completed
-        )
-
-    with (
-        LocalDaemonRuntime(tmp_path) as restarted,
-        TestClient(restarted.app()) as transport,
-    ):
-        client = _daemon_client(transport)
-        assert client.publish_calibration(fixture.command) == receipt
-        assert (
-            client.get_calibration_publication(source.cohort_id).finalization
-            == completed
-        )
-
-
-@pytest.mark.parametrize("transition", ["attention", "defer"])
-def test_automatic_calibration_merge_fences_stale_ready_occurrences(
-    tmp_path: Path,
-    transition: str,
-) -> None:
-    with (
-        LocalDaemonRuntime(tmp_path, bootstrap_config=_config()) as runtime,
-        TestClient(runtime.app()) as transport,
-    ):
-        client = _daemon_client(transport)
-        fixture = _prepare_calibration_merge(
-            runtime,
-            LabClient(client),
-            suffix=transition,
-            automatic_publication=True,
-        )
-        source = fixture.command.source
-        assert isinstance(source, CalibrationCohortMergeRevisionSource)
-        policy = source.automatic_publication
-        expected_revision = fixture.command.expected_finalization_revision
-        assert policy is not None
-        assert expected_revision is not None
-        before_effects = _publication_side_effects(runtime, fixture)
-
-        if transition == "attention":
-            changed = client.require_calibration_publication_attention(
-                CalibrationPublicationAttentionCommand(
-                    cohort_id=source.cohort_id,
-                    policy=policy,
-                    expected_finalization_revision=expected_revision,
-                    actor="calibration-finalizer",
-                    reason="deterministic proof drift",
-                )
-            ).finalization
-            assert changed.state == "attention_required"
-        else:
-            changed = client.defer_calibration_publication(
-                CalibrationPublicationDeferCommand(
-                    cohort_id=source.cohort_id,
-                    policy=policy,
-                    expected_finalization_revision=expected_revision,
-                    retry_after_seconds=600,
-                    reason="transient dependency outage",
-                )
-            ).finalization
-            assert changed.state == "ready"
-            assert changed.available_at is not None
-            assert changed.available_at > changed.updated_at
-        assert changed.revision == expected_revision + 1
-
-        with pytest.raises(BackendConflict, match="not eligible"):
-            runtime.application.config.publish_calibration(fixture.command)
-
-        rebased_payload = fixture.command.model_dump(mode="python")
-        rebased_payload["expected_finalization_revision"] = changed.revision
-        rebased = CalibrationPublicationCommand.model_validate(rebased_payload)
-        assert rebased.operation_id == fixture.command.operation_id
-        assert rebased.intent_hash == fixture.command.intent_hash
-        with pytest.raises(BackendConflict, match="not eligible"):
-            runtime.application.config.publish_calibration(rebased)
-
-        assert _publication_side_effects(runtime, fixture) == before_effects
-        assert (
-            runtime.application.calibration_cohorts.get_publication(
-                CalibrationPublicationGetQuery(cohort_id=source.cohort_id)
-            ).finalization
-            == changed
-        )
-        with pytest.raises(BackendNotFound):
-            runtime.application.config.get_calibration_publication_operation(
-                fixture.command.operation_id
-            )
-
-
-def test_calibration_merge_proof_and_result_failures_have_no_side_effects(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    with (
-        LocalDaemonRuntime(tmp_path, bootstrap_config=_config()) as runtime,
-        TestClient(runtime.app()) as transport,
-    ):
-        fixture = _prepare_calibration_merge(
-            runtime,
-            LabClient(_daemon_client(transport)),
-            suffix="invalid",
-        )
-        source = fixture.command.source
-        assert isinstance(source, CalibrationCohortMergeRevisionSource)
-        before = _publication_side_effects(runtime, fixture)
-
-        first, second = source.contributions
-        invalid_sources = (
-            source.model_copy(
-                update={
-                    "contributions": (
-                        first.model_copy(
-                            update={
-                                "proof": first.proof.model_copy(
-                                    update={
-                                        "evidence_step": (
-                                            first.proof.evidence_step.model_copy(
-                                                update={"attempt": 2}
-                                            )
-                                        )
-                                    }
-                                )
-                            }
-                        ),
-                        second,
-                    )
-                }
-            ),
-            source.model_copy(
-                update={
-                    "base": source.base.model_copy(update={"entry_id": "wrong-base"})
-                }
-            ),
-            source.model_copy(
-                update={
-                    "contributions": (
-                        first.model_copy(
-                            update={
-                                "proof": first.proof.model_copy(
-                                    update={"decision": second.proof.decision}
-                                )
-                            }
-                        ),
-                        second,
-                    )
-                }
-            ),
-            source.model_copy(
-                update={
-                    "contributions": (
-                        first.model_copy(
-                            update={
-                                "proof": first.proof.model_copy(
-                                    update={
-                                        "evidence_step": (
-                                            first.proof.evidence_step.model_copy(
-                                                update={"step_key": "baseline"}
-                                            )
-                                        )
-                                    }
-                                )
-                            }
-                        ),
-                        second,
-                    )
-                }
-            ),
-            source.model_copy(
-                update={"expected_result_content_hash": "sha256:" + "f" * 64}
-            ),
-        )
-        for index, invalid_source in enumerate(invalid_sources):
-            command = CalibrationPublicationCommand(
-                operation_id=f"invalid-calibration-publication-{index}",
-                source=invalid_source,
-                actor=fixture.command.actor,
-                entry_id=f"invalid-calibration-entry-{index}",
-            )
-            with pytest.raises(BackendConflict):
-                runtime.application.config.publish_calibration(command)
-            assert _publication_side_effects(runtime, fixture) == before
-            with pytest.raises(BackendNotFound):
-                runtime.application.config.get_calibration_publication_operation(
-                    command.operation_id
-                )
-
-        original_read = SQLiteRunRepository.read_snapshot_in_transaction
-
-        def read_with_unscoped_baseline(
-            repository: SQLiteRunRepository,
-            connection: sqlite3.Connection,
-            run_id: str,
-        ) -> RunSnapshot:
-            snapshot = original_read(repository, connection, run_id)
-            if run_id == fixture.baseline_run_ids[0]:
-                return snapshot.model_copy(
-                    update={
-                        "config_source": ConfigRegistryRunConfigSource(
-                            selector="entry",
-                            entry_id=source.base.entry_id,
-                            config_ref=source.base.config_ref,
-                            content_hash=source.base.content_hash,
-                        )
-                    }
-                )
-            return snapshot
-
-        # Matching saved values cannot stand in for exact working-point evidence.
-        with monkeypatch.context() as patch:
-            patch.setattr(
-                SQLiteRunRepository,
-                "read_snapshot_in_transaction",
-                read_with_unscoped_baseline,
-            )
-            with pytest.raises(BackendConflict):
-                runtime.application.config.publish_calibration(fixture.command)
-        assert _publication_side_effects(runtime, fixture) == before
-
-
-def test_calibration_merge_cas_and_final_anchor_failures_roll_back(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    with (
-        LocalDaemonRuntime(tmp_path, bootstrap_config=_config()) as runtime,
-        TestClient(runtime.app()) as transport,
-    ):
-        fixture = _prepare_calibration_merge(
-            runtime,
-            LabClient(_daemon_client(transport)),
-            suffix="rollback",
-            automatic_publication=True,
-        )
-        merge_source = fixture.command.source
-        assert isinstance(merge_source, CalibrationCohortMergeRevisionSource)
-        assert merge_source.automatic_publication is not None
-        intervening_config = _config().model_copy(update={"id": "intervening"})
-        normal = runtime.application.config.publish_config(
-            ConfigPublishCommand(
-                operation_id="publish:intervening",
-                source=DirectConfigRevisionSource(config=intervening_config),
-                actor="operator",
-                expected_generation=1,
-                entry_id="intervening",
-            )
-        )
-        assert type(normal) is ConfigPublishReceipt
-        # A default-only switch leaves the selected workspace's ready proof intact.
-        assert (
-            runtime.application.calibration_cohorts.get_publication(
-                CalibrationPublicationGetQuery(cohort_id=merge_source.cohort_id)
-            ).finalization.state
-            == "ready"
-        )
-        lab = LabClient(_daemon_client(transport))
-        advanced = lab.config.save_context(
-            entry_id="intervening-working-point",
-            base=merge_source.base.context_ref,
-            sample=merge_source.base.scope.sample_selectors()[0],
-            working_point_id="parked",
-            label="Parked",
-            advance=True,
-        )
-        superseded = runtime.application.calibration_cohorts.get_publication(
-            CalibrationPublicationGetQuery(cohort_id=merge_source.cohort_id)
-        ).finalization
-        assert superseded.state == "superseded"
-        assert superseded.supersession is not None
-        assert isinstance(
-            superseded.supersession.evidence, CalibrationWorkingPointSupersession
-        )
-        assert (
-            superseded.supersession.evidence.superseded_by.entry_id == advanced.entry.id
-        )
-        assert not runtime.application.calibration_cohorts.ready_publications(
-            CalibrationPublicationReadyQuery(
-                capabilities=(merge_source.automatic_publication,)
-            )
-        ).items
-        pending = (
-            runtime.application.calibration_cohorts.status(
-                CalibrationStatusQuery(
-                    calibration_keys=fixture.calibration_keys,
-                    fanout_scope="calibration-workers",
-                )
-            )
-            .snapshot.statuses[0]
-            .latest_success
-        )
-        assert pending is not None
-        with pytest.raises(ValidationError):
-            CalibrationPublicationReceipt.model_validate(
-                {
-                    **normal.model_dump(),
-                    "calibration_successes": (pending,),
-                }
-            )
-        before_cas = _publication_side_effects(runtime, fixture)
-        with pytest.raises(BackendConflict):
-            runtime.application.config.publish_calibration(fixture.command)
-        assert _publication_side_effects(runtime, fixture) == before_cas
-        assert _approval_count(runtime, fixture.baseline_run_ids) == 0
-        with pytest.raises(BackendNotFound):
-            runtime.application.config.get_calibration_publication_operation(
-                fixture.command.operation_id
-            )
-
-    anchor_root = tmp_path / "anchor-failure"
-    with (
-        LocalDaemonRuntime(anchor_root, bootstrap_config=_config()) as runtime,
-        TestClient(runtime.app()) as transport,
-    ):
-        fixture = _prepare_calibration_merge(
-            runtime,
-            LabClient(_daemon_client(transport)),
-            suffix="anchor",
-        )
-        before_anchor = _publication_side_effects(runtime, fixture)
-        insert = SQLiteCalibrationCohortStore.insert_success_publication_in_transaction
-        calls = 0
-
-        def fail_second_anchor(
-            store: SQLiteCalibrationCohortStore,
-            connection: sqlite3.Connection,
-            success: CalibrationSuccessRef,
-        ) -> None:
-            nonlocal calls
-            calls += 1
-            if calls == 2:
-                raise CalibrationCohortConflict("injected final anchor failure")
-            insert(store, connection, success)
-
-        with monkeypatch.context() as patch:
-            patch.setattr(
-                SQLiteCalibrationCohortStore,
-                "insert_success_publication_in_transaction",
-                fail_second_anchor,
-            )
-            with pytest.raises(BackendConflict, match="final anchor failure"):
-                runtime.application.config.publish_calibration(fixture.command)
-
-        assert calls == 2
-        assert _publication_side_effects(runtime, fixture) == before_anchor
-        with pytest.raises(BackendNotFound):
-            runtime.application.config.get_calibration_publication_operation(
-                fixture.command.operation_id
-            )
-        retried = runtime.application.config.publish_calibration(fixture.command)
-        assert runtime.application.config.get_active_config().activation.generation == 1
-        assert (
-            runtime.application.config.latest_context(
-                fixture.command.source.base.context_ref
-            ).entry
-            == retried.entry
-        )
-
-    finalization_root = tmp_path / "finalization-failure"
-    with (
-        LocalDaemonRuntime(finalization_root, bootstrap_config=_config()) as runtime,
-        TestClient(runtime.app()) as transport,
-    ):
-        fixture = _prepare_calibration_merge(
-            runtime,
-            LabClient(_daemon_client(transport)),
-            suffix="finalization",
-            automatic_publication=True,
-        )
-        source = fixture.command.source
-        assert isinstance(source, CalibrationCohortMergeRevisionSource)
-        before_finalization = runtime.application.calibration_cohorts.get_publication(
-            CalibrationPublicationGetQuery(cohort_id=source.cohort_id)
-        ).finalization
-        before_effects = _publication_side_effects(runtime, fixture)
-
-        def fail_finalization(
-            _store: SQLiteCalibrationCohortStore,
-            _connection: sqlite3.Connection,
-            *,
-            cohort_id: str,
-            policy: CalibrationPublicationPolicyRef,
-            expected_revision: int,
-            operation_id: str,
-            at: object,
-        ) -> object:
-            del cohort_id, policy, expected_revision, operation_id, at
-            raise CalibrationCohortConflict("injected finalization failure")
-
-        with monkeypatch.context() as patch:
-            patch.setattr(
-                SQLiteCalibrationCohortStore,
-                "complete_publication_in_transaction",
-                fail_finalization,
-            )
-            with pytest.raises(BackendConflict, match="finalization failure"):
-                runtime.application.config.publish_calibration(fixture.command)
-
-        assert _publication_side_effects(runtime, fixture) == before_effects
-        assert (
-            runtime.application.calibration_cohorts.get_publication(
-                CalibrationPublicationGetQuery(cohort_id=source.cohort_id)
-            ).finalization
-            == before_finalization
-        )
-        with pytest.raises(BackendNotFound):
-            runtime.application.config.get_calibration_publication_operation(
-                fixture.command.operation_id
-            )
-        retried = runtime.application.config.publish_calibration(fixture.command)
-        assert runtime.application.config.get_active_config().activation.generation == 1
-        assert (
-            runtime.application.config.latest_context(
-                fixture.command.source.base.context_ref
-            ).entry
-            == retried.entry
-        )
-        assert (
-            runtime.application.calibration_cohorts.get_publication(
-                CalibrationPublicationGetQuery(cohort_id=source.cohort_id)
-            ).finalization.state
-            == "published"
-        )
-
-
 def _compare_entity_runs(baseline: Dataset, candidate: Dataset) -> DerivedDataset:
     left, right = baseline.align_entities(candidate, "entity", join="outer")
     index = left.schema.dimensions[1].index
@@ -2499,8 +1350,9 @@ def test_typed_candidate_policy_uses_retained_decision_and_workpoint(
         assert lab.config.active().entry.id != "wrong-point"
 
 
+@pytest.mark.parametrize("sequential", [False, True])
 def test_verified_parameter_branch_publication_is_atomic_and_restorable(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, sequential: bool
 ) -> None:
     from scopecat.daemon.wire import ParameterBranchPublishCommand
 
@@ -2511,11 +1363,15 @@ def test_verified_parameter_branch_publication_is_atomic_and_restorable(
 
     root = tmp_path / "source"
     with (
-        LocalDaemonRuntime(root, bootstrap_config=_config()) as runtime,
+        LocalDaemonRuntime(root) as runtime,
         TestClient(runtime.app()) as transport,
     ):
         lab = LabClient(_daemon_client(transport))
         initial = _config()
+        equipment = lab.setup.save(
+            ExecutableSetupSnapshot.from_config(initial), name="bench"
+        )
+        lab.setup.activate(equipment)
         revision = lab.parameters.save(
             name="baseline",
             catalog=initial.parameter_catalog,
@@ -2564,8 +1420,100 @@ def test_verified_parameter_branch_publication_is_atomic_and_restorable(
                 }
             ),
         )
+        intermediate_id = None
+        candidate_context = None
+        if sequential:
+            # Stage two really consumed stage one's candidate, then refined the
+            # same cell. No intermediate value is published to the daily branch.
+            intermediate_id = candidate_id
+            refinement = parameter_change_proposal_from_updates(
+                source_run_id=intermediate_id,
+                source_config=config,
+                analysis_title="fit",
+                analysis_record_id="analysis-fit-r1",
+                proposal_id="refined-frequency",
+                updates=(
+                    replace_scalar_parameter("drive_frequency", Quantity(5.2, "GHz")),
+                ),
+                reason="second stage refinement",
+                confidence=None,
+            )
+            runtime.application.runs.save_run_analysis(
+                intermediate_id, _analysis_command(refinement)
+            )
+            first = ParameterCandidate(lab.config, candidate)
+            second = ParameterCandidate(
+                lab.config,
+                lab.get_run(intermediate_id)
+                .published_analysis("fit")
+                .candidate_config(),
+            )
+            with pytest.raises(DaemonConflictError, match="declared parameter input"):
+                first.combine(second, name="not-siblings")
+            with pytest.raises(DaemonConflictError, match="independent parameters"):
+                second.then(first, name="wrong-order")
+            chained = first.then(second, name="sequence")
+            candidate_context = lab.resolve_context(candidate=chained)
+            assert candidate_context.branch is None and candidate_context.setup is None
+            with pytest.raises(ValueError, match="not both"):
+                lab.resolve_context(candidate=chained, branch="daily")
+            candidate = chained.config
+            proposal = candidate.parameter_proposal
+            assert proposal.composition is not None
+            assert proposal.composition.mode == "sequential"
+            assert [item.run_id for item in proposal.composition.sources] == [
+                baseline_id,
+                intermediate_id,
+            ]
+            assert proposal.deltas[0].before == resolved.config.parameter_snapshot.get(
+                "drive_frequency"
+            )
+            assert proposal.deltas[0].after == refinement.deltas[0].after
+            forged = proposal.model_copy(
+                update={
+                    "id": "forged",
+                    "analysis_record_id": "analysis-forged-r1",
+                    "deltas": first.config.parameter_proposal.deltas,
+                }
+            )
+            with pytest.raises(DaemonConflictError, match="merged values"):
+                lab.config.client.save_analysis(
+                    baseline_id,
+                    AnalysisSaveCommand(
+                        title="forged",
+                        analysis_key="forged",
+                        outputs=(
+                            AnalysisParameterProposalOutputPayload(
+                                kind="parameter_change_proposal",
+                                id="forged",
+                                title="forged",
+                                content=forged,
+                            ),
+                        ),
+                    ),
+                )
+            assert lab.parameters.checkout("daily").head == branch
+            config, source = lab.config.resolve_with_source(candidate)
+            candidate_id = _complete_signal_run(
+                runtime,
+                submission_id="final-candidate",
+                signal=1.2,
+                submission=_submission("final-candidate").model_copy(
+                    update={"config": config, "config_source": source}
+                ),
+            )
         context = lab.analysis("Verify branch", key="branch-verification")
+        if sequential:
+            assert candidate_context is not None
+            assert (
+                lab.get_run(candidate_id).snapshot.measurement_context
+                == candidate_context.context
+            )
         context.measurements(baseline, id="baseline", role="baseline")
+        if intermediate_id is not None:
+            context.measurements(
+                lab.get_run(intermediate_id), id="intermediate", role="baseline"
+            )
         context.measurements(
             lab.get_run(candidate_id), id="candidate", role="candidate"
         )
@@ -2595,7 +1543,37 @@ def test_verified_parameter_branch_publication_is_atomic_and_restorable(
             actor="operator",
         )
         registry = lab.config.registry()
+        assert not registry.entries
         setup = lab.setup.active()
+        if intermediate_id is not None:
+            incomplete = lab.analysis("Missing stage", key="missing-stage")
+            incomplete.measurements(baseline, id="baseline", role="baseline")
+            incomplete.measurements(
+                lab.get_run(candidate_id), id="candidate", role="candidate"
+            )
+            missing = (
+                incomplete.result()
+                .fact(
+                    "decision",
+                    _CandidateDecision(accepted=True),
+                    schema=_CANDIDATE_DECISION_SCHEMA,
+                )
+                .save()
+            )
+            with pytest.raises(
+                DaemonConflictError, match="every contributing baseline"
+            ):
+                lab.config.client.publish_parameter_branch(
+                    command.model_copy(
+                        update={
+                            "verification": command.verification.model_copy(
+                                update={
+                                    "analysis_record_id": missing.id,
+                                }
+                            ),
+                        }
+                    )
+                )
         rejected = (
             context.result()
             .fact(
@@ -2672,15 +1650,310 @@ def test_verified_parameter_branch_publication_is_atomic_and_restorable(
             recovered.application.config.parameter_revision("accepted").parameters
             == config.parameter_snapshot
         )
+        if sequential:
+            with TestClient(recovered.app()) as transport:
+                restored_lab = LabClient(_daemon_client(transport))
+                retained = (
+                    restored_lab.get_run(baseline_id)
+                    .published_analysis("sequence")
+                    .candidate_config()
+                )
+                assert retained.parameter_proposal == proposal
+                assert restored_lab.config.resolve_with_source(retained)[0] == config
+
+
+def test_task_binds_adopted_candidate_atomically_and_replays_after_restart(
+    tmp_path: Path,
+) -> None:
+    from scopecat.analysis.calibration import CHECK_RESULT
+    from scopecat.automation import (
+        AnalysisPublicationOutputRef,
+        ProcedureCloseCommand,
+        ProcedureDefinitionRef,
+        ProcedureStepBeginCommand,
+        ProcedureStepCompleteCommand,
+        ProcedureWorkerLeaseAcquireCommand,
+        RunOutputRef,
+    )
+    from scopecat.automation.calibration_tasks import (
+        CalibrationTaskPlan,
+        CalibrationTaskStage,
+        StageCandidateOutput,
+    )
+    from scopecat.daemon.calibration_tasks import (
+        CalibrationTaskCall,
+        CalibrationTaskControl,
+        CalibrationTaskCreate,
+        CalibrationTaskDispatch,
+    )
+    from scopecat.daemon.wire import AnalysisFactOutputPayload
+    from scopecat.records.analysis import AnalysisFact
+    from scopecat.records.calibration_check import (
+        CalibrationCheckRequest,
+        CalibrationCheckResult,
+        CalibrationScope,
+    )
+    from scopecat.records.candidate_input import AnalysisCandidateRunConfigSource
+    from scopecat.records.execution_scenario import SoftwareExecutionScenario
+    from scopecat.sdk.compute import PYTHON_JSON_CODEC
+
+    config = _config()
+    config = config.model_copy(
+        update={
+            "system": config.system.model_copy(
+                update={
+                    "scenario": SoftwareExecutionScenario(
+                        id="task-test",
+                        label="Test",
+                        model_id="fixture",
+                        model_version="1",
+                        capabilities=("drive",),
+                    ),
+                }
+            )
+        }
+    )
+    with (
+        LocalDaemonRuntime(tmp_path) as runtime,
+        TestClient(runtime.app()) as transport,
+    ):
+        lab = LabClient(_daemon_client(transport))
+        app = runtime.application
+        lab.setup.activate(
+            lab.setup.save(ExecutableSetupSnapshot.from_config(config), name="bench")
+        )
+        parameters = lab.parameters.save(
+            name="initial",
+            catalog=config.parameter_catalog,
+            parameters=config.parameter_snapshot,
+        )
+        branch = lab.parameters.create_branch("daily", revision=parameters)
+        context = lab.resolve_context(parameters=parameters).context
+        check = CalibrationCheckRequest(
+            scope=CalibrationScope("drive", ("q0",), "test", "1"),
+            context=context,
+            measurement_step="measure",
+            analysis_step="assess",
+        )
+        definition = ProcedureDefinitionRef(
+            id="check", version="1", fingerprint="sha256:" + "a" * 64
+        )
+        specification = CalibrationTaskCreate(
+            task_id="candidate-flow",
+            plan=CalibrationTaskPlan(
+                stages=(
+                    CalibrationTaskStage(id="fit", check=check),
+                    CalibrationTaskStage(
+                        id="verify",
+                        check=check,
+                        depends_on=("fit",),
+                        candidate_from=StageCandidateOutput(
+                            stage_id="fit", proposal_id="frequency"
+                        ),
+                    ),
+                    CalibrationTaskStage(
+                        id="wrong-analysis",
+                        check=check,
+                        depends_on=("fit",),
+                        candidate_from=StageCandidateOutput(
+                            stage_id="fit", proposal_id="other"
+                        ),
+                    ),
+                )
+            ),
+            calls={
+                key: CalibrationTaskCall(
+                    definition=definition,
+                    intent={"calibration_check": check.model_dump(mode="json")},
+                )
+                for key in ("fit", "verify", "wrong-analysis")
+            },
+        )
+        app.calibration_tasks.create(specification)
+        first = app.calibration_tasks.dispatch(
+            CalibrationTaskDispatch(task_id=specification.task_id, stage_id="fit")
+        )
+        parent = app.automation.get(first.task.executions["fit"])
+        lease = app.automation.acquire_lease(
+            ProcedureWorkerLeaseAcquireCommand(
+                procedure_run_id=parent.procedure_run_id,
+                worker_id="test",
+                expected_run_revision=parent.revision,
+            )
+        )
+        resolved = lab.parameters.resolve(parameters)
+        run_id = _complete_signal_run(
+            runtime,
+            submission_id="task-fit",
+            signal=1.0,
+            submission=_submission("task-fit").model_copy(
+                update={
+                    "config": resolved.config,
+                    "config_source": resolved.config_source,
+                }
+            ),
+        )
+        proposal = parameter_change_proposal_from_updates(
+            source_run_id=run_id,
+            source_config=resolved.config,
+            analysis_title="fit",
+            analysis_record_id="analysis-fit-r1",
+            proposal_id="frequency",
+            updates=(
+                replace_scalar_parameter("drive_frequency", Quantity(5.1, "GHz")),
+            ),
+            reason="fit",
+            confidence=None,
+        )
+        analysis = app.runs.save_run_analysis(
+            run_id,
+            AnalysisSaveCommand(
+                title="fit",
+                analysis_key="fit",
+                outputs=(
+                    *_analysis_command(proposal).outputs,
+                    AnalysisFactOutputPayload(
+                        kind="fact",
+                        id="check",
+                        title="Check",
+                        content=AnalysisFact(
+                            schema_id=CHECK_RESULT.id,
+                            schema_codec=CHECK_RESULT.schema_codec,
+                            schema_hash=CHECK_RESULT.schema_hash,
+                            codec=PYTHON_JSON_CODEC,
+                            value=CHECK_RESULT.encode(
+                                CalibrationCheckResult(check.scope, True)
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        )
+        current = lease.run
+        for step, output in (
+            ("measure", RunOutputRef(run_id=run_id)),
+            (
+                "assess",
+                AnalysisPublicationOutputRef(
+                    subject=RunAnalysisSubject(run_id=run_id),
+                    analysis_record_id=analysis.record.id,
+                ),
+            ),
+        ):
+            begun = app.automation.begin_step(
+                ProcedureStepBeginCommand(
+                    procedure_run_id=parent.procedure_run_id,
+                    lease_token=lease.lease.lease_token,
+                    expected_run_revision=current.revision,
+                    step_key=step,
+                    operation="run" if step == "measure" else "analysis",
+                    intent_hash="sha256:" + "b" * 64,
+                )
+            )
+            done = app.automation.complete_step(
+                ProcedureStepCompleteCommand(
+                    procedure_run_id=parent.procedure_run_id,
+                    lease_token=lease.lease.lease_token,
+                    expected_run_revision=begun.run.revision,
+                    step_key=step,
+                    attempt=begun.step.attempt,
+                    expected_step_revision=begun.step.revision,
+                    output=output,
+                )
+            )
+            current = done.run
+        app.automation.close(
+            ProcedureCloseCommand(
+                procedure_run_id=parent.procedure_run_id,
+                lease_token=lease.lease.lease_token,
+                expected_run_revision=current.revision,
+                status="succeeded",
+            )
+        )
+        command = CalibrationTaskDispatch(
+            task_id=specification.task_id, stage_id="verify"
+        )
+        other = proposal.model_copy(
+            update={"id": "other", "analysis_record_id": "analysis-other-r1"}
+        )
+        app.runs.save_run_analysis(
+            run_id,
+            AnalysisSaveCommand(
+                title="other",
+                analysis_key="other",
+                outputs=(
+                    AnalysisParameterProposalOutputPayload(
+                        kind="parameter_change_proposal",
+                        id="other",
+                        title="Other",
+                        content=other,
+                    ),
+                ),
+            ),
+        )
+        with pytest.raises(BackendConflict, match="adopted analysis"):
+            app.calibration_tasks.dispatch(
+                CalibrationTaskDispatch(
+                    task_id=specification.task_id,
+                    stage_id="wrong-analysis",
+                )
+            )
+        from unittest.mock import patch
+
+        with (
+            patch.object(
+                app.calibration_tasks._store,
+                "update",
+                side_effect=RuntimeError("rollback binding"),
+            ),
+            pytest.raises(RuntimeError, match="rollback binding"),
+        ):
+            app.calibration_tasks.dispatch(command)
+        assert (
+            "verify"
+            not in app.calibration_tasks.get(specification.task_id).task.resolved_checks
+        )
+        before_start = app.calibration_tasks.get(specification.task_id)
+        app.calibration_tasks.control(
+            CalibrationTaskControl(
+                task_id=specification.task_id,
+                expected_revision=before_start.task.control_revision,
+                action="start",
+                actor="test",
+                reason="advance after fit",
+            )
+        )
+        bound = app.calibration_tasks.advance(specification.task_id)
+        assert app.calibration_tasks.dispatch(command) == bound
+        adopted = bound.task.resolved_checks["verify"]
+        assert isinstance(adopted.context.parameters, AnalysisCandidateRunConfigSource)
+        assert adopted.context.parameters.analysis_record_id == analysis.record.id
+        assert adopted.context.parameters.source_run_id == run_id
+        assert bound.task.specification == specification
+        assert lab.parameters.checkout("daily").head == branch
+        called = app.automation.get(bound.task.executions["verify"])
+        assert (
+            CalibrationCheckRequest.model_validate(called.intent["calibration_check"])
+            == adopted
+        )
+    with LocalDaemonRuntime(tmp_path) as restarted:
+        assert restarted.application.calibration_tasks.dispatch(command) == bound
+    from scopecat_server.snapshots import create_snapshot, restore_snapshot
+
+    (tmp_path / "scopecat.toml").write_text("[lab]\n")
+    archive = tmp_path.with_name(tmp_path.name + "-snapshot")
+    restored = tmp_path.with_name(tmp_path.name + "-restored")
+    create_snapshot(load_project(tmp_path / "scopecat.toml"), archive)
+    restore_snapshot(archive, restored)
+    with LocalDaemonRuntime(restored) as recovered:
+        assert recovered.application.calibration_tasks.dispatch(command) == bound
 
 
 def test_verified_candidates_publish_to_independent_working_points(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     from scopecat.api.parameter_candidates import VerifiedParameterCandidate
-    from scopecat.config.registry.records import ContextConfigRegistrySource
     from scopecat.daemon.wire import ConfigContextPublishCommand
-    from scopecat.records.config_context import ConfigContextRef
 
     from scopecat_server.storage.sqlite.config_operations import (
         SQLiteConfigOperationStore,
@@ -2896,3 +2169,18 @@ def test_verified_candidates_publish_to_independent_working_points(
         assert (
             recovered.application.config.latest_context(a.base).entry == receipt.entry
         )
+
+
+def _approval_count(
+    runtime: LocalDaemonRuntime,
+    baseline_run_ids: tuple[str, ...],
+) -> int:
+    return sum(
+        len(
+            runtime.application.runs.list_run_contents(
+                run_id,
+                kind="parameter_change_approval_record",
+            ).items
+        )
+        for run_id in baseline_run_ids
+    )

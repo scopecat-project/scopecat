@@ -34,7 +34,6 @@ function snapshot(driveFrequency: number, readoutFrequency: number): ConfigProfi
     id: `profile-${driveFrequency}`,
     system: {
       id: "system",
-      primary_entity_id: "q0",
       topology: {
         entities: [{ id: "q0", kind: "logical_qubit", metadata: {} }],
       },

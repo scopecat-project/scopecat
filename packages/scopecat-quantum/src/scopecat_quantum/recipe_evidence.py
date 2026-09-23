@@ -4,8 +4,13 @@ from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
 from typing import override
 
-from scopecat.authoring.parameter_queries import ParameterQueryResult, QueryMapping
+from scopecat.authoring.parameter_queries import (
+    ParameterQueryResult,
+    QueryMapping,
+    query_parameter_reads,
+)
 from scopecat.records.parameter import ParameterAtomValue
+from scopecat.records.parameter_read import KeyedParameterRead
 
 
 @dataclass(frozen=True, slots=True)
@@ -13,6 +18,11 @@ class ResolvedRecipeInputs(Mapping[str, object]):
     snapshot_id: str
     inputs: QueryMapping[ParameterAtomValue]
     sources: QueryMapping[tuple[ParameterQueryResult, ...]]
+
+    @property
+    def parameter_reads(self) -> tuple[KeyedParameterRead, ...]:
+        """Recorded query cells, including any lookups used to select a key."""
+        return query_parameter_reads(self.sources)
 
     @override
     def __getitem__(self, key: str) -> object:

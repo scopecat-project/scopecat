@@ -5,9 +5,44 @@ audited at `3ddaeb27b` after target catalog PR #625. This is the full execution 
 implemented. Authored/session and workbench selection are also implemented as
 described in the later stages below. It refines [experiment contexts](experiment-contexts.md).
 This design follows the [prebaseline data policy](../data-compatibility.md).
-Current format 76 is not a compatibility baseline; no old-format reader or
+Current format 98 is not a compatibility baseline; no old-format reader or
 migration obligation is introduced here. Coordinate shared source-side files
 with workspace publication.
+
+## Subject and setup binding
+
+`RegisteredTargetSubject` retains the exact target reference, definition and sample
+evidence. It no longer owns control addresses. `TargetSetupBinding` separately
+relates that target to an executable setup hash, with explicit entity and connection
+maps. Both the pure topology checker and retained execution evidence use the same
+mapping records. Changing a map does not change the scientific subject.
+
+`ResolvedScientificBinding.target_binding` carries this relationship through run,
+plan and procedure admission. The authority reconstructs it from retained evidence;
+missing or altered mappings are rejected. Procedure children and candidate
+verification preserve the relationship alongside the subject and setup.
+
+`MeasurementContext.target_binding` also retains the relationship. Applicability
+compares it independently and reports `target_binding_changed`; moving it out of
+the subject must not permit reuse under a different mapping. Indexed history uses
+the complete context. This is scientific applicability, separate from target identity.
+
+Schema 94 and scientific-binding codec v3 replace the development representation.
+Use a fresh development store; historical directories remain untouched. Registered
+execution still supports one member with an identity mapping. The general explicit
+mapping checker alone does not enable multi-member execution.
+
+The common `records/measurement_context.py` model now serves retained run projection
+and calibration. `lab.resolve_context(...)` and the read-only
+`POST /api/v1/measurement-context/resolve` endpoint capture branch/setup choices;
+resolution receipts remain outside scientific identity. That ownership move did
+not alter saved context payloads. Development schema 94 subsequently removes
+`primary_entity_id` from setup/configuration, with setup revision/content codecs v3.
+Setup describes control resources; subject selection belongs to each session/page.
+
+Further convergence should unify scientific entity addresses and author selection resolution,
+then separate setup resource definitions from execution environment and target
+binding. Capability prerequisite policy remains distinct from task execution order.
 
 ## What must change in the existing path
 
@@ -254,14 +289,59 @@ physical-device qualification remain separate finishing gates.
 
 ## Implemented domain foundation
 
+### Explicit multi-member topology checks
+
+`project_target()` now validates an explicit mapping from member-local entities
+and connections to a complete execution topology. It is a pure infrastructure
+function: it returns a checked `TargetProjection`, not a scientific run binding
+or permission to submit an assembly. The existing single-member projection uses
+the same checker with identity maps and retains its previous execution boundary.
+
+For a retained target with members `A` and `B`, each containing `q0`, `q1` and
+an `edge`, and a declared `bus` connecting `A/q1` to `B/q0`:
+
+```python
+from scopecat.config.target_projection import project_target
+
+projection = project_target(
+    target_revision,
+    catalog_id=owning_catalog_id,
+    samples=retained_sample_revisions,
+    execution_topology=setup_topology,
+    entities={
+        "A": {"q0": "left0", "q1": "left1"},
+        "B": {"q0": "right0", "q1": "right1"},
+    },
+    connections={"A": {"edge": "left-edge"}, "B": {"edge": "right-edge"}},
+    interconnections={"bus": "bus-edge"},
+)
+```
+
+The caller supplies immutable sample revisions keyed by `(sample_id, revision)`.
+Maps must cover every member entity, member connection and target interconnection
+exactly once; runtime IDs must not collide, and no extra runtime entities or edges
+are accepted. The checker preserves entity kinds, connection kinds, undirected
+endpoints and member-connection `entity_id` through the mapping. Display metadata
+and input ordering do not affect topology agreement. Target interconnections do
+not declare a coupler entity, so the checker cannot invent an `entity_id` for them.
+
+This makes the naming and topology checks reusable without inferring laboratory
+routes or hardware ownership. Remaining execution work includes multi-member
+scientific bindings, admission and replay consumers, explicit setup ownership of
+the mapping, parameter-address alignment and resource/compiler qualification.
+The capability context resolver still rejects registered multi-member/connected
+targets until those contracts can be retained and validated end to end.
+
 `config/target_projection.py` now owns pure sample-hash and connection-entity
 validation, consumed by the existing target catalog's create/revise operations.
 Its internal single-member projection preserves the exact qualified target ref,
 keeps member IDs separate from run role `subject`, and compares topology without
 description/order sensitivity. Contract tests cover foreign catalogs, composite
-targets, absent/different topology and label-only target revisions. The internal run-binding and admission path now consumes this projection. Public
-authored/session selection, target-bearing saved recipes and target-qualified
-calibration remain pending; registration alone still does not enable those paths.
+targets, absent/different topology and label-only target revisions. Run binding
+and admission consume this projection. Public authored/session selection, saved
+experiment plans and target-qualified capability reports support the same
+single-member binding. Multi-member execution remains pending; catalog registration
+and a successful topology check alone do not enable it.
 
 
 ## Internal run-binding stage (#639)

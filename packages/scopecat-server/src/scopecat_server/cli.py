@@ -300,130 +300,12 @@ def config_check(
     )
 
 
-@config_app.command("diff")
-def config_diff(
-    project: Annotated[
-        Path,
-        typer.Argument(help="Project directory or scopecat.toml."),
-    ] = _CURRENT_DIRECTORY,
-) -> None:
-    """Compare executable project configuration with the daemon default."""
-
-    from scopecat.project import open_project
-
-    from .config_commands import diff_project_config
-
-    try:
-        result = diff_project_config(open_project(project))
-    except _project_config_errors() as error:
-        _fail(error)
-
-    if not result.has_drift:
-        console.print(
-            f"[green]in sync[/green] content_hash={result.source_content_hash}",
-            soft_wrap=True,
-        )
-        return
-
-    console.print(
-        f"[yellow]different[/yellow] source={result.source_content_hash} "
-        f"daemon={result.active_content_hash}",
-        soft_wrap=True,
-    )
-    for line in result.unified_json_diff():
-        console.print(line, markup=False, soft_wrap=True)
-
-
-@config_app.command("apply")
-def config_apply(
-    project: Annotated[
-        Path,
-        typer.Argument(help="Project directory or scopecat.toml."),
-    ] = _CURRENT_DIRECTORY,
-    actor: Annotated[
-        str,
-        typer.Option(help="Identity recorded for the configuration change."),
-    ] = "local-operator",
-    note: Annotated[
-        str,
-        typer.Option(help="Reason recorded with the immutable revision."),
-    ] = "apply project config source",
-) -> None:
-    """Publish declared parameter defaults; never select executable setup."""
-
-    from scopecat.project import open_project
-
-    from .config_commands import apply_project_config
-
-    try:
-        result = apply_project_config(
-            open_project(project),
-            actor=actor,
-            note=note,
-        )
-    except _project_config_errors() as error:
-        _fail(error)
-
-    state = "[green]applied[/green]" if result.changed else "[green]in sync[/green]"
-    console.print(
-        f"{state} entry={result.entry_id} content_hash={result.source_content_hash}",
-        soft_wrap=True,
-    )
-
-
-@config_app.command("export")
-def config_export(
-    output: Annotated[
-        Path,
-        typer.Option("--output", "-o", help="Destination JSON snapshot."),
-    ],
-    project: Annotated[
-        Path,
-        typer.Argument(help="Project directory or scopecat.toml."),
-    ] = _CURRENT_DIRECTORY,
-    force: Annotated[
-        bool,
-        typer.Option("--force", help="Replace an existing destination."),
-    ] = False,
-) -> None:
-    """Export the complete daemon default as generated JSON."""
-
-    from scopecat.project import open_project
-
-    from .config_commands import export_project_config
-
-    try:
-        result = export_project_config(
-            open_project(project),
-            output,
-            overwrite=force,
-        )
-    except _project_config_errors() as error:
-        _fail(error)
-
-    console.print(
-        f"[green]exported[/green] {result.destination} "
-        f"content_hash={result.content_hash}",
-        soft_wrap=True,
-    )
-
-
 @automation_app.command("work")
 def automation_work(
     project: Annotated[
         Path,
         typer.Argument(help="Project directory or scopecat.toml."),
     ] = _CURRENT_DIRECTORY,
-    working_point: Annotated[
-        str | None,
-        typer.Option(
-            "--working-point",
-            help=(
-                "Saved parameter entry whose workspace head calibration follows. "
-                "Without it, calibration only checks nonpublishing catalog work."
-            ),
-        ),
-    ] = None,
     once: Annotated[
         bool,
         typer.Option("--once", help="Run one bounded automation cycle and exit."),
@@ -437,7 +319,7 @@ def automation_work(
         ),
     ] = 1.0,
 ) -> None:
-    """Finalize calibrations, plan work, and execute exact procedures."""
+    """Plan and execute explicitly registered durable procedures."""
 
     import signal
     from threading import Event
@@ -455,10 +337,6 @@ def automation_work(
             worker = ProjectAutomationWorker(
                 lab.procedures,
                 planner=lab.procedures.interval_planner(),
-                calibration_evaluator=lab.calibrations.evaluator(
-                    working_point=working_point
-                ),
-                calibration_finalizer=lab.calibrations.publication_finalizer(),
             )
             if once:
                 result = worker.cycle()
@@ -469,35 +347,11 @@ def automation_work(
                 )
                 console.print(
                     f"{outcome} "
-                    f"publication_ready="
-                    f"{result.publications.ready_items} "
-                    f"publication_prepared="
-                    f"{result.publications.prepared_items} "
-                    f"publication_published="
-                    f"{result.publications.published_items} "
-                    f"publication_deferred="
-                    f"{result.publications.deferred_items} "
-                    f"publication_attention="
-                    f"{result.publications.attention_items} "
-                    f"publication_reconciled="
-                    f"{result.publications.reconciled_items} "
-                    f"publication_superseded="
-                    f"{result.publications.superseded_items} "
-                    f"publication_races="
-                    f"{result.publications.benign_races} "
-                    f"publication_barrier="
-                    f"{str(result.config_planning_blocked).lower()} "
                     f"interval_created={result.intervals.created_schedules} "
-                    f"calibration_admitted={result.calibrations.admitted_members} "
-                    f"calibration_blocked={result.calibrations.blocked_members} "
                     f"materialized={result.schedules.materialized} "
                     f"dispatched={result.procedures.dispatched} "
                     f"planner_failures={result.intervals.failures} "
                     f"interval_drifts={result.intervals.drifted_schedules} "
-                    f"publication_failures="
-                    f"{result.publications.failures} "
-                    f"calibration_failures={result.calibrations.failures} "
-                    f"calibration_drifts={result.calibrations.cohort_drifts} "
                     f"schedule_failures={result.schedules.failures} "
                     f"procedure_failures={result.procedures.failures} "
                     f"procedure_conflicts={result.procedures.conflicts} "
@@ -531,12 +385,6 @@ def automation_work(
                         "[yellow]automation cycle needs review:[/yellow] "
                         f"planner_failures={result.intervals.failures} "
                         f"interval_drifts={result.intervals.drifted_schedules} "
-                        f"publication_failures="
-                        f"{result.publications.failures} "
-                        f"publication_attention="
-                        f"{result.publications.attention_items} "
-                        f"calibration_failures={result.calibrations.failures} "
-                        f"calibration_drifts={result.calibrations.cohort_drifts} "
                         f"schedule_failures={result.schedules.failures} "
                         f"procedure_failures={result.procedures.failures} "
                         f"procedure_conflicts={result.procedures.conflicts}",

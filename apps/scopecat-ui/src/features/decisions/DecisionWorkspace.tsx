@@ -397,6 +397,14 @@ function EvidenceLink({ input }: { input: ProcedureStepAttempt["inputs"][number]
   if (input.kind === "interpretation") {
     return <span className={common}>decision · {input.step_key}</span>;
   }
+  if (input.kind === "parameter_publish") {
+    return (
+      <span className={common}>
+        parameters · {input.branch.name} · generation {input.branch.generation} ·{" "}
+        {input.branch.revision.revision_id}
+      </span>
+    );
+  }
   return <span className={common}>configuration · {input.entry_id}</span>;
 }
 

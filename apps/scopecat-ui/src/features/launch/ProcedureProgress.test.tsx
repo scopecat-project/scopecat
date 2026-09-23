@@ -82,6 +82,33 @@ it("reopens a paused admission and explicitly dispatches the same procedure", as
   ]);
 });
 
+it("shows retained worker diagnostics separately from execution status", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () =>
+      Response.json(
+        view({
+          dispatch: {
+            management: "paused",
+            worker_running: false,
+            failure: {
+              kind: "dispatch",
+              message: "Author workspace is unavailable",
+              observed_at: NOW,
+            },
+            log_path: "C:\\lab-data\\procedure-workers\\abc\\worker.log",
+          },
+        }),
+      ),
+    ),
+  );
+  mount();
+  await screen.findByText("Worker diagnostic: Author workspace is unavailable");
+  expect(screen.getByText("C:\\lab-data\\procedure-workers\\abc\\worker.log")).toBeInTheDocument();
+  expect(screen.getByText("Dispatch paused")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Dispatch existing procedure" })).toBeEnabled();
+});
+
 it.each([
   ["waiting_for_input", "Waiting for review"],
   ["attention_required", "Needs attention"],

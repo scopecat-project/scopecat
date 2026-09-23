@@ -18,6 +18,7 @@ internals are separate roles, not prerequisites for writing an experiment.
 | Analyze retained measurements | [Ordinary analysis](../guides/ordinary-analysis.md) | Change an analysis while retaining the original measurement and its previous analysis. |
 | Edit, diagnose and recover | [Refresh author code](../how-to/refresh-author-code.md), [resume interrupted runs](../how-to/resume-interrupted-runs.md) | Correct one error and identify the failed and new jobs; learn which work supports resume. |
 | Compare and calibrate | [Retained comparisons](../how-to/retained-run-comparison.md), [verify candidates](../how-to/verify-parameter-candidates.md) | Validate a candidate before using it in subsequent experiments. |
+| Run calibration in the background | [Task tutorial sandbox](../tutorials/teaching-sandboxes.md), [task finalization](../how-to/preview-calibration-tasks.md#final-verification-and-publication) | Distinguish passed stage checks, final scientific acceptance and the actual branch publication receipt. |
 
 Basic refresh, error reading and reopening belong in the first editing lesson.
 Advanced recovery can wait until needed. After individual tasks, combine a short

@@ -14,6 +14,7 @@ from scopecat.compiler.parameter_overlays import (
 )
 from scopecat.compiler.point_domain import PointDomain
 from scopecat.compiler.relations.context import EvalContext, ParameterRelationData
+from scopecat.compiler.relations.parameter_reads import ParameterReadRecorder
 from scopecat.compiler.relations.specialization import (
     ParameterCellBinding,
     specialize_scalar_expression,
@@ -25,6 +26,7 @@ from scopecat.program.point_domain import (
     map_point_axis_centers,
 )
 from scopecat.program.value_graph import OperationId
+from scopecat.records.parameter_read import BindingParameterRead
 
 
 def specialize_bound_facts(
@@ -35,10 +37,14 @@ def specialize_bound_facts(
 ) -> BoundProgramFacts:
     """Partially evaluate pure values across one bound fact set."""
 
-    base_known = EvalContext(params=parameters)
+    recorder = ParameterReadRecorder()
+    for prior in program.parameter_reads:
+        if prior.phase == "specialization":
+            recorder.include(prior.evidence)
+    base_known = EvalContext(params=parameters, parameter_reads=recorder)
     parameter_cells = parameter_cell_bindings(program.parameter_overlays)
     known = base_known
-    return replace(
+    specialized = replace(
         program,
         point_domain=_specialize_point_domain(
             program.point_domain,
@@ -58,6 +64,17 @@ def specialize_bound_facts(
             program,
             known=known,
             parameter_cells=parameter_cells,
+        ),
+    )
+    return replace(
+        specialized,
+        parameter_reads=(
+            *(
+                read
+                for read in program.parameter_reads
+                if read.phase != "specialization"
+            ),
+            BindingParameterRead(phase="specialization", evidence=recorder.snapshot()),
         ),
     )
 

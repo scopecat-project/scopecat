@@ -6,11 +6,14 @@ from pathlib import Path
 import pytest
 from scopecat.automation import (
     ConfigPublishOutputRef,
+    ParameterBranchPublishOutputRef,
     ProcedureDefinitionRef,
     ProcedureRun,
     ProcedureStepAttempt,
     procedure_intent_hash,
 )
+from scopecat.records.parameter_branch import ParameterBranch
+from scopecat.records.parameter_revision import ParameterRevisionRef
 
 from scopecat_server.storage.sqlite.automation import (
     AutomationConflict,
@@ -146,11 +149,12 @@ def test_store_bounds_step_history_and_enforces_one_running_attempt(
     ).items == (succeeded,)
 
 
-def test_v42_round_trips_config_publish_step_attempt(tmp_path: Path) -> None:
+@pytest.mark.parametrize("operation", ["config_publish", "parameter_publish"])
+def test_round_trips_publication_step_attempt(tmp_path: Path, operation: str) -> None:
     store = _store(tmp_path)
     run = _run()
     running = _attempt(step_key="accept-candidate").model_copy(
-        update={"operation": "config_publish"}
+        update={"operation": operation}
     )
     with store.write_transaction() as connection:
         store.insert_run_in_transaction(connection, run)
@@ -163,7 +167,18 @@ def test_v42_round_trips_config_publish_step_attempt(tmp_path: Path) -> None:
             "state": "succeeded",
             "updated_at": finished_at,
             "finished_at": finished_at,
-            "output": ConfigPublishOutputRef(
+            "output": ParameterBranchPublishOutputRef(
+                branch=ParameterBranch(
+                    name="daily",
+                    generation=2,
+                    actor="automation",
+                    revision=ParameterRevisionRef(
+                        revision_id="accepted-candidate", content_hash=_HASH
+                    ),
+                )
+            )
+            if operation == "parameter_publish"
+            else ConfigPublishOutputRef(
                 generation=2,
                 entry_id="accepted-candidate",
                 entry_content_hash=_HASH,

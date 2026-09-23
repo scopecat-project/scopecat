@@ -200,17 +200,23 @@ def test_foreign_binding_and_mismatched_projection_allocate_nothing(
         foreign = subject.model_copy(
             update={"ref": subject.ref.model_copy(update={"catalog_id": "elsewhere"})}
         )
+        mapping = request.scientific_binding.target_binding
+        assert mapping is not None
         for malformed, message in (
-            (foreign, "another catalog"),
-            (subject.model_copy(update={"projection": ()}), "retained evidence"),
+            (
+                request.scientific_binding.model_copy(update={"subject": foreign}),
+                "another catalog",
+            ),
+            (
+                request.scientific_binding.model_copy(
+                    update={
+                        "target_binding": mapping.model_copy(update={"entities": ()})
+                    }
+                ),
+                "retained evidence",
+            ),
         ):
-            changed = request.model_copy(
-                update={
-                    "scientific_binding": request.scientific_binding.model_copy(
-                        update={"subject": malformed}
-                    )
-                }
-            )
+            changed = request.model_copy(update={"scientific_binding": malformed})
             with pytest.raises(BackendConflict, match=message):
                 runtime.application.submit_run(changed)
             assert _counts(tmp_path) == before
@@ -706,7 +712,16 @@ def test_fixed_setup_fence_survives_parameters_but_rejects_structure(
         changed_setup = config.model_copy(
             update={
                 "system": config.system.model_copy(
-                    update={"primary_entity_id": "drive-q0"}
+                    update={
+                        "topology": config.system.topology.model_copy(
+                            update={
+                                "entities": [
+                                    entity.model_copy(update={"kind": "rewired"})
+                                    for entity in config.system.topology.entities
+                                ]
+                            }
+                        )
+                    }
                 )
             }
         )

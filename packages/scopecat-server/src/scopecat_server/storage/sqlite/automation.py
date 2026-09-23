@@ -17,6 +17,7 @@ from scopecat.automation import (
     ProcedureStepAttempt,
 )
 
+from scopecat_server.storage.sqlite.calibration_checks import index_check
 from scopecat_server.storage.sqlite.connection import SQLiteDatabase
 
 
@@ -292,6 +293,7 @@ class SQLiteAutomationStore:
                     run.model_dump_json(),
                 ),
             )
+            index_check(connection, run)
         except sqlite3.IntegrityError as error:
             raise AutomationConflict(
                 "procedure run id or request key is already durable"
