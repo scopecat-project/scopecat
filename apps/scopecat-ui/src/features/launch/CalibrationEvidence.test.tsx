@@ -35,7 +35,8 @@ function report(
     observed_at: "2026-09-23T08:00:00Z",
     items: [
       {
-        requirement: { id: stage.id, scope: stage.check.scope, max_age: "PT7200S" },
+        requirement: { id: stage.id, scope: stage.check.scope, max_age: "PT7200S", depends_on: [] },
+        availability: { status, blocked_by: [] },
         scanned: 2,
         unresolved_procedures: [],
         incomplete_reasons: [],
@@ -86,7 +87,9 @@ it("requires an explicit age and submits exactly the stage's frozen scope and co
     {
       context: stage.check.context,
       history_limit: 50,
-      requirements: [{ id: stage.id, scope: stage.check.scope, max_age: "PT7200S" }],
+      requirements: [
+        { id: stage.id, scope: stage.check.scope, max_age: "PT7200S", depends_on: [] },
+      ],
     },
   ]);
   expect(screen.getByText(/does not assess the current branch head/)).toBeInTheDocument();

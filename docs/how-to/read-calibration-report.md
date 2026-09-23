@@ -59,7 +59,7 @@ within one SQLite read transaction. `observed_at` is the server's evaluation tim
 Evidence selection uses measurement creation time, not analysis publication time.
 No laboratory Python is imported, no experiment runs, and no parameter is written.
 
-| Status | Meaning |
+| `selection.status` | Meaning |
 |---|---|
 | `usable` | The selected check passed and meets the requested age/context policy. |
 | `out_of_spec` | The selected applicable check failed its scientific criterion. |
@@ -71,6 +71,39 @@ backward for success. Exact-context filtering means another parameter revision,
 setup, subject or software scenario provides no matching evidence; it is not
 silently reused. An absent requirement returns `no_matching_evidence`. This is
 still conservative exact-revision matching, not parameter-dependency analysis.
+
+## Declare capability prerequisites
+
+Add `depends_on` to requirements when your laboratory's policy requires other
+capabilities to be usable first. These are IDs in the same report:
+
+```python
+readout = CalibrationRequirement(
+    id="readout", scope=readout_scope, max_age=timedelta(hours=4)
+)
+gate = CalibrationRequirement(
+    id="gate", scope=gate_scope, max_age=timedelta(hours=2), depends_on=("readout",)
+)
+report = lab.calibration_checks.report(context=context, requirements=(readout, gate))
+for item in report.items:
+    print(item.requirement.id, item.selection.status, item.availability.status)
+    print(item.availability.blocked_by)
+```
+
+`selection` always describes the requirement's own evidence. `availability`
+has the same status unless a prerequisite is not usable; then it is `blocked`,
+even if the requirement's own check passed. `blocked_by` lists immediate unmet
+prerequisite IDs. Follow those items to inspect deeper causes. Blocking propagates
+through the graph, while independent requirements remain unaffected.
+
+All dependencies must name requirements in the request; duplicates and cycles
+are rejected. Request order does not matter, and response order is preserved.
+An empty dependency list preserves the individual evidence verdict. This explicit
+graph describes your policy, not measured causality or parameter read dependencies.
+Task stage ordering is not automatically adopted as capability policy. The
+workbench's per-stage inspector submits a single requirement without dependencies.
+
+## Bounds and interpretation
 
 `history_limit` defaults to 50 requests **per requirement**, with a range of 1–200.
 A report accepts 1–32 requirements with distinct IDs, and the product of requirement

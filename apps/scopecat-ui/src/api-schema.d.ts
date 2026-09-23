@@ -3008,6 +3008,11 @@ export interface components {
          * @description One explicitly requested capability; no inferred dependency closure.
          */
         CalibrationRequirement: {
+            /**
+             * Depends On
+             * @default []
+             */
+            depends_on: string[];
             /** Id */
             id: string;
             /**
@@ -3019,6 +3024,7 @@ export interface components {
         };
         /** CalibrationRequirementStatus */
         CalibrationRequirementStatus: {
+            availability: components["schemas"]["CapabilityAvailability"];
             /** Incomplete Reasons */
             incomplete_reasons: ("scan_limit" | "unresolved_checks")[];
             requirement: components["schemas"]["CalibrationRequirement"];
@@ -3206,6 +3212,16 @@ export interface components {
              */
             kind: "candidate";
             source: components["schemas"]["AnalysisCandidateRunConfigSource"];
+        };
+        /**
+         * CapabilityAvailability
+         * @description Advisory availability under an explicit, validated dependency graph.
+         */
+        CapabilityAvailability: {
+            /** Blocked By */
+            blocked_by: string[];
+            /** Status */
+            status: components["schemas"]["CheckStatus"] | "blocked";
         };
         /** ChangeParameterColumn */
         ChangeParameterColumn: {

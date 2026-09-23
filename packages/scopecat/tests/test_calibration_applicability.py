@@ -4,11 +4,17 @@ from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 
 import pytest
+from pydantic import ValidationError
 
 from scopecat.automation.calibration import (
     CheckEvidence,
     assess_calibration_check,
+    assess_capability_dependencies,
     select_calibration_check,
+)
+from scopecat.daemon.calibration_checks import (
+    CalibrationReportQuery,
+    CalibrationRequirement,
 )
 from scopecat.kernel.content_identity import sha256_json_hash
 from scopecat.kernel.frozen import freeze_json_mapping
@@ -31,6 +37,46 @@ from scopecat.records.setup import SetupRevisionRef
 
 START = datetime(2026, 9, 23, tzinfo=UTC)
 SCOPE = CalibrationScope("drive", ("q0", "q1"), "idle-v1", "residual-v1")
+
+
+def test_capability_dependencies_propagate_without_changing_own_checks() -> None:
+    result = assess_capability_dependencies(
+        {"joint": ("gate",), "gate": ("readout",), "readout": (), "other": ()},
+        {
+            "joint": "usable",
+            "gate": "out_of_spec",
+            "readout": "recheck",
+            "other": "usable",
+        },
+    )
+    assert result["joint"].status == "blocked"
+    assert result["joint"].blocked_by == ("gate",)
+    assert result["gate"].blocked_by == ("readout",)
+    assert result["readout"].status == "recheck"
+    assert result["other"].status == "usable"
+
+
+@pytest.mark.parametrize("dependencies", [("missing",), ("a",), ("b",), ("b", "b")])
+def test_report_rejects_invalid_dependency_graph(
+    observation: tuple[RunSnapshot, CalibrationContext],
+    dependencies: tuple[str, ...],
+) -> None:
+    _, context = observation
+    with pytest.raises(ValidationError):
+        CalibrationReportQuery(
+            context=context,
+            requirements=(
+                CalibrationRequirement(
+                    id="a",
+                    scope=SCOPE,
+                    max_age=timedelta(hours=1),
+                    depends_on=dependencies,
+                ),
+                CalibrationRequirement(
+                    id="b", scope=SCOPE, max_age=timedelta(hours=1), depends_on=("a",)
+                ),
+            ),
+        )
 
 
 @pytest.fixture

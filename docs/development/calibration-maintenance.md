@@ -244,8 +244,10 @@ measured execution cost. Do not infer parallel safety from distinct target IDs.
    procedures; passing and negative scientific outcomes leave the branch unchanged.
 2. **Partially implemented:** scoped checks, exact-context applicability and
    selection from explicit complete histories, with inspectable reasons. Still
-   needed: capability requirements/dependencies and resolved parameter dependency
-   capture. Indexed scoped queries, server evidence pages and bounded batch
+   Explicit capability requirements/dependencies now produce a bounded report
+   with separate own-evidence and prerequisite-availability verdicts. Resolved
+   parameter dependency capture remains needed. Indexed scoped queries, server
+   evidence pages and bounded batch
    observation checks are implemented. Avoid a second analysis/evidence store.
 3. **Fixed tasks implemented:** target-expanded stage plans declare exact checks
    and dependencies, with explicit partial completion. Tasks persist fixed calls

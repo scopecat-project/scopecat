@@ -3,12 +3,17 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
+from graphlib import CycleError, TopologicalSorter
 from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from scopecat.automation import ProcedureRun
-from scopecat.automation.calibration import CheckEvidence, CheckSelection
+from scopecat.automation.calibration import (
+    CapabilityAvailability,
+    CheckEvidence,
+    CheckSelection,
+)
 from scopecat.automation.calibration_tasks import CalibrationTaskPlan
 from scopecat.records.calibration_check import (
     CalibrationCheckRequest,
@@ -26,6 +31,7 @@ class CalibrationRequirement(BaseModel):
     id: str = Field(min_length=1)
     scope: CalibrationScope
     max_age: timedelta = Field(gt=timedelta(0))
+    depends_on: tuple[str, ...] = ()
 
 
 class CalibrationReportQuery(BaseModel):
@@ -38,8 +44,22 @@ class CalibrationReportQuery(BaseModel):
 
     @model_validator(mode="after")
     def validate_requirements(self) -> CalibrationReportQuery:
-        if len({item.id for item in self.requirements}) != len(self.requirements):
+        ids = {item.id for item in self.requirements}
+        if len(ids) != len(self.requirements):
             raise ValueError("requirement IDs must be unique")
+        for item in self.requirements:
+            if len(set(item.depends_on)) != len(item.depends_on):
+                raise ValueError("requirement dependencies must be unique")
+            if not set(item.depends_on) <= ids:
+                raise ValueError("requirement dependency names an unknown requirement")
+        try:
+            tuple(
+                TopologicalSorter(
+                    {item.id: item.depends_on for item in self.requirements}
+                ).static_order()
+            )
+        except CycleError as error:
+            raise ValueError("requirement dependencies must be acyclic") from error
         if len(self.requirements) * self.history_limit > MAX_CHECK_OBSERVATIONS:
             raise ValueError("report history budget exceeds 2000 requests")
         return self
@@ -49,6 +69,7 @@ class CalibrationRequirementStatus(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     requirement: CalibrationRequirement
     selection: CheckSelection
+    availability: CapabilityAvailability
     scanned: int
     unresolved_procedures: tuple[str, ...]
     incomplete_reasons: tuple[Literal["scan_limit", "unresolved_checks"], ...]

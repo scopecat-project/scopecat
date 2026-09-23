@@ -62,7 +62,14 @@ export function CalibrationEvidence({
             body: {
               context: stage.check.context,
               history_limit: historyLimit,
-              requirements: [{ id: stage.id, scope: stage.check.scope, max_age: `PT${seconds}S` }],
+              requirements: [
+                {
+                  id: stage.id,
+                  scope: stage.check.scope,
+                  max_age: `PT${seconds}S`,
+                  depends_on: [],
+                },
+              ],
             },
           }),
         ),

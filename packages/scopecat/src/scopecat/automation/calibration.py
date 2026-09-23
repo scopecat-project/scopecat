@@ -5,8 +5,10 @@ scope and scientific result from the retained analysis of the supplied run.
 No row-level independence or automatic physical dependency inference is claimed.
 """
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from graphlib import TopologicalSorter
 from typing import Literal
 
 from scopecat.records.calibration_check import CalibrationContext, CalibrationScope
@@ -33,6 +35,37 @@ type CheckReason = Literal[
 ]
 
 type CheckStatus = Literal["usable", "out_of_spec", "recheck", "unknown"]
+
+
+@dataclass(frozen=True)
+class CapabilityAvailability:
+    """Advisory availability under an explicit, validated dependency graph."""
+
+    status: CheckStatus | Literal["blocked"]
+    blocked_by: tuple[str, ...]
+
+
+def assess_capability_dependencies(
+    dependencies: Mapping[str, tuple[str, ...]],
+    checks: Mapping[str, CheckStatus],
+) -> dict[str, CapabilityAvailability]:
+    """Propagate unmet prerequisites without changing any check's own evidence.
+
+    Callers supply an acyclic graph with known, unique dependency IDs and one
+    check status per node. Coverage and scientific dependencies are lab policy.
+    """
+    result: dict[str, CapabilityAvailability] = {}
+    for identity in TopologicalSorter(dependencies).static_order():
+        blocked = tuple(
+            dependency
+            for dependency in dependencies[identity]
+            if result[dependency].status != "usable"
+        )
+        result[identity] = CapabilityAvailability(
+            "blocked" if blocked else checks[identity],
+            blocked,
+        )
+    return result
 
 
 @dataclass(frozen=True)

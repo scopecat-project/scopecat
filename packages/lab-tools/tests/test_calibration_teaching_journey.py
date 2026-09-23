@@ -239,11 +239,22 @@ try:
                             "id": "missing", "scope": replace(requirement.scope,
                                 capability="not-measured"),
                         }),
+                        requirement.model_copy(update={
+                            "id": "dependent", "depends_on": ("missing",),
+                        }),
+                        requirement.model_copy(update={
+                            "id": "downstream", "depends_on": ("dependent",),
+                        }),
                     ),
                 )
                 assert tuple(item.selection.status for item in report.items) == (
-                    "usable", "recheck", "unknown",
+                    "usable", "recheck", "unknown", "usable", "usable",
                 ), report
+                assert tuple(item.availability.status for item in report.items) == (
+                    "usable", "recheck", "unknown", "blocked", "blocked",
+                )
+                assert report.items[3].availability.blocked_by == ("missing",)
+                assert report.items[4].availability.blocked_by == ("dependent",)
                 assert report.items[1].selection.assessment.reasons == (
                     "check_expired",
                 )

@@ -147,6 +147,12 @@ IDs. Bounded or unresolved history remains unknown. The laboratory still owns
 requirement coverage, policy and age limits. See
 [capability reports](../../how-to/read-calibration-report.md).
 
+Requirements can declare an acyclic `depends_on` graph within that report.
+The separate `availability` projection propagates unmet prerequisites while
+preserving each check's own evidence selection. Task execution order is not
+inferred as scientific dependency policy. This graph does not track parameter
+reads or permit evidence reuse across parameter revisions.
+
 The task workbench consumes this endpoint per stage, with an explicit age policy
 and visible evaluation time. Users can inspect matching checks from other tasks
 without changing the stage's frozen context. This is an evidence-inspection entry

@@ -13,7 +13,12 @@ from scopecat.automation import (
     ProcedureStepOutputRef,
     RunOutputRef,
 )
-from scopecat.automation.calibration import CheckEvidence, select_calibration_check
+from scopecat.automation.calibration import (
+    CapabilityAvailability,
+    CheckEvidence,
+    assess_capability_dependencies,
+    select_calibration_check,
+)
 from scopecat.automation.calibration_tasks import (
     CalibrationTaskProgress,
     assess_calibration_task,
@@ -303,13 +308,25 @@ class CalibrationCheckQueries:
                     CalibrationRequirementStatus(
                         requirement=requirement,
                         selection=selection,
+                        availability=CapabilityAvailability(selection.status, ()),
                         scanned=len(views),
                         unresolved_procedures=unresolved,
                         incomplete_reasons=tuple(reasons),
                     )
                 )
+            availability = assess_capability_dependencies(
+                {item.id: item.depends_on for item in query.requirements},
+                {item.requirement.id: item.selection.status for item in items},
+            )
             return CalibrationReport(
-                context=query.context, observed_at=now, items=tuple(items)
+                context=query.context,
+                observed_at=now,
+                items=tuple(
+                    item.model_copy(
+                        update={"availability": availability[item.requirement.id]}
+                    )
+                    for item in items
+                ),
             )
 
     def preview_task(self, preview: CalibrationTaskPreview) -> CalibrationTaskProgress:
