@@ -15,7 +15,11 @@ from scopecat.inspection import (
 )
 from scopecat.program.parameters import ParameterContract
 from scopecat.records.costs import RunCompilationCost
-from scopecat.records.parameter_read import BindingParameterRead, HostPointParameterRead
+from scopecat.records.parameter_read import (
+    BindingParameterRead,
+    HostParameterEvidence,
+    HostPointParameterRead,
+)
 from scopecat.sdk.payloads import PayloadCodecRegistry
 
 if TYPE_CHECKING:
@@ -92,7 +96,14 @@ class RunCoverageCheckpoint:
             raise ValueError("coverage checkpoint points must be non-empty and unique")
 
 
-type RunCoveredOperation = RunCoverageCheckpoint | RunCoverageEffect | RunDomainJob
+@dataclass(frozen=True, slots=True)
+class RunHostParameterEvidence:
+    evidence: HostParameterEvidence
+
+
+type RunCoveredOperation = (
+    RunCoverageCheckpoint | RunCoverageEffect | RunDomainJob | RunHostParameterEvidence
+)
 
 
 @dataclass(frozen=True, slots=True)

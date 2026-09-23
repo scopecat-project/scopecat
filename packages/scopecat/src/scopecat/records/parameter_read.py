@@ -68,6 +68,29 @@ class BindingParameterRead(BaseModel):
     evidence: ScalarExpressionReadEvidence
 
 
+class HostParameterEvidence(BaseModel):
+    """Bounded host preparation observations; never a completion proof."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+    format: Literal["scopecat.host.parameter_reads.v1"] = (
+        "scopecat.host.parameter_reads.v1"
+    )
+    entries: tuple[HostPointParameterRead, ...] = Field(min_length=1, max_length=256)
+    binding: tuple[BindingParameterRead, ...]
+    incomplete_reasons: tuple[str, ...] = (
+        "binding_structure_not_captured",
+        "success_state_not_captured",
+    )
+
+
+class HostParameterEvidenceRecord(BaseModel):
+    """Preparation evidence scoped to the executor segment that published it."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+    segment_id: str = Field(min_length=1)
+    evidence: HostParameterEvidence
+
+
 class DomainInputParameterEvidence(BaseModel):
     """Input materialization coverage, separate from target-internal reads."""
 

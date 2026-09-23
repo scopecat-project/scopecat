@@ -27,6 +27,7 @@ from scopecat.execution.program import (
     RunCoveredOperation,
     RunDomainJob,
     RunHostBinding,
+    RunHostParameterEvidence,
     RunPointInspection,
     RunProgram,
 )
@@ -100,6 +101,7 @@ from scopecat.records.instrument import (
     InstrumentStateSetting,
     InterfaceStateMemberTarget,
 )
+from scopecat.records.parameter_read import HostParameterEvidence
 from scopecat.sdk.domain.compiler import (
     DomainBatchCandidate,
     DomainBatchPreparationCost,
@@ -854,6 +856,13 @@ def _validated_coverage(
             validator.register_local_coverage(operation.effects)
             if inspect_local is not None:
                 inspect_local(operation.effects)
+            elif operation.effects.parameter_reads:
+                yield RunHostParameterEvidence(
+                    HostParameterEvidence(
+                        entries=operation.effects.parameter_reads,
+                        binding=operation.effects.binding_parameter_reads,
+                    )
+                )
             continue
         validator.validate(operation)
         yield operation

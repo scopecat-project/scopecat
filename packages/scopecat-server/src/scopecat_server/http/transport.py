@@ -242,6 +242,7 @@ from scopecat.daemon.wire import (
     RunDomainJobTransitionPage,
     RunHardwareBatchCommand,
     RunHardwareFinishCommand,
+    RunHostParameterEvidenceCommand,
     RunInstrumentProvisionCommand,
     RunInstrumentProvisionReceipt,
     RunRecoveryGroupCommitCommand,
@@ -2502,6 +2503,13 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
             limit=limit,
             before=before,
         )
+
+    @app.post(f"{_API_PREFIX}/runs/{{run_id}}/host-parameter-evidence")
+    def publish_host_parameter_evidence(
+        run_id: str,
+        command: RunHostParameterEvidenceCommand,
+    ) -> ContentEntry:
+        return application.executor.publish_host_parameter_evidence(run_id, command)
 
     @app.post(f"{_API_PREFIX}/runs/{{run_id}}/coverage/advance")
     def advance_run_coverage(

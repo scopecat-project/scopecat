@@ -41,6 +41,7 @@ from scopecat.daemon.wire import (
     RunDomainJobTransitionBatchCommand,
     RunDomainJobTransitionBatchReceipt,
     RunDomainJobTransitionPage,
+    RunHostParameterEvidenceCommand,
     RunRecoveryGroupCommitCommand,
     RunRecoveryGroupCommitReceipt,
     RunRecoveryGroupPage,
@@ -50,12 +51,13 @@ from scopecat.kernel.errors import NotFound
 from scopecat.kernel.interaction_timing import record_timing
 from scopecat.kernel.problems import ProblemPhase, problem
 from scopecat.kernel.run_outcome import RunOutcome
-from scopecat.records.content import ModelWrite
+from scopecat.records.content import ContentEntry, ModelWrite
 from scopecat.records.measurement_recording import (
     MeasurementDatasetAppend,
     MeasurementDatasetReceipt,
 )
 from scopecat.records.run import RunSnapshot
+from scopecat.runs.parameter_evidence import host_parameter_evidence_publication
 from scopecat.runs.repository import TerminalRunCommit
 
 from scopecat_server.storage.sqlite.control_plane import (
@@ -171,6 +173,32 @@ class ExecutorService:
             )
         except ControlPlaneNotFound as error:
             raise BackendNotFound(str(error)) from error
+
+    def publish_host_parameter_evidence(
+        self,
+        run_id: str,
+        command: RunHostParameterEvidenceCommand,
+    ) -> ContentEntry:
+        with self.fenced_write(run_id, token=command.lease_id) as connection:
+            run = self._control.get_run_in_transaction(connection, run_id)
+            if any(
+                item.point_ordinal >= run.admission.plan.point_limit
+                for item in command.evidence.entries
+            ):
+                raise ExecutionStateConflict(
+                    "host evidence references an unadmitted point"
+                )
+            lease = self._control.executor_lease_for_run_in_transaction(
+                connection, run_id
+            )
+            if lease is None:
+                raise ExecutionStateConflict("host evidence requires an executor lease")
+            publication = host_parameter_evidence_publication(
+                run_id, lease.segment_id, command.evidence
+            )
+            prepared = self._runs.prepare_content_publication(publication)
+            self._runs.publish_prepared_content_in_transaction(connection, prepared)
+        return publication.entries[0]
 
     def advance_run_coverage(
         self,

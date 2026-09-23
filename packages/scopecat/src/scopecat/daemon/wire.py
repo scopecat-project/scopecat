@@ -83,6 +83,7 @@ from scopecat.records.parameter_change import (
     ParameterProposalRef,
     ParameterValueDelta,
 )
+from scopecat.records.parameter_read import HostParameterEvidence
 from scopecat.records.parameter_revision import (
     ParameterRevision,
     ParameterRevisionContent,
@@ -820,6 +821,10 @@ class _FencedCommand(_WireModel):
     lease_id: NonEmptyText
 
 
+class RunHostParameterEvidenceCommand(_FencedCommand):
+    evidence: HostParameterEvidence
+
+
 class RunCoverageState(_WireModel):
     """Durable contiguous logical-point prefix for one run."""
 
@@ -1417,6 +1422,7 @@ __all__ = [
     "RunDomainJobTransitionItem",
     "RunDomainJobTransitionPage",
     "RunDomainJobTransitionView",
+    "RunHostParameterEvidenceCommand",
     "RunInstrumentProvisionCommand",
     "RunInstrumentProvisionReceipt",
     "RunRecoveryGroupCommitCommand",

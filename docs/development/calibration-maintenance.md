@@ -245,12 +245,25 @@ and state expressions per logical point, including effective overlay values.
 identical state writes are coalesced or an invariant initial probe is reused.
 `RunPointInspection.host_parameter_reads` exposes them for the inspected point;
 `binding_parameter_reads` separately retains base-configuration expression reads
-that may already have been folded into literals. These host records are currently
-transient plan/inspection evidence, not durable run evidence. Resource selection,
-runtime kernel reads and success-state preparation remain outside this capture;
-the host records explicitly flag the first two gaps. A fenced host-evidence
-publication path is still needed before run records can claim this coverage.
-Neither this inspection nor the domain attachment enables cross-revision reuse.
+that may already have been folded into literals.
+
+Execution publishes host preparation evidence before consuming the corresponding
+effects, in batches of at most 256 logical points. The daemon validates the active
+executor lease and publishes the record and its content reference atomically.
+Records include the executor segment identity: an identical retry in one segment
+is idempotent, while resumed execution retains its own record without replacing
+the previous segment's evidence. Publication failure stops further effects.
+These are preparation observations, not proof of physical execution or point
+completion; a batch may include points never reached after an interruption.
+
+Use the run repository's bounded `list_contents` with
+`kind="host-parameter-evidence"`, then
+`scopecat.runs.parameter_evidence.read_host_parameter_evidence` for each record.
+The existing content store and backup/restore machinery retain these records;
+no database schema or prebaseline migration path is introduced.
+Resource selection, runtime kernel reads, binding structure and success-state
+preparation remain explicitly outside this capture. Neither these records nor
+the domain attachment enable cross-revision reuse or whole-run completeness.
 
 Before selective invalidation, extend this coverage to scalar expressions,
 runtime reads, selections and derived queries outside recipe preparation.

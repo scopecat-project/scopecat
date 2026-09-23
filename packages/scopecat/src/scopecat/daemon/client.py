@@ -225,6 +225,7 @@ from scopecat.daemon.wire import (
     RunDomainJobTransitionPage,
     RunHardwareBatchCommand,
     RunHardwareFinishCommand,
+    RunHostParameterEvidenceCommand,
     RunInstrumentProvisionCommand,
     RunInstrumentProvisionReceipt,
     RunRecoveryGroupCommitCommand,
@@ -2459,6 +2460,17 @@ class DaemonClient:
             f"{_API_PREFIX}/runs/{quote(run_id, safe='')}/execution-segments",
             RunExecutionSegmentPage,
             params=params,
+        )
+
+    def publish_host_parameter_evidence(
+        self,
+        run_id: str,
+        command: RunHostParameterEvidenceCommand,
+    ) -> ContentEntry:
+        return self._post_idempotent_model(
+            f"{_API_PREFIX}/runs/{quote(run_id, safe='')}/host-parameter-evidence",
+            command,
+            ContentEntry,
         )
 
     def advance_run_coverage(

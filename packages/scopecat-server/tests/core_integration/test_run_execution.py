@@ -20,6 +20,10 @@ from scopecat.optimization import (
 from scopecat.records.execution import InstrumentStateEvidence
 from scopecat.records.instrument import InstrumentStateSnapshot
 from scopecat.records.measurement import MeasurementScalar
+from scopecat.runs.parameter_evidence import (
+    HOST_PARAMETER_EVIDENCE_KIND,
+    read_host_parameter_evidence,
+)
 from scopecat.runs.service import read_run_measurement_dataset, read_run_record_json
 from scopecat.sdk.instruments import (
     InstrumentConnectionContext,
@@ -209,6 +213,19 @@ def test_execution_uses_provider_selected_config_instrument(
     evidence = InstrumentStateEvidence.model_validate(snapshot.content)
 
     assert manifest.status == "completed"
+    repository = sqlite_run_repository(tmp_path)
+    records = repository.list_contents(
+        manifest.run_id, limit=100, kind=HOST_PARAMETER_EVIDENCE_KIND
+    ).items
+    assert records
+    reads = [
+        read
+        for record in records
+        for read in read_host_parameter_evidence(
+            repository, manifest.run_id, record.id
+        ).evidence.entries
+    ]
+    assert sorted(read.point_ordinal for read in reads) == list(range(len(reads)))
     assert [state.instrument_id for state in evidence.observed_state] == ["source-a"]
     assert evidence.baseline_state == evidence.observed_state
 

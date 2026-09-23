@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import cast
+from uuid import uuid4
 
 from pydantic import BaseModel
 from scopecat.config.registry.ports import ConfigRegistryUnitOfWorkFactory
@@ -35,10 +36,12 @@ from scopecat.records.measurement_recording import (
     MeasurementDatasetReceipt,
     MeasurementDatasetSeal,
 )
+from scopecat.records.parameter_read import HostParameterEvidence
 from scopecat.records.run import RunConfigSource, RunSnapshot
 from scopecat.records.run_request import RunRequest
 from scopecat.records.scientific_binding import ResolvedScientificBinding
 from scopecat.runs.admission import RunSkeleton, build_run_admission
+from scopecat.runs.parameter_evidence import host_parameter_evidence_publication
 from scopecat.runs.refs import SCIENTIFIC_BINDING_REF
 from scopecat.runs.repository import RunRepository
 from scopecat.sdk.domain.invocation import DomainInvocationIntent
@@ -479,6 +482,13 @@ def sqlite_execution_session(
     selected_runs = sqlite_run_repository(project) if runs is None else runs
     coverage = SQLiteTestRunCoverage(selected_runs, run_id=run_id)
     recovery_groups = SQLiteTestRecoveryGroups(selected_runs, run_id=run_id)
+    segment_id = f"test-{uuid4().hex}"
+
+    def publish_host_parameter_evidence(evidence: HostParameterEvidence) -> None:
+        selected_runs.publish_content(
+            host_parameter_evidence_publication(run_id, segment_id, evidence)
+        )
+
     return SQLiteExecutionSession(
         accepted=selected_runs.read_snapshot(run_id),
         begin=lambda: None,
@@ -488,6 +498,7 @@ def sqlite_execution_session(
             run_id=run_id,
         ),
         coverage=coverage,
+        publish_host_parameter_evidence=publish_host_parameter_evidence,
         recovery_groups=recovery_groups,
         instruments=instruments or TestRunInstrumentHost(),
         domain_job_transitions=SQLiteTestDomainJobTransitionWriter(
