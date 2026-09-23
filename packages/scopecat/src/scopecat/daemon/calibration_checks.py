@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
-from graphlib import CycleError, TopologicalSorter
+from datetime import datetime
 from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -16,61 +15,14 @@ from scopecat.automation.calibration import (
 )
 from scopecat.automation.calibration_tasks import CalibrationTaskPlan
 from scopecat.records.calibration_check import CalibrationCheckRequest, CalibrationScope
+from scopecat.records.calibration_policy import (
+    CalibrationProfileRecord,
+    CalibrationRequirement,
+    CalibrationRequirements,
+)
 from scopecat.records.measurement_context import MeasurementContext
 
 MAX_CHECK_OBSERVATIONS = 2000
-
-
-class CalibrationRequirement(BaseModel):
-    """One explicitly requested capability; no inferred dependency closure."""
-
-    model_config = ConfigDict(extra="forbid", frozen=True)
-    id: str = Field(min_length=1)
-    scope: CalibrationScope
-    max_age: timedelta = Field(gt=timedelta(0))
-    depends_on: tuple[str, ...] = ()
-
-
-class CalibrationRequirements(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True)
-    requirements: tuple[CalibrationRequirement, ...] = Field(
-        min_length=1, max_length=32
-    )
-
-    @model_validator(mode="after")
-    def validate_requirements(self) -> CalibrationRequirements:
-        ids = {item.id for item in self.requirements}
-        if len(ids) != len(self.requirements):
-            raise ValueError("requirement IDs must be unique")
-        for item in self.requirements:
-            if len(set(item.depends_on)) != len(item.depends_on):
-                raise ValueError("requirement dependencies must be unique")
-            if not set(item.depends_on) <= ids:
-                raise ValueError("requirement dependency names an unknown requirement")
-        try:
-            tuple(
-                TopologicalSorter(
-                    {item.id: item.depends_on for item in self.requirements}
-                ).static_order()
-            )
-        except CycleError as error:
-            raise ValueError("requirement dependencies must be acyclic") from error
-        return self
-
-
-class CalibrationProfile(CalibrationRequirements):
-    """Immutable named requirements, evaluated against a separately chosen context."""
-
-    id: str = Field(
-        min_length=1, max_length=128, pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]*$"
-    )
-    description: str = Field(default="", max_length=4000)
-
-
-class CalibrationProfileRecord(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True)
-    profile: CalibrationProfile
-    created_at: datetime
 
 
 class CalibrationProfilePage(BaseModel):
@@ -83,9 +35,15 @@ class CalibrationProfileReportQuery(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     context: MeasurementContext
     history_limit: int = Field(default=50, ge=1, le=200)
+    requirement_ids: tuple[str, ...] | None = Field(
+        default=None, min_length=1, max_length=32
+    )
 
 
 class CalibrationReportQuery(CalibrationRequirements):
+    requirements: tuple[CalibrationRequirement, ...] = Field(
+        min_length=1, max_length=32
+    )
     context: MeasurementContext
     history_limit: int = Field(default=50, ge=1, le=200)
 

@@ -99,6 +99,35 @@ publication fence or permission to execute hardware.
 
 ## Query from Python
 
+Profiles describe reusable laboratory policy, independently of any one query.
+`CalibrationRequirement`, `CalibrationRequirements`, `CalibrationProfile` and
+`CalibrationProfileRecord` live in `scopecat.records.calibration_policy`.
+Their prerequisite graph is separate from a task's execution ordering.
+
+A profile can contain more than 32 requirements. Inspect a portion through the
+same report API:
+
+```python
+report = lab.calibration_checks.report(
+    context=context,
+    profile="daily-v1",
+    requirement_ids=("readout-q0", "gate-q0-q1"),
+)
+```
+
+The server adds all declared prerequisites, preserving profile order and each
+requirement's dependency edges. The response describes only this selected portion
+and its prerequisites, not readiness of the whole profile. Omit `requirement_ids`
+to request the whole profile. In the workbench, check the capabilities to inspect;
+with none checked, the request covers the whole profile. Changing the selection
+clears the previous report.
+
+Each report still allows at most 32 requirements **after** prerequisite expansion
+and at most 2,000 history entries in total. An oversized closure, unknown ID or
+duplicate ID is rejected; dependencies are never dropped to fit a query. Choose a
+smaller independent portion or reduce the per-requirement history limit when the
+history budget is exceeded. Stored policy itself is not limited by report size.
+
 Provide a resolved `MeasurementContext` and the requirements you want to inspect.
 The [common context API](resolve-measurement-context.md) serves measurements and
 calibration alike; it is not owned by the calibration-check API.
@@ -228,7 +257,8 @@ report policy, not an automatic maintenance schedule or complete sample policy.
 
 In the workbench, expand a stage's evidence inspector, then **Inspect a saved
 capability profile**. Load profiles, choose one, review its requirements, and
-click **Check saved profile**. It evaluates every requirement in the stage's
+click **Check saved profile**. It evaluates the selected requirements and their
+prerequisites (or the whole profile when none are checked) in the stage's
 frozen context, showing own-check status separately from availability and
 blocking prerequisites. This read-only entry uses 50 checks per requirement;
 use the Python report API to request a different history budget. Changing the

@@ -2,14 +2,15 @@
 
 from datetime import UTC, datetime
 
-from pydantic import ValidationError
 from scopecat.daemon.calibration_checks import (
-    CalibrationProfile,
     CalibrationProfilePage,
-    CalibrationProfileRecord,
     CalibrationProfileReportQuery,
     CalibrationReport,
     CalibrationReportQuery,
+)
+from scopecat.records.calibration_policy import (
+    CalibrationProfile,
+    CalibrationProfileRecord,
 )
 
 from scopecat_server.errors import BackendConflict, BackendNotFound
@@ -57,12 +58,17 @@ class CalibrationProfileService:
         # Profiles are immutable; only evidence needs a shared read transaction.
         try:
             request = CalibrationReportQuery(
-                requirements=profile.requirements,
+                requirements=profile.requirements
+                if query.requirement_ids is None
+                else profile.select(query.requirement_ids),
                 context=query.context,
                 history_limit=query.history_limit,
             )
-        except ValidationError as error:
+        except ValueError as error:
             raise BackendConflict(
-                "profile report history budget exceeds 2000 requests"
+                "profile report requires a valid selection with at most "
+                "32 requirements "
+                "including prerequisites and a history budget of 2000 requests: "
+                f"{error}"
             ) from error
         return self._checks.report(request).model_copy(update={"profile_id": identity})

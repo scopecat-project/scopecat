@@ -160,6 +160,14 @@ context. Reports retain the profile ID and evaluated requirements. This provides
 a shared policy source for notebook and future panel consumers without selecting
 a global active policy. A profile name is unique within its project data store.
 
+Policy definitions and prerequisite validation belong to
+`records/calibration_policy.py`, independently of HTTP report models. Profiles
+may exceed a report's 32-requirement limit. A focused report expands requested
+IDs through the complete declared prerequisite graph, then enforces report size
+and history budgets. It never truncates dependencies or interprets a focused
+report as whole-profile readiness. These prerequisites remain separate from task
+execution ordering. The stored profile representation is unchanged.
+
 The task workbench consumes this endpoint per stage, with an explicit age policy
 and visible evaluation time. Users can inspect matching checks from other tasks
 without changing the stage's frozen context. This is an evidence-inspection entry

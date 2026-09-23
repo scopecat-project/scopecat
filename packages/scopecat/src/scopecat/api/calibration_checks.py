@@ -20,16 +20,18 @@ from scopecat.daemon.calibration_checks import (
     MAX_CHECK_OBSERVATIONS,
     CalibrationCheckObservation,
     CalibrationCheckQuery,
-    CalibrationProfile,
     CalibrationProfilePage,
-    CalibrationProfileRecord,
     CalibrationProfileReportQuery,
     CalibrationReportQuery,
-    CalibrationRequirement,
     CalibrationTaskPreview,
 )
 from scopecat.daemon.client import DaemonClient
 from scopecat.records.calibration_check import CalibrationCheckRequest, CalibrationScope
+from scopecat.records.calibration_policy import (
+    CalibrationProfile,
+    CalibrationProfileRecord,
+    CalibrationRequirement,
+)
 from scopecat.records.measurement_context import MeasurementContext
 
 
@@ -105,16 +107,21 @@ class LabCalibrationChecks:
         context: MeasurementContext,
         requirements: tuple[CalibrationRequirement, ...] | None = None,
         profile: str | None = None,
+        requirement_ids: tuple[str, ...] | None = None,
         history_limit: int = 50,
     ) -> CalibrationReportView:
         """Assess explicit capabilities together at one server read snapshot."""
         if (requirements is None) == (profile is None):
             raise ValueError("choose either explicit requirements or a saved profile")
+        if requirement_ids is not None and profile is None:
+            raise ValueError("requirement_ids requires a saved profile")
         if profile is not None:
             report = self._client.report_calibration_profile(
                 profile,
                 CalibrationProfileReportQuery(
-                    context=context, history_limit=history_limit
+                    context=context,
+                    history_limit=history_limit,
+                    requirement_ids=requirement_ids,
                 ),
             )
         else:

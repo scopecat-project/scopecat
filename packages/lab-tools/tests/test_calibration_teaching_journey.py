@@ -267,6 +267,7 @@ try:
                 assert saved_profile in checks.profiles().items
                 saved_report = checks.report(
                     context=report.context, profile="teaching-v1",
+                    requirement_ids=(requirement.id,),
                 )
                 assert saved_report.profile_id == "teaching-v1"
                 assert saved_report.items[0].selection.status == "usable"

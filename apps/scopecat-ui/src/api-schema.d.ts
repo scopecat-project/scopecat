@@ -3076,6 +3076,8 @@ export interface components {
              * @default 50
              */
             history_limit: number;
+            /** Requirement Ids */
+            requirement_ids?: string[] | null;
         };
         /**
          * CalibrationReport

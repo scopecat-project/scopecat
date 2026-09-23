@@ -80,9 +80,7 @@ from scopecat.daemon.calibration_checks import (
     CalibrationCheckObservationResult,
     CalibrationCheckPage,
     CalibrationCheckQuery,
-    CalibrationProfile,
     CalibrationProfilePage,
-    CalibrationProfileRecord,
     CalibrationProfileReportQuery,
     CalibrationReport,
     CalibrationReportQuery,
@@ -267,6 +265,10 @@ from scopecat.records.author_revision import (
     AuthorRevisionBundle,
     AuthorRevisionRef,
     AuthorRevisionState,
+)
+from scopecat.records.calibration_policy import (
+    CalibrationProfile,
+    CalibrationProfileRecord,
 )
 from scopecat.records.config import ConfigProfileSnapshot
 from scopecat.records.config_context import ConfigContextRef

@@ -17,6 +17,7 @@ export function CalibrationProfiles({
   const [profiles, setProfiles] = useState<Page["items"]>([]);
   const [cursor, setCursor] = useState<number | null>();
   const [selected, setSelected] = useState("");
+  const [requirementIds, setRequirementIds] = useState<string[]>([]);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
   const [report, setReport] = useState<Report>();
@@ -26,6 +27,7 @@ export function CalibrationProfiles({
     setError("");
     if (reset) {
       setSelected("");
+      setRequirementIds([]);
       setReport(undefined);
     }
     try {
@@ -52,7 +54,11 @@ export function CalibrationProfiles({
         await apiData(
           apiClient.POST("/api/v1/calibration-profiles/{profile_id}/report", {
             params: { path: { profile_id: profile.id } },
-            body: { context, history_limit: 50 },
+            body: {
+              context,
+              history_limit: 50,
+              ...(requirementIds.length ? { requirement_ids: requirementIds } : {}),
+            },
           }),
         ),
       );
@@ -105,6 +111,7 @@ export function CalibrationProfiles({
             disabled={pending}
             onChange={(event) => {
               setSelected(event.target.value);
+              setRequirementIds([]);
               setReport(undefined);
               setError("");
             }}
@@ -121,9 +128,28 @@ export function CalibrationProfiles({
       {profile && (
         <>
           <p>{profile.description}</p>
+          <p>
+            Check capabilities to focus the report; leave all unchecked for the whole profile.
+            Prerequisites are included automatically. A report can include at most 32 capabilities.
+          </p>
           <ul>
             {profile.requirements.map((item) => (
               <li key={item.id}>
+                <input
+                  type="checkbox"
+                  aria-label={`Include ${item.id}`}
+                  disabled={pending}
+                  checked={requirementIds.includes(item.id)}
+                  onChange={(event) => {
+                    setRequirementIds((previous) =>
+                      event.target.checked
+                        ? [...previous, item.id]
+                        : previous.filter((id) => id !== item.id),
+                    );
+                    setReport(undefined);
+                    setError("");
+                  }}
+                />
                 {item.id}: {item.scope.capability} · {item.scope.targets.join(", ")} · conditions{" "}
                 {item.scope.conditions}
                 {" · policy "}

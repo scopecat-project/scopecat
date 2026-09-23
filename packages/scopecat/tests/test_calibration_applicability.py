@@ -17,13 +17,13 @@ from scopecat.automation.calibration import (
 )
 from scopecat.daemon.calibration_checks import (
     CalibrationReportQuery,
-    CalibrationRequirement,
     CalibrationRequirementStatus,
 )
 from scopecat.kernel.content_identity import sha256_json_hash
 from scopecat.kernel.frozen import freeze_json_mapping
 from scopecat.kernel.run_outcome import RunOutcome
 from scopecat.records.calibration_check import CalibrationCheckRequest, CalibrationScope
+from scopecat.records.calibration_policy import CalibrationRequirement
 from scopecat.records.execution_scenario import SoftwareExecutionScenario
 from scopecat.records.measurement_context import MeasurementContext
 from scopecat.records.parameter_revision import ParameterRevisionRef

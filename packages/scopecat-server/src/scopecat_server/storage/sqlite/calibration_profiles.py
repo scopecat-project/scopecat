@@ -3,10 +3,8 @@
 import sqlite3
 from typing import cast
 
-from scopecat.daemon.calibration_checks import (
-    CalibrationProfilePage,
-    CalibrationProfileRecord,
-)
+from scopecat.daemon.calibration_checks import CalibrationProfilePage
+from scopecat.records.calibration_policy import CalibrationProfileRecord
 
 
 class CalibrationProfileStore:

@@ -35,11 +35,9 @@ from scopecat.daemon.calibration_checks import (
     CalibrationCheckObservationResult,
     CalibrationCheckPage,
     CalibrationCheckQuery,
-    CalibrationProfile,
     CalibrationProfileReportQuery,
     CalibrationReport,
     CalibrationReportQuery,
-    CalibrationRequirement,
     CalibrationTaskPreview,
 )
 from scopecat.daemon.calibration_tasks import (
@@ -72,6 +70,10 @@ from scopecat.records.calibration_check import (
     CalibrationCheckRequest,
     CalibrationCheckResult,
     CalibrationScope,
+)
+from scopecat.records.calibration_policy import (
+    CalibrationProfile,
+    CalibrationRequirement,
 )
 from scopecat.records.execution_scenario import SoftwareExecutionScenario
 from scopecat.records.measurement_context import MeasurementContext
@@ -349,12 +351,44 @@ def test_capability_profiles_are_immutable_and_survive_backup(tmp_path: Path) ->
                 update={
                     "id": "large",
                     "requirements": tuple(
-                        profile.requirements[0].model_copy(update={"id": str(i)})
-                        for i in range(11)
+                        profile.requirements[0].model_copy(
+                            update={
+                                "id": str(i),
+                                "depends_on": (str(i - 1),) if i else (),
+                            }
+                        )
+                        for i in range(40)
                     ),
                 }
             )
-            service.save(large)
+            persisted = client.post(
+                "/api/v1/calibration-profiles", json=large.model_dump(mode="json")
+            )
+            assert persisted.status_code == 200, persisted.text
+            focused = client.post(
+                "/api/v1/calibration-profiles/large/report",
+                json={**query.model_dump(mode="json"), "requirement_ids": ["1"]},
+            )
+            assert focused.status_code == 200, focused.text
+            assert [item["requirement"]["id"] for item in focused.json()["items"]] == [
+                "0",
+                "1",
+            ]
+            over_budget = client.post(
+                "/api/v1/calibration-profiles/large/report",
+                json={
+                    **query.model_dump(mode="json"),
+                    "requirement_ids": ["10"],
+                    "history_limit": 200,
+                },
+            )
+            assert over_budget.status_code == 409
+            for ids in (["39"], ["missing"], ["1", "1"]):
+                rejected = client.post(
+                    "/api/v1/calibration-profiles/large/report",
+                    json={**query.model_dump(mode="json"), "requirement_ids": ids},
+                )
+                assert rejected.status_code == 409
             assert (
                 client.post(
                     "/api/v1/calibration-profiles/large/report",

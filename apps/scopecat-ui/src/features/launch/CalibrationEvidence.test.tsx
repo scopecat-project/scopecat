@@ -122,6 +122,15 @@ it("selects a saved policy explicitly and shows all capability verdicts without 
   expect(screen.getByText("Own check: usable · Availability: blocked")).toBeInTheDocument();
   expect(screen.getByText("Blocked by: readout")).toBeInTheDocument();
   expect(bodies).toEqual([{ context: stage.check.context, history_limit: 50 }]);
+  fireEvent.click(screen.getByLabelText("Include gate"));
+  expect(screen.queryByRole("region", { name: "Saved capability report" })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByText("Check saved profile"));
+  await screen.findByRole("region", { name: "Saved capability report" });
+  expect(bodies[1]).toEqual({
+    context: stage.check.context,
+    history_limit: 50,
+    requirement_ids: ["gate"],
+  });
   fail = true;
   fireEvent.click(screen.getByText("Check saved profile"));
   await screen.findByRole("alert");
