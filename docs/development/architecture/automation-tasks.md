@@ -48,12 +48,20 @@ filterable by declared context. The generic procedure facade no longer owns the
 calibration history query. Execution storage still owns the durable intent and
 effects; this slice adds no second scientific-data store or migration.
 
-This is a client-side domain adapter over the existing procedure journal, not a
-new server admission/indexing API. It currently supports one declared measurement
-and one analysis result per check. Laboratory procedures validate that executable
-arguments implement their declaration; query-time checks reject inconsistent
-result scope or measurement context. A server domain service must eventually
-enforce these associations before dispatch and expose them to non-Python clients.
+The server validates declarations before admitting a new procedure: the exact
+parameter revision must exist and compose with the current setup, and the declared
+subject and software scenario must match authoritative evidence. Physical checks
+require a subject. Procedure sample selection and any explicit scientific binding
+must agree with the declaration. The designated child measurement must use the
+declared parameter revision without overrides and the exact declared context.
+An exact request retry returns the retained request before rechecking mutable
+authority; it does not authorize new measurements against an obsolete setup.
+
+This slice supports one declared measurement and one analysis result per check.
+Laboratory procedures still validate their executable arguments; query-time checks
+reject inconsistent result scope or measurement context. History remains a
+client-side bounded journal scan, not an indexed server domain query. Result
+publication and task-level dispatch contracts remain future work.
 
 ## Panel requirements
 
@@ -77,7 +85,7 @@ making task boundaries explicit; add concurrency only after those boundaries wor
 
 Required next contracts:
 
-1. Server admission and indexed domain queries, including consistent pagination
+1. Indexed server domain queries, including consistent pagination
    and declarations for pending work. The current bounded journal scan is not a
    large-catalog query strategy.
 2. Task/stage/target relationships with frozen intent, explicit partial completion,

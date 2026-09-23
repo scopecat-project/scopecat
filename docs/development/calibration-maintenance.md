@@ -123,9 +123,14 @@ an empty complete history. There is no laboratory reader callback or name guessi
 
 The short-lived `lab.procedures.check_history()` adapter is removed. Unmarked
 procedures are generic executions, not inferred checks; no prebaseline reader or
-backfill is introduced. Existing files remain untouched. Declaration validation
-does not yet constitute a domain-specific server admission service: laboratory
-definitions still validate their executable arguments against the declaration.
+backfill is introduced. Existing files remain untouched. Server admission validates
+the declaration against retained parameters, current setup and authoritative
+subject/scenario evidence before queueing. The declared child measurement must use
+that exact context, without parameter overrides. Exact request retries return the
+retained request even after authority changes; new measurements still undergo
+normal admission. Laboratory definitions validate executable arguments, and the
+history reader validates analysis result scope. Indexed domain queries and result
+publication validation remain separate follow-up work.
 
 `CalibrationCheckHistory` reports evidence, unresolved request IDs, scanned count
 and `incomplete_reasons`: `scan_limit`, `unresolved_checks` or `journal_changed`.

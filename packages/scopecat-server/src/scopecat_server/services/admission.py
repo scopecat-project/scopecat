@@ -82,6 +82,7 @@ from scopecat_server.storage.sqlite.samples import SQLiteSampleStore
 from scopecat_server.storage.sqlite.target_catalog import TargetCatalogStore
 
 from ..errors import BackendConflict, BackendNotFound
+from .calibration_checks import require_check_measurement
 from .parameter_resolution import resolve_parameters
 from .point_plans import RunPointPlanService
 from .samples import SampleService
@@ -245,6 +246,7 @@ class AdmissionService:
             parent = store.read_run_in_transaction(connection, source.procedure_run_id)
         except AutomationNotFound as error:
             raise BackendConflict("parent procedure was not found") from error
+        require_check_measurement(parent.intent, submission)
         step = store.latest_step_attempt_in_transaction(
             connection, source.procedure_run_id, source.step_key
         )

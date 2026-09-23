@@ -115,6 +115,7 @@ from scopecat_server.storage.sqlite.samples import SQLiteSampleStore
 from scopecat_server.storage.sqlite.setups import SQLiteSetupRepository
 
 from ..errors import BackendConflict, BackendNotFound
+from .calibration_checks import CalibrationCheckAdmission, declared_check
 from .resource_waits import ProcedureResourceWaits
 
 _DEFAULT_PROCEDURE_LEASE_TTL = timedelta(seconds=30)
@@ -140,6 +141,7 @@ class AutomationService:
         clock: Callable[[], datetime] | None = None,
         resource_waits: ProcedureResourceWaits | None = None,
         plans: ExperimentPlanRepository | None = None,
+        checks: CalibrationCheckAdmission | None = None,
     ) -> None:
         if lease_ttl <= timedelta(0):
             raise ValueError("procedure lease TTL must be positive")
@@ -152,6 +154,7 @@ class AutomationService:
         self._clock = clock or _utc_now
         self._resource_waits = resource_waits
         self._plans = plans
+        self._checks = checks
 
     def worker_state(self, procedure_id: str) -> str:
         with self._store.sqlite.read_connection() as connection:
@@ -688,6 +691,16 @@ class AutomationService:
                 )
             except ManualPreviewChanged as error:
                 raise AutomationConflict(str(error)) from error
+        check = declared_check(selected_intent)
+        if check is not None:
+            if self._checks is None:
+                raise AutomationConflict("calibration check admission is unavailable")
+            self._checks.validate(
+                connection,
+                check,
+                samples=resolved_samples,
+                binding=scientific_binding,
+            )
         _require_configuration_authority(
             connection,
             expected_configuration,

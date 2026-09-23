@@ -37,6 +37,7 @@ from scopecat_server.services.admission import AdmissionService
 from scopecat_server.services.analyses import AnalysisService
 from scopecat_server.services.application import DaemonApplication
 from scopecat_server.services.automation import AutomationService
+from scopecat_server.services.calibration_checks import CalibrationCheckAdmission
 from scopecat_server.services.config import ConfigService
 from scopecat_server.services.executor import ExecutorService
 from scopecat_server.services.leases import OwnershipLeaseSupervisor
@@ -191,6 +192,10 @@ class LocalDaemonRuntime:
                 plans=ExperimentPlanRepository(project_store),
                 runs=runs,
                 resource_waits=ProcedureResourceWaits(control, runs, point_plans),
+                checks=CalibrationCheckAdmission(
+                    samples,
+                    TargetCatalogStore(sqlite, catalog_id=project_store.identity()),
+                ),
             )
 
             procedure_schedules = ProcedureScheduleService(
