@@ -32,7 +32,7 @@ unaffected. Selection and editing require no executable setup; the maintainer
 must select one before previewing or running an experiment. For repeated editing,
 use [a parameter branch and `session.params`](parameter-branches.md).
 
-Preview resolves the parameter revision and current setup through the common
+Preview resolves the parameter revision and selected setup through the common
 measurement resolver without creating a configuration-registry entry. Reviewed
 requests retain both exact references; a later setup selection or session edit
 cannot silently replace them. An incompatible active setup blocks admission.
@@ -45,9 +45,30 @@ inputs = lab.parameters.resolve(parameters)
 result = lab.run(experiment(), config=inputs)
 ```
 
-Advanced callers can supply an exact `setup=` to `resolve`, or choose
-`ParameterConfiguration(ref=..., setup=...)` inside an existing scientific
-selection. Neither form activates that setup. `parameters.bind(...)` remains a
+To pin a setup in an author session:
+
+```python
+setup = session.setup.get("bench-v1")
+session.use(parameter_branch="daily", setup=setup)
+prepared = session.prepare(experiment, parameters=session.params)
+```
+
+Use a saved setup revision or exact reference. Selecting another independent
+parameter revision, saving branch edits and preparing with a branch editor retain
+this setup choice. `session.use(setup=None)` clears the pin; the next preview
+captures the active setup. A failed selection leaves both the session and editor
+unchanged. Setup selection requires independent parameters; working points and
+candidates already own their configuration evidence. Changing the subject still
+starts a fresh scientific selection, so select its parameters/setup together.
+
+Standalone branch editors can use `params.preview(setup=setup)`; omission uses the
+active setup. Session preparation supplies its selected setup to the editor.
+Neither operation activates equipment: an incompatible active setup still blocks
+run admission.
+
+Low-level callers can supply an exact `setup=` to `resolve`, or choose
+`ParameterConfiguration(ref=..., setup=...)` inside a scientific selection.
+`parameters.bind(...)` remains a
 bridge for callers needing a named combined entry as an old working-point base;
 normal independent-parameter launches do not need it.
 

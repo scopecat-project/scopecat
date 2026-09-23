@@ -9,6 +9,7 @@ from scopecat.records.config_context import ConfigContextRef
 from scopecat.records.parameter_revision import ParameterRevision, ParameterRevisionRef
 from scopecat.records.record_collection import RecordCollectionId
 from scopecat.records.scientific_selection import ScientificSelection
+from scopecat.records.setup import SetupRevision, SetupRevisionRef
 from scopecat.records.target_catalog import TargetRevisionRef
 
 
@@ -35,5 +36,6 @@ class SessionContextUpdate(TypedDict, total=False):
     working_point: ConfigContextRef | None
     parameters: str | ParameterRevision | ParameterRevisionRef | None
     parameter_branch: str | None
+    setup: SetupRevision | SetupRevisionRef | None
     collection: str | None
     operator: str

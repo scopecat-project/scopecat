@@ -10,6 +10,7 @@ from scopecat.application.author_project import AuthorProject
 from scopecat.application.experiment_plans import plan_definition, plan_launch_request
 from scopecat.application.launch import LaunchPreview
 from scopecat.application.launch_config import resolve_launch_config
+from scopecat.application.session_context import INHERIT
 from scopecat.config.parameter_updates import replace_scalar_parameter
 from scopecat.config.registry.records import BoundParameterRegistrySource
 from scopecat.daemon.client import DaemonClient
@@ -270,7 +271,7 @@ def test_prepared_inputs_share_subject_batch_and_working_point_resolution(
                     operator="alice",
                 )
                 session.parameters.create_branch("daily", revision=parameters)
-                selected = session.use(parameter_branch="daily")
+                selected = session.use(parameter_branch="daily", setup=setup)
                 assert selected.science.subject == before.science.subject
                 assert selected.science.batch == before.science.batch
                 assert (selected.collection, selected.operator) == (
@@ -280,6 +281,8 @@ def test_prepared_inputs_share_subject_batch_and_working_point_resolution(
                 assert isinstance(
                     selected.science.configuration, ParameterConfiguration
                 )
+                with pytest.raises(ValueError, match="requires independent parameters"):
+                    other.use(setup=setup)
                 assert other.use(parameters="initial").science.subject.kind == "unbound"
                 assert session.selection == selected
                 with pytest.raises(
@@ -321,7 +324,9 @@ def test_prepared_inputs_share_subject_batch_and_working_point_resolution(
                 assert session.selection.science.batch == selected.science.batch
                 assert (
                     session.selection.science.configuration
-                    == ParameterConfiguration(ref=saved_branch.revision)
+                    == ParameterConfiguration(
+                        ref=saved_branch.revision, setup=setup.ref
+                    )
                 )
                 assert other.selection.science.configuration == ParameterConfiguration(
                     ref=parameters.ref
@@ -339,6 +344,51 @@ def test_prepared_inputs_share_subject_batch_and_working_point_resolution(
                     name="changed-setup",
                 )
                 lab.setup.activate(changed)
+                # The branch editor and the session use the same explicit setup,
+                # even after another client changes the daemon's active authority.
+                editor = session.params
+                science = session._prepare_science(
+                    selection=INHERIT,
+                    target=INHERIT,
+                    context=INHERIT,
+                    sample=INHERIT,
+                    batch=INHERIT,
+                    parameters=editor,
+                    candidate=None,
+                    overrides=(),
+                )
+                assert isinstance(science.configuration, ParameterConfiguration)
+                assert science.configuration.setup == setup.ref
+                assert editor.preview(setup=setup).config_source.setup == setup.ref
+                assert editor.preview().config_source.setup == changed.ref
+                pinned = resolve_launch_config(
+                    lab, request.model_copy(update={"selection": science})
+                )
+                receipt = lab.resolve_context(
+                    branch="daily",
+                    setup=setup.ref,
+                    samples=pinned.reviewed.binding.sample_selectors(),
+                )
+                assert (
+                    receipt.context.setup_content_hash
+                    == pinned.reviewed.binding.setup_content_hash
+                )
+                retained_selection = session.selection
+                with pytest.raises(ValueError, match="setup reference differs"):
+                    session.use(
+                        setup=setup.ref.model_copy(
+                            update={"content_hash": "sha256:" + "0" * 64}
+                        )
+                    )
+                assert session.selection == retained_selection
+                assert session.params is editor
+                session.use(setup=None)
+                assert session.params is editor
+                assert (
+                    session.selection.science.configuration
+                    == ParameterConfiguration(ref=saved_branch.revision)
+                )
+                assert lab.setup.active().revision.ref == changed.ref
                 frozen = request.model_copy(update={"reviewed": original.reviewed})
                 assert resolve_launch_config(lab, frozen) == original
                 assert (
