@@ -84,26 +84,22 @@ parameter-only merge core, retained multi-source candidates and explicit joint
 verification, durable target-complete orchestration and branch finalization are
 implemented. The old reference cohort workflow is retired. Its peer-insensitive
 freshness and implicit subset selection are withdrawn; redesigned applicability
-and freshness remain work, as does the generic framework legacy cohort API.
+and freshness remain work. The generic legacy cohort backend is also retired;
+do not treat its removal as a pending prerequisite for current task development.
 
 1. Remove gallery recommendations from learning routes. Keep the former tutorial
    URL as a retirement notice. Stop adding or mechanically migrating old examples.
 2. Remove redundant presentation scripts and fixture-shape assertions. Extract
    remaining generic behavior into existing starter/teaching/core tests.
-3. Define candidate verification/publication on independent parameter branches:
-   retain exact source and verification evidence, require an explicit publication
-   decision, and reject conflicting head/cell changes. Derive requirements from
-   these behaviors, not from the old DRAG procedure implementation.
-   [Issue #778](https://github.com/scopecat-project/scopecat/issues/778) tracks
-   atomic single-candidate publication and its retained verification evidence.
-4. Build a focused calibration fixture and, when the API is usable, a new
-   calibration-topic sandbox. Remove replaced DRAG/default-config workflows and
-   their unused dependencies in the same functional change.
-   Single-target acquisition through branch publication and accepted-gate
-   execution now has a focused real-daemon test. The former global-default
-   procedure is retired. Multi-target composition and durable automation now have
-   separate real-daemon coverage. Applicability and automatic freshness selection
-   are not implied by either journey.
+3. Candidate verification and branch publication are implemented, including
+   parallel/sequential composition, joint verification, generation conflicts and
+   lost-response recovery. Keep these scientific invariants when removing old
+   consumers; do not rebuild them from the old DRAG procedure interface.
+4. The `calibration`, `joint-calibration` and `task-calibration` sandboxes now own
+   the generic teaching journeys. The focused DRAG fixture still owns actual
+   simulated device acquisition and accepted-gate execution. Remove other
+   replaced consumers and unused dependencies as their coverage is accounted for.
+   Selective applicability, automatic repair and continuous freshness remain work.
 5. Remove legacy bootstrap and combined-config APIs once valid behaviors have
    new owners. An obsolete gallery consumer is a retirement task, not a reason
    to retain a compatibility layer.

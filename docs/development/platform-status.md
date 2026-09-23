@@ -1,7 +1,7 @@
 # Platform status and remaining work
 
-Audited against the local implementation on 2026-09-23, after exact saved
-parameter selection reached the sample workbench. This is the current work list;
+Audited against the local implementation on 2026-09-23, including task finalization,
+the background calibration tutorial and independent experiment-plan consumers. This is the current work list;
 earlier delivery notes are historical context, not additional pending work.
 No new hardware or installed Windows qualification is claimed by this audit.
 
@@ -51,6 +51,14 @@ bootstrap APIs must not be prerequisites for independent parameter/setup users.
 Replace fixtures with explicit owner initialization while preserving scientific,
 conflict, resource and recovery assertions. Retire old entries after their
 maintained consumers have moved.
+
+The experiment-plan/comparison journey now uses equipment-only startup and
+independent parameters/setup, including branch edits after preview. Remaining
+legacy consumers still include the shared gallery daemon, combined configuration
+editing/default-selection APIs and working-point launch paths. Their presence is
+not evidence that new author workflows require those owners. Use the
+[fixture ownership inventory](reference-fixtures.md) to retain each useful behavior
+before retiring its obsolete entry point.
 
 ### 3. Qualify a small simulated calibration workflow
 

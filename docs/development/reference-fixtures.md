@@ -38,6 +38,16 @@ the shared response contains an unapproved proposal, with approval decoding test
 separately in the UI. Calibration publication and restoration remain covered by
 the dedicated DRAG integration workflows.
 
+The experiment-plan journey (`tests/test_experiment_plans.py`) now also starts
+with equipment only. It explicitly selects independent parameters/setup and
+keeps the combined registry empty while testing comparison handoff, saved-plan
+copy/replay, exact sample revisions, structural inputs and candidate child scope.
+Branch edits replace the former global-default activation/restore exercise.
+The old working-point-specific assertion is replaced by exact independent
+parameter/setup selection; it is not a reason to keep working points forever.
+The comparison provider uses `comparison_selection(run.snapshot)` to retain
+source inputs instead of silently requiring a new global default.
+
 The legacy gallery still starts with transitional parameter defaults. Reassess
 its calibration/default-publication assertions against the new design; retain
 needed behaviors in focused tests and retire the old consumers. There is no

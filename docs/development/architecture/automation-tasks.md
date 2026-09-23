@@ -209,8 +209,9 @@ Required next contracts:
 1. Larger-history traversal and panel refresh policies beyond the bounded history
    facade. Pages have read-snapshot consistency and a final batch comparison;
    consumers must still use write-time authority checks when acting on observations.
-2. Extend explicit candidate-output binding to a complete multi-stage calibration
-   and final publication journey, then add bounded repair loops. Partial-completion
+2. Exercise a larger synthetic array, then add bounded repair loops. Explicit
+   candidate-output binding, final procedure handoff and the runnable
+   `task-calibration` publication journey are implemented. Partial-completion
    projections and task controls exist; a rejected source is not yet a repair trigger.
    Avoid one giant procedure containing every target and an unbounded maintenance loop.
 3. Parameter-read contracts, including query membership
