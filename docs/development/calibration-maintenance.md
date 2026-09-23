@@ -237,12 +237,15 @@ measured execution cost. Do not infer parallel safety from distinct target IDs.
    procedures; passing and negative scientific outcomes leave the branch unchanged.
 2. **Partially implemented:** scoped checks, exact-context applicability and
    selection from explicit complete histories, with inspectable reasons. Still
-   needed: capability requirements/dependencies, indexed/scoped catalog queries
-   for scale and resolved parameter dependency capture. Bounded procedure-journal
-   query integration is implemented. Avoid a second analysis/evidence store.
-3. Build target-expanded, staged plans on the durable procedure machinery, with
-   bounded recovery and explicit partial completion. Keep planning separate from
-   resource dispatch and scientific policy.
+   needed: capability requirements/dependencies and resolved parameter dependency
+   capture. Indexed scoped queries, server evidence pages and bounded batch
+   observation checks are implemented. Avoid a second analysis/evidence store.
+3. **Preview implemented:** target-expanded stage plans declare exact checks and
+   dependencies, and evaluate bound durable executions with explicit partial
+   completion. See [stage preview](../how-to/preview-calibration-tasks.md).
+   Durable task admission, prerequisite enforcement, dispatch and bounded recovery
+   remain to be built. Keep planning separate from resource dispatch and scientific
+   policy.
 4. Add check-first maintenance, batching/resource scheduling and workbench views
    showing required/available/blocked capabilities with their evidence.
 

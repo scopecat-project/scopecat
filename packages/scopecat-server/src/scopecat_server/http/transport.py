@@ -74,6 +74,7 @@ from scopecat.automation import (
     ProcedureWorkerLeaseReleaseCommand,
     ProcedureWorkerLeaseReleaseReceipt,
 )
+from scopecat.automation.calibration_tasks import CalibrationTaskProgress
 from scopecat.automation.wire import (
     ProcedureStepResourceWaitCommand,
     ProcedureStepResourceWaitReceipt,
@@ -92,6 +93,7 @@ from scopecat.daemon.calibration_checks import (
     CalibrationCheckObservationResult,
     CalibrationCheckPage,
     CalibrationCheckQuery,
+    CalibrationTaskPreview,
 )
 from scopecat.daemon.endpoint import (
     DAEMON_SHUTDOWN_PATH,
@@ -1721,6 +1723,12 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
     ) -> ProcedureScheduleMaterializeReceipt:
         _require_procedure_schedule_id(schedule_id, command.schedule_id)
         return application.procedure_schedules.materialize(command)
+
+    @app.post(f"{_API_PREFIX}/calibration-tasks/preview")
+    def preview_calibration_task(
+        preview: CalibrationTaskPreview,
+    ) -> CalibrationTaskProgress:
+        return application.calibration_checks.preview_task(preview)
 
     @app.post(f"{_API_PREFIX}/calibration-checks/query")
     def query_calibration_checks(query: CalibrationCheckQuery) -> CalibrationCheckPage:

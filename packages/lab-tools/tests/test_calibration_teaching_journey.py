@@ -96,6 +96,23 @@ try:
                     stable = checks.history()
                 assert stable.complete
                 from dataclasses import replace
+                from scopecat.automation.calibration_tasks import (
+                    CalibrationTaskPlan, CalibrationTaskStage,
+                )
+                declared = next(item.request for item in stable.requests
+                                if item.execution.procedure_run_id == concurrent.id)
+                staged = CalibrationTaskPlan(stages=(
+                    CalibrationTaskStage(id="baseline", check=declared),
+                    CalibrationTaskStage(id="followup", check=declared,
+                                         depends_on=("baseline",)),
+                    CalibrationTaskStage(id="independent", check=declared),
+                ))
+                progress = checks.preview_task(
+                    staged, executions={"baseline": concurrent.id},
+                )
+                assert progress.stages[0].state == "passed"
+                assert progress.ready == ("followup", "independent")
+                assert not progress.complete
                 # A queued check in another exact parameter context is visible,
                 # but does not block this context's domain query.
                 other_intent = check_request(

@@ -11,10 +11,15 @@ from scopecat.automation.calibration import (
     CheckSelection,
     select_calibration_check,
 )
+from scopecat.automation.calibration_tasks import (
+    CalibrationTaskPlan,
+    CalibrationTaskProgress,
+)
 from scopecat.daemon.calibration_checks import (
     MAX_CHECK_OBSERVATIONS,
     CalibrationCheckObservation,
     CalibrationCheckQuery,
+    CalibrationTaskPreview,
 )
 from scopecat.daemon.client import DaemonClient
 from scopecat.records.calibration_check import (
@@ -75,6 +80,20 @@ class LabCalibrationChecks:
         client: DaemonClient,
     ) -> None:
         self._client = client
+
+    def preview_task(
+        self,
+        plan: CalibrationTaskPlan,
+        *,
+        executions: dict[str, str] | None = None,
+    ) -> CalibrationTaskProgress:
+        """Preview dependencies and exact bound executions without dispatching work."""
+        return self._client.preview_calibration_task(
+            CalibrationTaskPreview(
+                plan=plan,
+                executions={} if executions is None else executions,
+            )
+        )
 
     def history(
         self,

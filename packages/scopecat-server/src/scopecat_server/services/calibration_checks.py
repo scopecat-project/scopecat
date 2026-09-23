@@ -12,12 +12,17 @@ from scopecat.automation import (
     RunOutputRef,
 )
 from scopecat.automation.calibration import CheckEvidence
+from scopecat.automation.calibration_tasks import (
+    CalibrationTaskProgress,
+    assess_calibration_task,
+)
 from scopecat.daemon.calibration_checks import (
     CalibrationCheckObservation,
     CalibrationCheckObservationResult,
     CalibrationCheckPage,
     CalibrationCheckQuery,
     CalibrationCheckView,
+    CalibrationTaskPreview,
 )
 from scopecat.daemon.wire import RunSubmission
 from scopecat.kernel.errors import NotFound
@@ -45,7 +50,10 @@ from scopecat_server.errors import BackendConflict
 from scopecat_server.services.parameter_resolution import resolve_parameters
 from scopecat_server.services.samples import SampleService
 from scopecat_server.services.scientific_binding import validate_scientific_binding
-from scopecat_server.storage.sqlite.automation import SQLiteAutomationStore
+from scopecat_server.storage.sqlite.automation import (
+    AutomationNotFound,
+    SQLiteAutomationStore,
+)
 from scopecat_server.storage.sqlite.calibration_checks import CalibrationCheckStore
 from scopecat_server.storage.sqlite.connection import SQLiteDatabase
 from scopecat_server.storage.sqlite.run_repository import SQLiteRunRepository
@@ -253,6 +261,29 @@ class CalibrationCheckQueries:
                 items=tuple(self._view(connection, run) for run in page.items),
                 next_cursor=page.next_cursor,
             )
+
+    def preview_task(self, preview: CalibrationTaskPreview) -> CalibrationTaskProgress:
+        executions: dict[str, tuple[ProcedureRun, CheckEvidence | None]] = {}
+        with self._sqlite.read_transaction() as connection:
+            for stage in preview.plan.stages:
+                procedure_id = preview.executions.get(stage.id)
+                if procedure_id is None:
+                    continue
+                try:
+                    run = self._procedures.read_run_in_transaction(
+                        connection, procedure_id
+                    )
+                except AutomationNotFound as error:
+                    raise BackendConflict(
+                        "task stage execution was not found"
+                    ) from error
+                view = self._view(connection, run)
+                if view.request != stage.check:
+                    raise BackendConflict(
+                        f"task stage {stage.id!r} differs from its declared check"
+                    )
+                executions[stage.id] = (run, view.evidence)
+            return assess_calibration_task(preview.plan, executions)
 
     def observe(
         self, observation: CalibrationCheckObservation

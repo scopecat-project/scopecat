@@ -61,6 +61,7 @@ from scopecat.automation import (
     ProcedureWorkerLeaseReleaseCommand,
     ProcedureWorkerLeaseReleaseReceipt,
 )
+from scopecat.automation.calibration_tasks import CalibrationTaskProgress
 from scopecat.automation.wire import (
     ProcedureStepResourceWaitCommand,
     ProcedureStepResourceWaitReceipt,
@@ -79,6 +80,7 @@ from scopecat.daemon.calibration_checks import (
     CalibrationCheckObservationResult,
     CalibrationCheckPage,
     CalibrationCheckQuery,
+    CalibrationTaskPreview,
 )
 from scopecat.daemon.hardware_receipt_wire import (
     decode_collect_receipt,
@@ -591,6 +593,15 @@ class DaemonClient:
             f"{_API_PREFIX}/procedures",
             command,
             ProcedureSubmitReceipt,
+        )
+
+    def preview_calibration_task(
+        self, preview: CalibrationTaskPreview
+    ) -> CalibrationTaskProgress:
+        return self._post_model(
+            f"{_API_PREFIX}/calibration-tasks/preview",
+            preview,
+            CalibrationTaskProgress,
         )
 
     def observe_calibration_checks(

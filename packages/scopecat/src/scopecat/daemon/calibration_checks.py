@@ -1,11 +1,14 @@
 """Domain query contract for admitted calibration check declarations."""
 
+from __future__ import annotations
+
 from typing import Annotated
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from scopecat.automation import ProcedureRun
 from scopecat.automation.calibration import CheckEvidence
+from scopecat.automation.calibration_tasks import CalibrationTaskPlan
 from scopecat.records.calibration_check import (
     CalibrationCheckRequest,
     CalibrationContext,
@@ -59,3 +62,21 @@ class CalibrationCheckObservationResult(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     changed_procedures: tuple[str, ...]
     head_changed: bool
+
+
+class CalibrationTaskPreview(BaseModel):
+    """Read-only evaluation of a plan against explicitly selected executions."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    plan: CalibrationTaskPlan
+    executions: dict[str, Annotated[str, Field(min_length=1)]] = Field(
+        default_factory=dict, max_length=256
+    )
+
+    @model_validator(mode="after")
+    def validate_bindings(self) -> CalibrationTaskPreview:
+        if not self.executions.keys() <= {stage.id for stage in self.plan.stages}:
+            raise ValueError("execution binding names an unknown task stage")
+        if len(set(self.executions.values())) != len(self.executions):
+            raise ValueError("one execution cannot fulfill multiple task stages")
+        return self

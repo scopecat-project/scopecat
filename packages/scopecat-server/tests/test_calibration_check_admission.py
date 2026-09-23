@@ -20,6 +20,11 @@ from scopecat.automation import (
     RunOutputRef,
     procedure_step_operation_id,
 )
+from scopecat.automation.calibration_tasks import (
+    CalibrationTaskPlan,
+    CalibrationTaskProgress,
+    CalibrationTaskStage,
+)
 from scopecat.config.scientific_binding import bind_scientific_evidence
 from scopecat.control.models import RunPlanSummary
 from scopecat.daemon.calibration_checks import (
@@ -27,6 +32,7 @@ from scopecat.daemon.calibration_checks import (
     CalibrationCheckObservationResult,
     CalibrationCheckPage,
     CalibrationCheckQuery,
+    CalibrationTaskPreview,
 )
 from scopecat.daemon.wire import (
     AnalysisFactOutputPayload,
@@ -437,6 +443,52 @@ def test_batch_observation_compares_head_and_revisions_at_one_snapshot(
             ).status_code
             == 422
         )
+
+
+def test_task_preview_binds_exact_checks_without_submitting_work(
+    check_case: CheckCase,
+) -> None:
+    runtime, declaration, _ = check_case
+    app = runtime.application
+    run = app.automation.submit(_command(declaration)).run
+    plan = CalibrationTaskPlan(
+        stages=(
+            CalibrationTaskStage(id="a", check=declaration),
+            CalibrationTaskStage(id="next", check=declaration, depends_on=("a",)),
+            CalibrationTaskStage(id="independent", check=declaration),
+        )
+    )
+    preview = CalibrationTaskPreview(plan=plan, executions={"a": run.procedure_run_id})
+    before = app.automation.list(ProcedureRunListQuery())
+    with TestClient(runtime.app()) as client:
+        response = client.post(
+            "/api/v1/calibration-tasks/preview", json=preview.model_dump(mode="json")
+        )
+        assert response.status_code == 200, response.text
+        progress = CalibrationTaskProgress.model_validate(response.json())
+        assert progress.ready == ("independent",)
+        assert tuple(stage.state for stage in progress.stages) == (
+            "queued",
+            "waiting",
+            "ready",
+        )
+        assert progress.stages[1].blocked_by == ("a",)
+        assert not progress.complete and not progress.successful
+        wrong = declaration.model_copy(
+            update={"scope": replace(declaration.scope, conditions="different")}
+        )
+        mismatch = CalibrationTaskPreview(
+            plan=CalibrationTaskPlan(
+                stages=(CalibrationTaskStage(id="a", check=wrong),)
+            ),
+            executions=preview.executions,
+        )
+        rejected = client.post(
+            "/api/v1/calibration-tasks/preview", json=mismatch.model_dump(mode="json")
+        )
+        assert rejected.status_code == 409
+        assert "declared check" in rejected.text
+    assert app.automation.list(ProcedureRunListQuery()) == before
 
 
 def test_exact_retry_survives_setup_change(check_case: CheckCase) -> None:
