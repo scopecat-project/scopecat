@@ -51,10 +51,11 @@ from scopecat.records.analysis import SampleAnalysisSubject
 from scopecat.records.config import ConfigProfileSnapshot
 from scopecat.records.config_context import ConfigContextRef
 from scopecat.records.experimental_batch import ExperimentalBatch
+from scopecat.records.parameter_revision import ParameterRevision, ParameterRevisionRef
 from scopecat.records.record_collection import RecordCollection
 from scopecat.records.run import RunConfigSource
 from scopecat.records.sample import SampleSelector
-from scopecat.records.setup import SetupRevisionRef
+from scopecat.records.setup import SetupRevision, SetupRevisionRef
 from scopecat.records.target_catalog import (
     TargetCatalogPage,
     TargetCreateCommand,
@@ -299,19 +300,27 @@ class LabClient:
     def resolve_context(
         self,
         *,
-        branch: str,
+        branch: str | None = None,
+        parameters: ParameterRevision | ParameterRevisionRef | None = None,
         samples: tuple[SampleSelector, ...] = (),
-        setup: SetupRevisionRef | None = None,
+        setup: SetupRevision | SetupRevisionRef | None = None,
         target: TargetRevisionRef | None = None,
     ) -> MeasurementContextResolution:
         """Capture exact saved scientific inputs without changing live selections.
 
-        Branch and active setup heads are resolved together. The receipt retains
+        Choose a branch or exact saved parameters. Branch and active setup heads
+        are resolved together. The receipt retains
         their versions; no experiment is imported or hardware acquired.
         """
         return self._client.resolve_measurement_context(
             MeasurementContextResolve(
-                branch=branch, samples=samples, setup=setup, target=target
+                branch=branch,
+                parameters=parameters.ref
+                if isinstance(parameters, ParameterRevision)
+                else parameters,
+                samples=samples,
+                setup=setup.ref if isinstance(setup, SetupRevision) else setup,
+                target=target,
             )
         )
 

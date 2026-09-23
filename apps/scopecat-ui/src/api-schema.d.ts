@@ -3108,7 +3108,7 @@ export interface components {
         };
         /**
          * CalibrationRequirement
-         * @description One explicitly requested capability; no inferred dependency closure.
+         * @description One explicitly requested capability; no inferred physical dependencies.
          */
         CalibrationRequirement: {
             /**
@@ -6586,17 +6586,18 @@ export interface components {
         };
         /**
          * MeasurementContextResolution
-         * @description Exact inputs plus the branch generation and setup revision used to resolve.
+         * @description Exact inputs with an optional branch receipt and the resolved setup revision.
          */
         MeasurementContextResolution: {
-            branch: components["schemas"]["ParameterBranch"];
+            branch?: components["schemas"]["ParameterBranch"] | null;
             context: components["schemas"]["MeasurementContext"];
             setup: components["schemas"]["SetupRevisionRef"];
         };
         /** MeasurementContextResolve */
         MeasurementContextResolve: {
             /** Branch */
-            branch: string;
+            branch?: string | null;
+            parameters?: components["schemas"]["ParameterRevisionRef"] | null;
             /**
              * Samples
              * @default []

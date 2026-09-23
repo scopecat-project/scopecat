@@ -187,8 +187,11 @@ export function CurrentCapabilities({
       {resolution && (
         <section key={attempt} aria-label="Resolved current capability context">
           <p>
-            Branch {resolution.branch.name} · generation {resolution.branch.generation} · parameters{" "}
-            {resolution.context.parameters.revision_id} · setup {resolution.setup.revision_id}
+            {resolution.branch
+              ? `Branch ${resolution.branch.name} · generation ${resolution.branch.generation} · `
+              : "Exact saved "}
+            parameters {resolution.context.parameters.revision_id} · setup{" "}
+            {resolution.setup.revision_id}
           </p>
           <p>
             These versions are now frozen for this report. Resolve again to follow later branch or

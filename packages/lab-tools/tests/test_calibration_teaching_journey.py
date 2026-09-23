@@ -277,7 +277,14 @@ try:
                 captured = lab.resolve_context(
                     branch=namespace["trial"],
                 )
+                assert captured.branch is not None
                 assert captured.branch.name == namespace["trial"]
+                exact = lab.resolve_context(
+                    parameters=lab.parameters.get(captured.context.parameters.revision_id),
+                    setup=lab.setup.get(captured.setup.revision_id),
+                )
+                assert exact.context == captured.context
+                assert exact.branch is None
                 assert captured.context.subject == subject
                 assert report.items[1].selection.assessment.reasons == (
                     "check_expired",

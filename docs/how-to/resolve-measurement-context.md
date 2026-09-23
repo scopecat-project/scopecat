@@ -1,6 +1,6 @@
 # Resolve exact measurement inputs
 
-Use `lab.resolve_context(...)` to capture a parameter branch and setup together
+Use `lab.resolve_context(...)` to capture saved parameters and setup together
 without launching an experiment, changing session selection or importing author
 code. Calibration reports consume this same public measurement context.
 
@@ -14,8 +14,24 @@ receipt = lab.resolve_context(
 context = receipt.context
 ```
 
+For a saved version without a branch, use `parameters` instead of `branch`:
+
+```python
+parameters = lab.parameters.get("initial-estimates")
+receipt = lab.resolve_context(
+    parameters=parameters,
+    setup=lab.setup.get("bench-v1"),
+    samples=(SampleSelector(sample_id="chip", revision=3),),
+)
+```
+
+Pass a saved `ParameterRevision` or exact reference; a branch is neither required
+nor created. The API requires exactly one of `branch` and `parameters`. Both paths
+use the same revision validation and scientific binding resolver. A stale content
+hash is rejected rather than replaced with the current content.
+
 Omitting `setup` reads the active setup in the same transaction as the parameter
-branch. Pass an exact `SetupRevisionRef` to select another setup. For a registered
+resolution. Pass a saved `SetupRevision` or exact reference to select another setup. For a registered
 target, pass `target=target.ref` instead of `samples`; the current execution
 binding supports one target member without target-level connections.
 
@@ -25,6 +41,8 @@ The result separates two responsibilities:
   executable setup hash, software scenario and target-to-setup mapping.
 - `receipt.branch` and `receipt.setup` record which branch generation and setup
   revision were resolved. Branch names and generations are not scientific identity.
+  With exact parameters, `receipt.branch` is `None`; the parameter reference is
+  retained in `receipt.context.parameters`.
 
 Moving the branch or activating another setup does not change an existing context.
 Resolve again when you want a fresh snapshot. With neither samples nor a target,

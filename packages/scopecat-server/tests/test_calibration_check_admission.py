@@ -216,6 +216,16 @@ def test_current_capability_context_freezes_branch_and_setup(
 ) -> None:
     runtime, declaration, child = check_case
     app = runtime.application
+    before = app.config.parameter_branch_heads(limit=100, after=None)
+    direct = app.measurement_context.resolve(
+        MeasurementContextResolve(
+            parameters=declaration.context.parameters,
+            samples=(SampleSelector(sample_id="chip", revision=1),),
+        )
+    )
+    assert direct.context == declaration.context
+    assert direct.branch is None
+    assert app.config.parameter_branch_heads(limit=100, after=None) == before
     head = app.config.commit_parameter_branch(
         ParameterBranchCommitCommand(
             name="daily",
@@ -269,9 +279,53 @@ def test_current_capability_context_freezes_branch_and_setup(
         )
     )
     refreshed = app.measurement_context.resolve(query)
+    assert refreshed.branch is not None
     assert refreshed.branch.generation == 2
     assert refreshed.context.parameters == changed.ref
     assert resolved.context.parameters == declaration.context.parameters
+    exact_query = MeasurementContextResolve(
+        parameters=declaration.context.parameters,
+        setup=resolved.setup,
+        samples=query.samples,
+    )
+    with TestClient(runtime.app()) as client:
+        exact = client.post(
+            "/api/v1/measurement-context/resolve",
+            json=exact_query.model_dump(mode="json"),
+        )
+        assert exact.status_code == 200, exact.text
+        captured = MeasurementContextResolution.model_validate(exact.json())
+        assert captured.context == resolved.context
+        assert captured.branch is None
+        for change in ({"parameters": None}, {"branch": "daily"}):
+            invalid = {**exact_query.model_dump(mode="json"), **change}
+            assert (
+                client.post(
+                    "/api/v1/measurement-context/resolve", json=invalid
+                ).status_code
+                == 422
+            )
+        for ref, status in (
+            (
+                declaration.context.parameters.model_copy(
+                    update={"revision_id": "missing"}
+                ),
+                404,
+            ),
+            (
+                declaration.context.parameters.model_copy(
+                    update={"content_hash": "sha256:" + "0" * 64}
+                ),
+                409,
+            ),
+        ):
+            response = client.post(
+                "/api/v1/measurement-context/resolve",
+                json=exact_query.model_copy(update={"parameters": ref}).model_dump(
+                    mode="json"
+                ),
+            )
+            assert response.status_code == status
     assert app.setup.current().revision.ref == resolved.setup
     explicit = app.measurement_context.resolve(
         query.model_copy(update={"setup": resolved.setup})

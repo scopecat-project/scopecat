@@ -57,10 +57,15 @@ class MeasurementContextService:
             else {}
         )
         with self._sqlite.read_transaction() as connection:
-            try:
-                branch = ParameterBranchRepository(connection).get(query.branch)
-            except KeyError as error:
-                raise BackendNotFound("parameter branch was not found") from error
+            branch = None
+            parameters = query.parameters
+            if query.branch is not None:
+                try:
+                    branch = ParameterBranchRepository(connection).get(query.branch)
+                except KeyError as error:
+                    raise BackendNotFound("parameter branch was not found") from error
+                parameters = branch.revision
+            assert parameters is not None
             setup = query.setup
             if setup is None:
                 active = SQLiteSetupRepository(connection).read_current()
@@ -70,7 +75,7 @@ class MeasurementContextService:
                     )
                 setup = active.revision.ref
             resolved = resolve_parameters(
-                connection, parameters=branch.revision, setup=setup
+                connection, parameters=parameters, setup=setup
             )
             try:
                 binding = bind_scientific_evidence(
@@ -83,7 +88,7 @@ class MeasurementContextService:
             except ValueError as error:
                 raise BackendConflict(str(error)) from error
             return MeasurementContextResolution(
-                context=MeasurementContext.from_binding(branch.revision, binding),
+                context=MeasurementContext.from_binding(parameters, binding),
                 branch=branch,
                 setup=setup,
             )
