@@ -39,6 +39,7 @@ function fixture(): View {
       control_revision: 4,
       dispatch_errors: { q0: "setup changed" },
       executions: {},
+      resolved_checks: {},
     },
     progress: {
       stages: [{ id: "q0", state: "ready", blocked_by: [] }],
@@ -61,6 +62,28 @@ afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
   window.history.replaceState(null, "", "/");
+});
+
+it("does not show a frozen parameter context before a candidate output is bound", async () => {
+  window.history.replaceState(null, "", "/?task=round%2F1#launch");
+  const view = fixture();
+  view.task.specification.plan.stages[0]!.candidate_from = {
+    stage_id: "fit",
+    proposal_id: "frequency",
+  };
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (request: Request) =>
+      Response.json(
+        new URL(request.url).pathname.endsWith("calibration-tasks")
+          ? { items: [view.task], next_cursor: null }
+          : view,
+      ),
+    ),
+  );
+  mount();
+  expect(await screen.findByText(/Parameter input is not bound yet/)).toBeInTheDocument();
+  expect(screen.queryByText("Frozen measurement context")).not.toBeInTheDocument();
 });
 
 it("reopens a task, shows admission failure, and fences a control with the observed revision", async () => {

@@ -57,11 +57,28 @@ class CalibrationTaskRecord(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     specification: CalibrationTaskCreate
     executions: dict[str, str] = Field(default_factory=dict)
+    resolved_checks: dict[str, CalibrationCheckRequest] = Field(default_factory=dict)
     created_at: datetime
     mode: Literal["manual", "running", "paused", "cancelled", "finished"] = "manual"
     control_revision: int = 1
     last_control: CalibrationTaskControl | None = None
     dispatch_errors: dict[str, str] = Field(default_factory=dict)
+
+    @property
+    def resolved_plan(self) -> CalibrationTaskPlan:
+        """Overlay retained bindings; undispatched candidate stages remain templates."""
+        return self.specification.plan.model_copy(
+            update={
+                "stages": tuple(
+                    stage.model_copy(
+                        update={
+                            "check": self.resolved_checks.get(stage.id, stage.check)
+                        }
+                    )
+                    for stage in self.specification.plan.stages
+                )
+            }
+        )
 
 
 class CalibrationTaskView(BaseModel):

@@ -1,15 +1,14 @@
 # Parameter flow through calibration tasks
 
-Status: implementation contract under development. Fixed check tasks and candidate
-verification/publication exist; automatic parameter-producing task stages do not.
-No automatic task-flow wire contract or supported data baseline is declared here.
+Status: explicit candidate output bindings are implemented for passing prerequisite
+checks. General adaptive flows, repair and task-wide publication remain unfinished.
+No supported persistent-data baseline is declared here.
 
 The first implemented lineage slice is `first.then(second, name=...)`: it resolves
 completed candidate-backed stages into one candidate against the initial saved
 revision. Each stage must consume the preceding exact candidate. A new independent
 measurement must verify the final candidate before branch publication. Schema 95
-retains ordered sources and revalidates their net values. This does not yet add
-task output bindings or automatic stage admission. Candidate contexts are now
+retains ordered sources and revalidates their net values. Candidate contexts are
 supported by the shared resolver, check admission, child-input matching, retained
 evidence and workbench consumers. They remain distinct from saved revision contexts.
 
@@ -23,14 +22,16 @@ requires a common base and does not inherit individual verification. These are
 implemented features, not pending work. Accepting candidate cells is not blanket
 branch validity; ordinary parameter saves also make no calibration claim.
 
-## Missing transition
+## Implemented stage transition
 
-`CalibrationTaskCreate` requires every check context and matching procedure intent
-at creation. Dependencies control order; they do not bind future produced values.
-Do not rewrite immutable intent, read the latest daily branch at dispatch or
-substitute arbitrary argument strings. Retain a typed stage-output-to-input binding
-before admission, along with the exact resolved call. Check declarations and child
-measurements must agree on the resulting context. Restart reuses that binding.
+`StageCandidateOutput` selects a proposal from a prerequisite's adopted analysis.
+Schema 97 stores `resolved_checks` atomically with procedure admission; the immutable
+specification and those checks reconstruct the exact calls without duplicating a
+second call ledger. The source check must pass and retain successful measurement
+evidence. Scope/setup/subject/scenario/mapping stay fixed while the declared edge
+replaces the parameter input. No arbitrary argument substitution occurs. Existing
+check admission and child evidence validation enforce the resulting context.
+See [the author contract](../../how-to/preview-calibration-tasks.md#bind-a-prerequisites-candidate-output).
 
 ## First complete workflow
 
@@ -54,8 +55,9 @@ ordinary saves and losing provenance.
 - Shared input resolution, admission and evidence now cover exact candidates and
   saved revisions without overrides. Use this same context when binding future
   stage outputs; do not add a task-only context or disguise candidates as revisions.
-- Define typed parameter outputs and binding receipts, not general Python object
-  graphs or arbitrary JSON paths.
+- Typed candidate outputs and binding receipts are implemented. They select only
+  the proposal in the source check's adopted analysis; general Python object graphs
+  and arbitrary JSON paths remain outside this contract.
 - Distinguish sequential ancestry from common-base sibling composition. Later
   stages can intentionally refine earlier cells; retain sibling conflict checks.
   This distinction is implemented for flat retained proposal chains.

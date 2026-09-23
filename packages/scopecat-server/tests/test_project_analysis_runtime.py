@@ -1662,6 +1662,293 @@ def test_verified_parameter_branch_publication_is_atomic_and_restorable(
                 assert restored_lab.config.resolve_with_source(retained)[0] == config
 
 
+def test_task_binds_adopted_candidate_atomically_and_replays_after_restart(
+    tmp_path: Path,
+) -> None:
+    from scopecat.analysis.calibration import CHECK_RESULT
+    from scopecat.automation import (
+        AnalysisPublicationOutputRef,
+        ProcedureCloseCommand,
+        ProcedureDefinitionRef,
+        ProcedureStepBeginCommand,
+        ProcedureStepCompleteCommand,
+        ProcedureWorkerLeaseAcquireCommand,
+        RunOutputRef,
+    )
+    from scopecat.automation.calibration_tasks import (
+        CalibrationTaskPlan,
+        CalibrationTaskStage,
+        StageCandidateOutput,
+    )
+    from scopecat.daemon.calibration_tasks import (
+        CalibrationTaskCall,
+        CalibrationTaskControl,
+        CalibrationTaskCreate,
+        CalibrationTaskDispatch,
+    )
+    from scopecat.daemon.wire import AnalysisFactOutputPayload
+    from scopecat.records.analysis import AnalysisFact
+    from scopecat.records.calibration_check import (
+        CalibrationCheckRequest,
+        CalibrationCheckResult,
+        CalibrationScope,
+    )
+    from scopecat.records.candidate_input import AnalysisCandidateRunConfigSource
+    from scopecat.records.execution_scenario import SoftwareExecutionScenario
+    from scopecat.sdk.compute import PYTHON_JSON_CODEC
+
+    config = _config()
+    config = config.model_copy(
+        update={
+            "system": config.system.model_copy(
+                update={
+                    "scenario": SoftwareExecutionScenario(
+                        id="task-test",
+                        label="Test",
+                        model_id="fixture",
+                        model_version="1",
+                        capabilities=("drive",),
+                    ),
+                }
+            )
+        }
+    )
+    with (
+        LocalDaemonRuntime(tmp_path) as runtime,
+        TestClient(runtime.app()) as transport,
+    ):
+        lab = LabClient(_daemon_client(transport))
+        app = runtime.application
+        lab.setup.activate(
+            lab.setup.save(ExecutableSetupSnapshot.from_config(config), name="bench")
+        )
+        parameters = lab.parameters.save(
+            name="initial",
+            catalog=config.parameter_catalog,
+            parameters=config.parameter_snapshot,
+        )
+        branch = lab.parameters.create_branch("daily", revision=parameters)
+        context = lab.resolve_context(parameters=parameters).context
+        check = CalibrationCheckRequest(
+            scope=CalibrationScope("drive", ("q0",), "test", "1"),
+            context=context,
+            measurement_step="measure",
+            analysis_step="assess",
+        )
+        definition = ProcedureDefinitionRef(
+            id="check", version="1", fingerprint="sha256:" + "a" * 64
+        )
+        specification = CalibrationTaskCreate(
+            task_id="candidate-flow",
+            plan=CalibrationTaskPlan(
+                stages=(
+                    CalibrationTaskStage(id="fit", check=check),
+                    CalibrationTaskStage(
+                        id="verify",
+                        check=check,
+                        depends_on=("fit",),
+                        candidate_from=StageCandidateOutput(
+                            stage_id="fit", proposal_id="frequency"
+                        ),
+                    ),
+                    CalibrationTaskStage(
+                        id="wrong-analysis",
+                        check=check,
+                        depends_on=("fit",),
+                        candidate_from=StageCandidateOutput(
+                            stage_id="fit", proposal_id="other"
+                        ),
+                    ),
+                )
+            ),
+            calls={
+                key: CalibrationTaskCall(
+                    definition=definition,
+                    intent={"calibration_check": check.model_dump(mode="json")},
+                )
+                for key in ("fit", "verify", "wrong-analysis")
+            },
+        )
+        app.calibration_tasks.create(specification)
+        first = app.calibration_tasks.dispatch(
+            CalibrationTaskDispatch(task_id=specification.task_id, stage_id="fit")
+        )
+        parent = app.automation.get(first.task.executions["fit"])
+        lease = app.automation.acquire_lease(
+            ProcedureWorkerLeaseAcquireCommand(
+                procedure_run_id=parent.procedure_run_id,
+                worker_id="test",
+                expected_run_revision=parent.revision,
+            )
+        )
+        resolved = lab.parameters.resolve(parameters)
+        run_id = _complete_signal_run(
+            runtime,
+            submission_id="task-fit",
+            signal=1.0,
+            submission=_submission("task-fit").model_copy(
+                update={
+                    "config": resolved.config,
+                    "config_source": resolved.config_source,
+                }
+            ),
+        )
+        proposal = parameter_change_proposal_from_updates(
+            source_run_id=run_id,
+            source_config=resolved.config,
+            analysis_title="fit",
+            analysis_record_id="analysis-fit-r1",
+            proposal_id="frequency",
+            updates=(
+                replace_scalar_parameter("drive_frequency", Quantity(5.1, "GHz")),
+            ),
+            reason="fit",
+            confidence=None,
+        )
+        analysis = app.runs.save_run_analysis(
+            run_id,
+            AnalysisSaveCommand(
+                title="fit",
+                analysis_key="fit",
+                outputs=(
+                    *_analysis_command(proposal).outputs,
+                    AnalysisFactOutputPayload(
+                        kind="fact",
+                        id="check",
+                        title="Check",
+                        content=AnalysisFact(
+                            schema_id=CHECK_RESULT.id,
+                            schema_codec=CHECK_RESULT.schema_codec,
+                            schema_hash=CHECK_RESULT.schema_hash,
+                            codec=PYTHON_JSON_CODEC,
+                            value=CHECK_RESULT.encode(
+                                CalibrationCheckResult(check.scope, True)
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        )
+        current = lease.run
+        for step, output in (
+            ("measure", RunOutputRef(run_id=run_id)),
+            (
+                "assess",
+                AnalysisPublicationOutputRef(
+                    subject=RunAnalysisSubject(run_id=run_id),
+                    analysis_record_id=analysis.record.id,
+                ),
+            ),
+        ):
+            begun = app.automation.begin_step(
+                ProcedureStepBeginCommand(
+                    procedure_run_id=parent.procedure_run_id,
+                    lease_token=lease.lease.lease_token,
+                    expected_run_revision=current.revision,
+                    step_key=step,
+                    operation="run" if step == "measure" else "analysis",
+                    intent_hash="sha256:" + "b" * 64,
+                )
+            )
+            done = app.automation.complete_step(
+                ProcedureStepCompleteCommand(
+                    procedure_run_id=parent.procedure_run_id,
+                    lease_token=lease.lease.lease_token,
+                    expected_run_revision=begun.run.revision,
+                    step_key=step,
+                    attempt=begun.step.attempt,
+                    expected_step_revision=begun.step.revision,
+                    output=output,
+                )
+            )
+            current = done.run
+        app.automation.close(
+            ProcedureCloseCommand(
+                procedure_run_id=parent.procedure_run_id,
+                lease_token=lease.lease.lease_token,
+                expected_run_revision=current.revision,
+                status="succeeded",
+            )
+        )
+        command = CalibrationTaskDispatch(
+            task_id=specification.task_id, stage_id="verify"
+        )
+        other = proposal.model_copy(
+            update={"id": "other", "analysis_record_id": "analysis-other-r1"}
+        )
+        app.runs.save_run_analysis(
+            run_id,
+            AnalysisSaveCommand(
+                title="other",
+                analysis_key="other",
+                outputs=(
+                    AnalysisParameterProposalOutputPayload(
+                        kind="parameter_change_proposal",
+                        id="other",
+                        title="Other",
+                        content=other,
+                    ),
+                ),
+            ),
+        )
+        with pytest.raises(BackendConflict, match="adopted analysis"):
+            app.calibration_tasks.dispatch(
+                CalibrationTaskDispatch(
+                    task_id=specification.task_id,
+                    stage_id="wrong-analysis",
+                )
+            )
+        from unittest.mock import patch
+
+        with (
+            patch.object(
+                app.calibration_tasks._store,
+                "update",
+                side_effect=RuntimeError("rollback binding"),
+            ),
+            pytest.raises(RuntimeError, match="rollback binding"),
+        ):
+            app.calibration_tasks.dispatch(command)
+        assert (
+            "verify"
+            not in app.calibration_tasks.get(specification.task_id).task.resolved_checks
+        )
+        before_start = app.calibration_tasks.get(specification.task_id)
+        app.calibration_tasks.control(
+            CalibrationTaskControl(
+                task_id=specification.task_id,
+                expected_revision=before_start.task.control_revision,
+                action="start",
+                actor="test",
+                reason="advance after fit",
+            )
+        )
+        bound = app.calibration_tasks.advance(specification.task_id)
+        assert app.calibration_tasks.dispatch(command) == bound
+        adopted = bound.task.resolved_checks["verify"]
+        assert isinstance(adopted.context.parameters, AnalysisCandidateRunConfigSource)
+        assert adopted.context.parameters.analysis_record_id == analysis.record.id
+        assert adopted.context.parameters.source_run_id == run_id
+        assert bound.task.specification == specification
+        assert lab.parameters.checkout("daily").head == branch
+        called = app.automation.get(bound.task.executions["verify"])
+        assert (
+            CalibrationCheckRequest.model_validate(called.intent["calibration_check"])
+            == adopted
+        )
+    with LocalDaemonRuntime(tmp_path) as restarted:
+        assert restarted.application.calibration_tasks.dispatch(command) == bound
+    from scopecat_server.snapshots import create_snapshot, restore_snapshot
+
+    (tmp_path / "scopecat.toml").write_text("[lab]\n")
+    archive = tmp_path.with_name(tmp_path.name + "-snapshot")
+    restored = tmp_path.with_name(tmp_path.name + "-restored")
+    create_snapshot(load_project(tmp_path / "scopecat.toml"), archive)
+    restore_snapshot(archive, restored)
+    with LocalDaemonRuntime(restored) as recovered:
+        assert recovered.application.calibration_tasks.dispatch(command) == bound
+
+
 def test_verified_candidates_publish_to_independent_working_points(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -3279,10 +3279,15 @@ export interface components {
              * @enum {string}
              */
             mode: "manual" | "running" | "paused" | "cancelled" | "finished";
+            /** Resolved Checks */
+            resolved_checks?: {
+                [key: string]: components["schemas"]["CalibrationCheckRequest"];
+            };
             specification: components["schemas"]["CalibrationTaskCreate-Output"];
         };
         /** CalibrationTaskStage */
         CalibrationTaskStage: {
+            candidate_from?: components["schemas"]["StageCandidateOutput"] | null;
             check: components["schemas"]["CalibrationCheckRequest"];
             /**
              * Depends On
@@ -6589,7 +6594,7 @@ export interface components {
         };
         /**
          * MeasurementContext
-         * @description Frozen inputs using an exact saved parameter revision without overrides.
+         * @description Frozen inputs using a saved revision or an exact retained candidate.
          *
          *     Mutable branch choices and resolution receipts are separate. This is not the
          *     complete execution provenance, nor proof of calibration applicability.
@@ -6604,7 +6609,7 @@ export interface components {
         };
         /**
          * MeasurementContextResolution
-         * @description Exact inputs with an optional branch receipt and the resolved setup revision.
+         * @description Exact inputs; candidates have no branch/setup selection receipt.
          */
         MeasurementContextResolution: {
             branch?: components["schemas"]["ParameterBranch"] | null;
@@ -10422,6 +10427,16 @@ export interface components {
             settings?: {
                 [key: string]: components["schemas"]["pydantic__types__JsonValue"];
             };
+        };
+        /**
+         * StageCandidateOutput
+         * @description Candidate from the exact analysis adopted by a prerequisite check.
+         */
+        StageCandidateOutput: {
+            /** Proposal Id */
+            proposal_id: string;
+            /** Stage Id */
+            stage_id: string;
         };
         StateLiteral: boolean | number | string | components["schemas"]["scopecat__kernel__quantity__Quantity"] | components["schemas"]["PayloadRef"];
         StateMemberTarget: components["schemas"]["InterfaceStateMemberTarget"] | components["schemas"]["DeviceStateMemberTarget"];

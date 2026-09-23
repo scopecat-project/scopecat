@@ -12,12 +12,12 @@ No new hardware or installed Windows qualification is claimed by this audit.
 | Parameters/setup | Independent immutable revisions, branches, session setup pins and exact context resolution | Some consumers still use combined configurations and optional global parameter defaults |
 | Scientific context | Common `MeasurementContext` for saved revisions and retained candidates; subject separated from `TargetSetupBinding`; mappings checked at admission and for applicability | Overrides/unsaved inputs remain outside exact contexts; candidates do not inherit saved-revision applicability |
 | Targets | Catalog definitions and a general pure topology mapping checker | Registered execution remains single-member, no target connections, identity mapping |
-| Candidates | Retained proposals, sibling composition, exact sequential chains, independent verification and fenced branch publication | No parameter flow between background task stages |
+| Candidates | Retained proposals, sibling composition, sequential chains, independent verification and fenced branch publication | No automatic task-wide final publication |
 | Calibration | Declared checks, indexed history, exact-context applicability, immutable profiles and prerequisite-aware focused reports | Whole-input matching; no resolved parameter-read dependencies or selective cross-revision reuse |
-| Automation | Durable fixed tasks, dependency-checked admission, sequential background advancement, controls and restart recovery | Calls and check contexts are fixed at task creation; no repair or stage output binding |
+| Automation | Durable tasks, explicit candidate output binding, dependency-checked admission, sequential advancement, controls and recovery | Candidate edges require passing source checks; no repair-on-failure or general adaptive flow |
 | Workbench | Task controls and drill-down; sample capability reports from retained runs, branches or exact revisions | Explicit bounded queries, not a continuously maintained health dashboard |
 | Application | Ordinary workbench first use, installed adapters, registered author folders, notebook interpreter selection and stopped environment replacement | Native installers and physical authority shared across separate services remain separate work |
-| Recovery | Current-format backup/restore and non-mutating rejection of unsupported formats | Schema 96 is not a supported persistent-data baseline |
+| Recovery | Current-format backup/restore and non-mutating rejection of unsupported formats | Schema 97 is not a supported persistent-data baseline |
 
 See [configuration ownership](configuration-ownership.md),
 [target execution](architecture/target-execution.md),

@@ -1,8 +1,14 @@
 """Persist fixed task intent and admit one dependency-ready stage atomically."""
 
 import sqlite3
+from dataclasses import replace
 from datetime import UTC, datetime
 
+from scopecat.config.candidates import (
+    CandidateConfig,
+    resolve_candidate_config_snapshot,
+)
+from scopecat.config.changes import load_parameter_change_proposal
 from scopecat.daemon.calibration_checks import CalibrationTaskPreview
 from scopecat.daemon.calibration_tasks import (
     CalibrationTaskControl,
@@ -14,6 +20,10 @@ from scopecat.daemon.calibration_tasks import (
     CalibrationTaskView,
 )
 from scopecat.kernel.content_identity import sha256_json_hash
+from scopecat.kernel.errors import ProblemFailure
+from scopecat.project_state import ProjectStateServices
+from scopecat.records.candidate_input import AnalysisCandidateRunConfigSource
+from scopecat.records.config import config_content_hash
 
 from scopecat_server.errors import BackendConflict, BackendNotFound
 from scopecat_server.services.automation import AutomationService
@@ -32,11 +42,13 @@ class CalibrationTaskService:
         sqlite: SQLiteDatabase,
         automation: AutomationService,
         checks: CalibrationCheckQueries,
+        services: ProjectStateServices,
     ) -> None:
         self._sqlite = sqlite
         self._automation = automation
         self._checks = checks
         self._store = CalibrationTaskStore()
+        self._services = services
 
     def create(self, specification: CalibrationTaskCreate) -> CalibrationTaskView:
         with self._sqlite.write_transaction() as connection:
@@ -157,6 +169,69 @@ class CalibrationTaskService:
         stage_id: str,
     ) -> CalibrationTaskRecord:
         call = task.specification.calls[stage_id]
+        stage = next(
+            item for item in task.specification.plan.stages if item.id == stage_id
+        )
+        resolved = stage.check
+        if stage.candidate_from is not None:
+            source_stage = stage.candidate_from
+            progress = self._view(connection, task).progress
+            source = next(
+                item for item in progress.stages if item.id == source_stage.stage_id
+            )
+            evidence = source.evidence
+            if (
+                source.state != "passed"
+                or evidence is None
+                or evidence.analysis_record_id is None
+            ):
+                raise BackendConflict("candidate source stage has no accepted analysis")
+            try:
+                proposal = load_parameter_change_proposal(
+                    run_id=evidence.measurement.run_id,
+                    selector=source_stage.proposal_id,
+                    services=self._services,
+                )
+                if proposal.analysis_record_id != evidence.analysis_record_id:
+                    raise BackendConflict(
+                        "candidate must belong to the source stage's adopted analysis"
+                    )
+                config = resolve_candidate_config_snapshot(
+                    CandidateConfig(proposal), services=self._services
+                )
+            except ProblemFailure as error:
+                raise BackendConflict(
+                    "stage candidate output could not be resolved"
+                ) from error
+            binding = evidence.measurement.scientific_binding
+            expected = stage.check.context
+            if (
+                binding.subject != expected.subject
+                or binding.target_binding != expected.target_binding
+                or binding.setup_content_hash != expected.setup_content_hash
+                or binding.scenario != expected.scenario
+            ):
+                raise BackendConflict(
+                    "stage candidate changes the requested scientific context"
+                )
+            candidate = AnalysisCandidateRunConfigSource(
+                source_run_id=proposal.source_run_id,
+                proposal_id=proposal.id,
+                analysis_record_id=proposal.analysis_record_id,
+                base_config_content_hash=proposal.base_config_content_hash,
+                content_hash=config_content_hash(config),
+            )
+            resolved = stage.check.model_copy(
+                update={"context": replace(expected, parameters=candidate)}
+            )
+            call = call.model_copy(
+                update={
+                    "intent": {
+                        **call.intent,
+                        "calibration_check": resolved.model_dump(mode="json"),
+                    }
+                }
+            )
         key = "calibration-task:" + sha256_json_hash(
             {"task": task.specification.task_id, "stage": stage_id}
         )
@@ -174,6 +249,7 @@ class CalibrationTaskService:
         return task.model_copy(
             update={
                 "executions": {**task.executions, stage_id: run.procedure_run_id},
+                "resolved_checks": {**task.resolved_checks, stage_id: resolved},
                 "dispatch_errors": {
                     key: value
                     for key, value in task.dispatch_errors.items()
@@ -198,7 +274,8 @@ class CalibrationTaskService:
             progress=self._checks.preview_in_transaction(
                 connection,
                 CalibrationTaskPreview(
-                    plan=task.specification.plan, executions=task.executions
+                    plan=task.resolved_plan,
+                    executions=task.executions,
                 ),
             ),
         )

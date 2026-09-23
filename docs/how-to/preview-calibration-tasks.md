@@ -116,7 +116,7 @@ authority. No earlier unrelated execution is silently adopted. Ready independent
 stages can be dispatched separately if another stage has an admission problem.
 
 The task and associations survive daemon restarts and current-format backup and
-restore. Current development schema 96 stores task controls and indexes running
+restore. Current development schema 97 stores task controls and indexes running
 tasks; use a fresh data directory
 for this format and retain older stores with their original environments.
 
@@ -192,7 +192,55 @@ the task before issuing a different command after another operator changes it.
 The daemon recovers running tasks and admitted worker handoffs after restart;
 paused/cancelled tasks remain so. There is no automatic retry of scientific failures.
 
-Tasks do not switch setups, transfer predecessor outputs into later intents,
-refresh parameter branches or publish combined readiness. Calls are fixed at task
-creation. A repair or new observation needs a new task specification and ID.
-Adaptive parameter flow, bounded repair and scheduling policy remain separate work.
+Tasks do not switch setups, refresh branches or publish combined readiness.
+A repair or new observation needs a new task specification and ID. Bounded repair
+and scheduling policy remain separate work.
+
+## Bind a prerequisite's candidate output
+
+Use an explicit candidate edge when the next check must measure parameters fitted
+by a preceding stage:
+
+```python
+from scopecat.automation.calibration_tasks import (
+    CalibrationTaskStage,
+    StageCandidateOutput,
+)
+
+verification_stage = CalibrationTaskStage(
+    id="verify",
+    check=verification_template,
+    depends_on=("fit",),
+    candidate_from=StageCandidateOutput(stage_id="fit", proposal_id="frequency"),
+)
+```
+
+`verification_template` is the usual `CalibrationCheckRequest`. Its scope, subject,
+setup, scenario, mapping and result-step addresses remain fixed. `candidate_from`
+explicitly replaces its parameter input at admission; until then that input is a
+template, not a resolved context. The matching call still contains the template
+under `calibration_check` at task creation.
+
+The source must be an explicit prerequisite and pass. Its adopted check analysis
+must publish the named parameter proposal alongside the standard check result.
+Another analysis of the same run, a latest-analysis lookup or a different stage's
+result cannot substitute for that output. A failed or rejected source blocks the
+dependent stage; this feature is not a repair-on-failure loop.
+
+At dispatch the server validates the output and scientific binding, then replaces
+only `intent.calibration_check.context.parameters` with the exact candidate source.
+Procedure code must consume this incoming declaration; parameter copies in other
+intent fields are not rewritten. The child measurement is checked against the
+admitted candidate, so code that accidentally keeps the template input is rejected.
+
+The resolved check and execution association commit together. `task.task.resolved_checks`
+retains the inputs; `task.task.resolved_plan` overlays them on the immutable
+specification for Python inspection and previews. Undispatched candidate stages
+remain templates. Restart/retry reuses the admitted check and procedure. An admission
+failure retains no partial binding; automatic advancement records the error until
+explicit resume, while independent work can proceed.
+
+The workbench shows the source stage/proposal while binding is pending and exposes
+the frozen candidate context and evidence query only after admission. Binding does
+not update the daily branch or certify the proposed values; verification and
+optimistically fenced publication remain explicit operations.

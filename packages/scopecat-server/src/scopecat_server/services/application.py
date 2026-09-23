@@ -119,7 +119,7 @@ class DaemonApplication:
             SQLiteRunRepository(project_store.sqlite, project_store.objects.root),
         )
         self.calibration_tasks = CalibrationTaskService(
-            project_store.sqlite, automation, self.calibration_checks
+            project_store.sqlite, automation, self.calibration_checks, services
         )
         self.calibration_profiles = CalibrationProfileService(
             project_store.sqlite, self.calibration_checks

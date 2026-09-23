@@ -115,10 +115,11 @@ discarding the chain; restoring its analysis records preserves the ordered sourc
 `combine()` remains the separate operation for sibling proposals from one base,
 where conflicting edits are rejected rather than applied in sequence.
 
-This is the retained candidate flow, not yet automatic parameter flow between
-background calibration-task stages. A fixed check can now capture the candidate
-through `lab.resolve_context(candidate=combined).context`; binding an output that
-will only exist after another stage finishes remains separate work.
+This API retains a completed candidate chain. A fixed check can capture it through
+`lab.resolve_context(candidate=combined).context`. For an output that will only
+exist after a prerequisite finishes, use an explicit
+[task candidate edge](preview-calibration-tasks.md#bind-a-prerequisites-candidate-output).
+That edge binds input; it does not automatically aggregate a chain or publish it.
 
 Preview retains the exact candidate, scientific binding and executable setup
 content. A parameter-only default change does not invalidate that fixed candidate;

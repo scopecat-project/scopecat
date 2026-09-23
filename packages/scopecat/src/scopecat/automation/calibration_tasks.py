@@ -13,15 +13,30 @@ from scopecat.automation.models import ProcedureRun
 from scopecat.records.calibration_check import CalibrationCheckRequest
 
 
+class StageCandidateOutput(BaseModel):
+    """Candidate from the exact analysis adopted by a prerequisite check."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    stage_id: str = Field(min_length=1)
+    proposal_id: str = Field(min_length=1)
+
+
 class CalibrationTaskStage(BaseModel):
+    """A fixed check, or a template whose parameter input comes from a prior stage.
+
+    Candidate binding replaces only check.context.parameters; all other fields
+    stay fixed. Until binding, that parameter input is not execution evidence.
+    """
+
     model_config = ConfigDict(extra="forbid", frozen=True)
     id: str = Field(min_length=1)
     check: CalibrationCheckRequest
     depends_on: tuple[str, ...] = ()
+    candidate_from: StageCandidateOutput | None = None
 
 
 class CalibrationTaskPlan(BaseModel):
-    """Explicit target-expanded checks; every stage retains its own context."""
+    """Explicit checks and candidate edges; admission freezes each stage's input."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
     stages: tuple[CalibrationTaskStage, ...] = Field(min_length=1, max_length=256)
@@ -32,6 +47,11 @@ class CalibrationTaskPlan(BaseModel):
         if len(ids) != len(self.stages):
             raise ValueError("task stage IDs must be unique")
         for stage in self.stages:
+            if (
+                stage.candidate_from is not None
+                and stage.candidate_from.stage_id not in stage.depends_on
+            ):
+                raise ValueError("candidate source must be an explicit prerequisite")
             if len(stage.depends_on) != len(set(stage.depends_on)):
                 raise ValueError("task stage dependencies must be unique")
             if not set(stage.depends_on) <= ids:

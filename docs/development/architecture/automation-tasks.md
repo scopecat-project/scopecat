@@ -3,7 +3,8 @@
 Status: declared checks, stage previews, durable fixed task specifications,
 dependency-checked dispatch and sequential background advancement with task controls
 are implemented. Bounded capability reports and sample/task workbench consumers
-also exist. Continuous maintenance, parameter flow and large-scale scheduling remain.
+also exist. Explicit candidate edges now bind a passing prerequisite's adopted
+proposal to a later check. Adaptive repair and large-scale scheduling remain.
 See the [implementation order](../platform-status.md) and
 [parameter-flow contract](task-parameter-flow.md).
 
@@ -208,8 +209,9 @@ Required next contracts:
 1. Larger-history traversal and panel refresh policies beyond the bounded history
    facade. Pages have read-snapshot consistency and a final batch comparison;
    consumers must still use write-time authority checks when acting on observations.
-2. Add parameter-flow contracts and bounded repair loops above fixed-stage
-   advancement. Explicit partial-completion projections and task controls exist.
+2. Extend explicit candidate-output binding to a complete multi-stage calibration
+   and final publication journey, then add bounded repair loops. Partial-completion
+   projections and task controls exist; a rejected source is not yet a repair trigger.
    Avoid one giant procedure containing every target and an unbounded maintenance loop.
 3. Parameter-read contracts, including query membership
    and physical interactions. Exact revision matching remains conservative until

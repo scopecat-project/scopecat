@@ -16,6 +16,7 @@ from scopecat.automation.calibration import CheckEvidence
 from scopecat.automation.calibration_tasks import (
     CalibrationTaskPlan,
     CalibrationTaskStage,
+    StageCandidateOutput,
     assess_calibration_task,
 )
 from scopecat.daemon.calibration_checks import CalibrationTaskPreview
@@ -81,6 +82,34 @@ def _execution(
     )
     return run, None if passed is None else CheckEvidence(
         measured, stage.check.scope, "report", passed
+    )
+
+
+def test_candidate_source_requires_explicit_dependency() -> None:
+    source = _stage("fit")
+    consumer = _stage("verify").model_copy(
+        update={
+            "candidate_from": StageCandidateOutput(
+                stage_id="fit", proposal_id="frequency"
+            ),
+        }
+    )
+    with pytest.raises(ValidationError, match="explicit prerequisite"):
+        CalibrationTaskPlan(stages=(source, consumer))
+    assert (
+        CalibrationTaskPlan(
+            stages=(
+                source,
+                consumer.model_copy(
+                    update={
+                        "depends_on": ("fit",),
+                    }
+                ),
+            )
+        )
+        .stages[1]
+        .candidate_from
+        is not None
     )
 
 

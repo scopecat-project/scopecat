@@ -235,9 +235,12 @@ function TaskDetail({
           )}
           <ol className="space-y-3">
             {view.progress.stages.map((stage) => {
-              const planned = view.task.specification.plan.stages.find(
+              const specification = view.task.specification.plan.stages.find(
                 (item) => item.id === stage.id,
               )!;
+              const resolved = view.task.resolved_checks?.[stage.id];
+              const pendingBinding = Boolean(specification.candidate_from && !resolved);
+              const planned = { ...specification, check: resolved ?? specification.check };
               const admissionError = view.task.dispatch_errors?.[stage.id];
               return (
                 <li key={stage.id} className="border rounded p-3 space-y-1">
@@ -277,22 +280,31 @@ function TaskDetail({
                       Open execution for {stage.id}
                     </button>
                   )}
-                  <details>
-                    <summary>Frozen measurement context</summary>
-                    <dl className="text-sm space-y-1 break-all">
-                      <dt>Parameters</dt>
-                      <dd>{contextParameterLabel(planned.check.context.parameters)}</dd>
-                      <dt>Measurement subject</dt>
-                      <dd>{subjectName(planned.check.context.subject)}</dd>
-                      <dt>Execution scenario</dt>
-                      <dd>{planned.check.context.scenario?.label ?? "Physical equipment"}</dd>
-                      <dt>Setup fingerprint</dt>
-                      <dd>{planned.check.context.setup_content_hash}</dd>
-                      <dt>Parameter fingerprint</dt>
-                      <dd>{planned.check.context.parameters.content_hash}</dd>
-                    </dl>
-                  </details>
-                  <CalibrationEvidence stage={planned} onProcedure={onProcedure} />
+                  {pendingBinding ? (
+                    <p>
+                      Waiting for candidate {specification.candidate_from!.proposal_id} from stage{" "}
+                      {specification.candidate_from!.stage_id}. Parameter input is not bound yet.
+                    </p>
+                  ) : (
+                    <>
+                      <details>
+                        <summary>Frozen measurement context</summary>
+                        <dl className="text-sm space-y-1 break-all">
+                          <dt>Parameters</dt>
+                          <dd>{contextParameterLabel(planned.check.context.parameters)}</dd>
+                          <dt>Measurement subject</dt>
+                          <dd>{subjectName(planned.check.context.subject)}</dd>
+                          <dt>Execution scenario</dt>
+                          <dd>{planned.check.context.scenario?.label ?? "Physical equipment"}</dd>
+                          <dt>Setup fingerprint</dt>
+                          <dd>{planned.check.context.setup_content_hash}</dd>
+                          <dt>Parameter fingerprint</dt>
+                          <dd>{planned.check.context.parameters.content_hash}</dd>
+                        </dl>
+                      </details>
+                      <CalibrationEvidence stage={planned} onProcedure={onProcedure} />
+                    </>
+                  )}
                 </li>
               );
             })}

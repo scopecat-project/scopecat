@@ -250,11 +250,12 @@ measured execution cost. Do not infer parallel safety from distinct target IDs.
    evidence pages and bounded batch
    observation checks are implemented. Avoid a second analysis/evidence store.
 3. **Fixed tasks implemented:** target-expanded stage plans declare exact checks
-   and dependencies, with explicit partial completion. Tasks persist fixed calls
+   and dependencies, with explicit partial completion. Tasks persist call templates
    and enforce prerequisites when dispatching each stage atomically. See
    [staged tasks](../how-to/preview-calibration-tasks.md). Sequential daemon advancement
-   and fenced start/pause/cancel controls are implemented. Parameter flow and bounded
-   repair remain to be built. Keep
+   and fenced start/pause/cancel controls are implemented. Explicit candidate edges
+   now bind passing stages' adopted proposals to later check inputs atomically.
+   A complete calibration/publication journey and bounded repair remain. Keep
    planning separate from resource dispatch and scientific policy.
 4. Bounded sample/task reports already show required, available and blocked
    capabilities with evidence. Add continuous refresh, check-first maintenance and
