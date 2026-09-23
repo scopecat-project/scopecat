@@ -8,7 +8,9 @@ import pytest
 from scopecat.automation.calibration import (
     CalibrationContext,
     CalibrationScope,
+    CheckEvidence,
     assess_calibration_check,
+    select_calibration_check,
 )
 from scopecat.kernel.content_identity import sha256_json_hash
 from scopecat.kernel.run_outcome import RunOutcome
@@ -220,3 +222,137 @@ def test_age_policy_is_explicit(
             now=START,
             max_age=timedelta(0),
         )
+
+
+def later_run(measured: RunSnapshot, *, complete: bool = True) -> RunSnapshot:
+    return measured.model_copy(
+        update={
+            "run_id": "check-2",
+            "created_at": START + timedelta(minutes=1),
+            "outcome": RunOutcome(
+                run_id="check-2",
+                result="succeeded",
+                certainty="known",
+                finished_at=START + timedelta(minutes=1),
+            )
+            if complete
+            else None,
+        }
+    )
+
+
+@pytest.mark.parametrize("reverse", [False, True])
+def test_selection_never_falls_back_from_newer_negative_evidence(
+    observation: tuple[RunSnapshot, CalibrationContext],
+    reverse: bool,
+) -> None:
+    measured, current = observation
+    old = CheckEvidence(measured, SCOPE, "old-pass", True)
+    newer = CheckEvidence(
+        later_run(measured),
+        SCOPE,
+        "new-fail",
+        False,
+    )
+    evidence = (newer, old) if reverse else (old, newer)
+    selected = select_calibration_check(
+        evidence,
+        requested_scope=SCOPE,
+        current=current,
+        now=START + timedelta(minutes=2),
+        max_age=timedelta(hours=1),
+        history_complete=True,
+    )
+    assert selected.status == "out_of_spec"
+    assert selected.evidence == newer
+    # Expiry cannot resurrect an even older positive observation.
+    expired = select_calibration_check(
+        evidence,
+        requested_scope=SCOPE,
+        current=current,
+        now=START + timedelta(hours=2),
+        max_age=timedelta(hours=1),
+        history_complete=True,
+    )
+    assert expired.status == "recheck"
+    assert expired.evidence == newer
+
+
+def test_selection_blocks_incomplete_attempt_and_incomplete_query(
+    observation: tuple[RunSnapshot, CalibrationContext],
+) -> None:
+    measured, current = observation
+    old = CheckEvidence(measured, SCOPE, "old-pass", True)
+    pending = CheckEvidence(
+        later_run(measured, complete=False),
+        SCOPE,
+        None,
+        None,
+    )
+    selected = select_calibration_check(
+        (old, pending),
+        requested_scope=SCOPE,
+        current=current,
+        now=START + timedelta(minutes=2),
+        max_age=timedelta(hours=1),
+        history_complete=True,
+    )
+    assert selected.status == "unknown"
+    assert selected.evidence == pending
+    assert selected.assessment is not None
+    assert set(selected.assessment.reasons) == {
+        "analysis_missing",
+        "measurement_incomplete",
+    }
+    truncated = select_calibration_check(
+        (old,),
+        requested_scope=SCOPE,
+        current=current,
+        now=START,
+        max_age=timedelta(hours=1),
+        history_complete=False,
+    )
+    assert truncated.reason == "incomplete_history"
+    assert truncated.status == "unknown"
+
+
+def test_selection_filters_context_but_does_not_choose_between_reanalyses(
+    observation: tuple[RunSnapshot, CalibrationContext],
+) -> None:
+    measured, current = observation
+    old = CheckEvidence(measured, SCOPE, "first-analysis", True)
+    other = CheckEvidence(
+        later_run(measured),
+        replace(SCOPE, targets=("q2",)),
+        "other-target",
+        False,
+    )
+    selected = select_calibration_check(
+        (old, other),
+        requested_scope=SCOPE,
+        current=current,
+        now=START + timedelta(minutes=2),
+        max_age=timedelta(hours=1),
+        history_complete=True,
+    )
+    assert selected.evidence == old
+    assert selected.status == "usable"
+    ambiguous = select_calibration_check(
+        (old, replace(old, analysis_record_id="reanalysis", passed=False)),
+        requested_scope=SCOPE,
+        current=current,
+        now=START + timedelta(minutes=2),
+        max_age=timedelta(hours=1),
+        history_complete=True,
+    )
+    assert ambiguous.status == "unknown"
+    assert ambiguous.reason == "ambiguous_latest"
+    empty = select_calibration_check(
+        (other,),
+        requested_scope=SCOPE,
+        current=current,
+        now=START + timedelta(minutes=2),
+        max_age=timedelta(hours=1),
+        history_complete=True,
+    )
+    assert empty.reason == "no_matching_evidence"

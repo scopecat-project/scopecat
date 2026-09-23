@@ -10,6 +10,9 @@ the parameter branch. Read the scientific result separately from execution statu
 The final check cells retain their capability scope and demonstrate exact-context
 applicability: policy/parameter changes and age require a new check. This is an
 explicit laboratory policy input, not automatic repair or publication permission.
+The example also selects from its two retained checks: a newer failing check must
+not be hidden by an older passing result. Production history queries must include
+unfinished/failed checks and report whether their result set is complete.
 Then use **联合校准与耦合验证** (`joint-calibration`) to observe two individually
 accepted candidates fail together under a declared synthetic coupling model.
 It also demonstrates missing target coverage and recovery after composition.

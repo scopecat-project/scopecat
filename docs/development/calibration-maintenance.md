@@ -69,7 +69,7 @@ This assessor is an advisory primitive for trusted orchestration code within one
 catalog. Callers obtain the scientific result and checked scope from the retained
 analysis of the supplied run, and construct the requested context independently.
 It does not authenticate arbitrary caller-supplied facts, authorize publication,
-select the latest relevant check, or prove complete scientific coverage. The
+or prove complete scientific coverage. The
 current exact-revision rule is deliberately conservative; it must not become a
 permanent substitute for parameter dependency capture. There is no new store.
 
@@ -77,6 +77,29 @@ The calibration notebook retains scope with its typed check result and exercises
 policy changes, parameter changes and expiry. Teaching setups explicitly declare
 their software computation scenario; their evidence cannot become physical-device
 evidence by omitting a sample binding.
+
+### Selecting retained checks
+
+`select_calibration_check()` accepts `CheckEvidence` projections from the owning
+catalog and an explicit `history_complete` declaration. It filters known context
+mismatches, then selects the latest matching run by creation time. This is an
+explicit conservative ordering policy, not a measurement timestamp inferred from
+analysis publication. The returned selection carries the analysis reference,
+assessment and selection reason; it creates no new evidence record.
+
+A newer negative check supersedes an older positive check. A newer unfinished
+attempt or missing analysis blocks reuse with `unknown`; an expired latest check
+requires rechecking. The selector never searches backward for a passing result.
+Different equally recent records (including competing reanalyses of one run)
+return `ambiguous_latest` until the caller explicitly resolves their authority.
+No matching history returns `no_matching_evidence`.
+
+An incomplete/truncated history returns `incomplete_history`, regardless of the
+visible results. A query that retrieves only successful analyses is insufficient:
+include failed/unfinished requested checks with their original scope and no result.
+The current selector does not query the daemon or establish query completeness.
+The teaching notebook supplies both checks from its known bounded exercise and
+demonstrates that reversing input order cannot resurrect the earlier passing check.
 
 ## Dependency capture has explicit limits
 
@@ -139,10 +162,10 @@ measured execution cost. Do not infer parallel safety from distinct target IDs.
 
 1. **Done:** check-only retained evidence using existing runs, analysis and durable
    procedures; passing and negative scientific outcomes leave the branch unchanged.
-2. **Partially implemented:** scoped checks and exact-context applicability with
-   inspectable reasons. Still needed: capability requirements/dependencies,
-   evidence selection and resolved parameter dependency capture. Avoid a second
-   analysis/evidence store.
+2. **Partially implemented:** scoped checks, exact-context applicability and
+   selection from explicit complete histories, with inspectable reasons. Still
+   needed: capability requirements/dependencies, catalog query integration and
+   resolved parameter dependency capture. Avoid a second analysis/evidence store.
 3. Build target-expanded, staged plans on the durable procedure machinery, with
    bounded recovery and explicit partial completion. Keep planning separate from
    resource dispatch and scientific policy.

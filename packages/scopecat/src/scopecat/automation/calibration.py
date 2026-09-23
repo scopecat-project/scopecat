@@ -48,6 +48,7 @@ class CalibrationContext:
 
 
 type CheckReason = Literal[
+    "analysis_missing",
     "measurement_incomplete",
     "parameters_unsaved",
     "subject_unbound",
@@ -65,11 +66,13 @@ type CheckReason = Literal[
     "out_of_spec",
 ]
 
+type CheckStatus = Literal["usable", "out_of_spec", "recheck", "unknown"]
+
 
 @dataclass(frozen=True)
 class CheckAssessment:
     run_id: str
-    status: Literal["usable", "out_of_spec", "recheck", "unknown"]
+    status: CheckStatus
     reasons: tuple[CheckReason, ...]
 
 
@@ -78,7 +81,7 @@ def assess_calibration_check(
     *,
     checked_scope: CalibrationScope,
     requested_scope: CalibrationScope,
-    passed: bool,
+    passed: bool | None,
     current: CalibrationContext,
     now: datetime,
     max_age: timedelta,
@@ -97,6 +100,8 @@ def assess_calibration_check(
 
     unknown: list[CheckReason] = []
     changed: list[CheckReason] = []
+    if passed is None:
+        unknown.append("analysis_missing")
     outcome = measurement.outcome
     if outcome is None or outcome.result != "succeeded":
         unknown.append("measurement_incomplete")
@@ -140,3 +145,90 @@ def assess_calibration_check(
         "usable" if passed else "out_of_spec",
         ("within_spec" if passed else "out_of_spec",),
     )
+
+
+@dataclass(frozen=True)
+class CheckEvidence:
+    """Read projection of a retained check, including attempts without a result.
+
+    Scope comes from the analysis (or the original check request if unfinished).
+    The caller resolves the analysis belonging to this measurement. References
+    are retained for inspection, not authenticated by this pure selector.
+    """
+
+    measurement: RunSnapshot
+    scope: CalibrationScope
+    analysis_record_id: str | None
+    passed: bool | None
+
+
+@dataclass(frozen=True)
+class CheckSelection:
+    status: CheckStatus
+    reason: Literal[
+        "latest_matching",
+        "no_matching_evidence",
+        "ambiguous_latest",
+        "incomplete_history",
+    ]
+    evidence: CheckEvidence | None = None
+    assessment: CheckAssessment | None = None
+
+
+_CONTEXT_CHANGES: frozenset[CheckReason] = frozenset(
+    {
+        "capability_changed",
+        "targets_changed",
+        "conditions_changed",
+        "policy_changed",
+        "parameters_changed",
+        "subject_changed",
+        "setup_changed",
+        "scenario_changed",
+    }
+)
+
+
+def select_calibration_check(
+    evidence: tuple[CheckEvidence, ...],
+    *,
+    requested_scope: CalibrationScope,
+    current: CalibrationContext,
+    now: datetime,
+    max_age: timedelta,
+    history_complete: bool,
+) -> CheckSelection:
+    """Select by run creation time, never by success or analysis publication time.
+
+    The supplied history must include unsuccessful/unfinished relevant attempts,
+    not just published positive results. A truncated or otherwise incomplete query
+    cannot establish readiness. Distinct equally recent records are ambiguous;
+    callers must resolve their authority rather than using incidental ID order.
+    """
+    if now.utcoffset() is None or max_age <= timedelta(0):
+        raise ValueError("selection requires an aware time and positive maximum age")
+    if not history_complete:
+        return CheckSelection("unknown", "incomplete_history")
+    matching: list[tuple[CheckEvidence, CheckAssessment]] = []
+    for item in evidence:
+        assessment = assess_calibration_check(
+            item.measurement,
+            checked_scope=item.scope,
+            requested_scope=requested_scope,
+            passed=item.passed if item.analysis_record_id is not None else None,
+            current=current,
+            now=now,
+            max_age=max_age,
+        )
+        if not _CONTEXT_CHANGES.intersection(assessment.reasons):
+            matching.append((item, assessment))
+    if not matching:
+        return CheckSelection("unknown", "no_matching_evidence")
+    latest_time = max(item.measurement.created_at for item, _ in matching)
+    latest = [
+        pair for pair in matching if pair[0].measurement.created_at == latest_time
+    ]
+    selected, assessment = latest[0]
+    if any(item != selected for item, _ in latest[1:]):
+        return CheckSelection("unknown", "ambiguous_latest")
+    return CheckSelection(assessment.status, "latest_matching", selected, assessment)
