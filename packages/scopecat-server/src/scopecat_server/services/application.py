@@ -16,6 +16,7 @@ from scopecat.daemon.wire import (
 from scopecat.runtime_binding import load_runtime_binding
 
 from scopecat_server.storage.sqlite.apparatus_history import ApparatusHistoryStore
+from scopecat_server.storage.sqlite.calibration_checks import CalibrationCheckStore
 from scopecat_server.storage.sqlite.experiment_plan_repository import (
     ExperimentPlanRepository,
 )
@@ -107,6 +108,7 @@ class DaemonApplication:
         self.payloads = payloads
         self.reviews = reviews
         self.automation = automation
+        self.calibration_checks = CalibrationCheckStore(project_store.sqlite)
 
         self.procedure_schedules = procedure_schedules
         self.point_plans = point_plans

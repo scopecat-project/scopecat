@@ -5,6 +5,7 @@ from dataclasses import replace
 from pathlib import Path
 
 import pytest
+from fastapi.testclient import TestClient
 from scopecat.analysis.calibration import CHECK_RESULT
 from scopecat.automation import (
     AnalysisPublicationOutputRef,
@@ -19,6 +20,10 @@ from scopecat.automation import (
 )
 from scopecat.config.scientific_binding import bind_scientific_evidence
 from scopecat.control.models import RunPlanSummary
+from scopecat.daemon.calibration_checks import (
+    CalibrationCheckPage,
+    CalibrationCheckQuery,
+)
 from scopecat.daemon.wire import (
     AnalysisFactOutputPayload,
     AnalysisSaveCommand,
@@ -220,6 +225,101 @@ def test_rejects_invalid_declarations_without_queueing(check_case: CheckCase) ->
             )
         )
     assert service.list(ProcedureRunListQuery()).items == ()
+    assert (
+        runtime.application.calibration_checks.query(CalibrationCheckQuery()).items
+        == ()
+    )
+
+
+def test_indexed_check_query_filters_before_pagination(check_case: CheckCase) -> None:
+    runtime, declaration, child = check_case
+    app = runtime.application
+    other_parameters = app.config.save_parameters(
+        ParameterSaveCommand(
+            revision_id="second",
+            catalog=child.config.parameter_catalog,
+            parameters=child.config.parameter_snapshot,
+            actor="test",
+        )
+    )
+    declarations = (
+        declaration,
+        declaration.model_copy(
+            update={"scope": replace(declaration.scope, capability="drive")}
+        ),
+        declaration.model_copy(
+            update={
+                "context": replace(declaration.context, parameters=other_parameters.ref)
+            }
+        ),
+        declaration,
+    )
+    checks = tuple(
+        app.automation.submit(
+            _command(item).model_copy(update={"request_key": f"check-{index}"})
+        ).run
+        for index, item in enumerate(declarations)
+    )
+    # New ordinary work must neither fill a domain page nor move its head.
+    for index in range(8):
+        app.automation.submit(
+            _command(declaration).model_copy(
+                update={
+                    "request_key": f"ordinary-{index}",
+                    "intent": {},
+                }
+            )
+        )
+    with TestClient(runtime.app()) as client:
+
+        def query(value: CalibrationCheckQuery) -> CalibrationCheckPage:
+            response = client.post(
+                "/api/v1/calibration-checks/query", json=value.model_dump(mode="json")
+            )
+            assert response.status_code == 200, response.text
+            return CalibrationCheckPage.model_validate(response.json())
+
+        filtered = CalibrationCheckQuery(
+            scope=declaration.scope, context=declaration.context, limit=1
+        )
+        page = query(filtered)
+        assert page.items == (checks[3],)
+        assert page.next_cursor is not None
+        tail = query(filtered.model_copy(update={"cursor": page.next_cursor}))
+        assert tail.items == (checks[0],)
+        assert tail.next_cursor is None
+        assert query(CalibrationCheckQuery()).items == tuple(reversed(checks))
+        assert query(CalibrationCheckQuery(scope=declaration.scope)).items == (
+            checks[3],
+            checks[2],
+            checks[0],
+        )
+        assert query(CalibrationCheckQuery(context=declaration.context)).items == (
+            checks[3],
+            checks[1],
+            checks[0],
+        )
+        assert (
+            query(
+                CalibrationCheckQuery(
+                    scope=replace(declaration.scope, conditions="absent")
+                )
+            ).items
+            == ()
+        )
+        acquired = app.automation.acquire_lease(
+            ProcedureWorkerLeaseAcquireCommand(
+                procedure_run_id=checks[3].procedure_run_id,
+                worker_id="test",
+                expected_run_revision=checks[3].revision,
+            )
+        )
+        assert query(filtered).items == (acquired.run,)
+        # An idempotent submit cannot duplicate the projection.
+        app.automation.submit(
+            _command(declaration).model_copy(update={"request_key": "check-3"})
+        )
+        assert len(query(CalibrationCheckQuery()).items) == 4
 
 
 def test_exact_retry_survives_setup_change(check_case: CheckCase) -> None:

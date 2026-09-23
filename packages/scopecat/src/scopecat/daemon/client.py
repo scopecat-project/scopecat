@@ -74,6 +74,10 @@ from scopecat.control.models import (
     EventPage,
     RunExecutionSegmentPage,
 )
+from scopecat.daemon.calibration_checks import (
+    CalibrationCheckPage,
+    CalibrationCheckQuery,
+)
 from scopecat.daemon.hardware_receipt_wire import (
     decode_collect_receipt,
     decode_run_hardware_receipt,
@@ -585,6 +589,15 @@ class DaemonClient:
             f"{_API_PREFIX}/procedures",
             command,
             ProcedureSubmitReceipt,
+        )
+
+    def query_calibration_checks(
+        self, query: CalibrationCheckQuery
+    ) -> CalibrationCheckPage:
+        return self._post_model(
+            f"{_API_PREFIX}/calibration-checks/query",
+            query,
+            CalibrationCheckPage,
         )
 
     def list_procedures(

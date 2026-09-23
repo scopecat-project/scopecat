@@ -87,6 +87,10 @@ from scopecat.control.models import (
     EventPage,
     RunExecutionSegmentPage,
 )
+from scopecat.daemon.calibration_checks import (
+    CalibrationCheckPage,
+    CalibrationCheckQuery,
+)
 from scopecat.daemon.endpoint import (
     DAEMON_SHUTDOWN_PATH,
     DAEMON_SHUTDOWN_TOKEN_HEADER,
@@ -1715,6 +1719,10 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
     ) -> ProcedureScheduleMaterializeReceipt:
         _require_procedure_schedule_id(schedule_id, command.schedule_id)
         return application.procedure_schedules.materialize(command)
+
+    @app.post(f"{_API_PREFIX}/calibration-checks/query")
+    def query_calibration_checks(query: CalibrationCheckQuery) -> CalibrationCheckPage:
+        return application.calibration_checks.query(query)
 
     @app.get(f"{_API_PREFIX}/procedures")
     def list_procedures(

@@ -126,6 +126,22 @@ try:
                 assert declared.request == other_intent.calibration_check
                 assert checks.history(context=namespace["current"]).complete
                 other.resume()
+                absent = checks.history(
+                    scope=replace(
+                        other_intent.calibration_check.scope,
+                        conditions="never-requested",
+                    ),
+                    max_requests=1,
+                )
+                assert absent.complete and absent.scanned == 0
+                exact = checks.history(context=other_intent.calibration_check.context)
+                assert exact.complete
+                budgeted = checks.history(
+                    context=other_intent.calibration_check.context,
+                    max_requests=len(exact.requests), page_size=1,
+                )
+                assert budgeted.complete
+                assert budgeted.scanned == len(exact.requests)
                 expected_runs += 2
             assert len(lab.runs().items) == expected_runs
             assert lab.config.registry().entries == ()

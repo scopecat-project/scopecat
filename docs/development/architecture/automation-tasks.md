@@ -68,9 +68,14 @@ not a restriction on saving independent analyses of the same run.
 
 The standard schema lives in `scopecat.analysis.calibration`; the author-facing
 `scopecat.api.calibration_checks.CHECK_RESULT` exposes the same contract. Historical
-queries also check result scope and measurement context. History remains a
-client-side bounded journal scan, not an indexed server domain query. Indexed
-queries and task-level dispatch contracts remain future work.
+queries also check result scope and measurement context. Declaration queries use
+the server's `calibration_check_requests` projection, with indexed exact scope,
+context and combined filters before keyset pagination. The projection is written
+in the request admission transaction and joins current procedure state; it does
+not duplicate scientific evidence. The client still resolves runs and analyses
+and checks observed revisions and the filtered head. Pages are observational,
+not a cross-request snapshot or authorization to publish. Schema 89 introduces
+the index without backfilling prebaseline stores.
 
 ## Panel requirements
 
@@ -94,9 +99,9 @@ making task boundaries explicit; add concurrency only after those boundaries wor
 
 Required next contracts:
 
-1. Indexed server domain queries, including consistent pagination
-   and declarations for pending work. The current bounded journal scan is not a
-   large-catalog query strategy.
+1. Server evidence projections and an explicit consistency contract spanning
+   pages. Indexed declaration queries now include pending work; clients still
+   retrieve individual evidence and conservatively report concurrent changes.
 2. Task/stage/target relationships with frozen intent, explicit partial completion,
    bounded repair loops and independently dispatchable units. Avoid one giant
    procedure containing every target and an unbounded maintenance loop.

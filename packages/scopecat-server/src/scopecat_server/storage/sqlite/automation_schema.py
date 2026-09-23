@@ -50,6 +50,19 @@ ON procedure_runs(
     sequence
 );
 
+CREATE TABLE IF NOT EXISTS calibration_check_requests (
+    sequence INTEGER PRIMARY KEY REFERENCES procedure_runs(sequence) ON DELETE CASCADE,
+    scope_hash TEXT NOT NULL,
+    context_hash TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS calibration_checks_scope_sequence
+ON calibration_check_requests(scope_hash, sequence);
+CREATE INDEX IF NOT EXISTS calibration_checks_context_sequence
+ON calibration_check_requests(context_hash, sequence);
+CREATE INDEX IF NOT EXISTS calibration_checks_scope_context_sequence
+ON calibration_check_requests(scope_hash, context_hash, sequence);
+
 CREATE TABLE IF NOT EXISTS procedure_step_attempts (
     sequence INTEGER PRIMARY KEY AUTOINCREMENT,
     procedure_run_id TEXT NOT NULL

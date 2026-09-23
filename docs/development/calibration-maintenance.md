@@ -134,8 +134,7 @@ context and verifies that the adopted analysis belongs to that measurement and
 contains the declared standard fact with matching scope. Invalid evidence cannot
 advance the procedure revision; a valid negative result can. Independent analysis
 publications remain available even if they cannot be adopted as check results.
-The history reader also validates scope and context. Indexed domain queries
-remain follow-up work.
+The history reader also validates scope and context.
 
 `CalibrationCheckHistory` reports evidence, unresolved request IDs, scanned count
 and `incomplete_reasons`: `scan_limit`, `unresolved_checks` or `journal_changed`.
@@ -146,11 +145,16 @@ observed request revisions and the journal head detects changes during reading;
 this is still an observational query, not a transaction fence or permission to
 publish. A new request can arrive after the query returns.
 
-The current implementation scans the general procedure journal with an explicit
-budget (200 requests by default). Unrelated requests count toward that budget;
-there is no specialized calibration index or large-catalog completeness claim.
-Before scaling maintenance, add server-side scope queries with an explicit
-consistency contract, retaining this bounded failure behavior.
+`POST /api/v1/calibration-checks/query` pages admitted checks using an indexed
+projection written atomically with the procedure. Exact scope and context filters
+run before pagination. All execution states are included; ordinary procedures and
+nonmatching checks do not consume the history budget (200 matching requests by
+default). Hashes identify canonical declaration JSON, not Python class identity.
+Evidence is still resolved from retained runs and analyses. Each page observes
+current execution state; cross-page reads are not a transaction snapshot. Revision
+and filtered-head rechecks retain conservative incomplete-history reporting.
+Development schema 89 adds this projection without a prebaseline backfill or
+migration. Earlier stores remain untouched and require their historical environment.
 
 The real-daemon notebook journey covers pagination, scan-budget exhaustion,
 unstarted check declarations, filtering another parameter context and history

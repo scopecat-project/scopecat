@@ -13,7 +13,7 @@ from scopecat.automation.calibration import (
     CheckSelection,
     select_calibration_check,
 )
-from scopecat.automation.wire import ProcedureRunListQuery
+from scopecat.daemon.calibration_checks import CalibrationCheckQuery
 from scopecat.daemon.client import DaemonClient
 from scopecat.kernel.frozen import thaw_json_value
 from scopecat.records.calibration_check import (
@@ -67,9 +67,9 @@ class CalibrationCheckHistory:
 
 
 class LabCalibrationChecks:
-    """Bounded domain queries over declared checks in the procedure journal.
+    """Bounded domain queries over server-indexed check declarations.
 
-    This adapter is observational, not a publication fence or a specialized index.
+    This adapter is observational, not a publication fence or transaction snapshot.
     Only the standard calibration_check intent declaration identifies a check.
     Opaque procedures are not inferred from names or Python definitions.
     """
@@ -103,8 +103,10 @@ class LabCalibrationChecks:
         first_id: str | None = None
         exhausted = False
         while scanned < max_requests:
-            page = self._client.list_procedures(
-                ProcedureRunListQuery(
+            page = self._client.query_calibration_checks(
+                CalibrationCheckQuery(
+                    scope=scope,
+                    context=context,
                     limit=min(page_size, max_requests - scanned),
                     cursor=cursor,
                 )
@@ -113,15 +115,9 @@ class LabCalibrationChecks:
                 first_id = page.items[0].procedure_run_id
             scanned += len(page.items)
             for run in page.items:
-                if "calibration_check" not in run.intent:
-                    continue
                 request = CalibrationCheckRequest.model_validate(
                     thaw_json_value(run.intent["calibration_check"])
                 )
-                if (scope is not None and request.scope != scope) or (
-                    context is not None and request.context != context
-                ):
-                    continue
                 requests.append(DeclaredCheck(run, request))
                 item = self._read(run, request)
                 if item is None:
@@ -139,7 +135,9 @@ class LabCalibrationChecks:
                 changed = True
                 if run.procedure_run_id not in unresolved:
                     unresolved.append(run.procedure_run_id)
-        latest = self._client.list_procedures(ProcedureRunListQuery(limit=1))
+        latest = self._client.query_calibration_checks(
+            CalibrationCheckQuery(scope=scope, context=context, limit=1)
+        )
         latest_id = latest.items[0].procedure_run_id if latest.items else None
         reasons: list[
             Literal["scan_limit", "unresolved_checks", "journal_changed"]
