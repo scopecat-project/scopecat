@@ -49,7 +49,7 @@ The comparison provider uses `comparison_selection(run.snapshot)` to retain
 source inputs instead of silently requiring a new global default.
 
 `independent_lab_daemon` now shares that equipment-only process among the plan,
-comparison, everyday-author and registered-target journeys. It copies no legacy
+comparison, everyday-author, session and registered-target journeys. It copies no legacy
 notebooks and does not set `SCOPECAT_DAEMON_URL`; consumers receive the endpoint
 explicitly. `independent_parameters` saves a fresh named revision for each test
 that needs one. Target selection pins those parameters and the setup alongside
@@ -57,6 +57,12 @@ the target reference; retained plans still execute after catalog/session changes
 Everyday-author tests intentionally supply complete low-level snapshots, but no
 longer require an unrelated default configuration just to inspect unchanged state.
 These consumers assert that the combined registry stays empty.
+
+Session isolation now uses two distinct parameter revisions with one shared setup.
+It retains failed-selection atomicity, frozen preparation, explicit scientific
+overrides, per-collection numeric lookup and saved-plan destination/actor inheritance.
+Parameter editors do not own sample selection; a supplied editor preserves the
+session's subject instead of importing a working point's bundled sample.
 
 The legacy gallery still starts with transitional parameter defaults. Reassess
 its calibration/default-publication assertions against the new design; retain
@@ -122,8 +128,11 @@ compute-only tutorials alone do not replace physical device evidence.
 The unknown-parameter declaration/freeze/structural-history journey now uses a
 compute-only tutorial daemon (`packages/lab-tools/tests/test_unknown_parameter_authoring.py`).
 Its former reference-lab test and probe module are removed. The same assertions
-cover unknown consumption, frozen requests and retained old contexts without the
-four-qubit device/quantum setup.
+cover unknown consumption, frozen requests and retained scientific snapshots without
+the four-qubit device/quantum setup. The remaining legacy structure-context test is
+also retired: this tutorial journey now adds an unknown column to an existing
+table and checks both unconsumed-column execution and consumed-column rejection.
+Working-point structure-origin metadata is no longer an author workflow contract.
 
 ## Explicit process fixtures
 

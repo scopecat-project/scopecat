@@ -55,7 +55,10 @@ maintained consumers have moved.
 The experiment-plan/comparison and registered-target journeys now share
 equipment-only startup and select independent parameters/setup, including branch
 edits after preview. Everyday-author acquisition also no longer needs default
-configuration startup; its explicit low-level snapshots remain valid inputs. Remaining
+configuration startup; its explicit low-level snapshots remain valid inputs. Session
+isolation and record numbering also use independent parameters/setup. Generic
+unknown-column and structural-history coverage lives in the tutorial fixture;
+the duplicate working-point structure test is retired. Remaining
 legacy consumers still include the shared gallery daemon, combined configuration
 editing/default-selection APIs and working-point launch paths. Their presence is
 not evidence that new author workflows require those owners. Use the
