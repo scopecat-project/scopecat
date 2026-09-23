@@ -190,6 +190,34 @@ from `run.domain_jobs()` results (or an invocation transition from
 `run.domain_job_transitions()`). It does not load author code or re-run queries. An absent
 attachment is an explicit error, not an inferred empty dependency set.
 
+The current attachment format is `scopecat.quantum.parameter_evidence.v2`, with
+coverage explicitly limited to `recipe_keyed_query_values`. Each declarative
+lookup retains its resolved query key and selected stored value cells as a public
+`KeyedParameterRead`. Indirect lookups used to form another lookup's key are
+included in `resolution.parameter_reads`, including on a cached pulse-body hit.
+These records do not require the author's row classes to decode.
+
+```python
+from scopecat.config.parameter_reads import compare_parameter_reads
+
+changes = compare_parameter_reads(resolution.parameter_reads, effective_snapshot)
+```
+
+Supply the effective snapshot for that recipe's scope, including candidate or
+point overrides. The comparison reports missing tables, missing/ambiguous keyed
+membership and changed columns. It ignores unselected rows and unread columns;
+a newly duplicated matching key still invalidates the unique-row read. Selected
+values use exact scalar identity, so tiny numeric edits are not silently treated
+as unchanged. Key matching retains the query's quantity-comparison semantics.
+
+An empty difference list only describes the recorded reads. It is not complete
+measurement dependency coverage or permission to reuse calibration: schema,
+implementation/context changes, arbitrary Python reads, runtime/analysis reads
+and physical interactions remain separate. Filtered selections require a future
+query-membership contract; they must not be represented as a list of earlier
+returned cells. The retired v1 development attachment is not given a fallback
+reader or migration; historical stores remain untouched.
+
 Retention follows the target's `DomainTransitionPolicy`: use `write_ahead` to retain the
 invocation before effects. `batched` admits a loss window; `abnormal_only` omits ordinary
 synchronous successes and therefore cannot promise complete parameter evidence. A saved

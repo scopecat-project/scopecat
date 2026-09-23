@@ -1,6 +1,7 @@
 import pytest
 import scopecat as sc
 from pydantic import TypeAdapter
+from scopecat.config.parameter_reads import compare_parameter_reads
 
 from scopecat_quantum import authoring as q
 from scopecat_quantum._ids import TargetCompileEntryId
@@ -139,3 +140,11 @@ def test_declarative_inputs_resolve_operation_context_and_scope() -> None:
         codec.validate_json(codec.dump_json(updated.parameter_evidence))
         == updated.parameter_evidence
     )
+    retained = codec.validate_json(codec.dump_json(updated.parameter_evidence))
+    assert (
+        compare_parameter_reads(retained[0].resolution.parameter_reads, candidate) == ()
+    )
+    changed = compare_parameter_reads(retained[0].resolution.parameter_reads, baseline)
+    assert len(changed) == 1
+    assert changed[0].reason == "cells_changed"
+    assert changed[0].columns == ("length",)

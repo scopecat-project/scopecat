@@ -26,9 +26,10 @@ class CompiledParameterEvidenceRecord(BaseModel):
     """Current-format payload; empty recipe evidence does not prove completeness."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
-    format: Literal["scopecat.quantum.parameter_evidence.v1"] = (
-        "scopecat.quantum.parameter_evidence.v1"
+    format: Literal["scopecat.quantum.parameter_evidence.v2"] = (
+        "scopecat.quantum.parameter_evidence.v2"
     )
+    coverage: Literal["recipe_keyed_query_values"] = "recipe_keyed_query_values"
     entries: tuple[CompiledPointParameterEvidence, ...] = Field(min_length=1)
 
     @model_validator(mode="after")

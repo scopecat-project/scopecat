@@ -110,8 +110,11 @@ execution and automatic selective repair are not established by this scenario.
 - Converge capability addresses with member-qualified target entities.
 - Connect explicit target/setup maps to admission before enabling connected or
   multi-member targets. The pure mapping checker is not execution authority.
-- Capture resolved parameter reads, query membership and capture completeness;
-  supplement them with declared physical interactions before selective reuse.
+- Declarative recipe queries now retain resolved key/value cells, indirect key
+  dependencies and explicit limited coverage through the execution ledger.
+  Public comparison detects changed inputs and lost/ambiguous row membership.
+  Extend capture to runtime/analysis reads and selection membership; supplement
+  it with schema/context and declared physical interactions before selective reuse.
 - Add bounded check-first repair after dependencies can explain invalidation.
 
 Setup still aggregates control topology, instrument registry, routing, domain

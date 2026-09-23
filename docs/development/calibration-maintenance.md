@@ -188,8 +188,16 @@ names, explicitly not resolved row identities. It is useful author feedback but
 is not an applicability fingerprint. A complete parameter/configuration hash is
 also too coarse to decide which capabilities need rechecking.
 
-Before selective invalidation, define retained, resolved read dependencies for
-scalar cells, keyed rows, selections and derived queries. Query membership matters:
+Declarative keyed parameter queries now retain model-independent key and value
+cells, including indirect lookups used by derived expressions. Recipe invocation
+evidence retains these through the existing ledger and labels coverage as
+`recipe_keyed_query_values`. The public comparison reports changed cells and
+missing/ambiguous membership without inferring full measurement applicability.
+See [adapter evidence](architecture/quantum-adapters.md).
+
+Before selective invalidation, extend this coverage to scalar expressions,
+runtime reads, selections and derived queries outside recipe preparation.
+Query membership matters:
 adding a row matching a filter can change a result without editing an earlier
 returned cell. Preparation and runtime/analysis reads need clearly stated coverage.
 Record captured values/identities and capture completeness, not arbitrary live
@@ -246,7 +254,9 @@ measured execution cost. Do not infer parallel safety from distinct target IDs.
    selection from explicit complete histories, with inspectable reasons.
    Explicit capability requirements/dependencies now produce a bounded report
    with separate own-evidence and prerequisite-availability verdicts. Resolved
-   parameter dependency capture remains needed. Indexed scoped queries, server
+   parameter dependency capture has begun with retained recipe keyed queries;
+   full run/analysis coverage and applicability integration remain needed.
+   Indexed scoped queries, server
    evidence pages and bounded batch
    observation checks are implemented. Avoid a second analysis/evidence store.
 3. **Fixed tasks implemented:** target-expanded stage plans declare exact checks

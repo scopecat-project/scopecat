@@ -14,6 +14,7 @@ from scopecat import (
     parameter_table,
     quantity,
 )
+from scopecat.config.parameter_reads import compare_parameter_reads
 from scopecat.daemon.wire import RunDomainJobTransitionItem
 from scopecat.records.execution import (
     DomainInvocationIntent,
@@ -114,6 +115,7 @@ def test_compiled_evidence_survives_execution_ledger_restart(tmp_path: Path) -> 
     assert isinstance(saved.transition, DomainJobInvocationTransition)
     assert saved.transition.intent.target_intent["realization"] == "iq"
     record = read_parameter_evidence(saved.transition.intent)
+    assert record.coverage == "recipe_keyed_query_values"
     for entry, ordinal, snapshot_id, width in zip(
         record.entries, (7, 9), ("baseline", "point-override"), (24, 32), strict=True
     ):
@@ -123,6 +125,19 @@ def test_compiled_evidence_survives_execution_ledger_restart(tmp_path: Path) -> 
         assert resolution.snapshot_id == snapshot_id
         assert resolution.inputs == {"width": Quantity(width, "ns")}
         assert resolution.sources["width"][0].table == "calibration"
+        current = parameter_snapshot(
+            "current",
+            tables={
+                Calibration: (
+                    Calibration(
+                        target=EntityRef(id="q0", kind="logical_qubit"), width=width + 1
+                    ),
+                )
+            },
+        )
+        [difference] = compare_parameter_reads(resolution.parameter_reads, current)
+        assert difference.reason == "cells_changed"
+        assert difference.columns == ("width",)
     # Recording compilation intent does not assert successful physical execution.
     assert restarted.read_current(limit=10).items[0].state == "invocation_unknown"
     changed = saved.transition.intent.model_dump()
