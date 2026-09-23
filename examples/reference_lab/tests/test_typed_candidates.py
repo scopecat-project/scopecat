@@ -4,6 +4,7 @@ import shutil
 from collections.abc import Generator
 from dataclasses import replace
 from pathlib import Path
+from typing import Literal
 
 import httpx2
 import pytest
@@ -24,7 +25,9 @@ from scopecat.daemon.client import DaemonClient, DaemonConflictError
 from scopecat.daemon.wire import (
     AnalysisParameterProposalOutputPayload,
     AnalysisSaveCommand,
+    AnalysisSaveReceipt,
     ParameterBranchPublishCommand,
+    ParameterCandidateComposeCommand,
 )
 from scopecat.project import load_project
 from scopecat.records.analysis import analysis_record_id
@@ -94,9 +97,11 @@ def candidate_daemon(
         stop_project(project)
 
 
+@pytest.mark.parametrize("composition", ["parallel", "sequential"])
 def test_joint_branch_procedure_recovers_after_restart_and_lost_publish_response(
     candidate_daemon: ReferenceLabDaemon,
     monkeypatch: pytest.MonkeyPatch,
+    composition: Literal["parallel", "sequential"],
 ) -> None:
     project = load_project(candidate_daemon.root / "scopecat.toml")
     with create_application(candidate_daemon.root).connect(candidate_daemon.url) as lab:
@@ -120,6 +125,7 @@ def test_joint_branch_procedure_recovers_after_restart_and_lost_publish_response
             destination=destination,
             result_revision_id="joint-accepted",
             actor="test",
+            composition=composition,
         )
         procedure = lab.procedures.submit(
             drag_branch_calibration, intent, request_key="joint", sample=sample.id
@@ -132,6 +138,17 @@ def test_joint_branch_procedure_recovers_after_restart_and_lost_publish_response
         assert lab.parameters.checkout("joint").head == destination
         before = {run.id for run in lab.runs().items}
         assert len(before) == 2
+        second = procedure.output("baseline-q1")
+        first_fit = procedure.output("fit-q0")
+        assert isinstance(second, RunOutputRef)
+        assert isinstance(first_fit, AnalysisPublicationOutputRef)
+        source = lab.get_run(second.run_id).snapshot.config_source
+        if composition == "sequential":
+            assert isinstance(source, AnalysisCandidateRunConfigSource)
+            assert source.analysis_record_id == first_fit.analysis_record_id
+            assert source.proposal_id == "q0-drag-beta"
+        else:
+            assert isinstance(source, ParameterRunConfigSource)
         procedure_id = procedure.id
     stop_project(project)
     restarted = start_project(project)
@@ -210,10 +227,9 @@ def test_joint_branch_procedure_recovers_after_restart_and_lost_publish_response
         assert missing.missing == ("q1",) and not missing.accepted
 
 
-@pytest.mark.parametrize("reject", [True, False])
-def test_branch_procedure_rejection_and_stale_destination_do_not_publish(
+def test_sequential_procedure_recovers_lost_composition_response(
     candidate_daemon: ReferenceLabDaemon,
-    reject: bool,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     with create_application(candidate_daemon.root).connect(candidate_daemon.url) as lab:
         config = bootstrap_config()
@@ -224,12 +240,77 @@ def test_branch_procedure_rejection_and_stale_destination_do_not_publish(
         )
         destination = lab.parameters.create_branch("daily", revision=parameters)
         intent = DragBranchCalibrationIntent(
-            targets=("q0",),
+            targets=("q0", "q1"),
+            initial=lab.parameters.resolve(parameters),
+            destination=destination,
+            result_revision_id="accepted",
+            actor="test",
+            composition="sequential",
+        )
+        procedure = lab.procedures.submit(
+            drag_branch_calibration, intent, request_key="sequential"
+        )
+        original = DaemonClient.compose_parameter_candidate
+        committed: list[AnalysisSaveReceipt] = []
+
+        def lose_response(
+            client: DaemonClient, run_id: str, command: ParameterCandidateComposeCommand
+        ) -> AnalysisSaveReceipt:
+            committed.append(original(client, run_id, command))
+            raise httpx2.ReadError("committed composition response lost")
+
+        with monkeypatch.context() as patch:
+            patch.setattr(DaemonClient, "compose_parameter_candidate", lose_response)
+            procedure.resume()
+        assert procedure.state == "attention_required"
+        assert procedure.step("compose").state == "attention_required"
+        assert lab.parameters.checkout("daily").head == destination
+        before = {run.id for run in lab.runs().items}
+        assert len(before) == 2
+        [receipt] = committed
+        [proposal] = receipt.parameter_proposals
+        procedure.retry_attention()
+        assert procedure.summary().outcome == "succeeded"
+        composed = procedure.output("compose")
+        assert isinstance(composed, AnalysisPublicationOutputRef)
+        assert composed.analysis_record_id == proposal.analysis_record_id
+        after = {run.id for run in lab.runs().items}
+        assert len(after) == 4 and before < after
+        assert (
+            lab.parameters.checkout("daily").head.generation
+            == destination.generation + 1
+        )
+        procedure.resume()
+        assert {run.id for run in lab.runs().items} == after
+        assert (
+            lab.parameters.checkout("daily").head.generation
+            == destination.generation + 1
+        )
+
+
+@pytest.mark.parametrize("reject", [True, False])
+@pytest.mark.parametrize("composition", ["parallel", "sequential"])
+def test_branch_procedure_rejection_and_stale_destination_do_not_publish(
+    candidate_daemon: ReferenceLabDaemon,
+    reject: bool,
+    composition: Literal["parallel", "sequential"],
+) -> None:
+    with create_application(candidate_daemon.root).connect(candidate_daemon.url) as lab:
+        config = bootstrap_config()
+        parameters = lab.parameters.save(
+            name="base",
+            catalog=config.parameter_catalog,
+            parameters=config.parameter_snapshot,
+        )
+        destination = lab.parameters.create_branch("daily", revision=parameters)
+        intent = DragBranchCalibrationIntent(
+            targets=("q0", "q1"),
             initial=lab.parameters.resolve(parameters),
             destination=destination,
             result_revision_id="accepted",
             actor="test",
             minimum_improvement=1.0 if reject else 0.001,
+            composition=composition,
         )
         procedure = lab.procedures.submit(
             drag_branch_calibration, intent, request_key="calibrate"
@@ -251,7 +332,7 @@ def test_branch_procedure_rejection_and_stale_destination_do_not_publish(
             decision = lab.published_analysis(verification.analysis_record_id).fact_as(
                 "decision", JOINT_DRAG_DECISION_SCHEMA
             )
-            assert decision.rejected == ("q0",) and decision.missing == ()
+            assert decision.rejected == ("q0", "q1") and decision.missing == ()
             assert not any(
                 step.operation == "parameter_publish"
                 for step in procedure.steps().items

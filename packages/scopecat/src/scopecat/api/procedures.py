@@ -686,11 +686,14 @@ class LabProcedureContext:
         *,
         name: str,
         note: str = "",
+        mode: Literal["parallel", "sequential"] = "parallel",
     ) -> AnalysisPublicationOutputRef:
         """Retain an exact composition as a replayable analysis step.
 
         Each pair identifies an analysis and its proposal. This composes values,
         not acceptance; measure and verify the combined candidate before publishing.
+        Parallel sources share a base. Sequential sources are ordered and each
+        later measurement must consume the preceding exact candidate.
         """
         if len(candidates) < 2:
             raise ValueError("composition requires at least two candidates")
@@ -699,7 +702,8 @@ class LabProcedureContext:
         ):
             raise TypeError("candidates must identify exact run analyses")
         identity = {
-            "codec": "scopecat.procedure-parameter-composition.v1",
+            "codec": "scopecat.procedure-parameter-composition.v2",
+            "mode": mode,
             "candidates": [
                 (ref.model_dump(mode="json"), proposal) for ref, proposal in candidates
             ],
@@ -730,7 +734,7 @@ class LabProcedureContext:
                     )
                 )
             command = ParameterCandidateComposeCommand(
-                name=name, note=note, sources=tuple(sources)
+                name=name, note=note, sources=tuple(sources), mode=mode
             )
             try:
                 receipt = self._config.client.compose_parameter_candidate(

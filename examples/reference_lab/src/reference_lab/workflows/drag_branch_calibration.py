@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Literal
 
 import scopecat as sc
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -36,6 +37,7 @@ class DragBranchCalibrationIntent(BaseModel):
     destination: ParameterBranch
     result_revision_id: str = Field(min_length=1)
     actor: str = Field(min_length=1)
+    composition: Literal["parallel", "sequential"] = "parallel"
     minimum_improvement: float = Field(default=DRAG_BETA_MINIMUM_IMPROVEMENT, ge=0)
 
     @field_validator("initial", mode="before")
@@ -148,7 +150,7 @@ class DragBranchCalibrationRejected(RuntimeError):
 
 @procedure(
     id="reference-lab.drag-branch-calibration",
-    version="1",
+    version="2",
     intent=DragBranchCalibrationIntent,
 )
 def drag_branch_calibration(
@@ -157,11 +159,22 @@ def drag_branch_calibration(
     baselines: dict[DragBetaQubit, RunOutputRef] = {}
     fits: list[tuple[AnalysisPublicationOutputRef, str]] = []
     for target in intent.targets:
+        preceding = fits[-1] if fits and intent.composition == "sequential" else None
+        candidate_input = (
+            ctx.published_analysis(preceding[0]).candidate_config(preceding[1])
+            if preceding is not None
+            else None
+        )
         baseline = ctx.run(
             f"baseline-{target}",
             drag_beta_experiment.build(target),
-            config=intent.initial.config,
-            config_source=intent.initial.config_source,
+            config=candidate_input
+            if candidate_input is not None
+            else intent.initial.config,
+            config_source=None
+            if candidate_input is not None
+            else intent.initial.config_source,
+            inputs=(preceding[0],) if preceding is not None else (),
             name=f"{target} DRAG baseline",
         )
         baselines[target] = baseline
@@ -177,6 +190,7 @@ def drag_branch_calibration(
             "compose",
             tuple(fits),
             name="joint-drag",
+            mode=intent.composition,
         )
         proposal_id = "joint-drag"
     candidate = ctx.published_analysis(candidate_ref).candidate_config(proposal_id)

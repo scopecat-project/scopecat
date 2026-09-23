@@ -67,6 +67,15 @@ ordinary saves and losing provenance.
   validated sources to one original-base candidate. Verification must include all
   contributing source runs plus new data using that aggregate candidate.
 
+The durable procedure composition API accepts `mode="sequential"` for these flat
+chains. It retains the ordered source references and mode in step identity, and
+uses the same server resolver as `ParameterCandidate.then()`. The maintained
+two-target simulation now exercises both common-base and sequential fitting,
+aggregate remeasurement, a complete decision and fenced publication, including
+restart and recovery of a lost committed publication response. This completes
+the explicitly authored procedure path; a calibration task still does not infer
+or schedule its own final aggregation, laboratory decision or publication.
+
 Start with two linear stages and serialized publication. General fan-in, adaptive
 loops and repair follow a retained, explainable path. Capability prerequisites,
 execution order and parameter flow remain distinct.

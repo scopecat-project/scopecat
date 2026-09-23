@@ -69,6 +69,38 @@ joint_ref = ctx.combine_parameter_candidates(
 candidate = ctx.published_analysis(joint_ref).candidate_config("joint-drive")
 ```
 
+The default `mode="parallel"` combines proposals fitted from the same saved
+baseline. If the second fit must use the first fit's values, pass its exact
+candidate to the next acquisition and compose the resulting chain in order:
+
+```python
+first = ctx.published_analysis(first_fit_ref).candidate_config("first-fit")
+second_run = ctx.run(
+    "second-measurement",
+    second_experiment.build(),
+    config=first,
+    inputs=(first_fit_ref,),
+)
+second_fit_ref = ctx.analyze_run("second-fit", second_run, second_analysis())
+joint_ref = ctx.combine_parameter_candidates(
+    "compose",
+    ((first_fit_ref, "first-fit"), (second_fit_ref, "second-fit")),
+    name="final-chain",
+    mode="sequential",
+)
+candidate = ctx.published_analysis(joint_ref).candidate_config("final-chain")
+```
+
+Here the experiments and analyses are laboratory definitions. Sequential mode
+checks that each source measurement consumed its predecessor's exact candidate;
+merely executing fits in order is insufficient. It permits later fits to refine
+earlier cells and retains the net changes against the initial saved revision.
+Use the resulting aggregate for fresh verification, including all contributing
+source runs in the retained decision. Intermediate success does not verify the
+aggregate, and the intermediate candidates never advance the daily branch.
+Composition mode and ordered sources are part of the durable step identity;
+changing them during replay is a conflict, not a new interpretation of old work.
+
 Run the requested verification measurements with this exact `candidate`. Use
 `ctx.analyze_project()` to retain all baseline and verification inputs and the
 laboratory decision. Its arguments may contain collections of run handles; durable

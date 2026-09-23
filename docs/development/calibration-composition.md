@@ -101,6 +101,13 @@ one joint decision before publication. Partial execution remains visible in the
 step ledger and cannot publish. A deliberate single-target request uses the same
 pipeline with no artificial composition.
 
+The same procedure supports sequential fitting: the next acquisition consumes
+the preceding exact candidate, and `combine_parameter_candidates(...,
+mode="sequential")` reduces the ordered chain to the initial branch base. The
+default parallel mode retains common-base sibling conflict checks. Both modes
+require fresh measurements under the aggregate and the complete joint decision;
+neither treats individually accepted stages as verification of the final values.
+
 The real-daemon journey stops after composition, restarts the daemon, resumes
 through `ProjectAutomationWorker`, loses a committed publication response, then
 recovers the historical receipt even after a later branch edit. Acquired runs are
