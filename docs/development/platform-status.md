@@ -95,13 +95,15 @@ evidence, including saved-plan/candidate scope. The combined-configuration guide
 is explicitly legacy documentation; its continued existence is not a recommended
 author entry point.
 
-### 3. Qualify a small simulated calibration workflow
+### 3. Small simulated calibration workflow qualified
 
-Use several control entities with shared readout and coupling edges. Exercise
-two parameter-producing stages, final verification, local drift, a failed resource,
-unaffected progress, restart and a concurrent daily-branch edit. Show retained
-partial results and missing coverage. This initially need not claim multi-member
-target execution or automatic selective repair.
+A [six-target daemon journey](array-maintenance-qualification.md) now exercises
+three logical readout groups, neighboring coupling, six candidate-producing fits,
+aggregate verification and fenced publication. Four cases cover success, local
+drift, a synthetic readout failure with unaffected progress, and a concurrent
+daily-branch edit. Each restarts after retained partial progress. It uses declared
+software computation; real resource failure/concurrency, multi-member target
+execution and automatic selective repair are not established by this scenario.
 
 ### 4. Extend addresses, applicability and execution deliberately
 

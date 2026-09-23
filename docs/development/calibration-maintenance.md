@@ -255,16 +255,18 @@ measured execution cost. Do not infer parallel safety from distinct target IDs.
    [staged tasks](../how-to/preview-calibration-tasks.md). Sequential daemon advancement
    and fenced start/pause/cancel controls are implemented. Explicit candidate edges
    now bind passing stages' adopted proposals to later check inputs atomically.
-   A complete calibration/publication journey and bounded repair remain. Keep
+   Finalization and a complete calibration/publication journey are implemented;
+   bounded repair remains. Keep
    planning separate from resource dispatch and scientific policy.
 4. Bounded sample/task reports already show required, available and blocked
    capabilities with evidence. Add continuous refresh, check-first maintenance and
    batching/resource scheduling. See the next [parameter-flow contract](architecture/task-parameter-flow.md).
 
-Use a small synthetic array with shared readout and several coupling edges as the
-next integration scenario. Establish an initial operating revision, inject local
-drift and one equipment failure, then demonstrate selective repair, unaffected
-progress, restart recovery, explicit degraded scope and final combined checks.
+The [six-target qualification](array-maintenance-qualification.md) exercises
+logical shared readout and coupling, local drift, a synthetic readout outage,
+unaffected progress, restart recovery and final combined checks. It also verifies
+that concurrent branch edits survive a stale publication attempt. Selective
+repair and physical resource-failure qualification remain separate work.
 Validate explanations and provenance before benchmarking large target counts.
 Hardware behavior and operator usability still require later laboratory trials.
 
