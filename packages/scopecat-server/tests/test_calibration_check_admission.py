@@ -1,8 +1,10 @@
 """Declared checks are admitted against authority before executing laboratory code."""
 
-from collections.abc import Iterator
+import sqlite3
+from collections.abc import Callable, Iterator
 from dataclasses import replace
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -50,6 +52,7 @@ from scopecat.sdk.compute import PYTHON_JSON_CODEC
 from scopecat_testkit.workflow_fixtures import load_config
 
 from scopecat_server import BackendConflict, LocalDaemonRuntime
+from scopecat_server.storage.sqlite.calibration_checks import CheckRequestPage
 
 type CheckCase = tuple[LocalDaemonRuntime, CalibrationCheckRequest, RunSubmission]
 
@@ -283,18 +286,28 @@ def test_indexed_check_query_filters_before_pagination(check_case: CheckCase) ->
             scope=declaration.scope, context=declaration.context, limit=1
         )
         page = query(filtered)
-        assert page.items == (checks[3],)
+        assert tuple(item.execution for item in page.items) == (checks[3],)
+        assert page.items[0].request == declaration
+        assert page.items[0].evidence is None
         assert page.next_cursor is not None
         tail = query(filtered.model_copy(update={"cursor": page.next_cursor}))
-        assert tail.items == (checks[0],)
+        assert tuple(item.execution for item in tail.items) == (checks[0],)
         assert tail.next_cursor is None
-        assert query(CalibrationCheckQuery()).items == tuple(reversed(checks))
-        assert query(CalibrationCheckQuery(scope=declaration.scope)).items == (
+        assert tuple(
+            item.execution for item in query(CalibrationCheckQuery()).items
+        ) == tuple(reversed(checks))
+        assert tuple(
+            item.execution
+            for item in query(CalibrationCheckQuery(scope=declaration.scope)).items
+        ) == (
             checks[3],
             checks[2],
             checks[0],
         )
-        assert query(CalibrationCheckQuery(context=declaration.context)).items == (
+        assert tuple(
+            item.execution
+            for item in query(CalibrationCheckQuery(context=declaration.context)).items
+        ) == (
             checks[3],
             checks[1],
             checks[0],
@@ -314,7 +327,9 @@ def test_indexed_check_query_filters_before_pagination(check_case: CheckCase) ->
                 expected_run_revision=checks[3].revision,
             )
         )
-        assert query(filtered).items == (acquired.run,)
+        assert tuple(item.execution for item in query(filtered).items) == (
+            acquired.run,
+        )
         # An idempotent submit cannot duplicate the projection.
         app.automation.submit(
             _command(declaration).model_copy(update={"request_key": "check-3"})
@@ -563,6 +578,34 @@ def test_check_result_registration_rejects_wrong_evidence_and_retains_negative(
                 service.complete_step(command)
             assert service.get(parent.procedure_run_id).revision == assess.run.revision
         else:
+            queries = app.calibration_checks
+            original_query = queries._checks.query_in_transaction
+
+            def finishing_query(
+                connection: sqlite3.Connection,
+                query: CalibrationCheckQuery,
+                read: Callable[
+                    [sqlite3.Connection, CalibrationCheckQuery], CheckRequestPage
+                ] = original_query,
+                finish: ProcedureStepCompleteCommand = command,
+            ):
+                page = read(connection, query)
+                service.complete_step(finish)
+                return page
+
+            with patch.object(queries._checks, "query_in_transaction", finishing_query):
+                before_completion = queries.query(CalibrationCheckQuery()).items[0]
+            assert before_completion.execution.revision == assess.run.revision
+            assert before_completion.evidence is None
             done = service.complete_step(command)
             assert done.step.state == "succeeded"
             assert service.complete_step(command) == done
+            with TestClient(runtime.app()) as client:
+                response = client.post("/api/v1/calibration-checks/query", json={})
+                assert response.status_code == 200, response.text
+                retained = CalibrationCheckPage.model_validate(response.json()).items[0]
+            assert retained.execution == done.run
+            assert retained.evidence is not None
+            assert retained.evidence.measurement.run_id == measured.run_id
+            assert retained.evidence.analysis_record_id == saved.record.id
+            assert retained.evidence.passed is False

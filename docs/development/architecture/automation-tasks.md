@@ -72,10 +72,17 @@ queries also check result scope and measurement context. Declaration queries use
 the server's `calibration_check_requests` projection, with indexed exact scope,
 context and combined filters before keyset pagination. The projection is written
 in the request admission transaction and joins current procedure state; it does
-not duplicate scientific evidence. The client still resolves runs and analyses
-and checks observed revisions and the filtered head. Pages are observational,
-not a cross-request snapshot or authorization to publish. Schema 89 introduces
-the index without backfilling prebaseline stores.
+not duplicate scientific evidence. Each response item now contains the execution,
+typed declaration and optional resolved evidence. The server reads the page,
+steps and measurement snapshots in one SQLite read transaction and resolves the
+fixed immutable analysis publications with the same validation used at result
+adoption. Pending checks have no evidence; invalid retained evidence is an error.
+No laboratory Python or author session is needed to query this endpoint.
+
+The client still checks observed revisions and the filtered head across pages.
+A consistent page is not a cross-request snapshot or authorization to publish.
+Schema 89 introduces the index without backfilling prebaseline stores; the evidence
+view adds no persisted format.
 
 ## Panel requirements
 
@@ -99,9 +106,9 @@ making task boundaries explicit; add concurrency only after those boundaries wor
 
 Required next contracts:
 
-1. Server evidence projections and an explicit consistency contract spanning
-   pages. Indexed declaration queries now include pending work; clients still
-   retrieve individual evidence and conservatively report concurrent changes.
+1. An explicit consistency contract spanning pages and bounded batch observation
+   validation. Server pages now include resolved evidence in one read snapshot;
+   clients still conservatively check individual execution revisions across pages.
 2. Task/stage/target relationships with frozen intent, explicit partial completion,
    bounded repair loops and independently dispatchable units. Avoid one giant
    procedure containing every target and an unbounded maintenance loop.

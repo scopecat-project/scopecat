@@ -75,14 +75,18 @@ try:
                 )
 
                 checks = lab.calibration_checks
-                original_read = checks._read
+                original_query = checks._client.query_calibration_checks
 
-                def advancing_reader(snapshot, declaration):
-                    if snapshot.procedure_run_id == concurrent.id:
+                def advancing_query(query):
+                    page = original_query(query)
+                    if any(item.execution.procedure_run_id == concurrent.id
+                           and item.evidence is None for item in page.items):
                         concurrent.resume()
-                    return original_read(snapshot, declaration)
+                    return page
 
-                with patch.object(checks, "_read", advancing_reader):
+                with patch.object(
+                    checks._client, "query_calibration_checks", advancing_query,
+                ):
                     changed = checks.history(page_size=1)
                 assert not changed.complete
                 assert "journal_changed" in changed.incomplete_reasons
@@ -90,25 +94,6 @@ try:
                 stable = checks.history()
                 assert stable.complete
                 from dataclasses import replace
-                import pytest
-
-                declared = next(
-                    item for item in stable.requests
-                    if item.execution.procedure_run_id == concurrent.id
-                )
-                wrong_scope = declared.request.model_copy(update={
-                    "scope": replace(declared.request.scope, conditions="different"),
-                })
-                with pytest.raises(ValueError, match="declared scope"):
-                    checks._read(declared.execution, wrong_scope)
-                wrong_context = declared.request.model_copy(update={
-                    "context": replace(
-                        declared.request.context,
-                        parameters=namespace["destination"].revision,
-                    ),
-                })
-                with pytest.raises(ValueError, match="declared context"):
-                    checks._read(declared.execution, wrong_context)
                 # A queued check in another exact parameter context is visible,
                 # but does not block this context's domain query.
                 other_intent = check_request(

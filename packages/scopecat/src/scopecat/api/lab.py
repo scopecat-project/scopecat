@@ -281,7 +281,7 @@ class LabClient:
 
     @property
     def calibration_checks(self) -> LabCalibrationChecks:
-        return LabCalibrationChecks(self._client, self._procedures, self)
+        return LabCalibrationChecks(self._client)
 
     def health(self) -> DaemonHealth:
         return self._control.health()

@@ -134,7 +134,8 @@ context and verifies that the adopted analysis belongs to that measurement and
 contains the declared standard fact with matching scope. Invalid evidence cannot
 advance the procedure revision; a valid negative result can. Independent analysis
 publications remain available even if they cannot be adopted as check results.
-The history reader also validates scope and context.
+The server history reader also validates scope and context using the result
+adoption contract.
 
 `CalibrationCheckHistory` reports evidence, unresolved request IDs, scanned count
 and `incomplete_reasons`: `scan_limit`, `unresolved_checks` or `journal_changed`.
@@ -150,9 +151,15 @@ projection written atomically with the procedure. Exact scope and context filter
 run before pagination. All execution states are included; ordinary procedures and
 nonmatching checks do not consume the history budget (200 matching requests by
 default). Hashes identify canonical declaration JSON, not Python class identity.
-Evidence is still resolved from retained runs and analyses. Each page observes
-current execution state; cross-page reads are not a transaction snapshot. Revision
-and filtered-head rechecks retain conservative incomplete-history reporting.
+Each response item includes `execution`, `request` and optional `evidence` with
+the retained measurement, analysis ID and positive or negative result. Evidence
+resolution runs on the server without importing author code. Page selection,
+step outputs and measurement snapshots share one read transaction; analysis
+publications are fixed immutable records. Unfinished work returns no evidence,
+while invalid retained evidence raises. Cross-page reads are not a transaction
+snapshot. Revision and filtered-head rechecks retain conservative incomplete-history
+reporting. The Python facade no longer fetches individual steps, measurements and
+analysis content to assemble each item.
 Development schema 89 adds this projection without a prebaseline backfill or
 migration. Earlier stores remain untouched and require their historical environment.
 

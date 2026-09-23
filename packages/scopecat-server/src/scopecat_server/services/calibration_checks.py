@@ -11,6 +11,12 @@ from scopecat.automation import (
     ProcedureStepOutputRef,
     RunOutputRef,
 )
+from scopecat.automation.calibration import CheckEvidence
+from scopecat.daemon.calibration_checks import (
+    CalibrationCheckPage,
+    CalibrationCheckQuery,
+    CalibrationCheckView,
+)
 from scopecat.daemon.wire import RunSubmission
 from scopecat.kernel.errors import NotFound
 from scopecat.kernel.frozen import thaw_json_value
@@ -21,6 +27,7 @@ from scopecat.records.analysis import (
 )
 from scopecat.records.calibration_check import (
     CalibrationCheckRequest,
+    CalibrationCheckResult,
     CalibrationContext,
 )
 from scopecat.records.run import ParameterRunConfigSource, RunConfigSource
@@ -37,6 +44,8 @@ from scopecat_server.services.parameter_resolution import resolve_parameters
 from scopecat_server.services.samples import SampleService
 from scopecat_server.services.scientific_binding import validate_scientific_binding
 from scopecat_server.storage.sqlite.automation import SQLiteAutomationStore
+from scopecat_server.storage.sqlite.calibration_checks import CalibrationCheckStore
+from scopecat_server.storage.sqlite.connection import SQLiteDatabase
 from scopecat_server.storage.sqlite.run_repository import SQLiteRunRepository
 from scopecat_server.storage.sqlite.setups import SQLiteSetupRepository
 from scopecat_server.storage.sqlite.target_catalog import TargetCatalogStore
@@ -183,34 +192,112 @@ def require_check_completion(
         ):
             raise BackendConflict("check result requires its completed measurement")
         subject = RunAnalysisSubject(run_id=measurement.output.run_id)
-        if (
-            not isinstance(output, AnalysisPublicationOutputRef)
-            or output.subject != subject
-        ):
-            raise BackendConflict("check result must analyze its declared measurement")
-        publication = runs.read_analysis_publication(
-            subject.run_id, output.analysis_record_id
-        )
-        record = runs.read_model(
-            subject.run_id,
-            record_content_ref(record_id=publication.record.id, kind="analysis"),
-            AnalysisRecord,
-        )
-        fact_output = next(
-            (item for item in record.outputs if item.id == request.result_output), None
-        )
-        if not isinstance(fact_output, AnalysisFactRecordOutput):
-            raise BackendConflict("check result requires its declared fact output")
-        fact = fact_output.content
-        if (
-            fact.schema_id != CHECK_RESULT.id
-            or fact.schema_codec != CHECK_RESULT.schema_codec
-            or fact.schema_hash != CHECK_RESULT.schema_hash
-            or fact.codec != PYTHON_JSON_CODEC
-        ):
-            raise BackendConflict("check result requires the standard result schema")
-        result = CHECK_RESULT.decode(fact.value)
-        if result.scope != request.scope:
-            raise BackendConflict("check result differs from its declared scope")
+        _read_result(request, subject, output, runs)
     except (NotFound, TypeError, ValueError) as error:
         raise BackendConflict(f"invalid calibration check evidence: {error}") from error
+
+
+def _read_result(
+    request: CalibrationCheckRequest,
+    subject: RunAnalysisSubject,
+    output: ProcedureStepOutputRef,
+    runs: SQLiteRunRepository,
+) -> CalibrationCheckResult:
+    if (
+        not isinstance(output, AnalysisPublicationOutputRef)
+        or output.subject != subject
+    ):
+        raise BackendConflict("check result must analyze its declared measurement")
+    publication = runs.read_analysis_publication(
+        subject.run_id, output.analysis_record_id
+    )
+    record = runs.read_model(
+        subject.run_id,
+        record_content_ref(record_id=publication.record.id, kind="analysis"),
+        AnalysisRecord,
+    )
+    fact_output = next(
+        (item for item in record.outputs if item.id == request.result_output), None
+    )
+    if not isinstance(fact_output, AnalysisFactRecordOutput):
+        raise BackendConflict("check result requires its declared fact output")
+    fact = fact_output.content
+    if (
+        fact.schema_id != CHECK_RESULT.id
+        or fact.schema_codec != CHECK_RESULT.schema_codec
+        or fact.schema_hash != CHECK_RESULT.schema_hash
+        or fact.codec != PYTHON_JSON_CODEC
+    ):
+        raise BackendConflict("check result requires the standard result schema")
+    result = CHECK_RESULT.decode(fact.value)
+    if result.scope != request.scope:
+        raise BackendConflict("check result differs from its declared scope")
+    return result
+
+
+class CalibrationCheckQueries:
+    """One consistent page of executions, declared context and retained evidence."""
+
+    def __init__(self, sqlite: SQLiteDatabase, runs: SQLiteRunRepository) -> None:
+        self._sqlite = sqlite
+        self._runs = runs
+        self._procedures = SQLiteAutomationStore(sqlite)
+        self._checks = CalibrationCheckStore()
+
+    def query(self, query: CalibrationCheckQuery) -> CalibrationCheckPage:
+        with self._sqlite.read_transaction() as connection:
+            page = self._checks.query_in_transaction(connection, query)
+            return CalibrationCheckPage(
+                items=tuple(self._view(connection, run) for run in page.items),
+                next_cursor=page.next_cursor,
+            )
+
+    def _view(
+        self, connection: sqlite3.Connection, run: ProcedureRun
+    ) -> CalibrationCheckView:
+        request = declared_check(run.intent)
+        if request is None:
+            raise BackendConflict("indexed check is missing its declaration")
+        measurement = self._procedures.latest_step_attempt_in_transaction(
+            connection,
+            run.procedure_run_id,
+            request.measurement_step,
+        )
+        analysis = self._procedures.latest_step_attempt_in_transaction(
+            connection,
+            run.procedure_run_id,
+            request.analysis_step,
+        )
+        evidence: CheckEvidence | None = None
+        if (
+            measurement is not None
+            and measurement.state == "succeeded"
+            and isinstance(measurement.output, RunOutputRef)
+            and analysis is not None
+            and analysis.state == "succeeded"
+            and isinstance(analysis.output, AnalysisPublicationOutputRef)
+        ):
+            try:
+                snapshot = self._runs.read_snapshot_in_transaction(
+                    connection, measurement.output.run_id
+                )
+                _require_context(
+                    request, snapshot.config_source, snapshot.scientific_binding
+                )
+                result = _read_result(
+                    request,
+                    RunAnalysisSubject(run_id=snapshot.run_id),
+                    analysis.output,
+                    self._runs,
+                )
+                evidence = CheckEvidence(
+                    snapshot,
+                    result.scope,
+                    analysis.output.analysis_record_id,
+                    result.passed,
+                )
+            except (NotFound, TypeError, ValueError) as error:
+                raise BackendConflict(
+                    f"invalid calibration check evidence: {error}"
+                ) from error
+        return CalibrationCheckView(execution=run, request=request, evidence=evidence)

@@ -2,12 +2,10 @@
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Literal, Protocol
+from typing import Literal
 
 from scopecat.analysis.calibration import CHECK_RESULT as CHECK_RESULT
-from scopecat.api.procedures import LabProcedureOperations
-from scopecat.api.run import RunHandle
-from scopecat.automation import AnalysisPublicationOutputRef, ProcedureRun, RunOutputRef
+from scopecat.automation import ProcedureRun
 from scopecat.automation.calibration import (
     CheckEvidence,
     CheckSelection,
@@ -15,17 +13,11 @@ from scopecat.automation.calibration import (
 )
 from scopecat.daemon.calibration_checks import CalibrationCheckQuery
 from scopecat.daemon.client import DaemonClient
-from scopecat.kernel.frozen import thaw_json_value
 from scopecat.records.calibration_check import (
     CalibrationCheckRequest,
     CalibrationContext,
     CalibrationScope,
 )
-from scopecat.records.run import ParameterRunConfigSource
-
-
-class _CheckSession(Protocol):
-    def get_run(self, run: str) -> RunHandle: ...
 
 
 @dataclass(frozen=True)
@@ -77,12 +69,8 @@ class LabCalibrationChecks:
     def __init__(
         self,
         client: DaemonClient,
-        procedures: LabProcedureOperations,
-        session: _CheckSession,
     ) -> None:
         self._client = client
-        self._procedures = procedures
-        self._session = session
 
     def history(
         self,
@@ -112,18 +100,14 @@ class LabCalibrationChecks:
                 )
             )
             if scanned == 0 and page.items:
-                first_id = page.items[0].procedure_run_id
+                first_id = page.items[0].execution.procedure_run_id
             scanned += len(page.items)
-            for run in page.items:
-                request = CalibrationCheckRequest.model_validate(
-                    thaw_json_value(run.intent["calibration_check"])
-                )
-                requests.append(DeclaredCheck(run, request))
-                item = self._read(run, request)
-                if item is None:
-                    unresolved.append(run.procedure_run_id)
+            for item in page.items:
+                requests.append(DeclaredCheck(item.execution, item.request))
+                if item.evidence is None:
+                    unresolved.append(item.execution.procedure_run_id)
                 else:
-                    evidence.append(item)
+                    evidence.append(item.evidence)
             if page.next_cursor is None:
                 exhausted = True
                 break
@@ -131,14 +115,17 @@ class LabCalibrationChecks:
         changed = False
         for item in requests:
             run = item.execution
-            if self._procedures.snapshot(run.procedure_run_id).revision != run.revision:
+            if (
+                self._client.get_procedure(run.procedure_run_id).revision
+                != run.revision
+            ):
                 changed = True
                 if run.procedure_run_id not in unresolved:
                     unresolved.append(run.procedure_run_id)
         latest = self._client.query_calibration_checks(
             CalibrationCheckQuery(scope=scope, context=context, limit=1)
         )
-        latest_id = latest.items[0].procedure_run_id if latest.items else None
+        latest_id = latest.items[0].execution.procedure_run_id if latest.items else None
         reasons: list[
             Literal["scan_limit", "unresolved_checks", "journal_changed"]
         ] = []
@@ -151,38 +138,3 @@ class LabCalibrationChecks:
         return CalibrationCheckHistory(
             tuple(requests), tuple(evidence), tuple(unresolved), scanned, tuple(reasons)
         )
-
-    def _read(
-        self, run: ProcedureRun, request: CalibrationCheckRequest
-    ) -> CheckEvidence | None:
-        handle = self._procedures.get(run.procedure_run_id)
-        try:
-            measurement = handle.step(request.measurement_step)
-            analysis = handle.step(request.analysis_step)
-        except KeyError:
-            return None
-        if not isinstance(measurement.output, RunOutputRef) or not isinstance(
-            analysis.output, AnalysisPublicationOutputRef
-        ):
-            return None
-        measured = self._session.get_run(measurement.output.run_id)
-        snapshot = measured.snapshot
-        binding = snapshot.scientific_binding
-        source = snapshot.config_source
-        if (
-            not isinstance(source, ParameterRunConfigSource)
-            or source.overrides
-            or CalibrationContext(
-                source.parameters,
-                binding.subject,
-                binding.setup_content_hash,
-                binding.scenario,
-            )
-            != request.context
-        ):
-            raise ValueError("check measurement does not match its declared context")
-        report = measured.published_analysis(analysis.output.analysis_record_id)
-        result = report.fact_as(request.result_output, CHECK_RESULT)
-        if result.scope != request.scope:
-            raise ValueError("check result does not match its declared scope")
-        return CheckEvidence(snapshot, result.scope, report.id, result.passed)

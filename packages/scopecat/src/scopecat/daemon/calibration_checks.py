@@ -3,7 +3,12 @@
 from pydantic import BaseModel, ConfigDict, Field
 
 from scopecat.automation import ProcedureRun
-from scopecat.records.calibration_check import CalibrationContext, CalibrationScope
+from scopecat.automation.calibration import CheckEvidence
+from scopecat.records.calibration_check import (
+    CalibrationCheckRequest,
+    CalibrationContext,
+    CalibrationScope,
+)
 
 
 class CalibrationCheckQuery(BaseModel):
@@ -15,8 +20,16 @@ class CalibrationCheckQuery(BaseModel):
     cursor: int | None = Field(default=None, ge=1)
 
 
+class CalibrationCheckView(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    execution: ProcedureRun
+    request: CalibrationCheckRequest
+    evidence: CheckEvidence | None
+
+
 class CalibrationCheckPage(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    items: tuple[ProcedureRun, ...]
+    items: tuple[CalibrationCheckView, ...]
     next_cursor: int | None = None
