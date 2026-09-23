@@ -382,7 +382,10 @@ def test_manager_drops_terminal_and_attention_procedures(tmp_path: Path) -> None
 
 
 def test_http_lifespan_starts_and_stops_manager() -> None:
-    with patch("scopecat_server.http.transport.ProjectProcedureWorkers") as manager:
+    with (
+        patch("scopecat_server.http.transport.ProjectProcedureWorkers") as manager,
+        patch("scopecat_server.http.transport.CalibrationTaskRunner") as tasks,
+    ):
         with TestClient(
             create_app(
                 cast(
@@ -404,8 +407,10 @@ def test_http_lifespan_starts_and_stops_manager() -> None:
             )
         ):
             manager.return_value.start.assert_called_once()
+            tasks.return_value.start.assert_called_once()
             manager.return_value.stop.assert_not_called()
         manager.return_value.stop.assert_called_once()
+        tasks.return_value.stop.assert_called_once()
 
 
 def test_catalog_rejects_a_submission_shaped_worker_result() -> None:

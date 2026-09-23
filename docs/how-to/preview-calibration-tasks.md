@@ -122,6 +122,17 @@ for this format and retain older stores with their original environments.
 
 ## Run without keeping a notebook open
 
+The workbench's **Calibration tasks** section lists retained plans. Open a task to
+inspect each stage's check, target, frozen context, prerequisites and admission
+errors. **Open execution** leads to the existing procedure view for worker/resource
+status, retained measurements, review input and execution cancellation. The task URL
+can be bookmarked and reopened after a browser restart.
+
+Start/resume, pause and cancel controls require an operator and reason. A conflicting
+control refreshes the view and displays the error without automatically retrying
+your action. Task progress describes this plan; it is not a sample-health or combined
+capability assessment. Plan creation currently remains in author Python code.
+
 Once the task specification is ready, ask the daemon to advance it:
 
 ```python

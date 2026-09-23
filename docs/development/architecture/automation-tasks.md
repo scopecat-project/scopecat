@@ -134,6 +134,11 @@ activate equipment. New observations/repairs need explicit new task intent.
 
 ## Panel requirements
 
+The workbench now has a retained calibration-task list and detail view with stage
+results, admission errors, frozen context and start/pause/cancel controls. Stage
+execution links reuse the procedure operator view for resource/worker status,
+review and cancellation. This is the first task consumer, not a capability panel.
+
 Sample/target panels need scoped capability status, evidence time and parameter
 revision, pending checks/repairs, blocked prerequisites and explicit missing scope.
 They must not translate procedure completion into a calibrated flag. A completed
@@ -166,7 +171,8 @@ Required next contracts:
 4. Worker/environment routing, resource/scientific grouping, fairness, task budgets
    and coalescing repeated maintenance requests. Closing a notebook must not own
    or cancel admitted background work.
-5. Panel projections and operator controls using the same domain service.
+5. Sample capability panels using the same domain service; task operator controls
+   and execution drill-down are already available in the workbench.
 
 Validate these with a small synthetic array: full tune-up, local drift, one failed
 resource, unaffected progress, restart and explicit partial results. Add a sample

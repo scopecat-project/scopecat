@@ -427,11 +427,13 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
         resolve_root=procedure_root,
     )
 
-    task_runner = CalibrationTaskRunner(application.calibration_tasks, project_workers)
     retained_workers = RevisionWorkers("scopecat_server.retained_worker")
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI) -> AsyncGenerator[None]:
+        task_runner = CalibrationTaskRunner(
+            application.calibration_tasks, project_workers
+        )
         project_workers.start()
         task_runner.start()
         try:

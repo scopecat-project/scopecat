@@ -141,6 +141,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/calibration-tasks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Calibration Tasks */
+        get: operations["list_calibration_tasks_api_v1_calibration_tasks_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/calibration-tasks/{task_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Calibration Task */
+        get: operations["get_calibration_task_api_v1_calibration_tasks__task_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/calibration-tasks/control": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Control Calibration Task */
+        post: operations["control_calibration_task_api_v1_calibration_tasks_control_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/config-registry": {
         parameters: {
             query?: never;
@@ -2857,6 +2908,185 @@ export interface components {
             parameters: components["schemas"]["ParameterRevisionRef"];
             setup: components["schemas"]["SetupRevisionRef"];
         };
+        /**
+         * CalibrationCheckRequest
+         * @description Durable declaration stored as a procedure intent's calibration_check field.
+         *
+         *     Execution step addresses locate evidence; they do not define capability
+         *     identity. This initial adapter supports one measurement and one analysis.
+         */
+        CalibrationCheckRequest: {
+            /** Analysis Step */
+            analysis_step: string;
+            /**
+             * Codec
+             * @default scopecat.calibration-check.v1
+             * @constant
+             */
+            codec: "scopecat.calibration-check.v1";
+            context: components["schemas"]["CalibrationContext"];
+            /** Measurement Step */
+            measurement_step: string;
+            /**
+             * Result Output
+             * @default check
+             */
+            result_output: string;
+            scope: components["schemas"]["CalibrationScope"];
+        };
+        /**
+         * CalibrationContext
+         * @description Exact requested scientific inputs; branch labels do not establish scope.
+         */
+        CalibrationContext: {
+            parameters: components["schemas"]["ParameterRevisionRef"];
+            scenario: components["schemas"]["SoftwareExecutionScenario"] | null;
+            setup_content_hash: components["schemas"]["Sha256ContentHash"];
+            subject: components["schemas"]["ResolvedSubject"];
+        };
+        /**
+         * CalibrationScope
+         * @description A capability and ordered target addresses within a resolved subject.
+         *
+         *     Conditions and policy versions are explicit laboratory contracts, not
+         *     inferred physical state. Update them when relevant semantics change.
+         */
+        CalibrationScope: {
+            /** Capability */
+            capability: string;
+            /** Conditions */
+            conditions: string;
+            /** Policy Version */
+            policy_version: string;
+            /** Targets */
+            targets: string[];
+        };
+        /** CalibrationStageProgress */
+        CalibrationStageProgress: {
+            /**
+             * Blocked By
+             * @default []
+             */
+            blocked_by: string[];
+            evidence?: components["schemas"]["CheckEvidence"] | null;
+            /** Id */
+            id: string;
+            /** Procedure Run Id */
+            procedure_run_id?: string | null;
+            state: components["schemas"]["CalibrationStageState"];
+        };
+        /** @enum {string} */
+        CalibrationStageState: "ready" | "waiting" | "blocked" | "queued" | "running" | "attention_required" | "waiting_for_input" | "passed" | "rejected" | "failed" | "cancelled" | "incomplete";
+        /** CalibrationTaskCall */
+        "CalibrationTaskCall-Output": {
+            definition: components["schemas"]["ProcedureDefinitionRef"];
+            intent: components["schemas"]["ProcedureIntent-Output"];
+            /**
+             * Samples
+             * @default []
+             */
+            samples: components["schemas"]["SampleSelector"][];
+        };
+        /** CalibrationTaskControl */
+        CalibrationTaskControl: {
+            /**
+             * Action
+             * @enum {string}
+             */
+            action: "start" | "pause" | "cancel";
+            /** Actor */
+            actor: string;
+            /** Expected Revision */
+            expected_revision: number;
+            /** Reason */
+            reason: string;
+            /** Task Id */
+            task_id: string;
+        };
+        /** CalibrationTaskCreate */
+        "CalibrationTaskCreate-Output": {
+            /** Calls */
+            calls: {
+                [key: string]: components["schemas"]["CalibrationTaskCall-Output"];
+            };
+            plan: components["schemas"]["CalibrationTaskPlan"];
+            /** Task Id */
+            task_id: string;
+        };
+        /** CalibrationTaskPage */
+        CalibrationTaskPage: {
+            /** Items */
+            items: components["schemas"]["CalibrationTaskRecord"][];
+            /** Next Cursor */
+            next_cursor?: number | null;
+        };
+        /**
+         * CalibrationTaskPlan
+         * @description Explicit target-expanded checks; every stage retains its own context.
+         */
+        CalibrationTaskPlan: {
+            /** Stages */
+            stages: components["schemas"]["CalibrationTaskStage"][];
+        };
+        /**
+         * CalibrationTaskProgress
+         * @description Observed execution progress; not scientific readiness or dispatch authority.
+         */
+        CalibrationTaskProgress: {
+            /** Complete */
+            complete: boolean;
+            /** Ready */
+            ready: string[];
+            /** Stages */
+            stages: components["schemas"]["CalibrationStageProgress"][];
+            /** Successful */
+            successful: boolean;
+        };
+        /** CalibrationTaskRecord */
+        CalibrationTaskRecord: {
+            /**
+             * Control Revision
+             * @default 1
+             */
+            control_revision: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Dispatch Errors */
+            dispatch_errors?: {
+                [key: string]: string;
+            };
+            /** Executions */
+            executions?: {
+                [key: string]: string;
+            };
+            last_control?: components["schemas"]["CalibrationTaskControl"] | null;
+            /**
+             * Mode
+             * @default manual
+             * @enum {string}
+             */
+            mode: "manual" | "running" | "paused" | "cancelled" | "finished";
+            specification: components["schemas"]["CalibrationTaskCreate-Output"];
+        };
+        /** CalibrationTaskStage */
+        CalibrationTaskStage: {
+            check: components["schemas"]["CalibrationCheckRequest"];
+            /**
+             * Depends On
+             * @default []
+             */
+            depends_on: string[];
+            /** Id */
+            id: string;
+        };
+        /** CalibrationTaskView */
+        CalibrationTaskView: {
+            progress: components["schemas"]["CalibrationTaskProgress"];
+            task: components["schemas"]["CalibrationTaskRecord"];
+        };
         /** CandidateConfigRegistrySource */
         CandidateConfigRegistrySource: {
             /** Acceptance */
@@ -2925,6 +3155,22 @@ export interface components {
             kind: "change_key";
             /** Parameter Id */
             parameter_id: string;
+        };
+        /**
+         * CheckEvidence
+         * @description Read projection of a retained check, including attempts without a result.
+         *
+         *     Scope comes from the analysis (or the original check request if unfinished).
+         *     The caller resolves the analysis belonging to this measurement. References
+         *     are retained for inspection, not authenticated by this pure selector.
+         */
+        CheckEvidence: {
+            /** Analysis Record Id */
+            analysis_record_id: string | null;
+            measurement: components["schemas"]["RunSnapshot"];
+            /** Passed */
+            passed: boolean | null;
+            scope: components["schemas"]["CalibrationScope"];
         };
         /**
          * CollectReceipt
@@ -10606,6 +10852,102 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AuthorWorkspaceCatalog"];
+                };
+            };
+        };
+    };
+    list_calibration_tasks_api_v1_calibration_tasks_get: {
+        parameters: {
+            query?: {
+                cursor?: number | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalibrationTaskPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_calibration_task_api_v1_calibration_tasks__task_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                task_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalibrationTaskView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    control_calibration_task_api_v1_calibration_tasks_control_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CalibrationTaskControl"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalibrationTaskView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

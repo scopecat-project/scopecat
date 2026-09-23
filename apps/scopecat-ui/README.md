@@ -122,7 +122,16 @@ from cancellation completion; a waiting child's cancellation leaves its resource
 owner running. Unknown child effects require reconciliation, and both explicit
 dispatch and launch admission replay enforce the same server-side gate.
 
-The server manages project processes for explicitly dispatched procedures, with
+`CalibrationTasks` lists durable check plans and polls their stage progress. It
+shows retained admission errors and frozen measurement contexts, offers fenced
+start/pause/cancel controls, and opens existing procedure details for execution
+inspection. Task controls require an actor and reason; a conflict refreshes the
+view without replaying the command. Cancelling a task stops future admission and
+does not claim its admitted hardware work has stopped. Task URLs use `?task=...#launch`.
+This is a task operator view, not a sample capability/health projection or plan editor.
+
+The server manages project processes for explicitly dispatched procedures and
+stages of running calibration tasks, with
 at most two live workers. A worker runs the normal durable `resume` operation
 until closure, attention, or interpretation input, then exits. Waiting for review
 consumes no process. The manager observes submitted review input and wakes ready
@@ -130,7 +139,8 @@ procedures; HTTP disconnects do not cancel execution. Durable leases remain the
 authority across processes.
 
 Manager membership is retained in `.scopecat/console-procedures.json`. On daemon
-restart, only previously managed, ready procedures are eligible to resume; other
+restart, previously managed ready procedures are eligible to resume; running
+calibration tasks also recover admitted stages awaiting worker handoff. Other
 CLI procedures are not automatically adopted. An observed nonzero worker exit
 pauses automatic dispatch until an explicit `Dispatch existing procedure` request.
 Attention and closed procedures leave the manager. This is process management, not a

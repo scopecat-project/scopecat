@@ -11,6 +11,7 @@ import { LaunchForm } from "./LaunchForm";
 import { OriginalSubmission } from "./OriginalSubmission";
 import { ProcedureHistory } from "./ProcedureHistory";
 import { ProcedureProgress } from "./ProcedureProgress";
+import { CalibrationTasks } from "./CalibrationTasks";
 
 export function LaunchWorkspace({
   handoff,
@@ -210,6 +211,9 @@ export function LaunchWorkspace({
         catalogReady={sourceAvailable && !handoff && Boolean(entry) && catalog.isSuccess}
       />
       <ProcedureHistory selectedId={procedureId} onSelect={admitted} />
+      {projectId && (
+        <CalibrationTasks key={projectId} projectId={projectId} onProcedure={admitted} />
+      )}
       {procedureId && <ProcedureProgress key={procedureId} procedureId={procedureId} />}
     </section>
   );
