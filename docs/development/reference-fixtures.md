@@ -87,6 +87,22 @@ retaining their explicit low-level snapshots and descriptive context labels.
 Those labels carry provenance, not parameter ownership or validity. Both journeys
 keep the combined registry empty.
 
+The copied-author launch suite owns a separate equipment-only daemon because it
+edits source files and observes live worker batches. Explicit parameter/setup
+selection now covers HTTP and Python launch, modified Ramsey timing, typed/editable
+requests, required-input diagnostics, source refresh, saved plans, bounded inspection
+and reconnecting to an ongoing preview. Overrides retain independent parameter
+provenance through the worker boundary. Changing a daily branch does not invalidate
+an exact reviewed launch; idempotent submission and new execution both retain its
+original inputs. This replaces the former global-default invalidation assertion.
+
+The analysis-recovery journey shares the independent daemon instead of starting
+another default-configured process. Its procedure receives an explicit resolved
+snapshot. Tests still verify one original acquisition, no reacquisition during
+recovery, unchanged failed-procedure history, exact recovery provenance and
+idempotency/conflict checks. Run counts compare against the existing store rather
+than assuming the service belongs to only one test.
+
 The legacy gallery still starts with transitional parameter defaults. Reassess
 its calibration/default-publication assertions against the new design; retain
 needed behaviors in focused tests and retire the old consumers. There is no

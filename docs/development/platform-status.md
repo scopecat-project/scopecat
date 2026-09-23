@@ -64,6 +64,10 @@ not imply calibration validity, while plans and candidates retain exact scope.
 The old unknown-parameter context test is folded into tutorial coverage. Managed
 notebook recovery now uses parameter branches, including stale edits and recovery
 in a fresh Python process. Exploration/reanalysis also runs without global defaults.
+The separate copied-author suite likewise uses equipment-only startup and explicit
+inputs across source refresh, request editing, HTTP launch and live preview recovery.
+Analysis recovery shares independent startup and preserves its no-reacquisition
+and provenance checks.
 Remaining
 legacy consumers still include the shared gallery daemon, combined configuration
 editing/default-selection APIs and working-point launch paths. Their presence is

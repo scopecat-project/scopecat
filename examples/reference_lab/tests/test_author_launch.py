@@ -18,7 +18,7 @@ from scopecat.api.analysis import AnalysisDefinition, AnalysisStep
 from scopecat.application import LabApplication
 from scopecat.application.author_project import AuthorProject
 from scopecat.application.launch import LaunchCatalog, LaunchPreview, LaunchSubmission
-from scopecat.daemon.client import DaemonClient, DaemonConflictError
+from scopecat.daemon.client import DaemonClient
 from scopecat.kernel.frozen import thaw_json_value
 from scopecat.kernel.quantity import Quantity
 from scopecat.project import load_project
@@ -27,6 +27,7 @@ from scopecat.records.launch_request import LaunchRequest
 from scopecat.records.run_request import AxisValuesSourceRecord
 from scopecat.records.sample import SampleRevisionDraft
 from scopecat.records.scientific_selection import (
+    ParameterConfiguration,
     SampleSubjectChoice,
     ScientificSelection,
 )
@@ -34,7 +35,7 @@ from scopecat_server.author_worker import revision_project
 from scopecat_server.lifecycle import start_project, stop_project
 from scopecat_testkit.project_loading import isolated_project_imports
 
-from reference_lab.configuration import EXAMPLE_ROOT
+from reference_lab.configuration import EXAMPLE_ROOT, bootstrap_config
 
 
 @dataclass(frozen=True)
@@ -44,6 +45,7 @@ class AuthorDaemon:
     source: str
     analysis: AnalysisStep
     root: Path
+    configuration: ParameterConfiguration
 
 
 @pytest.fixture(scope="module")
@@ -53,7 +55,18 @@ def reference_lab_daemon(
     root = tmp_path_factory.mktemp("ordinary-author")
     for name in ("src", "config"):
         shutil.copytree(EXAMPLE_ROOT / name, root / name)
-    shutil.copy2(EXAMPLE_ROOT / "scopecat.toml", root / "scopecat.toml")
+    shutil.copy2(
+        EXAMPLE_ROOT / "fixtures/equipment_bootstrap.py",
+        root / "src/equipment_bootstrap.py",
+    )
+    (root / "scopecat.toml").write_text(
+        (EXAMPLE_ROOT / "scopecat.toml")
+        .read_text()
+        .replace(
+            "reference_lab.application:create_bootstrap",
+            "equipment_bootstrap:create_bootstrap",
+        )
+    )
     source_path = root / "src/reference_lab/workflows/authored/signal.py"
     source = source_path.read_text(encoding="utf-8")
     # Only ordinary author code changes, with no Git repository or project edits.
@@ -122,7 +135,23 @@ def preview_signal(
                 )()
             # Keep the loaded objects, not snapshot import paths, across the
             # function-scoped loader isolation used by the rest of this suite.
-            yield AuthorDaemon(endpoint.base_url, application, source, analysis, root)
+            with application.connect(endpoint.base_url) as lab:
+                config = bootstrap_config()
+                parameters = lab.parameters.save(
+                    name="author-inputs",
+                    catalog=config.parameter_catalog,
+                    parameters=config.parameter_snapshot,
+                )
+                configuration = ParameterConfiguration(
+                    ref=parameters.ref, setup=lab.setup.active().revision.ref
+                )
+                assert lab.config.registry().entries == ()
+            yield AuthorDaemon(
+                endpoint.base_url, application, source, analysis, root, configuration
+            )
+            with application.connect(endpoint.base_url) as lab:
+                assert lab.config.registry().entries == ()
+                assert lab.setup.active().revision.ref == configuration.setup
         finally:
             stop_project(project)
 
@@ -147,7 +176,9 @@ def test_copied_author_uses_shared_control_plan_and_real_retained_run(
             json={"name": "Author cooldown"},
         )
         collection_response.raise_for_status()
-        before = lab.config.active()
+        before = lab.parameters.resolve(
+            fixture.configuration.ref, setup=fixture.configuration.setup
+        )
         chip = lab.samples.create(
             "author-chip",
             kind="synthetic",
@@ -172,7 +203,8 @@ def test_copied_author_uses_shared_control_plan_and_real_retained_run(
                 inputs={"polarity": "negative"},
                 actor="ordinary-author",
                 selection=ScientificSelection(
-                    subject=SampleSubjectChoice(sample_id=chip.id)
+                    subject=SampleSubjectChoice(sample_id=chip.id),
+                    configuration=fixture.configuration,
                 ),
                 record_collection="author-cooldown",
             )
@@ -234,9 +266,10 @@ def test_copied_author_uses_shared_control_plan_and_real_retained_run(
             )
         np.testing.assert_array_equal(retained[0], retained[1])
         np.testing.assert_array_equal(retained[0], (-2.0,))
-        assert lab.config.active() == before
+        assert lab.config.registry().entries == ()
         python_run = selected.run(
             lab,
+            config=before,
             edits={
                 "frequency": sc.axis(
                     next(
@@ -256,6 +289,7 @@ def test_copied_author_uses_shared_control_plan_and_real_retained_run(
         wrong = LaunchRequest(
             action="preview",
             experiment="copied_signal",
+            selection=ScientificSelection(configuration=fixture.configuration),
             version=selected.entry.version,
             control_edits={
                 "frequency": ControlEdit(mode="fixed", value=Quantity(7, "GHz"))
@@ -269,10 +303,22 @@ def test_copied_author_uses_shared_control_plan_and_real_retained_run(
         changed = wrong.model_copy(update={"version": "stale", "control_edits": {}})
         with pytest.raises(ValueError, match="declaration changed"):
             provider(lab, changed)
-        lab.config.set_default(before.config)
+        branch = lab.parameters.create_branch(
+            "author-daily", revision=fixture.configuration.ref
+        )
+        editor = lab.parameters.workspace(branch.name)
+        editor["qubits"]["q0"]["drive_carrier_frequency"] = sc.Quantity(5.1, "GHz")
+        editor.save()
         assert provider(lab, command) == admitted
-        with pytest.raises(DaemonConflictError, match="active configuration changed"):
-            provider(lab, command.model_copy(update={"request_key": "stale-new"}))
+        replay = provider(
+            lab, command.model_copy(update={"request_key": "exact-replay"})
+        )
+        assert isinstance(replay, LaunchSubmission)
+        repeated = lab.procedures.get(replay.procedure_id).resume()
+        output = repeated.output("experiment")
+        assert output.kind == "run"
+        assert lab.get_run(output.run_id).config == before.config
+        assert lab.config.registry().entries == ()
 
 
 def test_author_changes_supported_timing_without_application_edits(
@@ -282,7 +328,9 @@ def test_author_changes_supported_timing_without_application_edits(
     authors = fixture.application.authors
     assert authors is not None
     with fixture.application.connect(fixture.url) as lab:
-        config = lab.config.active().config
+        config = lab.parameters.resolve(
+            fixture.configuration.ref, setup=fixture.configuration.setup
+        ).config
         entry = authors.get("ramsey")
         invocation = entry.edit(config=config)
         preview = lab.preview(invocation, config=config)
@@ -299,30 +347,17 @@ def test_revision_aware_notebook_prepare_preserves_parameter_context(
     reference_lab_daemon: AuthorDaemon,
 ) -> None:
     from scopecat.application.author_project import AuthorProject
-    from scopecat.records.config_context import ConfigContextRef, ContextRunConfigSource
+    from scopecat.records.run import ParameterRunConfigSource
 
     from reference_lab.parameters import QubitParameters
 
     fixture = reference_lab_daemon
     with fixture.application.connect(fixture.url) as lab:
-        active = lab.config.active()
+        setup = lab.setup.active()
         sample = lab.samples.create(
             "notebook-context",
             kind="synthetic",
             content=SampleRevisionDraft(display_name="Notebook context"),
-        )
-        saved = lab.config.save_context(
-            entry_id="notebook-working-point",
-            base=ConfigContextRef(
-                entry_id=active.entry.id, content_hash=active.entry.content_hash
-            ),
-            sample=sample.selector(),
-            working_point_id="shifted",
-            label="Notebook shifted point",
-            parameters=active.config.parameter_snapshot,
-        )
-        context = ConfigContextRef(
-            entry_id=saved.entry.id, content_hash=saved.entry.content_hash
         )
         overrides = (
             sc.parameter_update(
@@ -331,21 +366,30 @@ def test_revision_aware_notebook_prepare_preserves_parameter_context(
                 sc.Quantity(5.1, "GHz"),
             ),
         )
-        expected = lab.config.resolve_context(context, overrides=overrides)
+        expected = lab.parameters.resolve(
+            fixture.configuration.ref,
+            setup=fixture.configuration.setup,
+            overrides=overrides,
+        )
         with AuthorProject(fixture.url, timeout=120) as authors:
             prepared = authors.prepare(
-                "copied_signal", context=context, overrides=overrides
+                "copied_signal",
+                selection=ScientificSelection(
+                    subject=SampleSubjectChoice(sample_id=sample.id),
+                    configuration=fixture.configuration.model_copy(
+                        update={"overrides": overrides}
+                    ),
+                ),
             )
             admitted = prepared.submit(request_key="notebook-context-launch")
-        assert prepared.request.selection.configuration.kind == "working_point"
-        assert prepared.request.selection.configuration.ref == context
+        assert prepared.request.selection.configuration.kind == "parameters"
+        assert prepared.request.selection.configuration.ref == fixture.configuration.ref
         assert prepared.request.selection.configuration.overrides == overrides
         assert prepared.preview.code_revision is not None
         source = prepared.preview.reviewed.config_source
-        assert isinstance(source, ContextRunConfigSource)
+        assert isinstance(source, ParameterRunConfigSource)
         assert source == expected.config_source
-        assert source.sample.sample_id == "notebook-context"
-        assert source.sample.context_id == "shifted"
+        assert prepared.preview.reviewed.binding.samples[0].sample_id == sample.id
         procedure = lab.procedures.get(admitted.procedure_id)
         deadline = time.monotonic() + 30
         while procedure.state in {"ready", "leased"} and time.monotonic() < deadline:
@@ -365,14 +409,18 @@ def test_revision_aware_notebook_prepare_preserves_parameter_context(
         assert run.snapshot.config_source == source
         assert run.request.metadata["author_code_revision"] == revision.content_hash
         assert run.samples[0].sample_id == "notebook-context"
-        assert run.samples[0].context_id == "shifted"
-        assert lab.config.active() == active
+        assert lab.setup.active() == setup
+        assert lab.config.registry().entries == ()
 
 
 def test_required_author_input_diagnostics_survive_the_worker_boundary(
     reference_lab_daemon: AuthorDaemon,
 ) -> None:
     with AuthorProject(reference_lab_daemon.url) as author:
+        author.use(
+            parameters=reference_lab_daemon.configuration.ref,
+            setup=reference_lab_daemon.configuration.setup,
+        )
         entry = next(
             item for item in author.catalog().entries if item.id == "required_target"
         )
@@ -409,6 +457,10 @@ def test_editable_request_rebuilds_and_reuses_saved_plan(
     )
     frequencies[:] = 5.2
     with AuthorProject(fixture.url, receipts=tmp_path / "receipts") as author:
+        author.use(
+            parameters=reference_lab_daemon.configuration.ref,
+            setup=reference_lab_daemon.configuration.setup,
+        )
         selected = request.typed(SignalInputs) if typed else request
         scanned = author.prepare(selected)
         assert scanned.request.control_edits["frequency"].mode == "scan"
@@ -464,6 +516,10 @@ def test_imported_request_rejects_changed_declaration_but_can_select_old_revisio
     request = declaration(gain=1.0)
     path = fixture.root / "src/reference_lab/workflows/authored/signal.py"
     with AuthorProject(fixture.url) as author:
+        author.use(
+            parameters=reference_lab_daemon.configuration.ref,
+            setup=reference_lab_daemon.configuration.setup,
+        )
         original = author.prepare(request)
         try:
             path.write_text(
@@ -488,6 +544,10 @@ def test_required_control_uses_existing_catalog_preview_and_plan_paths(
     reference_lab_daemon: AuthorDaemon,
 ) -> None:
     with AuthorProject(reference_lab_daemon.url) as author:
+        author.use(
+            parameters=reference_lab_daemon.configuration.ref,
+            setup=reference_lab_daemon.configuration.setup,
+        )
         entry = next(
             item for item in author.catalog().entries if item.id == "required_level"
         )
@@ -513,6 +573,10 @@ def test_author_inspection_is_bounded_and_retained_without_a_live_client(
         sc.Quantity(float(value), "GHz") for value in np.linspace(4.7, 4.9, 70)
     )
     with AuthorProject(fixture.url) as author:
+        author.use(
+            parameters=reference_lab_daemon.configuration.ref,
+            setup=reference_lab_daemon.configuration.setup,
+        )
         prepared = author.prepare(request)
         facts = prepared.inspection
         assert facts.total_point_count == 70
@@ -549,6 +613,10 @@ def test_author_reads_ongoing_preview_after_reconnect(
     release = fixture.root / "release-preview"
     try:
         with AuthorProject(fixture.url, receipts=fixture.root / "receipts") as author:
+            author.use(
+                parameters=reference_lab_daemon.configuration.ref,
+                setup=reference_lab_daemon.configuration.setup,
+            )
             job = author.prepare(
                 "preview_signal",
                 scans={"frequency": [*np.linspace(4.7, 4.74, 32), 4.8]},
