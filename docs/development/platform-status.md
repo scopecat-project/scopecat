@@ -58,7 +58,10 @@ edits after preview. Everyday-author acquisition also no longer needs default
 configuration startup; its explicit low-level snapshots remain valid inputs. Session
 isolation and record numbering also use independent parameters/setup. Generic
 unknown-column and structural-history coverage lives in the tutorial fixture;
-the duplicate working-point structure test is retired. Remaining
+the duplicate working-point structure test is retired. The
+batch/context journeys now also select independent inputs: parameter reuse does
+not imply calibration validity, while plans and candidates retain exact scope.
+The old unknown-parameter context test is folded into tutorial coverage. Remaining
 legacy consumers still include the shared gallery daemon, combined configuration
 editing/default-selection APIs and working-point launch paths. Their presence is
 not evidence that new author workflows require those owners. Use the

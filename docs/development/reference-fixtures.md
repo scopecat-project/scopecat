@@ -64,6 +64,19 @@ overrides, per-collection numeric lookup and saved-plan destination/actor inheri
 Parameter editors do not own sample selection; a supplied editor preserves the
 session's subject instead of importing a working point's bundled sample.
 
+Batch and parameter-context journeys also use this equipment-only fixture.
+The same saved values may be selected in different cooldowns without asserting
+calibration validity. Frozen plans and candidate provenance still retain their
+original batch; candidate execution cannot relabel that evidence. This replaces
+the old requirement to copy a working point before selecting a new batch.
+Parameter-context tests retain numerical response changes, override/replay,
+forged-source rejection and immutable history using independent revisions.
+Launch replay keeps exact sample/setup/parameter inputs after branch edits.
+`AuthorExperiment.prepare/run` accepts `ParameterResolution` explicitly in its
+typed API, matching the underlying runner and preserving exact provenance.
+Their duplicate unknown-parameter test is covered by the tutorial journey below;
+parameter ownership itself no longer implies a sample or working-point scope.
+
 The legacy gallery still starts with transitional parameter defaults. Reassess
 its calibration/default-publication assertions against the new design; retain
 needed behaviors in focused tests and retire the old consumers. There is no
