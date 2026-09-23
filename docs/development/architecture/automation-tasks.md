@@ -153,7 +153,7 @@ preserving each check's own evidence selection. Task execution order is not
 inferred as scientific dependency policy. This graph does not track parameter
 reads or permit evidence reuse across parameter revisions.
 
-Schema 93 retains immutable named capability profiles separately from tasks and
+Schema 94 retains immutable named capability profiles separately from tasks and
 measurement contexts. The profile service saves, lists and reads explicit
 requirements, then evaluates them with the same report query for a caller-chosen
 context. Reports retain the profile ID and evaluated requirements. This provides

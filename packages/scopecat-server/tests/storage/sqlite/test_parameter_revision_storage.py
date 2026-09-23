@@ -157,7 +157,8 @@ def test_damaged_shared_setup_is_rejected(tmp_path: Path) -> None:
     with store.sqlite.write_transaction() as connection:
         connection.execute(
             "UPDATE configuration_setup_contents "
-            "SET setup_json = json_set(setup_json, '$.primary_entity_id', 'changed')"
+            "SET setup_json = json_set(setup_json, "
+            "'$.topology.entities[0].id', 'changed')"
         )
     with (
         store.read_unit_of_work() as work,

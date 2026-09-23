@@ -19,7 +19,7 @@ afterEach(cleanup);
 const hash = `sha256:${"a".repeat(64)}`;
 const detail: ConfigRegistryEntryDetail = {
   structureVersion: hash,
-  summary: { id: "lab", primaryEntityId: "q0", parameterCount: 1, instrumentCount: 0 },
+  summary: { id: "lab", parameterCount: 1, instrumentCount: 0 },
   entry: {
     id: "old",
     content_hash: hash,
@@ -50,7 +50,6 @@ const detail: ConfigRegistryEntryDetail = {
     system: {
       id: "system",
       domain_target: null,
-      primary_entity_id: "q0",
       topology: { entities: [] },
       instrument_registry: { instruments: [] },
       parameter_catalog: {

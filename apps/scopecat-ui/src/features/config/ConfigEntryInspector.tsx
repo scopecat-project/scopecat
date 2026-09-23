@@ -499,7 +499,6 @@ function SnapshotSummary({ snapshot }: { snapshot: ConfigSnapshotSummary }) {
       <div className="mt-[13px] grid grid-cols-4 gap-[9px] pt-3 max-[1100px]:grid-cols-2 max-[460px]:grid-cols-1">
         <ConfigFact label="Parameters" value={String(snapshot.parameterCount)} />
         <ConfigFact label="Instruments" value={String(snapshot.instrumentCount)} />
-        <ConfigFact label="Primary entity" value={snapshot.primaryEntityId ?? "Not reported"} />
       </div>
     </section>
   );

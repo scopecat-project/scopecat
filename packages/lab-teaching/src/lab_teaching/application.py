@@ -14,7 +14,6 @@ from scopecat.records.setup import ExecutableSetupSnapshot
 
 def initial_setup() -> ExecutableSetupSnapshot:
     return ExecutableSetupSnapshot(
-        primary_entity_id="q0",
         topology=Topology(entities=[sc.EntityRef(id="q0", kind="logical_qubit")]),
         instrument_registry=InstrumentRegistry(instruments=[]),
         routing=RoutingGraph(routes=[]),

@@ -9,13 +9,13 @@ from pydantic import ConfigDict
 
 from scopecat.records.config import ConfigProfileSnapshot
 
-CONFIG_SNAPSHOT_FORMAT_VERSION = "scopecat.config_snapshot.v10"
+CONFIG_SNAPSHOT_FORMAT_VERSION = "scopecat.config_snapshot.v11"
 
 
 class _ConfigSnapshotDocument(ConfigProfileSnapshot):
     model_config = ConfigDict(extra="forbid")
 
-    format_version: Literal["scopecat.config_snapshot.v10"] = (
+    format_version: Literal["scopecat.config_snapshot.v11"] = (
         CONFIG_SNAPSHOT_FORMAT_VERSION
     )
 

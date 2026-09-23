@@ -31,7 +31,6 @@ const revision: SetupRevision = {
   note: "",
   recorded_at: "2026-09-19T00:00:00Z",
   setup: {
-    primary_entity_id: "q0",
     topology: { entities: [] },
     instrument_registry: { instruments: [] },
     routing: { roles: [], routes: [] },

@@ -502,7 +502,6 @@ class SystemSpec(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     id: str
-    primary_entity_id: str
     topology: Topology
     instrument_registry: InstrumentRegistry
     scenario: SoftwareExecutionScenario | None = None
@@ -539,10 +538,6 @@ class ConfigProfileSnapshot(BaseModel):
     id: str
     system: SystemSpec
     parameter_snapshot: ParameterSnapshot
-
-    @property
-    def primary_entity_id(self) -> str:
-        return self.system.primary_entity_id
 
     @property
     def topology(self) -> Topology:

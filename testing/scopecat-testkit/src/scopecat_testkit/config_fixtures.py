@@ -10,7 +10,6 @@ def simple_scan_config() -> ConfigProfileSnapshot:
             "id": "simple-scan-profile",
             "system": {
                 "id": "simple-scan-system",
-                "primary_entity_id": "q0",
                 "topology": {
                     "entities": [
                         {"id": "q0", "kind": "logical_device"},

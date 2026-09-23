@@ -15,7 +15,6 @@ import type { components } from "../../api-schema";
 
 export interface ConfigSnapshotSummary {
   id: string;
-  primaryEntityId: string;
   parameterCount: number;
   instrumentCount: number;
 }
@@ -148,7 +147,6 @@ async function retryOneTransportFailure<Result>(send: () => Promise<Result>): Pr
 function summarizeConfigSnapshot(config: ConfigProfileSnapshot): ConfigSnapshotSummary {
   return {
     id: config.id,
-    primaryEntityId: config.system.primary_entity_id,
     parameterCount: config.parameter_snapshot.values?.length ?? 0,
     instrumentCount: config.system.instrument_registry.instruments.length,
   };
@@ -163,7 +161,7 @@ export function parseConfigProfileJson(textValue: string): ConfigProfileSnapshot
   }
   const profile = object(parsed, "selected config snapshot");
   const formatVersion = optionalText(profile.format_version);
-  if (formatVersion !== "scopecat.config_snapshot.v10") {
+  if (formatVersion !== "scopecat.config_snapshot.v11") {
     throw new Error(
       `Unsupported config snapshot format: ${formatVersion ?? "missing format_version"}.`,
     );

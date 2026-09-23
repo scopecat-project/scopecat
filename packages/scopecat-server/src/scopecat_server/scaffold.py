@@ -52,7 +52,6 @@ def initial_setup() -> ExecutableSetupSnapshot:
                 "No physical instrument connections.",
             ),
         ),
-        primary_entity_id="subject",
         topology=Topology(
             entities=[EntityRef(id="subject", kind="logical_subject")],
         ),

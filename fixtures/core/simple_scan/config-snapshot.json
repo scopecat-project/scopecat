@@ -1,9 +1,8 @@
 {
-  "format_version": "scopecat.config_snapshot.v10",
+  "format_version": "scopecat.config_snapshot.v11",
   "id": "simple-scan-profile",
   "system": {
     "id": "simple-scan-system",
-    "primary_entity_id": "q0",
     "topology": {
       "entities": [
         {

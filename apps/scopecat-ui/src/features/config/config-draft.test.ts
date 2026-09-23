@@ -101,7 +101,6 @@ function testConfig(): ConfigProfileSnapshot {
     id: "active",
     system: {
       id: "system",
-      primary_entity_id: "q0",
       topology: {
         entities,
       },

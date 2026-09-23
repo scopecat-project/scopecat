@@ -125,7 +125,6 @@ describe("ConfigWorkspace", () => {
         config: emptyConfig(entryId),
         summary: {
           id: entryId,
-          primaryEntityId: "q0",
           parameterCount: 0,
           instrumentCount: 0,
         },
@@ -249,7 +248,6 @@ describe("ConfigWorkspace", () => {
         config: emptyConfig(entry.id),
         summary: {
           id: entry.id,
-          primaryEntityId: "q0",
           parameterCount: 0,
           instrumentCount: 0,
         },
@@ -561,7 +559,6 @@ function entryDetail(entry: ConfigRegistryEntry) {
     config: emptyConfig(entry.id),
     summary: {
       id: entry.id,
-      primaryEntityId: "q0",
       parameterCount: 0,
       instrumentCount: 0,
     },
@@ -573,7 +570,6 @@ function emptyConfig(id: string): ConfigProfileSnapshot {
     id,
     system: {
       id: "system",
-      primary_entity_id: "q0",
       topology: {
         entities: [],
       },

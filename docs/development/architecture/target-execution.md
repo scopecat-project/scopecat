@@ -5,7 +5,7 @@ audited at `3ddaeb27b` after target catalog PR #625. This is the full execution 
 implemented. Authored/session and workbench selection are also implemented as
 described in the later stages below. It refines [experiment contexts](experiment-contexts.md).
 This design follows the [prebaseline data policy](../data-compatibility.md).
-Current format 93 is not a compatibility baseline; no old-format reader or
+Current format 94 is not a compatibility baseline; no old-format reader or
 migration obligation is introduced here. Coordinate shared source-side files
 with workspace publication.
 
@@ -27,7 +27,7 @@ compares it independently and reports `target_binding_changed`; moving it out of
 the subject must not permit reuse under a different mapping. Indexed history uses
 the complete context. This is scientific applicability, separate from target identity.
 
-Schema 93 and scientific-binding codec v3 replace the development representation.
+Schema 94 and scientific-binding codec v3 replace the development representation.
 Use a fresh development store; historical directories remain untouched. Registered
 execution still supports one member with an identity mapping. The general explicit
 mapping checker alone does not enable multi-member execution.
@@ -35,8 +35,10 @@ mapping checker alone does not enable multi-member execution.
 The common `records/measurement_context.py` model now serves retained run projection
 and calibration. `lab.resolve_context(...)` and the read-only
 `POST /api/v1/measurement-context/resolve` endpoint capture branch/setup choices;
-resolution receipts remain outside scientific identity. The saved record payload
-is unchanged by this ownership move, so development schema 93 remains current.
+resolution receipts remain outside scientific identity. That ownership move did
+not alter saved context payloads. Development schema 94 subsequently removes
+`primary_entity_id` from setup/configuration, with setup revision/content codecs v3.
+Setup describes control resources; subject selection belongs to each session/page.
 
 Further convergence should unify scientific entity addresses and author selection resolution,
 then separate setup resource definitions from execution environment and target

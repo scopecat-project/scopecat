@@ -46,9 +46,9 @@ _CONFIG_FIXTURE = (
 
 def test_config_snapshot_rejects_previous_external_format() -> None:
     document = json.loads(_CONFIG_FIXTURE.read_text(encoding="utf-8"))
-    document["format_version"] = "scopecat.config_snapshot.v9"
+    document["format_version"] = "scopecat.config_snapshot.v10"
 
-    with pytest.raises(ValueError, match=r"scopecat\.config_snapshot\.v10"):
+    with pytest.raises(ValueError, match=r"scopecat\.config_snapshot\.v11"):
         parse_config_snapshot_document(json.dumps(document))
 
 

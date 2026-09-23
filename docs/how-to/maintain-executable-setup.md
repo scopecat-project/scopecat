@@ -5,6 +5,16 @@ connections and lifecycle declarations, and the domain target. Saved setup
 revisions contain no parameter definitions or values. Selecting a parameter
 default or publishing a working-point calibration does not select another setup.
 
+Setup does not select a primary chip or entity. Select the scientific subject in
+the session or workbench page; registered targets carry their own binding to the
+setup's control addresses. Laboratory bootstrap code should omit the retired
+`primary_entity_id` argument. Control topology and routing remain explicit.
+
+Current development storage is schema 94; exported configuration documents use
+`scopecat.config_snapshot.v11`. Use fresh development data directories rather than
+rewriting old stores. Historical data and old environments may be retained for
+archival reading; no earlier development format is a compatibility baseline.
+
 In the workbench's configuration page, **Executable setup** shows that independent
 selection. Save the selected configuration's setup, or import a complete JSON
 configuration snapshot and save its setup. Saving adds an immutable revision.

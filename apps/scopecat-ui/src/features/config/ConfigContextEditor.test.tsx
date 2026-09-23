@@ -19,7 +19,6 @@ const config: ConfigProfileSnapshot = {
   system: {
     id: "system",
     domain_target: null,
-    primary_entity_id: "q0",
     topology: { entities: [] },
     instrument_registry: { instruments: [] },
     routing: { roles: [], routes: [] },

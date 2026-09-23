@@ -196,8 +196,8 @@ export function SetupPanel({
         >
           <p>
             Select <strong>{candidate.id}</strong>:{" "}
-            {candidate.setup.instrument_registry.instruments.length} instruments, primary entity{" "}
-            {candidate.setup.primary_entity_id}.
+            {candidate.setup.instrument_registry.instruments.length} instruments,{" "}
+            {candidate.setup.topology.entities?.length ?? 0} control entities.
           </p>
           <p>
             This changes the setup for the entire experiment service, including other pages and

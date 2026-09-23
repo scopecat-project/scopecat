@@ -336,7 +336,6 @@ def _config(*specs: InstrumentSpec) -> ConfigProfileSnapshot:
         id="test",
         system=SystemSpec(
             id="test-system",
-            primary_entity_id="lab",
             topology=Topology(entities=[EntityRef(id="lab", kind="lab")]),
             instrument_registry=InstrumentRegistry(instruments=list(specs)),
             domain_target=None,

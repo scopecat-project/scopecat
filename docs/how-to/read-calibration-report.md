@@ -222,7 +222,7 @@ actually evaluated. Supply either `profile` or `requirements`, not both.
 
 Profiles belong to the selected project data store, are available through the
 HTTP API without importing author Python, and survive current-format backup and
-restore. Current schema 93 retains their storage; use a fresh development data directory and
+restore. Current schema 94 retains their storage; use a fresh development data directory and
 retain older stores with their original environments. A saved profile is a
 report policy, not an automatic maintenance schedule or complete sample policy.
 

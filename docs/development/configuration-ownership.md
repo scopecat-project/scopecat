@@ -22,9 +22,14 @@ must not change device authority. Selecting an author directory must not create 
 new physical access domain. Simulation must declare its model and coverage; it
 must not silently substitute for a physical connection.
 
-Topology and `primary_entity_id` still live in executable setup. Review their
-division between installed resources and measurement binding before promising a
-stable model. Similarly, one daemon-wide active setup is the current authority,
+Setup no longer selects a primary measurement entity. Its topology names control
+entities; the session/page selects the scientific subject, and `TargetSetupBinding`
+relates that subject to control addresses. The retired `primary_entity_id` field
+had no compiler or execution consumer and is rejected rather than silently ignored.
+
+Topology still lives in executable setup. Review the division between installed
+resources and measurement binding before promising a stable model. Similarly,
+one daemon-wide active setup is the current authority,
 not a decision that all future independent targets must switch together. Do not
 invent a comprehensive physical asset model before concrete consumers require it.
 

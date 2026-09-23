@@ -4893,8 +4893,6 @@ export interface components {
         ExecutableSetupSnapshot: {
             domain_target: components["schemas"]["DomainTargetBinding"] | null;
             instrument_registry: components["schemas"]["InstrumentRegistry"];
-            /** Primary Entity Id */
-            primary_entity_id: string;
             routing: components["schemas"]["RoutingGraph"];
             scenario?: components["schemas"]["SoftwareExecutionScenario"] | null;
             topology: components["schemas"]["Topology"];
@@ -10529,8 +10527,6 @@ export interface components {
             id: string;
             instrument_registry: components["schemas"]["InstrumentRegistry"];
             parameter_catalog: components["schemas"]["ParameterCatalog"];
-            /** Primary Entity Id */
-            primary_entity_id: string;
             routing?: components["schemas"]["RoutingGraph"];
             scenario?: components["schemas"]["SoftwareExecutionScenario"] | null;
             topology: components["schemas"]["Topology"];

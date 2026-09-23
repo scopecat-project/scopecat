@@ -373,7 +373,17 @@ def test_config_problems_do_not_produce_an_environment() -> None:
     invalid = config.model_copy(
         update={
             "system": config.system.model_copy(
-                update={"primary_entity_id": "missing-entity"},
+                update={
+                    "routing": config.system.routing.model_copy(
+                        update={
+                            "routes": [
+                                config.system.routing.routes[0].model_copy(
+                                    update={"instrument_id": "missing"}
+                                )
+                            ]
+                        }
+                    )
+                },
             )
         }
     )
@@ -382,7 +392,7 @@ def test_config_problems_do_not_produce_an_environment() -> None:
         build_config_environment(invalid)
 
     assert tuple(problem.code for problem in caught.value.problems) == (
-        "configuration.unknown_primary_entity",
+        "configuration.unknown_resource_route_instrument",
     )
 
 

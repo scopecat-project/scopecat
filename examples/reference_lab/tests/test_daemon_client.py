@@ -29,7 +29,7 @@ def test_reference_lab_manifest_discovers_separate_bootstrap_and_application() -
     assert project.instrument_backend_spec == "reference_lab.backend:create_backend"
     assert bootstrap.setup is not None
     assert bootstrap.parameter_defaults is not None
-    assert bootstrap.setup().primary_entity_id == bootstrap_config().primary_entity_id
+    assert bootstrap.setup().topology == bootstrap_config().topology
     assert (
         bootstrap.parameter_defaults().parameters
         == bootstrap_config().parameter_snapshot

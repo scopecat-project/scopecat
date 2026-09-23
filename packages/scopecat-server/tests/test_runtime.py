@@ -5591,7 +5591,7 @@ def test_admission_does_not_fence_parameter_default_publication(
         assert runtime.application.setup.current().activation.generation == 1
 
 
-def test_setup_save_rejects_unknown_executable_entity(tmp_path: Path) -> None:
+def test_setup_save_rejects_unknown_route_instrument(tmp_path: Path) -> None:
     with LocalDaemonRuntime(tmp_path, bootstrap_config=_config()) as runtime:
         current = runtime.application.setup.current()
         with pytest.raises(BackendConflict):
@@ -5600,7 +5600,19 @@ def test_setup_save_rejects_unknown_executable_entity(tmp_path: Path) -> None:
                     revision_id="invalid-setup",
                     actor="operator",
                     setup=current.revision.setup.model_copy(
-                        update={"primary_entity_id": "missing"}
+                        update={
+                            "routing": current.revision.setup.routing.model_copy(
+                                update={
+                                    "routes": [
+                                        current.revision.setup.routing.routes[
+                                            0
+                                        ].model_copy(
+                                            update={"instrument_id": "missing"}
+                                        )
+                                    ]
+                                }
+                            )
+                        }
                     ),
                 )
             )
