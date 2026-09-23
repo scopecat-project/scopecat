@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 from typing import Literal
 
 from scopecat.analysis.calibration import CHECK_RESULT as CHECK_RESULT
+from scopecat.api.calibration_report import CalibrationReportView
 from scopecat.automation import ProcedureRun
 from scopecat.automation.calibration import (
     CheckEvidence,
@@ -19,7 +20,6 @@ from scopecat.daemon.calibration_checks import (
     MAX_CHECK_OBSERVATIONS,
     CalibrationCheckObservation,
     CalibrationCheckQuery,
-    CalibrationReport,
     CalibrationReportQuery,
     CalibrationRequirement,
     CalibrationTaskPreview,
@@ -104,15 +104,16 @@ class LabCalibrationChecks:
         context: CalibrationContext,
         requirements: tuple[CalibrationRequirement, ...],
         history_limit: int = 50,
-    ) -> CalibrationReport:
+    ) -> CalibrationReportView:
         """Assess explicit capabilities together at one server read snapshot."""
-        return self._client.calibration_report(
+        report = self._client.calibration_report(
             CalibrationReportQuery(
                 context=context,
                 requirements=requirements,
                 history_limit=history_limit,
             )
         )
+        return CalibrationReportView.model_validate(report, from_attributes=True)
 
     def history(
         self,

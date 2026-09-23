@@ -6,8 +6,11 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from pydantic import ValidationError
 
+from scopecat.api.calibration_report import CalibrationReportView
 from scopecat.automation.calibration import (
+    CapabilityAvailability,
     CheckEvidence,
+    CheckSelection,
     assess_calibration_check,
     assess_capability_dependencies,
     select_calibration_check,
@@ -15,6 +18,7 @@ from scopecat.automation.calibration import (
 from scopecat.daemon.calibration_checks import (
     CalibrationReportQuery,
     CalibrationRequirement,
+    CalibrationRequirementStatus,
 )
 from scopecat.kernel.content_identity import sha256_json_hash
 from scopecat.kernel.frozen import freeze_json_mapping
@@ -37,6 +41,34 @@ from scopecat.records.setup import SetupRevisionRef
 
 START = datetime(2026, 9, 23, tzinfo=UTC)
 SCOPE = CalibrationScope("drive", ("q0", "q1"), "idle-v1", "residual-v1")
+
+
+def test_notebook_report_escapes_lab_text_and_preserves_typed_data(
+    observation: tuple[RunSnapshot, CalibrationContext],
+) -> None:
+    _, context = observation
+    item = CalibrationRequirementStatus(
+        requirement=CalibrationRequirement(
+            id="<script>lab</script>",
+            scope=SCOPE,
+            max_age=timedelta(hours=1),
+            depends_on=("<readout>",),
+        ),
+        selection=CheckSelection("unknown", "incomplete_history"),
+        availability=CapabilityAvailability("blocked", ("<readout>",)),
+        scanned=2,
+        unresolved_procedures=("<execution>",),
+        incomplete_reasons=("unresolved_checks",),
+    )
+    view = CalibrationReportView(context=context, observed_at=START, items=(item,))
+    rendered = view._repr_html_()
+    assert "<script>" not in rendered and "&lt;script&gt;" in rendered
+    assert "&lt;readout&gt;" in rendered and "&lt;execution&gt;" in rendered
+    assert "unknown" in rendered and "blocked" in rendered
+    assert START.isoformat() in rendered
+    assert view.items[0].selection.status == "unknown"
+    assert view.context == context
+    assert "blocked" in repr(view)
 
 
 def test_capability_dependencies_propagate_without_changing_own_checks() -> None:

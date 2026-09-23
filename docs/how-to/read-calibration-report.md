@@ -74,6 +74,15 @@ still conservative exact-revision matching, not parameter-dependency analysis.
 
 ## Declare capability prerequisites
 
+In a notebook, leave `report` as the last expression of a cell to display a
+table of capabilities, targets, own-check results, availability and blocking
+prerequisites. Expand each requirement for its evidence IDs, reasons, age policy
+and unresolved executions; expand the context for exact scientific inputs.
+The report retains its typed `.items`, `.context` and `.observed_at` fields.
+Displaying it performs no request: call `lab.calibration_checks.report(...)`
+again to obtain a fresh snapshot. A saved notebook output is a captured view
+at that observation time, not a live status panel or an authoritative data record.
+
 Add `depends_on` to requirements when your laboratory's policy requires other
 capabilities to be usable first. These are IDs in the same report:
 

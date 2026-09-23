@@ -255,6 +255,11 @@ try:
                 )
                 assert report.items[3].availability.blocked_by == ("missing",)
                 assert report.items[4].availability.blocked_by == ("dependent",)
+                rendered = report._repr_html_()
+                assert "Own check" in rendered and "Availability" in rendered
+                assert "dependent evidence" in rendered
+                assert "Exact measurement context" in rendered
+                assert "Snapshot of declared requirements only" in repr(report)
                 assert report.items[1].selection.assessment.reasons == (
                     "check_expired",
                 )
