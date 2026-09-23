@@ -50,7 +50,7 @@ A historical check does not become evidence for the newest head merely because
 both revisions have occupied the same branch.
 
 `scopecat.records.calibration_check` provides `CalibrationScope` and
-`CalibrationContext`; `scopecat.automation.calibration` provides the pure
+`MeasurementContext`; `scopecat.automation.calibration` provides the pure
 `assess_calibration_check()` function. Scope
 names a capability, ordered target addresses within the resolved subject,
 laboratory conditions and policy version. The lab must update the policy version

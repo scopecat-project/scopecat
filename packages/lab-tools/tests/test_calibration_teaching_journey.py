@@ -273,7 +273,7 @@ try:
                 assert "teaching-v1" in saved_report._repr_html_()
                 subject = report.context.subject
                 assert subject.kind == "unbound"
-                captured = checks.resolve_context(
+                captured = lab.resolve_context(
                     branch=namespace["trial"],
                 )
                 assert captured.branch.name == namespace["trial"]

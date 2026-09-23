@@ -80,8 +80,6 @@ from scopecat.daemon.calibration_checks import (
     CalibrationCheckObservationResult,
     CalibrationCheckPage,
     CalibrationCheckQuery,
-    CalibrationContextResolution,
-    CalibrationContextResolve,
     CalibrationProfile,
     CalibrationProfilePage,
     CalibrationProfileRecord,
@@ -101,6 +99,10 @@ from scopecat.daemon.calibration_tasks import (
 from scopecat.daemon.hardware_receipt_wire import (
     decode_collect_receipt,
     decode_run_hardware_receipt,
+)
+from scopecat.daemon.measurement_context import (
+    MeasurementContextResolution,
+    MeasurementContextResolve,
 )
 from scopecat.daemon.points import (
     RunDomainDecisionCommand,
@@ -681,13 +683,13 @@ class DaemonClient:
             f"{_API_PREFIX}/calibration-checks/report", query, CalibrationReport
         )
 
-    def resolve_calibration_context(
-        self, query: CalibrationContextResolve
-    ) -> CalibrationContextResolution:
+    def resolve_measurement_context(
+        self, query: MeasurementContextResolve
+    ) -> MeasurementContextResolution:
         return self._post_model(
-            f"{_API_PREFIX}/calibration-checks/context",
+            f"{_API_PREFIX}/measurement-context/resolve",
             query,
-            CalibrationContextResolution,
+            MeasurementContextResolution,
         )
 
     def save_calibration_profile(

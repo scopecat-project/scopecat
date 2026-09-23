@@ -45,8 +45,8 @@ from scopecat.records.analysis import (
 from scopecat.records.calibration_check import (
     CalibrationCheckRequest,
     CalibrationCheckResult,
-    CalibrationContext,
 )
+from scopecat.records.measurement_context import MeasurementContext
 from scopecat.records.run import ParameterRunConfigSource, RunConfigSource
 from scopecat.records.sample import SampleSelector
 from scopecat.records.scientific_binding import (
@@ -161,13 +161,7 @@ def _require_context(
     if (
         not isinstance(source, ParameterRunConfigSource)
         or source.overrides
-        or CalibrationContext(
-            source.parameters,
-            binding.subject,
-            binding.setup_content_hash,
-            binding.scenario,
-            binding.target_binding,
-        )
+        or MeasurementContext.from_binding(source.parameters, binding)
         != request.context
     ):
         raise BackendConflict("check measurement differs from admitted declaration")

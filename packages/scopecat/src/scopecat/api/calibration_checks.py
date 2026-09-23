@@ -20,8 +20,6 @@ from scopecat.daemon.calibration_checks import (
     MAX_CHECK_OBSERVATIONS,
     CalibrationCheckObservation,
     CalibrationCheckQuery,
-    CalibrationContextResolution,
-    CalibrationContextResolve,
     CalibrationProfile,
     CalibrationProfilePage,
     CalibrationProfileRecord,
@@ -31,14 +29,8 @@ from scopecat.daemon.calibration_checks import (
     CalibrationTaskPreview,
 )
 from scopecat.daemon.client import DaemonClient
-from scopecat.records.calibration_check import (
-    CalibrationCheckRequest,
-    CalibrationContext,
-    CalibrationScope,
-)
-from scopecat.records.sample import SampleSelector
-from scopecat.records.setup import SetupRevisionRef
-from scopecat.records.target_catalog import TargetRevisionRef
+from scopecat.records.calibration_check import CalibrationCheckRequest, CalibrationScope
+from scopecat.records.measurement_context import MeasurementContext
 
 
 @dataclass(frozen=True)
@@ -65,7 +57,7 @@ class CalibrationCheckHistory:
         self,
         *,
         requested_scope: CalibrationScope,
-        current: CalibrationContext,
+        current: MeasurementContext,
         now: datetime,
         max_age: timedelta,
     ) -> CheckSelection:
@@ -110,7 +102,7 @@ class LabCalibrationChecks:
     def report(
         self,
         *,
-        context: CalibrationContext,
+        context: MeasurementContext,
         requirements: tuple[CalibrationRequirement, ...] | None = None,
         profile: str | None = None,
         history_limit: int = 50,
@@ -135,24 +127,6 @@ class LabCalibrationChecks:
                 )
             )
         return CalibrationReportView.model_validate(report, from_attributes=True)
-
-    def resolve_context(
-        self,
-        *,
-        branch: str,
-        samples: tuple[SampleSelector, ...] = (),
-        setup: SetupRevisionRef | None = None,
-        target: TargetRevisionRef | None = None,
-    ) -> CalibrationContextResolution:
-        """Capture branch/setup heads for exact samples without execution."""
-        return self._client.resolve_calibration_context(
-            CalibrationContextResolve(
-                branch=branch,
-                samples=samples,
-                setup=setup,
-                target=target,
-            )
-        )
 
     def save_profile(
         self,
@@ -182,7 +156,7 @@ class LabCalibrationChecks:
         self,
         *,
         scope: CalibrationScope | None = None,
-        context: CalibrationContext | None = None,
+        context: MeasurementContext | None = None,
         max_requests: int = 200,
         page_size: int = 50,
     ) -> CalibrationCheckHistory:

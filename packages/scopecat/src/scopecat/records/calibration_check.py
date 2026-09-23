@@ -8,10 +8,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from scopecat.kernel.frozen import thaw_json_value
-from scopecat.records.content import Sha256ContentHash
-from scopecat.records.execution_scenario import SoftwareExecutionScenario
-from scopecat.records.parameter_revision import ParameterRevisionRef
-from scopecat.records.scientific_binding import ResolvedSubject, TargetSetupBinding
+from scopecat.records.measurement_context import MeasurementContext
 
 
 @dataclass(frozen=True)
@@ -28,17 +25,6 @@ class CalibrationScope:
     policy_version: str
 
 
-@dataclass(frozen=True)
-class CalibrationContext:
-    """Exact requested scientific inputs; branch labels do not establish scope."""
-
-    parameters: ParameterRevisionRef
-    subject: ResolvedSubject
-    setup_content_hash: Sha256ContentHash
-    scenario: SoftwareExecutionScenario | None
-    target_binding: TargetSetupBinding | None = None
-
-
 class CalibrationCheckRequest(BaseModel):
     """Durable declaration stored as a procedure intent's calibration_check field.
 
@@ -49,7 +35,7 @@ class CalibrationCheckRequest(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
     codec: Literal["scopecat.calibration-check.v1"] = "scopecat.calibration-check.v1"
     scope: CalibrationScope
-    context: CalibrationContext
+    context: MeasurementContext
     measurement_step: str = Field(min_length=1)
     analysis_step: str = Field(min_length=1)
     result_output: str = Field(default="check", min_length=1)

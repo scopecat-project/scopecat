@@ -4,7 +4,7 @@ import type { MethodResponse } from "openapi-fetch";
 import { apiClient, apiData } from "../../api-client";
 import { CalibrationProfiles } from "../launch/CalibrationProfiles";
 
-type Resolution = MethodResponse<typeof apiClient, "post", "/api/v1/calibration-checks/context">;
+type Resolution = MethodResponse<typeof apiClient, "post", "/api/v1/measurement-context/resolve">;
 
 export function CurrentCapabilities({
   sampleId,
@@ -61,7 +61,7 @@ export function CurrentCapabilities({
     try {
       setResolution(
         await apiData(
-          apiClient.POST("/api/v1/calibration-checks/context", {
+          apiClient.POST("/api/v1/measurement-context/resolve", {
             body: {
               branch: branch.trim(),
               setup: selectedSetup

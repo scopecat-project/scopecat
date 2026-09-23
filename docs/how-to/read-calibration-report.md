@@ -59,7 +59,7 @@ multiple exact sample revisions and roles:
 ```python
 from scopecat.records.sample import SampleSelector
 
-resolved = lab.calibration_checks.resolve_context(
+resolved = lab.resolve_context(
     branch="daily",
     samples=(SampleSelector(sample_id="chip-a", revision=2),),
 )
@@ -73,7 +73,7 @@ To retain registered target identity and its entity projection:
 
 ```python
 target = lab.target("chip-target", revision=2)
-resolved = lab.calibration_checks.resolve_context(branch="daily", target=target.ref)
+resolved = lab.resolve_context(branch="daily", target=target.ref)
 ```
 
 Pass either `target` or inline `samples`. The resolver checks the target's catalog,
@@ -99,7 +99,9 @@ publication fence or permission to execute hardware.
 
 ## Query from Python
 
-Provide a resolved `CalibrationContext` and the requirements you want to inspect.
+Provide a resolved `MeasurementContext` and the requirements you want to inspect.
+The [common context API](resolve-measurement-context.md) serves measurements and
+calibration alike; it is not owned by the calibration-check API.
 For example, using the exact declaration from a laboratory check intent:
 
 ```python

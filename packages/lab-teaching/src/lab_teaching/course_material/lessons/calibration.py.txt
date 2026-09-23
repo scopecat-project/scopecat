@@ -14,9 +14,9 @@ from scopecat.kernel.frozen import thaw_json_value
 from scopecat.records.calibration_check import (
     CalibrationCheckRequest,
     CalibrationCheckResult,
-    CalibrationContext,
     CalibrationScope,
 )
+from scopecat.records.measurement_context import MeasurementContext
 from scopecat.records.parameter_branch import ParameterBranch
 from scopecat.records.scientific_binding import UnboundSubject
 from scopecat.records.scientific_scope import setup_content_hash
@@ -154,7 +154,7 @@ def check_declaration(
 ) -> CalibrationCheckRequest:
     return CalibrationCheckRequest(
         scope=check_scope(tolerance),
-        context=CalibrationContext(
+        context=MeasurementContext(
             initial.config_source.parameters,
             UnboundSubject(),
             setup_content_hash(initial.config),

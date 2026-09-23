@@ -93,8 +93,6 @@ from scopecat.daemon.calibration_checks import (
     CalibrationCheckObservationResult,
     CalibrationCheckPage,
     CalibrationCheckQuery,
-    CalibrationContextResolution,
-    CalibrationContextResolve,
     CalibrationProfile,
     CalibrationProfilePage,
     CalibrationProfileRecord,
@@ -119,6 +117,10 @@ from scopecat.daemon.hardware_receipt_wire import (
     HARDWARE_RECEIPT_MEDIA_TYPE,
     encode_collect_receipt,
     encode_run_hardware_receipt,
+)
+from scopecat.daemon.measurement_context import (
+    MeasurementContextResolution,
+    MeasurementContextResolve,
 )
 from scopecat.daemon.points import (
     ResolvedRunDomainView,
@@ -1806,11 +1808,11 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
     def calibration_report(query: CalibrationReportQuery) -> CalibrationReport:
         return application.calibration_checks.report(query)
 
-    @app.post(f"{_API_PREFIX}/calibration-checks/context")
-    def resolve_calibration_context(
-        query: CalibrationContextResolve,
-    ) -> CalibrationContextResolution:
-        return application.calibration_context.resolve(query)
+    @app.post(f"{_API_PREFIX}/measurement-context/resolve")
+    def resolve_measurement_context(
+        query: MeasurementContextResolve,
+    ) -> MeasurementContextResolution:
+        return application.measurement_context.resolve(query)
 
     @app.post(f"{_API_PREFIX}/calibration-profiles")
     def save_calibration_profile(

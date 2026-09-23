@@ -15,40 +15,10 @@ from scopecat.automation.calibration import (
     CheckSelection,
 )
 from scopecat.automation.calibration_tasks import CalibrationTaskPlan
-from scopecat.records.calibration_check import (
-    CalibrationCheckRequest,
-    CalibrationContext,
-    CalibrationScope,
-)
-from scopecat.records.parameter_branch import ParameterBranch
-from scopecat.records.sample import SampleSelector
-from scopecat.records.setup import SetupRevisionRef
-from scopecat.records.target_catalog import TargetRevisionRef
+from scopecat.records.calibration_check import CalibrationCheckRequest, CalibrationScope
+from scopecat.records.measurement_context import MeasurementContext
 
 MAX_CHECK_OBSERVATIONS = 2000
-
-
-class CalibrationContextResolve(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True)
-    branch: str = Field(min_length=1)
-    setup: SetupRevisionRef | None = None
-    samples: tuple[SampleSelector, ...] = Field(default=(), max_length=32)
-    target: TargetRevisionRef | None = None
-
-    @model_validator(mode="after")
-    def exact_samples(self) -> CalibrationContextResolve:
-        if self.target is not None and self.samples:
-            raise ValueError("choose a registered target or inline samples, not both")
-        if any(sample.revision is None for sample in self.samples):
-            raise ValueError("select exact sample revisions for a capability context")
-        return self
-
-
-class CalibrationContextResolution(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True)
-    context: CalibrationContext
-    branch: ParameterBranch
-    setup: SetupRevisionRef
 
 
 class CalibrationRequirement(BaseModel):
@@ -111,12 +81,12 @@ class CalibrationProfilePage(BaseModel):
 
 class CalibrationProfileReportQuery(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
-    context: CalibrationContext
+    context: MeasurementContext
     history_limit: int = Field(default=50, ge=1, le=200)
 
 
 class CalibrationReportQuery(CalibrationRequirements):
-    context: CalibrationContext
+    context: MeasurementContext
     history_limit: int = Field(default=50, ge=1, le=200)
 
     @model_validator(mode="after")
@@ -140,7 +110,7 @@ class CalibrationReport(BaseModel):
     """Advisory evidence snapshot for explicit requirements, not sample health."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
-    context: CalibrationContext
+    context: MeasurementContext
     observed_at: datetime
     items: tuple[CalibrationRequirementStatus, ...]
     profile_id: str | None = None
@@ -150,7 +120,7 @@ class CalibrationCheckQuery(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     scope: CalibrationScope | None = None
-    context: CalibrationContext | None = None
+    context: MeasurementContext | None = None
     limit: int = Field(default=50, ge=1, le=200)
     cursor: int | None = Field(default=None, ge=1)
 
@@ -175,7 +145,7 @@ class CalibrationCheckObservation(BaseModel):
 
     model_config = ConfigDict(extra="forbid", frozen=True)
     scope: CalibrationScope | None = None
-    context: CalibrationContext | None = None
+    context: MeasurementContext | None = None
     head: str | None = Field(default=None, min_length=1)
     revisions: dict[
         Annotated[str, Field(min_length=1)], Annotated[int, Field(ge=1)]

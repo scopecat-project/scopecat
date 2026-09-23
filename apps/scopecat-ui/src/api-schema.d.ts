@@ -141,23 +141,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/calibration-checks/context": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Resolve Calibration Context */
-        post: operations["resolve_calibration_context_api_v1_calibration_checks_context_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/calibration-checks/report": {
         parameters: {
             query?: never;
@@ -971,6 +954,23 @@ export interface paths {
         get: operations["get_instrument_api_v1_instruments__instrument_id__get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/measurement-context/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Resolve Measurement Context */
+        post: operations["resolve_measurement_context_api_v1_measurement_context_resolve_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3027,7 +3027,7 @@ export interface components {
              * @constant
              */
             codec: "scopecat.calibration-check.v1";
-            context: components["schemas"]["CalibrationContext"];
+            context: components["schemas"]["MeasurementContext"];
             /** Measurement Step */
             measurement_step: string;
             /**
@@ -3036,35 +3036,6 @@ export interface components {
              */
             result_output: string;
             scope: components["schemas"]["CalibrationScope"];
-        };
-        /**
-         * CalibrationContext
-         * @description Exact requested scientific inputs; branch labels do not establish scope.
-         */
-        CalibrationContext: {
-            parameters: components["schemas"]["ParameterRevisionRef"];
-            scenario: components["schemas"]["SoftwareExecutionScenario"] | null;
-            setup_content_hash: components["schemas"]["Sha256ContentHash"];
-            subject: components["schemas"]["ResolvedSubject"];
-            target_binding?: components["schemas"]["TargetSetupBinding"] | null;
-        };
-        /** CalibrationContextResolution */
-        CalibrationContextResolution: {
-            branch: components["schemas"]["ParameterBranch"];
-            context: components["schemas"]["CalibrationContext"];
-            setup: components["schemas"]["SetupRevisionRef"];
-        };
-        /** CalibrationContextResolve */
-        CalibrationContextResolve: {
-            /** Branch */
-            branch: string;
-            /**
-             * Samples
-             * @default []
-             */
-            samples: components["schemas"]["SampleSelector"][];
-            setup?: components["schemas"]["SetupRevisionRef"] | null;
-            target?: components["schemas"]["TargetRevisionRef"] | null;
         };
         /**
          * CalibrationProfile
@@ -3099,7 +3070,7 @@ export interface components {
         };
         /** CalibrationProfileReportQuery */
         CalibrationProfileReportQuery: {
-            context: components["schemas"]["CalibrationContext"];
+            context: components["schemas"]["MeasurementContext"];
             /**
              * History Limit
              * @default 50
@@ -3111,7 +3082,7 @@ export interface components {
          * @description Advisory evidence snapshot for explicit requirements, not sample health.
          */
         CalibrationReport: {
-            context: components["schemas"]["CalibrationContext"];
+            context: components["schemas"]["MeasurementContext"];
             /** Items */
             items: components["schemas"]["CalibrationRequirementStatus"][];
             /**
@@ -3124,7 +3095,7 @@ export interface components {
         };
         /** CalibrationReportQuery */
         CalibrationReportQuery: {
-            context: components["schemas"]["CalibrationContext"];
+            context: components["schemas"]["MeasurementContext"];
             /**
              * History Limit
              * @default 50
@@ -6598,6 +6569,41 @@ export interface components {
         MeasurementComplexJson: {
             imag: number;
             real: number;
+        };
+        /**
+         * MeasurementContext
+         * @description Frozen inputs using an exact saved parameter revision without overrides.
+         *
+         *     Mutable branch choices and resolution receipts are separate. This is not the
+         *     complete execution provenance, nor proof of calibration applicability.
+         */
+        MeasurementContext: {
+            parameters: components["schemas"]["ParameterRevisionRef"];
+            scenario: components["schemas"]["SoftwareExecutionScenario"] | null;
+            setup_content_hash: components["schemas"]["Sha256ContentHash"];
+            subject: components["schemas"]["ResolvedSubject"];
+            target_binding?: components["schemas"]["TargetSetupBinding"] | null;
+        };
+        /**
+         * MeasurementContextResolution
+         * @description Exact inputs plus the branch generation and setup revision used to resolve.
+         */
+        MeasurementContextResolution: {
+            branch: components["schemas"]["ParameterBranch"];
+            context: components["schemas"]["MeasurementContext"];
+            setup: components["schemas"]["SetupRevisionRef"];
+        };
+        /** MeasurementContextResolve */
+        MeasurementContextResolve: {
+            /** Branch */
+            branch: string;
+            /**
+             * Samples
+             * @default []
+             */
+            samples: components["schemas"]["SampleSelector"][];
+            setup?: components["schemas"]["SetupRevisionRef"] | null;
+            target?: components["schemas"]["TargetRevisionRef"] | null;
         };
         /**
          * MeasurementDataset
@@ -11172,39 +11178,6 @@ export interface operations {
             };
         };
     };
-    resolve_calibration_context_api_v1_calibration_checks_context_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CalibrationContextResolve"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CalibrationContextResolution"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     calibration_report_api_v1_calibration_checks_report_post: {
         parameters: {
             query?: never;
@@ -12816,6 +12789,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["InstrumentView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    resolve_measurement_context_api_v1_measurement_context_resolve_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MeasurementContextResolve"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MeasurementContextResolution"];
                 };
             };
             /** @description Validation Error */

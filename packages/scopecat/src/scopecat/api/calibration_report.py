@@ -105,6 +105,7 @@ class CalibrationReportView(CalibrationReport):
             f"({context.parameters.content_hash})\n"
             f"Setup: {context.setup_content_hash}\n"
             f"Subject: {context.subject.model_dump_json()}\n"
+            f"Target binding: {context.target_binding!r}\n"
             f"Scenario: {context.scenario!r}"
         )
         return (

@@ -31,6 +31,10 @@ from scopecat.automation import ProcedureRegistry, ProcedureScheduleRegistry
 from scopecat.config.candidates import CandidateConfig
 from scopecat.control.models import ControlRunState
 from scopecat.daemon.client import DaemonClient
+from scopecat.daemon.measurement_context import (
+    MeasurementContextResolution,
+    MeasurementContextResolve,
+)
 from scopecat.daemon.views import (
     ConfigContextResolution,
     DaemonHealth,
@@ -50,6 +54,7 @@ from scopecat.records.experimental_batch import ExperimentalBatch
 from scopecat.records.record_collection import RecordCollection
 from scopecat.records.run import RunConfigSource
 from scopecat.records.sample import SampleSelector
+from scopecat.records.setup import SetupRevisionRef
 from scopecat.records.target_catalog import (
     TargetCatalogPage,
     TargetCreateCommand,
@@ -290,6 +295,25 @@ class LabClient:
 
     def health(self) -> DaemonHealth:
         return self._control.health()
+
+    def resolve_context(
+        self,
+        *,
+        branch: str,
+        samples: tuple[SampleSelector, ...] = (),
+        setup: SetupRevisionRef | None = None,
+        target: TargetRevisionRef | None = None,
+    ) -> MeasurementContextResolution:
+        """Capture exact saved scientific inputs without changing live selections.
+
+        Branch and active setup heads are resolved together. The receipt retains
+        their versions; no experiment is imported or hardware acquired.
+        """
+        return self._client.resolve_measurement_context(
+            MeasurementContextResolve(
+                branch=branch, samples=samples, setup=setup, target=target
+            )
+        )
 
     def targets(
         self, *, limit: int = 100, before: int | None = None

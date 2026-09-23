@@ -16,9 +16,9 @@ from scopecat.daemon.wire import (
 from scopecat.runtime_binding import load_runtime_binding
 
 from scopecat_server.services.calibration_checks import CalibrationCheckQueries
-from scopecat_server.services.calibration_context import CalibrationContextService
 from scopecat_server.services.calibration_profiles import CalibrationProfileService
 from scopecat_server.services.calibration_tasks import CalibrationTaskService
+from scopecat_server.services.measurement_context import MeasurementContextService
 from scopecat_server.storage.sqlite.apparatus_history import ApparatusHistoryStore
 from scopecat_server.storage.sqlite.experiment_plan_repository import (
     ExperimentPlanRepository,
@@ -122,7 +122,7 @@ class DaemonApplication:
         self.calibration_profiles = CalibrationProfileService(
             project_store.sqlite, self.calibration_checks
         )
-        self.calibration_context = CalibrationContextService(
+        self.measurement_context = MeasurementContextService(
             project_store.sqlite, samples, self.targets
         )
 

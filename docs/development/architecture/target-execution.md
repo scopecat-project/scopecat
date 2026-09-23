@@ -22,7 +22,7 @@ plan and procedure admission. The authority reconstructs it from retained eviden
 missing or altered mappings are rejected. Procedure children and candidate
 verification preserve the relationship alongside the subject and setup.
 
-`CalibrationContext.target_binding` also retains the relationship. Applicability
+`MeasurementContext.target_binding` also retains the relationship. Applicability
 compares it independently and reports `target_binding_changed`; moving it out of
 the subject must not permit reuse under a different mapping. Indexed history uses
 the complete context. This is scientific applicability, separate from target identity.
@@ -32,7 +32,13 @@ Use a fresh development store; historical directories remain untouched. Register
 execution still supports one member with an identity mapping. The general explicit
 mapping checker alone does not enable multi-member execution.
 
-Further convergence should unify scientific entity addresses and context resolution,
+The common `records/measurement_context.py` model now serves retained run projection
+and calibration. `lab.resolve_context(...)` and the read-only
+`POST /api/v1/measurement-context/resolve` endpoint capture branch/setup choices;
+resolution receipts remain outside scientific identity. The saved record payload
+is unchanged by this ownership move, so development schema 93 remains current.
+
+Further convergence should unify scientific entity addresses and author selection resolution,
 then separate setup resource definitions from execution environment and target
 binding. Capability prerequisite policy remains distinct from task execution order.
 

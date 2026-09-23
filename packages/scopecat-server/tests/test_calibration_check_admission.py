@@ -35,8 +35,6 @@ from scopecat.daemon.calibration_checks import (
     CalibrationCheckObservationResult,
     CalibrationCheckPage,
     CalibrationCheckQuery,
-    CalibrationContextResolution,
-    CalibrationContextResolve,
     CalibrationProfile,
     CalibrationProfileReportQuery,
     CalibrationReport,
@@ -52,6 +50,10 @@ from scopecat.daemon.calibration_tasks import (
     CalibrationTaskListQuery,
     CalibrationTaskRecord,
     CalibrationTaskView,
+)
+from scopecat.daemon.measurement_context import (
+    MeasurementContextResolution,
+    MeasurementContextResolve,
 )
 from scopecat.daemon.wire import (
     AnalysisFactOutputPayload,
@@ -69,10 +71,10 @@ from scopecat.records.analysis import AnalysisFact, RunAnalysisSubject
 from scopecat.records.calibration_check import (
     CalibrationCheckRequest,
     CalibrationCheckResult,
-    CalibrationContext,
     CalibrationScope,
 )
 from scopecat.records.execution_scenario import SoftwareExecutionScenario
+from scopecat.records.measurement_context import MeasurementContext
 from scopecat.records.plan_ref import ProcedureChildSubmission
 from scopecat.records.run_request import RunRequest
 from scopecat.records.sample import SampleRevisionDraft, SampleSelector
@@ -129,13 +131,13 @@ def test_capability_context_retains_exact_registered_target(
             ),
         )
     )
-    query = CalibrationContextResolve(branch="target-branch", target=target.ref)
+    query = MeasurementContextResolve(branch="target-branch", target=target.ref)
     with TestClient(runtime.app()) as client:
         response = client.post(
-            "/api/v1/calibration-checks/context", json=query.model_dump(mode="json")
+            "/api/v1/measurement-context/resolve", json=query.model_dump(mode="json")
         )
         assert response.status_code == 200, response.text
-        resolved = CalibrationContextResolution.model_validate(response.json())
+        resolved = MeasurementContextResolution.model_validate(response.json())
         subject = resolved.context.subject
         assert subject.kind == "registered_target"
         assert subject.ref == target.ref
@@ -147,7 +149,7 @@ def test_capability_context_retains_exact_registered_target(
             SampleSelector(sample_id="chip", revision=1).model_dump(mode="json")
         ]
         assert (
-            client.post("/api/v1/calibration-checks/context", json=mixed).status_code
+            client.post("/api/v1/measurement-context/resolve", json=mixed).status_code
             == 422
         )
     revised = app.targets.revise(
@@ -158,8 +160,8 @@ def test_capability_context_retains_exact_registered_target(
             ),
         )
     )
-    assert app.calibration_context.resolve(query).context.subject == subject
-    latest = app.calibration_context.resolve(
+    assert app.measurement_context.resolve(query).context.subject == subject
+    latest = app.measurement_context.resolve(
         query.model_copy(update={"target": revised.ref})
     ).context.subject
     assert latest.kind == "registered_target" and latest.ref == revised.ref
@@ -196,13 +198,13 @@ def test_capability_context_retains_exact_registered_target(
         )
     )
     with pytest.raises(BackendConflict, match="one target member"):
-        app.calibration_context.resolve(query.model_copy(update={"target": joint.ref}))
+        app.measurement_context.resolve(query.model_copy(update={"target": joint.ref}))
     for reference in (
         target.ref.model_copy(update={"catalog_id": "elsewhere"}),
         target.ref.model_copy(update={"content_hash": "sha256:" + "a" * 64}),
     ):
         with pytest.raises(BackendConflict):
-            app.calibration_context.resolve(
+            app.measurement_context.resolve(
                 query.model_copy(update={"target": reference})
             )
 
@@ -220,27 +222,27 @@ def test_current_capability_context_freezes_branch_and_setup(
             actor="test",
         )
     )
-    query = CalibrationContextResolve(
+    query = MeasurementContextResolve(
         branch="daily", samples=(SampleSelector(sample_id="chip", revision=1),)
     )
     with TestClient(runtime.app()) as client:
         response = client.post(
-            "/api/v1/calibration-checks/context", json=query.model_dump(mode="json")
+            "/api/v1/measurement-context/resolve", json=query.model_dump(mode="json")
         )
         assert response.status_code == 200, response.text
-        resolved = CalibrationContextResolution.model_validate(response.json())
+        resolved = MeasurementContextResolution.model_validate(response.json())
         assert resolved.context == declaration.context
         assert resolved.branch == head
         assert resolved.setup == app.setup.current().revision.ref
         invalid = query.model_dump(mode="json")
         invalid["samples"][0]["revision"] = None
         assert (
-            client.post("/api/v1/calibration-checks/context", json=invalid).status_code
+            client.post("/api/v1/measurement-context/resolve", json=invalid).status_code
             == 422
         )
         assert (
             client.post(
-                "/api/v1/calibration-checks/context",
+                "/api/v1/measurement-context/resolve",
                 json={
                     **query.model_dump(mode="json"),
                     "branch": "missing",
@@ -264,17 +266,17 @@ def test_current_capability_context_freezes_branch_and_setup(
             actor="test",
         )
     )
-    refreshed = app.calibration_context.resolve(query)
+    refreshed = app.measurement_context.resolve(query)
     assert refreshed.branch.generation == 2
     assert refreshed.context.parameters == changed.ref
     assert resolved.context.parameters == declaration.context.parameters
     assert app.setup.current().revision.ref == resolved.setup
-    explicit = app.calibration_context.resolve(
+    explicit = app.measurement_context.resolve(
         query.model_copy(update={"setup": resolved.setup})
     )
     assert explicit == refreshed
     with pytest.raises(BackendConflict, match="reference differs"):
-        app.calibration_context.resolve(
+        app.measurement_context.resolve(
             query.model_copy(
                 update={
                     "setup": resolved.setup.model_copy(
@@ -426,7 +428,7 @@ def _check_case(tmp_path: Path) -> Generator[CheckCase]:
         )
         declaration = CalibrationCheckRequest(
             scope=CalibrationScope("readout", ("q0",), "cold", "1"),
-            context=CalibrationContext(
+            context=MeasurementContext(
                 revision.ref,
                 binding.subject,
                 binding.setup_content_hash,

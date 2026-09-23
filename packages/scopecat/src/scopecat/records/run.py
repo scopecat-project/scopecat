@@ -10,6 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from scopecat.kernel.run_outcome import RunOutcome, RunStatus, utc_now
 from scopecat.records.config import ConfigContentHash
 from scopecat.records.config_context import ContextRunConfigSource
+from scopecat.records.measurement_context import MeasurementContext
 from scopecat.records.parameter_revision import ParameterRevisionRef
 from scopecat.records.parameter_update import ParameterUpdate
 from scopecat.records.sample import SampleBinding
@@ -115,6 +116,20 @@ class RunSnapshot(BaseModel):
         if len(sample_ids) != len(set(sample_ids)):
             raise ValueError("one sample cannot fill multiple run roles")
         return self
+
+    @property
+    def measurement_context(self) -> MeasurementContext | None:
+        """Exact saved inputs, or None for candidates, overrides and unsaved config.
+
+        This derives evidence from the retained run, never current branch heads.
+        A context alone says nothing about execution success or calibration.
+        """
+        source = self.config_source
+        if not isinstance(source, ParameterRunConfigSource) or source.overrides:
+            return None
+        return MeasurementContext.from_binding(
+            source.parameters, self.scientific_binding
+        )
 
     @property
     def status(self) -> RunStatus:

@@ -1,11 +1,11 @@
 """Resolve mutable parameter/setup choices without acquiring or dispatching hardware."""
 
 from scopecat.config.scientific_binding import bind_scientific_evidence
-from scopecat.daemon.calibration_checks import (
-    CalibrationContextResolution,
-    CalibrationContextResolve,
+from scopecat.daemon.measurement_context import (
+    MeasurementContextResolution,
+    MeasurementContextResolve,
 )
-from scopecat.records.calibration_check import CalibrationContext
+from scopecat.records.measurement_context import MeasurementContext
 from scopecat.records.sample import SampleSelector
 
 from scopecat_server.errors import BackendConflict, BackendNotFound
@@ -17,7 +17,7 @@ from scopecat_server.storage.sqlite.setups import SQLiteSetupRepository
 from scopecat_server.storage.sqlite.target_catalog import TargetCatalogStore
 
 
-class CalibrationContextService:
+class MeasurementContextService:
     def __init__(
         self,
         sqlite: SQLiteDatabase,
@@ -28,7 +28,7 @@ class CalibrationContextService:
         self._samples = samples
         self._targets = targets
 
-    def resolve(self, query: CalibrationContextResolve) -> CalibrationContextResolution:
+    def resolve(self, query: MeasurementContextResolve) -> MeasurementContextResolution:
         # Exact sample revisions are immutable. Mutable branch/setup heads share
         # one read transaction; no launch admission or global selection is changed.
         target = (
@@ -38,7 +38,7 @@ class CalibrationContextService:
         if target is not None:
             if len(target.content.members) != 1 or target.content.connections:
                 raise BackendConflict(
-                    "registered capability context requires one target member "
+                    "registered measurement context requires one target member "
                     "and no connections"
                 )
             member = target.content.members[0]
@@ -82,14 +82,8 @@ class CalibrationContextService:
                 )
             except ValueError as error:
                 raise BackendConflict(str(error)) from error
-            return CalibrationContextResolution(
-                context=CalibrationContext(
-                    branch.revision,
-                    binding.subject,
-                    binding.setup_content_hash,
-                    binding.scenario,
-                    binding.target_binding,
-                ),
+            return MeasurementContextResolution(
+                context=MeasurementContext.from_binding(branch.revision, binding),
                 branch=branch,
                 setup=setup,
             )

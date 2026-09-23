@@ -23,14 +23,16 @@ from scopecat.daemon.calibration_checks import (
 from scopecat.kernel.content_identity import sha256_json_hash
 from scopecat.kernel.frozen import freeze_json_mapping
 from scopecat.kernel.run_outcome import RunOutcome
-from scopecat.records.calibration_check import (
-    CalibrationCheckRequest,
-    CalibrationContext,
-    CalibrationScope,
-)
+from scopecat.records.calibration_check import CalibrationCheckRequest, CalibrationScope
 from scopecat.records.execution_scenario import SoftwareExecutionScenario
+from scopecat.records.measurement_context import MeasurementContext
 from scopecat.records.parameter_revision import ParameterRevisionRef
-from scopecat.records.run import ParameterRunConfigSource, RunSnapshot
+from scopecat.records.parameter_update import DeleteParameterRows
+from scopecat.records.run import (
+    AnalysisCandidateRunConfigSource,
+    ParameterRunConfigSource,
+    RunSnapshot,
+)
 from scopecat.records.sample import SampleBinding
 from scopecat.records.scientific_binding import (
     EntityProjection,
@@ -53,7 +55,7 @@ SCOPE = CalibrationScope("drive", ("q0", "q1"), "idle-v1", "residual-v1")
 
 
 def test_notebook_report_escapes_lab_text_and_preserves_typed_data(
-    observation: tuple[RunSnapshot, CalibrationContext],
+    observation: tuple[RunSnapshot, MeasurementContext],
 ) -> None:
     _, context = observation
     item = CalibrationRequirementStatus(
@@ -99,7 +101,7 @@ def test_capability_dependencies_propagate_without_changing_own_checks() -> None
 
 @pytest.mark.parametrize("dependencies", [("missing",), ("a",), ("b",), ("b", "b")])
 def test_report_rejects_invalid_dependency_graph(
-    observation: tuple[RunSnapshot, CalibrationContext],
+    observation: tuple[RunSnapshot, MeasurementContext],
     dependencies: tuple[str, ...],
 ) -> None:
     _, context = observation
@@ -121,7 +123,7 @@ def test_report_rejects_invalid_dependency_graph(
 
 
 @pytest.fixture
-def observation() -> tuple[RunSnapshot, CalibrationContext]:
+def observation() -> tuple[RunSnapshot, MeasurementContext]:
     identity = sha256_json_hash("saved")
     parameters = ParameterRevisionRef(revision_id="daily-1", content_hash=identity)
     scenario = SoftwareExecutionScenario(
@@ -150,13 +152,13 @@ def observation() -> tuple[RunSnapshot, CalibrationContext]:
             ),
             outcome=RunOutcome(run_id="check-1", result="succeeded", certainty="known"),
         ),
-        CalibrationContext(parameters, binding.subject, identity, scenario),
+        MeasurementContext(parameters, binding.subject, identity, scenario),
     )
 
 
 @pytest.mark.parametrize("passed, status", [(True, "usable"), (False, "out_of_spec")])
 def test_applicable_negative_check_is_not_execution_failure(
-    observation: tuple[RunSnapshot, CalibrationContext], passed: bool, status: str
+    observation: tuple[RunSnapshot, MeasurementContext], passed: bool, status: str
 ) -> None:
     measured, current = observation
     result = assess_calibration_check(
@@ -172,8 +174,41 @@ def test_applicable_negative_check_is_not_execution_failure(
     assert result.run_id == measured.run_id
 
 
+def test_run_context_uses_retained_inputs_and_excludes_unsaved_parameters(
+    observation: tuple[RunSnapshot, MeasurementContext],
+) -> None:
+    measured, current = observation
+    assert measured.measurement_context == current
+    assert (
+        RunSnapshot.model_validate_json(measured.model_dump_json()).measurement_context
+        == current
+    )
+    assert "measurement_context" not in measured.model_dump()
+    source = measured.config_source
+    assert isinstance(source, ParameterRunConfigSource)
+    for unsaved in (
+        None,
+        source.model_copy(
+            update={
+                "overrides": (
+                    DeleteParameterRows(parameter_id="qubits", key={"id": "q0"}),
+                )
+            }
+        ),
+        AnalysisCandidateRunConfigSource(
+            source_run_id="prior",
+            analysis_record_id="analysis",
+            proposal_id="proposal",
+            base_config_content_hash=source.content_hash,
+            content_hash=source.content_hash,
+        ),
+    ):
+        changed = measured.model_copy(update={"config_source": unsaved})
+        assert changed.measurement_context is None
+
+
 def test_all_recheck_reasons_are_retained_and_target_order_matters(
-    observation: tuple[RunSnapshot, CalibrationContext],
+    observation: tuple[RunSnapshot, MeasurementContext],
 ) -> None:
     measured, current = observation
     assert current.scenario is not None
@@ -210,7 +245,7 @@ def test_all_recheck_reasons_are_retained_and_target_order_matters(
 
 
 def test_changed_mapping_is_not_reused_even_when_subject_is_unchanged(
-    observation: tuple[RunSnapshot, CalibrationContext],
+    observation: tuple[RunSnapshot, MeasurementContext],
 ) -> None:
     measured, current = observation
     mapping = TargetSetupBinding(
@@ -269,6 +304,9 @@ def test_changed_mapping_is_not_reused_even_when_subject_is_unchanged(
         }
     )
     changed = replace(current, subject=subject, target_binding=changed_mapping)
+    assert measured.measurement_context == replace(
+        current, subject=subject, target_binding=mapping
+    )
     result = assess_calibration_check(
         measured,
         checked_scope=SCOPE,
@@ -292,7 +330,7 @@ def test_changed_mapping_is_not_reused_even_when_subject_is_unchanged(
 
 
 def test_missing_evidence_does_not_grant_readiness(
-    observation: tuple[RunSnapshot, CalibrationContext],
+    observation: tuple[RunSnapshot, MeasurementContext],
 ) -> None:
     measured, current = observation
     measured = measured.model_copy(update={"config_source": None, "outcome": None})
@@ -314,7 +352,7 @@ def test_missing_evidence_does_not_grant_readiness(
 
 
 def test_unbound_real_execution_does_not_inherit_software_check(
-    observation: tuple[RunSnapshot, CalibrationContext],
+    observation: tuple[RunSnapshot, MeasurementContext],
 ) -> None:
     measured, current = observation
     result = assess_calibration_check(
@@ -331,7 +369,7 @@ def test_unbound_real_execution_does_not_inherit_software_check(
 
 
 def test_physical_evidence_does_not_cross_sample_contexts(
-    observation: tuple[RunSnapshot, CalibrationContext],
+    observation: tuple[RunSnapshot, MeasurementContext],
 ) -> None:
     measured, current = observation
     sample = SampleBinding(
@@ -382,7 +420,7 @@ def test_physical_evidence_does_not_cross_sample_contexts(
 
 
 def test_age_policy_is_explicit(
-    observation: tuple[RunSnapshot, CalibrationContext],
+    observation: tuple[RunSnapshot, MeasurementContext],
 ) -> None:
     measured, current = observation
     with pytest.raises(ValueError, match="positive"):
@@ -415,7 +453,7 @@ def later_run(measured: RunSnapshot, *, complete: bool = True) -> RunSnapshot:
 
 
 def test_check_request_decodes_without_author_code_after_intent_freezing(
-    observation: tuple[RunSnapshot, CalibrationContext],
+    observation: tuple[RunSnapshot, MeasurementContext],
 ) -> None:
     _, context = observation
     request = CalibrationCheckRequest(
@@ -430,7 +468,7 @@ def test_check_request_decodes_without_author_code_after_intent_freezing(
 
 @pytest.mark.parametrize("reverse", [False, True])
 def test_selection_never_falls_back_from_newer_negative_evidence(
-    observation: tuple[RunSnapshot, CalibrationContext],
+    observation: tuple[RunSnapshot, MeasurementContext],
     reverse: bool,
 ) -> None:
     measured, current = observation
@@ -466,7 +504,7 @@ def test_selection_never_falls_back_from_newer_negative_evidence(
 
 
 def test_selection_blocks_incomplete_attempt_and_incomplete_query(
-    observation: tuple[RunSnapshot, CalibrationContext],
+    observation: tuple[RunSnapshot, MeasurementContext],
 ) -> None:
     measured, current = observation
     old = CheckEvidence(measured, SCOPE, "old-pass", True)
@@ -504,7 +542,7 @@ def test_selection_blocks_incomplete_attempt_and_incomplete_query(
 
 
 def test_selection_filters_context_but_does_not_choose_between_reanalyses(
-    observation: tuple[RunSnapshot, CalibrationContext],
+    observation: tuple[RunSnapshot, MeasurementContext],
 ) -> None:
     measured, current = observation
     old = CheckEvidence(measured, SCOPE, "first-analysis", True)

@@ -20,11 +20,8 @@ from scopecat.automation.calibration_tasks import (
 )
 from scopecat.daemon.calibration_checks import CalibrationTaskPreview
 from scopecat.kernel.run_outcome import RunOutcome
-from scopecat.records.calibration_check import (
-    CalibrationCheckRequest,
-    CalibrationContext,
-    CalibrationScope,
-)
+from scopecat.records.calibration_check import CalibrationCheckRequest, CalibrationScope
+from scopecat.records.measurement_context import MeasurementContext
 from scopecat.records.parameter_revision import ParameterRevisionRef
 from scopecat.records.run import RunSnapshot
 from scopecat.records.scientific_binding import (
@@ -41,7 +38,7 @@ def _stage(id: str, *dependencies: str) -> CalibrationTaskStage:
         depends_on=dependencies,
         check=CalibrationCheckRequest(
             scope=CalibrationScope("drive", (id,), "idle", "1"),
-            context=CalibrationContext(
+            context=MeasurementContext(
                 ParameterRevisionRef(revision_id="p", content_hash=HASH),
                 UnboundSubject(),
                 HASH,

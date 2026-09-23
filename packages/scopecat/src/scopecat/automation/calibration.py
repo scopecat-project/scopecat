@@ -11,8 +11,9 @@ from datetime import datetime, timedelta
 from graphlib import TopologicalSorter
 from typing import Literal
 
-from scopecat.records.calibration_check import CalibrationContext, CalibrationScope
-from scopecat.records.run import ParameterRunConfigSource, RunSnapshot
+from scopecat.records.calibration_check import CalibrationScope
+from scopecat.records.measurement_context import MeasurementContext
+from scopecat.records.run import RunSnapshot
 from scopecat.records.scientific_binding import UnboundSubject
 
 type CheckReason = Literal[
@@ -82,7 +83,7 @@ def assess_calibration_check(
     checked_scope: CalibrationScope,
     requested_scope: CalibrationScope,
     passed: bool | None,
-    current: CalibrationContext,
+    current: MeasurementContext,
     now: datetime,
     max_age: timedelta,
 ) -> CheckAssessment:
@@ -105,10 +106,10 @@ def assess_calibration_check(
     outcome = measurement.outcome
     if outcome is None or outcome.result != "succeeded":
         unknown.append("measurement_incomplete")
-    source = measurement.config_source
-    if not isinstance(source, ParameterRunConfigSource) or source.overrides:
+    observed = measurement.measurement_context
+    if observed is None:
         unknown.append("parameters_unsaved")
-    elif source.parameters != current.parameters:
+    elif observed.parameters != current.parameters:
         changed.append("parameters_changed")
     binding = measurement.scientific_binding
     if (isinstance(binding.subject, UnboundSubject) and binding.scenario is None) or (
@@ -195,7 +196,7 @@ def select_calibration_check(
     evidence: tuple[CheckEvidence, ...],
     *,
     requested_scope: CalibrationScope,
-    current: CalibrationContext,
+    current: MeasurementContext,
     now: datetime,
     max_age: timedelta,
     history_complete: bool,
