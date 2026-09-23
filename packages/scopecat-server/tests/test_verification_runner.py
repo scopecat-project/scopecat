@@ -18,7 +18,7 @@ def test_tiers_and_weighted_shards_cover_every_file_once(tmp_path: Path) -> None
     (tmp_path / "pyproject.toml").write_text("""
 [tool.scopecat-tests]
 roots = ["tests"]
-fast_paths = ["tests/journey/unit"]
+fast_paths = ["tests/journey/unit", "tests/test_new.py", "tests/suffix_test.py"]
 integration_paths = ["tests/integration"]
 journey_paths = ["tests/journey", "tests/integration/test_restart.py"]
 [tool.scopecat-tests.weights]
@@ -110,6 +110,7 @@ def test_runner_keeps_workspace_config_for_a_nested_only_tier(tmp_path: Path) ->
 addopts = ["--import-mode=importlib"]
 [tool.scopecat-tests]
 roots = ["nested/tests"]
+fast_paths = ["nested/tests"]
 """)
     tests = tmp_path / "nested/tests"
     tests.mkdir(parents=True)
