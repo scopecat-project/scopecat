@@ -42,14 +42,20 @@ def select_files(root: Path, suite: str, shard: tuple[int, int] = (1, 1)) -> lis
             return "fast"
         if matches(path, journeys):
             return "journey"
-        return "integration" if matches(path, integration) else "fast"
+        if matches(path, integration):
+            return "integration"
+        raise ValueError(
+            f"Unclassified test file: {path}; assign a tier in [tool.scopecat-tests]"
+        )
+
+    tiers = {path: tier(path) for path in files}
 
     selected = [
         p
         for p in files
         if suite == "full"
-        or tier(p) == suite
-        or (suite == "core" and tier(p) != "journey")
+        or tiers[p] == suite
+        or (suite == "core" and tiers[p] != "journey")
     ]
     index, count = shard
     buckets: list[list[str]] = [[] for _ in range(count)]
@@ -88,7 +94,10 @@ def main() -> int:
     except ValueError:
         parser.error("--shard requires 1 <= index <= count")
     root = args.root.resolve()
-    files = select_files(root, args.suite, (index, count))
+    try:
+        files = select_files(root, args.suite, (index, count))
+    except ValueError as error:
+        parser.error(str(error))
     if args.list:
         print("\n".join(files))
         return 0

@@ -1,5 +1,6 @@
 """Declared six-channel software plant; no physical device or lease claims."""
 
+import os
 from dataclasses import dataclass
 from typing import cast
 
@@ -26,8 +27,11 @@ from scopecat.records.calibration_check import (
 )
 from scopecat.records.parameter_branch import ParameterBranch
 
-TARGETS = tuple(f"q{i}" for i in range(6))
-GROUPS = {"readout-a": TARGETS[:2], "readout-b": TARGETS[2:4], "readout-c": TARGETS[4:]}
+TARGETS = tuple(f"q{i}" for i in range(int(os.environ["SCOPECAT_TEST_ARRAY_SIZE"])))
+GROUPS = {
+    f"readout-{chr(ord('a') + i // 2)}": TARGETS[i : i + 2]
+    for i in range(0, len(TARGETS), 2)
+}
 PEERS = dict(zip(TARGETS, (*TARGETS[1:], TARGETS[0]), strict=True))
 
 

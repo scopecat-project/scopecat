@@ -24,8 +24,13 @@ Pass pytest options after `--`, for example `fast -- -n 0 -q`. Run affected test
 files directly for focused development. Use `--list` to inspect a tier without
 collecting tests, and `journey --shard 1/2` for one deterministic shard. Shards
 keep files intact and use reviewed file-cost estimates to balance work. New
-files are always included with a default weight; stale weights affect balance,
-not coverage. New runtime journeys should be classified explicitly.
+files in a classified directory are included with a default weight; stale weights
+affect balance, not coverage. Files outside classified paths fail selection,
+including `full` selection, until assigned a tier. Lab/application tests use
+file-level classification so a new runtime journey cannot silently become fast.
+Library directories retain their fast classification and server directories their
+integration classification; authors must still explicitly promote expensive
+server workflows to journey. Classification does not infer cost from filenames.
 
 Every runner invocation writes ignored `.test-results/` artifacts:
 
@@ -56,6 +61,41 @@ and shared-fixture setup is charged to the first test that owns it. Do not
 interpret a timing sample as a benchmark or a successful run as hardware evidence.
 
 ## CI contract during the architecture transition
+
+### September 24 calibration qualification split
+
+[Run 35891413427](https://github.com/scopecat-project/scopecat/actions/runs/35891413427)
+at `01f5629b9` took 6m46s from the first job to gate completion. Core's
+3747 tests took 374.47s, including 25.25s for worker startup/collection.
+Summed test phases were 688.06s; worker assignments were 342.86s and 345.21s.
+This is test-phase occupancy, not CPU utilization. Dependency setup and shard
+imbalance were not the dominant costs in this sample.
+
+The four six-target scenarios accounted for 231.18s of summed phases, and the
+installed-adapter journey another 45.17s. Both were implicitly fast. They now
+belong to journey and remain in both Linux and Windows full acceptance. Journey
+shard weights include these measured costs. Core retains a two-target version of
+the same real daemon/worker chain, including restart, exact candidate retention,
+combined remeasurement, verified publication, unchanged setup and empty legacy
+registry. First-use, settings, lifecycle and author-workspace tests remain in core.
+
+| Invariant | Ordinary PR coverage | Full qualification |
+| --- | --- | --- |
+| Real task → acquisition → analysis → candidate → verified publication | `test_calibration_smoke.py`, two targets, real workers and restart | `test_array_maintenance.py`, six targets and three readout groups |
+| Negative verification cannot publish; exact candidate references and unknown outcomes | `packages/scopecat/tests/api/test_procedures.py`; server `test_calibration_task_finalization.py` | Array drift/rejection scenario |
+| Task restart, current-format restore, failed prerequisites and admission | Server `test_calibration_check_admission.py` and `test_calibration_task_finalization.py` | Array restart and readout-failure scenarios |
+| Concurrent edits cannot be overwritten | Server parameter-branch tests and API procedure conflict tests | Array branch-conflict scenario |
+| Installed adapter identity, refresh and isolated restoration | Core keeps first-use, settings, author workspace and registration checks; these do not replace wheel isolation | `test_installed_adapter_journey.py` retains the complete installed-package chain |
+
+Moving a qualification test does not establish equivalent wheel/process coverage
+in unit tests. Dispatch full acceptance before qualification/release, and run the
+affected journey directly when modifying these boundaries. No test is deleted,
+no timing timeout is shortened, and plain pytest still includes all scenarios.
+
+The five-minute target requires a new final-head CI measurement after this split;
+subtracting cumulative phase seconds from wall time would overstate the saving.
+
+### Required gate
 
 [CI](https://github.com/scopecat-project/scopecat/blob/main/.github/workflows/ci.yml)
 is the required PR gate during the redesign tracked in

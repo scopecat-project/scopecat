@@ -16,6 +16,10 @@ from lab_teaching.project import create_project
     "case", ["healthy", "drift", "readout-failure", "branch-conflict"]
 )
 def test_array_maintenance(tmp_path: Path, case: str) -> None:
+    run_array_maintenance(tmp_path, case=case, target_count=6)
+
+
+def run_array_maintenance(tmp_path: Path, *, case: str, target_count: int) -> None:
     root = tmp_path / "array"
     create_project(root)
     install_lesson(root, "task-calibration")
@@ -37,6 +41,7 @@ def test_array_maintenance(tmp_path: Path, case: str) -> None:
     )
     environment = dict(os.environ)
     environment.pop("SCOPECAT_DAEMON_URL", None)
+    environment["SCOPECAT_TEST_ARRAY_SIZE"] = str(target_count)
     result = subprocess.run(  # noqa: S603 - Fixed scenario and disposable project.
         [sys.executable, "-c", _JOURNEY, str(root), case],
         env=environment,
@@ -56,7 +61,9 @@ from scopecat_server.lifecycle import start_project, stop_project
 
 root, case = Path(sys.argv[1]), sys.argv[2]
 sys.path.insert(0, str(root / "src"))
-from my_experiment.array_maintenance import Channel, TARGETS, DECISION, create_task
+from my_experiment.array_maintenance import (
+    Channel, TARGETS, GROUPS, DECISION, create_task,
+)
 project = sc.open_project(root)
 
 def wait_stage(lab, name):
@@ -128,7 +135,7 @@ try:
             assert lab.parameters.workspace("daily").version == original
         else:
             assert result.progress.successful
-            assert len(result.task.executions) == 9
+            assert len(result.task.executions) == len(GROUPS) + len(TARGETS)
             assert result.finalization is not None
             final = lab.procedures.get(result.finalization.procedure_run_id)
             assert final.step("verify").state == "succeeded", final.summary()

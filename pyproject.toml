@@ -417,12 +417,53 @@ extend-immutable-calls = ["scopecat.Quantity", "scopecat.kernel.quantity.Quantit
 
 [tool.scopecat-tests]
 roots = ["packages/lab-tools/tests", "examples/reference_lab/tests", "packages/scopecat/tests", "packages/scopecat-server/tests", "packages/scopecat-instruments/tests", "packages/scopecat-quantum/tests"]
-fast_paths = ["examples/reference_lab/tests/unit"]
-integration_paths = ["packages/scopecat-server/tests"]
-journey_paths = ["packages/lab-tools/tests/test_calibration_teaching_journey.py", "packages/lab-tools/tests/test_host_journey.py", "packages/lab-tools/tests/test_notebook_workspace_journey.py", "packages/lab-tools/tests/test_unknown_parameter_authoring.py", "packages/lab-tools/tests/test_minimal_teaching_journey.py", "packages/lab-tools/tests/test_teaching_mean_iq_journey.py", "packages/lab-tools/tests/test_grouped_teaching_journey.py", "packages/scopecat-server/tests/test_runtime_binding.py", "examples/reference_lab/tests", "packages/scopecat-server/tests/test_snapshot_integration.py", "packages/scopecat-server/tests/test_author_validation_diagnostics.py"]
+fast_paths = [
+  "examples/reference_lab/tests/unit",
+  "packages/scopecat/tests",
+  "packages/scopecat-instruments/tests",
+  "packages/scopecat-quantum/tests",
+  "packages/lab-tools/tests/test_test_tiers.py",
+]
+# Lab/application tests require a file-level decision. New files must be classified.
+integration_paths = [
+  "packages/scopecat-server/tests",
+  "packages/lab-tools/tests/test_application_entry.py",
+  "packages/lab-tools/tests/test_author_notebook.py",
+  "packages/lab-tools/tests/test_calibration_smoke.py",
+  "packages/lab-tools/tests/test_delivery_recipe.py",
+  "packages/lab-tools/tests/test_entry.py",
+  "packages/lab-tools/tests/test_first_run.py",
+  "packages/lab-tools/tests/test_first_run_journey.py",
+  "packages/lab-tools/tests/test_host.py",
+  "packages/lab-tools/tests/test_installed_tools.py",
+  "packages/lab-tools/tests/test_lab_environment.py",
+  "packages/lab-tools/tests/test_maintenance.py",
+  "packages/lab-tools/tests/test_sandboxes.py",
+  "packages/lab-tools/tests/test_services.py",
+  "packages/lab-tools/tests/test_settings_journey.py",
+  "packages/lab-tools/tests/test_teaching_delivery.py",
+]
+journey_paths = [
+  "packages/lab-tools/tests/test_array_maintenance.py",
+  "packages/lab-tools/tests/test_installed_adapter_journey.py",
+  "packages/lab-tools/tests/test_calibration_teaching_journey.py",
+  "packages/lab-tools/tests/test_host_journey.py",
+  "packages/lab-tools/tests/test_notebook_workspace_journey.py",
+  "packages/lab-tools/tests/test_unknown_parameter_authoring.py",
+  "packages/lab-tools/tests/test_minimal_teaching_journey.py",
+  "packages/lab-tools/tests/test_teaching_mean_iq_journey.py",
+  "packages/lab-tools/tests/test_grouped_teaching_journey.py",
+  "packages/scopecat-server/tests/test_runtime_binding.py",
+  "examples/reference_lab/tests",
+  "packages/scopecat-server/tests/test_snapshot_integration.py",
+  "packages/scopecat-server/tests/test_author_validation_diagnostics.py",
+]
 
 # Windows run 34757173348: summed setup/call/teardown seconds per file.
 [tool.scopecat-tests.weights]
+# Ubuntu run 35891413427: newly classified qualification journeys.
+"packages/lab-tools/tests/test_array_maintenance.py" = 231.2
+"packages/lab-tools/tests/test_installed_adapter_journey.py" = 45.2
 "examples/reference_lab/tests/test_acceptance.py" = 37.3
 "examples/reference_lab/tests/test_analysis_recovery.py" = 6.1
 "examples/reference_lab/tests/test_author_launch.py" = 232.3

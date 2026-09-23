@@ -11,6 +11,14 @@ Run from the repository with the locked development environment:
 uv run --locked pytest packages/lab-tools/tests/test_array_maintenance.py -q
 ```
 
+All four six-target cases belong to the `journey` tier and run in the manual
+Linux/Windows full-acceptance matrix. Ordinary PR CI runs
+`packages/lab-tools/tests/test_calibration_smoke.py`, a two-target healthy version
+of the same chain with restart and verified publication. It is not six-target
+qualification. The harness sets the disposable fixture's
+`SCOPECAT_TEST_ARRAY_SIZE` explicitly to six or two; production APIs do not use
+this test-only setting. See [test feedback](test-feedback.md) for coverage ownership.
+
 The author implementation is in
 `packages/lab-tools/tests/fixtures/array_maintenance.py`; the test copies it into
 the disposable project's author package and registers its two procedures.
