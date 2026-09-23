@@ -8,6 +8,7 @@ from typing import cast
 
 from scopecat.inspection import CompiledProgramInspectionQuery
 from scopecat.measurements.values import MeasurementValueCatalog
+from scopecat.records.parameter_read import DomainInputParameterRead
 from scopecat.sdk.domain.view import (
     DomainCallView,
     DomainPointRef,
@@ -21,6 +22,7 @@ class DomainBatchInputs:
 
     program: tuple[tuple[str, tuple[object, ...]], ...]
     compiler: tuple[tuple[str, tuple[object, ...]], ...]
+    parameter_reads: tuple[DomainInputParameterRead, ...] | None = None
 
     def program_input(self, name: str) -> tuple[object, ...]:
         """Return one program input column in request point order."""

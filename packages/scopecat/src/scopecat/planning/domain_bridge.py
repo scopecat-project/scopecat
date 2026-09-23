@@ -14,6 +14,7 @@ from scopecat.planning.measurement_projection import (
 )
 from scopecat.planning.point_materialization import MaterializedBoundPoints
 from scopecat.program.logical import LogicalDomainExecution
+from scopecat.records.parameter_read import DomainInputParameterRead
 from scopecat.sdk.domain._identities import product_use_id
 from scopecat.sdk.domain.batch import (
     DomainBatchInputs,
@@ -81,19 +82,23 @@ def make_domain_batch_request(
 
     program_input_ids = tuple(port.id for port in call.program.inputs)
     compiler_input_ids = tuple(port.id for port in call.program.compiler_inputs)
+    parameter_reads: list[DomainInputParameterRead] = []
     inputs = DomainBatchInputs(
         program=bound_points.bind_domain_inputs(
             call.id,
             "program",
             program_input_ids,
             point_ordinals,
+            parameter_reads=parameter_reads,
         ),
         compiler=bound_points.bind_domain_inputs(
             call.id,
             "compiler",
             compiler_input_ids,
             point_ordinals,
+            parameter_reads=parameter_reads,
         ),
+        parameter_reads=tuple(parameter_reads),
     )
     selected_points = tuple(
         bound_points.point_domain.points[ordinal] for ordinal in point_ordinals

@@ -44,6 +44,10 @@ from scopecat.sdk.domain.job import (
     DomainInvocationSpec,
     DomainResultValue,
 )
+from scopecat.sdk.domain.parameter_evidence import (
+    attach_domain_input_reads,
+    read_domain_input_reads,
+)
 from scopecat.sdk.domain.runtime import (
     DomainExecutionReceipt,
     DomainExecutionResult,
@@ -215,6 +219,28 @@ def test_point_candidate_reuses_prepared_buffers_across_subranges(
             retained_bytes=5,
             compile_batch=compile_batch,
         )
+
+
+def test_input_evidence_must_cover_selected_batch_and_cannot_be_overwritten(
+    tmp_path: Path,
+) -> None:
+    context = _preparation_context(tmp_path, namespace="input-evidence")
+    assert context.inputs.parameter_reads is not None
+    partial = replace(
+        context,
+        inputs=replace(
+            context.inputs, parameter_reads=context.inputs.parameter_reads[:1]
+        ),
+    )
+    with pytest.raises(ValueError, match="exactly the selected"):
+        attach_domain_input_reads(partial, {})
+    attached = attach_domain_input_reads(context, {"profile": "test"})
+    with pytest.raises(ValueError, match="already contains"):
+        attach_domain_input_reads(context, attached)
+    unavailable = replace(context, inputs=replace(context.inputs, parameter_reads=None))
+    assert attach_domain_input_reads(unavailable, {"profile": "test"}) == {
+        "profile": "test"
+    }
 
 
 def test_map_measurements_closes_exact_product_cover(
@@ -505,7 +531,14 @@ def test_measurement_plan_and_build_close_the_complete_public_sdk_declaration(
 
     assert isinstance(prepared, PreparedDomainExecution)
     assert prepared.instrument_ids == ("instrument-a", "instrument-b")
-    assert prepared.invocation.intent.target_intent == {"mode": "test"}
+    assert prepared.invocation.intent.target_intent["mode"] == "test"
+    retained = read_domain_input_reads(prepared.invocation.intent)
+    assert retained.entries == context.inputs.parameter_reads
+    assert [
+        (entry.point_ordinal, entry.input_kind, entry.input_id)
+        for entry in retained.entries
+    ] == [(0, "program", "count"), (1, "program", "count")]
+    assert retained.incomplete_reasons == ("upstream_binding_not_captured",)
     assert prepared.state_requirements == (
         DomainStateRequirement(
             address=guard_enabled,

@@ -213,10 +213,22 @@ unsupported persisted scalar values and whole-table selections likewise cannot
 produce a complete-read claim. Relation keys retain their execution semantics,
 including entity/string ID matching, rather than adopting recipe-query matching.
 
-These are opt-in compiler hooks. Ordinary run planning does not yet create,
-aggregate or persist these recorders automatically. Threading them through
-point materialization and execution records remains the next integration step;
-the existence of the hooks does not establish whole-run capture completeness.
+Domain input materialization now creates one recorder per logical point and
+program/compiler input. `make_domain_batch_request` carries their immutable
+snapshots in `DomainBatchInputs.parameter_reads`; `DomainPreparationBuilder`
+automatically includes them in the existing invocation intent. This attachment
+is covered by the invocation fingerprint and survives ledger reopening. Its
+reader is `scopecat.sdk.domain.parameter_evidence.read_domain_input_reads`.
+Sub-batches retain their actual logical ordinals, not batch-local indices.
+
+The attachment declares `domain_input_materialization` coverage and retains
+`upstream_binding_not_captured`: earlier binding may have folded parameters
+before this phase. Whole-table inputs carry their own incomplete reason. This
+does not cover host compute/state preparation, target-internal reads, analysis,
+or physical interaction dependencies. Those integrations remain before any
+whole-run completeness claim. Low-level callers that construct requests without
+capture get no fabricated empty attachment; reading absent evidence fails
+explicitly. Existing transition retention policy still controls durability.
 
 Before selective invalidation, extend this coverage to scalar expressions,
 runtime reads, selections and derived queries outside recipe preparation.

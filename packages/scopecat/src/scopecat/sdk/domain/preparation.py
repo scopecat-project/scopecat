@@ -40,6 +40,7 @@ from scopecat.sdk.domain.job import (
     DomainInvocationSpec,
     DomainResultValue,
 )
+from scopecat.sdk.domain.parameter_evidence import attach_domain_input_reads
 from scopecat.sdk.domain.result_mapping import (
     DomainMappedResult,
     DomainResultBinding,
@@ -167,7 +168,9 @@ class DomainPreparationBuilder:
             artifact_id=invocation.artifact_id,
             artifact_fingerprint=invocation.artifact_fingerprint,
             execution_summary=invocation.execution_summary,
-            target_intent=invocation.target_intent,
+            target_intent=attach_domain_input_reads(
+                self._context, invocation.target_intent
+            ),
             payload=invocation.payload,
         )
 

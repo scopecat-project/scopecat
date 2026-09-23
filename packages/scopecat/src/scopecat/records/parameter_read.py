@@ -34,3 +34,24 @@ class ScalarExpressionReadEvidence(BaseModel):
     scalars: tuple[ScalarParameterValue, ...] = ()
     keyed: tuple[KeyedParameterRead, ...] = ()
     incomplete_reasons: tuple[str, ...] = ()
+
+
+class DomainInputParameterRead(BaseModel):
+    """Expression reads for one input at one logical run point."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+    point_ordinal: int = Field(ge=0)
+    input_kind: Literal["program", "compiler"]
+    input_id: str
+    evidence: ScalarExpressionReadEvidence
+
+
+class DomainInputParameterEvidence(BaseModel):
+    """Input materialization coverage, separate from target-internal reads."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+    format: Literal["scopecat.domain-input-reads.v1"] = "scopecat.domain-input-reads.v1"
+    coverage: Literal["domain_input_materialization"] = "domain_input_materialization"
+    entries: tuple[DomainInputParameterRead, ...]
+    # Binding may already have folded parameter expressions before this phase.
+    incomplete_reasons: tuple[str, ...] = ("upstream_binding_not_captured",)

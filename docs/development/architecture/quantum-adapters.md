@@ -227,6 +227,24 @@ The new private execution adapter must still attach these entries and verify tha
 device preparation, pulse inputs and measurement records use the same effective point
 parameters. The ledger integration alone does not establish that physical invariant.
 
+Core domain-input evidence is separate from those target-internal recipe entries.
+Normal planning automatically records program/compiler input expression reads for
+each logical point. `DomainPreparationBuilder.build(...)` attaches this evidence
+under `scopecat.domain.parameter_reads` before computing invocation identity; the
+adapter does not assemble or copy it. Exact point/input coverage is checked and
+an existing attachment cannot be overwritten. The framework retains only the
+current selected batch, including reordered points and sub-batches.
+
+Use `scopecat.sdk.domain.parameter_evidence.read_domain_input_reads(intent)` after
+reopening a run's invocation record. The attachment format is
+`scopecat.domain-input-reads.v1`; its coverage is `domain_input_materialization`.
+It explicitly retains `upstream_binding_not_captured`, since values may have
+been folded before input materialization. Per-input evidence also marks whole
+table selection or unresolved coverage. Missing evidence from a manually built
+request or a low-level invocation is not an empty dependency set. The same
+write-ahead/batched/abnormal-only retention limits above apply, and invocation
+evidence still does not assert successful hardware execution.
+
 ## Circuit transformation contract
 
 Current compilation binds, resolves implementations and lowers authored operations. It
