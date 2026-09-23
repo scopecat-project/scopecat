@@ -13,11 +13,6 @@ from scopecat.records.config import (
 from scopecat.records.parameter_revision import ParameterRevisionContent
 from scopecat.records.setup import ExecutableSetupSnapshot
 
-from reference_lab.parameters import (
-    REFERENCE_PARAMETER_CATALOG,
-    reference_lab_parameter_snapshot,
-)
-
 EXAMPLE_ROOT = Path(__file__).resolve().parents[2]
 DEMO_CONFIG_DIR = EXAMPLE_ROOT / "config"
 DAEMON_URL_ENV = "SCOPECAT_DAEMON_URL"
@@ -38,6 +33,11 @@ def initial_setup(
 
 
 def initial_parameters() -> ParameterRevisionContent:
+    from reference_lab.parameters import (
+        REFERENCE_PARAMETER_CATALOG,
+        reference_lab_parameter_snapshot,
+    )
+
     return ParameterRevisionContent(
         id="reference-lab-profile",
         system_id="reference-lab-system",

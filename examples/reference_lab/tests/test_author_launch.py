@@ -55,18 +55,7 @@ def reference_lab_daemon(
     root = tmp_path_factory.mktemp("ordinary-author")
     for name in ("src", "config"):
         shutil.copytree(EXAMPLE_ROOT / name, root / name)
-    shutil.copy2(
-        EXAMPLE_ROOT / "fixtures/equipment_bootstrap.py",
-        root / "src/equipment_bootstrap.py",
-    )
-    (root / "scopecat.toml").write_text(
-        (EXAMPLE_ROOT / "scopecat.toml")
-        .read_text()
-        .replace(
-            "reference_lab.application:create_bootstrap",
-            "equipment_bootstrap:create_bootstrap",
-        )
-    )
+    shutil.copy2(EXAMPLE_ROOT / "scopecat.toml", root / "scopecat.toml")
     source_path = root / "src/reference_lab/workflows/authored/signal.py"
     source = source_path.read_text(encoding="utf-8")
     # Only ordinary author code changes, with no Git repository or project edits.

@@ -223,17 +223,6 @@ def check_roundtrip(template: Path) -> None:
         for name in ("src", "config"):
             shutil.copytree(template / name, source / name)
         shutil.copy2(template / "scopecat.toml", source / "scopecat.toml")
-        shutil.copy2(
-            template / "fixtures/equipment_bootstrap.py",
-            source / "src/equipment_bootstrap.py",
-        )
-        manifest = source / "scopecat.toml"
-        manifest.write_text(
-            manifest.read_text().replace(
-                "reference_lab.application:create_bootstrap",
-                "equipment_bootstrap:create_bootstrap",
-            )
-        )
         project = load_project(source / "scopecat.toml")
         _start_fixture_project(project)
         try:

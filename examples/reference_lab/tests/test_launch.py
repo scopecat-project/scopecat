@@ -51,18 +51,7 @@ def reference_lab_daemon(
     for root in roots:
         for name in ("config", "src"):
             shutil.copytree(EXAMPLE_ROOT / name, root / name)
-        shutil.copy2(
-            EXAMPLE_ROOT / "fixtures/equipment_bootstrap.py",
-            root / "src/equipment_bootstrap.py",
-        )
-        (root / "scopecat.toml").write_text(
-            (EXAMPLE_ROOT / "scopecat.toml")
-            .read_text()
-            .replace(
-                "reference_lab.application:create_bootstrap",
-                "equipment_bootstrap:create_bootstrap",
-            )
-        )
+        shutil.copy2(EXAMPLE_ROOT / "scopecat.toml", root / "scopecat.toml")
         projects.append(load_project(root / "scopecat.toml"))
     foreign, project = projects
     with pytest.MonkeyPatch.context() as patch:

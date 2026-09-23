@@ -45,17 +45,6 @@ def reference_lab_daemon(
     shutil.copytree(EXAMPLE_ROOT / "config", project_root / "config")
     shutil.copytree(EXAMPLE_ROOT / "src", project_root / "src")
     shutil.copy2(EXAMPLE_ROOT / "scopecat.toml", project_root / "scopecat.toml")
-    shutil.copy2(
-        EXAMPLE_ROOT / "fixtures/equipment_bootstrap.py",
-        project_root / "src/equipment_bootstrap.py",
-    )
-    manifest = project_root / "scopecat.toml"
-    manifest.write_text(
-        manifest.read_text().replace(
-            "reference_lab.application:create_bootstrap",
-            "equipment_bootstrap:create_bootstrap",
-        )
-    )
     project = load_project(project_root / "scopecat.toml")
     try:
         record = start_project(project)
@@ -149,18 +138,7 @@ def independent_lab_daemon(tmp_path_factory: pytest.TempPathFactory) -> Generato
     root = tmp_path_factory.mktemp("independent-reference-lab")
     for name in ("src", "config"):
         shutil.copytree(EXAMPLE_ROOT / name, root / name)
-    shutil.copy2(
-        EXAMPLE_ROOT / "fixtures/equipment_bootstrap.py",
-        root / "src/equipment_bootstrap.py",
-    )
-    (root / "scopecat.toml").write_text(
-        (EXAMPLE_ROOT / "scopecat.toml")
-        .read_text()
-        .replace(
-            "reference_lab.application:create_bootstrap",
-            "equipment_bootstrap:create_bootstrap",
-        )
-    )
+    shutil.copy2(EXAMPLE_ROOT / "scopecat.toml", root / "scopecat.toml")
     project = load_project(root / "scopecat.toml")
     endpoint = start_project(project)
     try:

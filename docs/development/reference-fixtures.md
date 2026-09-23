@@ -28,9 +28,11 @@ mapping is irrelevant. Use the full virtual plant for shared claims, channel
 routing, compiled buffers and recovery interactions. Mocking these boundaries
 would remove the evidence the tests exist to provide.
 
-The shared acceptance capture and snapshot roundtrip use
-`reference_lab/fixtures/equipment_bootstrap.py` in their disposable projects.
-This fixture starts equipment without publishing parameter defaults. Capture
+The reference application's standard bootstrap now starts equipment without
+publishing parameter defaults or importing the parameter-table declarations.
+The temporary `equipment_bootstrap.py` fixture and manifest-rewriting paths are
+retired; shared acceptance capture, snapshot roundtrip and author/device tests use
+the same standard manifest in disposable projects. Capture
 saves an independent parameter revision and selects its exact setup for previews
 and runs; recovery compares both owners as well as retained scientific results.
 The combined registry remains empty. Candidate acquisition is not approval:
@@ -120,9 +122,10 @@ the current setup without selecting defaults. Direct instrument control needs no
 revision. Routing, waveform, resource-conflict, independent-channel failure and
 ragged-data assertions remain in place; the fixture checks that the combined
 registry stays empty and setup stays unchanged. This helper is acceptance code,
-not a replacement teaching template or a second user mode. The original reference
-application bootstrap still exposes transitional defaults; its contract and
-remaining external consumers must be reviewed before retiring that entry point.
+not a replacement teaching template or a second user mode. The reference
+application no longer exposes transitional defaults. `initial_parameters()` and
+`bootstrap_config()` remain explicit fixture-data builders for callers that need
+saved inputs or complete low-level execution snapshots.
 
 No private package may become a prerequisite for public CI or the installed
 starter. Shared test helpers belong in testkit only when independently reused;

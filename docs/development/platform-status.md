@@ -70,8 +70,10 @@ Analysis recovery shares independent startup and preserves its no-reacquisition
 and provenance checks.
 The launcher suite now selects independent inputs too, retaining foreign-endpoint
 isolation and rejecting new work when executable setup authority changes.
-Remaining legacy consumers still include the original reference application bootstrap,
-combined configuration editing/default-selection APIs and working-point launch
+The standard reference bootstrap now initializes equipment only; its temporary
+equipment-only replacement and manifest rewrites are retired, including acceptance
+capture and snapshot recovery. Remaining legacy consumers include combined
+configuration editing/default-selection APIs and working-point launch
 paths. Their presence does not imply that new author workflows require those owners.
 The retained device gallery now uses equipment-only startup and explicit fixture
 parameter revisions, while keeping its physical-behavior assertions. Use the
