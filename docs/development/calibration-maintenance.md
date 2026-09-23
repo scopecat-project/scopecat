@@ -81,6 +81,13 @@ evidence by omitting a sample binding.
 
 ### Selecting retained checks
 
+`lab.calibration_checks.report(context=..., requirements=...)` now evaluates an
+explicit bounded set of requirements in one server read snapshot. Requirements
+declare scope and maximum evidence age; results retain selection reasons, missing
+evidence and scan limits. This is the read primitive for a future capability panel,
+not an inferred capability registry or repair planner. See
+[capability evidence reports](../how-to/read-calibration-report.md).
+
 `select_calibration_check()` accepts `CheckEvidence` projections from the owning
 catalog and an explicit `history_complete` declaration. It filters known context
 mismatches, then selects the latest matching run by creation time. This is an

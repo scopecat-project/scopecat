@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-from typing import Annotated
+from datetime import datetime, timedelta
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from scopecat.automation import ProcedureRun
-from scopecat.automation.calibration import CheckEvidence
+from scopecat.automation.calibration import CheckEvidence, CheckSelection
 from scopecat.automation.calibration_tasks import CalibrationTaskPlan
 from scopecat.records.calibration_check import (
     CalibrationCheckRequest,
@@ -16,6 +17,50 @@ from scopecat.records.calibration_check import (
 )
 
 MAX_CHECK_OBSERVATIONS = 2000
+
+
+class CalibrationRequirement(BaseModel):
+    """One explicitly requested capability; no inferred dependency closure."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    id: str = Field(min_length=1)
+    scope: CalibrationScope
+    max_age: timedelta = Field(gt=timedelta(0))
+
+
+class CalibrationReportQuery(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    context: CalibrationContext
+    requirements: tuple[CalibrationRequirement, ...] = Field(
+        min_length=1, max_length=32
+    )
+    history_limit: int = Field(default=50, ge=1, le=200)
+
+    @model_validator(mode="after")
+    def validate_requirements(self) -> CalibrationReportQuery:
+        if len({item.id for item in self.requirements}) != len(self.requirements):
+            raise ValueError("requirement IDs must be unique")
+        if len(self.requirements) * self.history_limit > MAX_CHECK_OBSERVATIONS:
+            raise ValueError("report history budget exceeds 2000 requests")
+        return self
+
+
+class CalibrationRequirementStatus(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    requirement: CalibrationRequirement
+    selection: CheckSelection
+    scanned: int
+    unresolved_procedures: tuple[str, ...]
+    incomplete_reasons: tuple[Literal["scan_limit", "unresolved_checks"], ...]
+
+
+class CalibrationReport(BaseModel):
+    """Advisory evidence snapshot for explicit requirements, not sample health."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    context: CalibrationContext
+    observed_at: datetime
+    items: tuple[CalibrationRequirementStatus, ...]
 
 
 class CalibrationCheckQuery(BaseModel):

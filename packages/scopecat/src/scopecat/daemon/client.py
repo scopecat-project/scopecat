@@ -80,6 +80,8 @@ from scopecat.daemon.calibration_checks import (
     CalibrationCheckObservationResult,
     CalibrationCheckPage,
     CalibrationCheckQuery,
+    CalibrationReport,
+    CalibrationReportQuery,
     CalibrationTaskPreview,
 )
 from scopecat.daemon.calibration_tasks import (
@@ -666,6 +668,11 @@ class DaemonClient:
             f"{_API_PREFIX}/calibration-checks/query",
             query,
             CalibrationCheckPage,
+        )
+
+    def calibration_report(self, query: CalibrationReportQuery) -> CalibrationReport:
+        return self._post_model(
+            f"{_API_PREFIX}/calibration-checks/report", query, CalibrationReport
         )
 
     def list_procedures(

@@ -93,6 +93,8 @@ from scopecat.daemon.calibration_checks import (
     CalibrationCheckObservationResult,
     CalibrationCheckPage,
     CalibrationCheckQuery,
+    CalibrationReport,
+    CalibrationReportQuery,
     CalibrationTaskPreview,
 )
 from scopecat.daemon.calibration_tasks import (
@@ -1782,6 +1784,10 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
         observation: CalibrationCheckObservation,
     ) -> CalibrationCheckObservationResult:
         return application.calibration_checks.observe(observation)
+
+    @app.post(f"{_API_PREFIX}/calibration-checks/report")
+    def calibration_report(query: CalibrationReportQuery) -> CalibrationReport:
+        return application.calibration_checks.report(query)
 
     @app.get(f"{_API_PREFIX}/procedures")
     def list_procedures(

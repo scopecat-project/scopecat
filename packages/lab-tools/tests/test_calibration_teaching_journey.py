@@ -148,6 +148,8 @@ try:
                 assert budgeted.scanned == len(exact.requests)
                 expected_runs += 2
                 from scopecat.api.calibration_tasks import task_call
+                from scopecat.api.calibration_checks import CalibrationRequirement
+                from datetime import timedelta
                 from scopecat.daemon.client import DaemonConflictError
                 import pytest
 
@@ -181,6 +183,14 @@ try:
                 assert tuple(stage.state for stage in progressed.progress.stages) == (
                     "passed", "rejected", "ready", "blocked",
                 )
+                negative = checks.report(
+                    context=intents["bad"].calibration_check.context,
+                    requirements=(CalibrationRequirement(
+                        id="readout", scope=intents["bad"].calibration_check.scope,
+                        max_age=timedelta(hours=1),
+                    ),),
+                )
+                assert negative.items[0].selection.status == "out_of_spec", negative
                 with pytest.raises(DaemonConflictError, match="prerequisites"):
                     tasks.dispatch("teaching-round", "after-bad")
                 followup = tasks.dispatch("teaching-round", "after-good")
@@ -215,6 +225,29 @@ try:
                 )
                 assert len(automatic.task.executions) == 3
                 expected_runs += 3
+                requirement = CalibrationRequirement(
+                    id="readout", scope=intents["good"].calibration_check.scope,
+                    max_age=timedelta(hours=1),
+                )
+                report = checks.report(
+                    context=intents["good"].calibration_check.context,
+                    requirements=(requirement,
+                        requirement.model_copy(update={
+                            "id": "expired", "max_age": timedelta(microseconds=1),
+                        }),
+                        requirement.model_copy(update={
+                            "id": "missing", "scope": replace(requirement.scope,
+                                capability="not-measured"),
+                        }),
+                    ),
+                )
+                assert tuple(item.selection.status for item in report.items) == (
+                    "usable", "recheck", "unknown",
+                ), report
+                assert report.items[1].selection.assessment.reasons == (
+                    "check_expired",
+                )
+                assert report.items[2].selection.reason == "no_matching_evidence"
             assert len(lab.runs().items) == expected_runs
             assert lab.config.registry().entries == ()
             outcomes = {r.summary().outcome for r in lab.procedures.list().items}

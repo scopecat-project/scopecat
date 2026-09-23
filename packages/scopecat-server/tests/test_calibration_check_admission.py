@@ -4,6 +4,7 @@ import sqlite3
 from collections.abc import Callable, Generator, Iterator
 from contextlib import contextmanager
 from dataclasses import replace
+from datetime import timedelta
 from pathlib import Path
 from unittest.mock import Mock, patch
 
@@ -34,6 +35,9 @@ from scopecat.daemon.calibration_checks import (
     CalibrationCheckObservationResult,
     CalibrationCheckPage,
     CalibrationCheckQuery,
+    CalibrationReport,
+    CalibrationReportQuery,
+    CalibrationRequirement,
     CalibrationTaskPreview,
 )
 from scopecat.daemon.calibration_tasks import (
@@ -461,6 +465,91 @@ def test_batch_observation_compares_head_and_revisions_at_one_snapshot(
         assert (
             client.post(
                 "/api/v1/calibration-checks/observe", json={"revisions": oversized}
+            ).status_code
+            == 422
+        )
+
+
+def test_capability_report_uses_one_snapshot_and_keeps_missing_evidence_unknown(
+    check_case: CheckCase,
+) -> None:
+    runtime, declaration, _ = check_case
+    app = runtime.application
+    first = app.automation.submit(_command(declaration)).run
+    second = declaration.model_copy(
+        update={"scope": replace(declaration.scope, capability="other")}
+    )
+    query = CalibrationReportQuery(
+        context=declaration.context,
+        requirements=(
+            CalibrationRequirement(
+                id="first", scope=declaration.scope, max_age=timedelta(hours=1)
+            ),
+            CalibrationRequirement(
+                id="second", scope=second.scope, max_age=timedelta(hours=1)
+            ),
+        ),
+    )
+    read = app.calibration_checks._checks.query_in_transaction
+    inserted = False
+
+    def concurrent_admission(
+        connection: sqlite3.Connection, page_query: CalibrationCheckQuery
+    ) -> CheckRequestPage:
+        nonlocal inserted
+        page = read(connection, page_query)
+        if not inserted:
+            inserted = True
+            app.automation.submit(
+                _command(second).model_copy(update={"request_key": "second"})
+            )
+        return page
+
+    with patch.object(
+        app.calibration_checks._checks, "query_in_transaction", concurrent_admission
+    ):
+        report = app.calibration_checks.report(query)
+    assert report.context == declaration.context
+    assert report.items[0].unresolved_procedures == (first.procedure_run_id,)
+    assert report.items[0].selection.status == "unknown"
+    assert report.items[0].incomplete_reasons == ("unresolved_checks",)
+    assert report.items[1].scanned == 0
+    assert report.items[1].selection.reason == "no_matching_evidence"
+    assert app.calibration_checks.report(query).items[1].scanned == 1
+    app.automation.submit(
+        _command(declaration).model_copy(update={"request_key": "new-first"})
+    )
+    with TestClient(runtime.app()) as client:
+        response = client.post(
+            "/api/v1/calibration-checks/report",
+            json=query.model_copy(update={"history_limit": 1}).model_dump(mode="json"),
+        )
+        assert response.status_code == 200, response.text
+        limited = CalibrationReport.model_validate(response.json())
+        assert limited.items[0].selection.reason == "incomplete_history"
+        assert limited.items[0].incomplete_reasons == (
+            "scan_limit",
+            "unresolved_checks",
+        )
+        invalid = query.model_dump(mode="json")
+        invalid["requirements"] = [query.requirements[0].model_dump(mode="json")] * 2
+        assert (
+            client.post("/api/v1/calibration-checks/report", json=invalid).status_code
+            == 422
+        )
+        over_budget = query.model_copy(
+            update={
+                "history_limit": 200,
+                "requirements": tuple(
+                    query.requirements[0].model_copy(update={"id": str(index)})
+                    for index in range(11)
+                ),
+            }
+        )
+        assert (
+            client.post(
+                "/api/v1/calibration-checks/report",
+                json=over_budget.model_dump(mode="json"),
             ).status_code
             == 422
         )

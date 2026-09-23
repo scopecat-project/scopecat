@@ -19,6 +19,9 @@ from scopecat.daemon.calibration_checks import (
     MAX_CHECK_OBSERVATIONS,
     CalibrationCheckObservation,
     CalibrationCheckQuery,
+    CalibrationReport,
+    CalibrationReportQuery,
+    CalibrationRequirement,
     CalibrationTaskPreview,
 )
 from scopecat.daemon.client import DaemonClient
@@ -92,6 +95,22 @@ class LabCalibrationChecks:
             CalibrationTaskPreview(
                 plan=plan,
                 executions={} if executions is None else executions,
+            )
+        )
+
+    def report(
+        self,
+        *,
+        context: CalibrationContext,
+        requirements: tuple[CalibrationRequirement, ...],
+        history_limit: int = 50,
+    ) -> CalibrationReport:
+        """Assess explicit capabilities together at one server read snapshot."""
+        return self._client.calibration_report(
+            CalibrationReportQuery(
+                context=context,
+                requirements=requirements,
+                history_limit=history_limit,
             )
         )
 

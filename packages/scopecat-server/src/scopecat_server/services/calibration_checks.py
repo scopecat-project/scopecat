@@ -2,6 +2,8 @@
 
 import sqlite3
 from collections.abc import Mapping
+from datetime import UTC, datetime
+from typing import Literal
 
 from pydantic import ValidationError
 from scopecat.analysis.calibration import CHECK_RESULT
@@ -11,7 +13,7 @@ from scopecat.automation import (
     ProcedureStepOutputRef,
     RunOutputRef,
 )
-from scopecat.automation.calibration import CheckEvidence
+from scopecat.automation.calibration import CheckEvidence, select_calibration_check
 from scopecat.automation.calibration_tasks import (
     CalibrationTaskProgress,
     assess_calibration_task,
@@ -22,6 +24,9 @@ from scopecat.daemon.calibration_checks import (
     CalibrationCheckPage,
     CalibrationCheckQuery,
     CalibrationCheckView,
+    CalibrationReport,
+    CalibrationReportQuery,
+    CalibrationRequirementStatus,
     CalibrationTaskPreview,
 )
 from scopecat.daemon.wire import RunSubmission
@@ -260,6 +265,51 @@ class CalibrationCheckQueries:
             return CalibrationCheckPage(
                 items=tuple(self._view(connection, run) for run in page.items),
                 next_cursor=page.next_cursor,
+            )
+
+    def report(self, query: CalibrationReportQuery) -> CalibrationReport:
+        items: list[CalibrationRequirementStatus] = []
+        with self._sqlite.read_transaction() as connection:
+            now = datetime.now(UTC)
+            for requirement in query.requirements:
+                page = self._checks.query_in_transaction(
+                    connection,
+                    CalibrationCheckQuery(
+                        scope=requirement.scope,
+                        context=query.context,
+                        limit=query.history_limit,
+                    ),
+                )
+                views = tuple(self._view(connection, run) for run in page.items)
+                unresolved = tuple(
+                    item.execution.procedure_run_id
+                    for item in views
+                    if item.evidence is None
+                )
+                reasons: list[Literal["scan_limit", "unresolved_checks"]] = []
+                if page.next_cursor is not None:
+                    reasons.append("scan_limit")
+                if unresolved:
+                    reasons.append("unresolved_checks")
+                selection = select_calibration_check(
+                    tuple(item.evidence for item in views if item.evidence is not None),
+                    requested_scope=requirement.scope,
+                    current=query.context,
+                    now=now,
+                    max_age=requirement.max_age,
+                    history_complete=not reasons,
+                )
+                items.append(
+                    CalibrationRequirementStatus(
+                        requirement=requirement,
+                        selection=selection,
+                        scanned=len(views),
+                        unresolved_procedures=unresolved,
+                        incomplete_reasons=tuple(reasons),
+                    )
+                )
+            return CalibrationReport(
+                context=query.context, observed_at=now, items=tuple(items)
             )
 
     def preview_task(self, preview: CalibrationTaskPreview) -> CalibrationTaskProgress:

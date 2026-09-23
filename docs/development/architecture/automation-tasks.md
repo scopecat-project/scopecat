@@ -139,6 +139,14 @@ results, admission errors, frozen context and start/pause/cancel controls. Stage
 execution links reuse the procedure operator view for resource/worker status,
 review and cancellation. This is the first task consumer, not a capability panel.
 
+`POST /api/v1/calibration-checks/report` evaluates explicit capability requirements
+for one exact context in one read transaction. It reuses indexed declarations,
+resolved evidence and the applicability selector, without new persistence. Each
+requirement retains its status, selected evidence, reasons and unresolved execution
+IDs. Bounded or unresolved history remains unknown. The laboratory still owns
+requirement coverage, policy and age limits. See
+[capability reports](../../how-to/read-calibration-report.md).
+
 Sample/target panels need scoped capability status, evidence time and parameter
 revision, pending checks/repairs, blocked prerequisites and explicit missing scope.
 They must not translate procedure completion into a calibrated flag. A completed
