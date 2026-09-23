@@ -260,6 +260,17 @@ try:
                 assert "dependent evidence" in rendered
                 assert "Exact measurement context" in rendered
                 assert "Snapshot of declared requirements only" in repr(report)
+                saved_profile = checks.save_profile(
+                    "teaching-v1", requirements=(requirement,),
+                )
+                assert checks.profile("teaching-v1") == saved_profile
+                assert saved_profile in checks.profiles().items
+                saved_report = checks.report(
+                    context=report.context, profile="teaching-v1",
+                )
+                assert saved_report.profile_id == "teaching-v1"
+                assert saved_report.items[0].selection.status == "usable"
+                assert "teaching-v1" in saved_report._repr_html_()
                 assert report.items[1].selection.assessment.reasons == (
                     "check_expired",
                 )

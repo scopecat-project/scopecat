@@ -70,6 +70,64 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+it("selects a saved policy explicitly and shows all capability verdicts without dispatch", async () => {
+  const own = report("usable").items[0]!;
+  const blocked = {
+    ...own,
+    requirement: { ...own.requirement, id: "gate", depends_on: [stage.id] },
+    availability: { status: "blocked", blocked_by: [stage.id] },
+  };
+  const result = {
+    ...report("unknown"),
+    profile_id: "daily-v1",
+    items: [report("unknown").items[0]!, blocked],
+  };
+  const bodies: unknown[] = [];
+  let fail = false;
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (request: Request) => {
+      const url = new URL(request.url);
+      expect(request.method).toBe(url.pathname === "/api/v1/calibration-profiles" ? "GET" : "POST");
+      if (url.pathname === "/api/v1/calibration-profiles") {
+        return Response.json({
+          items: [
+            {
+              created_at: "2026-09-23T00:00:00Z",
+              profile: {
+                id: "daily-v1",
+                description: "Lab daily policy",
+                requirements: [own.requirement, blocked.requirement],
+              },
+            },
+          ],
+          next_cursor: null,
+        });
+      }
+      expect(url.pathname).toBe("/api/v1/calibration-profiles/daily-v1/report");
+      bodies.push(await request.json());
+      if (fail) throw new Error("offline");
+      return Response.json(result);
+    }),
+  );
+  mount();
+  fireEvent.click(screen.getByText("Inspect a saved capability profile"));
+  fireEvent.click(screen.getByText("Load saved profiles"));
+  const select = await screen.findByLabelText("Capability profile");
+  fireEvent.change(select, { target: { value: "daily-v1" } });
+  expect(screen.getByText("Lab daily policy")).toBeInTheDocument();
+  expect(bodies).toEqual([]);
+  fireEvent.click(screen.getByText("Check saved profile"));
+  await screen.findByRole("region", { name: "Saved capability report" });
+  expect(screen.getByText("Own check: usable · Availability: blocked")).toBeInTheDocument();
+  expect(screen.getByText("Blocked by: readout")).toBeInTheDocument();
+  expect(bodies).toEqual([{ context: stage.check.context, history_limit: 50 }]);
+  fail = true;
+  fireEvent.click(screen.getByText("Check saved profile"));
+  await screen.findByRole("alert");
+  expect(screen.queryByRole("region", { name: "Saved capability report" })).not.toBeInTheDocument();
+});
+
 it("requires an explicit age and submits exactly the stage's frozen scope and context", async () => {
   const requests: unknown[] = [];
   const fetcher = vi.fn(async (request: Request) => {

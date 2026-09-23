@@ -153,6 +153,13 @@ preserving each check's own evidence selection. Task execution order is not
 inferred as scientific dependency policy. This graph does not track parameter
 reads or permit evidence reuse across parameter revisions.
 
+Schema 92 retains immutable named capability profiles separately from tasks and
+measurement contexts. The profile service saves, lists and reads explicit
+requirements, then evaluates them with the same report query for a caller-chosen
+context. Reports retain the profile ID and evaluated requirements. This provides
+a shared policy source for notebook and future panel consumers without selecting
+a global active policy. A profile name is unique within its project data store.
+
 The task workbench consumes this endpoint per stage, with an explicit age policy
 and visible evaluation time. Users can inspect matching checks from other tasks
 without changing the stage's frozen context. This is an evidence-inspection entry
@@ -191,7 +198,7 @@ Required next contracts:
 2. Add parameter-flow contracts and bounded repair loops above fixed-stage
    advancement. Explicit partial-completion projections and task controls exist.
    Avoid one giant procedure containing every target and an unbounded maintenance loop.
-3. Capability dependency and parameter-read contracts, including query membership
+3. Parameter-read contracts, including query membership
    and physical interactions. Exact revision matching remains conservative until
    reuse can be explained from complete dependencies.
 4. Worker/environment routing, resource/scientific grouping, fairness, task budgets

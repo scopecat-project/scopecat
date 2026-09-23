@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { MethodResponse } from "openapi-fetch";
 import { apiClient, apiData } from "../../api-client";
+import { CalibrationProfiles } from "./CalibrationProfiles";
 
 type TaskView = MethodResponse<typeof apiClient, "get", "/api/v1/calibration-tasks/{task_id}">;
 type Stage = TaskView["task"]["specification"]["plan"]["stages"][number];
@@ -182,6 +183,7 @@ export function CalibrationEvidence({
           ))}
         </section>
       )}
+      <CalibrationProfiles context={stage.check.context} onProcedure={onProcedure} />
     </details>
   );
 }

@@ -80,6 +80,10 @@ from scopecat.daemon.calibration_checks import (
     CalibrationCheckObservationResult,
     CalibrationCheckPage,
     CalibrationCheckQuery,
+    CalibrationProfile,
+    CalibrationProfilePage,
+    CalibrationProfileRecord,
+    CalibrationProfileReportQuery,
     CalibrationReport,
     CalibrationReportQuery,
     CalibrationTaskPreview,
@@ -673,6 +677,38 @@ class DaemonClient:
     def calibration_report(self, query: CalibrationReportQuery) -> CalibrationReport:
         return self._post_model(
             f"{_API_PREFIX}/calibration-checks/report", query, CalibrationReport
+        )
+
+    def save_calibration_profile(
+        self, profile: CalibrationProfile
+    ) -> CalibrationProfileRecord:
+        return self._post_model(
+            f"{_API_PREFIX}/calibration-profiles", profile, CalibrationProfileRecord
+        )
+
+    def get_calibration_profile(self, identity: str) -> CalibrationProfileRecord:
+        return self._get_model(
+            f"{_API_PREFIX}/calibration-profiles/{quote(identity, safe='')}",
+            CalibrationProfileRecord,
+        )
+
+    def list_calibration_profiles(
+        self, limit: int, cursor: int | None
+    ) -> CalibrationProfilePage:
+        params: dict[str, str | int] = {"limit": limit}
+        if cursor is not None:
+            params["cursor"] = cursor
+        return self._get_model(
+            f"{_API_PREFIX}/calibration-profiles", CalibrationProfilePage, params=params
+        )
+
+    def report_calibration_profile(
+        self, identity: str, query: CalibrationProfileReportQuery
+    ) -> CalibrationReport:
+        return self._post_model(
+            f"{_API_PREFIX}/calibration-profiles/{quote(identity, safe='')}/report",
+            query,
+            CalibrationReport,
         )
 
     def list_procedures(

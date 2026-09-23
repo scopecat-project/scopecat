@@ -25,7 +25,8 @@ class CalibrationReportView(CalibrationReport):
     @property
     def _notice(self) -> str:
         return (
-            f"Observed at {self.observed_at.isoformat()}. "
+            (f"Profile: {self.profile_id}. " if self.profile_id is not None else "")
+            + f"Observed at {self.observed_at.isoformat()}. "
             "Snapshot of declared requirements only; not overall sample readiness. "
             "Call lab.calibration_checks.report(...) again to refresh."
         )

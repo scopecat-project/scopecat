@@ -35,6 +35,8 @@ from scopecat.daemon.calibration_checks import (
     CalibrationCheckObservationResult,
     CalibrationCheckPage,
     CalibrationCheckQuery,
+    CalibrationProfile,
+    CalibrationProfileReportQuery,
     CalibrationReport,
     CalibrationReportQuery,
     CalibrationRequirement,
@@ -82,6 +84,98 @@ from scopecat_server.snapshots import create_snapshot, restore_snapshot
 from scopecat_server.storage.sqlite.calibration_checks import CheckRequestPage
 
 type CheckCase = tuple[LocalDaemonRuntime, CalibrationCheckRequest, RunSubmission]
+
+
+def test_capability_profiles_are_immutable_and_survive_backup(tmp_path: Path) -> None:
+    source = tmp_path / "source"
+    source.mkdir()
+    manifest = source / "scopecat.toml"
+    manifest.write_text("[lab]\n")
+    with _check_case(source) as (runtime, declaration, _):
+        profile = CalibrationProfile(
+            id="daily-v1",
+            description="Readout before gates",
+            requirements=(
+                CalibrationRequirement(
+                    id="readout",
+                    scope=declaration.scope,
+                    max_age=timedelta(hours=1),
+                ),
+            ),
+        )
+        query = CalibrationProfileReportQuery(context=declaration.context)
+        service = runtime.application.calibration_profiles
+        with TestClient(runtime.app()) as client:
+            saved = client.post(
+                "/api/v1/calibration-profiles", json=profile.model_dump(mode="json")
+            )
+            assert saved.status_code == 200, saved.text
+            retained = service.get(profile.id)
+            assert service.save(profile) == retained
+            changed = profile.model_copy(update={"description": "changed policy"})
+            assert (
+                client.post(
+                    "/api/v1/calibration-profiles", json=changed.model_dump(mode="json")
+                ).status_code
+                == 409
+            )
+            assert client.get("/api/v1/calibration-profiles/missing").status_code == 404
+            assert (
+                client.get(f"/api/v1/calibration-profiles/{profile.id}").json()
+                == saved.json()
+            )
+            service.save(profile.model_copy(update={"id": "daily-v2"}))
+            first = service.list(1, None)
+            assert first.items[0].profile.id == "daily-v2"
+            assert service.list(1, first.next_cursor).items == (retained,)
+            assert client.get("/api/v1/calibration-profiles?limit=0").status_code == 422
+            report_response = client.post(
+                f"/api/v1/calibration-profiles/{profile.id}/report",
+                json=query.model_dump(mode="json"),
+            )
+            assert report_response.status_code == 200, report_response.text
+            report = CalibrationReport.model_validate(report_response.json())
+            assert report.profile_id == profile.id
+            assert report.context == declaration.context
+            assert report.items[0].selection.status == "unknown"
+            invalid = profile.model_dump(mode="json")
+            invalid["requirements"][0]["depends_on"] = ["missing"]
+            assert (
+                client.post("/api/v1/calibration-profiles", json=invalid).status_code
+                == 422
+            )
+            large = profile.model_copy(
+                update={
+                    "id": "large",
+                    "requirements": tuple(
+                        profile.requirements[0].model_copy(update={"id": str(i)})
+                        for i in range(11)
+                    ),
+                }
+            )
+            service.save(large)
+            assert (
+                client.post(
+                    "/api/v1/calibration-profiles/large/report",
+                    json={
+                        **query.model_dump(mode="json"),
+                        "history_limit": 200,
+                    },
+                ).status_code
+                == 409
+            )
+    with LocalDaemonRuntime(source) as restarted:
+        assert restarted.application.calibration_profiles.get(profile.id) == retained
+    create_snapshot(load_project(manifest), tmp_path / "snapshot")
+    restore_snapshot(tmp_path / "snapshot", tmp_path / "restored")
+    with LocalDaemonRuntime(tmp_path / "restored") as restored:
+        assert restored.application.calibration_profiles.get(profile.id) == retained
+        assert (
+            restored.application.calibration_profiles.report(
+                profile.id, query
+            ).profile_id
+            == profile.id
+        )
 
 
 @pytest.fixture

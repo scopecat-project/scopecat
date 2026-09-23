@@ -112,6 +112,49 @@ graph describes your policy, not measured causality or parameter read dependenci
 Task stage ordering is not automatically adopted as capability policy. The
 workbench's per-stage inspector submits a single requirement without dependencies.
 
+## Save reusable requirements
+
+Keep requirement definitions in laboratory author code, then save a named version
+for use across notebooks and daemon restarts:
+
+```python
+saved = lab.calibration_checks.save_profile(
+    "two-qubit-daily-v1",
+    requirements=(readout, gate),
+    description="Readout evidence is required before using the gate capability.",
+)
+lab.calibration_checks.profiles()  # bounded page; use next_cursor for older entries
+lab.calibration_checks.profile("two-qubit-daily-v1")
+report = lab.calibration_checks.report(context=context, profile="two-qubit-daily-v1")
+report
+```
+
+A profile stores requirements, age limits and dependency edges, but no parameter
+branch, setup, sample selection or task execution state. Its target addresses are
+interpreted within the context supplied at evaluation. Reuse it only where those
+addresses, conditions and policy meanings apply; the framework does not infer
+physical equivalence across samples. There is no global active profile.
+
+IDs use letters, digits, dots, underscores and hyphens, beginning with a letter or
+digit. Saving identical content under the same ID is idempotent. Changing any
+content requires a new ID, such as `two-qubit-daily-v2`; existing profiles are
+immutable. The returned report includes `profile_id` and the full requirements
+actually evaluated. Supply either `profile` or `requirements`, not both.
+
+Profiles belong to the selected project data store, are available through the
+HTTP API without importing author Python, and survive current-format backup and
+restore. Schema 92 adds their storage; use a fresh development data directory and
+retain older stores with their original environments. A saved profile is a
+report policy, not an automatic maintenance schedule or complete sample policy.
+
+In the workbench, expand a stage's evidence inspector, then **Inspect a saved
+capability profile**. Load profiles, choose one, review its requirements, and
+click **Check saved profile**. It evaluates every requirement in the stage's
+frozen context, showing own-check status separately from availability and
+blocking prerequisites. This read-only entry uses 50 checks per requirement;
+use the Python report API to request a different history budget. Changing the
+selection or a failed refresh clears the old result. No experiment is dispatched.
+
 ## Bounds and interpretation
 
 `history_limit` defaults to 50 requests **per requirement**, with a range of 1–200.

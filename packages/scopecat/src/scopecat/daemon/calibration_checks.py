@@ -34,16 +34,14 @@ class CalibrationRequirement(BaseModel):
     depends_on: tuple[str, ...] = ()
 
 
-class CalibrationReportQuery(BaseModel):
+class CalibrationRequirements(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
-    context: CalibrationContext
     requirements: tuple[CalibrationRequirement, ...] = Field(
         min_length=1, max_length=32
     )
-    history_limit: int = Field(default=50, ge=1, le=200)
 
     @model_validator(mode="after")
-    def validate_requirements(self) -> CalibrationReportQuery:
+    def validate_requirements(self) -> CalibrationRequirements:
         ids = {item.id for item in self.requirements}
         if len(ids) != len(self.requirements):
             raise ValueError("requirement IDs must be unique")
@@ -60,6 +58,42 @@ class CalibrationReportQuery(BaseModel):
             )
         except CycleError as error:
             raise ValueError("requirement dependencies must be acyclic") from error
+        return self
+
+
+class CalibrationProfile(CalibrationRequirements):
+    """Immutable named requirements, evaluated against a separately chosen context."""
+
+    id: str = Field(
+        min_length=1, max_length=128, pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]*$"
+    )
+    description: str = Field(default="", max_length=4000)
+
+
+class CalibrationProfileRecord(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    profile: CalibrationProfile
+    created_at: datetime
+
+
+class CalibrationProfilePage(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    items: tuple[CalibrationProfileRecord, ...]
+    next_cursor: int | None = None
+
+
+class CalibrationProfileReportQuery(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    context: CalibrationContext
+    history_limit: int = Field(default=50, ge=1, le=200)
+
+
+class CalibrationReportQuery(CalibrationRequirements):
+    context: CalibrationContext
+    history_limit: int = Field(default=50, ge=1, le=200)
+
+    @model_validator(mode="after")
+    def validate_budget(self) -> CalibrationReportQuery:
         if len(self.requirements) * self.history_limit > MAX_CHECK_OBSERVATIONS:
             raise ValueError("report history budget exceeds 2000 requests")
         return self
@@ -82,6 +116,7 @@ class CalibrationReport(BaseModel):
     context: CalibrationContext
     observed_at: datetime
     items: tuple[CalibrationRequirementStatus, ...]
+    profile_id: str | None = None
 
 
 class CalibrationCheckQuery(BaseModel):

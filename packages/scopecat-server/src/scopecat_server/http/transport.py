@@ -93,6 +93,10 @@ from scopecat.daemon.calibration_checks import (
     CalibrationCheckObservationResult,
     CalibrationCheckPage,
     CalibrationCheckQuery,
+    CalibrationProfile,
+    CalibrationProfilePage,
+    CalibrationProfileRecord,
+    CalibrationProfileReportQuery,
     CalibrationReport,
     CalibrationReportQuery,
     CalibrationTaskPreview,
@@ -1799,6 +1803,30 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
     @app.post(f"{_API_PREFIX}/calibration-checks/report")
     def calibration_report(query: CalibrationReportQuery) -> CalibrationReport:
         return application.calibration_checks.report(query)
+
+    @app.post(f"{_API_PREFIX}/calibration-profiles")
+    def save_calibration_profile(
+        profile: CalibrationProfile,
+    ) -> CalibrationProfileRecord:
+        return application.calibration_profiles.save(profile)
+
+    @app.get(f"{_API_PREFIX}/calibration-profiles")
+    def list_calibration_profiles(
+        limit: Annotated[int, Query(ge=1, le=200)] = 50,
+        cursor: Annotated[int | None, Query(ge=1)] = None,
+    ) -> CalibrationProfilePage:
+        return application.calibration_profiles.list(limit, cursor)
+
+    @app.get(f"{_API_PREFIX}/calibration-profiles/{{profile_id}}")
+    def get_calibration_profile(profile_id: str) -> CalibrationProfileRecord:
+        return application.calibration_profiles.get(profile_id)
+
+    @app.post(f"{_API_PREFIX}/calibration-profiles/{{profile_id}}/report")
+    def report_calibration_profile(
+        profile_id: str,
+        query: CalibrationProfileReportQuery,
+    ) -> CalibrationReport:
+        return application.calibration_profiles.report(profile_id, query)
 
     @app.get(f"{_API_PREFIX}/procedures")
     def list_procedures(

@@ -158,6 +158,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/calibration-profiles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Calibration Profiles */
+        get: operations["list_calibration_profiles_api_v1_calibration_profiles_get"];
+        put?: never;
+        /** Save Calibration Profile */
+        post: operations["save_calibration_profile_api_v1_calibration_profiles_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/calibration-profiles/{profile_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Calibration Profile */
+        get: operations["get_calibration_profile_api_v1_calibration_profiles__profile_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/calibration-profiles/{profile_id}/report": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Report Calibration Profile */
+        post: operations["report_calibration_profile_api_v1_calibration_profiles__profile_id__report_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/calibration-tasks": {
         parameters: {
             query?: never;
@@ -2979,6 +3031,46 @@ export interface components {
             subject: components["schemas"]["ResolvedSubject"];
         };
         /**
+         * CalibrationProfile
+         * @description Immutable named requirements, evaluated against a separately chosen context.
+         */
+        CalibrationProfile: {
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /** Id */
+            id: string;
+            /** Requirements */
+            requirements: components["schemas"]["CalibrationRequirement"][];
+        };
+        /** CalibrationProfilePage */
+        CalibrationProfilePage: {
+            /** Items */
+            items: components["schemas"]["CalibrationProfileRecord"][];
+            /** Next Cursor */
+            next_cursor?: number | null;
+        };
+        /** CalibrationProfileRecord */
+        CalibrationProfileRecord: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            profile: components["schemas"]["CalibrationProfile"];
+        };
+        /** CalibrationProfileReportQuery */
+        CalibrationProfileReportQuery: {
+            context: components["schemas"]["CalibrationContext"];
+            /**
+             * History Limit
+             * @default 50
+             */
+            history_limit: number;
+        };
+        /**
          * CalibrationReport
          * @description Advisory evidence snapshot for explicit requirements, not sample health.
          */
@@ -2991,6 +3083,8 @@ export interface components {
              * Format: date-time
              */
             observed_at: string;
+            /** Profile Id */
+            profile_id?: string | null;
         };
         /** CalibrationReportQuery */
         CalibrationReportQuery: {
@@ -11026,6 +11120,137 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["CalibrationReportQuery"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalibrationReport"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_calibration_profiles_api_v1_calibration_profiles_get: {
+        parameters: {
+            query?: {
+                cursor?: number | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalibrationProfilePage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    save_calibration_profile_api_v1_calibration_profiles_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CalibrationProfile"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalibrationProfileRecord"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_calibration_profile_api_v1_calibration_profiles__profile_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                profile_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalibrationProfileRecord"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    report_calibration_profile_api_v1_calibration_profiles__profile_id__report_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                profile_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CalibrationProfileReportQuery"];
             };
         };
         responses: {

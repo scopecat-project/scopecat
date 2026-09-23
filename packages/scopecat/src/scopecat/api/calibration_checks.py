@@ -20,6 +20,10 @@ from scopecat.daemon.calibration_checks import (
     MAX_CHECK_OBSERVATIONS,
     CalibrationCheckObservation,
     CalibrationCheckQuery,
+    CalibrationProfile,
+    CalibrationProfilePage,
+    CalibrationProfileRecord,
+    CalibrationProfileReportQuery,
     CalibrationReportQuery,
     CalibrationRequirement,
     CalibrationTaskPreview,
@@ -102,18 +106,54 @@ class LabCalibrationChecks:
         self,
         *,
         context: CalibrationContext,
-        requirements: tuple[CalibrationRequirement, ...],
+        requirements: tuple[CalibrationRequirement, ...] | None = None,
+        profile: str | None = None,
         history_limit: int = 50,
     ) -> CalibrationReportView:
         """Assess explicit capabilities together at one server read snapshot."""
-        report = self._client.calibration_report(
-            CalibrationReportQuery(
-                context=context,
+        if (requirements is None) == (profile is None):
+            raise ValueError("choose either explicit requirements or a saved profile")
+        if profile is not None:
+            report = self._client.report_calibration_profile(
+                profile,
+                CalibrationProfileReportQuery(
+                    context=context, history_limit=history_limit
+                ),
+            )
+        else:
+            assert requirements is not None
+            report = self._client.calibration_report(
+                CalibrationReportQuery(
+                    context=context,
+                    requirements=requirements,
+                    history_limit=history_limit,
+                )
+            )
+        return CalibrationReportView.model_validate(report, from_attributes=True)
+
+    def save_profile(
+        self,
+        identity: str,
+        *,
+        requirements: tuple[CalibrationRequirement, ...],
+        description: str = "",
+    ) -> CalibrationProfileRecord:
+        """Save an immutable named policy; exact retries return the existing record."""
+        return self._client.save_calibration_profile(
+            CalibrationProfile(
+                id=identity,
+                description=description,
                 requirements=requirements,
-                history_limit=history_limit,
             )
         )
-        return CalibrationReportView.model_validate(report, from_attributes=True)
+
+    def profile(self, identity: str) -> CalibrationProfileRecord:
+        return self._client.get_calibration_profile(identity)
+
+    def profiles(
+        self, *, limit: int = 50, cursor: int | None = None
+    ) -> CalibrationProfilePage:
+        return self._client.list_calibration_profiles(limit, cursor)
 
     def history(
         self,

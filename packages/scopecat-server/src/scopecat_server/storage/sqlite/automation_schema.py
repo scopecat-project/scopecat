@@ -63,6 +63,12 @@ CREATE TABLE IF NOT EXISTS calibration_tasks (
     record_json TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS calibration_profiles (
+    sequence INTEGER PRIMARY KEY AUTOINCREMENT,
+    profile_id TEXT NOT NULL UNIQUE,
+    record_json TEXT NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS calibration_tasks_mode_sequence
 ON calibration_tasks(mode, sequence);
 
