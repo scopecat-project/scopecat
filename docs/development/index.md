@@ -35,6 +35,7 @@ uv run --locked --package reference-lab --group test pytest examples/reference_l
 ## Repository and architecture
 
 - [Current platform status and remaining work](platform-status.md)
+- [Calibration branch integration boundary](calibration-branch-closeout.md)
 - [Multi-target calibration and maintenance](calibration-maintenance.md)
 - [Automation tasks and durable execution](architecture/automation-tasks.md)
 - [Task parameter flow and acceptance](architecture/task-parameter-flow.md)

@@ -1,7 +1,7 @@
 # Platform status and remaining work
 
-Audited against the local implementation on 2026-09-23, including task finalization,
-the background calibration tutorial and independent experiment-plan consumers. This is the current work list;
+Audited against the local implementation on 2026-09-24, including task finalization,
+six-target qualification, scoped dependency evidence and independent author consumers. This is the current work list;
 earlier delivery notes are historical context, not additional pending work.
 No new hardware or installed Windows qualification is claimed by this audit.
 
@@ -13,7 +13,7 @@ No new hardware or installed Windows qualification is claimed by this audit.
 | Scientific context | Common `MeasurementContext` for saved revisions and retained candidates; subject separated from `TargetSetupBinding`; mappings checked at admission and for applicability | Overrides/unsaved inputs remain outside exact contexts; candidates do not inherit saved-revision applicability |
 | Targets | Catalog definitions and a general pure topology mapping checker | Registered execution remains single-member, no target connections, identity mapping |
 | Candidates | Retained proposals, sibling composition, sequential chains, independent verification and fenced branch publication; optional task finalization handoff | Final scientific policy and publication remain explicitly authored |
-| Calibration | Declared checks, indexed history, exact-context applicability, immutable profiles and prerequisite-aware focused reports | Whole-input matching; no resolved parameter-read dependencies or selective cross-revision reuse |
+| Calibration | Declared checks, indexed history, exact-context applicability, immutable profiles, focused reports and scoped parameter-read evidence | Applicability still uses exact contexts; partial read capture does not enable selective cross-revision reuse |
 | Automation | Durable tasks, explicit candidate output binding, dependency-checked admission, sequential advancement, controls and recovery | Candidate edges require passing source checks; no repair-on-failure or general adaptive flow |
 | Workbench | Task controls and drill-down; sample capability reports from retained runs, branches or exact revisions | Explicit bounded queries, not a continuously maintained health dashboard |
 | Application | Ordinary workbench first use, installed adapters, registered author folders, notebook interpreter selection and stopped environment replacement | Native installers and physical authority shared across separate services remain separate work |
@@ -38,8 +38,8 @@ final combination, then publishes against the captured head. Intermediate
 progress survives failure/restart without becoming the daily branch. Tasks can
 now hand all adopted stage evidence to one explicit final procedure. The
 `task-calibration` sandbox connects that handoff to final measurement and branch
-publication, including scientific rejection and concurrent edits. A larger
-synthetic array scenario remains to exercise maintenance beyond two targets.
+publication, including scientific rejection and concurrent edits. The six-target
+software scenario below extends this qualification beyond two targets.
 See [task parameter flow](architecture/task-parameter-flow.md) for acceptance and
 the remaining design decisions. Fixed check tasks remain usable during this work.
 
@@ -120,11 +120,16 @@ execution and automatic selective repair are not established by this scenario.
   retains them in invocation intents without private adapter assembly. Frontend
   static evaluation and constant specialization now retain whole-program,
   base-configuration reads alongside point-local input reads, including across
-  repeated specialization and ledger reopening. Binding structure/membership,
-  host compute/state and analysis remain uncovered. Extend capture to these phases and selection
-  membership; supplement it with schema/context and declared physical interactions
-  before selective reuse.
-- Add bounded check-first repair after dependencies can explain invalidation.
+  repeated specialization and ledger reopening. Host compute/state/invocation and
+  resource entity-selection inputs now persist under the executor lease, retaining
+  point scope through state coalescing and segment scope across restart. Successful
+  completion state retains a separate base-configuration record. Analysis config
+  access retains the complete run snapshot as a validated publication input.
+  Topology/schema/membership and arbitrary runtime/analysis reads remain incomplete;
+  supplement observed reads with declared physical interactions before selective reuse.
+  Track this boundary in [#783](https://github.com/scopecat-project/scopecat/issues/783).
+- Add [bounded check-first repair](https://github.com/scopecat-project/scopecat/issues/784)
+  after dependencies can explain invalidation.
 
 Setup still aggregates control topology, instrument registry, routing, domain
 target and software scenario. One active setup remains deployment authority.
@@ -157,5 +162,7 @@ Concurrent jobs and one batched acquisition are different contracts.
 
 Follow the [data policy](data-compatibility.md): retain historical files, add no
 prebaseline readers or migrations, and keep current-format recovery tested.
-Private Actions remain disabled. This work continues locally on the current branch
-with coherent commits and targeted checks, without a PR or remote CI per slice.
+Private Actions remain disabled. The accumulated calibration branch now closes as
+one public integration PR; it does not include analysis-author redesign, online
+group scheduling, automatic selective repair or installation qualification.
+See [the integration scope and validation record](calibration-branch-closeout.md).

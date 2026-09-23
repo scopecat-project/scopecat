@@ -15,6 +15,7 @@ from scopecat.config.parameter_reads import compare_expression_parameter_reads
 from scopecat.kernel.entity import EntityRef
 from scopecat.kernel.value_types import Entity, Float, Scalar, String
 from scopecat.program.expressions import (
+    ParameterLookupScalarExpr,
     ParameterLookupUse,
     input_ref,
     lit,
@@ -32,7 +33,9 @@ FLOAT = Scalar(Float())
 STRING = Scalar(String())
 
 
-def lookup(column: str, key, *, value_type=FLOAT, key_type=STRING):
+def lookup(
+    column: str, key: object, *, value_type: Scalar = FLOAT, key_type: Scalar = STRING
+) -> ParameterLookupScalarExpr:
     return parameter_lookup(
         ParameterLookupUse(
             table_id="channels",
@@ -76,7 +79,7 @@ def snapshot(offset: float = 0.1) -> ParameterSnapshot:
 def test_specialization_and_evaluation_capture_same_nested_dependencies() -> None:
     peer = lookup("peer", lit("q0", STRING), value_type=STRING)
     expression = lookup("offset", peer) * param("gain", FLOAT)
-    captured = []
+    captured: list[ScalarExpressionReadEvidence] = []
     for specialize in (False, True):
         recorder = ParameterReadRecorder()
         context = EvalContext(params=parameters(), parameter_reads=recorder)

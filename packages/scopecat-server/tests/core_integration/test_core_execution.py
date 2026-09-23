@@ -250,7 +250,12 @@ def test_run_persists_measurements_and_run_files(
         limit=100,
         role="dataset",
     ).items
-    assert {record.id for record in records} == {"instrument-state-evidence"}
+    [host_evidence] = [
+        record for record in records if record.kind == "host-parameter-evidence"
+    ]
+    assert {record.id for record in records if record != host_evidence} == {
+        "instrument-state-evidence"
+    }
     assert {dataset.id for dataset in datasets} == {"raw-measurements"}
     raw_dataset = datasets[0]
     assert raw_dataset.kind == "measurement_dataset"
