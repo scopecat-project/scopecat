@@ -80,6 +80,15 @@ parameter revisions, while keeping its physical-behavior assertions. Use the
 [fixture ownership inventory](reference-fixtures.md) to retain each useful behavior
 before retiring its obsolete entry point.
 
+The transitional `config diff/apply/export` CLI commands are retired. They only
+compared, published or exported the daemon-wide combined default. Source checking
+remains read-only; author edits use parameter branches, equipment changes use setup
+operations, and scientific retention uses snapshot backup/restore. The old command
+mock tests are removed with their implementations; current-format parsing,
+bootstrap validation and backup/restore coverage remain. Low-level combined
+registry and working-point APIs still have separate consumers and are not removed
+by this CLI retirement.
+
 ### 3. Qualify a small simulated calibration workflow
 
 Use several control entities with shared readout and coupling edges. Exercise

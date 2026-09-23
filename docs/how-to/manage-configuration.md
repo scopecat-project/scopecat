@@ -239,46 +239,24 @@ and daemon use the same current build. There is no promise that new readers acce
 prebaseline snapshots or runs; preserve original files separately under the
 [data policy](../development/data-compatibility.md).
 
-## Review configuration source changes
+## Validate setup source and manage parameters separately
 
-This is a maintainer workflow for the transitional execution default. Bootstrap
-declares `setup` and optional `parameter_defaults` separately. Ordinary author
-edits belong in `session.params` and named parameter branches; they do not require
-editing bootstrap source or publishing a daemon-wide default.
-
-Validate the source without starting the daemon:
+Validate bootstrap source without starting the daemon:
 
 ```sh
 scopecat config check ./my-lab
 ```
 
-With the project daemon running, compare a freshly evaluated source snapshot
-with the current daemon default:
+Ordinary author edits belong in `session.params` and named parameter branches.
+Use `session.params.diff()` to review local edits and `session.params.save()` to
+save them to the checked-out branch. Review and explicitly activate equipment
+changes through [setup management](maintain-executable-setup.md).
 
-```sh
-scopecat config diff ./my-lab
-```
-
-Review the diff, then explicitly publish it with an operator identity and useful
-audit note:
-
-```sh
-scopecat config apply ./my-lab \
-  --actor alice \
-  --note "publish reviewed repetition defaults"
-```
-
-Export a complete JSON snapshot for review or backup:
-
-```sh
-scopecat config export ./my-lab --output ./active-config.json
-```
-
-The exported JSON is generated state, not the primary editing format. `apply`
-never installs or switches equipment. Review and explicitly activate equipment
-changes through [setup management](maintain-executable-setup.md) first; publishing
-defaults requires a compatible selected setup. `diff` and `apply` require both
-declarations, while `check` also accepts equipment-only bootstrap.
+The former `config diff/apply/export` commands are retired. They compared,
+published or exported a daemon-wide combined default, conflating source setup
+and author parameter state. They are not needed for independent parameter/setup
+workflows. Use [backup and restore](backup-and-restore.md) to preserve scientific
+records and their dependencies; a single configuration JSON is not a full backup.
 
 
 ## Propose an entity or field edit
