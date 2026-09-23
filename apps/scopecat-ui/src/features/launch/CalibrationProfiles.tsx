@@ -8,9 +8,11 @@ type Report = MethodResponse<typeof apiClient, "post", "/api/v1/calibration-chec
 export function CalibrationProfiles({
   context,
   onProcedure,
+  contextDescription = "Uses this stage's frozen measurement context.",
 }: {
   context: Report["context"];
-  onProcedure: (id: string) => void;
+  onProcedure?: (id: string) => void;
+  contextDescription?: string;
 }) {
   const [profiles, setProfiles] = useState<Page["items"]>([]);
   const [cursor, setCursor] = useState<number | null>();
@@ -64,8 +66,8 @@ export function CalibrationProfiles({
     <details className="space-y-2 border-t pt-2">
       <summary>Inspect a saved capability profile</summary>
       <p>
-        Uses this stage's frozen measurement context. Choose a profile whose targets and conditions
-        apply here. Task ordering is not used as capability policy.
+        {contextDescription} Choose a profile whose targets and conditions apply here. Task ordering
+        is not used as capability policy.
       </p>
       {cursor !== null && (
         <button
@@ -182,16 +184,26 @@ export function CalibrationProfiles({
                   Open analysis for {item.requirement.id}
                 </a>
               )}
-              {item.unresolved_procedures.map((id) => (
-                <button
-                  type="button"
-                  key={id}
-                  className="underline block"
-                  onClick={() => onProcedure(id)}
-                >
-                  Inspect unresolved execution {id}
-                </button>
-              ))}
+              {item.unresolved_procedures.map((id) =>
+                onProcedure ? (
+                  <button
+                    type="button"
+                    key={id}
+                    className="underline block"
+                    onClick={() => onProcedure(id)}
+                  >
+                    Inspect unresolved execution {id}
+                  </button>
+                ) : (
+                  <a
+                    key={id}
+                    className="underline block"
+                    href={`?procedure=${encodeURIComponent(id)}#launch`}
+                  >
+                    Inspect unresolved execution {id}
+                  </a>
+                ),
+              )}
             </article>
           ))}
         </section>

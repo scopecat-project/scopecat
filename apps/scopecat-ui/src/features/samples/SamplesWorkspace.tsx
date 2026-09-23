@@ -1,4 +1,5 @@
 import { SampleArtifacts } from "./SampleArtifacts";
+import { SampleCapabilities } from "./SampleCapabilities";
 import { useMemo, useState, type ReactNode } from "react";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import {
@@ -472,6 +473,12 @@ function SampleDetail({
       </div>
 
       <div className="grid grid-cols-2 gap-4 max-[900px]:grid-cols-1">
+        <SampleCapabilities
+          key={`${sampleId}:${revision.revision}`}
+          sampleId={sampleId}
+          revision={revision.revision}
+          runs={runs}
+        />
         <section className={detailCard} aria-labelledby="sample-runs-heading">
           <SectionHeading
             icon={<FlaskConical />}

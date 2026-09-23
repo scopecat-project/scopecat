@@ -207,6 +207,12 @@ Required next contracts:
 5. Sample capability panels using the same domain service; task operator controls
    and execution drill-down are already available in the workbench.
 
+The sample workspace now offers a bounded historical-context consumer: choose a
+measurement bound to the displayed sample revision, then evaluate an explicit
+saved profile. The complete joint subject is retained, and parameter overrides
+or non-revision sources cannot supply an exact context. This does not yet provide
+a current-context selector or a continuously refreshed sample health dashboard.
+
 Validate these with a small synthetic array: full tune-up, local drift, one failed
 resource, unaffected progress, restart and explicit partial results. Add a sample
 panel consumer before claiming that a Python-only automation abstraction is ready
