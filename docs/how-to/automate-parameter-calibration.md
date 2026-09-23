@@ -10,10 +10,10 @@ the parameter branch. Read the scientific result separately from execution statu
 The final check cells retain their capability scope and demonstrate exact-context
 applicability: policy/parameter changes and age require a new check. This is an
 explicit laboratory policy input, not automatic repair or publication permission.
-The example queries retained checks with `lab.procedures.check_history()`: a newer
-failing check must not be hidden by an older passing result. The laboratory reader
-maps procedure steps to check evidence; pagination and completeness reporting are
-handled by the framework. Inspect `incomplete_reasons` and `unresolved_procedures`
+The example queries retained checks with `lab.calibration_checks.history()`: a newer
+failing check must not be hidden by an older passing result. Check requests declare
+their scope, context and result location before execution; no laboratory reader
+callback is required. Inspect `incomplete_reasons` and `unresolved_procedures`
 before using a result. The bounded journal query includes unfinished requests and
 does not claim transactional consistency with concurrent execution.
 Then use **联合校准与耦合验证** (`joint-calibration`) to observe two individually

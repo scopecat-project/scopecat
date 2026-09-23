@@ -38,7 +38,7 @@ Rejected evidence remains inspectable. A retry of the same completed request
 replays its result; a new observation requires a new request.
 
 The installed `calibration` sandbox implements this boundary through `check_zero`
-and a typed `CheckResult` analysis fact. It exercises passing and failing checks
+and a public `CalibrationCheckResult` analysis fact. It exercises passing and failing checks
 on the same exact accepted revision, without candidates or branch publication.
 It is a declared synthetic residual check, not a generic capability registry.
 
@@ -49,8 +49,9 @@ parameter modification time. Branch names are destinations, not scientific scope
 A historical check does not become evidence for the newest head merely because
 both revisions have occupied the same branch.
 
-`scopecat.automation.calibration` now provides `CalibrationScope`,
-`CalibrationContext` and the pure `assess_calibration_check()` function. Scope
+`scopecat.records.calibration_check` provides `CalibrationScope` and
+`CalibrationContext`; `scopecat.automation.calibration` provides the pure
+`assess_calibration_check()` function. Scope
 names a capability, ordered target addresses within the resolved subject,
 laboratory conditions and policy version. The lab must update the policy version
 when measurement/analysis semantics or acceptance criteria change, and conditions
@@ -98,21 +99,35 @@ An incomplete/truncated history returns `incomplete_history`, regardless of the
 visible results. A query that retrieves only successful analyses is insufficient:
 include failed/unfinished requested checks with their original scope and no result.
 The pure selector does not query the daemon or establish query completeness.
-The notebook now obtains its history from `lab.procedures.check_history()` instead
+The notebook now obtains its history from `lab.calibration_checks.history()` instead
 of maintaining an in-memory list of checks.
 
-### Reading the procedure journal
+### Declaring checks and querying their history
 
-`check_history(procedure_id=..., read=...)` follows bounded newest-first pages over
-all procedure states, including requests that have not reached measurement. The
-laboratory reader maps that procedure's step/fact layout to `CheckEvidence`; None
-means an unresolved check, never an ignored failure. An optional `include` predicate
-can narrow the intended scope from frozen request intent, not from outcome/state.
-Reader and transport errors propagate rather than producing an apparently complete
-history. Unknown procedure definitions must be unresolved or explicitly excluded
-under a declared request-scope policy, not decoded through an old-code fallback.
+A check intent carries a typed `calibration_check: CalibrationCheckRequest` field:
+capability scope, exact scientific context, declared measurement/analysis step
+addresses and result output ID. This declaration is retained and hashed with the
+procedure intent at submission, before any acquisition. It remains readable using
+public record types without executing the laboratory's procedure or decoder.
+The analysis retains the public `CalibrationCheckResult` under `CHECK_RESULT`
+from `scopecat.api.calibration_checks`; laboratory-specific metrics are separate
+analysis facts. Execution completion and scientific acceptance remain distinct.
 
-`ProcedureCheckHistory` reports evidence, unresolved request IDs, scanned count
+`lab.calibration_checks.history(scope=..., context=...)` queries declared checks
+across procedure definitions, in all states. Scope/context filters use the request,
+so an unstarted check in a different context need not block the requested context.
+`requests` exposes each declaration alongside its execution state for future panel
+consumers. Evidence is located by declared addresses, with standard result-schema,
+scope and measured-context checks. Invalid evidence raises rather than looking like
+an empty complete history. There is no laboratory reader callback or name guessing.
+
+The short-lived `lab.procedures.check_history()` adapter is removed. Unmarked
+procedures are generic executions, not inferred checks; no prebaseline reader or
+backfill is introduced. Existing files remain untouched. Declaration validation
+does not yet constitute a domain-specific server admission service: laboratory
+definitions still validate their executable arguments against the declaration.
+
+`CalibrationCheckHistory` reports evidence, unresolved request IDs, scanned count
 and `incomplete_reasons`: `scan_limit`, `unresolved_checks` or `journal_changed`.
 Its `complete` property is true only when those reasons are absent. Call
 `history.select(...)` to carry this completeness into evidence selection
@@ -128,7 +143,8 @@ Before scaling maintenance, add server-side scope queries with an explicit
 consistency contract, retaining this bounded failure behavior.
 
 The real-daemon notebook journey covers pagination, scan-budget exhaustion,
-unstarted checks and history recovery after reconnecting. A separate assertion
+unstarted check declarations, filtering another parameter context and history
+recovery after reconnecting. A separate assertion
 advances a procedure during reading and confirms that only a later stable read
 can report complete history. It never filters out a newer negative check to
 recover an older positive result.

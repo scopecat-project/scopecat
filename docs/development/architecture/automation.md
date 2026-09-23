@@ -1,5 +1,8 @@
 # Durable procedure automation
 
+For the current division between domain tasks, panels and this execution kernel,
+see [Automation tasks and durable execution](automation-tasks.md).
+
 Scopecat's first automation boundary coordinates a small number of related runs,
 analysis publications, exact configuration publications, and saved-entry
 activations without moving

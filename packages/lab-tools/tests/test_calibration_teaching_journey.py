@@ -63,33 +63,70 @@ try:
         with project.connect() as lab:
             expected_runs = int(sys.argv[3])
             if sys.argv[2] == "calibration":
-                from functools import partial
+                from unittest.mock import patch
                 from my_experiment.calibration import (
-                    CheckIntent, check_zero, read_check,
+                    check_request, check_zero,
                 )
 
                 concurrent = lab.procedures.submit(
                     check_zero,
-                    CheckIntent(initial=lab.parameters.resolve(namespace["accepted"].revision)),
+                    check_request(initial=lab.parameters.resolve(namespace["accepted"].revision)),
                     request_key="history-concurrent-progress",
                 )
 
-                def advancing_reader(handle, snapshot):
-                    if handle.id == concurrent.id:
-                        handle.resume()
-                    return read_check(lab, handle, snapshot)
+                checks = lab.calibration_checks
+                original_read = checks._read
 
-                changed = lab.procedures.check_history(
-                    procedure_id=check_zero.ref.id, read=advancing_reader, page_size=1,
-                )
+                def advancing_reader(snapshot, declaration):
+                    if snapshot.procedure_run_id == concurrent.id:
+                        concurrent.resume()
+                    return original_read(snapshot, declaration)
+
+                with patch.object(checks, "_read", advancing_reader):
+                    changed = checks.history(page_size=1)
                 assert not changed.complete
                 assert "journal_changed" in changed.incomplete_reasons
                 assert concurrent.id in changed.unresolved_procedures
-                stable = lab.procedures.check_history(
-                    procedure_id=check_zero.ref.id, read=partial(read_check, lab),
-                )
+                stable = checks.history()
                 assert stable.complete
-                expected_runs += 1
+                from dataclasses import replace
+                import pytest
+
+                declared = next(
+                    item for item in stable.requests
+                    if item.execution.procedure_run_id == concurrent.id
+                )
+                wrong_scope = declared.request.model_copy(update={
+                    "scope": replace(declared.request.scope, conditions="different"),
+                })
+                with pytest.raises(ValueError, match="declared scope"):
+                    checks._read(declared.execution, wrong_scope)
+                wrong_context = declared.request.model_copy(update={
+                    "context": replace(
+                        declared.request.context,
+                        parameters=namespace["destination"].revision,
+                    ),
+                })
+                with pytest.raises(ValueError, match="declared context"):
+                    checks._read(declared.execution, wrong_context)
+                # A queued check in another exact parameter context is visible,
+                # but does not block this context's domain query.
+                other_intent = check_request(
+                    initial=lab.parameters.resolve(namespace["initial"]),
+                )
+                other = lab.procedures.submit(
+                    check_zero, other_intent, request_key="other-context-check",
+                )
+                all_checks = checks.history()
+                assert other.id in all_checks.unresolved_procedures
+                declared = next(
+                    item for item in all_checks.requests
+                    if item.execution.procedure_run_id == other.id
+                )
+                assert declared.request == other_intent.calibration_check
+                assert checks.history(context=namespace["current"]).complete
+                other.resume()
+                expected_runs += 2
             assert len(lab.runs().items) == expected_runs
             assert lab.config.registry().entries == ()
             outcomes = {r.summary().outcome for r in lab.procedures.list().items}

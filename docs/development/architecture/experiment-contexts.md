@@ -1,7 +1,10 @@
 # Experiment workbench and session contexts
 
-Status: selected product direction and proposed implementation contracts, recorded
-2026-09-19 after the teaching-host trial. The entities and APIs proposed here are
+Status: selected product direction and proposed implementation contracts, begun
+2026-09-19 and updated for independent parameter branches and declared checks.
+The implementation chronicles below retain historical terminology; use the
+current capability table and [automation ownership](automation-tasks.md) for current
+boundaries. The entities and APIs proposed here are
 not all shipped; implementation status is recorded below. This document governs the next implementation slices; it does not
 relax current ownership checks. The [prebaseline data policy](../data-compatibility.md)
 retires the schema 68–74 migration exercises; current format 88 is not a supported
@@ -25,7 +28,7 @@ controls all clients.
 
 A representative context summary is:
 
-> A + B assembly · cooldown 3 · joint-gate working point · coupler-lab · operator Li
+> A + B assembly · cooldown 3 · joint-gate conditions · daily parameter branch · operator Li
 
 First-class selection does not require filling every field for every run. Remember
 session defaults, offer compatible choices, and show the resolved context before
@@ -44,7 +47,7 @@ this boundary. See the [current platform status](../platform-status.md) for sequ
 |---|---|---|
 | Scientific identity | Immutable sample revisions; exact single-member target selection through Python and the workbench, preview, plans and parent/child admission | Executable assembly validation |
 | Applicability | Exact target/batch/setup checks in preparation, admission and scoped publication; conservative whole-setup identity | Qualified cross-object dependencies and finer dependency scopes |
-| Working points | Exact scope, value provenance, explicit estimate copies and verified publication; bounded automatic cohorts share independent working-point ownership | Qualified cross-object calibration dependencies |
+| Parameters and calibration | Independent parameter revisions/branches, candidate composition and verified publication; declared check scope and exact-context evidence assessment | Dependency-aware reuse, capability/task models and panel projections; legacy cohorts are retired |
 | Apparatus history | Descriptive object/revision and observation slice (#644); separate from executable target selection | Useful history navigation and explicit evidence links; no live wiring or calibration-validity claim |
 | Execution setup | Independent maintained setup revisions/selection; complete retained run config and setup-content fences | Concurrent incompatible deployments and qualified cross-object applicability |
 | Session and addressing | Per-page/kernel choices, graphical workspace selection, frozen target plans, collection numbering and same-environment source-qualified execution | Heterogeneous environments and portable multi-source installation |
@@ -70,7 +73,7 @@ not merge physical samples merely because both are named `chip-a`.
 | Physical sample | Stable physical identity and revisioned description | A repository or one run sequence |
 | Measurement target / assembly revision | Selected sample revisions, roles, member-qualified entities and interconnections | A new physical identity for each cooldown |
 | Experimental batch | A named event/campaign such as mounting or cooldown, with stable ID and metadata | A database, process or mandatory wall-clock-derived identity |
-| Working point | Versioned parameter state applicable to a target and compatible setup | Another session's selection or an automatic hardware write |
+| Parameter revision / branch | Saved values and a named evolving revision pointer | Scientific applicability, another session's selection or an automatic hardware write |
 | Descriptive apparatus object and observation | Stable identity, recorded descriptions and historical evidence under declared conditions | Current wiring, executable targeting or calibration validity |
 | Executable setup revision | Maintained execution connections/routes, drivers and capabilities | A complete physical inventory or proof that the real wiring matches |
 | Operator | Attribution and, separately, authorized capabilities | A new environment or data directory |
@@ -81,20 +84,20 @@ not merge physical samples merely because both are named `chip-a`.
 An experimental batch can contain several samples and collections. A collection
 can have a default target/batch without deriving its identity from their names.
 The initial convenience flow may create one collection for a selected target and
-cooldown. Changing an operator, repository or working point keeps that collection
+cooldown. Changing an operator, repository or parameter branch keeps that collection
 unless the user explicitly chooses another. Renaming labels never changes IDs.
 
 Starting a new cooldown or changing mounting/wiring does not automatically qualify
-the previous working point or calibration for the new physical conditions. A
-working point's applicability includes the relevant batch/setup scope. Previous
+the previous parameter values or calibration for the new physical conditions.
+Evidence applicability includes the relevant batch/setup scope. Previous
 values may be explicitly copied as starting estimates with retained provenance;
 that copy is not evidence of fresh calibration. Batch selection and calibration
 freshness therefore need a shared validation rule, not just matching chip names.
 
 An assembly is a revisioned measurement target, not a string concatenation of chip
 names. It records members and their physical roles, qualified entity addresses,
-and relevant interconnections. Moving from A to A+B does not reuse A's working point
-as a joint working point without an explicit compatible composition. Single-chip
+and relevant interconnections. Moving from A to A+B does not qualify A's parameters
+as joint parameters without explicit composition and verification. Single-chip
 and joint calibration validity must remain distinguishable. The current one-sample
 context and subject-role analysis rules need adaptation and consumer tests before
 claiming this support.
@@ -109,7 +112,7 @@ collection label, for example `chip A / cooldown 3 / #42`.
   sessions using one collection cannot receive the same number.
 - An exact idempotent retry returns the same run and address. A cancelled or failed
   admitted run retains its number; gaps are allowed and numbers are not recycled.
-- Searching by sample, working point, operator or research membership never
+- Searching by sample, parameter revision, operator or research membership never
   recalculates numbers. A run has one original acquisition address; additional
   collections of references/bookmarks do not relocate or renumber it.
 - `#42` resolves only against an explicitly bound collection. Ambiguous cross-
@@ -127,7 +130,7 @@ cooldown boundaries from folder names or rewrite files as part of a code refacto
 ## Session selection, preparation and admission
 
 The intended flow is selection -> validated preparation -> admitted frozen context.
-Preparation resolves compatible source, sample/assembly revisions, working-point
+Preparation resolves compatible source, sample/assembly revisions, parameter
 revision, apparatus setup, batch, collection and operator attribution. The GUI and
 Python client use the same server contract. No concrete constructor syntax is
 committed here.
@@ -140,7 +143,7 @@ change affecting preview semantics requires preparation again. Admitted runs ret
 the resolved snapshot and provenance, including procedure-child attribution and
 numbering policy. Refresh of code follows the same rule.
 
-A session's working-point selection is distinct from publishing a shared update.
+A session's parameter branch/revision selection is distinct from publishing a shared update.
 Publication requires an expected revision, validates applicability, and records the
 actor and evidence. Another client's conflicting update is surfaced rather than
 overwritten. Restoring a UI selection or parameter context never dispatches hardware.
@@ -154,7 +157,7 @@ for executing retained source; reading old data need not execute old code.
 
 ## Configuration composition and resource ownership
 
-Maintain apparatus/setup, target description, parameter declarations, working-point
+Maintain apparatus/setup, target description, parameter declarations, parameter
 values and per-request overrides under their appropriate owners. Resolve them into
 a complete immutable execution snapshot with value origins and compatibility checks.
 This separates maintenance without weakening reproducibility. Parameters defined
@@ -178,14 +181,14 @@ achieve one ordinary installation and workbench entry.
 ## Teaching inside the same application
 
 Help opens a prepared exercise in the ordinary workbench with a persistent, visible
-practice marker. Each exercise owns a simulated target, copied working-point state,
+practice marker. Each exercise owns a declared software scene, copied parameter state,
 record collection and source sandbox. Repeated teaching labels and `#1` are qualified
 by exercise identities. A real-work context and several practice contexts can remain
 open side by side.
 
 The server must enforce practice resource and publication boundaries: practice
 sessions can use only simulated backends; they cannot obtain real apparatus
-capabilities or advance a real working point. Merely hiding real devices in a menu
+capabilities or advance a real parameter branch. Merely hiding real devices in a menu
 is insufficient. Initial storage and worker separation may remain underneath this
 shared presentation. This is protection against accidental workflow crossover,
 not an OS security sandbox for arbitrary Python code running as the same user.
@@ -243,6 +246,12 @@ Prototype defaults, labels and navigation with the small scenarios above before
 committing to broad GUI polish. Real device behavior remains a separate evidence gate.
 
 ## First implementation: record addresses
+
+The numbered implementation sections below are historical development notes.
+Their working-point/config-context interfaces and prospective migration work
+are not the current calibration contract. Independent parameters and the retired
+cohort boundary are described in [calibration composition](../calibration-composition.md);
+new automation work follows [domain tasks above execution](automation-tasks.md).
 
 Record collections provide atomic admission-time numbering and collection-qualified
 Python/HTTP history/lookup. Store-wide sequence lookup remains a convenience in

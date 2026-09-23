@@ -9,43 +9,9 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Literal
 
-from scopecat.records.content import Sha256ContentHash
-from scopecat.records.execution_scenario import SoftwareExecutionScenario
-from scopecat.records.parameter_revision import ParameterRevisionRef
+from scopecat.records.calibration_check import CalibrationContext, CalibrationScope
 from scopecat.records.run import ParameterRunConfigSource, RunSnapshot
-from scopecat.records.scientific_binding import ResolvedSubject, UnboundSubject
-
-
-@dataclass(frozen=True)
-class CalibrationScope:
-    """Laboratory-defined capability, ordered target addresses and check contract.
-
-    Targets are addresses within the resolved subject, not global qubit names.
-    Order matters for directional operations. Conditions name a laboratory-owned
-    operating condition contract; change it when relevant unmodeled conditions
-    change. Policy versions cover thresholds, analysis and measurement semantics.
-    """
-
-    capability: str
-    targets: tuple[str, ...]
-    conditions: str
-    policy_version: str
-
-
-@dataclass(frozen=True)
-class CalibrationContext:
-    """Exact saved inputs for a requested check, independent of branch names.
-
-    The caller supplies the requested subject/scenario, not those of whichever
-    historical check happens to be available. This initial contract deliberately
-    requires the same parameter revision until selective dependencies exist.
-    """
-
-    parameters: ParameterRevisionRef
-    subject: ResolvedSubject
-    setup_content_hash: Sha256ContentHash
-    scenario: SoftwareExecutionScenario | None
-
+from scopecat.records.scientific_binding import UnboundSubject
 
 type CheckReason = Literal[
     "analysis_missing",

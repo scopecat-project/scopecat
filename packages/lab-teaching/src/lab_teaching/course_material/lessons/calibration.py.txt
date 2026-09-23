@@ -6,14 +6,20 @@ from typing import Self
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 import scopecat as sc
-from scopecat.api.lab import LabClient
-from scopecat.api.procedures import LabProcedureContext, ProcedureHandle
+from scopecat.api.calibration_checks import CHECK_RESULT
+from scopecat.api.procedures import LabProcedureContext
 from scopecat.api.run import RunHandle
-from scopecat.automation import AnalysisPublicationOutputRef, ProcedureRun, RunOutputRef
-from scopecat.automation.calibration import CalibrationScope, CheckEvidence
 from scopecat.daemon.views import ParameterResolution
 from scopecat.kernel.frozen import thaw_json_value
+from scopecat.records.calibration_check import (
+    CalibrationCheckRequest,
+    CalibrationCheckResult,
+    CalibrationContext,
+    CalibrationScope,
+)
 from scopecat.records.parameter_branch import ParameterBranch
+from scopecat.records.scientific_binding import UnboundSubject
+from scopecat.records.scientific_scope import setup_content_hash
 
 
 class Sensor(sc.ParameterModel, table="sensor"):
@@ -92,17 +98,6 @@ def verify_zero(
     )
 
 
-@dataclass(frozen=True)
-class CheckResult:
-    passed: bool
-    residual: float
-    tolerance: float
-    scope: CalibrationScope
-
-
-CHECK_RESULT = sc.AnalysisFactSchema("teaching.zero-check.v2", CheckResult)
-
-
 def check_scope(tolerance: float) -> CalibrationScope:
     return CalibrationScope(
         capability="teaching.zero",
@@ -116,14 +111,21 @@ def check_scope(tolerance: float) -> CalibrationScope:
 def assess_zero(context: sc.AnalysisContext, *, tolerance: float) -> sc.Analysis:
     data = context.measurements()
     error = abs(float(data["residual"].require_values()[0]))
-    return context.result("当前参数健康检查").fact(
-        "check",
-        CheckResult(error <= tolerance, error, tolerance, check_scope(tolerance)),
-        schema=CHECK_RESULT,
+    return (
+        context.result("当前参数健康检查")
+        .fact("residual", error)
+        .fact("tolerance", tolerance)
+        .fact(
+            "check",
+            CalibrationCheckResult(check_scope(tolerance), error <= tolerance),
+            schema=CHECK_RESULT,
+        )
     )
 
 
 class CheckIntent(BaseModel):
+    calibration_check: CalibrationCheckRequest
+
     model_config = ConfigDict(frozen=True, extra="forbid", allow_inf_nan=False)
 
     initial: ParameterResolution
@@ -142,10 +144,42 @@ class CheckIntent(BaseModel):
             or self.initial.config_source.overrides
         ):
             raise ValueError("健康检查需要已保存的精确参数版本")
+        if self.calibration_check != check_declaration(self.initial, self.tolerance):
+            raise ValueError("检查声明必须匹配实际测量参数和策略")
         return self
 
 
-@sc.procedure(id="teaching.check-zero", version="2", intent=CheckIntent)
+def check_declaration(
+    initial: ParameterResolution, tolerance: float
+) -> CalibrationCheckRequest:
+    return CalibrationCheckRequest(
+        scope=check_scope(tolerance),
+        context=CalibrationContext(
+            initial.config_source.parameters,
+            UnboundSubject(),
+            setup_content_hash(initial.config),
+            initial.config.system.scenario,
+        ),
+        measurement_step="check",
+        analysis_step="assess",
+    )
+
+
+def check_request(
+    *,
+    initial: ParameterResolution,
+    disturbance: float = 0.002,
+    tolerance: float = 0.01,
+) -> CheckIntent:
+    return CheckIntent(
+        initial=initial,
+        disturbance=disturbance,
+        tolerance=tolerance,
+        calibration_check=check_declaration(initial, tolerance),
+    )
+
+
+@sc.procedure(id="teaching.check-zero", version="3", intent=CheckIntent)
 def check_zero(ctx: LabProcedureContext, intent: CheckIntent) -> None:
     measurement = ctx.run(
         "check",
@@ -156,27 +190,6 @@ def check_zero(ctx: LabProcedureContext, intent: CheckIntent) -> None:
     ctx.analyze_run("assess", measurement, assess_zero(tolerance=intent.tolerance))
     # 检查完成不等于指标达标；保留负面结果，由维护策略决定下一步。
     # 不生成参数候选，不发布分支，也不声称检查结果永远适用。
-
-
-def read_check(
-    lab: LabClient, handle: ProcedureHandle, request: ProcedureRun
-) -> CheckEvidence | None:
-    """读取本专题的检查布局；未完成或旧定义不能伪装成已通过。"""
-    if request.definition != check_zero.ref:
-        return None
-    try:
-        acquisition = handle.step("check")
-        analysis = handle.step("assess")
-    except KeyError:
-        return None
-    if not isinstance(acquisition.output, RunOutputRef) or not isinstance(
-        analysis.output, AnalysisPublicationOutputRef
-    ):
-        return None
-    measured = lab.get_run(acquisition.output.run_id)
-    report = measured.published_analysis(analysis.output.analysis_record_id)
-    result = report.fact_as("check", CHECK_RESULT)
-    return CheckEvidence(measured.snapshot, result.scope, report.id, result.passed)
 
 
 class CalibrationIntent(BaseModel):

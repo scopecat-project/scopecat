@@ -36,6 +36,7 @@ uv run --locked --package reference-lab --group test pytest examples/reference_l
 
 - [Current platform status and remaining work](platform-status.md)
 - [Multi-target calibration and maintenance](calibration-maintenance.md)
+- [Automation tasks and durable execution](architecture/automation-tasks.md)
 - [Repository map](repository-map.md)
 - [Core workflow evaluations](workflow-evaluations.md)
 - [Everyday Python author contract](everyday-author-contract.md)

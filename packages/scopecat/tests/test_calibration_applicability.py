@@ -6,14 +6,18 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from scopecat.automation.calibration import (
-    CalibrationContext,
-    CalibrationScope,
     CheckEvidence,
     assess_calibration_check,
     select_calibration_check,
 )
 from scopecat.kernel.content_identity import sha256_json_hash
+from scopecat.kernel.frozen import freeze_json_mapping
 from scopecat.kernel.run_outcome import RunOutcome
+from scopecat.records.calibration_check import (
+    CalibrationCheckRequest,
+    CalibrationContext,
+    CalibrationScope,
+)
 from scopecat.records.execution_scenario import SoftwareExecutionScenario
 from scopecat.records.parameter_revision import ParameterRevisionRef
 from scopecat.records.run import ParameterRunConfigSource, RunSnapshot
@@ -239,6 +243,20 @@ def later_run(measured: RunSnapshot, *, complete: bool = True) -> RunSnapshot:
             else None,
         }
     )
+
+
+def test_check_request_decodes_without_author_code_after_intent_freezing(
+    observation: tuple[RunSnapshot, CalibrationContext],
+) -> None:
+    _, context = observation
+    request = CalibrationCheckRequest(
+        scope=SCOPE,
+        context=context,
+        measurement_step="probe",
+        analysis_step="judge",
+    )
+    frozen = freeze_json_mapping(request.model_dump(mode="json"), path="check")
+    assert CalibrationCheckRequest.model_validate(frozen) == request
 
 
 @pytest.mark.parametrize("reverse", [False, True])

@@ -13,6 +13,7 @@ from scopecat.api._remote import RemoteRunOperations
 from scopecat.api._runner import _DaemonRunner
 from scopecat.api.analysis import AnalysisContext, AnalysisStep
 from scopecat.api.apparatus_history import LabApparatusOperations
+from scopecat.api.calibration_checks import LabCalibrationChecks
 from scopecat.api.instruments import LabInstrumentOperations
 from scopecat.api.parameter_revisions import LabParameterOperations
 from scopecat.api.plans import LabPlanOperations
@@ -277,6 +278,10 @@ class LabClient:
     @property
     def procedures(self) -> LabProcedureOperations:
         return self._procedures
+
+    @property
+    def calibration_checks(self) -> LabCalibrationChecks:
+        return LabCalibrationChecks(self._client, self._procedures, self)
 
     def health(self) -> DaemonHealth:
         return self._control.health()
