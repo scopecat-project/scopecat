@@ -147,6 +147,11 @@ IDs. Bounded or unresolved history remains unknown. The laboratory still owns
 requirement coverage, policy and age limits. See
 [capability reports](../../how-to/read-calibration-report.md).
 
+The task workbench consumes this endpoint per stage, with an explicit age policy
+and visible evaluation time. Users can inspect matching checks from other tasks
+without changing the stage's frozen context. This is an evidence-inspection entry
+point; laboratory requirement coverage and sample capability panels remain separate.
+
 Sample/target panels need scoped capability status, evidence time and parameter
 revision, pending checks/repairs, blocked prerequisites and explicit missing scope.
 They must not translate procedure completion into a calibrated flag. A completed

@@ -141,6 +141,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/calibration-checks/report": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Calibration Report */
+        post: operations["calibration_report_api_v1_calibration_checks_report_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/calibration-tasks": {
         parameters: {
             query?: never;
@@ -2945,6 +2962,56 @@ export interface components {
             subject: components["schemas"]["ResolvedSubject"];
         };
         /**
+         * CalibrationReport
+         * @description Advisory evidence snapshot for explicit requirements, not sample health.
+         */
+        CalibrationReport: {
+            context: components["schemas"]["CalibrationContext"];
+            /** Items */
+            items: components["schemas"]["CalibrationRequirementStatus"][];
+            /**
+             * Observed At
+             * Format: date-time
+             */
+            observed_at: string;
+        };
+        /** CalibrationReportQuery */
+        CalibrationReportQuery: {
+            context: components["schemas"]["CalibrationContext"];
+            /**
+             * History Limit
+             * @default 50
+             */
+            history_limit: number;
+            /** Requirements */
+            requirements: components["schemas"]["CalibrationRequirement"][];
+        };
+        /**
+         * CalibrationRequirement
+         * @description One explicitly requested capability; no inferred dependency closure.
+         */
+        CalibrationRequirement: {
+            /** Id */
+            id: string;
+            /**
+             * Max Age
+             * Format: duration
+             */
+            max_age: string;
+            scope: components["schemas"]["CalibrationScope"];
+        };
+        /** CalibrationRequirementStatus */
+        CalibrationRequirementStatus: {
+            /** Incomplete Reasons */
+            incomplete_reasons: ("scan_limit" | "unresolved_checks")[];
+            requirement: components["schemas"]["CalibrationRequirement"];
+            /** Scanned */
+            scanned: number;
+            selection: components["schemas"]["CheckSelection"];
+            /** Unresolved Procedures */
+            unresolved_procedures: string[];
+        };
+        /**
          * CalibrationScope
          * @description A capability and ordered target addresses within a resolved subject.
          *
@@ -3156,6 +3223,14 @@ export interface components {
             /** Parameter Id */
             parameter_id: string;
         };
+        /** CheckAssessment */
+        CheckAssessment: {
+            /** Reasons */
+            reasons: components["schemas"]["CheckReason"][];
+            /** Run Id */
+            run_id: string;
+            status: components["schemas"]["CheckStatus"];
+        };
         /**
          * CheckEvidence
          * @description Read projection of a retained check, including attempts without a result.
@@ -3172,6 +3247,21 @@ export interface components {
             passed: boolean | null;
             scope: components["schemas"]["CalibrationScope"];
         };
+        /** @enum {string} */
+        CheckReason: "analysis_missing" | "measurement_incomplete" | "parameters_unsaved" | "subject_unbound" | "capability_changed" | "targets_changed" | "conditions_changed" | "policy_changed" | "parameters_changed" | "subject_changed" | "setup_changed" | "scenario_changed" | "evidence_from_future" | "check_expired" | "within_spec" | "out_of_spec";
+        /** CheckSelection */
+        CheckSelection: {
+            assessment?: components["schemas"]["CheckAssessment"] | null;
+            evidence?: components["schemas"]["CheckEvidence"] | null;
+            /**
+             * Reason
+             * @enum {string}
+             */
+            reason: "latest_matching" | "no_matching_evidence" | "ambiguous_latest" | "incomplete_history";
+            status: components["schemas"]["CheckStatus"];
+        };
+        /** @enum {string} */
+        CheckStatus: "usable" | "out_of_spec" | "recheck" | "unknown";
         /**
          * CollectReceipt
          * @description Explicit outcome reported after one collection command.
@@ -10852,6 +10942,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AuthorWorkspaceCatalog"];
+                };
+            };
+        };
+    };
+    calibration_report_api_v1_calibration_checks_report_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CalibrationReportQuery"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalibrationReport"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

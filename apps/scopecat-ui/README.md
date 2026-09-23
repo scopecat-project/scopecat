@@ -130,6 +130,13 @@ view without replaying the command. Cancelling a task stops future admission and
 does not claim its admitted hardware work has stopped. Task URLs use `?task=...#launch`.
 This is a task operator view, not a sample capability/health projection or plan editor.
 
+Each task stage also exposes `CalibrationEvidence`, a read-only report using the
+stage's exact frozen scope/context and an explicitly entered maximum age. It queries
+matching checks across retained tasks and shows selection reasons, truncated or
+unresolved history, evaluation time and record links. Edits or failed refreshes
+clear the previous verdict. There is no automatic age policy, branch-head following
+or sample-wide readiness inference; report refresh is explicit.
+
 The server manages project processes for explicitly dispatched procedures and
 stages of running calibration tasks, with
 at most two live workers. A worker runs the normal durable `resume` operation

@@ -4,6 +4,24 @@ A task view explains one plan's progress. A capability report instead asks which
 retained checks apply to an explicit measurement context. It does not infer the
 capabilities required by a sample or declare that the whole sample is calibrated.
 
+## Inspect from the workbench
+
+Open **Calibration tasks**, select a task, and expand **Inspect applicable evidence**
+under a stage. Enter a maximum evidence age in hours and click **Check evidence**.
+The age starts blank because the laboratory must choose that policy. The history
+limit defaults to 50 and can be increased to 200.
+
+This queries all retained checks matching that stage's frozen context and scope,
+including checks from other tasks. It does not follow a parameter branch's current
+head. Each result shows its evaluation time, status, reasons and inspected count,
+with links to selected measurements/analyses and unresolved procedure controls.
+Changing inputs clears the old report. Checking again refreshes it; results do not
+automatically update or expire on screen, and failed refreshes clear old verdicts.
+This entry point inspects one declared requirement at a time; it does not certify
+the task's complete scientific coverage.
+
+## Query from Python
+
 Provide a resolved `CalibrationContext` and the requirements you want to inspect.
 For example, using the exact declaration from a laboratory check intent:
 

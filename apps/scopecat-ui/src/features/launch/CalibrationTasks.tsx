@@ -3,6 +3,7 @@ import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-quer
 import { apiClient, apiData } from "../../api-client";
 import type { components } from "../../api-schema";
 import type { MethodResponse } from "openapi-fetch";
+import { CalibrationEvidence } from "./CalibrationEvidence";
 
 type TaskControl = components["schemas"]["CalibrationTaskControl"];
 type TaskView = MethodResponse<typeof apiClient, "get", "/api/v1/calibration-tasks/{task_id}">;
@@ -290,6 +291,7 @@ function TaskDetail({
                       <dd>{planned.check.context.parameters.content_hash}</dd>
                     </dl>
                   </details>
+                  <CalibrationEvidence stage={planned} onProcedure={onProcedure} />
                 </li>
               );
             })}
