@@ -89,6 +89,12 @@ bootstrap validation and backup/restore coverage remain. Low-level combined
 registry and working-point APIs still have separate consumers and are not removed
 by this CLI retirement.
 
+Author guides now consistently start from independent parameter branches. The
+batch guide reflects the tested distinction between reusing values and reusing
+evidence, including saved-plan/candidate scope. The combined-configuration guide
+is explicitly legacy documentation; its continued existence is not a recommended
+author entry point.
+
 ### 3. Qualify a small simulated calibration workflow
 
 Use several control entities with shared readout and coupling edges. Exercise

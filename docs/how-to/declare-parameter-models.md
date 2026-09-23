@@ -47,10 +47,10 @@ configuration validation. This does not install a default or alter a project.
 
 ## Create or edit a table
 
-Given an existing author session and named parameter context:
+Given an existing author session and named parameter branch:
 
 ```python
-params = author.config.workspace(context="my-working-point")
+params = author.parameters.workspace("my-parameter-branch")
 drive = params.declare_table(Drive)
 drive.add(Drive(qubit="q0"))
 print(params.structure_diff())
@@ -179,6 +179,6 @@ field defaults. Missing required cells fail when read; optional unknowns are
 
 Use the effective snapshot supplied for the current request/point, including its
 parameter-cell overrides. Editing these detached rows cannot change that snapshot
-or the saved working point. Before retaining values in a compiler cache, freeze
+or the saved parameter revision. Before retaining values in a compiler cache, freeze
 the fields the recipe consumes into immutable compiler parameters; these rows are
 editable values, not live workspace bindings or immutable cache keys.

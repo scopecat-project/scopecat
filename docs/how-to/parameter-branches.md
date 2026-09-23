@@ -213,10 +213,9 @@ carry no enforced sample/cooldown applicability or calibration acceptance.
 
 The low-level `checkout(...).save(catalog=..., parameters=...)` remains available
 for programmatic full-snapshot producers; ordinary authors use `params.save()`.
-The old `session.config.workspace(context=...)` still serves maintained
-working-point consumers, but new teaching uses the independent branch backend
+The [legacy combined configuration API](manage-configuration.md) remains for its
+maintained working-point consumers. New author workflows use independent branches
 without fabricating samples or working points.
 
-Default branch selection, scientific working-point consolidation, graphical
-branch editing and equipment/target/binding separation remain follow-up work.
+Automatic default-branch selection and graphical branch editing remain follow-up work.
 No prebaseline data migration or historical-file rewriting is introduced.

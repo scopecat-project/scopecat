@@ -1,25 +1,21 @@
-# Review and publish project configuration
+# Legacy combined configuration APIs
 
-For declarations shared by parameter editing and experiments, start with
-[parameter models](declare-parameter-models.md). The same workspace also supports
-ordinary dataclass and dictionary views described below.
+This page documents transitional combined-configuration APIs for their remaining
+maintained consumers. New author workflows should use [parameter branches](parameter-branches.md)
+for values, [parameter models](declare-parameter-models.md) or
+[dynamic tables](declare-dynamic-parameters.md) for declarations, and
+[session context](select-session-context.md) for sample and batch selection.
+See [setup management](maintain-executable-setup.md) for equipment authority.
 
-
-A project's `src/<package>/configuration.py` is ordinary version-controlled
-Python. The daemon owns the accepted configuration history; it does not watch or
-rewrite that source file. Executable setup has its own saved revisions and current
-selection; see [maintain executable setup](maintain-executable-setup.md). Parameter
-defaults and working points must match that authority before execution.
-
-New author workflows should use [parameter branches](parameter-branches.md);
-the working-point APIs below serve existing calibration/publication consumers.
-Publishing a default, even through full-snapshot `set_default`, requires an
-explicitly selected setup and never creates equipment authority. Ordinary branch
-editing needs no setup and does not publish a shared default.
+The working-point APIs below bind parameters to sample scope in the older model.
+They are not prerequisites for new experiments, parameter editing or a new cooldown.
+A saved parameter revision or branch is independent of those choices and carries
+no automatic calibration acceptance. Existing combined-default publication still
+requires compatible explicitly selected equipment and does not create setup authority.
 
 ## Edit a saved working point in Python
 
-For ordinary parameter edits, open a context that your laboratory project has
+For a maintained legacy working-point consumer, open a context that its project has
 already installed. The entry name selects an exact sample revision and working
 point; no Pydantic models or configuration hashes are needed. The following
 example assumes a `qubits` table with a string `id` primary key and numeric
