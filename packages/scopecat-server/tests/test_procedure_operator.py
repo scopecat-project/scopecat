@@ -33,7 +33,10 @@ from scopecat_server.http.procedure_operator import read_procedure_operator
 from scopecat_server.http.transport import create_app
 from scopecat_server.services.application import DaemonApplication
 from scopecat_server.services.manual_previews import ManualPreviewService
-from scopecat_server.services.project_workers import ProjectProcedureWorkers
+from scopecat_server.services.project_workers import (
+    ProcedureDispatchError,
+    ProjectProcedureWorkers,
+)
 from scopecat_server.storage.sqlite.connection import SQLiteDatabase
 
 NOW = datetime(2026, 9, 1, tzinfo=UTC)
@@ -248,7 +251,7 @@ def test_dispatch_snapshot_survives_restart_and_read_never_spawns(
     manager = ProjectProcedureWorkers(lambda: tmp_path, lambda _: "ready")
     with (
         patch.object(manager, "_spawn", side_effect=OSError("spawn failed")),
-        pytest.raises(OSError, match="spawn failed"),
+        pytest.raises(ProcedureDispatchError, match="spawn failed"),
     ):
         manager.dispatch("procedure-1")
     restarted = ProjectProcedureWorkers(lambda: tmp_path, lambda _: "ready")
