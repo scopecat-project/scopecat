@@ -1,9 +1,11 @@
 """Declared calibration check identity, independent of execution implementation."""
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from scopecat.kernel.frozen import thaw_json_value
 from scopecat.records.content import Sha256ContentHash
@@ -55,6 +57,12 @@ class CalibrationCheckRequest(BaseModel):
     @classmethod
     def thaw_retained_intent(cls, value: object) -> object:
         return thaw_json_value(value)
+
+    @model_validator(mode="after")
+    def distinct_steps(self) -> CalibrationCheckRequest:
+        if self.measurement_step == self.analysis_step:
+            raise ValueError("check measurement and analysis require distinct steps")
+        return self
 
 
 @dataclass(frozen=True)

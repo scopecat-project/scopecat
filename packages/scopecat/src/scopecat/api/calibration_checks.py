@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Literal, Protocol
 
-from scopecat.analysis.facts import AnalysisFactSchema
+from scopecat.analysis.calibration import CHECK_RESULT as CHECK_RESULT
 from scopecat.api.procedures import LabProcedureOperations
 from scopecat.api.run import RunHandle
 from scopecat.automation import AnalysisPublicationOutputRef, ProcedureRun, RunOutputRef
@@ -18,15 +18,10 @@ from scopecat.daemon.client import DaemonClient
 from scopecat.kernel.frozen import thaw_json_value
 from scopecat.records.calibration_check import (
     CalibrationCheckRequest,
-    CalibrationCheckResult,
     CalibrationContext,
     CalibrationScope,
 )
 from scopecat.records.run import ParameterRunConfigSource
-
-CHECK_RESULT = AnalysisFactSchema(
-    "scopecat.calibration-check-result.v1", CalibrationCheckResult
-)
 
 
 class _CheckSession(Protocol):

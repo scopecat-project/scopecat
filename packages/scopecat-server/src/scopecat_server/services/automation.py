@@ -115,7 +115,11 @@ from scopecat_server.storage.sqlite.samples import SQLiteSampleStore
 from scopecat_server.storage.sqlite.setups import SQLiteSetupRepository
 
 from ..errors import BackendConflict, BackendNotFound
-from .calibration_checks import CalibrationCheckAdmission, declared_check
+from .calibration_checks import (
+    CalibrationCheckAdmission,
+    declared_check,
+    require_check_completion,
+)
 from .resource_waits import ProcedureResourceWaits
 
 _DEFAULT_PROCEDURE_LEASE_TTL = timedelta(seconds=30)
@@ -1097,6 +1101,14 @@ class AutomationService:
                 raise AutomationConflict(
                     "interpretation steps complete through typed input submission"
                 )
+            require_check_completion(
+                connection,
+                run=run,
+                step_key=step_key,
+                output=output,
+                procedures=self._store,
+                runs=self._runs,
+            )
             updated_attempt = _attempt_state(
                 current,
                 state="succeeded",

@@ -128,9 +128,14 @@ the declaration against retained parameters, current setup and authoritative
 subject/scenario evidence before queueing. The declared child measurement must use
 that exact context, without parameter overrides. Exact request retries return the
 retained request even after authority changes; new measurements still undergo
-normal admission. Laboratory definitions validate executable arguments, and the
-history reader validates analysis result scope. Indexed domain queries and result
-publication validation remain separate follow-up work.
+normal admission. Laboratory definitions validate executable arguments. Before
+recording the declared steps as complete, the server checks the measurement
+context and verifies that the adopted analysis belongs to that measurement and
+contains the declared standard fact with matching scope. Invalid evidence cannot
+advance the procedure revision; a valid negative result can. Independent analysis
+publications remain available even if they cannot be adopted as check results.
+The history reader also validates scope and context. Indexed domain queries
+remain follow-up work.
 
 `CalibrationCheckHistory` reports evidence, unresolved request IDs, scanned count
 and `incomplete_reasons`: `scan_limit`, `unresolved_checks` or `journal_changed`.

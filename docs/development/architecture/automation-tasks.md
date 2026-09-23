@@ -58,10 +58,19 @@ An exact request retry returns the retained request before rechecking mutable
 authority; it does not authorize new measurements against an obsolete setup.
 
 This slice supports one declared measurement and one analysis result per check.
-Laboratory procedures still validate their executable arguments; query-time checks
-reject inconsistent result scope or measurement context. History remains a
-client-side bounded journal scan, not an indexed server domain query. Result
-publication and task-level dispatch contracts remain future work.
+Laboratory procedures still validate their executable arguments. When completing
+the declared measurement step, the server checks the retained run context. When
+completing the analysis step, it requires a publication belonging to that exact
+measurement, the declared fact output, the standard result schema and matching
+scope. Invalid evidence leaves the step and procedure revisions unchanged;
+negative scientific results are valid completed checks. This is result adoption,
+not a restriction on saving independent analyses of the same run.
+
+The standard schema lives in `scopecat.analysis.calibration`; the author-facing
+`scopecat.api.calibration_checks.CHECK_RESULT` exposes the same contract. Historical
+queries also check result scope and measurement context. History remains a
+client-side bounded journal scan, not an indexed server domain query. Indexed
+queries and task-level dispatch contracts remain future work.
 
 ## Panel requirements
 

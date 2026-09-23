@@ -5,17 +5,23 @@ from dataclasses import replace
 from pathlib import Path
 
 import pytest
+from scopecat.analysis.calibration import CHECK_RESULT
 from scopecat.automation import (
+    AnalysisPublicationOutputRef,
     ProcedureDefinitionRef,
     ProcedureRunListQuery,
     ProcedureStepBeginCommand,
+    ProcedureStepCompleteCommand,
     ProcedureSubmitCommand,
     ProcedureWorkerLeaseAcquireCommand,
+    RunOutputRef,
     procedure_step_operation_id,
 )
 from scopecat.config.scientific_binding import bind_scientific_evidence
 from scopecat.control.models import RunPlanSummary
 from scopecat.daemon.wire import (
+    AnalysisFactOutputPayload,
+    AnalysisSaveCommand,
     ParameterResolveCommand,
     ParameterSaveCommand,
     RunSubmission,
@@ -23,8 +29,10 @@ from scopecat.daemon.wire import (
     SetupActivateCommand,
     SetupSaveCommand,
 )
+from scopecat.records.analysis import AnalysisFact, RunAnalysisSubject
 from scopecat.records.calibration_check import (
     CalibrationCheckRequest,
+    CalibrationCheckResult,
     CalibrationContext,
     CalibrationScope,
 )
@@ -33,6 +41,7 @@ from scopecat.records.plan_ref import ProcedureChildSubmission
 from scopecat.records.run_request import RunRequest
 from scopecat.records.sample import SampleRevisionDraft, SampleSelector
 from scopecat.records.scientific_binding import UnboundSubject
+from scopecat.sdk.compute import PYTHON_JSON_CODEC
 from scopecat_testkit.workflow_fixtures import load_config
 
 from scopecat_server import BackendConflict, LocalDaemonRuntime
@@ -133,6 +142,12 @@ def test_rejects_invalid_declarations_without_queueing(check_case: CheckCase) ->
     context = declaration.context
     cases = (
         ({"codec": "unknown"}, "invalid calibration check"),
+        (
+            declaration.model_copy(
+                update={"analysis_step": declaration.measurement_step}
+            ).model_dump(mode="json"),
+            "distinct steps",
+        ),
         (
             declaration.model_copy(
                 update={
@@ -310,3 +325,144 @@ def test_measurement_must_use_admitted_parameter_revision(
     else:
         admitted = app.submit_run(child)
         assert app.submit_run(child).run_id == admitted.run_id
+
+
+def test_check_result_registration_rejects_wrong_evidence_and_retains_negative(
+    check_case: CheckCase,
+) -> None:
+    runtime, declaration, child = check_case
+    app = runtime.application
+    service = app.automation
+    parent = service.submit(_command(declaration)).run
+    lease = service.acquire_lease(
+        ProcedureWorkerLeaseAcquireCommand(
+            procedure_run_id=parent.procedure_run_id,
+            worker_id="test",
+            expected_run_revision=parent.revision,
+        )
+    )
+    measure = service.begin_step(
+        ProcedureStepBeginCommand(
+            procedure_run_id=parent.procedure_run_id,
+            lease_token=lease.lease.lease_token,
+            expected_run_revision=lease.run.revision,
+            step_key="measure",
+            operation="run",
+            intent_hash="sha256:" + "b" * 64,
+        )
+    )
+    measured = app.submit_run(child)
+    measured_output = RunOutputRef(run_id=measured.run_id)
+    measured_done = service.complete_step(
+        ProcedureStepCompleteCommand(
+            procedure_run_id=parent.procedure_run_id,
+            lease_token=lease.lease.lease_token,
+            expected_run_revision=measure.run.revision,
+            step_key="measure",
+            attempt=measure.step.attempt,
+            expected_step_revision=measure.step.revision,
+            output=measured_output,
+        )
+    )
+    assess = service.begin_step(
+        ProcedureStepBeginCommand(
+            procedure_run_id=parent.procedure_run_id,
+            lease_token=lease.lease.lease_token,
+            expected_run_revision=measured_done.run.revision,
+            step_key="assess",
+            operation="analysis",
+            intent_hash="sha256:" + "c" * 64,
+        )
+    )
+    subject = RunAnalysisSubject(run_id=measured.run_id)
+    complete = ProcedureStepCompleteCommand(
+        procedure_run_id=parent.procedure_run_id,
+        lease_token=lease.lease.lease_token,
+        expected_run_revision=assess.run.revision,
+        step_key="assess",
+        attempt=assess.step.attempt,
+        expected_step_revision=assess.step.revision,
+        output=AnalysisPublicationOutputRef(
+            subject=subject, analysis_record_id="missing"
+        ),
+    )
+    with pytest.raises(BackendConflict, match="invalid calibration check evidence"):
+        service.complete_step(complete)
+    other = app.submit_run(
+        child.model_copy(update={"submission_id": "another-measurement"})
+    )
+    with pytest.raises(BackendConflict, match="declared measurement"):
+        service.complete_step(
+            complete.model_copy(
+                update={
+                    "output": AnalysisPublicationOutputRef(
+                        subject=RunAnalysisSubject(run_id=other.run_id),
+                        analysis_record_id="missing",
+                    )
+                }
+            )
+        )
+
+    valid = AnalysisFact(
+        schema_id=CHECK_RESULT.id,
+        schema_codec=CHECK_RESULT.schema_codec,
+        schema_hash=CHECK_RESULT.schema_hash,
+        codec=PYTHON_JSON_CODEC,
+        value=CHECK_RESULT.encode(CalibrationCheckResult(declaration.scope, False)),
+    )
+    wrong_scope = valid.model_copy(
+        update={
+            "value": CHECK_RESULT.encode(
+                CalibrationCheckResult(
+                    replace(declaration.scope, conditions="warm"), True
+                ),
+            )
+        }
+    )
+    cases = (
+        (None, "declared fact output"),
+        (
+            valid.model_copy(update={"schema_hash": "sha256:" + "f" * 64}),
+            "standard result schema",
+        ),
+        (
+            valid.model_copy(update={"value": {"passed": "yes"}}),
+            "invalid calibration check evidence",
+        ),
+        (wrong_scope, "declared scope"),
+        (valid, None),
+    )
+    for index, (fact, error) in enumerate(cases):
+        saved = app.runs.save_run_analysis(
+            measured.run_id,
+            AnalysisSaveCommand(
+                title="Check",
+                analysis_key=f"check-{index}",
+                outputs=()
+                if fact is None
+                else (
+                    AnalysisFactOutputPayload(
+                        kind="fact",
+                        id=declaration.result_output,
+                        title="Check",
+                        content=fact,
+                    ),
+                ),
+            ),
+        )
+        command = complete.model_copy(
+            update={
+                "output": AnalysisPublicationOutputRef(
+                    subject=subject,
+                    analysis_record_id=saved.record.id,
+                )
+            }
+        )
+        if error is not None:
+            with pytest.raises(BackendConflict, match=error):
+                service.complete_step(command)
+            assert service.get(parent.procedure_run_id).revision == assess.run.revision
+        else:
+            done = service.complete_step(command)
+            assert done.step.state == "succeeded"
+            assert service.complete_step(command) == done
