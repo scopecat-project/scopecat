@@ -61,7 +61,10 @@ unknown-column and structural-history coverage lives in the tutorial fixture;
 the duplicate working-point structure test is retired. The
 batch/context journeys now also select independent inputs: parameter reuse does
 not imply calibration validity, while plans and candidates retain exact scope.
-The old unknown-parameter context test is folded into tutorial coverage. Remaining
+The old unknown-parameter context test is folded into tutorial coverage. Managed
+notebook recovery now uses parameter branches, including stale edits and recovery
+in a fresh Python process. Exploration/reanalysis also runs without global defaults.
+Remaining
 legacy consumers still include the shared gallery daemon, combined configuration
 editing/default-selection APIs and working-point launch paths. Their presence is
 not evidence that new author workflows require those owners. Use the

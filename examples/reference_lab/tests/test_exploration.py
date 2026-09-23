@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import os
-
 import numpy as np
 import pytest
 from scopecat.records.config import config_content_hash
@@ -21,14 +19,12 @@ from reference_lab.workflows.exploratory_signal import (
     exploratory_signal,
 )
 
-pytestmark = pytest.mark.usefixtures("reference_lab_daemon")
 
-
-def test_exploration_retains_distinct_contexts_and_reanalyzes() -> None:
-    with create_application(EXAMPLE_ROOT).connect(
-        os.environ["SCOPECAT_DAEMON_URL"]
-    ) as lab:
-        active = lab.config.active()
+def test_exploration_retains_distinct_contexts_and_reanalyzes(
+    independent_lab_daemon: str,
+) -> None:
+    with create_application(EXAMPLE_ROOT).connect(independent_lab_daemon) as lab:
+        setup = lab.setup.active()
         run_ids = seed_exploration(lab)
         cases = exploration_cases()
         assert len(set(run_ids)) == 4
@@ -68,13 +64,12 @@ def test_exploration_retains_distinct_contexts_and_reanalyzes() -> None:
         )
         assert original.snapshot == snapshot
         assert original.request == request
-        assert lab.config.active() == active
+        assert lab.setup.active() == setup
+        assert lab.config.registry().entries == ()
         np.testing.assert_array_equal(
             original.measurements()["result"].require_values(), values
         )
-    with create_application(EXAMPLE_ROOT).connect(
-        os.environ["SCOPECAT_DAEMON_URL"]
-    ) as lab:
+    with create_application(EXAMPLE_ROOT).connect(independent_lab_daemon) as lab:
         retained = lab.get_run(run_ids[0])
         assert retained.snapshot == snapshot
         assert retained.request == request
@@ -83,11 +78,12 @@ def test_exploration_retains_distinct_contexts_and_reanalyzes() -> None:
         )
 
 
-def test_missing_carrier_is_not_replaced_with_a_known_working_value() -> None:
-    with create_application(EXAMPLE_ROOT).connect(
-        os.environ["SCOPECAT_DAEMON_URL"]
-    ) as lab:
-        active = lab.config.active()
+def test_missing_carrier_is_not_replaced_with_a_known_working_value(
+    independent_lab_daemon: str,
+) -> None:
+    with create_application(EXAMPLE_ROOT).connect(independent_lab_daemon) as lab:
+        setup = lab.setup.active()
         with pytest.raises((ValueError, KeyError), match="drive_carrier_frequency"):
             lab.preview(exploratory_signal.build(), config=exploration_config(None))
-        assert lab.config.active() == active
+        assert lab.setup.active() == setup
+        assert lab.config.registry().entries == ()

@@ -77,6 +77,16 @@ typed API, matching the underlying runner and preserving exact provenance.
 Their duplicate unknown-parameter test is covered by the tutorial journey below;
 parameter ownership itself no longer implies a sample or working-point scope.
 
+Managed notebook recovery also uses independent parameter branches and explicit
+setup selection. It tests frozen unsaved edits, stale-editor conflicts, reopening
+the receipt in a fresh Python process and recovering one admission after a lost
+response. Reopening distinguishes the current branch head from the exact saved
+base of the run's overrides; no working-point latest/original lookup is needed.
+Exploration/reanalysis tests use the same equipment-only daemon while intentionally
+retaining their explicit low-level snapshots and descriptive context labels.
+Those labels carry provenance, not parameter ownership or validity. Both journeys
+keep the combined registry empty.
+
 The legacy gallery still starts with transitional parameter defaults. Reassess
 its calibration/default-publication assertions against the new design; retain
 needed behaviors in focused tests and retire the old consumers. There is no
