@@ -4,7 +4,7 @@ from dataclasses import replace
 from datetime import UTC, datetime
 
 import pytest
-from pydantic import ValidationError
+from pydantic import JsonValue, ValidationError
 
 from scopecat.automation import (
     ProcedureClosure,
@@ -20,6 +20,7 @@ from scopecat.automation.calibration_tasks import (
     assess_calibration_task,
 )
 from scopecat.daemon.calibration_checks import CalibrationTaskPreview
+from scopecat.daemon.calibration_tasks import CalibrationTaskCall, CalibrationTaskCreate
 from scopecat.kernel.run_outcome import RunOutcome
 from scopecat.records.calibration_check import CalibrationCheckRequest, CalibrationScope
 from scopecat.records.measurement_context import MeasurementContext
@@ -31,6 +32,31 @@ from scopecat.records.scientific_binding import (
 )
 
 HASH = "sha256:" + "a" * 64
+
+
+@pytest.mark.parametrize("case", ["missing", "prebound", "check"])
+def test_finalization_requires_an_unbound_task_input(case: str) -> None:
+    stage = _stage("fit")
+    definition = ProcedureDefinitionRef(id="finish", version="1", fingerprint=HASH)
+    intent: dict[str, JsonValue] = {"calibration_task": None}
+    if case == "missing":
+        intent = {}
+    elif case == "prebound":
+        intent = {"calibration_task": {"task_id": "other", "checks": {}}}
+    else:
+        intent["calibration_check"] = stage.check.model_dump(mode="json")
+    with pytest.raises(ValidationError, match="finalization"):
+        CalibrationTaskCreate(
+            task_id="round",
+            plan=CalibrationTaskPlan(stages=(stage,)),
+            calls={
+                "fit": CalibrationTaskCall(
+                    definition=definition,
+                    intent={"calibration_check": stage.check.model_dump(mode="json")},
+                )
+            },
+            finalization=CalibrationTaskCall(definition=definition, intent=intent),
+        )
 
 
 def _stage(id: str, *dependencies: str) -> CalibrationTaskStage:

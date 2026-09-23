@@ -199,7 +199,8 @@ function TaskDetail({
                 disabled={
                   disabled ||
                   (view.task.mode === "running" &&
-                    Object.keys(view.task.dispatch_errors ?? {}).length === 0)
+                    Object.keys(view.task.dispatch_errors ?? {}).length === 0 &&
+                    !view.task.finalization_error)
                 }
                 onClick={() => {
                   void control("start");
@@ -232,6 +233,31 @@ function TaskDetail({
               Last control: {view.task.last_control.action} by {view.task.last_control.actor} —{" "}
               {view.task.last_control.reason}
             </p>
+          )}
+          {view.task.specification.finalization && (
+            <section aria-label="Task finalization" className="border rounded p-3 space-y-1">
+              <h4 className="font-semibold">Final verification and publication</h4>
+              <p>
+                {view.finalization
+                  ? `Final procedure: ${view.finalization.closure?.status ?? view.finalization.state}.`
+                  : view.progress.complete && !view.progress.successful
+                    ? "Not admitted: planned checks did not all pass."
+                    : "Waiting for all planned checks to pass and task advancement."}
+              </p>
+              <p>Check success alone does not verify or publish the combined parameters.</p>
+              {view.task.finalization_error && (
+                <p role="alert">Finalization admission stopped: {view.task.finalization_error}</p>
+              )}
+              {view.finalization && (
+                <button
+                  type="button"
+                  className="underline"
+                  onClick={() => onProcedure(view.finalization!.procedure_run_id)}
+                >
+                  Open final verification and publication
+                </button>
+              )}
+            </section>
           )}
           <ol className="space-y-3">
             {view.progress.stages.map((stage) => {

@@ -3219,6 +3219,7 @@ export interface components {
             calls: {
                 [key: string]: components["schemas"]["CalibrationTaskCall-Output"];
             };
+            finalization?: components["schemas"]["CalibrationTaskCall-Output"] | null;
             plan: components["schemas"]["CalibrationTaskPlan"];
             /** Task Id */
             task_id: string;
@@ -3232,7 +3233,7 @@ export interface components {
         };
         /**
          * CalibrationTaskPlan
-         * @description Explicit target-expanded checks; every stage retains its own context.
+         * @description Explicit checks and candidate edges; admission freezes each stage's input.
          */
         CalibrationTaskPlan: {
             /** Stages */
@@ -3272,6 +3273,10 @@ export interface components {
             executions?: {
                 [key: string]: string;
             };
+            /** Finalization Error */
+            finalization_error?: string | null;
+            /** Finalization Run Id */
+            finalization_run_id?: string | null;
             last_control?: components["schemas"]["CalibrationTaskControl"] | null;
             /**
              * Mode
@@ -3285,7 +3290,13 @@ export interface components {
             };
             specification: components["schemas"]["CalibrationTaskCreate-Output"];
         };
-        /** CalibrationTaskStage */
+        /**
+         * CalibrationTaskStage
+         * @description A fixed check, or a template whose parameter input comes from a prior stage.
+         *
+         *     Candidate binding replaces only check.context.parameters; all other fields
+         *     stay fixed. Until binding, that parameter input is not execution evidence.
+         */
         CalibrationTaskStage: {
             candidate_from?: components["schemas"]["StageCandidateOutput"] | null;
             check: components["schemas"]["CalibrationCheckRequest"];
@@ -3299,6 +3310,7 @@ export interface components {
         };
         /** CalibrationTaskView */
         CalibrationTaskView: {
+            finalization?: components["schemas"]["ProcedureRun"] | null;
             progress: components["schemas"]["CalibrationTaskProgress"];
             task: components["schemas"]["CalibrationTaskRecord"];
         };

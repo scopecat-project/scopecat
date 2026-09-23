@@ -4,6 +4,7 @@ import sqlite3
 from dataclasses import replace
 from datetime import UTC, datetime
 
+from scopecat.automation.calibration_tasks import CalibrationTaskInputs
 from scopecat.config.candidates import (
     CandidateConfig,
     resolve_candidate_config_snapshot,
@@ -31,6 +32,7 @@ from scopecat_server.services.calibration_checks import CalibrationCheckQueries
 from scopecat_server.storage.sqlite.automation import (
     AutomationConflict,
     AutomationNotFound,
+    SQLiteAutomationStore,
 )
 from scopecat_server.storage.sqlite.calibration_tasks import CalibrationTaskStore
 from scopecat_server.storage.sqlite.connection import SQLiteDatabase
@@ -111,6 +113,9 @@ class CalibrationTaskService:
                     "dispatch_errors": {}
                     if command.action == "start"
                     else task.dispatch_errors,
+                    "finalization_error": None
+                    if command.action == "start"
+                    else task.finalization_error,
                 }
             )
             self._store.update(connection, updated)
@@ -128,6 +133,28 @@ class CalibrationTaskService:
             if task.mode != "running":
                 return view
             if view.progress.complete:
+                if (
+                    task.specification.finalization is not None
+                    and view.progress.successful
+                ):
+                    if view.finalization is not None:
+                        if view.finalization.closure is None:
+                            return view
+                    elif task.finalization_error is not None:
+                        return view
+                    else:
+                        connection.execute("SAVEPOINT task_finalization")
+                        try:
+                            task = self._admit_finalization(connection, view)
+                        except (BackendConflict, BackendNotFound) as error:
+                            connection.execute("ROLLBACK TO task_finalization")
+                            task = task.model_copy(
+                                update={"finalization_error": str(error)}
+                            )
+                        finally:
+                            connection.execute("RELEASE task_finalization")
+                        self._store.update(connection, task)
+                        return self._view(connection, task)
                 task = task.model_copy(update={"mode": "finished"})
                 self._store.update(connection, task)
                 return self._view(connection, task)
@@ -161,6 +188,39 @@ class CalibrationTaskService:
                 if stage_id in task.executions:
                     break
             return self._view(connection, task)
+
+    def _admit_finalization(
+        self, connection: sqlite3.Connection, view: CalibrationTaskView
+    ) -> CalibrationTaskRecord:
+        task = view.task
+        call = task.specification.finalization
+        assert call is not None
+        inputs = CalibrationTaskInputs(
+            task_id=task.specification.task_id,
+            checks={
+                stage.id: stage.evidence
+                for stage in view.progress.stages
+                if stage.evidence is not None
+            },
+        )
+        key = "calibration-task-finalization:" + sha256_json_hash(
+            {"task": inputs.task_id}
+        )
+        try:
+            run = self._automation.submit_in_transaction(
+                connection,
+                definition=call.definition,
+                intent={
+                    **call.intent,
+                    "calibration_task": inputs.model_dump(mode="json"),
+                },
+                samples=call.samples,
+                request_key=key,
+                require_new=True,
+            )
+        except (AutomationConflict, AutomationNotFound) as error:
+            raise BackendConflict(str(error)) from error
+        return task.model_copy(update={"finalization_run_id": run.procedure_run_id})
 
     def _admit(
         self,
@@ -271,6 +331,11 @@ class CalibrationTaskService:
     ) -> CalibrationTaskView:
         return CalibrationTaskView(
             task=task,
+            finalization=SQLiteAutomationStore(self._sqlite).read_run_in_transaction(
+                connection, task.finalization_run_id
+            )
+            if task.finalization_run_id is not None
+            else None,
             progress=self._checks.preview_in_transaction(
                 connection,
                 CalibrationTaskPreview(

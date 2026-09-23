@@ -12,12 +12,12 @@ No new hardware or installed Windows qualification is claimed by this audit.
 | Parameters/setup | Independent immutable revisions, branches, session setup pins and exact context resolution | Some consumers still use combined configurations and optional global parameter defaults |
 | Scientific context | Common `MeasurementContext` for saved revisions and retained candidates; subject separated from `TargetSetupBinding`; mappings checked at admission and for applicability | Overrides/unsaved inputs remain outside exact contexts; candidates do not inherit saved-revision applicability |
 | Targets | Catalog definitions and a general pure topology mapping checker | Registered execution remains single-member, no target connections, identity mapping |
-| Candidates | Retained proposals, sibling composition, sequential chains, independent verification and fenced branch publication | No automatic task-wide final publication |
+| Candidates | Retained proposals, sibling composition, sequential chains, independent verification and fenced branch publication; optional task finalization handoff | Final scientific policy and publication remain explicitly authored |
 | Calibration | Declared checks, indexed history, exact-context applicability, immutable profiles and prerequisite-aware focused reports | Whole-input matching; no resolved parameter-read dependencies or selective cross-revision reuse |
 | Automation | Durable tasks, explicit candidate output binding, dependency-checked admission, sequential advancement, controls and recovery | Candidate edges require passing source checks; no repair-on-failure or general adaptive flow |
 | Workbench | Task controls and drill-down; sample capability reports from retained runs, branches or exact revisions | Explicit bounded queries, not a continuously maintained health dashboard |
 | Application | Ordinary workbench first use, installed adapters, registered author folders, notebook interpreter selection and stopped environment replacement | Native installers and physical authority shared across separate services remain separate work |
-| Recovery | Current-format backup/restore and non-mutating rejection of unsupported formats | Schema 97 is not a supported persistent-data baseline |
+| Recovery | Current-format backup/restore and non-mutating rejection of unsupported formats | Schema 98 is not a supported persistent-data baseline |
 
 See [configuration ownership](configuration-ownership.md),
 [target execution](architecture/target-execution.md),
@@ -32,10 +32,13 @@ Build on existing candidate verification and branch publication, without a secon
 proposal/evidence store. Audit their maintained consumers without a global
 parameter default before connecting them to tasks.
 
-The next complete workflow captures an initial branch head, retains a first
+The supported procedure workflow captures an initial branch head, retains a first
 stage's candidate, lets a later stage consume those exact values, verifies the
 final combination, then publishes against the captured head. Intermediate
-progress survives failure/restart without becoming the daily branch.
+progress survives failure/restart without becoming the daily branch. Tasks can
+now hand all adopted stage evidence to one explicit final procedure. A complete
+maintained task-to-final-publication tutorial and synthetic array scenario remain
+to connect these capabilities for authors.
 See [task parameter flow](architecture/task-parameter-flow.md) for acceptance and
 the remaining design decisions. Fixed check tasks remain usable during this work.
 

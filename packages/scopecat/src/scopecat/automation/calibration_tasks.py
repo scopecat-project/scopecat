@@ -6,10 +6,11 @@ from collections.abc import Mapping
 from graphlib import CycleError, TopologicalSorter
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from scopecat.automation.calibration import CheckEvidence
 from scopecat.automation.models import ProcedureRun
+from scopecat.kernel.frozen import thaw_json_value
 from scopecat.records.calibration_check import CalibrationCheckRequest
 
 
@@ -19,6 +20,19 @@ class StageCandidateOutput(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     stage_id: str = Field(min_length=1)
     proposal_id: str = Field(min_length=1)
+
+
+class CalibrationTaskInputs(BaseModel):
+    """Exact adopted results handed to an explicitly authored final procedure."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    task_id: str
+    checks: dict[str, CheckEvidence]
+
+    @field_validator("checks", mode="before")
+    @classmethod
+    def thaw_checks(cls, value: object) -> object:
+        return thaw_json_value(value)
 
 
 class CalibrationTaskStage(BaseModel):

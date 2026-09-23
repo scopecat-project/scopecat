@@ -41,9 +41,12 @@ class LabCalibrationTasks:
         plan: CalibrationTaskPlan,
         *,
         calls: dict[str, CalibrationTaskCall],
+        finalization: CalibrationTaskCall | None = None,
     ) -> CalibrationTaskView:
         return self._client.create_calibration_task(
-            CalibrationTaskCreate(task_id=task_id, plan=plan, calls=calls)
+            CalibrationTaskCreate(
+                task_id=task_id, plan=plan, calls=calls, finalization=finalization
+            )
         )
 
     def get(self, task_id: str) -> CalibrationTaskView:

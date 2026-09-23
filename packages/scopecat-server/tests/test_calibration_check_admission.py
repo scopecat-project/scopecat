@@ -93,6 +93,7 @@ from scopecat.records.run_request import RunRequest
 from scopecat.records.sample import SampleRevisionDraft, SampleSelector
 from scopecat.records.scientific_binding import UnboundSubject
 from scopecat.records.scientific_scope import MeasurementTarget, TargetMember
+from scopecat.records.setup import ExecutableSetupSnapshot
 from scopecat.records.target_catalog import (
     TargetCreateCommand,
     TargetReviseCommand,
@@ -492,8 +493,23 @@ def check_case(
 @contextmanager
 def _check_case(tmp_path: Path) -> Generator[CheckCase]:
     config = load_config()
-    with LocalDaemonRuntime(tmp_path, bootstrap_config=config) as runtime:
+    with LocalDaemonRuntime(tmp_path) as runtime:
         app = runtime.application
+        setup = app.setup.save(
+            SetupSaveCommand(
+                revision_id="bench",
+                setup=ExecutableSetupSnapshot.from_config(config),
+                actor="test",
+            )
+        )
+        app.setup.activate(
+            SetupActivateCommand(
+                operation_id="bench",
+                revision=setup.ref,
+                expected_generation=0,
+                actor="test",
+            )
+        )
         app.samples.create(
             SampleCreateCommand(
                 operation_id="sample",

@@ -116,9 +116,62 @@ authority. No earlier unrelated execution is silently adopted. Ready independent
 stages can be dispatched separately if another stage has an admission problem.
 
 The task and associations survive daemon restarts and current-format backup and
-restore. Current development schema 97 stores task controls and indexes running
+restore. Current development schema 98 stores task controls and indexes running
 tasks; use a fresh data directory
 for this format and retain older stores with their original environments.
+
+## Final verification and publication
+
+A task may name one registered procedure to run after **every planned check
+passes**. It receives the exact adopted evidence of every stage. A rejected,
+failed, cancelled or incomplete stage prevents this handoff; it never publishes
+a successful subset. Add the call when creating the immutable specification:
+
+```python
+task = lab.calibration_tasks.create(
+    "cooldown-7/calibrate-1",
+    plan,
+    calls=calls,
+    finalization=task_call(finalize_calibration, final_intent, samples=samples),
+)
+```
+
+`finalize_calibration` is your registered laboratory procedure. Its typed intent
+must declare `calibration_task: CalibrationTaskInputs | None = None`, importing
+`CalibrationTaskInputs` from `scopecat.automation.calibration_tasks`. At creation
+that field must be `None`; the daemon fills it at admission. Other fields remain
+unchanged. Capture the destination branch head, result revision name, composition
+mode, proposal IDs, verification scope and policy in that intent **before**
+starting the task. Supply the exact sample selectors needed by the final procedure.
+Do not look up a newer branch head or setup to repair a conflict during replay.
+
+Inside the procedure, each `intent.calibration_task.checks[stage_id]` contains the
+adopted measurement and analysis identity, scientific binding, scope and result.
+Use `evidence.measurement.run_id` and `evidence.analysis_record_id` to construct
+an `AnalysisPublicationOutputRef` with `RunAnalysisSubject`. Choose the proposal
+from that exact analysis according to the captured intent, then use
+[`ctx.combine_parameter_candidates()`](automate-parameter-calibration.md#compose-measure-and-decide)
+for parallel or sequential composition. Measure the aggregate, retain all source
+and verification inputs in the laboratory decision, and only then call
+`ctx.publish_parameter_candidate()` against the captured branch head. This uses
+the ordinary fenced publication and durable-step recovery path. The task does
+not invent an acceptance policy or authorize publication from check success.
+
+Start the task to enable finalization admission. Check evidence binding and the
+new procedure association commit in one transaction; interrupted admission leaves
+neither behind. Restart and backup/restore retain the same association. The
+configured worker executes it even after the notebook disconnects. Admission
+errors appear in `task.task.finalization_error`; correct the cause and start again
+to retry. Procedure attention/input and unknown publication outcomes use existing
+procedure controls, without submitting a second finalizer.
+
+`task.progress` describes the check stages only. Inspect `task.finalization` for
+the final procedure's state and closure, and its retained publication output for
+the actual branch receipt. `mode="finished"` means advancement ended, not that
+scientific verification passed or parameters were published. The workbench shows
+the final procedure separately and links to its evidence and controls. Pause or
+cancel prevents new finalization admission; it cannot undo an already admitted
+procedure or committed publication.
 
 ## Run without keeping a notebook open
 

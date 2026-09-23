@@ -46,6 +46,11 @@ class CalibrationTaskRunner:
                         if stage.state == "queued":
                             assert stage.procedure_run_id is not None
                             self._workers.manage(stage.procedure_run_id)
+                    if (
+                        view.finalization is not None
+                        and view.finalization.state == "ready"
+                    ):
+                        self._workers.manage(view.finalization.procedure_run_id)
                 except Exception:
                     _LOG.exception("Calibration task advancement failed: %s", task_id)
 

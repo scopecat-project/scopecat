@@ -86,6 +86,38 @@ it("does not show a frozen parameter context before a candidate output is bound"
   expect(screen.queryByText("Frozen measurement context")).not.toBeInTheDocument();
 });
 
+it("separates passed checks from finalization admission and allows retry", async () => {
+  window.history.replaceState(null, "", "/?task=round%2F1#launch");
+  const view = fixture();
+  view.task.specification.finalization = {
+    definition: { id: "finalize", version: "1", fingerprint: "sha256:code" },
+    intent: { calibration_task: null },
+    samples: [],
+  };
+  view.progress.complete = true;
+  view.progress.successful = true;
+  view.task.dispatch_errors = {};
+  view.task.finalization_error = "setup changed";
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (request: Request) =>
+      Response.json(
+        new URL(request.url).pathname.endsWith("calibration-tasks")
+          ? { items: [view.task], next_cursor: null }
+          : view,
+      ),
+    ),
+  );
+  mount();
+  expect(
+    await screen.findByText(/Finalization admission stopped: setup changed/),
+  ).toBeInTheDocument();
+  expect(screen.getByText(/Check success alone does not verify/)).toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText("Task operator"), { target: { value: "Alice" } });
+  fireEvent.change(screen.getByLabelText("Task control reason"), { target: { value: "retry" } });
+  expect(screen.getByRole("button", { name: "Resume / retry admission" })).toBeEnabled();
+});
+
 it("reopens a task, shows admission failure, and fences a control with the observed revision", async () => {
   window.history.replaceState(null, "", "/?task=round%2F1#launch");
   let view = fixture();

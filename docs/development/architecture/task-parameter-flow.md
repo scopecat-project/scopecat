@@ -1,7 +1,7 @@
 # Parameter flow through calibration tasks
 
-Status: explicit candidate output bindings are implemented for passing prerequisite
-checks. General adaptive flows, repair and task-wide publication remain unfinished.
+Status: explicit candidate output bindings and an optional final procedure handoff
+are implemented for passing checks. General adaptive flows and repair remain unfinished.
 No supported persistent-data baseline is declared here.
 
 The first implemented lineage slice is `first.then(second, name=...)`: it resolves
@@ -50,7 +50,7 @@ not certification. Do not use daily as transport. If task-local saved revisions
 are introduced, preserve their candidate ancestry instead of copying values into
 ordinary saves and losing provenance.
 
-## Decisions before the task wire contract
+## Ownership and remaining boundaries
 
 - Shared input resolution, admission and evidence now cover exact candidates and
   saved revisions without overrides. Use this same context when binding future
@@ -73,8 +73,13 @@ uses the same server resolver as `ParameterCandidate.then()`. The maintained
 two-target simulation now exercises both common-base and sequential fitting,
 aggregate remeasurement, a complete decision and fenced publication, including
 restart and recovery of a lost committed publication response. This completes
-the explicitly authored procedure path; a calibration task still does not infer
-or schedule its own final aggregation, laboratory decision or publication.
+the explicitly authored procedure path. Schema 98 adds an optional finalization
+call to a task: after every check passes, admission freezes all adopted evidence
+in `CalibrationTaskInputs` and associates one procedure in the same transaction.
+Workers recover that handoff after restart. The author-specified procedure owns
+aggregation, final acquisition, laboratory policy and fenced branch publication;
+the task does not infer any of these from check success. See
+[the finalization contract](../../how-to/preview-calibration-tasks.md#final-verification-and-publication).
 
 Start with two linear stages and serialized publication. General fan-in, adaptive
 loops and repair follow a retained, explainable path. Capability prerequisites,
