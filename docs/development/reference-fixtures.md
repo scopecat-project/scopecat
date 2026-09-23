@@ -113,11 +113,16 @@ saved parameter revision rather than temporarily changing a global default.
 Selecting inputs is not scientific acceptance; preflight reports selected context
 and proposed candidate separately.
 
-The legacy gallery still starts with transitional parameter defaults. Reassess
-its calibration/default-publication assertions against the new design; retain
-needed behaviors in focused tests and retire the old consumers. There is no
-requirement to port every script before removing bootstrap defaults. The
-acceptance fixture is not a second user mode.
+The retained device gallery now also starts with equipment only. Acquisition and
+preview scripts explicitly call the maintainer-owned `gallery_inputs(lab)` helper,
+which saves an immutable fixture revision per script run and resolves it against
+the current setup without selecting defaults. Direct instrument control needs no parameter
+revision. Routing, waveform, resource-conflict, independent-channel failure and
+ragged-data assertions remain in place; the fixture checks that the combined
+registry stays empty and setup stays unchanged. This helper is acceptance code,
+not a replacement teaching template or a second user mode. The original reference
+application bootstrap still exposes transitional defaults; its contract and
+remaining external consumers must be reviewed before retiring that entry point.
 
 No private package may become a prerequisite for public CI or the installed
 starter. Shared test helpers belong in testkit only when independently reused;

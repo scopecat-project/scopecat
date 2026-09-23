@@ -9,13 +9,15 @@ import scopecat as sc
 from numpy.typing import NDArray
 
 from reference_lab.configuration import EXAMPLE_ROOT
-from reference_lab.notebook import show
+from reference_lab.notebook import gallery_inputs, show
 from reference_lab.workflows.awg_output_monitor import AWG_OUTPUT_MONITOR
 
 # %%
 with sc.open_project(EXAMPLE_ROOT).connect(operator="gallery") as lab:
+    inputs = gallery_inputs(lab)
     run = lab.run(
         AWG_OUTPUT_MONITOR,
+        config=inputs,
         name="AWG CH1 pulse shape after bench recabling",
         tags=("diagnostic", "awg-monitor"),
         description=(

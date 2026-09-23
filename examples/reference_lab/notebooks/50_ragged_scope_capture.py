@@ -6,7 +6,7 @@ import scopecat as sc
 from scopecat.records.measurement import MeasurementArray, MeasurementValue
 
 from reference_lab.configuration import EXAMPLE_ROOT
-from reference_lab.notebook import show
+from reference_lab.notebook import gallery_inputs, show
 from reference_lab.workflows.ragged_scope_capture import RAGGED_SCOPE_CAPTURE
 
 
@@ -17,8 +17,10 @@ def available_shape(value: MeasurementValue) -> list[int | None]:
 
 # %%
 with sc.open_project(EXAMPLE_ROOT).connect(operator="gallery") as lab:
+    inputs = gallery_inputs(lab)
     run = lab.run(
         RAGGED_SCOPE_CAPTURE,
+        config=inputs,
         name="Variable record-length AWG monitor",
         tags=("gallery", "ragged", "diagnostic"),
         description=(

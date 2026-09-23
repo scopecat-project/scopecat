@@ -45,6 +45,17 @@ def reference_lab_daemon(
     shutil.copytree(EXAMPLE_ROOT / "config", project_root / "config")
     shutil.copytree(EXAMPLE_ROOT / "src", project_root / "src")
     shutil.copy2(EXAMPLE_ROOT / "scopecat.toml", project_root / "scopecat.toml")
+    shutil.copy2(
+        EXAMPLE_ROOT / "fixtures/equipment_bootstrap.py",
+        project_root / "src/equipment_bootstrap.py",
+    )
+    manifest = project_root / "scopecat.toml"
+    manifest.write_text(
+        manifest.read_text().replace(
+            "reference_lab.application:create_bootstrap",
+            "equipment_bootstrap:create_bootstrap",
+        )
+    )
     project = load_project(project_root / "scopecat.toml")
     try:
         record = start_project(project)
@@ -59,7 +70,13 @@ def reference_lab_daemon(
     previous_url = os.environ.get(DAEMON_URL_ENV)
     os.environ[DAEMON_URL_ENV] = record.base_url
     try:
+        with LabClient(DaemonClient(record.base_url)) as lab:
+            setup = lab.setup.active()
+            assert lab.config.registry().entries == ()
         yield ReferenceLabDaemon(url=record.base_url, root=project_root)
+        with LabClient(DaemonClient(record.base_url)) as lab:
+            assert lab.config.registry().entries == ()
+            assert lab.setup.active() == setup
     finally:
         if previous_url is None:
             os.environ.pop(DAEMON_URL_ENV, None)

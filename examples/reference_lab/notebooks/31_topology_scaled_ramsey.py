@@ -6,7 +6,7 @@ from __future__ import annotations
 import scopecat as sc
 
 from reference_lab.configuration import EXAMPLE_ROOT
-from reference_lab.notebook import show
+from reference_lab.notebook import gallery_inputs, show
 from reference_lab.workflows.ramsey import topology_scaled_ramsey_program
 from reference_lab.workflows.ramsey_experiments import topology_scaled_ramsey
 
@@ -15,10 +15,12 @@ program_tree = topology_scaled_ramsey_program.draw()
 
 # %%
 with sc.open_project(EXAMPLE_ROOT).connect(operator="gallery") as lab:
+    inputs = gallery_inputs(lab)
     invocation = topology_scaled_ramsey.build()
-    preview = lab.preview(invocation)
+    preview = lab.preview(invocation, config=inputs)
     run = lab.run(
         invocation,
+        config=inputs,
         name="Topology-scaled Ramsey",
         tags=("gallery", "topology", "qubit-set", "parallel"),
         description=(

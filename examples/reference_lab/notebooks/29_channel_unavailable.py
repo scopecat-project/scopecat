@@ -7,14 +7,16 @@ import scopecat as sc
 from scopecat.records.measurement import MeasurementUnavailable
 
 from reference_lab.configuration import EXAMPLE_ROOT
-from reference_lab.notebook import show
+from reference_lab.notebook import gallery_inputs, show
 from reference_lab.workflows.ramsey_experiments import parallel_raw_ramsey
 
 # %%
 with sc.open_project(EXAMPLE_ROOT).connect(operator="gallery") as lab:
+    inputs = gallery_inputs(lab)
     invocation = parallel_raw_ramsey.build()
     run = lab.run(
         invocation,
+        config=inputs,
         name="Entity-axis multiplexed Ramsey readout",
         tags=("gallery", "entity-axis", "multi-channel", "unavailable"),
         description=(

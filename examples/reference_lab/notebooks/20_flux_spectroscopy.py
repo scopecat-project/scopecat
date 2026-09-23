@@ -7,13 +7,14 @@ from pathlib import Path
 
 import scopecat as sc
 
-from reference_lab.notebook import show
+from reference_lab.notebook import gallery_inputs, show
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
 # %%
 with sc.open_project(PROJECT_ROOT).connect(operator="notebook-demo") as lab:
+    inputs = gallery_inputs(lab)
     # Connecting loads this project's ``src`` tree before workflow imports.
     from reference_lab.workflows.flux_spectroscopy import (
         flux_spectroscopy,
@@ -25,9 +26,10 @@ with sc.open_project(PROJECT_ROOT).connect(operator="notebook-demo") as lab:
     )
 
     invocation = flux_spectroscopy.build()
-    preview = lab.preview(invocation)
+    preview = lab.preview(invocation, config=inputs)
     run = lab.run(
         invocation,
+        config=inputs,
         name="Virtual resonator flux spectroscopy",
         tags=("spectroscopy", "virtual-instruments"),
     )

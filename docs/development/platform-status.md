@@ -70,10 +70,11 @@ Analysis recovery shares independent startup and preserves its no-reacquisition
 and provenance checks.
 The launcher suite now selects independent inputs too, retaining foreign-endpoint
 isolation and rejecting new work when executable setup authority changes.
-Remaining
-legacy consumers still include the shared gallery daemon, combined configuration
-editing/default-selection APIs and working-point launch paths. Their presence is
-not evidence that new author workflows require those owners. Use the
+Remaining legacy consumers still include the original reference application bootstrap,
+combined configuration editing/default-selection APIs and working-point launch
+paths. Their presence does not imply that new author workflows require those owners.
+The retained device gallery now uses equipment-only startup and explicit fixture
+parameter revisions, while keeping its physical-behavior assertions. Use the
 [fixture ownership inventory](reference-fixtures.md) to retain each useful behavior
 before retiring its obsolete entry point.
 

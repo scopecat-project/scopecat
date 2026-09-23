@@ -5,12 +5,13 @@ from __future__ import annotations
 import scopecat as sc
 
 from reference_lab.configuration import EXAMPLE_ROOT
-from reference_lab.notebook import show
+from reference_lab.notebook import gallery_inputs, show
 from reference_lab.workflows.xy_drive import XY_LO_SWEEP
 
 # %%
 with sc.open_project(EXAMPLE_ROOT).connect(operator="gallery") as lab:
-    run = lab.run(XY_LO_SWEEP)
+    inputs = gallery_inputs(lab)
+    run = lab.run(XY_LO_SWEEP, config=inputs)
     data = run.measurements()
     requested_carrier_frequency_ghz = {
         entity.id: [
