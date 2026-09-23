@@ -11,7 +11,11 @@ from scopecat.automation.calibration import (
     CheckSelection,
     select_calibration_check,
 )
-from scopecat.daemon.calibration_checks import CalibrationCheckQuery
+from scopecat.daemon.calibration_checks import (
+    MAX_CHECK_OBSERVATIONS,
+    CalibrationCheckObservation,
+    CalibrationCheckQuery,
+)
 from scopecat.daemon.client import DaemonClient
 from scopecat.records.calibration_check import (
     CalibrationCheckRequest,
@@ -81,8 +85,11 @@ class LabCalibrationChecks:
         page_size: int = 50,
     ) -> CalibrationCheckHistory:
         """Filter by declared intent even before any acquisition has started."""
-        if max_requests < 1 or not 1 <= page_size <= 200:
-            raise ValueError("history requires a positive budget and page size 1..200")
+        if not 1 <= max_requests <= MAX_CHECK_OBSERVATIONS or not 1 <= page_size <= 200:
+            raise ValueError(
+                f"history requires budget 1..{MAX_CHECK_OBSERVATIONS} "
+                "and page size 1..200"
+            )
         requests: list[DeclaredCheck] = []
         evidence: list[CheckEvidence] = []
         unresolved: list[str] = []
@@ -112,20 +119,20 @@ class LabCalibrationChecks:
                 exhausted = True
                 break
             cursor = page.next_cursor
-        changed = False
-        for item in requests:
-            run = item.execution
-            if (
-                self._client.get_procedure(run.procedure_run_id).revision
-                != run.revision
-            ):
-                changed = True
-                if run.procedure_run_id not in unresolved:
-                    unresolved.append(run.procedure_run_id)
-        latest = self._client.query_calibration_checks(
-            CalibrationCheckQuery(scope=scope, context=context, limit=1)
+        observation = self._client.observe_calibration_checks(
+            CalibrationCheckObservation(
+                scope=scope,
+                context=context,
+                head=first_id,
+                revisions={
+                    item.execution.procedure_run_id: item.execution.revision
+                    for item in requests
+                },
+            )
         )
-        latest_id = latest.items[0].execution.procedure_run_id if latest.items else None
+        for procedure_id in observation.changed_procedures:
+            if procedure_id not in unresolved:
+                unresolved.append(procedure_id)
         reasons: list[
             Literal["scan_limit", "unresolved_checks", "journal_changed"]
         ] = []
@@ -133,7 +140,7 @@ class LabCalibrationChecks:
             reasons.append("scan_limit")
         if unresolved:
             reasons.append("unresolved_checks")
-        if changed or latest_id != first_id:
+        if observation.changed_procedures or observation.head_changed:
             reasons.append("journal_changed")
         return CalibrationCheckHistory(
             tuple(requests), tuple(evidence), tuple(unresolved), scanned, tuple(reasons)

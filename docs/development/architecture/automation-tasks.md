@@ -79,8 +79,13 @@ fixed immutable analysis publications with the same validation used at result
 adoption. Pending checks have no evidence; invalid retained evidence is an error.
 No laboratory Python or author session is needed to query this endpoint.
 
-The client still checks observed revisions and the filtered head across pages.
-A consistent page is not a cross-request snapshot or authorization to publish.
+After reading pages, the client submits observed revisions and the filtered head
+to `POST /api/v1/calibration-checks/observe`. The server compares both in one
+read transaction, using only indexed declarations and execution revisions. Missing
+or out-of-scope observations count as changed. The request accepts at most 2,000
+observed checks; the Python history budget shares this bound (default 200).
+A stable comparison means those observations still match at that read snapshot;
+it is neither a retained snapshot spanning requests nor authorization to publish.
 Schema 89 introduces the index without backfilling prebaseline stores; the evidence
 view adds no persisted format.
 
@@ -106,9 +111,9 @@ making task boundaries explicit; add concurrency only after those boundaries wor
 
 Required next contracts:
 
-1. An explicit consistency contract spanning pages and bounded batch observation
-   validation. Server pages now include resolved evidence in one read snapshot;
-   clients still conservatively check individual execution revisions across pages.
+1. Larger-history traversal and panel refresh policies beyond the bounded history
+   facade. Pages have read-snapshot consistency and a final batch comparison;
+   consumers must still use write-time authority checks when acting on observations.
 2. Task/stage/target relationships with frozen intent, explicit partial completion,
    bounded repair loops and independently dispatchable units. Avoid one giant
    procedure containing every target and an unbounded maintenance loop.

@@ -39,18 +39,41 @@ class CheckRequestPage:
 
 
 class CalibrationCheckStore:
+    def revisions_in_transaction(
+        self,
+        connection: sqlite3.Connection,
+        query: CalibrationCheckQuery,
+        procedure_ids: tuple[str, ...],
+    ) -> dict[str, int]:
+        if not procedure_ids:
+            return {}
+        clauses, parameters = _scope_filters(query)
+        placeholders = ",".join("?" for _ in procedure_ids)
+        clauses.append(f"runs.procedure_run_id IN ({placeholders})")
+        parameters.extend(procedure_ids)
+        rows = cast(
+            "list[sqlite3.Row]",
+            connection.execute(
+                f"""
+            SELECT runs.procedure_run_id, runs.revision
+            FROM procedure_runs AS runs
+            JOIN calibration_check_requests AS checks ON checks.sequence = runs.sequence
+            WHERE {" AND ".join(clauses)}
+            """,  # noqa: S608 - fixed clauses and generated placeholders
+                parameters,
+            ).fetchall(),
+        )
+        return {
+            cast("str", row["procedure_run_id"]): cast("int", row["revision"])
+            for row in rows
+        }
+
     def query_in_transaction(
         self,
         connection: sqlite3.Connection,
         query: CalibrationCheckQuery,
     ) -> CheckRequestPage:
-        clauses: list[str] = []
-        parameters: list[str | int] = []
-        content: dict[str, object] = query.model_dump(mode="json")
-        for field in ("scope", "context"):
-            if content[field] is not None:
-                clauses.append(f"checks.{field}_hash = ?")
-                parameters.append(sha256_json_hash(content[field]))
+        clauses, parameters = _scope_filters(query)
         if query.cursor is not None:
             clauses.append("checks.sequence < ?")
             parameters.append(query.cursor)
@@ -79,3 +102,14 @@ class CalibrationCheckStore:
             if len(rows) > query.limit
             else None,
         )
+
+
+def _scope_filters(query: CalibrationCheckQuery) -> tuple[list[str], list[str | int]]:
+    clauses: list[str] = []
+    parameters: list[str | int] = []
+    content: dict[str, object] = query.model_dump(mode="json")
+    for field in ("scope", "context"):
+        if content[field] is not None:
+            clauses.append(f"checks.{field}_hash = ?")
+            parameters.append(sha256_json_hash(content[field]))
+    return clauses, parameters

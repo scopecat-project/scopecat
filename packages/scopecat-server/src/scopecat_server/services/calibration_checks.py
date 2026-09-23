@@ -13,6 +13,8 @@ from scopecat.automation import (
 )
 from scopecat.automation.calibration import CheckEvidence
 from scopecat.daemon.calibration_checks import (
+    CalibrationCheckObservation,
+    CalibrationCheckObservationResult,
     CalibrationCheckPage,
     CalibrationCheckQuery,
     CalibrationCheckView,
@@ -250,6 +252,29 @@ class CalibrationCheckQueries:
             return CalibrationCheckPage(
                 items=tuple(self._view(connection, run) for run in page.items),
                 next_cursor=page.next_cursor,
+            )
+
+    def observe(
+        self, observation: CalibrationCheckObservation
+    ) -> CalibrationCheckObservationResult:
+        query = CalibrationCheckQuery(
+            scope=observation.scope, context=observation.context, limit=1
+        )
+        with self._sqlite.read_transaction() as connection:
+            head = self._checks.query_in_transaction(connection, query)
+            current = self._checks.revisions_in_transaction(
+                connection,
+                query,
+                tuple(observation.revisions),
+            )
+            return CalibrationCheckObservationResult(
+                head_changed=(head.items[0].procedure_run_id if head.items else None)
+                != observation.head,
+                changed_procedures=tuple(
+                    procedure_id
+                    for procedure_id, revision in observation.revisions.items()
+                    if current.get(procedure_id) != revision
+                ),
             )
 
     def _view(

@@ -141,25 +141,29 @@ adoption contract.
 and `incomplete_reasons`: `scan_limit`, `unresolved_checks` or `journal_changed`.
 Its `complete` property is true only when those reasons are absent. Call
 `history.select(...)` to carry this completeness into evidence selection
-automatically. Rechecking
-observed request revisions and the journal head detects changes during reading;
-this is still an observational query, not a transaction fence or permission to
-publish. A new request can arrive after the query returns.
+automatically. A final batch observation compares all read request revisions and
+the filtered head at one server read snapshot. Changed, missing or now out-of-scope
+requests are reported as changed; a new matching request changes the head. Unrelated
+tasks do neither. This remains an observational query, not a transaction fence or
+permission to publish. A new request can arrive after the comparison returns.
 
 `POST /api/v1/calibration-checks/query` pages admitted checks using an indexed
 projection written atomically with the procedure. Exact scope and context filters
 run before pagination. All execution states are included; ordinary procedures and
 nonmatching checks do not consume the history budget (200 matching requests by
-default). Hashes identify canonical declaration JSON, not Python class identity.
+default, maximum 2,000). Hashes identify canonical declaration JSON, not Python class identity.
 Each response item includes `execution`, `request` and optional `evidence` with
 the retained measurement, analysis ID and positive or negative result. Evidence
 resolution runs on the server without importing author code. Page selection,
 step outputs and measurement snapshots share one read transaction; analysis
 publications are fixed immutable records. Unfinished work returns no evidence,
 while invalid retained evidence raises. Cross-page reads are not a transaction
-snapshot. Revision and filtered-head rechecks retain conservative incomplete-history
-reporting. The Python facade no longer fetches individual steps, measurements and
-analysis content to assemble each item.
+snapshot. `POST /api/v1/calibration-checks/observe` performs the bounded revision
+and head comparison without loading scientific evidence. It returns
+`changed_procedures` and `head_changed`; the facade uses them for conservative
+incomplete-history reporting. The Python facade makes one final observation
+request instead of individual procedure reads, and no longer fetches individual
+steps, measurements or analysis content to assemble each item.
 Development schema 89 adds this projection without a prebaseline backfill or
 migration. Earlier stores remain untouched and require their historical environment.
 

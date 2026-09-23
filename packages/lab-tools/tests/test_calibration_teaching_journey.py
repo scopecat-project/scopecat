@@ -91,7 +91,9 @@ try:
                 assert not changed.complete
                 assert "journal_changed" in changed.incomplete_reasons
                 assert concurrent.id in changed.unresolved_procedures
-                stable = checks.history()
+                with patch.object(checks._client, "get_procedure",
+                                  side_effect=AssertionError("per-check HTTP read")):
+                    stable = checks.history()
                 assert stable.complete
                 from dataclasses import replace
                 # A queued check in another exact parameter context is visible,

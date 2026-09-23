@@ -23,6 +23,8 @@ from scopecat.automation import (
 from scopecat.config.scientific_binding import bind_scientific_evidence
 from scopecat.control.models import RunPlanSummary
 from scopecat.daemon.calibration_checks import (
+    CalibrationCheckObservation,
+    CalibrationCheckObservationResult,
     CalibrationCheckPage,
     CalibrationCheckQuery,
 )
@@ -335,6 +337,106 @@ def test_indexed_check_query_filters_before_pagination(check_case: CheckCase) ->
             _command(declaration).model_copy(update={"request_key": "check-3"})
         )
         assert len(query(CalibrationCheckQuery()).items) == 4
+
+
+def test_batch_observation_compares_head_and_revisions_at_one_snapshot(
+    check_case: CheckCase,
+) -> None:
+    runtime, declaration, _ = check_case
+    app = runtime.application
+    first = app.automation.submit(_command(declaration)).run
+    other_declaration = declaration.model_copy(
+        update={"scope": replace(declaration.scope, capability="other")}
+    )
+    other = app.automation.submit(
+        _command(other_declaration).model_copy(update={"request_key": "other"})
+    ).run
+    observation = CalibrationCheckObservation(
+        scope=declaration.scope,
+        context=declaration.context,
+        head=first.procedure_run_id,
+        revisions={first.procedure_run_id: first.revision},
+    )
+    with TestClient(runtime.app()) as client:
+
+        def observe(
+            value: CalibrationCheckObservation,
+        ) -> CalibrationCheckObservationResult:
+            response = client.post(
+                "/api/v1/calibration-checks/observe", json=value.model_dump(mode="json")
+            )
+            assert response.status_code == 200, response.text
+            return CalibrationCheckObservationResult.model_validate(response.json())
+
+        stable = observe(observation)
+        assert not stable.head_changed and stable.changed_procedures == ()
+        absent = observe(
+            observation.model_copy(
+                update={
+                    "scope": replace(declaration.scope, conditions="absent"),
+                    "head": None,
+                    "revisions": {},
+                }
+            )
+        )
+        assert not absent.head_changed and absent.changed_procedures == ()
+        mismatched = observe(
+            observation.model_copy(
+                update={
+                    "revisions": {other.procedure_run_id: other.revision, "missing": 1}
+                }
+            )
+        )
+        assert mismatched.changed_procedures == (other.procedure_run_id, "missing")
+        assert not mismatched.head_changed
+        query_store = app.calibration_checks._checks
+        original = query_store.revisions_in_transaction
+
+        def advancing(
+            connection: sqlite3.Connection,
+            query: CalibrationCheckQuery,
+            ids: tuple[str, ...],
+        ) -> dict[str, int]:
+            app.automation.acquire_lease(
+                ProcedureWorkerLeaseAcquireCommand(
+                    procedure_run_id=first.procedure_run_id,
+                    worker_id="test",
+                    expected_run_revision=first.revision,
+                )
+            )
+            app.automation.submit(
+                _command(declaration).model_copy(update={"request_key": "new"})
+            )
+            return original(connection, query, ids)
+
+        with patch.object(query_store, "revisions_in_transaction", advancing):
+            during = observe(observation)
+        assert during == stable
+        after = observe(observation)
+        assert after.head_changed
+        assert after.changed_procedures == (first.procedure_run_id,)
+        assert (
+            client.post(
+                "/api/v1/calibration-checks/observe", json={"revisions": {"bad": 0}}
+            ).status_code
+            == 422
+        )
+        oversized = {f"check-{index}": 1 for index in range(2001)}
+        bounded = dict(list(oversized.items())[:2000])
+        assert (
+            len(
+                observe(
+                    observation.model_copy(update={"revisions": bounded})
+                ).changed_procedures
+            )
+            == 2000
+        )
+        assert (
+            client.post(
+                "/api/v1/calibration-checks/observe", json={"revisions": oversized}
+            ).status_code
+            == 422
+        )
 
 
 def test_exact_retry_survives_setup_change(check_case: CheckCase) -> None:

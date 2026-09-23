@@ -75,6 +75,8 @@ from scopecat.control.models import (
     RunExecutionSegmentPage,
 )
 from scopecat.daemon.calibration_checks import (
+    CalibrationCheckObservation,
+    CalibrationCheckObservationResult,
     CalibrationCheckPage,
     CalibrationCheckQuery,
 )
@@ -589,6 +591,16 @@ class DaemonClient:
             f"{_API_PREFIX}/procedures",
             command,
             ProcedureSubmitReceipt,
+        )
+
+    def observe_calibration_checks(
+        self,
+        observation: CalibrationCheckObservation,
+    ) -> CalibrationCheckObservationResult:
+        return self._post_model(
+            f"{_API_PREFIX}/calibration-checks/observe",
+            observation,
+            CalibrationCheckObservationResult,
         )
 
     def query_calibration_checks(
