@@ -126,7 +126,7 @@ from scopecat.daemon.points import (
     RunPointPlanCloseCommand,
     RunPointPlanView,
 )
-from scopecat.daemon.procedure_views import ProcedureOperatorView
+from scopecat.daemon.procedure_views import ProcedureOperatorView, ProcedureWorkerLog
 from scopecat.daemon.reviews import (
     ReviewCompileCommand,
     ReviewCompileReceipt,
@@ -838,6 +838,14 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
         return read_procedure_operator(
             application, project_workers, procedure_run_id, cursor=cursor
         )
+
+    @app.get(f"{_API_PREFIX}/procedures/{{procedure_run_id}}/worker-log")
+    def get_procedure_worker_log(
+        procedure_run_id: str,
+        max_bytes: Annotated[int, Query(ge=1, le=65536)] = 16384,
+    ) -> ProcedureWorkerLog:
+        application.automation.get(procedure_run_id)
+        return project_workers.read_log(procedure_run_id, max_bytes)
 
     @app.get(f"{_API_PREFIX}/health")
     def health() -> DaemonHealth:

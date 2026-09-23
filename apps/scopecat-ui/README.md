@@ -173,6 +173,14 @@ remains in the URL. Configuration acceptance stays in the declared procedure and
 The generic GUI does not accept calibration parameters itself. Existing projects
 without a provider show an empty state.
 
+**Recent worker output** reads that execution's log on demand and offers explicit
+refresh. The daemon verifies the retained procedure ID and serves only its own
+derived log path, never a caller-supplied path. Reads are bounded to a byte tail
+(16 KiB by default, 64 KiB maximum); the response distinguishes absent/empty logs
+and reports file size and truncation. Text is decoded as UTF-8 with replacement
+for partial or invalid characters, and rendered as plain text. Full logs remain
+available at the displayed path. Log output does not determine scientific status.
+
 Decision review renders retained run, sample and project analysis publications
 inline, including curves, facts and proposed parameter differences. Table changes
 are expanded to changed fields; quantity representation changes remain visible.

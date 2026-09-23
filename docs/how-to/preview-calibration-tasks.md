@@ -165,6 +165,12 @@ worker diagnostic and exact log path, restore its code workspace or environment,
 **Dispatch existing procedure**. This retries the admitted execution rather than
 creating a replacement check.
 
+Expand **Recent worker output** in execution details to read the latest 16 KiB
+directly in the workbench. Use **Refresh worker output** for new messages. The view
+marks truncated output and distinguishes an absent log from an empty one; use the
+displayed file path when you need the complete log. Output is shown as plain text,
+separately from the retained measurement and procedure outcomes.
+
 ```python
 task = lab.calibration_tasks.pause(task, actor="alice", reason="inspect equipment")
 task = lab.calibration_tasks.start(task, actor="alice", reason="inspection complete")

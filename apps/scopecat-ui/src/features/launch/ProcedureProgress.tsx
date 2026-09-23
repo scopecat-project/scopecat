@@ -1,4 +1,5 @@
 import { PlanOrigin } from "./PlanOrigin";
+import { ProcedureWorkerLog } from "./ProcedureWorkerLog";
 import { ComparisonLink } from "../analyses/ComparisonLink";
 import { useState } from "react";
 import { useInfiniteQuery } from "@tanstack/react-query";
@@ -110,6 +111,7 @@ export function ProcedureProgress({ procedureId }: { procedureId: string }) {
               Worker log: <code>{view.dispatch.log_path}</code>
             </p>
           )}
+          <ProcedureWorkerLog procedureId={procedureId} />
           {run.recovery && (
             <p>
               Recovery from{" "}

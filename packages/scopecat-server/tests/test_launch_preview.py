@@ -349,6 +349,64 @@ def test_worker_logs_are_per_execution_and_preserve_previous_output(
     assert previous.read_text(encoding="utf-8") == "retained old output"
 
 
+def test_worker_log_read_is_bounded_and_cannot_select_another_file(
+    tmp_path: Path,
+) -> None:
+    from scopecat_server.services.project_workers import ProjectProcedureWorkers
+
+    manager = ProjectProcedureWorkers(lambda: tmp_path, lambda _: "ready")
+    assert not manager.read_log("p1", 16).available
+    path = manager._worker_dir("p1") / "worker.log"
+    path.parent.mkdir(parents=True)
+    path.write_bytes(b"older output\n" + "新输出".encode())
+    tail = manager.read_log("p1", 9)
+    assert tail.available and tail.truncated
+    assert tail.text == "新输出"
+    assert tail.total_bytes == path.stat().st_size
+    # Cutting a multibyte character is rendered with replacement, never a 500.
+    assert manager.read_log("p1", 1).text == "\ufffd"
+    assert not manager.read_log("../../p1", 16).available
+    path.write_bytes(b"")
+    empty = manager.read_log("p1", 16)
+    assert empty.available and empty.text == "" and not empty.truncated
+
+
+def test_worker_log_route_validates_identity_and_read_budget() -> None:
+    from scopecat.daemon.procedure_views import ProcedureWorkerLog
+
+    from scopecat_server import BackendNotFound
+
+    application = SimpleNamespace(
+        automation=SimpleNamespace(
+            get=Mock(side_effect=BackendNotFound("missing procedure"))
+        )
+    )
+    with patch("scopecat_server.http.transport.ProjectProcedureWorkers") as manager:
+        app = create_app(cast("DaemonApplication", cast("object", application)))
+        reader = TestClient(app)
+        for budget in (0, 65537):
+            assert (
+                reader.get(
+                    f"/api/v1/procedures/p1/worker-log?max_bytes={budget}"
+                ).status_code
+                == 422
+            )
+        assert reader.get("/api/v1/procedures/p1/worker-log").status_code == 404
+        manager.return_value.read_log.assert_not_called()
+        application.automation.get.side_effect = None
+        manager.return_value.read_log.return_value = ProcedureWorkerLog(
+            available=False,
+            text="",
+            total_bytes=0,
+            truncated=False,
+        )
+        assert (
+            reader.get("/api/v1/procedures/p1/worker-log?max_bytes=65536").status_code
+            == 200
+        )
+        manager.return_value.read_log.assert_called_once_with("p1", 65536)
+
+
 def test_dispatch_deduplicates_live_workers(tmp_path: Path) -> None:
     from scopecat_server.services.project_workers import ProjectProcedureWorkers
 

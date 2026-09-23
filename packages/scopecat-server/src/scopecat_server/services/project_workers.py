@@ -20,6 +20,7 @@ from typing import Literal, cast
 from scopecat.daemon.procedure_views import (
     ProcedureDispatchView,
     ProcedureWorkerFailure,
+    ProcedureWorkerLog,
 )
 from scopecat.kernel.interaction_timing import record_timing
 from scopecat.runtime_binding import load_runtime_binding
@@ -63,6 +64,26 @@ class ProjectProcedureWorkers:
             ProcedureWorkerFailure.model_validate_json(path.read_text(encoding="utf-8"))
             if path.exists()
             else None
+        )
+
+    def read_log(self, procedure_id: str, max_bytes: int) -> ProcedureWorkerLog:
+        path = self._worker_dir(procedure_id) / "worker.log"
+        try:
+            stream = path.open("rb")
+        except FileNotFoundError:
+            return ProcedureWorkerLog(
+                available=False, text="", total_bytes=0, truncated=False
+            )
+        with stream:
+            size = stream.seek(0, 2)
+            start = max(0, size - max_bytes)
+            stream.seek(start)
+            content = stream.read(min(size, max_bytes))
+        return ProcedureWorkerLog(
+            available=True,
+            text=content.decode("utf-8", errors="replace"),
+            total_bytes=size,
+            truncated=start > 0,
         )
 
     def _record_failure(

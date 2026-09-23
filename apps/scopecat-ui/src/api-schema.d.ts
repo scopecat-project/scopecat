@@ -1078,6 +1078,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/procedures/{procedure_run_id}/worker-log": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Procedure Worker Log */
+        get: operations["get_procedure_worker_log_api_v1_procedures__procedure_run_id__worker_log_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/record-collections": {
         parameters: {
             query?: never;
@@ -8108,6 +8125,20 @@ export interface components {
             observed_at: string;
         };
         /**
+         * ProcedureWorkerLog
+         * @description Bounded UTF-8 rendering of one execution's recent process output.
+         */
+        ProcedureWorkerLog: {
+            /** Available */
+            available: boolean;
+            /** Text */
+            text: string;
+            /** Total Bytes */
+            total_bytes: number;
+            /** Truncated */
+            truncated: boolean;
+        };
+        /**
          * ProjectAnalysisDecisionReference
          * @description One exact typed fact interpreted as a project-level decision.
          */
@@ -12781,6 +12812,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProcedureStepInputSubmitReceipt"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_procedure_worker_log_api_v1_procedures__procedure_run_id__worker_log_get: {
+        parameters: {
+            query?: {
+                max_bytes?: number;
+            };
+            header?: never;
+            path: {
+                procedure_run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProcedureWorkerLog"];
                 };
             };
             /** @description Validation Error */
