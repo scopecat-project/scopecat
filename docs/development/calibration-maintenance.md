@@ -195,6 +195,29 @@ evidence retains these through the existing ledger and labels coverage as
 missing/ambiguous membership without inferring full measurement applicability.
 See [adapter evidence](architecture/quantum-adapters.md).
 
+The ordinary scalar evaluator and constant specializer also accept a
+context-local `ParameterReadRecorder` through `EvalContext.parameter_reads`.
+Checked evaluation preserves it when normalizing a context. It records scalar
+parameters and resolved keyed cells, including nested key expressions; snapshots
+decode without author code as `ScalarExpressionReadEvidence`.
+`compare_expression_parameter_reads` reports changed scalar names/keyed cells
+and preserves incomplete reasons. Its `unchanged` verdict covers only those
+observed expression reads, not scientific applicability.
+
+Use a fresh recorder for each effective point/scope. Evaluating against
+`resolve_point_parameters(...)` records the actual overlaid values without
+changing the base. Symbolic cell substitution during specialization is marked
+incomplete because it bypasses a parameter-table read; retain the final point
+evaluation before claiming coverage. Unresolved expressions, failed evaluation,
+unsupported persisted scalar values and whole-table selections likewise cannot
+produce a complete-read claim. Relation keys retain their execution semantics,
+including entity/string ID matching, rather than adopting recipe-query matching.
+
+These are opt-in compiler hooks. Ordinary run planning does not yet create,
+aggregate or persist these recorders automatically. Threading them through
+point materialization and execution records remains the next integration step;
+the existence of the hooks does not establish whole-run capture completeness.
+
 Before selective invalidation, extend this coverage to scalar expressions,
 runtime reads, selections and derived queries outside recipe preparation.
 Query membership matters:

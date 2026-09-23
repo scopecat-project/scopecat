@@ -113,8 +113,12 @@ execution and automatic selective repair are not established by this scenario.
 - Declarative recipe queries now retain resolved key/value cells, indirect key
   dependencies and explicit limited coverage through the execution ledger.
   Public comparison detects changed inputs and lost/ambiguous row membership.
-  Extend capture to runtime/analysis reads and selection membership; supplement
-  it with schema/context and declared physical interactions before selective reuse.
+  Scalar evaluation and constant specialization now share opt-in context-local
+  capture hooks, with checked-context propagation, effective-point isolation and
+  explicit incomplete coverage. Automatic point/run aggregation and retention
+  remain unconnected. Extend capture to runtime/analysis reads and selection
+  membership; supplement it with schema/context and declared physical interactions
+  before selective reuse.
 - Add bounded check-first repair after dependencies can explain invalidation.
 
 Setup still aggregates control topology, instrument registry, routing, domain

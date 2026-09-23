@@ -55,15 +55,20 @@ def evaluate_scalar(
 
     from scopecat.compiler.relations.evaluator import evaluate_scalar_expression
 
-    normalized = _prepare_context(expression, ctx, bindings=bindings)
-    result = evaluate_scalar_expression(expression, normalized)
-    return cast(
-        "CellValue",
-        _normalize_materialized_result(
-            expected_type or expression.value_type,
-            result,
-        ),
-    )
+    try:
+        normalized = _prepare_context(expression, ctx, bindings=bindings)
+        result = evaluate_scalar_expression(expression, normalized)
+        return cast(
+            "CellValue",
+            _normalize_materialized_result(
+                expected_type or expression.value_type,
+                result,
+            ),
+        )
+    except ArithmeticError, KeyError, TypeError, ValueError:
+        if ctx.parameter_reads is not None:
+            ctx.parameter_reads.incomplete("evaluation_failed")
+        raise
 
 
 def evaluate_table_value(
@@ -76,6 +81,8 @@ def evaluate_table_value(
     if isinstance(source, LiteralTableSource):
         result: object = source.rows
     elif isinstance(source, ParameterTableSource):
+        if ctx.parameter_reads is not None:
+            ctx.parameter_reads.incomplete(f"table_selection:{source.parameter_id}")
         result = _parameter_table_rows(
             source.parameter_id,
             ctx.params,
@@ -285,6 +292,7 @@ def _normalize_evaluation_context(
         ),
         point_row=point_row,
         inputs=inputs,
+        parameter_reads=ctx.parameter_reads,
     )
 
 

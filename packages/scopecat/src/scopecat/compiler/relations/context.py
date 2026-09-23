@@ -5,7 +5,8 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 
-from scopecat.compiler.relations.scalar_eval import cell_matches
+from scopecat.compiler.relations.parameter_reads import ParameterReadRecorder
+from scopecat.compiler.relations.scalar_eval import cell_matches, read_path
 from scopecat.kernel.value_data import CellValue, Row
 
 
@@ -132,6 +133,31 @@ class EvalContext:
     params: ParameterRelationData = field(default_factory=ParameterRelationData)
     point_row: Row = field(default_factory=dict)
     inputs: dict[str, object] = field(default_factory=dict)
+    parameter_reads: ParameterReadRecorder | None = None
+
+    def parameter_scalar(self, name: str) -> CellValue:
+        try:
+            value = self.params.scalar(name)
+        except KeyError:
+            if self.parameter_reads is not None:
+                self.parameter_reads.incomplete(f"unresolved_scalar:{name}")
+            raise
+        if self.parameter_reads is not None:
+            self.parameter_reads.scalar(name, value)
+        return value
+
+    def parameter_lookup(
+        self, table: str, key: Mapping[str, CellValue], column: str
+    ) -> CellValue:
+        try:
+            value = read_path(self.params.lookup_row(table, key), column)
+        except KeyError, TypeError, ValueError:
+            if self.parameter_reads is not None:
+                self.parameter_reads.incomplete(f"unresolved_lookup:{table}.{column}")
+            raise
+        if self.parameter_reads is not None:
+            self.parameter_reads.lookup(table, key, column, value)
+        return value
 
 
 __all__ = ["EvalContext", "ParameterRelationData"]

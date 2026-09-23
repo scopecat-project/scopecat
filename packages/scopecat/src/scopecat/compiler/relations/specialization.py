@@ -63,6 +63,25 @@ def specialize_scalar_expression(
     external effect can be represented or executed here.
     """
 
+    try:
+        result = _specialize_scalar_expression(
+            expression, known=known, parameter_cells=parameter_cells
+        )
+    except _KNOWN_EVALUATION_ERRORS:
+        if known.parameter_reads is not None:
+            known.parameter_reads.incomplete("specialization_failed")
+        raise
+    if known.parameter_reads is not None and not isinstance(result, LiteralScalarExpr):
+        known.parameter_reads.incomplete("residual_expression")
+    return result
+
+
+def _specialize_scalar_expression(
+    expression: ScalarExpr,
+    *,
+    known: EvalContext,
+    parameter_cells: Sequence[ParameterCellBinding],
+) -> ScalarExpr:
     scalar = expression
     match scalar:
         case LiteralScalarExpr():
@@ -78,7 +97,7 @@ def specialize_scalar_expression(
                 lambda: read_path(known.inputs, scalar.name),
             )
         case ParameterScalarExpr():
-            return _known_leaf(scalar, lambda: known.params.scalar(scalar.name))
+            return _known_leaf(scalar, lambda: known.parameter_scalar(scalar.name))
         case ComputeResultScalarExpr() | ModuleExportScalarExpr():
             return scalar
         case ParameterLookupScalarExpr():
@@ -139,9 +158,15 @@ def _specialize_parameter_lookup(
             column_id=expression.use.column_id,
         )
         if matched is not None:
+            if known.parameter_reads is not None:
+                known.parameter_reads.incomplete(
+                    f"symbolic_overlay:{expression.use.table_id}.{expression.use.column_id}"
+                )
             return specialize_scalar_expression(matched.replacement, known=known)
         try:
-            row = known.params.lookup_row(expression.use.table_id, key)
+            value = known.parameter_lookup(
+                expression.use.table_id, key, expression.use.column_id
+            )
         except ValueError as error:
             raise ExpressionVerificationError(
                 "parameter_lookup_failed",
@@ -152,10 +177,13 @@ def _specialize_parameter_lookup(
             pass
         else:
             try:
-                value = read_path(row, expression.use.column_id)
                 return _typed_literal(value, expression.value_type)
             except _KNOWN_EVALUATION_ERRORS:
                 pass
+    if known.parameter_reads is not None:
+        known.parameter_reads.incomplete(
+            f"residual_lookup:{expression.use.table_id}.{expression.use.column_id}"
+        )
     return ParameterLookupScalarExpr(
         use=expression.use,
         key=key_results,

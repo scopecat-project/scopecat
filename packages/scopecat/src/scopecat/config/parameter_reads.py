@@ -3,9 +3,17 @@
 from dataclasses import dataclass
 from typing import Literal
 
+from scopecat.compiler.relations.scalar_eval import cell_matches
 from scopecat.kernel.value_identity import scalar_identity, scalar_values_equal
-from scopecat.records.parameter import ParameterSnapshot, TableParameterValue
-from scopecat.records.parameter_read import KeyedParameterRead
+from scopecat.records.parameter import (
+    ParameterSnapshot,
+    ScalarParameterValue,
+    TableParameterValue,
+)
+from scopecat.records.parameter_read import (
+    KeyedParameterRead,
+    ScalarExpressionReadEvidence,
+)
 
 
 @dataclass(frozen=True)
@@ -24,7 +32,10 @@ def _matches(left: object, right: object) -> bool:
 
 
 def compare_parameter_reads(
-    reads: tuple[KeyedParameterRead, ...], snapshot: ParameterSnapshot
+    reads: tuple[KeyedParameterRead, ...],
+    snapshot: ParameterSnapshot,
+    *,
+    key_semantics: Literal["query", "relation"] = "query",
 ) -> tuple[ParameterReadChange, ...]:
     """Explain changed recorded reads, including lost/ambiguous membership.
 
@@ -33,6 +44,7 @@ def compare_parameter_reads(
     Callers must supply the effective snapshot for the captured parameter scope.
     """
     changes: list[ParameterReadChange] = []
+    matches = _matches if key_semantics == "query" else cell_matches
     for read in reads:
         table = snapshot.get(read.table)
         if not isinstance(table, TableParameterValue):
@@ -41,7 +53,7 @@ def compare_parameter_reads(
         rows = [
             row
             for row in table.rows
-            if all(_matches(row.get(key.id), key.value) for key in read.key)
+            if all(matches(row.get(key.id), key.value) for key in read.key)
         ]
         if len(rows) != 1:
             changes.append(ParameterReadChange(read, "membership_changed"))
@@ -54,3 +66,34 @@ def compare_parameter_reads(
         if changed:
             changes.append(ParameterReadChange(read, "cells_changed", changed))
     return tuple(changes)
+
+
+@dataclass(frozen=True)
+class ScalarExpressionReadComparison:
+    changed_scalars: tuple[str, ...]
+    changed_keyed: tuple[ParameterReadChange, ...]
+    incomplete_reasons: tuple[str, ...]
+
+    @property
+    def status(self) -> Literal["changed", "unknown", "unchanged"]:
+        if self.changed_scalars or self.changed_keyed:
+            return "changed"
+        return "unknown" if self.incomplete_reasons else "unchanged"
+
+
+def compare_expression_parameter_reads(
+    evidence: ScalarExpressionReadEvidence, snapshot: ParameterSnapshot
+) -> ScalarExpressionReadComparison:
+    """Compare one expression context; never upgrade incomplete capture to valid."""
+    changed: list[str] = []
+    for read in evidence.scalars:
+        value = snapshot.get(read.id)
+        if not isinstance(value, ScalarParameterValue) or scalar_identity(
+            value.value
+        ) != scalar_identity(read.value):
+            changed.append(read.id)
+    return ScalarExpressionReadComparison(
+        tuple(changed),
+        compare_parameter_reads(evidence.keyed, snapshot, key_semantics="relation"),
+        evidence.incomplete_reasons,
+    )

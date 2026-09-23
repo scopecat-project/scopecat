@@ -22,6 +22,15 @@ from scopecat.program.expressions import (
 
 
 def evaluate_scalar_expression(expression: ScalarExpr, ctx: EvalContext) -> CellValue:
+    try:
+        return _evaluate_scalar_expression(expression, ctx)
+    except ArithmeticError, KeyError, TypeError, ValueError:
+        if ctx.parameter_reads is not None:
+            ctx.parameter_reads.incomplete("evaluation_failed")
+        raise
+
+
+def _evaluate_scalar_expression(expression: ScalarExpr, ctx: EvalContext) -> CellValue:
     scalar = expression
     match scalar:
         case LiteralScalarExpr():
@@ -31,7 +40,7 @@ def evaluate_scalar_expression(expression: ScalarExpr, ctx: EvalContext) -> Cell
         case InputScalarExpr():
             return read_path(ctx.inputs, scalar.name)
         case ParameterScalarExpr():
-            return ctx.params.scalar(scalar.name)
+            return ctx.parameter_scalar(scalar.name)
         case ComputeResultScalarExpr():
             msg = "compute results cannot be evaluated as pure scalar expressions"
             raise TypeError(msg)
@@ -43,8 +52,9 @@ def evaluate_scalar_expression(expression: ScalarExpr, ctx: EvalContext) -> Cell
                 name: evaluate_scalar_expression(value, ctx)
                 for name, value in scalar.key.items()
             }
-            row = ctx.params.lookup_row(scalar.use.table_id, resolved_key)
-            return read_path(row, scalar.use.column_id)
+            return ctx.parameter_lookup(
+                scalar.use.table_id, resolved_key, scalar.use.column_id
+            )
         case BinaryScalarExpr():
             return eval_binary(
                 scalar.op,
