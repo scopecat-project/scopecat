@@ -1,6 +1,7 @@
 # Multi-target calibration and maintenance
 
-Status: selected design direction, with one executable check-only slice. This is
+Status: selected design direction, with executable check-only evidence and an
+exact-context applicability assessor. This is
 not an implemented automatic planner or a persistent-data compatibility baseline.
 The [composition contract](calibration-composition.md) describes the existing
 candidate, verification and publication boundaries.
@@ -41,12 +42,41 @@ and a typed `CheckResult` analysis fact. It exercises passing and failing checks
 on the same exact accepted revision, without candidates or branch publication.
 It is a declared synthetic residual check, not a generic capability registry.
 
-Future applicability assessment must evaluate subject/setup/operating conditions,
+Applicability assessment must evaluate subject/setup/operating conditions,
 policy and relevant parameter dependencies. Time is one reason to request a new
 check, not proof that values are wrong. Preserve evidence time separately from
 parameter modification time. Branch names are destinations, not scientific scope.
 A historical check does not become evidence for the newest head merely because
 both revisions have occupied the same branch.
+
+`scopecat.automation.calibration` now provides `CalibrationScope`,
+`CalibrationContext` and the pure `assess_calibration_check()` function. Scope
+names a capability, ordered target addresses within the resolved subject,
+laboratory conditions and policy version. The lab must update the policy version
+when measurement/analysis semantics or acceptance criteria change, and conditions
+when relevant external operating conditions change. These strings are explicit
+laboratory contracts, not automatically detected physical state.
+
+The initial assessor compares the exact saved parameter revision, resolved
+subject, executable setup content, software scenario and declared scope. It uses
+the run's creation time as a conservative age bound, so reanalysis cannot refresh
+evidence. An applicable positive result is `usable`; an applicable negative result
+is `out_of_spec`. Changed or expired evidence returns `recheck`, and incomplete
+measurements, unsaved parameters, unbound physical subjects or future-dated data
+return `unknown`. Reasons are retained together, rather than only the first failure.
+
+This assessor is an advisory primitive for trusted orchestration code within one
+catalog. Callers obtain the scientific result and checked scope from the retained
+analysis of the supplied run, and construct the requested context independently.
+It does not authenticate arbitrary caller-supplied facts, authorize publication,
+select the latest relevant check, or prove complete scientific coverage. The
+current exact-revision rule is deliberately conservative; it must not become a
+permanent substitute for parameter dependency capture. There is no new store.
+
+The calibration notebook retains scope with its typed check result and exercises
+policy changes, parameter changes and expiry. Teaching setups explicitly declare
+their software computation scenario; their evidence cannot become physical-device
+evidence by omitting a sample binding.
 
 ## Dependency capture has explicit limits
 
@@ -109,8 +139,10 @@ measured execution cost. Do not infer parallel safety from distinct target IDs.
 
 1. **Done:** check-only retained evidence using existing runs, analysis and durable
    procedures; passing and negative scientific outcomes leave the branch unchanged.
-2. Define scoped capabilities and applicability inputs, including dependency
-   capture limits and inspectable reasons. Avoid a second analysis/evidence store.
+2. **Partially implemented:** scoped checks and exact-context applicability with
+   inspectable reasons. Still needed: capability requirements/dependencies,
+   evidence selection and resolved parameter dependency capture. Avoid a second
+   analysis/evidence store.
 3. Build target-expanded, staged plans on the durable procedure machinery, with
    bounded recovery and explicit partial completion. Keep planning separate from
    resource dispatch and scientific policy.

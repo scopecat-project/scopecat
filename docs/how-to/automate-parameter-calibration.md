@@ -7,6 +7,9 @@ The notebook covers one target, pause/resume and rejection without publication.
 It also includes check-only requests: both a passing check and an out-of-spec check
 complete successfully as procedures, retaining typed evidence without changing
 the parameter branch. Read the scientific result separately from execution status.
+The final check cells retain their capability scope and demonstrate exact-context
+applicability: policy/parameter changes and age require a new check. This is an
+explicit laboratory policy input, not automatic repair or publication permission.
 Then use **联合校准与耦合验证** (`joint-calibration`) to observe two individually
 accepted candidates fail together under a declared synthetic coupling model.
 It also demonstrates missing target coverage and recovery after composition.

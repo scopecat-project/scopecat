@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 import scopecat as sc
 from scopecat.api.procedures import LabProcedureContext
 from scopecat.api.run import RunHandle
+from scopecat.automation.calibration import CalibrationScope
 from scopecat.daemon.views import ParameterResolution
 from scopecat.kernel.frozen import thaw_json_value
 from scopecat.records.parameter_branch import ParameterBranch
@@ -94,9 +95,19 @@ class CheckResult:
     passed: bool
     residual: float
     tolerance: float
+    scope: CalibrationScope
 
 
-CHECK_RESULT = sc.AnalysisFactSchema("teaching.zero-check.v1", CheckResult)
+CHECK_RESULT = sc.AnalysisFactSchema("teaching.zero-check.v2", CheckResult)
+
+
+def check_scope(tolerance: float) -> CalibrationScope:
+    return CalibrationScope(
+        capability="teaching.zero",
+        targets=("q0",),
+        conditions="synthetic-idle-v1",
+        policy_version=f"absolute-residual-v1:tolerance={tolerance!r}",
+    )
 
 
 @sc.analysis_step(id="teaching.check-zero")
@@ -104,7 +115,9 @@ def assess_zero(context: sc.AnalysisContext, *, tolerance: float) -> sc.Analysis
     data = context.measurements()
     error = abs(float(data["residual"].require_values()[0]))
     return context.result("当前参数健康检查").fact(
-        "check", CheckResult(error <= tolerance, error, tolerance), schema=CHECK_RESULT
+        "check",
+        CheckResult(error <= tolerance, error, tolerance, check_scope(tolerance)),
+        schema=CHECK_RESULT,
     )
 
 
@@ -130,7 +143,7 @@ class CheckIntent(BaseModel):
         return self
 
 
-@sc.procedure(id="teaching.check-zero", version="1", intent=CheckIntent)
+@sc.procedure(id="teaching.check-zero", version="2", intent=CheckIntent)
 def check_zero(ctx: LabProcedureContext, intent: CheckIntent) -> None:
     measurement = ctx.run(
         "check",
