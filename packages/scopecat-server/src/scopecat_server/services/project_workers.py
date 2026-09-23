@@ -108,6 +108,15 @@ class ProjectProcedureWorkers:
             self._load()
             self._tick()
 
+    def manage(self, procedure_id: str) -> None:
+        """Recover task handoffs without clearing a failed worker's pause."""
+        with self._lock:
+            managed = self._load()
+            if procedure_id not in managed:
+                managed[procedure_id] = "active"
+                self._save()
+            self._tick()
+
     def _tick(self) -> None:
         managed = self._load()
         for key, child in tuple(self._children.items()):

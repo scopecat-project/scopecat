@@ -69,7 +69,7 @@ consumers still need ownership cleanup, tracked in
 `lab.config.set_parameter_default(...)` specifically publishes a global default;
 ordinary parameter authoring should not use it just to save a revision.
 
-Current storage is development schema 90. No prebaseline migration or persistent
+Current storage is development schema 91. No prebaseline migration or persistent
 compatibility promise is introduced. Current-format backup/restore includes
 standalone revisions even when no setup has ever been saved.
 

@@ -1,8 +1,8 @@
 # Automation: domain tasks above durable execution
 
-Status: declared checks, stage previews, durable fixed task specifications and
-explicit dependency-checked stage dispatch are implemented. Automatic task
-advancement, capability projections and large-scale scheduling remain requirements.
+Status: declared checks, stage previews, durable fixed task specifications,
+dependency-checked dispatch and sequential background advancement with task controls
+are implemented. Capability projections and large-scale scheduling remain requirements.
 
 ## Ownership
 
@@ -117,11 +117,20 @@ introducing prebaseline migration. Stored scientific evidence remains in procedu
 runs and analyses. Task creation validates declarations structurally; equipment and
 parameter authority are checked when each stage is actually dispatched.
 
-The first task service has no automatic polling, repair attempts or implicit
-parameter flow. Existing workers execute admitted procedures; callers currently
-choose when to dispatch each newly ready stage. Plans spanning setups do not
-automatically activate equipment. New observations/repairs need explicit new task
-intent. These limits precede task-level cancellation, scheduling and repair policy.
+Schema 91 adds durable manual/running/paused/cancelled/finished modes, fenced control
+commands and per-stage admission errors, with an index for running-task discovery.
+The HTTP daemon's task runner advances each task sequentially and hands admitted
+procedures to the existing bounded worker manager. Both admission and controls
+serialize through SQLite write transactions. Each failed admission rolls back its
+own savepoint and is retained without repeated retries; independent stages remain
+eligible. Explicit start clears admission errors but never unpauses failed workers.
+Restart recovers running tasks and the admission-to-worker handoff gap.
+
+Pause/cancel stop future admission; already admitted procedures retain their own
+cancellation and uncertainty protocols. Cancelled tasks cannot restart. Completion
+is projected from stage evidence, not from control mode. There are no repair
+attempts or implicit parameter flow. Plans spanning setups do not automatically
+activate equipment. New observations/repairs need explicit new task intent.
 
 ## Panel requirements
 
@@ -138,20 +147,19 @@ does not grant hardware authorization.
 
 ## Background execution and scale
 
-The current project worker discovers runnable procedures and resumes them
-sequentially in one dispatch loop. Leases and resource waits support recovery,
-but are not a complete parallel task scheduler. Preserve serial execution while
-making task boundaries explicit; add concurrency only after those boundaries work.
+The task runner admits stages sequentially within each task. The shared project
+worker manager bounds concurrent subprocesses across tasks; leases and resource
+waits retain hardware admission. This is not a fairness or scientific grouping
+scheduler. Preserve serial task execution until those contracts are explicit.
 
 Required next contracts:
 
 1. Larger-history traversal and panel refresh policies beyond the bounded history
    facade. Pages have read-snapshot consistency and a final batch comparison;
    consumers must still use write-time authority checks when acting on observations.
-2. Add automatic advancement, task-level controls and bounded repair loops to the
-   persisted exact stages and dependency-checked dispatch primitive. Explicit
-   partial-completion projections exist. Avoid one giant procedure containing
-   every target and an unbounded maintenance loop.
+2. Add parameter-flow contracts and bounded repair loops above fixed-stage
+   advancement. Explicit partial-completion projections and task controls exist.
+   Avoid one giant procedure containing every target and an unbounded maintenance loop.
 3. Capability dependency and parameter-read contracts, including query membership
    and physical interactions. Exact revision matching remains conservative until
    reuse can be explained from complete dependencies.

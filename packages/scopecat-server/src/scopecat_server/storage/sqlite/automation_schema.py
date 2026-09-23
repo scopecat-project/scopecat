@@ -59,8 +59,12 @@ CREATE TABLE IF NOT EXISTS calibration_check_requests (
 CREATE TABLE IF NOT EXISTS calibration_tasks (
     sequence INTEGER PRIMARY KEY AUTOINCREMENT,
     task_id TEXT NOT NULL UNIQUE,
+    mode TEXT NOT NULL,
     record_json TEXT NOT NULL
 );
+
+CREATE INDEX IF NOT EXISTS calibration_tasks_mode_sequence
+ON calibration_tasks(mode, sequence);
 
 CREATE INDEX IF NOT EXISTS calibration_checks_scope_sequence
 ON calibration_check_requests(scope_hash, sequence);

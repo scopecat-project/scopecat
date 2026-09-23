@@ -191,6 +191,30 @@ try:
                 assert tasks.dispatch("teaching-round", "good").task == finished.task
                 assert tasks.list().items == (finished.task,)
                 expected_runs += 3
+                import time
+
+                automatic = tasks.create("automatic-round", plan, calls={
+                    key: task_call(check_zero, intent)
+                    for key, intent in intents.items()
+                })
+                paused = tasks.pause(
+                    automatic, actor="test", reason="review before start",
+                )
+                assert paused.task.mode == "paused"
+                tasks.start(paused, actor="test", reason="run in background")
+                deadline = time.monotonic() + 45
+                while time.monotonic() < deadline:
+                    automatic = tasks.get("automatic-round")
+                    if automatic.task.mode == "finished":
+                        break
+                    time.sleep(0.1)
+                assert automatic.task.mode == "finished", automatic
+                assert automatic.progress.complete and not automatic.progress.successful
+                assert tuple(stage.state for stage in automatic.progress.stages) == (
+                    "passed", "rejected", "passed", "blocked",
+                )
+                assert len(automatic.task.executions) == 3
+                expected_runs += 3
             assert len(lab.runs().items) == expected_runs
             assert lab.config.registry().entries == ()
             outcomes = {r.summary().outcome for r in lab.procedures.list().items}

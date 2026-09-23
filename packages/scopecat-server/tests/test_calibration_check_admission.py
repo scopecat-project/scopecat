@@ -5,13 +5,14 @@ from collections.abc import Callable, Generator, Iterator
 from contextlib import contextmanager
 from dataclasses import replace
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import pytest
 from fastapi.testclient import TestClient
 from scopecat.analysis.calibration import CHECK_RESULT
 from scopecat.automation import (
     AnalysisPublicationOutputRef,
+    ProcedureCancelCommand,
     ProcedureDefinitionRef,
     ProcedureRunListQuery,
     ProcedureStepBeginCommand,
@@ -37,9 +38,11 @@ from scopecat.daemon.calibration_checks import (
 )
 from scopecat.daemon.calibration_tasks import (
     CalibrationTaskCall,
+    CalibrationTaskControl,
     CalibrationTaskCreate,
     CalibrationTaskDispatch,
     CalibrationTaskListQuery,
+    CalibrationTaskRecord,
     CalibrationTaskView,
 )
 from scopecat.daemon.wire import (
@@ -69,6 +72,8 @@ from scopecat.sdk.compute import PYTHON_JSON_CODEC
 from scopecat_testkit.workflow_fixtures import load_config
 
 from scopecat_server import BackendConflict, LocalDaemonRuntime
+from scopecat_server.services.calibration_task_runner import CalibrationTaskRunner
+from scopecat_server.services.project_workers import ProjectProcedureWorkers
 from scopecat_server.snapshots import create_snapshot, restore_snapshot
 from scopecat_server.storage.sqlite.calibration_checks import CheckRequestPage
 
@@ -599,6 +604,15 @@ def test_task_survives_restart_and_current_format_restore(tmp_path: Path) -> Non
         runtime.application.calibration_tasks.create(spec)
         command = CalibrationTaskDispatch(task_id=spec.task_id, stage_id="a")
         retained = runtime.application.calibration_tasks.dispatch(command)
+        retained = runtime.application.calibration_tasks.control(
+            CalibrationTaskControl(
+                task_id=spec.task_id,
+                expected_revision=1,
+                action="start",
+                actor="test",
+                reason="continue after restart",
+            )
+        )
     with LocalDaemonRuntime(source) as restarted:
         assert restarted.application.calibration_tasks.get(spec.task_id) == retained
         assert restarted.application.calibration_tasks.dispatch(command) == retained
@@ -614,6 +628,145 @@ def test_task_survives_restart_and_current_format_restore(tmp_path: Path) -> Non
                 CalibrationTaskDispatch(task_id=spec.task_id, stage_id="b")
             ).task.executions
         ) == {"a", "b"}
+
+
+def test_task_controls_stop_new_admission_and_reject_stale_commands(
+    check_case: CheckCase,
+) -> None:
+    runtime, declaration, _ = check_case
+    tasks = runtime.application.calibration_tasks
+    spec = _task(declaration)
+    tasks.create(spec)
+    start = CalibrationTaskControl(
+        task_id=spec.task_id,
+        expected_revision=1,
+        action="start",
+        actor="test",
+        reason="run",
+    )
+    started = tasks.control(start)
+    assert tasks.control(start) == started
+    admitted = tasks.advance(spec.task_id)
+    assert set(admitted.task.executions) == {"a"}
+    assert tasks.advance(spec.task_id) == admitted  # sequential, no second child
+    pause = start.model_copy(update={"expected_revision": 2, "action": "pause"})
+    paused = tasks.control(pause)
+    assert tasks.advance(spec.task_id) == paused
+    with pytest.raises(BackendConflict, match="revision changed"):
+        tasks.control(start)
+    with pytest.raises(BackendConflict, match="paused"):
+        tasks.dispatch(CalibrationTaskDispatch(task_id=spec.task_id, stage_id="b"))
+    assert (
+        tasks.dispatch(CalibrationTaskDispatch(task_id=spec.task_id, stage_id="a"))
+        == paused
+    )
+    cancelled = tasks.control(
+        start.model_copy(update={"expected_revision": 3, "action": "cancel"})
+    )
+    assert tasks.advance(spec.task_id) == cancelled
+    assert tasks.running_ids() == []
+    with pytest.raises(BackendConflict, match="cancelled"):
+        tasks.control(start.model_copy(update={"expected_revision": 4}))
+    assert (
+        runtime.application.automation.get(admitted.task.executions["a"]).state
+        == "ready"
+    )
+
+
+def test_automatic_admission_failure_does_not_block_independent_stage(
+    check_case: CheckCase,
+) -> None:
+    runtime, declaration, _ = check_case
+    tasks = runtime.application.calibration_tasks
+    spec = _task(declaration)
+    tasks.create(spec)
+    start = CalibrationTaskControl(
+        task_id=spec.task_id,
+        expected_revision=1,
+        action="start",
+        actor="test",
+        reason="run",
+    )
+    tasks.control(start)
+    admit = tasks._admit
+    count = 0
+
+    def fail_first(
+        connection: sqlite3.Connection, task: CalibrationTaskRecord, stage_id: str
+    ) -> CalibrationTaskRecord:
+        nonlocal count
+        count += 1
+        run = admit(connection, task, stage_id)
+        if count == 1:
+            raise BackendConflict("changed setup")
+        return run
+
+    with patch.object(tasks, "_admit", side_effect=fail_first):
+        view = tasks.advance(spec.task_id)
+    assert view.task.dispatch_errors == {"a": "changed setup"}
+    assert set(view.task.executions) == {"b"}
+    assert len(runtime.application.automation.list(ProcedureRunListQuery()).items) == 1
+    assert tasks.advance(spec.task_id) == view
+    child = runtime.application.automation.get(view.task.executions["b"])
+    runtime.application.automation.cancel(
+        ProcedureCancelCommand(
+            procedure_run_id=child.procedure_run_id,
+            expected_run_revision=child.revision,
+            actor="test",
+            reason="finish independent branch",
+        )
+    )
+    with patch.object(tasks, "_admit") as retry:
+        stalled = tasks.advance(spec.task_id)
+    retry.assert_not_called()
+    assert stalled.task.dispatch_errors == {"a": "changed setup"}
+    resumed = tasks.control(start.model_copy(update={"expected_revision": 2}))
+    assert resumed.task.dispatch_errors == {}
+    assert set(tasks.advance(spec.task_id).task.executions) == {"a", "b"}
+
+
+def test_runner_recovers_admitted_handoff_and_rechecks_pause(
+    check_case: CheckCase,
+) -> None:
+    runtime, declaration, _ = check_case
+    tasks = runtime.application.calibration_tasks
+    spec = _task(declaration)
+    tasks.create(spec)
+    tasks.control(
+        CalibrationTaskControl(
+            task_id=spec.task_id,
+            expected_revision=1,
+            action="start",
+            actor="test",
+            reason="run",
+        )
+    )
+    admitted = tasks.advance(spec.task_id)  # daemon stopped before the worker handoff
+    workers = Mock(spec=ProjectProcedureWorkers)
+    runner = CalibrationTaskRunner(tasks, workers)
+    runner.tick()
+    workers.manage.assert_called_once_with(admitted.task.executions["a"])
+    workers.reset_mock()
+    discover = tasks.running_ids
+
+    def pause_after_discovery(after: int) -> list[tuple[int, str]]:
+        page = discover(after)
+        if page:
+            tasks.control(
+                CalibrationTaskControl(
+                    task_id=spec.task_id,
+                    expected_revision=2,
+                    action="pause",
+                    actor="test",
+                    reason="inspect",
+                )
+            )
+        return page
+
+    with patch.object(tasks, "running_ids", side_effect=pause_after_discovery):
+        runner.tick()
+    workers.manage.assert_not_called()
+    assert tasks.get(spec.task_id).task.executions == admitted.task.executions
 
 
 def test_exact_retry_survives_setup_change(check_case: CheckCase) -> None:

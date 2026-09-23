@@ -243,8 +243,9 @@ measured execution cost. Do not infer parallel safety from distinct target IDs.
 3. **Fixed tasks implemented:** target-expanded stage plans declare exact checks
    and dependencies, with explicit partial completion. Tasks persist fixed calls
    and enforce prerequisites when dispatching each stage atomically. See
-   [staged tasks](../how-to/preview-calibration-tasks.md). Automatic advancement,
-   task controls, parameter flow and bounded recovery remain to be built. Keep
+   [staged tasks](../how-to/preview-calibration-tasks.md). Sequential daemon advancement
+   and fenced start/pause/cancel controls are implemented. Parameter flow and bounded
+   repair remain to be built. Keep
    planning separate from resource dispatch and scientific policy.
 4. Add check-first maintenance, batching/resource scheduling and workbench views
    showing required/available/blocked capabilities with their evidence.

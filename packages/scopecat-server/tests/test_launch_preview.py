@@ -88,6 +88,7 @@ def client(
                     "object",
                     SimpleNamespace(
                         project_root=Path.cwd(),
+                        calibration_tasks=Mock(),
                         manual_previews=_manual_previews(),
                         author_revisions=service
                         or SimpleNamespace(
@@ -221,6 +222,7 @@ def test_admission_survives_dispatch_failure(tmp_path: Path) -> None:
                 "object",
                 SimpleNamespace(
                     project_root=tmp_path,
+                    calibration_tasks=Mock(),
                     automation=automation,
                     author_revisions=SimpleNamespace(
                         root=Path.cwd(),
@@ -332,6 +334,7 @@ def test_failed_process_requires_explicit_dispatch_even_after_restart(
         manager.tick()
         restored = ProjectProcedureWorkers(lambda: tmp_path, lambda _: "ready")
         restored.tick()
+        restored.manage("p1")  # task handoff must not undo the failed-worker pause
         spawn.assert_called_once()
         restored.dispatch("p1")
         assert spawn.call_count == 2
@@ -388,6 +391,7 @@ def test_http_lifespan_starts_and_stops_manager() -> None:
                         "object",
                         SimpleNamespace(
                             project_root=Path.cwd(),
+                            calibration_tasks=Mock(),
                             manual_previews=_manual_previews(),
                             author_revisions=SimpleNamespace(
                                 root=Path.cwd(),

@@ -116,14 +116,60 @@ authority. No earlier unrelated execution is silently adopted. Ready independent
 stages can be dispatched separately if another stage has an admission problem.
 
 The task and associations survive daemon restarts and current-format backup and
-restore. Development schema 90 introduces their storage; use a fresh data directory
+restore. Current development schema 91 stores task controls and indexes running
+tasks; use a fresh data directory
 for this format and retain older stores with their original environments.
 
-This API enforces dependencies at dispatch, but does not poll and dispatch future
-stages automatically. It does not switch setups, transfer predecessor outputs
-into later intents, refresh parameter branches, retry rejected stages or publish
-combined readiness. Calls are fixed at task creation. A repair or new observation
-needs a new task specification and ID. Cancellation of an already admitted
-procedure still uses the procedure API; unsubmitted stages remain unsubmitted.
-Automatic task advancement, task-level controls and bounded repair policies are
-the next layer above this admission primitive.
+## Run without keeping a notebook open
+
+Once the task specification is ready, ask the daemon to advance it:
+
+```python
+task = lab.calibration_tasks.start(task, actor="alice", reason="check this cooldown")
+# The notebook may now disconnect. Read current state after reconnecting:
+task = lab.calibration_tasks.get("cooldown-7/check-round-1")
+print(task.task.mode, task.task.dispatch_errors)
+print(task.progress)
+```
+
+The daemon polls running tasks and admits at most one stage per task at a time.
+Existing procedure workers load the configured application/author workspace and
+execute the retained definition. Its identity must still be available there;
+defining a procedure only in a notebook does not make it importable by a worker.
+Procedure leases and resource admission continue to apply. Different tasks may
+execute concurrently within the worker limit; distinct targets do not prove that
+their hardware is independent.
+
+A rejected check blocks its descendants; other independent stages may continue.
+An admission failure is retained in `task.task.dispatch_errors` and is not retried
+on every poll. Correct the cause and call `start` with the latest task view to
+clear admission errors and try again. A failed worker process stays paused and
+requires explicit procedure dispatch after inspection; starting the task does
+not reset that worker pause. Waiting input or attention also stops sequential
+advancement until resolved through the procedure's existing controls.
+
+```python
+task = lab.calibration_tasks.pause(task, actor="alice", reason="inspect equipment")
+task = lab.calibration_tasks.start(task, actor="alice", reason="inspection complete")
+task = lab.calibration_tasks.cancel(
+    task, actor="alice", reason="abandon remaining checks"
+)
+```
+
+Pause and cancellation stop **new stage admission**, including manual dispatch.
+Already admitted procedures may continue; use their procedure/run controls to
+request cancellation and inspect the actual outcome. Task cancellation is final
+and does not mean hardware has stopped or that the plan completed. Its progress
+still reports the retained stage results. A finished task likewise cannot restart;
+`progress.successful` distinguishes complete success from terminal partial results.
+
+Control commands carry the revision from the supplied view, actor and reason.
+An exact retry is safe; a stale view cannot silently undo a newer control. Reload
+the task before issuing a different command after another operator changes it.
+The daemon recovers running tasks and admitted worker handoffs after restart;
+paused/cancelled tasks remain so. There is no automatic retry of scientific failures.
+
+Tasks do not switch setups, transfer predecessor outputs into later intents,
+refresh parameter branches or publish combined readiness. Calls are fixed at task
+creation. A repair or new observation needs a new task specification and ID.
+Adaptive parameter flow, bounded repair and scheduling policy remain separate work.

@@ -96,6 +96,7 @@ from scopecat.daemon.calibration_checks import (
     CalibrationTaskPreview,
 )
 from scopecat.daemon.calibration_tasks import (
+    CalibrationTaskControl,
     CalibrationTaskCreate,
     CalibrationTaskDispatch,
     CalibrationTaskListQuery,
@@ -361,6 +362,7 @@ from scopecat_server.http.procedure_operator import (
     read_procedure_operator,
 )
 from scopecat_server.retained_request import AnalysisCall, ComparisonCall
+from scopecat_server.services.calibration_task_runner import CalibrationTaskRunner
 from scopecat_server.services.project_workers import ProjectProcedureWorkers
 from scopecat_server.services.revision_workers import RevisionWorkers
 from scopecat_server.storage.sqlite.author_revision_repository import (
@@ -425,14 +427,17 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
         resolve_root=procedure_root,
     )
 
+    task_runner = CalibrationTaskRunner(application.calibration_tasks, project_workers)
     retained_workers = RevisionWorkers("scopecat_server.retained_worker")
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI) -> AsyncGenerator[None]:
         project_workers.start()
+        task_runner.start()
         try:
             yield
         finally:
+            task_runner.stop()
             project_workers.stop()
             application.author_revisions.close()
             retained_workers.close()
@@ -1740,6 +1745,12 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
         command: CalibrationTaskDispatch,
     ) -> CalibrationTaskView:
         return application.calibration_tasks.dispatch(command)
+
+    @app.post(f"{_API_PREFIX}/calibration-tasks/control")
+    def control_calibration_task(
+        command: CalibrationTaskControl,
+    ) -> CalibrationTaskView:
+        return application.calibration_tasks.control(command)
 
     @app.get(f"{_API_PREFIX}/calibration-tasks")
     def list_calibration_tasks(

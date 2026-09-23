@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -43,11 +44,24 @@ class CalibrationTaskCreate(BaseModel):
         return self
 
 
+class CalibrationTaskControl(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    task_id: str = Field(min_length=1)
+    expected_revision: int = Field(ge=1)
+    action: Literal["start", "pause", "cancel"]
+    actor: str = Field(min_length=1)
+    reason: str = Field(min_length=1)
+
+
 class CalibrationTaskRecord(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     specification: CalibrationTaskCreate
     executions: dict[str, str] = Field(default_factory=dict)
     created_at: datetime
+    mode: Literal["manual", "running", "paused", "cancelled", "finished"] = "manual"
+    control_revision: int = 1
+    last_control: CalibrationTaskControl | None = None
+    dispatch_errors: dict[str, str] = Field(default_factory=dict)
 
 
 class CalibrationTaskView(BaseModel):

@@ -33,17 +33,33 @@ class CalibrationTaskStore:
         self, connection: sqlite3.Connection, task: CalibrationTaskRecord
     ) -> None:
         connection.execute(
-            "INSERT INTO calibration_tasks(task_id, record_json) VALUES (?, ?)",
-            (task.specification.task_id, task.model_dump_json()),
+            "INSERT INTO calibration_tasks(task_id, mode, record_json) "
+            "VALUES (?, ?, ?)",
+            (task.specification.task_id, task.mode, task.model_dump_json()),
         )
 
     def update(
         self, connection: sqlite3.Connection, task: CalibrationTaskRecord
     ) -> None:
         connection.execute(
-            "UPDATE calibration_tasks SET record_json = ? WHERE task_id = ?",
-            (task.model_dump_json(), task.specification.task_id),
+            "UPDATE calibration_tasks SET mode = ?, record_json = ? WHERE task_id = ?",
+            (task.mode, task.model_dump_json(), task.specification.task_id),
         )
+
+    def running_ids(
+        self, connection: sqlite3.Connection, after: int
+    ) -> list[tuple[int, str]]:
+        rows = cast(
+            "list[sqlite3.Row]",
+            connection.execute(
+                "SELECT sequence, task_id FROM calibration_tasks "
+                "WHERE mode = 'running' AND sequence > ? ORDER BY sequence LIMIT 50",
+                (after,),
+            ).fetchall(),
+        )
+        return [
+            (cast("int", row["sequence"]), cast("str", row["task_id"])) for row in rows
+        ]
 
     def list(
         self, connection: sqlite3.Connection, query: CalibrationTaskListQuery

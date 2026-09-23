@@ -83,6 +83,7 @@ from scopecat.daemon.calibration_checks import (
     CalibrationTaskPreview,
 )
 from scopecat.daemon.calibration_tasks import (
+    CalibrationTaskControl,
     CalibrationTaskCreate,
     CalibrationTaskDispatch,
     CalibrationTaskListQuery,
@@ -630,6 +631,13 @@ class DaemonClient:
     ) -> CalibrationTaskView:
         return self._post_model(
             f"{_API_PREFIX}/calibration-tasks/dispatch", command, CalibrationTaskView
+        )
+
+    def control_calibration_task(
+        self, command: CalibrationTaskControl
+    ) -> CalibrationTaskView:
+        return self._post_model(
+            f"{_API_PREFIX}/calibration-tasks/control", command, CalibrationTaskView
         )
 
     def preview_calibration_task(
