@@ -4,6 +4,9 @@ For a complete runnable starting point, open the **参数校准与恢复** (`cal
 [tutorial sandbox](../tutorials/teaching-sandboxes.md). Its local author module
 contains the synthetic model, fitting, acceptance policy and durable procedure.
 The notebook covers one target, pause/resume and rejection without publication.
+It also includes check-only requests: both a passing check and an out-of-spec check
+complete successfully as procedures, retaining typed evidence without changing
+the parameter branch. Read the scientific result separately from execution status.
 Then use **联合校准与耦合验证** (`joint-calibration`) to observe two individually
 accepted candidates fail together under a declared synthetic coupling model.
 It also demonstrates missing target coverage and recovery after composition.

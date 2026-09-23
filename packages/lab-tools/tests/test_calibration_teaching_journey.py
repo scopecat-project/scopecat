@@ -12,7 +12,7 @@ from lab_teaching.project import create_project
 
 
 @pytest.mark.parametrize(
-    ("topic", "expected_runs"), [("calibration", 4), ("joint-calibration", 12)]
+    ("topic", "expected_runs"), [("calibration", 6), ("joint-calibration", 12)]
 )
 def test_calibration_notebook_resumes_and_retains_rejection(
     tmp_path: Path, topic: str, expected_runs: int

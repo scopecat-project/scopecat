@@ -89,6 +89,60 @@ def verify_zero(
     )
 
 
+@dataclass(frozen=True)
+class CheckResult:
+    passed: bool
+    residual: float
+    tolerance: float
+
+
+CHECK_RESULT = sc.AnalysisFactSchema("teaching.zero-check.v1", CheckResult)
+
+
+@sc.analysis_step(id="teaching.check-zero")
+def assess_zero(context: sc.AnalysisContext, *, tolerance: float) -> sc.Analysis:
+    data = context.measurements()
+    error = abs(float(data["residual"].require_values()[0]))
+    return context.result("当前参数健康检查").fact(
+        "check", CheckResult(error <= tolerance, error, tolerance), schema=CHECK_RESULT
+    )
+
+
+class CheckIntent(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid", allow_inf_nan=False)
+
+    initial: ParameterResolution
+    disturbance: float = 0.002
+    tolerance: float = Field(default=0.01, gt=0)
+
+    @field_validator("initial", mode="before")
+    @classmethod
+    def thaw_initial(cls, value: object) -> object:
+        return thaw_json_value(value)
+
+    @model_validator(mode="after")
+    def require_saved_parameters(self) -> Self:
+        if (
+            self.initial.config_source.parameters is None
+            or self.initial.config_source.overrides
+        ):
+            raise ValueError("健康检查需要已保存的精确参数版本")
+        return self
+
+
+@sc.procedure(id="teaching.check-zero", version="1", intent=CheckIntent)
+def check_zero(ctx: LabProcedureContext, intent: CheckIntent) -> None:
+    measurement = ctx.run(
+        "check",
+        measure_zero.build(disturbance=intent.disturbance),
+        config=intent.initial.config,
+        config_source=intent.initial.config_source,
+    )
+    ctx.analyze_run("assess", measurement, assess_zero(tolerance=intent.tolerance))
+    # 检查完成不等于指标达标；保留负面结果，由维护策略决定下一步。
+    # 不生成参数候选，不发布分支，也不声称检查结果永远适用。
+
+
 class CalibrationIntent(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid", allow_inf_nan=False)
 

@@ -52,7 +52,8 @@ def install_lesson(root: Path, topic: str) -> Path:
         _ = manifest.write_text(
             manifest.read_text(encoding="utf-8").replace(
                 "[lab.capabilities]",
-                f'[lab.capabilities]\nprocedures = ["{procedure}"]',
+                f'[lab.capabilities]\nprocedures = ["{procedure}", '
+                '"my_experiment.calibration:check_zero"]',
             ),
             encoding="utf-8",
         )

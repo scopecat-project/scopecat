@@ -153,6 +153,11 @@ not scientific freshness policies or completed human usability validation.
 
 ## Remaining implementation order
 
+The [multi-target maintenance direction](calibration-maintenance.md) separates
+initial tune-up, routine checks and recovery. The single-target sandbox now also
+retains positive and negative check-only evidence without creating candidates or
+advancing a branch. Procedure completion is distinct from the measured outcome.
+
 1. Define scientific freshness/applicability over explicit parameter dependencies,
    subject, setup and policy; do not reuse the retired full-config projection.
 2. Collect focused usability feedback on the single-target and joint notebooks
