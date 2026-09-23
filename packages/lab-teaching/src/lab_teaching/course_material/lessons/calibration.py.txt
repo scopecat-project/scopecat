@@ -6,9 +6,11 @@ from typing import Self
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 import scopecat as sc
-from scopecat.api.procedures import LabProcedureContext
+from scopecat.api.lab import LabClient
+from scopecat.api.procedures import LabProcedureContext, ProcedureHandle
 from scopecat.api.run import RunHandle
-from scopecat.automation.calibration import CalibrationScope
+from scopecat.automation import AnalysisPublicationOutputRef, ProcedureRun, RunOutputRef
+from scopecat.automation.calibration import CalibrationScope, CheckEvidence
 from scopecat.daemon.views import ParameterResolution
 from scopecat.kernel.frozen import thaw_json_value
 from scopecat.records.parameter_branch import ParameterBranch
@@ -154,6 +156,27 @@ def check_zero(ctx: LabProcedureContext, intent: CheckIntent) -> None:
     ctx.analyze_run("assess", measurement, assess_zero(tolerance=intent.tolerance))
     # 检查完成不等于指标达标；保留负面结果，由维护策略决定下一步。
     # 不生成参数候选，不发布分支，也不声称检查结果永远适用。
+
+
+def read_check(
+    lab: LabClient, handle: ProcedureHandle, request: ProcedureRun
+) -> CheckEvidence | None:
+    """读取本专题的检查布局；未完成或旧定义不能伪装成已通过。"""
+    if request.definition != check_zero.ref:
+        return None
+    try:
+        acquisition = handle.step("check")
+        analysis = handle.step("assess")
+    except KeyError:
+        return None
+    if not isinstance(acquisition.output, RunOutputRef) or not isinstance(
+        analysis.output, AnalysisPublicationOutputRef
+    ):
+        return None
+    measured = lab.get_run(acquisition.output.run_id)
+    report = measured.published_analysis(analysis.output.analysis_record_id)
+    result = report.fact_as("check", CHECK_RESULT)
+    return CheckEvidence(measured.snapshot, result.scope, report.id, result.passed)
 
 
 class CalibrationIntent(BaseModel):

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Literal, Protocol, cast
 from uuid import uuid4
 
@@ -64,6 +64,13 @@ from scopecat.automation import (
     ProcedureWorker,
     RegisteredProcedure,
     RunOutputRef,
+)
+from scopecat.automation.calibration import (
+    CalibrationContext,
+    CalibrationScope,
+    CheckEvidence,
+    CheckSelection,
+    select_calibration_check,
 )
 from scopecat.automation.recovery import (
     ProcedureRecoveryAdapter,
@@ -164,6 +171,40 @@ class ProcedureHandlePage:
 
     items: tuple[ProcedureHandle, ...] = ()
     next_cursor: int | None = None
+
+
+@dataclass(frozen=True)
+class ProcedureCheckHistory:
+    """Bounded observational history, not a transaction or readiness authority."""
+
+    evidence: tuple[CheckEvidence, ...]
+    unresolved_procedures: tuple[str, ...]
+    scanned: int
+    incomplete_reasons: tuple[
+        Literal["scan_limit", "unresolved_checks", "journal_changed"], ...
+    ]
+
+    @property
+    def complete(self) -> bool:
+        return not self.incomplete_reasons
+
+    def select(
+        self,
+        *,
+        requested_scope: CalibrationScope,
+        current: CalibrationContext,
+        now: datetime,
+        max_age: timedelta,
+    ) -> CheckSelection:
+        """Select evidence without letting the caller omit query completeness."""
+        return select_calibration_check(
+            self.evidence,
+            requested_scope=requested_scope,
+            current=current,
+            now=now,
+            max_age=max_age,
+            history_complete=self.complete,
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -1315,6 +1356,82 @@ class LabProcedureOperations:
                 ProcedureHandle(self, run.procedure_run_id) for run in page.items
             ),
             next_cursor=page.next_cursor,
+        )
+
+    def check_history(
+        self,
+        *,
+        procedure_id: str,
+        read: Callable[[ProcedureHandle, ProcedureRun], CheckEvidence | None],
+        include: Callable[[ProcedureRun], bool] = lambda _run: True,
+        max_requests: int = 200,
+        page_size: int = 50,
+    ) -> ProcedureCheckHistory:
+        """Read all states, retaining unresolved checks instead of skipping them.
+
+        The laboratory reader maps its step/fact layout to CheckEvidence; None
+        means unresolved. The optional predicate narrows scope from frozen request
+        intent, never from whether a check passed. Exceptions propagate rather
+        than pretending missing evidence is a complete history. This initial
+        bounded reader scans the procedure journal, not a calibration index.
+
+        Concurrent journal changes detected during reading make the result
+        incomplete. This remains an observational query, not a transaction fence.
+        """
+        if max_requests < 1 or not 1 <= page_size <= 200:
+            raise ValueError("history requires a positive budget and page size 1..200")
+        evidence: list[CheckEvidence] = []
+        unresolved: list[str] = []
+        observed: list[ProcedureRun] = []
+        cursor: int | None = None
+        scanned = 0
+        first_id: str | None = None
+        exhausted = False
+        while scanned < max_requests:
+            page = self._client.list_procedures(
+                ProcedureRunListQuery(
+                    limit=min(page_size, max_requests - scanned),
+                    cursor=cursor,
+                )
+            )
+            if scanned == 0 and page.items:
+                first_id = page.items[0].procedure_run_id
+            scanned += len(page.items)
+            for run in page.items:
+                if run.definition.id != procedure_id or not include(run):
+                    continue
+                observed.append(run)
+                item = read(ProcedureHandle(self, run.procedure_run_id), run)
+                if item is None:
+                    unresolved.append(run.procedure_run_id)
+                else:
+                    evidence.append(item)
+            if page.next_cursor is None:
+                exhausted = True
+                break
+            cursor = page.next_cursor
+        changed = False
+        for run in observed:
+            if self.snapshot(run.procedure_run_id).revision != run.revision:
+                changed = True
+                if run.procedure_run_id not in unresolved:
+                    unresolved.append(run.procedure_run_id)
+        latest = self._client.list_procedures(ProcedureRunListQuery(limit=1))
+        latest_id = latest.items[0].procedure_run_id if latest.items else None
+        reasons: list[
+            Literal["scan_limit", "unresolved_checks", "journal_changed"]
+        ] = []
+        if not exhausted:
+            reasons.append("scan_limit")
+        if unresolved:
+            reasons.append("unresolved_checks")
+        if changed or latest_id != first_id:
+            reasons.append("journal_changed")
+        return ProcedureCheckHistory(
+            evidence=tuple(evidence),
+            unresolved_procedures=tuple(unresolved),
+            scanned=scanned,
+            incomplete_reasons=tuple(reasons),
         )
 
     def create_schedule(

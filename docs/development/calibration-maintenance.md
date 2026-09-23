@@ -97,9 +97,41 @@ No matching history returns `no_matching_evidence`.
 An incomplete/truncated history returns `incomplete_history`, regardless of the
 visible results. A query that retrieves only successful analyses is insufficient:
 include failed/unfinished requested checks with their original scope and no result.
-The current selector does not query the daemon or establish query completeness.
-The teaching notebook supplies both checks from its known bounded exercise and
-demonstrates that reversing input order cannot resurrect the earlier passing check.
+The pure selector does not query the daemon or establish query completeness.
+The notebook now obtains its history from `lab.procedures.check_history()` instead
+of maintaining an in-memory list of checks.
+
+### Reading the procedure journal
+
+`check_history(procedure_id=..., read=...)` follows bounded newest-first pages over
+all procedure states, including requests that have not reached measurement. The
+laboratory reader maps that procedure's step/fact layout to `CheckEvidence`; None
+means an unresolved check, never an ignored failure. An optional `include` predicate
+can narrow the intended scope from frozen request intent, not from outcome/state.
+Reader and transport errors propagate rather than producing an apparently complete
+history. Unknown procedure definitions must be unresolved or explicitly excluded
+under a declared request-scope policy, not decoded through an old-code fallback.
+
+`ProcedureCheckHistory` reports evidence, unresolved request IDs, scanned count
+and `incomplete_reasons`: `scan_limit`, `unresolved_checks` or `journal_changed`.
+Its `complete` property is true only when those reasons are absent. Call
+`history.select(...)` to carry this completeness into evidence selection
+automatically. Rechecking
+observed request revisions and the journal head detects changes during reading;
+this is still an observational query, not a transaction fence or permission to
+publish. A new request can arrive after the query returns.
+
+The current implementation scans the general procedure journal with an explicit
+budget (200 requests by default). Unrelated requests count toward that budget;
+there is no specialized calibration index or large-catalog completeness claim.
+Before scaling maintenance, add server-side scope queries with an explicit
+consistency contract, retaining this bounded failure behavior.
+
+The real-daemon notebook journey covers pagination, scan-budget exhaustion,
+unstarted checks and history recovery after reconnecting. A separate assertion
+advances a procedure during reading and confirms that only a later stable read
+can report complete history. It never filters out a newer negative check to
+recover an older positive result.
 
 ## Dependency capture has explicit limits
 
@@ -164,8 +196,9 @@ measured execution cost. Do not infer parallel safety from distinct target IDs.
    procedures; passing and negative scientific outcomes leave the branch unchanged.
 2. **Partially implemented:** scoped checks, exact-context applicability and
    selection from explicit complete histories, with inspectable reasons. Still
-   needed: capability requirements/dependencies, catalog query integration and
-   resolved parameter dependency capture. Avoid a second analysis/evidence store.
+   needed: capability requirements/dependencies, indexed/scoped catalog queries
+   for scale and resolved parameter dependency capture. Bounded procedure-journal
+   query integration is implemented. Avoid a second analysis/evidence store.
 3. Build target-expanded, staged plans on the durable procedure machinery, with
    bounded recovery and explicit partial completion. Keep planning separate from
    resource dispatch and scientific policy.

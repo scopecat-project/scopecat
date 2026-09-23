@@ -12,7 +12,7 @@ from lab_teaching.project import create_project
 
 
 @pytest.mark.parametrize(
-    ("topic", "expected_runs"), [("calibration", 6), ("joint-calibration", 12)]
+    ("topic", "expected_runs"), [("calibration", 7), ("joint-calibration", 12)]
 )
 def test_calibration_notebook_resumes_and_retains_rejection(
     tmp_path: Path, topic: str, expected_runs: int
@@ -61,7 +61,36 @@ try:
                 stop_project(project)
                 start_project(project, timeout=120)
         with project.connect() as lab:
-            assert len(lab.runs().items) == int(sys.argv[3])
+            expected_runs = int(sys.argv[3])
+            if sys.argv[2] == "calibration":
+                from functools import partial
+                from my_experiment.calibration import (
+                    CheckIntent, check_zero, read_check,
+                )
+
+                concurrent = lab.procedures.submit(
+                    check_zero,
+                    CheckIntent(initial=lab.parameters.resolve(namespace["accepted"].revision)),
+                    request_key="history-concurrent-progress",
+                )
+
+                def advancing_reader(handle, snapshot):
+                    if handle.id == concurrent.id:
+                        handle.resume()
+                    return read_check(lab, handle, snapshot)
+
+                changed = lab.procedures.check_history(
+                    procedure_id=check_zero.ref.id, read=advancing_reader, page_size=1,
+                )
+                assert not changed.complete
+                assert "journal_changed" in changed.incomplete_reasons
+                assert concurrent.id in changed.unresolved_procedures
+                stable = lab.procedures.check_history(
+                    procedure_id=check_zero.ref.id, read=partial(read_check, lab),
+                )
+                assert stable.complete
+                expected_runs += 1
+            assert len(lab.runs().items) == expected_runs
             assert lab.config.registry().entries == ()
             outcomes = {r.summary().outcome for r in lab.procedures.list().items}
             assert outcomes == {"succeeded", "failed"}
