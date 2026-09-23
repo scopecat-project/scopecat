@@ -15,6 +15,8 @@ export function CurrentCapabilities({
 }) {
   const [expanded, setExpanded] = useState(false);
   const [branch, setBranch] = useState("");
+  const [parameterId, setParameterId] = useState("");
+  const [source, setSource] = useState<"branch" | "revision">("branch");
   const [setupId, setSetupId] = useState("");
   const [targetId, setTargetId] = useState("");
   const [resolution, setResolution] = useState<Resolution>();
@@ -59,11 +61,26 @@ export function CurrentCapabilities({
     setError("");
     setResolution(undefined);
     try {
+      const parameters =
+        source === "revision"
+          ? await apiData(
+              apiClient.GET("/api/v1/parameters/revisions/{revision_id}", {
+                params: { path: { revision_id: parameterId.trim() } },
+              }),
+            )
+          : undefined;
       setResolution(
         await apiData(
           apiClient.POST("/api/v1/measurement-context/resolve", {
             body: {
-              branch: branch.trim(),
+              ...(parameters
+                ? {
+                    parameters: {
+                      revision_id: parameters.id,
+                      content_hash: parameters.content_hash,
+                    },
+                  }
+                : { branch: branch.trim() }),
               setup: selectedSetup
                 ? { revision_id: selectedSetup.id, content_hash: selectedSetup.content_hash }
                 : null,
@@ -84,12 +101,12 @@ export function CurrentCapabilities({
       className="border rounded p-3 space-y-3"
       onToggle={(event) => setExpanded(event.currentTarget.open)}
     >
-      <summary>Capability evidence from a parameter branch</summary>
+      <summary>Capability evidence from saved parameters</summary>
       <p>
-        Choose a parameter branch and setup for this exact sample revision. Resolving captures their
-        current versions without running an experiment or changing defaults. This entry selects one
-        inline sample in the subject role or a registered single-member target. Connected targets
-        are not supported by the current target projection.
+        Choose a parameter branch or saved revision and setup for this exact sample revision.
+        Resolving captures their current versions without running an experiment or changing
+        defaults. This entry selects one inline sample in the subject role or a registered
+        single-member target. Connected targets are not supported by the current target projection.
       </p>
       <form
         onSubmit={(event) => {
@@ -131,12 +148,27 @@ export function CurrentCapabilities({
             </button>
           )}
           <label>
-            Parameter branch
+            Parameter source
+            <select
+              value={source}
+              onChange={(event) => {
+                setSource(event.target.value === "revision" ? "revision" : "branch");
+                setResolution(undefined);
+                setError("");
+              }}
+            >
+              <option value="branch">Parameter branch</option>
+              <option value="revision">Exact saved revision</option>
+            </select>
+          </label>
+          <label>
+            {source === "branch" ? "Parameter branch" : "Saved parameter revision"}
             <input
               required
-              value={branch}
+              value={source === "branch" ? branch : parameterId}
               onChange={(event) => {
-                setBranch(event.target.value);
+                if (source === "branch") setBranch(event.target.value);
+                else setParameterId(event.target.value);
                 setResolution(undefined);
                 setError("");
               }}
@@ -163,7 +195,7 @@ export function CurrentCapabilities({
           <button
             type="submit"
             disabled={
-              !branch.trim() ||
+              !(source === "branch" ? branch.trim() : parameterId.trim()) ||
               pending ||
               Boolean(setupId && !selectedSetup) ||
               Boolean(targetId && !selectedTarget)
@@ -182,7 +214,7 @@ export function CurrentCapabilities({
       {targets.error && (
         <p role="alert">Could not load registered targets: {targets.error.message}.</p>
       )}
-      {pending && <p role="status">Resolving current versions…</p>}
+      {pending && <p role="status">Resolving measurement context…</p>}
       {error && <p role="alert">{error}</p>}
       {resolution && (
         <section key={attempt} aria-label="Resolved current capability context">
@@ -194,8 +226,8 @@ export function CurrentCapabilities({
             {resolution.setup.revision_id}
           </p>
           <p>
-            These versions are now frozen for this report. Resolve again to follow later branch or
-            setup changes.
+            These versions are now frozen for this report. Resolve again to capture changes to a
+            selected branch or the active setup.
           </p>
           <p>Scenario: {resolution.context.scenario?.id ?? "physical"}</p>
           <details>
@@ -204,7 +236,7 @@ export function CurrentCapabilities({
           </details>
           <CalibrationProfiles
             context={resolution.context}
-            contextDescription="Uses the explicitly resolved branch, setup and sample versions."
+            contextDescription="Uses the explicitly resolved parameter, setup and sample versions."
           />
         </section>
       )}

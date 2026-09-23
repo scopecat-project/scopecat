@@ -40,12 +40,16 @@ the previous report, including while the new context is loading or fails to load
 The evaluation time is current, but its requested context is historical: this
 does not assess today's branch head, setup or overall sample readiness.
 
-## Resolve a branch and setup without a previous measurement
+## Resolve saved parameters and setup without a previous measurement
 
-In the sample workspace, expand **Capability evidence from a parameter branch**.
-Enter the branch name, choose the current active setup or a saved setup, then
-click **Resolve capability context**. The result shows the captured branch
-generation, parameter revision, setup revision and scenario. Select a saved
+In the sample workspace, expand **Capability evidence from saved parameters**.
+Choose **Parameter branch** or **Exact saved revision**, enter its name, and choose
+the current active setup or a saved setup. Click **Resolve capability context**.
+For an exact revision, the workbench reads that one saved version and supplies its
+content hash automatically; it does not create a branch or load the whole parameter
+library. A failed lookup clears the old result and does not submit a context query.
+The result shows the parameter revision, setup revision and scenario, plus the
+captured branch generation when a branch was selected. Select a saved
 profile below it to inspect evidence. No measurement, task or global-default
 change is required.
 

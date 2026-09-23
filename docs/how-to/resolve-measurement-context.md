@@ -30,6 +30,10 @@ nor created. The API requires exactly one of `branch` and `parameters`. Both pat
 use the same revision validation and scientific binding resolver. A stale content
 hash is rejected rather than replaced with the current content.
 
+The sample workbench exposes the same choice under **Capability evidence from
+saved parameters**. Select **Exact saved revision** and enter the saved version's
+name; the workbench obtains its exact reference without asking you to copy a hash.
+
 Omitting `setup` reads the active setup in the same transaction as the parameter
 resolution. Pass a saved `SetupRevision` or exact reference to select another setup. For a registered
 target, pass `target=target.ref` instead of `samples`; the current execution

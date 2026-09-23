@@ -1028,6 +1028,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/parameters/revisions/{revision_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Parameter Revision */
+        get: operations["get_parameter_revision_api_v1_parameters_revisions__revision_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/procedures": {
         parameters: {
             query?: never;
@@ -12918,6 +12935,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ParameterBranchPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_parameter_revision_api_v1_parameters_revisions__revision_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                revision_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ParameterRevision"];
                 };
             };
             /** @description Validation Error */
