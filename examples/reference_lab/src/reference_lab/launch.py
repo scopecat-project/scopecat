@@ -216,7 +216,8 @@ def launch_provider(lab: LabClient, request: LaunchRequest) -> LaunchResult:
                 config_content_hash=config_content_hash(candidate),
                 configuration_meaning=(
                     "Compiles the proposed delay; has not run or been "
-                    "verified. Default acceptance remains a separate action."
+                    "verified. Scientific acceptance and parameter publication "
+                    "remain separate actions."
                 ),
                 executions=ExactQuantity(
                     value=1,

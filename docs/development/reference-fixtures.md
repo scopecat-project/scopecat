@@ -103,6 +103,16 @@ recovery, unchanged failed-procedure history, exact recovery provenance and
 idempotency/conflict checks. Run counts compare against the existing store rather
 than assuming the service belongs to only one test.
 
+The launcher suite starts two equipment-only daemons to retain foreign-endpoint
+isolation coverage. Only the target daemon receives explicit parameter revisions;
+catalog, preflight, control edits, candidate review and HTTP dispatch do not rely
+on a global parameter default. Its stale-preview test now changes executable
+setup authority: new work from the old review is rejected, while replay of an
+existing admission remains idempotent. No-op candidate diagnostics use a separate
+saved parameter revision rather than temporarily changing a global default.
+Selecting inputs is not scientific acceptance; preflight reports selected context
+and proposed candidate separately.
+
 The legacy gallery still starts with transitional parameter defaults. Reassess
 its calibration/default-publication assertions against the new design; retain
 needed behaviors in focused tests and retire the old consumers. There is no
