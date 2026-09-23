@@ -12,7 +12,8 @@ from lab_teaching.project import create_project
 
 
 @pytest.mark.parametrize(
-    ("topic", "expected_runs"), [("calibration", 7), ("joint-calibration", 12)]
+    ("topic", "expected_runs"),
+    [("calibration", 7), ("joint-calibration", 12), ("task-calibration", 12)],
 )
 def test_calibration_notebook_resumes_and_retains_rejection(
     tmp_path: Path, topic: str, expected_runs: int
@@ -57,7 +58,7 @@ try:
                 # Wrong-interpreter protection is exercised by test_sandboxes.
                 continue
             exec(compile(source, str(notebook), "exec"), namespace)
-            if "request_id = request.id" in source:
+            if "request_id = request.id" in source or "task_ids =" in source:
                 stop_project(project)
                 start_project(project, timeout=120)
         with project.connect() as lab:

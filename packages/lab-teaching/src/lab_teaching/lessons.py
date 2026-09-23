@@ -1,5 +1,6 @@
 """独立专题的官方 Notebook 与源码起点。"""
 
+import json
 from importlib.resources import files
 from pathlib import Path
 
@@ -10,6 +11,7 @@ TOPICS = {
     "groups": "分组分析与历史",
     "calibration": "参数校准与恢复",
     "joint-calibration": "联合校准与耦合验证",
+    "task-calibration": "后台标定与最终发布",
 }
 
 
@@ -37,23 +39,31 @@ def install_lesson(root: Path, topic: str) -> Path:
         _ = (root / "src/my_experiment/teaching.py").write_bytes(
             lesson.joinpath("compute_experiment.py.txt").read_bytes()
         )
-    if topic in ("calibration", "joint-calibration"):
+    if topic in ("calibration", "joint-calibration", "task-calibration"):
         _ = (root / "src/my_experiment/calibration.py").write_bytes(
             lesson.joinpath("calibration.py.txt").read_bytes()
         )
         (root / "src/my_experiment/teaching.py").unlink()
         procedure = "my_experiment.calibration:calibrate"
-        if topic == "joint-calibration":
+        if topic in ("joint-calibration", "task-calibration"):
             _ = (root / "src/my_experiment/joint_calibration.py").write_bytes(
                 lesson.joinpath("joint_calibration.py.txt").read_bytes()
             )
             procedure = "my_experiment.joint_calibration:calibrate_joint"
+        procedures = [procedure, "my_experiment.calibration:check_zero"]
+        if topic == "task-calibration":
+            _ = (root / "src/my_experiment/task_calibration.py").write_bytes(
+                lesson.joinpath("task_calibration.py.txt").read_bytes()
+            )
+            procedures = [
+                "my_experiment.task_calibration:fit_stage",
+                "my_experiment.task_calibration:finalize",
+            ]
         manifest = root / "scopecat.toml"
         _ = manifest.write_text(
             manifest.read_text(encoding="utf-8").replace(
                 "[lab.capabilities]",
-                f'[lab.capabilities]\nprocedures = ["{procedure}", '
-                '"my_experiment.calibration:check_zero"]',
+                f"[lab.capabilities]\nprocedures = {json.dumps(procedures)}",
             ),
             encoding="utf-8",
         )

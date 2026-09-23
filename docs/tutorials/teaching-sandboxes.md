@@ -32,6 +32,7 @@ Each topic has its own environment and one complete Notebook:
 | `groups` | Analyze two groups from a retained scan and reopen their summaries |
 | `calibration` | Fit, verify and publish a synthetic zero offset; recover paused work and retain check-only evidence without changing parameters |
 | `joint-calibration` | Compose two candidates, remeasure the joint settings and distinguish coupled failure from missing target coverage |
+| `task-calibration` | Submit background fit stages and a final verification/publication procedure; observe acceptance, scientific rejection and concurrent branch conflicts |
 
 Open the generated project folder and select its `.venv` kernel. The first cell
 rejects the wrong interpreter. Run All before making one small change. The current

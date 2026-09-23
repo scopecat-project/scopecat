@@ -145,10 +145,16 @@ mode, proposal IDs, verification scope and policy in that intent **before**
 starting the task. Supply the exact sample selectors needed by the final procedure.
 Do not look up a newer branch head or setup to repair a conflict during replay.
 
+For a runnable starting point, open **后台标定与最终发布** (`task-calibration`) in
+[tutorial sandboxes](../tutorials/teaching-sandboxes.md). Its source contains the
+fit stages, task creation and final verification/publication procedure. The three
+requests show acceptance, scientific rejection and a concurrent branch conflict.
+
 Inside the procedure, each `intent.calibration_task.checks[stage_id]` contains the
 adopted measurement and analysis identity, scientific binding, scope and result.
-Use `evidence.measurement.run_id` and `evidence.analysis_record_id` to construct
-an `AnalysisPublicationOutputRef` with `RunAnalysisSubject`. Choose the proposal
+Use `intent.calibration_task.measurement(stage_id)` and
+`intent.calibration_task.analysis(stage_id)` for the durable references consumed
+by `ctx.run_handle()` and `ctx.published_analysis()`. Choose the proposal
 from that exact analysis according to the captured intent, then use
 [`ctx.combine_parameter_candidates()`](automate-parameter-calibration.md#compose-measure-and-decide)
 for parallel or sequential composition. Measure the aggregate, retain all source

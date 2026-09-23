@@ -36,9 +36,10 @@ The supported procedure workflow captures an initial branch head, retains a firs
 stage's candidate, lets a later stage consume those exact values, verifies the
 final combination, then publishes against the captured head. Intermediate
 progress survives failure/restart without becoming the daily branch. Tasks can
-now hand all adopted stage evidence to one explicit final procedure. A complete
-maintained task-to-final-publication tutorial and synthetic array scenario remain
-to connect these capabilities for authors.
+now hand all adopted stage evidence to one explicit final procedure. The
+`task-calibration` sandbox connects that handoff to final measurement and branch
+publication, including scientific rejection and concurrent edits. A larger
+synthetic array scenario remains to exercise maintenance beyond two targets.
 See [task parameter flow](architecture/task-parameter-flow.md) for acceptance and
 the remaining design decisions. Fixed check tasks remain usable during this work.
 

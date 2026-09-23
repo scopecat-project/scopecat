@@ -9,8 +9,13 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from scopecat.automation.calibration import CheckEvidence
-from scopecat.automation.models import ProcedureRun
+from scopecat.automation.models import (
+    AnalysisPublicationOutputRef,
+    ProcedureRun,
+    RunOutputRef,
+)
 from scopecat.kernel.frozen import thaw_json_value
+from scopecat.records.analysis import RunAnalysisSubject
 from scopecat.records.calibration_check import CalibrationCheckRequest
 
 
@@ -33,6 +38,20 @@ class CalibrationTaskInputs(BaseModel):
     @classmethod
     def thaw_checks(cls, value: object) -> object:
         return thaw_json_value(value)
+
+    def measurement(self, stage_id: str) -> RunOutputRef:
+        """Use a stage's adopted measurement as a durable procedure input."""
+        return RunOutputRef(run_id=self.checks[stage_id].measurement.run_id)
+
+    def analysis(self, stage_id: str) -> AnalysisPublicationOutputRef:
+        """Use the exact adopted analysis, never a later analysis of the same run."""
+        evidence = self.checks[stage_id]
+        if evidence.analysis_record_id is None:
+            raise ValueError(f"stage {stage_id!r} has no adopted analysis")
+        return AnalysisPublicationOutputRef(
+            subject=RunAnalysisSubject(run_id=evidence.measurement.run_id),
+            analysis_record_id=evidence.analysis_record_id,
+        )
 
 
 class CalibrationTaskStage(BaseModel):
