@@ -229,8 +229,17 @@ snapshots retain its source id, so cache by content rather than id alone. Only t
 selected bounded batch is materialized; untouched parameter records are shared.
 Named recipe candidates apply on top of each point's effective baseline, without
 changing the saved revision. These values are compilation inputs, not evidence
-that all parameters were consumed or scientifically independent. Request-level
-validation of recipe-only sweep targets remains separate work.
+that all parameters were consumed or scientifically independent.
+
+For request-level sweeps, a domain may declare guaranteed query reads through
+`DomainProgramDef.parameter_reads`. It receives only literal program inputs and
+the selected parameter snapshot; the shared program model treats that snapshot
+as opaque. Quantum profiles expose declarative recipe inputs for statically
+selected operations without running pulse builders. Each reported cell includes
+the reads selecting its key, so a concurrent overlay of that selection rejects
+the dependent cell sweep. Dynamic or shadowed reads do not authorize a sweep.
+This capability is a bounded authoring check, not new persisted evidence or
+complete dependency coverage for calibration reuse.
 
 The attachment declares `domain_input_materialization` coverage. It additionally
 retains `frontend` and `specialization` expression reads from binding, so turning

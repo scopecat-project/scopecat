@@ -31,6 +31,21 @@ request = request.sweep_parameter(
 
 The declared field supplies units and key types. The experiment must actually
 consume that exact cell. Unknown cells and duplicate coordinate names are errors.
+This includes declarative quantum gate/measurement recipe queries selected with
+`with_recipes(...)`: a literal operand and an unconditional operation can consume
+a cell even when the experiment has no explicit `parameter_ref` for it. Queries
+may use aliases, arithmetic and cross-table keys. A cell whose lookup key is also
+overlaid is rejected because that exact cell is not guaranteed across the scan.
+The selector cell itself can be scanned when its own key stays fixed.
+
+Consumption checks do not build pulses or expand scan points/repetitions. They
+remain conservative for arbitrary Python resolvers, dynamic operands, conditional
+branches, entity-set maps, unexpanded dynamic fragments and scoped candidate
+gates. Scoped gates use `with_recipe_parameters(...)`; measurements keep baseline
+semantics even inside a scope. These limits do not require fake parameter reads
+in an experiment. Domain compilers must consume the effective point snapshots in
+`DomainBatchRequest.parameters` for recipe-only overlays to reach actual waveforms.
+
 Preview, submission and saved plans retain the composition and bind it into their
 request identity. The console currently edits Cartesian control scans; use the
 Python author API for paired scans and parameter overlays. Opening such a plan in

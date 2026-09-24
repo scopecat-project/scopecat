@@ -372,6 +372,8 @@ def _domain_program(
 ) -> DomainProgramDef:
     """Project a unified declaration into core's domain program seam."""
 
+    from ._parameter_reads import QuantumParameterReads
+
     repeat_input_ids = {
         input_handle.id
         for input_handle in _summarize_fragment(declaration.body).repeat_inputs
@@ -381,6 +383,11 @@ def _domain_program(
         dialect_id=QUANTUM_PROGRAM_DIALECT_ID,
         dialect_version=QUANTUM_PROGRAM_DIALECT_VERSION,
         body=declaration,
+        parameter_reads=(
+            QuantumParameterReads(declaration.body, declaration.recipes)
+            if declaration.recipes is not None
+            else None
+        ),
         inputs={
             port.id: program_port_type(
                 port,

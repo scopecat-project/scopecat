@@ -2,10 +2,37 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
+from typing import Protocol
 
 from scopecat.kernel.symbols import SymbolId
+from scopecat.kernel.value_data import CellValue
 from scopecat.kernel.value_types import ValueType
+
+
+@dataclass(frozen=True, slots=True)
+class DomainParameterRead:
+    """A guaranteed declarative read and the reads selecting its exact key."""
+
+    table: str
+    key: tuple[tuple[str, CellValue], ...]
+    columns: tuple[str, ...]
+    selection_reads: tuple[DomainParameterRead, ...] = ()
+
+
+class DomainParameterReads(Protocol):
+    def __call__(
+        self, inputs: Mapping[str, object], parameters: object
+    ) -> tuple[DomainParameterRead, ...]:
+        """Resolve guaranteed reads from static inputs without executing the domain.
+
+        The snapshot is opaque to the shared program model, like the domain body.
+        The application supplies a ParameterSnapshot. Missing inputs are dynamic.
+        Unsupported or conditional reads must not be reported. These declarations
+        authorize sweeps, not scientific reuse.
+        """
+        ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -48,6 +75,7 @@ class DomainProgramDef:
     input_ports: tuple[DomainInputPort, ...] = ()
     compiler_input_ports: tuple[DomainInputPort, ...] = ()
     result_ports: tuple[DomainResultPort, ...] = ()
+    parameter_reads: DomainParameterReads | None = field(default=None, repr=False)
 
     def __post_init__(self) -> None:
         if not all((self.id, self.dialect_id, self.dialect_version)):
