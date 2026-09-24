@@ -221,6 +221,17 @@ is covered by the invocation fingerprint and survives ledger reopening. Its
 reader is `scopecat.sdk.domain.parameter_evidence.read_domain_input_reads`.
 Sub-batches retain their actual logical ordinals, not batch-local indices.
 
+`DomainBatchRequest.parameters` supplies immutable effective parameter snapshots
+in request point order, including parameter-cell overlays. Domain compilers that
+resolve recipe queries must use these snapshots rather than constructor-captured
+configuration. `base_parameters` retains the run's frozen selection. Effective
+snapshots retain its source id, so cache by content rather than id alone. Only the
+selected bounded batch is materialized; untouched parameter records are shared.
+Named recipe candidates apply on top of each point's effective baseline, without
+changing the saved revision. These values are compilation inputs, not evidence
+that all parameters were consumed or scientifically independent. Request-level
+validation of recipe-only sweep targets remains separate work.
+
 The attachment declares `domain_input_materialization` coverage. It additionally
 retains `frontend` and `specialization` expression reads from binding, so turning
 a parameter into a literal no longer drops that observed dependency. These

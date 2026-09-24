@@ -1,3 +1,4 @@
+from collections.abc import Mapping
 from dataclasses import replace
 from typing import Never, cast
 
@@ -57,6 +58,11 @@ from scopecat.program.point_domain import (
     point_axis_values,
 )
 from scopecat.program.table_values import ParameterTableSource
+from scopecat.records.parameter import (
+    ParameterAtomValue,
+    ParameterSnapshot,
+    TableParameterValue,
+)
 from scopecat.records.parameter_read import DomainInputParameterRead
 
 _PARAMETER_TYPES = PARAMETER_TYPES
@@ -203,9 +209,26 @@ def test_domain_compiler_table_is_point_scoped_after_overlay() -> None:
         domain_execution=execution,
     )
 
+    base = ParameterSnapshot(
+        id="baseline",
+        values=tuple(
+            TableParameterValue(
+                id=name,
+                rows=tuple(
+                    cast("Mapping[str, ParameterAtomValue]", row)
+                    for row in parameters().table_rows(name)
+                ),
+            )
+            for name in _PARAMETER_TYPES
+        ),
+    )
     environment = replace(
         build_config_environment(config_with_physical_resources({})),
         parameters=parameters(),
+    )
+    environment = replace(
+        environment,
+        config=environment.config.model_copy(update={"parameter_snapshot": base}),
     )
     bound_points = prepare_bound_points(bind_program_facts(spec, environment))
     reads: list[DomainInputParameterRead] = []
@@ -232,6 +255,27 @@ def test_domain_compiler_table_is_point_scoped_after_overlay() -> None:
         Quantity(value=5.9, unit="GHz"),
         Quantity(value=6.2, unit="GHz"),
     ]
+
+    batch = make_domain_batch_request(
+        make_domain_call_view(bound_points.bound_plan, execution.id, ()),
+        bound_points,
+        (1, 0),
+        legal_cut_offsets=(1, 2),
+        batch_ordinal=0,
+    )
+    assert batch.base_parameters is base
+    assert batch.point_ordinals == (1, 0)
+    for snapshot, frequency in zip(
+        batch.parameters, (Quantity(6.2, "GHz"), Quantity(5.9, "GHz")), strict=True
+    ):
+        [table] = [v for v in snapshot.values if v.id == "readout_devices"]
+        assert isinstance(table, TableParameterValue)
+        assert table.rows[0]["frequency"] == frequency
+        assert table.rows[1] == parameters().table_rows("readout_devices")[1]
+        assert snapshot.values[0] is base.values[0]
+    original = base.values[-1]
+    assert isinstance(original, TableParameterValue)
+    assert original.rows[0]["frequency"] == Quantity(5.95, "GHz")
 
 
 def test_domain_input_materializes_with_its_port_type() -> None:

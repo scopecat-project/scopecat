@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Literal
 
 import pytest
 from scopecat_testkit.authoring import bind_invocation, load_config
@@ -731,4 +731,27 @@ def test_unknown_parameter_table_has_authoring_problem() -> None:
     assert error.value.problems[0].code == "unknown_authoring_parameter"
     assert error.value.problems[0].location == model_location(
         "parameters", "missing_table"
+    )
+
+
+class GateCalibration(sc.ParameterModel, table="gate_calibration"):
+    operation: sc.Param[Literal["x", "x90"]] = sc.param(key=True)
+    amplitude: sc.Magnitude[float] = sc.quantity(unit="arb")
+
+
+def test_literal_parameter_key_preserves_its_choice_constraint() -> None:
+    config = load_config()
+    config.system = config.system.model_copy(
+        update={"parameter_catalog": sc.parameter_catalog("gates", GateCalibration)}
+    )
+    config.parameter_snapshot = sc.parameter_snapshot(
+        "gates",
+        tables={GateCalibration: (GateCalibration(operation="x90", amplitude=0.1),)},
+    )
+    _resolve_dependency(sc.parameter_ref(GateCalibration.amplitude, "x90"), config)
+    with pytest.raises(CheckFailed) as rejected:
+        _resolve_dependency(sc.parameter_ref(GateCalibration.amplitude, "z"), config)
+    assert (
+        rejected.value.problems[0].code
+        == "authoring_parameter_lookup_key_type_mismatch"
     )

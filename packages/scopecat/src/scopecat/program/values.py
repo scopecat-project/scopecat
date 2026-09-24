@@ -445,6 +445,8 @@ def _is_parameter_key_input(value: object) -> bool:
 def _parameter_key_value_type(value: ParameterKeyInput) -> Scalar:
     if isinstance(value, ValueRef):
         return cast("Scalar", value.value_type)
+    if isinstance(value, str):
+        return Scalar(String(choices=(value,)))
     return literal_scalar_type(value)
 
 

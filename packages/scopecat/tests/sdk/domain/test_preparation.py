@@ -198,6 +198,7 @@ def test_point_candidate_reuses_prepared_buffers_across_subranges(
         selected = replace(
             request,
             points=(request.points[index],),
+            parameters=(request.parameters[index],),
             legal_cut_offsets=(1,),
             inputs=DomainBatchInputs(
                 program=tuple(
