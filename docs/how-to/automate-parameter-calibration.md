@@ -188,5 +188,5 @@ recording an answer does not itself submit a new acquisition.
 Validate the scientific meaning before using a response. If a value is outside
 the measured interval, request a corrected answer at a new stable interpretation
 step, retaining the original answer. Do not silently clamp it or manufacture a
-fit. An analysis can consume the answer with `context.interpretation(ref, schema=...)`
+fit. A project analysis can consume the answer with `context.interpretation(ref, schema=...)`
 to preserve its source and operator alongside the original measurements.

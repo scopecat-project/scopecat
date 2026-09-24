@@ -42,7 +42,7 @@ export function DecisionWorkspace({ daemonUnavailable }: { daemonUnavailable: bo
       />
     );
   }
-  if (procedures.data.items.length === 0 && selectedId) {
+  if (selectedId && !procedures.data.items.some((item) => item.procedure_run_id === selectedId)) {
     return (
       <section className="rounded-lg border border-line bg-panel p-5">
         <h2>Decision saved or no longer waiting</h2>
@@ -53,6 +53,15 @@ export function DecisionWorkspace({ daemonUnavailable }: { daemonUnavailable: bo
         >
           Open task and continue
         </a>
+        {procedures.data.items.length > 0 && (
+          <button
+            type="button"
+            className="ml-4 text-accent underline"
+            onClick={() => setSelectedId(undefined)}
+          >
+            View other waiting decisions
+          </button>
+        )}
       </section>
     );
   }
@@ -105,8 +114,8 @@ export function DecisionWorkspace({ daemonUnavailable }: { daemonUnavailable: bo
       <main className="min-w-0 p-4 max-[680px]:p-2.5">
         <header className="mb-3 rounded-md border border-line bg-panel-soft px-3.5 py-3">
           <p className="m-0 text-[0.66rem] leading-5 text-text-dim">
-            Inspect the retained evidence and record one structured judgment. The procedure then
-            continues with the recorded response.
+            Inspect the retained evidence and record one structured judgment. Then open the task and
+            choose when to continue with the recorded response.
           </p>
         </header>
         <DecisionCard

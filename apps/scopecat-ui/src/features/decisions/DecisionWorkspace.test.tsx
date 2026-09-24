@@ -175,7 +175,9 @@ describe("DecisionWorkspace", () => {
     renderWorkspace();
     expect(await screen.findByLabelText("Peak frequency (MHz) 1")).toHaveValue(6500.25);
     expect(screen.getByLabelText("Recorded reviewer")).toHaveValue("Alice");
-    vi.mocked(getWaitingProcedures).mockResolvedValue({ items: [] });
+    vi.mocked(getWaitingProcedures).mockResolvedValue({
+      items: [{ ...waitingProcedure(), procedure_run_id: "procedure-2" }],
+    });
     fireEvent.click(screen.getByRole("button", { name: "Record decision" }));
     await waitFor(() =>
       expect(submitProcedureInput).toHaveBeenCalledWith(
@@ -190,6 +192,7 @@ describe("DecisionWorkspace", () => {
       "href",
       "?procedure=procedure-1#launch",
     );
+    expect(screen.getByRole("button", { name: "View other waiting decisions" })).toBeVisible();
     expect(localStorage.length).toBe(0);
   });
 
