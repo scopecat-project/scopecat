@@ -131,7 +131,10 @@ export function LaunchWorkspace({
           </button>
         </div>
       )}
-      <PlanLibrary key={projectId} initializing={catalog.isPending && draft === undefined} />
+      <PlanLibrary
+        key={`plans:${projectId}`}
+        initializing={catalog.isPending && draft === undefined}
+      />
       {handoffUnavailable && (
         <p role="alert">
           The suggested experiment is unavailable. The source analysis is retained.
@@ -212,7 +215,11 @@ export function LaunchWorkspace({
       />
       <ProcedureHistory selectedId={procedureId} onSelect={admitted} />
       {projectId && (
-        <CalibrationTasks key={projectId} projectId={projectId} onProcedure={admitted} />
+        <CalibrationTasks
+          key={`calibration:${projectId}`}
+          projectId={projectId}
+          onProcedure={admitted}
+        />
       )}
       {procedureId && <ProcedureProgress key={procedureId} procedureId={procedureId} />}
     </section>
