@@ -43,6 +43,11 @@ from scopecat.kernel.value_types import Scalar, Table, ValueType
 from scopecat.kernel.value_validation import ValueValidationError, coerce_literal
 from scopecat.program.expressions import ArrayExpr, LiteralArrayExpr, ScalarExpr
 from scopecat.program.logical import LogicalDomainExecution
+from scopecat.records.parameter import (
+    ParameterAtomValue,
+    ParameterSnapshot,
+    TableParameterValue,
+)
 from scopecat.records.parameter_read import DomainInputParameterRead
 
 
@@ -58,6 +63,35 @@ class MaterializedBoundPoints:
         if len(self.point_parameters) != len(self.point_domain.points):
             msg = "materialized points and parameter bindings must have equal length"
             raise ValueError(msg)
+
+    def parameter_snapshot(self, ordinal: int) -> ParameterSnapshot:
+        """Project the same effective values used by point input/state evaluation.
+
+        Only selected batches request snapshots. Untouched records are shared;
+        no run-wide snapshot collection or new saved parameter revision exists.
+        """
+        base = self.bound_plan.environment.config.parameter_snapshot
+        tables = {
+            overlay.table_id for overlay in self.bound_plan.bindings.parameter_overlays
+        }
+        if not tables:
+            return base
+        parameters = self.point_parameters[ordinal]
+        return ParameterSnapshot(
+            id=base.id,
+            values=tuple(
+                TableParameterValue(
+                    id=value.id,
+                    rows=tuple(
+                        cast("Mapping[str, ParameterAtomValue]", row)
+                        for row in parameters.table_rows(value.id)
+                    ),
+                )
+                if value.id in tables
+                else value
+                for value in base.values
+            ),
+        )
 
     def bind_domain_inputs(
         self,

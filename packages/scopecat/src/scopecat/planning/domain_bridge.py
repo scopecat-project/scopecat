@@ -119,6 +119,10 @@ def make_domain_batch_request(
         points=point_refs,
         legal_cut_offsets=legal_cut_offsets,
         measurement_catalog=project_measurement_catalog(bound_points),
+        base_parameters=bound_points.bound_plan.environment.config.parameter_snapshot,
+        parameters=tuple(
+            bound_points.parameter_snapshot(ordinal) for ordinal in point_ordinals
+        ),
         inspection_requested=inspection_requested,
         inspection_query=inspection_query,
     )

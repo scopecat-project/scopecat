@@ -8,6 +8,7 @@ from typing import cast
 
 from scopecat.inspection import CompiledProgramInspectionQuery
 from scopecat.measurements.values import MeasurementValueCatalog
+from scopecat.records.parameter import ParameterSnapshot
 from scopecat.records.parameter_read import (
     BindingParameterRead,
     DomainInputParameterRead,
@@ -53,7 +54,12 @@ class DomainBatchInputs:
 
 @dataclass(frozen=True, slots=True)
 class DomainBatchRequest:
-    """One complete bounded point batch ready for domain compilation."""
+    """One complete bounded point batch ready for domain compilation.
+
+    ``parameters`` aligns with ``points`` and includes each point's overlays.
+    ``base_parameters`` retains the run's frozen selection. Effective snapshots
+    keep its source id; compilers must cache by content, not snapshot id alone.
+    """
 
     batch_ordinal: int
     call: DomainCallView
@@ -61,12 +67,16 @@ class DomainBatchRequest:
     points: tuple[DomainPointRef, ...]
     legal_cut_offsets: tuple[int, ...]
     measurement_catalog: MeasurementValueCatalog = field(repr=False)
+    base_parameters: ParameterSnapshot = field(repr=False)
+    parameters: tuple[ParameterSnapshot, ...] = field(repr=False)
     inspection_requested: bool = False
     inspection_query: CompiledProgramInspectionQuery | None = None
 
     def __post_init__(self) -> None:
         if not self.points:
             raise ValueError("domain batch request must contain points")
+        if len(self.parameters) != len(self.points):
+            raise ValueError("domain parameters must align with request points")
         if (
             not self.legal_cut_offsets
             or self.legal_cut_offsets[-1] != len(self.points)
