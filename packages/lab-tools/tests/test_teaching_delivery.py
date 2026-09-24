@@ -279,6 +279,39 @@ def test_managed_symlink_destinations_rejected(
     assert list(outside.iterdir()) == []
 
 
+def test_installed_launchers_select_notebook_and_quote_shell_paths(
+    delivery, tmp_path, fake_runtime, monkeypatch
+):
+    import runpy
+    import shlex
+    import sys
+
+    home = tmp_path / "实验室's application"
+    launcher = bundle.install_home(delivery, home)
+    calls = []
+    monkeypatch.setattr(
+        bundle.subprocess, "call", lambda command: calls.append(command) or 0
+    )
+    monkeypatch.setattr(sys, "argv", [str(launcher), "notebook", "--no-browser"])
+    with pytest.raises(SystemExit) as exited:
+        runpy.run_path(str(launcher), run_name="__main__")
+    assert exited.value.code == 0
+    assert calls[0][1:] == [
+        "-m",
+        "lab_tools.author_notebook",
+        "--home",
+        str(home),
+        "--no-browser",
+    ]
+    script = (home / "Scopecat.command").read_text()
+    assert shlex.quote("./" + Path(calls[0][0]).relative_to(home).as_posix()) in script
+    assert (home / "Scopecat.command").stat().st_mode & 0o111
+    assert (home / "Notebook.command").stat().st_mode & 0o111
+    assert 'notebook "$@"' in (home / "Notebook.command").read_text()
+    assert '--manage "$@"' in (home / "Manage.command").read_text()
+    assert (home / "Manage.command").stat().st_mode & 0o111
+
+
 def test_public_install_bundle_still_refuses_existing_destination(delivery, tmp_path):
     destination = tmp_path / "existing"
     destination.mkdir()

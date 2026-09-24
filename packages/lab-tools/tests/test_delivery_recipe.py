@@ -89,9 +89,16 @@ def test_recipe_build_uses_locked_lab_and_public_toolchain(
     gui.mkdir()
     (gui / "index.html").write_text("<html>workbench</html>")
     result = delivery.build_delivery(
-        tmp_path / "output", recipe=recipe, gui=gui, release=True
+        tmp_path / "输出 with spaces", recipe=recipe, gui=gui, release=True
     )
     calls = build_tools
+    builds = [command for command, _ in calls if command[1] == "build"]
+    assert builds
+    for command in builds:
+        assert (
+            command[command.index("--build-constraints") + 1]
+            == (result / "dependencies.lock").as_uri()
+        )
     export, cwd = next(item for item in calls if item[0][1] == "export")
     assert cwd == tmp_path
     assert "--locked" in export and "--no-emit-local" in export

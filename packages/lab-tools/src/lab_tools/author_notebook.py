@@ -14,20 +14,45 @@ from .services import Services
 
 
 class Arguments(Protocol):
-    workspace: Path
+    workspace: Path | None
     home: Path
     no_browser: bool
 
 
-def launch_notebook(workspace: Path, home: Path, *, no_browser: bool = False) -> int:
-    workspace = workspace.resolve()
+def launch_notebook(
+    workspace: Path | None, home: Path, *, no_browser: bool = False
+) -> int:
     home = home.resolve()
     store = Services(home)
     # A session gets its own kernelspec. A later launch must not redirect kernels
     # created by a still-running Jupyter server from an earlier environment.
     with tempfile.TemporaryDirectory(prefix="scopecat-notebook-") as directory:
         with store.lock:
-            service, identity = store.for_workspace(workspace)
+            if workspace is None:
+                from scopecat.author_workspaces import local_author_workspaces
+
+                service = store.preferred()
+                if service is None:
+                    raise ValueError(
+                        "请先在 Scopecat 中选择并打开实验室，再打开 Notebook"
+                    )
+                sources = local_author_workspaces(Path(service.root))
+                if len(sources) > 1:
+                    raise ValueError(
+                        "实验室有多个作者目录；请用 scopecat notebook 指定要打开的目录"
+                    )
+                workspace = sources[0].root if sources else Path(service.root)
+            workspace = workspace.resolve()
+            service = next(
+                (item for item in store.list() if Path(item.root) == workspace), None
+            )
+            if service is None:
+                service, identity = store.for_workspace(workspace)
+            else:
+                from .lab_environment import require_completed_update
+
+                require_completed_update(home, service.id)
+                identity = "legacy"
             command, env = kernel_command(
                 workspace,
                 python=service.python,
@@ -80,12 +105,20 @@ def launch_notebook(workspace: Path, home: Path, *, no_browser: bool = False) ->
 def main(argv: list[str] | None = None) -> None:
     configure_console()
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("workspace", type=Path, nargs="?", default=Path.cwd())
+    parser.add_argument(
+        "workspace",
+        type=Path,
+        nargs="?",
+        help="作者目录；省略时使用当前实验室的唯一作者目录",
+    )
     parser.add_argument("--home", type=Path, default=Path.home() / "Scopecat-Lab")
     parser.add_argument("--no-browser", action="store_true")
     args = cast("Arguments", cast("object", parser.parse_args(argv)))
+    workspace = args.workspace
+    if workspace is None and (Path.cwd() / "scopecat.toml").is_file():
+        workspace = Path.cwd()
     try:
-        status = launch_notebook(args.workspace, args.home, no_browser=args.no_browser)
+        status = launch_notebook(workspace, args.home, no_browser=args.no_browser)
     except (ValueError, OSError, subprocess.SubprocessError) as error:
         parser.exit(2, f"{error}\n")
     if status:

@@ -285,7 +285,7 @@ def build_delivery(
                 "build",
                 "--wheel",
                 "--build-constraints",
-                str(dependency_lock),
+                dependency_lock.as_uri(),
                 "--out-dir",
                 str(wheels),
                 str(package),

@@ -13,6 +13,7 @@ import io
 import json
 import os
 import platform
+import shlex
 import shutil
 import subprocess
 import sys
@@ -400,9 +401,11 @@ def _install_home_locked(root: Path, home: Path) -> Path:
         "home = Path(__file__).resolve().parent\n"
         f"python = home / {python.relative_to(home).as_posix()!r}\n"
         "args = sys.argv[1:]\n"
-        "module = ('lab_tools.sandbox' if args[:1] == ['teach'] "
-        "else 'lab_tools.application')\n"
-        "if args[:1] == ['teach']: args = args[1:]\n"
+        "entries = {'teach': 'lab_tools.sandbox', "
+        "'notebook': 'lab_tools.author_notebook'}\n"
+        "module = entries.get(args[0], 'lab_tools.application') "
+        "if args else 'lab_tools.application'\n"
+        "if args and args[0] in entries: args = args[1:]\n"
         "command = [str(python), '-m', module, '--home', str(home)]\n"
         "raise SystemExit(subprocess.call([*command, *args]))\n"
     )
@@ -411,11 +414,36 @@ def _install_home_locked(root: Path, home: Path) -> Path:
         f'"%~dp0{python.relative_to(home)}" "%~dp0lab.py" %*\n'
         "if errorlevel 1 pause\n"
     )
+    notebook_command = '@echo off\ncall "%~dp0lab.cmd" notebook %*\n'
+    shell_command = (
+        '#!/bin/sh\ncd -- "$(dirname -- "$0")" || exit 1\n'
+        f'{shlex.quote("./" + python.relative_to(home).as_posix())} ./lab.py "$@"\n'
+        'status=$?\nif [ "$status" -ne 0 ]; then\n'
+        '  printf "\\n启动失败，请保留上方错误信息。按回车关闭。"\n'
+        "  read answer\nfi\n"
+        'exit "$status"\n'
+    )
+    notebook_shell = (
+        '#!/bin/sh\ncd -- "$(dirname -- "$0")" || exit 1\n'
+        'exec ./Scopecat.command notebook "$@"\n'
+    )
     # Both files are complete before replacement. Either retained interpreter can
     # bootstrap lab.py; only lab.py chooses the selected application release.
     pending: list[Path] = []
     try:
-        for name, content in (("lab.cmd", command_text), ("lab.py", launcher_text)):
+        entries = [
+            ("lab.cmd", command_text),
+            ("Notebook.cmd", notebook_command),
+            ("Manage.cmd", '@echo off\ncall "%~dp0lab.cmd" --manage %*\n'),
+            ("Scopecat.command", shell_command),
+            ("Notebook.command", notebook_shell),
+            (
+                "Manage.command",
+                notebook_shell.replace('notebook "$@"', '--manage "$@"'),
+            ),
+            ("lab.py", launcher_text),
+        ]
+        for name, content in entries:
             _ = managed_path(home, home / name)
             with tempfile.NamedTemporaryFile(
                 mode="w", encoding="utf-8", dir=home, prefix=f".{name}-", delete=False
@@ -424,14 +452,16 @@ def _install_home_locked(root: Path, home: Path) -> Path:
                 _ = stream.write(content)
                 stream.flush()
                 os.fsync(stream.fileno())
-        _ = pending[0].replace(home / "lab.cmd")
-        _ = pending[1].replace(launcher)
+            if name.endswith(".command"):
+                pending[-1].chmod(0o755)
+        for staged, (name, _) in zip(pending, entries, strict=True):
+            _ = staged.replace(home / name)
     finally:
         for path in pending:
             path.unlink(missing_ok=True)
     print(
         f"已准备并选择默认版本 {key}。Windows 双击 {home / 'lab.cmd'}; "
-        f"其他系统运行 python {launcher}。\n"
+        f"Mac 双击 {home / 'Scopecat.command'}。Notebook 使用同目录的 Notebook 入口。\n"
         "正在运行的管理器尚未更换；下次启动时尝试切换，存在进行中的管理操作时会拒绝切换。"
     )
     return launcher

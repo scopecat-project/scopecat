@@ -153,6 +153,7 @@ it("previews a typed request and clears results after edits", async () => {
   fireEvent.change(screen.getByLabelText("Amplitude"), { target: { value: "0.4" } });
   fireEvent.click(screen.getByRole("button", { name: "Preview" }));
   await screen.findByText("Preview ready");
+  expect(screen.getAllByRole("region", { name: "Saved experiment plans" })).toHaveLength(1);
   const request = fetcher.mock.calls[1]?.[0] as Request;
   expect(await request.json()).toEqual({
     workspace_id: "legacy",
