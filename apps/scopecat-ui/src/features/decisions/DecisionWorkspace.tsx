@@ -7,7 +7,7 @@ import type {
   ProcedureStepInputSubmitCommand,
 } from "../../api-contract";
 import { DecisionEvidence } from "./DecisionEvidence";
-import { DecisionFields, decisionFields } from "./DecisionFields";
+import { DecisionFields, decisionFields, decisionValueError } from "./DecisionFields";
 import { errorMessage, formatRelative } from "../../lib/presentation";
 import { classes, primaryButton } from "../../ui/styles";
 import { getProcedureSteps, getWaitingProcedures, submitProcedureInput } from "./decision-api";
@@ -40,6 +40,29 @@ export function DecisionWorkspace({ daemonUnavailable }: { daemonUnavailable: bo
         title="Experiment decisions unavailable"
         detail={errorMessage(procedures.error)}
       />
+    );
+  }
+  if (selectedId && !procedures.data.items.some((item) => item.procedure_run_id === selectedId)) {
+    return (
+      <section className="rounded-lg border border-line bg-panel p-5">
+        <h2>Decision saved or no longer waiting</h2>
+        <p>Open the task to see the recorded answer and choose when to continue.</p>
+        <a
+          className="text-accent underline"
+          href={`?procedure=${encodeURIComponent(selectedId)}#launch`}
+        >
+          Open task and continue
+        </a>
+        {procedures.data.items.length > 0 && (
+          <button
+            type="button"
+            className="ml-4 text-accent underline"
+            onClick={() => setSelectedId(undefined)}
+          >
+            View other waiting decisions
+          </button>
+        )}
+      </section>
     );
   }
   if (procedures.data.items.length === 0) {
@@ -91,17 +114,32 @@ export function DecisionWorkspace({ daemonUnavailable }: { daemonUnavailable: bo
       <main className="min-w-0 p-4 max-[680px]:p-2.5">
         <header className="mb-3 rounded-md border border-line bg-panel-soft px-3.5 py-3">
           <p className="m-0 text-[0.66rem] leading-5 text-text-dim">
-            Inspect the retained evidence and record one structured judgment. The procedure then
-            continues with the recorded response.
+            Inspect the retained evidence and record one structured judgment. Then open the task and
+            choose when to continue with the recorded response.
           </p>
         </header>
-        <DecisionCard key={selected.procedure_run_id} procedure={selected} />
+        <DecisionCard
+          key={selected.procedure_run_id}
+          procedure={selected}
+          onRecorded={() => {
+            setSelectedId(selected.procedure_run_id);
+            const url = new URL(window.location.href);
+            url.searchParams.set("procedure", selected.procedure_run_id);
+            window.history.replaceState(null, "", url);
+          }}
+        />
       </main>
     </div>
   );
 }
 
-function DecisionCard({ procedure }: { procedure: ProcedureRun }) {
+function DecisionCard({
+  procedure,
+  onRecorded,
+}: {
+  procedure: ProcedureRun;
+  onRecorded: () => void;
+}) {
   const steps = useQuery({
     queryKey: ["procedure-decision-steps", procedure.procedure_run_id],
     queryFn: ({ signal }) => getProcedureSteps(procedure.procedure_run_id, signal),
@@ -129,31 +167,71 @@ function DecisionCard({ procedure }: { procedure: ProcedureRun }) {
     );
   }
   return (
-    <DecisionForm key={`${step.step_key}:${step.revision}`} procedure={procedure} step={step} />
+    <DecisionForm
+      key={`${step.step_key}:${step.revision}`}
+      procedure={procedure}
+      step={step}
+      onRecorded={onRecorded}
+    />
   );
 }
 
 function DecisionForm({
   procedure,
   step,
+  onRecorded,
 }: {
   procedure: ProcedureRun;
   step: ProcedureStepAttempt;
+  onRecorded: () => void;
 }) {
   const request = step.interpretation_request;
   if (!request) throw new Error("waiting interpretation request is missing");
-  const [actor, setActor] = useState("");
-  const [actorKind, setActorKind] = useState<"ai" | "human" | "service">("human");
-  const [note, setNote] = useState("");
+  const draftKey = `scopecat:decision:${procedure.procedure_run_id}:${step.step_key}:${step.attempt}:${step.intent_hash}`;
+  const [draft] = useState(() => {
+    try {
+      const saved: unknown = JSON.parse(localStorage.getItem(draftKey) ?? "null");
+      return isRecord(saved) ? saved : {};
+    } catch {
+      return {};
+    }
+  });
+  const [actor, setActor] = useState(
+    typeof draft.actor === "string"
+      ? draft.actor
+      : typeof request.metadata?.reviewer === "string"
+        ? request.metadata.reviewer
+        : "",
+  );
+  const [actorKind, setActorKind] = useState<"ai" | "human" | "service">(
+    draft.actorKind === "ai" || draft.actorKind === "service" ? draft.actorKind : "human",
+  );
+  const [note, setNote] = useState(typeof draft.note === "string" ? draft.note : "");
   const [valueText, setValueText] = useState(() =>
-    JSON.stringify(request.response_template ?? initialValue(request.structure), null, 2),
+    typeof draft.valueText === "string"
+      ? draft.valueText
+      : JSON.stringify(request.response_template ?? initialValue(request.structure), null, 2),
   );
   const fields = decisionFields(request.structure);
-  const [useJson, setUseJson] = useState(!fields);
+  const [useJson, setUseJson] = useState(() => {
+    try {
+      return !fields || draft.useJson === true || !isRecord(JSON.parse(valueText));
+    } catch {
+      return true;
+    }
+  });
   const [parseError, setParseError] = useState<string>();
   const queryClient = useQueryClient();
   const submit = useMutation({
     mutationFn: submitProcedureInput,
+    onSuccess: () => {
+      try {
+        localStorage.removeItem(draftKey);
+      } catch {
+        /* Storage may be disabled. */
+      }
+      onRecorded();
+    },
     onSettled: async () => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["procedure-decisions"] }),
@@ -165,10 +243,16 @@ function DecisionForm({
   });
 
   useEffect(() => {
-    if (!submit.isSuccess) return;
-    const timer = window.setTimeout(() => submit.reset(), 5_000);
-    return () => window.clearTimeout(timer);
-  }, [submit]);
+    if (submit.isSuccess) return;
+    try {
+      localStorage.setItem(
+        draftKey,
+        JSON.stringify({ actor, actorKind, note, valueText, useJson }),
+      );
+    } catch {
+      /* The server response remains authoritative when browser storage is unavailable. */
+    }
+  }, [actor, actorKind, note, valueText, useJson, draftKey, submit.isSuccess]);
 
   const record = () => {
     if (!actor.trim()) {
@@ -181,6 +265,13 @@ function DecisionForm({
     } catch (error) {
       setParseError(errorMessage(error));
       return;
+    }
+    if (fields) {
+      const error = decisionValueError(fields, value);
+      if (error) {
+        setParseError(error);
+        return;
+      }
     }
     setParseError(undefined);
     const command: ProcedureStepInputSubmitCommand = {
@@ -259,6 +350,7 @@ function DecisionForm({
           {!useJson && fields ? (
             <DecisionFields
               fields={fields}
+              labels={isRecord(request.metadata?.field_labels) ? request.metadata.field_labels : {}}
               value={JSON.parse(valueText)}
               onChange={(value) => setValueText(JSON.stringify(value, null, 2))}
             />
@@ -343,7 +435,13 @@ function DecisionForm({
           )}
           {submit.isSuccess && (
             <p className="m-0 inline-flex items-center gap-1.5 text-[0.64rem] text-green">
-              <Check size={14} /> Decision recorded. The procedure is ready to continue.
+              <Check size={14} /> Decision recorded.{" "}
+              <a
+                className="underline"
+                href={`?procedure=${encodeURIComponent(procedure.procedure_run_id)}#launch`}
+              >
+                Open task and continue
+              </a>
             </p>
           )}
           <button
@@ -415,9 +513,10 @@ function initialValue(structure: unknown): unknown {
       Object.entries(structure.fields).map(([name, field]) => [name, initialValue(field)]),
     );
   }
-  if (structure.type === "list" || structure.type === "tuple") return [];
+  if (structure.type === "array" || structure.type === "list" || structure.type === "tuple")
+    return [];
   if (structure.type === "bool") return false;
-  if (structure.type === "float" || structure.type === "int") return 0;
+  if (structure.type === "float" || structure.type === "int") return null;
   if (structure.type === "string") return "";
   if (structure.type === "quantity") return { value: 0, unit: "" };
   return null;

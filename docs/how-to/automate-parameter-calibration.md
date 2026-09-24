@@ -164,3 +164,29 @@ or infer dependencies between samples. Those are explicit laboratory policies.
 The maintained simulation fixture `drag_branch_calibration` tests two-target joint
 remeasurement and recovery; it is developer evidence rather than a hardware recipe
 or the installed single-target teaching model.
+
+## Let a person supply the next exploration value
+
+Use `ctx.interpret()` when the next value should come from inspecting a measured
+curve. Include the source run and a published curve analysis in `inputs`; the
+Decisions page shows that figure beside the response form. An interpretation is
+a retained judgment, not a fitted result or calibration acceptance.
+
+The form supports scalar fields, literal choices and lists of scalar values.
+Use a named field with an explicit unit (for example `frequencies_mhz: list[float]`)
+and an outcome such as selected, no peak or uncertain. An empty numeric field is
+not a zero. Pass `metadata={"field_labels": {"frequencies_mhz": "Peak frequency (MHz)"},
+"reviewer": operator}` for readable labels and an editable reviewer default.
+The response schema and metadata are part of the retained request identity.
+
+Unsubmitted edits are kept in this browser for the exact request. They are not
+scientific evidence until recorded; clearing browser storage removes them. Recorded
+responses live in the project store and can be reopened after a restart. After
+recording, **Open task and continue** returns to the existing procedure controls;
+recording an answer does not itself submit a new acquisition.
+
+Validate the scientific meaning before using a response. If a value is outside
+the measured interval, request a corrected answer at a new stable interpretation
+step, retaining the original answer. Do not silently clamp it or manufacture a
+fit. A project analysis can consume the answer with `context.interpretation(ref, schema=...)`
+to preserve its source and operator alongside the original measurements.
