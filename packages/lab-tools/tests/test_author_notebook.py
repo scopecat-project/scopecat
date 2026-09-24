@@ -25,6 +25,7 @@ def laboratory(tmp_path, monkeypatch):
     )
     store = SimpleNamespace(
         lock=FileLock(home / "services.lock"),
+        list=list,
         for_workspace=lambda root: (service, "source-id") if root == source else None,
     )
     monkeypatch.setattr(author_notebook, "Services", lambda _: store)
@@ -126,3 +127,35 @@ def test_public_notebook_entry_forwards_workspace_options(monkeypatch):
     result = CliRunner().invoke(app, ["notebook", *arguments])
     assert result.exit_code == 0, result.output
     assert received == arguments
+
+
+def test_default_notebook_opens_preferred_software_laboratory(tmp_path, monkeypatch):
+    root = tmp_path / "software laboratory"
+    root.mkdir()
+    (root / "scopecat.toml").write_text("[lab]\n")
+    home = tmp_path / "home"
+    home.mkdir()
+    service = SimpleNamespace(
+        id="a" * 32, root=str(root), python="installed/python", name="Software"
+    )
+    store = SimpleNamespace(
+        lock=FileLock(home / "services.lock"),
+        preferred=lambda: service,
+        list=lambda: [service],
+    )
+    monkeypatch.setattr(author_notebook, "Services", lambda _: store)
+    monkeypatch.setattr(
+        author_notebook.subprocess,
+        "run",
+        lambda *_a, **_kw: SimpleNamespace(returncode=0),
+    )
+    calls = []
+
+    def start(command, *, cwd, env):
+        calls.append((command, cwd))
+        return SimpleNamespace(wait=lambda: 0)
+
+    monkeypatch.setattr(author_notebook.subprocess, "Popen", start)
+    assert author_notebook.launch_notebook(None, home) == 0
+    assert calls[0][0][:4] == [service.python, "-I", "-m", "jupyterlab"]
+    assert calls[0][1] == root
