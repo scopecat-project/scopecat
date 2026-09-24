@@ -179,7 +179,7 @@ export function ProcedureProgress({ procedureId }: { procedureId: string }) {
               }}
               className="border rounded px-3 py-1"
             >
-              Dispatch existing procedure
+              Continue task
             </button>
           )}
           {view.dispatch_blocked_reason && run.state === "ready" && (

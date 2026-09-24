@@ -75,7 +75,7 @@ it("reopens a paused admission and explicitly dispatches the same procedure", as
   await screen.findByText("Dispatch paused");
   first.unmount();
   mount();
-  fireEvent.click(await screen.findByRole("button", { name: "Dispatch existing procedure" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Continue task" }));
   await screen.findByText("Queued for a worker");
   expect(requests.filter((request) => request.startsWith("POST"))).toEqual([
     "POST /api/v1/procedures/p1/dispatch",
@@ -106,7 +106,7 @@ it("shows retained worker diagnostics separately from execution status", async (
   await screen.findByText("Worker diagnostic: Author workspace is unavailable");
   expect(screen.getByText("C:\\lab-data\\procedure-workers\\abc\\worker.log")).toBeInTheDocument();
   expect(screen.getByText("Dispatch paused")).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "Dispatch existing procedure" })).toBeEnabled();
+  expect(screen.getByRole("button", { name: "Continue task" })).toBeEnabled();
 });
 
 it.each([
@@ -124,7 +124,7 @@ it.each([
   );
   mount();
   await screen.findByText(label);
-  expect(screen.queryByRole("button", { name: "Dispatch existing procedure" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Continue task" })).toBeNull();
   expect(screen.queryByRole("link", { name: /Review results/ })?.getAttribute("href") ?? null).toBe(
     state === "waiting_for_input" ? "?procedure=p1#decisions" : null,
   );
@@ -187,7 +187,7 @@ it("shows an uncertain current child as attention even when its parent is ready 
     "status",
   );
   expect(screen.queryByText("Queued for a worker")).toBeNull();
-  expect(screen.queryByRole("button", { name: "Dispatch existing procedure" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Continue task" })).toBeNull();
   expect(screen.getByRole("link", { name: /Open current child run/ })).toHaveAttribute(
     "href",
     "?procedure=p1&run=retained-child#runs",
@@ -254,7 +254,7 @@ it("retains current phase while loading earlier step history", async () => {
   fireEvent.click(screen.getByRole("button", { name: "Load earlier steps" }));
   await screen.findByText("earlier: Failed");
   expect(screen.getByText("Current step: current-acquisition · Running")).toBeVisible();
-  expect(screen.queryByRole("button", { name: "Dispatch existing procedure" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Continue task" })).toBeNull();
 });
 
 it("finds durable work from history without copying an ID", async () => {
