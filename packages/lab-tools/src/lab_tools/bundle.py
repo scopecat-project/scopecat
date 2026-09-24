@@ -434,8 +434,13 @@ def _install_home_locked(root: Path, home: Path) -> Path:
         entries = [
             ("lab.cmd", command_text),
             ("Notebook.cmd", notebook_command),
+            ("Manage.cmd", '@echo off\ncall "%~dp0lab.cmd" --manage %*\n'),
             ("Scopecat.command", shell_command),
             ("Notebook.command", notebook_shell),
+            (
+                "Manage.command",
+                notebook_shell.replace('notebook "$@"', '--manage "$@"'),
+            ),
             ("lab.py", launcher_text),
         ]
         for name, content in entries:

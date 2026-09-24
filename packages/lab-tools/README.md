@@ -22,6 +22,8 @@ is selected automatically; a software starter opens its own workspace. Multiple
 author workspaces require an explicit `scopecat notebook PATH` selection. From an
 author directory, `scopecat notebook` continues to use that directory. Notebook
 launch does not start the laboratory or acquire data; open the workbench first.
+`Manage.cmd` / `Manage.command` opens service management without starting an
+experiment service, including when the preferred workbench is already selected.
 
 After updating an existing environment, stop the service and use **Recheck environment**
 in the manager to validate its registered paths without rebuilding a CLI command.

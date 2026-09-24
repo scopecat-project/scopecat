@@ -308,6 +308,8 @@ def test_installed_launchers_select_notebook_and_quote_shell_paths(
     assert (home / "Scopecat.command").stat().st_mode & 0o111
     assert (home / "Notebook.command").stat().st_mode & 0o111
     assert 'notebook "$@"' in (home / "Notebook.command").read_text()
+    assert '--manage "$@"' in (home / "Manage.command").read_text()
+    assert (home / "Manage.command").stat().st_mode & 0o111
 
 
 def test_public_install_bundle_still_refuses_existing_destination(delivery, tmp_path):
