@@ -37,6 +37,7 @@ from scopecat_quantum.pulse_recipes import (
     PulseRecipeMaterializationCache,
 )
 from scopecat_quantum.recipe_evidence import RecipeInputEvidence, ResolvedRecipeInputs
+from scopecat_quantum.recipe_queries import RecipeParameterInputs
 
 
 @dataclass(frozen=True, slots=True)
@@ -89,6 +90,17 @@ class GateRecipeBinding[ParametersT]:
     @property
     def recipe_ids(self) -> tuple[str, ...]:
         return (self.id,)
+
+    def declarative_inputs(
+        self,
+        *,
+        gate_id: GateId | None = None,
+        measurement_kind: AcquisitionKind | None = None,
+    ) -> tuple[RecipeParameterInputs, ...]:
+        del measurement_kind
+        if gate_id == self.gate.id and isinstance(self.inputs, RecipeParameterInputs):
+            return (self.inputs,)
+        return ()
 
     def materialize(
         self,
@@ -268,6 +280,19 @@ class MeasurementRecipeBinding[ParametersT]:
     @property
     def recipe_ids(self) -> tuple[str, ...]:
         return (self.id,)
+
+    def declarative_inputs(
+        self,
+        *,
+        gate_id: GateId | None = None,
+        measurement_kind: AcquisitionKind | None = None,
+    ) -> tuple[RecipeParameterInputs, ...]:
+        del gate_id
+        if measurement_kind == self.kind and isinstance(
+            self.inputs, RecipeParameterInputs
+        ):
+            return (self.inputs,)
+        return ()
 
     def materialize(
         self,

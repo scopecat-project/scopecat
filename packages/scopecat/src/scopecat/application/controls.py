@@ -102,7 +102,12 @@ def edit_controls[ResultT](
             else:
                 raise ValueError("control forms support explicit values or range axes")
     edited = controls.apply(invocation, config=config, edits=values, reset=tuple(reset))
-    return compose_request_sweeps(edited, mode=scan_mode, parameters=parameter_sweeps)
+    return compose_request_sweeps(
+        edited,
+        mode=scan_mode,
+        parameters=parameter_sweeps,
+        snapshot=config.parameter_snapshot,
+    )
 
 
 def control_values(

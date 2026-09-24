@@ -13,6 +13,7 @@ from typing import cast
 
 from scopecat.domain.program import (
     DomainInputPort,
+    DomainParameterReads,
     DomainProgramDef,
     DomainResultPort,
 )
@@ -61,6 +62,7 @@ def domain_program(
     inputs: Mapping[str, ValueType] | None = None,
     compiler_inputs: Mapping[str, ValueType] | None = None,
     results: Mapping[str, object | None] | None = None,
+    parameter_reads: DomainParameterReads | None = None,
 ) -> DomainProgramDef:
     """Declare an opaque program with ordered typed input and result ports."""
 
@@ -69,6 +71,7 @@ def domain_program(
         dialect_id=dialect_id,
         dialect_version=dialect_version,
         body=body,
+        parameter_reads=parameter_reads,
         input_ports=tuple(
             DomainInputPort(port_id, value_type)
             for port_id, value_type in (inputs or {}).items()

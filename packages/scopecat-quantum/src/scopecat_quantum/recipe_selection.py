@@ -3,11 +3,22 @@
 from collections.abc import Callable
 from typing import Protocol
 
+from scopecat_quantum._ids import GateId
+from scopecat_quantum.acquisitions import AcquisitionKind
+from scopecat_quantum.recipe_queries import RecipeParameterInputs
+
 
 class SelectableRecipes(Protocol):
     """Low-level selection boundary, independent of authoring implementation imports."""
 
     def selection_identity(self) -> object: ...
+
+    def declarative_inputs(
+        self,
+        *,
+        gate_id: GateId | None = None,
+        measurement_kind: AcquisitionKind | None = None,
+    ) -> tuple[RecipeParameterInputs, ...]: ...
 
     @property
     def materialize_quantum(self) -> Callable[..., object]: ...

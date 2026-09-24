@@ -38,6 +38,7 @@ from scopecat_quantum.pulse_implementations import (
 
 if TYPE_CHECKING:
     from scopecat_quantum.programs import VerifiedQuantumProgram
+    from scopecat_quantum.recipe_queries import RecipeParameterInputs
 
 type _GateRecipeTarget = GateDefinition | Gate
 type _GateRecipeCacheKey = tuple[
@@ -391,6 +392,16 @@ class PulseRecipeMap[ParametersT, RowT]:
     def recipe_ids(self) -> tuple[str, ...]:
         return tuple(recipe.id for recipe in (*self.gates, *self.measurements))
 
+    def declarative_inputs(
+        self,
+        *,
+        gate_id: GateId | None = None,
+        measurement_kind: AcquisitionKind | None = None,
+    ) -> tuple[RecipeParameterInputs, ...]:
+        """Arbitrary row callbacks do not declare exact parameter reads."""
+        del gate_id, measurement_kind
+        return ()
+
     def materialize(
         self,
         parameters: ParametersT,
@@ -541,6 +552,13 @@ class _PulseRecipeMapping[ParametersT](Protocol):
     @property
     def recipe_ids(self) -> tuple[str, ...]: ...
 
+    def declarative_inputs(
+        self,
+        *,
+        gate_id: GateId | None = None,
+        measurement_kind: AcquisitionKind | None = None,
+    ) -> tuple[RecipeParameterInputs, ...]: ...
+
     def materialize(
         self,
         parameters: ParametersT,
@@ -584,6 +602,21 @@ class PulseRecipeProfile[ParametersT]:
         )
 
         return recipe_definition_identity(self._mappings)
+
+    def declarative_inputs(
+        self,
+        *,
+        gate_id: GateId | None = None,
+        measurement_kind: AcquisitionKind | None = None,
+    ) -> tuple[RecipeParameterInputs, ...]:
+        """Expose only declared queries for the selected logical operation."""
+        return tuple(
+            query
+            for binding in self._mappings
+            for query in binding.declarative_inputs(
+                gate_id=gate_id, measurement_kind=measurement_kind
+            )
+        )
 
     def materialize(
         self,
