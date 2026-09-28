@@ -302,22 +302,31 @@ def test_daily_entry_opens_registered_workbench_without_replaying_runs(
     opened = []
     monkeypatch.setattr(application.webbrowser, "open", opened.append)
     try:
-        application.main([str(root), "--static-dir", str(gui), "--home", str(home)])
+        application.main(
+            [
+                str(root),
+                "--action",
+                "start",
+                "--static-dir",
+                str(gui),
+                "--home",
+                str(home),
+            ]
+        )
         status = inspect_daemon(project)
         assert status.state == "running" and status.record is not None
-        assert opened == [status.record.base_url]
+        assert opened == []
         client = ensure_host(home, None)
-        assert len(client.state().operations) == 1
-        assert client.state().operations[0].status == "succeeded"
-        application.main(["--home", str(home)])
+        assert client.state().operations == []
+        application.main(["--home", str(home), "--action", "open"])
         assert inspect_daemon(project).record == status.record
-        assert opened == [status.record.base_url, status.record.base_url]
+        assert len(opened) == 1 and opened[0].startswith(client.record.url + "/#token=")
         with httpx2.Client(trust_env=False) as http:
             response = http.get(status.record.base_url + "/api/v1/runs")
             assert response.status_code == 200
             assert response.json()["items"] == []
-        application.main(["--home", str(home), "--manage"])
-        assert len(client.state().operations) == 2
+        application.main(["--home", str(home), "--action", "open", "--manage"])
+        assert client.state().operations == []
         assert opened[-1].startswith(client.record.url + "/#token=")
     finally:
         stop_project(project)

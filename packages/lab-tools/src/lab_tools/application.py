@@ -8,17 +8,27 @@ import sys
 import webbrowser
 from pathlib import Path
 from typing import Protocol, cast
-from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+from urllib.parse import urlencode
 
 import httpx2
 
 from .bundle import configure_console
 from .host_client import ensure_host
-from .host_models import Command
-from .services import Services
+from .services import Service, Services
+
+
+def registered(store: Services, project: Path) -> Service:
+    root = project.resolve()
+    if root.name == "scopecat.toml":
+        root = root.parent
+    selected = next((item for item in store.list() if Path(item.root) == root), None)
+    if selected is None:
+        raise ValueError("未找到此项目的登记；没有停止其他服务")
+    return selected
 
 
 class Arguments(Protocol):
+    action: str
     project: Path | None
     workspace: Path | None
     python: Path | None
@@ -28,11 +38,19 @@ class Arguments(Protocol):
     source: Path | None
     no_browser: bool
     manage: bool
+    stop_started: bool
+    keep_background: bool
 
 
 def main(argv: list[str] | None = None) -> None:
     configure_console()
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--action",
+        choices=("status", "start", "stop", "open", "desktop", "quit"),
+        default="status",
+        help="Status is read-only; only open explicitly launches a browser",
+    )
     location = parser.add_mutually_exclusive_group()
     location.add_argument(
         "project",
@@ -53,15 +71,27 @@ def main(argv: list[str] | None = None) -> None:
     )
     parser.add_argument("--name")
     parser.add_argument("--static-dir", type=Path)
-    parser.add_argument("--home", type=Path, default=Path.home() / "Scopecat-Lab")
+    parser.add_argument(
+        "--home",
+        type=Path,
+        required=True,
+        help="Explicit installation or isolated development home",
+    )
     parser.add_argument("--source", type=Path)
     parser.add_argument("--no-browser", action="store_true")
+    exit_mode = parser.add_mutually_exclusive_group()
+    exit_mode.add_argument("--stop-started", action="store_true")
+    exit_mode.add_argument("--keep-background", action="store_true")
     parser.add_argument(
         "--manage",
         action="store_true",
         help="Open maintenance without starting a service",
     )
     args = cast("Arguments", cast("object", parser.parse_args(argv)))
+    if args.action in ("status", "desktop", "quit") and (
+        args.project or args.workspace
+    ):
+        parser.error("项目或作者目录只用于 start、stop 或 open")
     if args.workspace is not None and any(
         value is not None for value in (args.python, args.name, args.static_dir)
     ):
@@ -69,55 +99,85 @@ def main(argv: list[str] | None = None) -> None:
             "--workspace 使用实验室已登记环境，"
             "不能同时指定 --python、--name 或 --static-dir"
         )
-    manager_url: str | None = None
     workspace_id: str | None = None
     try:
         store = Services(args.home.resolve())
+        if args.action == "status":
+            import json
+
+            print(
+                json.dumps(
+                    {"services": [v.model_dump() for v in store.views()]},
+                    ensure_ascii=False,
+                )
+            )
+            return
+        if args.action == "desktop":
+            from .desktop import run
+
+            run(args.home.resolve(), args.source)
+            return
+        if args.action == "quit":
+            from .host_client import existing_host
+
+            client = existing_host(args.home.resolve())
+            if client is not None:
+                if not (args.stop_started or args.keep_background):
+                    raise ValueError("退出需指定 --stop-started 或 --keep-background")
+                client.request(
+                    "POST",
+                    "/api/exit",
+                    body={"stop_started_services": args.stop_started},
+                )
+            return
         selected = None
         if args.workspace is not None:
             selected, workspace_id = store.for_workspace(args.workspace)
         elif args.project is not None:
-            service = store.register(
-                args.project,
-                args.python or Path(sys.executable),
-                name=args.name or args.project.resolve().name,
-                static_dir=args.static_dir,
-            )
-            print(
-                f"已登记实验服务: {service.name} ({service.id})\n环境: {service.python}"
-            )
+            if args.action == "stop":
+                service = registered(store, args.project)
+            else:
+                service = store.register(
+                    args.project,
+                    args.python or Path(sys.executable),
+                    name=args.name or args.project.resolve().name,
+                    static_dir=args.static_dir,
+                )
+                print(
+                    f"已登记实验服务: {service.name} ({service.id})\n"
+                    f"环境: {service.python}"
+                )
             selected = service
-        client = ensure_host(args.home, args.source)
-        if args.no_browser:
-            print(client.state().model_dump_json(indent=2))
-            return
-        manager_url = f"{client.record.url}/#token={client.record.token}"
         selected = selected or store.preferred()
-        if args.manage or selected is None:
-            webbrowser.open(manager_url)
+        if args.action in ("start", "stop"):
+            if selected is None:
+                raise ValueError("请明确选择已登记的实验室")
+            if args.action == "start":
+                store.start(selected.id)
+                store.remember(selected.id)
+            else:
+                store.stop(selected.id)
+            print(
+                next(
+                    view for view in store.views() if view.service.id == selected.id
+                ).model_dump_json()
+            )
             return
-        operation = client.submit(Command(action="service_start", service=selected.id))
-        print(
-            f"正在启动 / 检查工作台: {selected.name}；操作编号: {operation.command.id}"
-        )
-        client.wait(operation)
-        view = next(
-            (item for item in client.state().services if item.service == selected), None
-        )
-        if view is None or view.state != "running" or view.url is None:
-            raise ValueError("启动后的服务状态或登记已改变；请在管理页面检查")
-        store.remember(selected.id)
-        url = view.url
+        client = ensure_host(args.home, args.source)
+        fragment = {"token": client.record.token}
+        if selected is not None:
+            fragment["service"] = selected.id
         if workspace_id is not None:
-            parts = urlsplit(url)
-            query = dict(parse_qsl(parts.query))
-            query["workspace"] = workspace_id
-            url = urlunsplit(parts._replace(query=urlencode(query)))
-        webbrowser.open(url)
+            fragment["workspace"] = workspace_id
+        if args.manage:
+            fragment["view"] = "settings"
+        url = f"{client.record.url}/#{urlencode(fragment)}"
+        if not args.no_browser:
+            webbrowser.open(url)
+        else:
+            print(client.state().model_dump_json(indent=2))
     except (OSError, ValueError, subprocess.SubprocessError, httpx2.HTTPError) as error:
-        if manager_url is not None:
-            webbrowser.open(manager_url)
-        parser.exit(2, f"{error}\n未打开实验工作台；已有登记、数据和操作日志保留。\n")
+        parser.exit(2, f"{error}\n已有登记、数据和操作日志保留；没有自动打开浏览器。\n")
 
 
 if __name__ == "__main__":

@@ -154,6 +154,7 @@ def _launch(home: Path, source: Path | None, command: Command) -> Operation:
                 stderr=log,
                 start_new_session=sys.platform != "win32",
                 creationflags=subprocess.CREATE_NEW_PROCESS_GROUP
+                | subprocess.CREATE_NO_WINDOW
                 if sys.platform == "win32"
                 else 0,
             )
@@ -180,7 +181,7 @@ def execute(home: Path, source: Path | None, command: Command) -> str | None:
             static_dir=source / "apps" / "scopecat-ui" / "dist" if source else None,
         )
         services = Services(home)
-        services.start(service.id)
+        services.start(service.id, session=command.session)
         services.remember(service.id)
         return service.id
     if command.action in (
@@ -195,7 +196,7 @@ def execute(home: Path, source: Path | None, command: Command) -> str | None:
         assert command.service is not None
         services = Services(home)
         if command.action == "service_start":
-            services.start(command.service)
+            services.start(command.service, session=command.session)
         elif command.action == "service_stop":
             services.stop(command.service)
         elif command.action == "service_update":

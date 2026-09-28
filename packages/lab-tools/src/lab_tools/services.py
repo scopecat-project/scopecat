@@ -64,6 +64,7 @@ def _run(python: str, request: dict[str, object]) -> dict[str, object]:
                 ],
                 check=True,
                 env=_environment(),
+                creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
                 # Service startup follows the existing progress/cancellation contract.
                 timeout=30
                 if request["action"] in ("probe", "register_source")
@@ -475,7 +476,63 @@ class Services:
             print(f"已登记作者目录: {workspace} ({selected})", flush=True)
             return selected
 
-    def start(self, identity: str) -> None:
+    def start(self, identity: str, *, session: str | None = None) -> None:
+        with self.lock:
+            service = self.get(identity)
+            before = inspect_daemon(open_project(service.root, resolve_adapter=False))
+            try:
+                self._start(identity)
+            finally:
+                # A GUI check may fail after the process has started. Keep its
+                # identity so the application can still offer to stop it.
+                self._record_started(service, session, before.state)
+
+    def _record_started(
+        self, service: Service, session: str | None, before: str
+    ) -> None:
+        after = inspect_daemon(open_project(service.root, resolve_adapter=False))
+        if (
+            session is not None
+            and before in ("stopped", "stale")
+            and after.record is not None
+        ):
+            path = self.database.parent / "sessions" / f"{session}.json"
+            path.parent.mkdir(parents=True, exist_ok=True)
+            owned = (
+                cast("dict[str, list[float]]", json.loads(path.read_text()))
+                if path.exists()
+                else {}
+            )
+            owned[service.id] = [after.record.pid, after.record.process_create_time]
+            temporary = path.with_suffix(".tmp")
+            temporary.write_text(json.dumps(owned), encoding="utf-8")
+            temporary.replace(path)
+
+    def owned(self, session: str) -> list[Service]:
+        """Only services still running as the exact process started by a session."""
+        path = self.database.parent / "sessions" / f"{session}.json"
+        if not path.exists():
+            return []
+        identities = cast("dict[str, list[float]]", json.loads(path.read_text()))
+        result: list[Service] = []
+        for service in self.list():
+            if service.id not in identities:
+                continue
+            status = inspect_daemon(open_project(service.root, resolve_adapter=False))
+            if (
+                status.record is not None
+                and [status.record.pid, status.record.process_create_time]
+                == identities[service.id]
+            ):
+                result.append(service)
+        return result
+
+    def stop_owned(self, session: str) -> None:
+        with self.lock:
+            for service in self.owned(session):
+                self.stop(service.id)
+
+    def _start(self, identity: str) -> None:
         from .lab_environment import require_completed_update
 
         require_completed_update(self.database.parent.parent, identity)
