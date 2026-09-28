@@ -136,9 +136,13 @@ selection, setup-sensitive session retries, shared maintained-key claims and no
 global activation during device edits. It does not yet provide a device registry.
 Currently `ExecutableSetupSnapshot.instrument_registry` embeds connections and
 driver choices; editing a device copies a setup. The runtime obtains its driver
-catalog from the backend selected at startup. The raw driver probe calls that
-backend without the normal session-claim path. These are replacement boundaries,
-not contracts to extend with additional service registrations.
+catalog from the backend selected at startup. Connection tests now acquire and
+close normal leased sessions; the worker's raw probe operation has been removed.
+They reuse exact known physical bindings in the selected setup and distinguish
+named virtual instances. This closes the direct probe bypass, but does not supply
+application-wide registration or identify different addresses/drivers as one
+physical device. These remain replacement boundaries, not contracts to extend
+with additional service registrations.
 
 1. Implement device/connection ownership and setup references together with a
    usable device list/editor. Resolve references into existing execution snapshots;

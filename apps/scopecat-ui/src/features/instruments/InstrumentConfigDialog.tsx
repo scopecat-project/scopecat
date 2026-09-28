@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { Dialog } from "@base-ui/react/dialog";
+import { useQueryClient } from "@tanstack/react-query";
 import { Cable, Check, LoaderCircle, PlugZap, Save, X } from "lucide-react";
 import type {
   DriverCatalog,
@@ -24,7 +25,11 @@ import {
   secondaryButton,
 } from "../../ui/styles";
 import { InstrumentDefaultsEditor } from "./InstrumentDefaultsEditor";
-import { probeInstrumentDriver, publishInstrumentSpec } from "./instrument-api";
+import {
+  createInstrumentCommandId,
+  probeInstrumentDriver,
+  publishInstrumentSpec,
+} from "./instrument-api";
 
 import type { SavedSetupRevision as SetupRevision } from "../config/setup-api";
 
@@ -100,6 +105,7 @@ function InstrumentConfigEditor({
   onCancel: () => void;
   onPublished: (instrumentId: string, revision: SetupRevision) => void | Promise<void>;
 }) {
+  const queryClient = useQueryClient();
   const initialDriver = catalog.drivers.find((driver) => driver.driver_id === existing?.driver_id);
   const firstDriver = initialDriver ?? catalog.drivers[0];
   const [instrumentId, setInstrumentId] = useState(existing?.id ?? "");
@@ -200,6 +206,9 @@ function InstrumentConfigEditor({
     setProbe(undefined);
     try {
       const receipt = await probeInstrumentDriver({
+        setup: { revision_id: revision.id, content_hash: revision.content_hash },
+        operation_id: createInstrumentCommandId("connection-test"),
+        actor: "local-operator",
         binding: {
           id: spec.id,
           driver_id: spec.driver_id,
@@ -214,6 +223,7 @@ function InstrumentConfigEditor({
       setError(errorMessage(cause));
     } finally {
       setProbePending(false);
+      void queryClient.invalidateQueries({ queryKey: ["instruments"] });
     }
   };
   const publish = async () => {

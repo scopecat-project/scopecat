@@ -1359,6 +1359,9 @@ describe("instrument workspace", () => {
 
     await waitFor(() =>
       expect(probeInstrumentDriver).toHaveBeenCalledWith({
+        setup: { revision_id: expect.any(String), content_hash: expect.any(String) },
+        operation_id: expect.stringContaining("connection-test"),
+        actor: "local-operator",
         binding: {
           id: "bias-source",
           driver_id: "yokogawa.gs200",
@@ -1434,6 +1437,9 @@ describe("instrument workspace", () => {
 
     await waitFor(() =>
       expect(probeInstrumentDriver).toHaveBeenCalledWith({
+        setup: { revision_id: "lab-default", content_hash: "sha256:active" },
+        operation_id: expect.stringContaining("connection-test"),
+        actor: "local-operator",
         binding: {
           id: "controller",
           driver_id: "example.controller",

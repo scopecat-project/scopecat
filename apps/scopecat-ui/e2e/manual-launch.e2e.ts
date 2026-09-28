@@ -41,6 +41,9 @@ test("direct device pages keep separate contexts and share ownership", async ({
     await second.getByLabel("Device context", { exact: true }).selectOption("browser-bench-b");
     await page.getByTitle("Inspect instrument drive-lo-a").click();
     await second.getByTitle("Inspect instrument drive-lo-a").click();
+    await second.getByRole("button", { name: "Configure device", exact: true }).click();
+    const connectionDialog = second.getByRole("dialog");
+    await expect(connectionDialog).toBeVisible();
     const opening = page.waitForRequest((request) =>
       request.url().endsWith("/instrument-sessions"),
     );
@@ -48,6 +51,9 @@ test("direct device pages keep separate contexts and share ownership", async ({
     expect((await opening).postDataJSON().setup.revision_id).toBe("browser-bench-a");
     await expect(page.getByText("Interactive session connected")).toBeVisible();
     await expect(page.getByLabel("Device context", { exact: true })).toBeDisabled();
+    await connectionDialog.getByRole("button", { name: "Test connection", exact: true }).click();
+    await expect(connectionDialog.getByRole("alert")).toContainText("resources are busy");
+    await connectionDialog.getByRole("button", { name: "Cancel", exact: true }).click();
     await second.getByRole("button", { name: "Refresh instruments", exact: true }).click();
     await expect(second.getByRole("button", { name: "Connect", exact: true })).not.toBeVisible();
     await expect(second.getByLabel("Device context", { exact: true })).toHaveValue(
@@ -64,6 +70,12 @@ test("direct device pages keep separate contexts and share ownership", async ({
     await expect(second.getByText("Interactive session connected")).toBeVisible();
     await second.getByRole("button", { name: "Disconnect", exact: true }).click();
     await expect(second.getByLabel("Device context", { exact: true })).toBeEnabled();
+    await second.getByRole("button", { name: "Configure device", exact: true }).click();
+    await connectionDialog.getByRole("button", { name: "Test connection", exact: true }).click();
+    await expect(connectionDialog.getByRole("status")).toContainText(
+      /Connected to|Connection succeeded/,
+    );
+    await connectionDialog.getByRole("button", { name: "Cancel", exact: true }).click();
     await second.close();
     completed = true;
   } finally {

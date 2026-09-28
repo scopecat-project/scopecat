@@ -1194,8 +1194,11 @@ class InstrumentContractCatalogRequest(_WireModel):
 
 
 class InstrumentDriverProbeCommand(_WireModel):
-    """Open, identify, and close one candidate instrument binding."""
+    """Test a candidate using a leased session in an explicit device context."""
 
+    setup: SetupRevisionRef
+    operation_id: NonEmptyText
+    actor: NonEmptyText
     binding: InstrumentBindingSpec
 
 

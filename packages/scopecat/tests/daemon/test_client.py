@@ -321,11 +321,14 @@ def test_driver_catalog_reads_project_backend_metadata() -> None:
 def test_driver_probe_posts_the_candidate_binding() -> None:
     requests: list[httpx2.Request] = []
     command = InstrumentDriverProbeCommand(
+        setup=SetupRevisionRef(revision_id="bench", content_hash="sha256:" + "0" * 64),
+        operation_id="connection-test-1",
+        actor="alice",
         binding=InstrumentBindingSpec(
             id="source-0",
             driver_id="tests.signal",
             connection=VirtualInstrumentConnection(),
-        )
+        ),
     )
     receipt = InstrumentDriverProbeReceipt(
         status="connected",

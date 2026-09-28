@@ -120,8 +120,6 @@ class InstrumentBackendEndpoint(Protocol):
         bindings: tuple[InstrumentBindingSpec, ...],
     ) -> InstrumentProviderDescription: ...
 
-    def probe(self, binding: InstrumentBindingSpec) -> InstrumentDescription: ...
-
     def connect(
         self,
         *,
@@ -241,22 +239,6 @@ class LocalInstrumentBackendEndpoint:
                     )
                 self._connections[handle] = connection
             return ConnectedInstrument(handle=handle, description=actual)
-
-    def probe(self, binding: InstrumentBindingSpec) -> InstrumentDescription:
-        with self._provider_lock:
-            with self._lock:
-                if self._closed:
-                    raise InstrumentBackendUnavailable(
-                        "instrument backend is shut down"
-                    )
-            driver, description = self._open_driver(binding)
-            try:
-                driver.disconnect()
-            except Exception as error:
-                raise InstrumentBackendUnavailable(
-                    "instrument probe cleanup failed"
-                ) from error
-            return description
 
     def _open_driver(
         self,

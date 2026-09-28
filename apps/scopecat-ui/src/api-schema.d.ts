@@ -5486,10 +5486,13 @@ export interface components {
         };
         /**
          * InstrumentDriverProbeCommand
-         * @description Open, identify, and close one candidate instrument binding.
+         * @description Test a candidate using a leased session in an explicit device context.
          */
         InstrumentDriverProbeCommand: {
+            actor: components["schemas"]["NonEmptyText"];
             binding: components["schemas"]["InstrumentBindingSpec"];
+            operation_id: components["schemas"]["NonEmptyText"];
+            setup: components["schemas"]["SetupRevisionRef"];
         };
         /** InstrumentDriverProbeReceipt */
         InstrumentDriverProbeReceipt: {

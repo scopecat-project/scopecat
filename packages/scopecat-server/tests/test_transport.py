@@ -46,6 +46,7 @@ from scopecat.records.scientific_binding import (
     ResolvedScientificBinding,
     UnboundSubject,
 )
+from scopecat.records.setup import SetupRevisionRef
 from scopecat.sdk.instruments.catalog import DriverCatalog
 from scopecat.sdk.instruments.contracts import InstrumentDescription
 
@@ -444,11 +445,14 @@ def test_driver_probe_route_forwards_the_candidate_binding() -> None:
     backend = FakeApplication()
     client = TestClient(_create_test_app(backend))
     command = InstrumentDriverProbeCommand(
+        setup=SetupRevisionRef(revision_id="bench", content_hash=_HASH),
+        operation_id="connection-test-1",
+        actor="alice",
         binding=InstrumentBindingSpec(
             id="source-0",
             driver_id="tests.signal",
             connection=VirtualInstrumentConnection(),
-        )
+        ),
     )
 
     response = client.post(

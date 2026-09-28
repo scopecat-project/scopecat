@@ -207,6 +207,9 @@ describe("instrument driver catalog", () => {
     });
     await expect(
       probeInstrumentDriver({
+        setup: { revision_id: "bench", content_hash: `sha256:${"0".repeat(64)}` },
+        operation_id: "connection-test-1",
+        actor: "alice",
         binding: {
           id: "source-1",
           driver_id: "virtual.rf_source",
@@ -220,6 +223,9 @@ describe("instrument driver catalog", () => {
     await expect(
       requestJson(fetchMock.mock.calls[1]?.[0], fetchMock.mock.calls[1]?.[1]),
     ).resolves.toEqual({
+      setup: { revision_id: "bench", content_hash: `sha256:${"0".repeat(64)}` },
+      operation_id: "connection-test-1",
+      actor: "alice",
       binding: {
         id: "source-1",
         driver_id: "virtual.rf_source",

@@ -348,22 +348,52 @@ class InstrumentRuntime:
         self,
         command: InstrumentDriverProbeCommand,
     ) -> InstrumentDriverProbeReceipt:
-        endpoint = self._endpoint
-        if endpoint is None:
-            raise BackendConflict("project does not configure an instrument backend")
-        self._require_supported_binding(endpoint, command.binding)
-        try:
-            description = endpoint.probe(command.binding)
-        except InstrumentBackendRejected as error:
-            return InstrumentDriverProbeReceipt(
-                status="rejected",
-                problems=error.problems,
+        # Use normal session admission and resident connections. A renamed
+        # candidate must not bypass a maintained device's physical claim.
+        config = self._selected_setup_config(command.setup)
+        matching = tuple(
+            spec
+            for spec in config.instrument_registry.instruments
+            if spec.driver_id == command.binding.driver_id
+            and spec.connection == command.binding.connection
+            and (
+                command.binding.connection.kind != "virtual"
+                or spec.id == command.binding.id
             )
-        except InstrumentBackendUnavailable as error:
-            raise BackendConflict(str(error)) from error
+        )
+        if len(matching) > 1:
+            raise BackendConflict("candidate connection has ambiguous device ownership")
+        binding = command.binding.model_copy(
+            update={
+                "id": matching[0].id
+                if matching
+                else f"connection-test:{command.binding.id}"
+            }
+        )
+        session = self.open_session(
+            InstrumentSessionOpenCommand(
+                setup=command.setup,
+                operation_id=command.operation_id,
+                actor=command.actor,
+                instrument_ids=(binding.id,),
+                temporary_bindings=() if matching else (binding,),
+            )
+        )
+        try:
+            self._end_session(
+                session.session_id, abort=False, discard_connections=not matching
+            )
+        except BackendConflict as error:
+            raise BackendConflict(
+                f"connection test needs session recovery ({session.session_id}): "
+                f"{error}"
+            ) from error
+        [description] = session.descriptions
         return InstrumentDriverProbeReceipt(
             status="connected",
-            description=description,
+            description=description.model_copy(
+                update={"instrument_id": command.binding.id}
+            ),
         )
 
     def get_instrument(
@@ -3631,6 +3661,7 @@ class InstrumentRuntime:
         session_id: str,
         *,
         abort: bool,
+        discard_connections: bool = False,
     ) -> InstrumentSessionEndReceipt:
         try:
             session = self._control.get_instrument_session(session_id)
@@ -3674,7 +3705,14 @@ class InstrumentRuntime:
                     abort=False,
                 )
                 raise BackendConflict("instrument abort was not confirmed")
-            if release_instruments(runtime.instruments.values()):
+            # Unsaved connection tests must not leave a second resident path
+            # when the candidate is subsequently registered under a new key.
+            release_failed = (
+                fault_ownership(runtime, abort=False)
+                if discard_connections
+                else release_instruments(runtime.instruments.values())
+            )
+            if release_failed:
                 self._pop_runtime(session.session_id)
                 self._mark_unknown(
                     session,
@@ -4056,6 +4094,7 @@ class InstrumentRuntime:
                 for spec in configured
                 if spec.driver_id == binding.driver_id
                 and spec.connection == binding.connection
+                and binding.connection.kind != "virtual"
             ),
             None,
         )
@@ -4067,6 +4106,9 @@ class InstrumentRuntime:
                 {
                     "driver_id": binding.driver_id,
                     "connection": binding.connection.model_dump(mode="json"),
+                    "virtual_instance": binding.id
+                    if binding.connection.kind == "virtual"
+                    else None,
                 }
             )
         )
