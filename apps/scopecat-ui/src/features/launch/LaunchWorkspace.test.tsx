@@ -240,7 +240,6 @@ it("previews a chosen branch version and invalidates only when another version i
   fireEvent.change(screen.getByLabelText("Parameter branch"), { target: { value: "daily" } });
   fireEvent.click(screen.getByRole("button", { name: "Use this parameter version" }));
   expect(screen.getByRole("button", { name: "Preview" })).toBeDisabled();
-  fireEvent.click(screen.getByRole("button", { name: "Choose devices" }));
   await screen.findByRole("option", { name: "bench" });
   fireEvent.change(screen.getByLabelText("Device context"), { target: { value: "bench" } });
   fireEvent.click(screen.getByRole("button", { name: "Preview" }));

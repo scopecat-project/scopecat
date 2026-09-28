@@ -67,11 +67,8 @@ it("keeps two drafts independent through refresh and parameter changes without c
   );
   const first = within(screen.getByRole("region", { name: "First draft" }));
   const second = within(screen.getByRole("region", { name: "Second draft" }));
-  expect(calls).toEqual([]);
-  fireEvent.click(first.getByRole("button", { name: "Choose devices" }));
   await first.findByRole("option", { name: "bench-a" });
   fireEvent.change(first.getByLabelText("Device context"), { target: { value: "bench-a" } });
-  fireEvent.click(second.getByRole("button", { name: "Choose devices" }));
   await second.findByRole("option", { name: "bench-b" });
   fireEvent.change(second.getByLabelText("Device context"), { target: { value: "bench-b" } });
   setups = [...setups, { id: "bench-c", content_hash: "sha256:c" }];

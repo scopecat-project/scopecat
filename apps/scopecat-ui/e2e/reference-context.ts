@@ -31,6 +31,5 @@ export async function chooseReferenceContext(page: Page, setup = "browser-bench-
   await expect(page.getByRole("option", { name: /browser.*generation 1/ })).toBeAttached();
   await page.getByLabel("Parameter branch", { exact: true }).selectOption("browser");
   await page.getByRole("button", { name: "Use this parameter version", exact: true }).click();
-  await page.getByRole("button", { name: "Choose devices", exact: true }).click();
   await page.getByLabel("Device context", { exact: true }).selectOption(setup);
 }

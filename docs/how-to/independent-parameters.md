@@ -68,7 +68,7 @@ Neither operation activates equipment. Explicit setup references do not require
 a global active setup and are not invalidated when another client selects one.
 
 In the workbench, choose a parameter branch and adopt its version, then use
-**Choose devices** to select a saved device context for this page. Preview becomes
+the **Device context** field to select a saved setup for this page. Preview becomes
 available after this selection. Another browser page may use a different context
 on the same service. Refreshing either list or adopting a new parameter version
 preserves the selected setup; only an explicit change replaces it.
