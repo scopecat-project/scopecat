@@ -22,7 +22,7 @@ from scopecat.author_workspaces import (
     author_workspace_id,
 )
 from scopecat.project import open_project
-from scopecat_server.lifecycle import inspect_daemon
+from scopecat_server.lifecycle import inspect_daemon, stop_project
 
 
 class Service(BaseModel):
@@ -436,14 +436,26 @@ class Services:
                 status = inspect_daemon(
                     open_project(service.root, resolve_adapter=False)
                 )
+                state = status.state
+                detail = status.detail or ""
+                if state == "running" and status.record is not None:
+                    python = status.record.python
+                    if python is None or os.path.normcase(
+                        str(python.absolute())
+                    ) != os.path.normcase(str(Path(service.python).absolute())):
+                        state = "degraded"
+                        detail = (
+                            "后台服务仍在运行，但环境与当前登记不一致或尚未确认。"
+                            "请停止服务后重新启动；已有记录保留。"
+                        )
                 result.append(
                     ServiceView(
                         service=service,
-                        state=status.state,
+                        state=state,
                         url=status.record.base_url
-                        if status.state == "running" and status.record
+                        if state == "running" and status.record
                         else None,
-                        detail=status.detail or "",
+                        detail=detail,
                     )
                 )
             except (OSError, ValueError) as error:
@@ -566,15 +578,9 @@ class Services:
     def stop(self, identity: str) -> None:
         with self.lock:
             service = self.get(identity)
-            _run(
-                service.python,
-                {
-                    "action": "stop",
-                    "root": service.root,
-                    "static_dir": None,
-                    "environment": service.environment,
-                },
-            )
+            # Explicit shutdown targets the registered binding and exact process,
+            # even if its old interpreter has changed or is no longer installed.
+            stop_project(open_project(service.root, resolve_adapter=False))
             if (
                 inspect_daemon(open_project(service.root, resolve_adapter=False)).state
                 != "stopped"
