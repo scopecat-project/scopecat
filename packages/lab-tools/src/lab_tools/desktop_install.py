@@ -10,6 +10,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from .windows_shortcut import CREATE_SHORTCUT
+
 
 def install_entry(home: Path, python: Path) -> Path | None:
     if sys.platform == "darwin":
@@ -65,14 +67,7 @@ def install_entry(home: Path, python: Path) -> Path | None:
                     "-NoProfile",
                     "-NonInteractive",
                     "-Command",
-                    (
-                        "$c = Get-Content -LiteralPath .desktop-entry.json "
-                        "-Raw -Encoding UTF8 | ConvertFrom-Json; "
-                        "$s = (New-Object -ComObject WScript.Shell)"
-                        ".CreateShortcut($c.link); "
-                        "$s.TargetPath = $c.python; $s.Arguments = $c.arguments; "
-                        "$s.WorkingDirectory = $c.home; $s.Save()"
-                    ),
+                    CREATE_SHORTCUT,
                 ],
                 cwd=home,
                 check=True,

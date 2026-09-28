@@ -31,17 +31,19 @@ def test_windows_shortcut_uses_pythonw_and_no_shell_path_interpolation(
 ):
     monkeypatch.setattr(desktop_install.sys, "platform", "win32")
     monkeypatch.setattr(desktop_install.shutil, "which", lambda _: "powershell.exe")
+    home = tmp_path / "中文 space's"
+    home.mkdir()
     seen = []
 
     def run(args, **kwargs):
-        seen.append(json.loads((tmp_path / ".desktop-entry.json").read_text()))
-        assert str(tmp_path) not in args[-1]
-        assert kwargs == {"cwd": tmp_path, "check": True}
+        seen.append(json.loads((home / ".desktop-entry.json").read_text()))
+        assert str(home) not in args[-1]
+        assert kwargs == {"cwd": home, "check": True}
 
     monkeypatch.setattr(desktop_install.subprocess, "run", run)
     assert (
-        desktop_install.install_entry(tmp_path, tmp_path / "python.exe")
-        == tmp_path / "Scopecat.lnk"
+        desktop_install.install_entry(home, home / "python.exe")
+        == home / "Scopecat.lnk"
     )
-    assert seen[0]["python"] == str(tmp_path / "pythonw.exe")
-    assert not (tmp_path / ".desktop-entry.json").exists()
+    assert seen[0]["python"] == str(home / "pythonw.exe")
+    assert not (home / ".desktop-entry.json").exists()
