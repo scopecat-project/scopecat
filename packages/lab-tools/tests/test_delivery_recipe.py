@@ -37,7 +37,7 @@ def recipe(tmp_path):
     path = tmp_path / "delivery.toml"
     path.write_text(
         '[delivery]\nlock_project="."\npublic_source="public"\n'
-        'dependency_group="lab-delivery"\ninclude_project=true\n'
+        'dependency_group="lab-delivery"\ninclude_project=true\nsource_builds=["proxy-tools"]\n'
         'packages=[".","public/packages/scopecat", "public/packages/scopecat-server", '
         '"public/packages/scopecat-instruments", "public/packages/lab-tools", '
         '"public/packages/lab-teaching"]\n'
@@ -104,9 +104,13 @@ def test_recipe_build_uses_locked_lab_and_public_toolchain(
     assert "--locked" in export and "--no-emit-local" in export
     assert export[export.index("--group") + 1] == "lab-delivery"
     assert "--no-default-groups" in export
-    download, cwd = next(item for item in calls if "download" in item[0])
+    download, cwd = next(
+        item for item in calls if "pip" in item[0] and "wheel" in item[0]
+    )
     assert cwd == tmp_path / "public"
     assert {"--require-hashes", "--no-deps", "--only-binary=:all:"} <= set(download)
+    assert "--no-build-isolation" in download
+    assert "--no-binary=proxy-tools" in download
     assert (result / "build.lock").read_bytes() == (tmp_path / "uv.lock").read_bytes()
     assert (
         "my-adapter==1.0 --hash=sha256:" in (result / "requirements.lock").read_text()

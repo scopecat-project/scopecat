@@ -18,6 +18,13 @@ afterEach(() => {
 });
 function mount(serviceState = "running", fresh = false) {
   document.body.innerHTML = new DOMParser().parseFromString(markup, "text/html").body.innerHTML;
+  const dialog = document.getElementById("exit-dialog") as HTMLDialogElement;
+  dialog.showModal = () => {
+    dialog.open = true;
+  };
+  dialog.close = () => {
+    dialog.open = false;
+  };
   const state = {
     setup_defaults: { project: "/home/experiments/main", data_root: "/home/data" },
     topics: {},
@@ -52,6 +59,17 @@ function mount(serviceState = "running", fresh = false) {
   const confirm = vi.fn(() => true);
   const requests: Array<{ path: string; body?: unknown }> = [];
   const fetch = vi.fn(async (path: string, options: RequestInit) => {
+    if (path === "/api/exit") {
+      if (options.method === "GET")
+        return Response.json({
+          services: [
+            { name: "本次实验", owned: true },
+            { name: "独立实验", owned: false },
+          ],
+        });
+      requests.push({ path, body: JSON.parse(options.body as string) });
+      return Response.json({ detail: "应用已退出" });
+    }
     if (path === "/api/state")
       return control.failState
         ? Response.json({ detail: "manager unavailable" }, { status: 503 })
@@ -79,6 +97,7 @@ function mount(serviceState = "running", fresh = false) {
     throw new Error(`Unexpected manager request: ${path}`);
   });
   runInNewContext(script, {
+    window: {},
     document,
     confirm,
     URL,
@@ -97,16 +116,20 @@ function mount(serviceState = "running", fresh = false) {
   });
   return { control, requests, assign, confirm, poll: () => poll() };
 }
-it("keeps manager open and reveals an isolated workbench link only after successful verification", async () => {
+it("opens experiments inside the application and preserves settings without sharing credentials", async () => {
   const host = mount();
   const start = await screen.findByRole("button", { name: "启动 / 检查工作台" });
   expect(screen.queryByRole("link", { name: "打开工作台（新标签页）" })).not.toBeInTheDocument();
   fireEvent.click(start);
-  const link = await screen.findByRole("link", { name: "打开工作台（新标签页）" });
-  expect(link).toHaveAttribute("href", "http://127.0.0.1:9001/");
-  expect(link).toHaveAttribute("target", "_blank");
-  expect(link).toHaveAttribute("rel", "noopener noreferrer");
-  expect(link.getAttribute("href")).not.toContain("manager-secret");
+  const frame = screen.getByTitle("实验工作台");
+  await waitFor(() => expect(frame).toHaveAttribute("src", "http://127.0.0.1:9001/"));
+  expect(frame).toBeVisible();
+  expect(frame).toHaveAttribute("referrerpolicy", "no-referrer");
+  expect(frame.getAttribute("src")).not.toContain("manager-secret");
+  fireEvent.click(screen.getByRole("button", { name: "设置与帮助" }));
+  expect(frame).not.toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "实验" }));
+  expect(frame).toBeVisible();
   expect(host.assign).not.toHaveBeenCalled();
   expect(host.requests).toEqual([
     {
@@ -120,7 +143,8 @@ it("keeps manager open and reveals an isolated workbench link only after success
   ]);
   host.control.state.services[0]!.state = "stopped";
   await host.poll();
-  expect(screen.queryByRole("link")).not.toBeInTheDocument();
+  expect(frame).not.toHaveAttribute("src");
+  expect(frame).not.toBeVisible();
 });
 it("retains startup failure evidence and never offers the stale running URL", async () => {
   const host = mount();
@@ -132,13 +156,33 @@ it("retains startup failure evidence and never offers the stale running URL", as
     ),
   );
   expect(screen.getByRole("button", { name: "查看日志" })).toBeVisible();
+  expect(screen.queryByRole("button", { name: "进入实验" })).not.toBeInTheDocument();
   expect(screen.queryByRole("link")).not.toBeInTheDocument();
+  expect(host.assign).not.toHaveBeenCalled();
+});
+it.each([true, false])("makes background retention explicit on exit (stop=%s)", async (stop) => {
+  const host = mount();
+  await screen.findByRole("button", { name: "启动 / 检查工作台" });
+  fireEvent.click(document.getElementById("request-exit")!);
+  await screen.findByText("独立实验 · 独立后台服务，将保留");
+  expect(screen.getByText("本次实验 · 本次启动")).toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "取消" }));
+  expect(document.getElementById("exit-dialog")).not.toHaveAttribute("open");
+  expect(host.requests).toHaveLength(0);
+  fireEvent.click(document.getElementById("request-exit")!);
+  await waitFor(() => expect(document.getElementById("exit-dialog")).toHaveAttribute("open"));
+  fireEvent.click(
+    screen.getByRole("button", { name: stop ? "停止本次服务并退出" : "保留后台服务并退出" }),
+  );
+  await waitFor(() =>
+    expect(host.requests).toEqual([{ path: "/api/exit", body: { stop_started_services: stop } }]),
+  );
   expect(host.assign).not.toHaveBeenCalled();
 });
 it("removes ready links when the manager can no longer verify service state", async () => {
   const host = mount();
   fireEvent.click(await screen.findByRole("button", { name: "启动 / 检查工作台" }));
-  await screen.findByRole("link", { name: "打开工作台（新标签页）" });
+  await waitFor(() => expect(screen.getByTitle("实验工作台")).toBeVisible());
   host.control.failState = true;
   await host.poll();
   expect(screen.queryByRole("link")).not.toBeInTheDocument();
@@ -151,8 +195,9 @@ it.each([
   "javascript:alert(1)",
 ])("rejects a non-workbench navigation URL %s", async (url) => {
   const host = mount();
+  const start = await screen.findByRole("button", { name: "启动 / 检查工作台" });
   host.control.state.services[0]!.url = url;
-  fireEvent.click(await screen.findByRole("button", { name: "启动 / 检查工作台" }));
+  fireEvent.click(start);
   await waitFor(() =>
     expect(document.getElementById("notice")).toHaveTextContent("工作台地址无效"),
   );
@@ -245,7 +290,10 @@ it("shows first-run setup, preserves edits during polling, and enters the create
   await host.poll();
   expect(project).toHaveValue("D:\\实验代码");
   fireEvent.submit(document.getElementById("setup-form")!);
-  await waitFor(() => expect(host.assign).toHaveBeenCalledWith("http://127.0.0.1:9001/"));
+  await waitFor(() =>
+    expect(screen.getByTitle("实验工作台")).toHaveAttribute("src", "http://127.0.0.1:9001/"),
+  );
+  expect(host.assign).not.toHaveBeenCalled();
   expect(host.requests[0]?.body).toEqual({
     id: "12345678123412341234123456789012",
     action: "setup",
@@ -366,7 +414,10 @@ it("sets up an installed adapter and opens the independently registered author c
   expect(screen.getByLabelText("适配包名称")).toHaveValue("my-lab");
   fireEvent.submit(document.getElementById("setup-form")!);
   await waitFor(() =>
-    expect(host.assign).toHaveBeenCalledWith("http://127.0.0.1:9001/?workspace=author-id"),
+    expect(screen.getByTitle("实验工作台")).toHaveAttribute(
+      "src",
+      "http://127.0.0.1:9001/?workspace=author-id",
+    ),
   );
   expect(host.requests[0]?.body).toMatchObject({
     action: "setup",

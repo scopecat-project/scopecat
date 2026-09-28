@@ -14,6 +14,7 @@ const setupForm = document.getElementById("setup-form");
 const setupPanel = document.getElementById("setup-panel");
 const setupFields = document.getElementById("setup-fields");
 const readyServices = new Map();
+const failedServices = new Set();
 const updateDrafts = new Map();
 let activeService = null, selectedOnce = false;
 const frame = document.getElementById("experiment-frame");
@@ -100,6 +101,9 @@ function workbenchUrl(value) {
 }
 function forgetReadyLinks() {
   readyServices.clear();
+  activeService = null;
+  frame.removeAttribute("src");
+  showSettings();
   document.querySelectorAll("[data-workbench-link]").forEach(link => link.remove());
 }
 async function submit(command) {
@@ -121,7 +125,13 @@ async function submit(command) {
       await new Promise(resolve => setTimeout(resolve, 1200));
       operation = await api(`/api/operations/${command.id}`);
     }
-    if (operation.status !== "succeeded") throw new Error(operation.detail);
+    if (operation.status !== "succeeded") {
+      if (command.service) {
+        failedServices.add(command.service);
+        readyServices.delete(command.service);
+      }
+      throw new Error(operation.detail);
+    }
     message(operation.detail || "已完成。");
     if (["service_start", "setup"].includes(command.action)) {
       const state = await api("/api/state");
@@ -130,6 +140,7 @@ async function submit(command) {
       if (service?.state !== "running" || !service.url) throw new Error("实验服务尚未就绪，请查看日志。");
       const url = workbenchUrl(service.url);
       readyServices.set(identity, url);
+      failedServices.delete(identity);
       openWorkbench(identity, url, operation.workspace || fragment.get("workspace"));
       message("实验服务已就绪。");
     }
@@ -146,7 +157,7 @@ async function refresh() {
   catch (error) { forgetReadyLinks(); throw error; }
   if (stopped) return;
   for (const item of state.services) {
-    if (item.state === "running" && item.url) readyServices.set(item.service.id, workbenchUrl(item.url));
+    if (item.state === "running" && item.url && !failedServices.has(item.service.id)) readyServices.set(item.service.id, workbenchUrl(item.url));
   }
   for (const [identity, url] of readyServices) {
     const service = state.services.find(item => item.service.id === identity);

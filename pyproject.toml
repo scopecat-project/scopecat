@@ -26,7 +26,7 @@ dev = [
   { include-group = "delivery" },
 ]
 delivery = ["scopecat-lab-tools[kernel,desktop]", "uv_build>=0.12.3,<0.13"]
-delivery-build = ["pip>=25"]
+delivery-build = ["pip>=25", "setuptools>=80", "wheel>=0.45"]
 delivery-notebook = ["scopecat-lab-tools[notebook]", { include-group = "delivery" }]
 docs = [
   "mkdocstrings-python>=2",
