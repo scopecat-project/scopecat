@@ -7,10 +7,11 @@ import os
 import subprocess
 import sys
 import tempfile
+from collections.abc import Callable
 from pathlib import Path
 from typing import cast
 
-from scopecat.application.author_project import AuthorJobFailed
+from scopecat.application.author_project import AuthorJobFailed, AuthorProject
 from scopecat.authoring.experiments import Experiment
 from scopecat.daemon.endpoint import DAEMON_URL_ENV
 from scopecat.daemon.preparation import AuthorPreparationFailed
@@ -96,6 +97,12 @@ def check() -> None:
             with project.authoring() as session:
                 sys.path.insert(0, str(project.root / "src"))
                 initial = session.refresh()
+                cast(
+                    "Callable[[AuthorProject], object]",
+                    importlib.import_module(
+                        "scopecat_lab.authored.parameters"
+                    ).open_parameters,
+                )(session)
                 imported = cast(
                     "Experiment[..., object]",
                     importlib.import_module(
@@ -199,6 +206,7 @@ def check() -> None:
         start_project(project, timeout=90)
         try:
             with project.authoring() as session:
+                session.use(parameter_branch="starter")
                 for run_id, field, expected in (
                     (old_id, "iq", 2 + 3j),
                     (new_id, "average", 4 + 7j),
