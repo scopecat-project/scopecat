@@ -455,12 +455,7 @@ export function InstrumentsWorkspace({ daemonUnavailable }: { daemonUnavailable:
               configTarget.instrumentId === selected.instrument_id &&
               driverCatalogQuery.isFetching
             }
-            configurationUnavailable={
-              !!session ||
-              connectMutation.isPending ||
-              endMutation.isPending ||
-              driverCatalogQuery.isError
-            }
+            configurationUnavailable={driverCatalogQuery.isError}
             onConnect={() => connectCurrent(selected.instrument_id)}
             onClose={closeCurrent}
             onSessionLost={loseCurrent}

@@ -420,6 +420,8 @@ function InstrumentInspectorContent({
           onClick={onConfigure}
           disabled={
             connected ||
+            connectPending ||
+            closePending ||
             configurationPending ||
             configurationUnavailable ||
             instrument.availability === "active" ||
@@ -429,9 +431,9 @@ function InstrumentInspectorContent({
             configurationUnavailable
               ? "Driver catalog unavailable"
               : connected
-                ? "Disconnect before changing the immutable config"
+                ? "Disconnect before editing this device context"
                 : instrument.availability === "active" || instrument.availability === "quarantined"
-                  ? "Resolve the current owner before changing the immutable config"
+                  ? "Resolve the current owner before editing this device context"
                   : undefined
           }
         >

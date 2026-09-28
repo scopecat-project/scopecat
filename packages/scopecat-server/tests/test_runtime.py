@@ -200,10 +200,7 @@ from scopecat_server.services.point_plans import RunPointPlanService
 from scopecat_server.services.samples import SampleService
 from scopecat_server.storage.sqlite.config_registry import SQLiteConfigRegistryStore
 from scopecat_server.storage.sqlite.connection import SQLiteDatabase
-from scopecat_server.storage.sqlite.control_plane import (
-    ControlPlaneConflict,
-    SQLiteControlPlane,
-)
+from scopecat_server.storage.sqlite.control_plane import SQLiteControlPlane
 from scopecat_server.storage.sqlite.execution import (
     SQLiteMeasurementDatasetRepository,
 )
@@ -1392,7 +1389,7 @@ def test_parameter_default_publish_does_not_invalidate_setup_selection(
         )
 
 
-def test_setup_release_before_commit_fences_old_session_claim(
+def test_setup_activation_does_not_invalidate_explicit_session_selection(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     baseline = _config()
@@ -1431,10 +1428,13 @@ def test_setup_release_before_commit_fences_old_session_claim(
         with ThreadPoolExecutor(max_workers=1) as pool:
             claim = pool.submit(claim_from_old_snapshot)
             runtime.application.setup.activate(_inventory_migration_command(target))
-            with pytest.raises(ControlPlaneConflict, match="active setup changed"):
-                claim.result(timeout=2)
-        assert control.list_instrument_sessions() == ()
-        assert _resource_claims(tmp_path) == ()
+            claim.result(timeout=2)
+        [session] = control.list_instrument_sessions()
+        assert session.setup == active.revision.ref
+        assert session.exclusivity_keys == ("source-0",)
+        [held] = _resource_claims(tmp_path)
+        assert held.resource == ResourceKey.instrument("source-0")
+        assert held.owner_id == session.session_id
 
 
 def test_setup_activation_rolls_back_and_releases_gate_on_event_failure(
