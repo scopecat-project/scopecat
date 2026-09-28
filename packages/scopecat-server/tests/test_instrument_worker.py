@@ -166,11 +166,6 @@ def test_spawned_worker_executes_closed_driver_requests(
         "driver_id",
         "connection",
     }
-    assert endpoint.probe(binding) == expected
-    assert (project / "driver-events.log").read_text(encoding="utf-8") == (
-        "disconnect:source-0\n"
-    )
-
     connection = endpoint.connect(
         binding=binding,
         expected=expected,
@@ -253,7 +248,7 @@ def test_spawned_worker_executes_closed_driver_requests(
 
     endpoint.disconnect(connection.handle)
     assert (project / "driver-events.log").read_text(encoding="utf-8") == (
-        "disconnect:source-0\ndisconnect:source-0\n"
+        "disconnect:source-0\n"
     )
     with pytest.raises(InstrumentHandleInvalid, match="stale"):
         endpoint.read_state(connection.handle, _gain_read_request())
@@ -268,7 +263,7 @@ def test_spawned_worker_executes_closed_driver_requests(
     endpoint.shutdown()
     endpoint.shutdown()
     assert (project / "driver-events.log").read_text(encoding="utf-8") == (
-        "disconnect:source-0\ndisconnect:source-0\nabort\ndisconnect:source-0\n"
+        "disconnect:source-0\nabort\ndisconnect:source-0\n"
     )
     assert not endpoint.healthy
     assert not worker_process.is_running()

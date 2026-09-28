@@ -50,6 +50,12 @@ and click **Connect**. With one saved context, its devices appear directly.
 Disconnect before choosing another context. Editing a device saves a new context
 and selects it only on that page; it does not activate a global configuration.
 
+**Test connection** in the device editor uses the same ownership checks as a
+manual session. If another session or experiment owns the device, finish that work
+before retrying. A successful test releases its ownership. Known configured
+connections remain available for subsequent work; unsaved candidate connections
+are disconnected. Testing does not save the edited settings.
+
 Closing a session ends ownership and applies its configured finish policy, while
 keeping the connection available for subsequent work. To hand a configured device
 to another program after all runs and sessions have ended, disconnect it explicitly:

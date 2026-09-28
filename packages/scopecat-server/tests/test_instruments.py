@@ -683,7 +683,9 @@ def test_instrument_views_expose_only_safe_configuration_summaries(
         assert forbidden not in detail_response.text
 
 
-def test_driver_probe_uses_an_ephemeral_worker_connection(tmp_path: Path) -> None:
+def test_driver_probe_releases_ownership_and_reuses_the_managed_connection(
+    tmp_path: Path,
+) -> None:
     config = load_config()
     [binding] = instrument_bindings(config)
     provider = _TrackingProvider()
@@ -711,15 +713,190 @@ def test_driver_probe_uses_an_ephemeral_worker_connection(tmp_path: Path) -> Non
         _runtime(tmp_path, provider, config=config, driver_catalog=catalog) as runtime,
         TestClient(runtime.app()) as transport,
     ):
-        receipt = _daemon_client(transport).probe_driver(
-            InstrumentDriverProbeCommand(binding=binding)
+        daemon = _daemon_client(transport)
+        setup = runtime.application.setup.current().revision.ref
+        command = InstrumentDriverProbeCommand(
+            setup=setup,
+            operation_id="connection-test",
+            actor="alice",
+            binding=binding,
         )
+        receipt = daemon.probe_driver(command)
+        [driver] = provider.drivers
+        assert driver.disconnect_count == 0
+        [record] = runtime.application.executor._control.list_instrument_sessions()
+        assert record.state == "closed"
+        assert record.actor == "alice"
+        # A lost response must not repeat a completed connection test.
+        with pytest.raises(DaemonConflictError):
+            daemon.probe_driver(command)
+        session = daemon.open_instrument_session(
+            InstrumentSessionOpenCommand(
+                setup=setup,
+                operation_id="open-after-test",
+                actor="bob",
+                instrument_ids=(binding.id,),
+            )
+        )
+        assert provider.drivers == [driver]
+        daemon.close_instrument_session(session.session_id)
 
     assert receipt.status == "connected"
     assert receipt.description is not None
     assert receipt.description.instrument_id == binding.id
     [driver] = provider.drivers
     assert driver.disconnect_count == 1
+
+
+@pytest.mark.parametrize("owner", ["session", "run"])
+def test_driver_probe_cannot_bypass_an_owner_by_renaming_the_candidate(
+    tmp_path: Path,
+    owner: str,
+) -> None:
+    config = load_config()
+    config.instrument_registry.instruments[
+        0
+    ].connection = TcpipSocketInstrumentConnection(host="instrument.example", port=5025)
+    [binding] = instrument_bindings(config)
+    provider = _TrackingProvider()
+    with (
+        _runtime(tmp_path, provider, config=config) as runtime,
+        TestClient(runtime.app()) as transport,
+    ):
+        daemon = _daemon_client(transport)
+        setup = runtime.application.setup.current().revision.ref
+        if owner == "session":
+            daemon.open_instrument_session(
+                InstrumentSessionOpenCommand(
+                    setup=setup,
+                    operation_id="owner",
+                    actor="alice",
+                    instrument_ids=(binding.id,),
+                )
+            )
+        else:
+            admission = daemon.submit_run(_submission(config))
+            daemon.start_executor(
+                admission.run_id, ExecutorStartRequest(executor_id="worker")
+            )
+        connections = len(provider.drivers)
+        with pytest.raises(DaemonConflictError, match="resources are busy"):
+            daemon.probe_driver(
+                InstrumentDriverProbeCommand(
+                    setup=setup,
+                    operation_id="test-while-owned",
+                    actor="bob",
+                    binding=binding.model_copy(update={"id": "another-name"}),
+                )
+            )
+        assert len(provider.drivers) == connections
+
+
+def test_driver_probe_failure_leaves_no_owner(tmp_path: Path) -> None:
+    provider = _RejectedProvider()
+    with (
+        _runtime(tmp_path, provider) as runtime,
+        TestClient(runtime.app()) as transport,
+    ):
+        [binding] = instrument_bindings(load_config())
+        with pytest.raises(DaemonConflictError):
+            _daemon_client(transport).probe_driver(
+                InstrumentDriverProbeCommand(
+                    setup=runtime.application.setup.current().revision.ref,
+                    operation_id="rejected-test",
+                    actor="alice",
+                    binding=binding,
+                )
+            )
+        [record] = runtime.application.executor._control.list_instrument_sessions()
+        assert record.state == "closed"
+        assert record.end_status == "aborted"
+
+
+def test_candidate_virtual_probe_does_not_borrow_a_configured_virtual_device(
+    tmp_path: Path,
+) -> None:
+    provider = _TrackingProvider()
+    [binding] = instrument_bindings(load_config())
+    catalog = DriverCatalog(
+        provider_id=provider.provider_id,
+        drivers=(
+            DriverSpec(
+                driver_id=binding.driver_id,
+                implementation_version="v1",
+                label="Signal",
+                connections=(DriverConnectionSpec(kind="virtual", options_schema={}),),
+            ),
+        ),
+    )
+    with (
+        _runtime(tmp_path, provider, driver_catalog=catalog) as runtime,
+        TestClient(runtime.app()) as transport,
+    ):
+        daemon = _daemon_client(transport)
+        setup = runtime.application.setup.current().revision.ref
+        owner = daemon.open_instrument_session(
+            InstrumentSessionOpenCommand(
+                setup=setup,
+                operation_id="configured-owner",
+                actor="alice",
+                instrument_ids=(binding.id,),
+            )
+        )
+        result = daemon.probe_driver(
+            InstrumentDriverProbeCommand(
+                setup=setup,
+                operation_id="new-virtual-test",
+                actor="bob",
+                binding=binding.model_copy(update={"id": "new-simulator"}),
+            )
+        )
+        assert result.description is not None
+        assert result.description.instrument_id == "new-simulator"
+        assert len(provider.drivers) == 2
+        assert not provider.drivers[0].disconnected
+        assert provider.drivers[1].disconnect_count == 1
+        records = runtime.application.executor._control.list_instrument_sessions()
+        assert {record.state for record in records} == {"active", "closed"}
+        daemon.close_instrument_session(owner.session_id)
+
+
+def test_driver_probe_cleanup_failure_retains_recoverable_attention(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    provider = _TrackingProvider()
+    with (
+        _runtime(tmp_path, provider) as runtime,
+        TestClient(runtime.app()) as transport,
+    ):
+        daemon = _daemon_client(transport)
+        [binding] = instrument_bindings(load_config())
+        with monkeypatch.context() as patch:
+
+            def fail_release(_instruments: object) -> bool:
+                return True
+
+            patch.setattr(
+                instrument_service_module, "release_instruments", fail_release
+            )
+            with pytest.raises(
+                DaemonConflictError, match="needs session recovery"
+            ) as failure:
+                daemon.probe_driver(
+                    InstrumentDriverProbeCommand(
+                        setup=runtime.application.setup.current().revision.ref,
+                        operation_id="test-cleanup-failure",
+                        actor="alice",
+                        binding=binding,
+                    )
+                )
+        control = runtime.application.executor._control
+        [record] = control.list_instrument_sessions()
+        assert record.state == "attention_required"
+        assert record.session_id in str(failure.value)
+        daemon.resolve_instrument_session_attention(record.session_id)
+        assert control.get_instrument_session(record.session_id).state == "closed"
 
 
 def test_notebook_direct_interaction_releases_ownership_but_keeps_connection(
