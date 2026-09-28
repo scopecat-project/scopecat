@@ -140,7 +140,7 @@ def test_default_status_does_not_start_host(entry, monkeypatch, capsys):
 
     monkeypatch.setattr(application, "ensure_host", unexpected)
     entry.invoke()
-    assert json.loads(capsys.readouterr().out) == {"services": []}
+    assert json.loads(capsys.readouterr().out) == {"host": None, "services": []}
     assert not entry.opened
 
 

@@ -13,7 +13,7 @@ from urllib.parse import urlencode
 import httpx2
 
 from .bundle import configure_console
-from .host_client import ensure_host
+from .host_client import ensure_host, existing_host
 from .services import Service, Services
 
 
@@ -105,9 +105,15 @@ def main(argv: list[str] | None = None) -> None:
         if args.action == "status":
             import json
 
+            host = existing_host(args.home.resolve())
             print(
                 json.dumps(
-                    {"services": [v.model_dump() for v in store.views()]},
+                    {
+                        "host": host.record.model_dump(exclude={"token"})
+                        if host
+                        else None,
+                        "services": [v.model_dump() for v in store.views()],
+                    },
                     ensure_ascii=False,
                 )
             )
@@ -118,17 +124,11 @@ def main(argv: list[str] | None = None) -> None:
             run(args.home.resolve(), args.source)
             return
         if args.action == "quit":
-            from .host_client import existing_host
-
             client = existing_host(args.home.resolve())
             if client is not None:
                 if not (args.stop_started or args.keep_background):
                     raise ValueError("退出需指定 --stop-started 或 --keep-background")
-                client.request(
-                    "POST",
-                    "/api/exit",
-                    body={"stop_started_services": args.stop_started},
-                )
+                client.exit(stop_started=args.stop_started)
             return
         selected = None
         if args.workspace is not None:

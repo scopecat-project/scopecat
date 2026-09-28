@@ -40,9 +40,8 @@ def test_exit_owns_only_services_started_in_this_session(tmp_path, stop_started)
                 for index, service in enumerate(registered)
             ]
         }
-        client.request(
-            "POST", "/api/exit", body={"stop_started_services": stop_started}
-        )
+        client.exit(stop_started=stop_started)
+        assert not process_alive(client.record)
         assert inspect_daemon(projects[0]).record == external
         assert inspect_daemon(projects[1]).state == (
             "stopped" if stop_started else "running"

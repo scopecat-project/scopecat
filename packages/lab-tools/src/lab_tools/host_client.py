@@ -121,6 +121,13 @@ class HostClient:
 
     def shutdown(self) -> None:
         self.request("POST", "/api/shutdown", body={})
+        self.wait_stopped()
+
+    def exit(self, *, stop_started: bool) -> None:
+        self.request("POST", "/api/exit", body={"stop_started_services": stop_started})
+        self.wait_stopped()
+
+    def wait_stopped(self) -> None:
         deadline = time.monotonic() + 30
         while process_alive(self.record) and time.monotonic() < deadline:
             time.sleep(0.1)
