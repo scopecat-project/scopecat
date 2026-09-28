@@ -5,6 +5,16 @@ six-target qualification, scoped dependency evidence and independent author cons
 earlier delivery notes are historical context, not additional pending work.
 No new hardware or installed Windows qualification is claimed by this audit.
 
+Application priorities have since been corrected by the
+[canonical application contract](architecture/public-application.md). Before physical
+acceptance, converge direct workbench entry, an application service independent of
+author/device contexts, shared resource claims and same-service tutorial cleanup.
+Retire the manager topology and service-source `legacy` special case. Native entry
+and interpreter/stale-process recovery (#801–#804) are delivered foundations, not
+completion of this target. Existing browser journeys with obsolete parameter/default
+assumptions need revision and requalification; routine CI does not establish that
+those journeys or Windows physical use pass.
+
 ## Delivered boundaries
 
 | Area | Implemented | Current boundary |
@@ -16,7 +26,7 @@ No new hardware or installed Windows qualification is claimed by this audit.
 | Calibration | Declared checks, indexed history, exact-context applicability, immutable profiles, focused reports and scoped parameter-read evidence | Applicability still uses exact contexts; partial read capture does not enable selective cross-revision reuse |
 | Automation | Durable tasks, explicit candidate output binding, dependency-checked admission, sequential advancement, controls and recovery | Candidate edges require passing source checks; no repair-on-failure or general adaptive flow |
 | Workbench | Task controls and drill-down; sample capability reports from retained runs, branches or exact revisions | Explicit bounded queries, not a continuously maintained health dashboard |
-| Application | Ordinary workbench first use, installed adapters, registered author folders, notebook interpreter selection and stopped environment replacement | Native installers and physical authority shared across separate services remain separate work |
+| Application | Native workbench/settings entry, installed adapters, registered author folders, notebook interpreter selection and recoverable stopped environment replacement | Shared application authority, independent device contexts, practice scopes and manager retirement remain unimplemented; native installer qualification is separate |
 | Recovery | Current-format backup/restore and non-mutating rejection of unsupported formats | Schema 98 is not a supported persistent-data baseline |
 
 See [configuration ownership](configuration-ownership.md),
@@ -25,6 +35,10 @@ See [configuration ownership](configuration-ownership.md),
 [the public application contract](architecture/public-application.md).
 
 ## Implementation order
+
+The following scientific slices remain valid within the application convergence
+gate above. They are not prerequisites for delaying direct entry or retiring old
+service topology; complete the software journey before scheduling physical trials.
 
 ### 1. Establish the parameter-flow contract
 

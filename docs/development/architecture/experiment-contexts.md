@@ -1,14 +1,15 @@
 # Experiment workbench and session contexts
 
-Status: selected product direction and proposed implementation contracts, begun
-2026-09-19 and updated for independent parameter branches and declared checks.
+Status: scientific/session contracts and implementation history. The canonical
+application target is [one application, independent execution contexts](public-application.md),
+which supersedes laboratory selection and per-workspace/per-lesson service topology.
 The implementation chronicles below retain historical terminology; use the
 current capability table and [automation ownership](automation-tasks.md) for current
 boundaries. The entities and APIs proposed here are
-not all shipped; implementation status is recorded below. This document governs the next implementation slices; it does not
+not all shipped; implementation status is recorded below. This document does not
 relax current ownership checks. The [prebaseline data policy](../data-compatibility.md)
-retires the schema 68–74 migration exercises; current format 88 is not a supported
-baseline. All retained-evidence and recovery contracts below concern the current
+retires the schema 68–74 migration exercises; no supported data baseline is designated.
+All retained-evidence and recovery contracts below concern the current
 format, not a promise to read or upgrade earlier development stores.
 
 ## Product outcome
@@ -19,7 +20,9 @@ open prepared simulated experiments in that same workbench. The teaching invento
 introduced in [the local host](application-host.md) is a transitional facility,
 not the application's information architecture.
 
-One default local application manages discovery, execution services and installation.
+One default local application service owns execution authority independently of author
+folders and revisioned device resolution contexts. Launch opens the workbench without
+a laboratory/service chooser. Opening code or history does not initialize devices.
 Each workbench page and Python kernel selects its own experimental context. A kernel
 normally discovers its code workspace from its current repository; that discovery
 must not silently choose a physical sample, replace another session's source, or
@@ -51,7 +54,7 @@ this boundary. See the [current platform status](../platform-status.md) for sequ
 | Apparatus history | Descriptive object/revision and observation slice (#644); separate from executable target selection | Useful history navigation and explicit evidence links; no live wiring or calibration-validity claim |
 | Execution setup | Independent maintained setup revisions/selection; complete retained run config and setup-content fences | Concurrent incompatible deployments and qualified cross-object applicability |
 | Session and addressing | Per-page/kernel choices, graphical workspace selection, frozen target plans, collection numbering and same-environment source-qualified execution | Heterogeneous environments and portable multi-source installation |
-| Application | Registered service workbenches, workbench Help and manager-preserving navigation; local lifecycle controls | Explicit installation pairing/environment maintenance; server-enforced boundaries before shared real/practice execution |
+| Application | Native workbench/settings window, registered services, explicit lifecycle controls and stale-process recovery | Direct entry without a chooser; one service with independent device contexts and common physical-resource admission; server-enforced practice scopes and cleanup |
 
 The apparatus-history row describes the bounded slice introduced with this change,
 not a completed physical-state or calibration model. Its scope and the next

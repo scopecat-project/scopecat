@@ -1,32 +1,100 @@
-# Public application and laboratory capabilities
+# One application, independent execution contexts
 
-Product direction after the installed Windows trial, tracked in
-[#671](https://github.com/scopecat-project/scopecat/issues/671).
-The successful installation of a teaching/service manager did not establish the
-intended experiment application. This page distinguishes the next product contract
-from the already implemented ownership primitives.
+Canonical product target, tracked by [#610](https://github.com/scopecat-project/scopecat/issues/610)
+and [#671](https://github.com/scopecat-project/scopecat/issues/671).
+This contract supersedes the first-run laboratory chooser and per-project/per-lesson
+service topology. It is not a claim that the target is implemented. Native desktop
+entry, explicit launch actions, recovery from interpreter mismatch and valid stale
+process records are delivered foundations (#801–#804); shared execution authority,
+independent device contexts and same-service practice cleanup remain to be built.
 
 ## Installation and everyday use
 
 The target is a platform-standard public application installation, update and
 uninstall. Python environments, GUI assets and worker processes are application
 implementation details. Uninstalling software must not delete scientific data.
-First use should create an initial experiment code folder or connect a laboratory
-adapter and settings, choose a primary code folder, and offer a separate data
-location with a useful default. Completing setup opens the experiment workbench.
+Launch opens the workbench directly, restoring the last task or history; first use
+shows useful experiment and tutorial actions there. It never requires choosing a
+laboratory, service or device context first. Missing capabilities or unresolved
+physical choices are explained at the affected action, with inline setup/recovery.
+Opening the application, history or code must not initialize devices or replay work.
+Preparing, connecting and acquiring have explicit boundaries and observable results.
 
-Normal launch restores the primary workbench. Management belongs under settings
-and recovery; teaching belongs under Help. Reopening a context never replays a
-measurement. Starting an explicitly selected service still follows its device
-initialization policy; this is distinct from submission. Notebook connections
-identify their code folder and share the application's execution authority.
+One default local application service serves GUI, VS Code/Python and CLI clients.
+VS Code opens an ordinary code folder; JupyterLab is optional. Code folders and
+device contexts do not create separate application services, ports or installations.
+Qualified workers may use different processes; one service does not mean one Python
+process. Heterogeneous runtime support is not a prerequisite for this first target.
 
-The first-run UI now creates an ordinary source project or connects a prepared
-laboratory code directory and enters its workbench. It can place new data separately
-and reuses a local `.venv` or the application environment. A verified offline
-laboratory delivery can prepare a fresh project environment and matching GUI.
-Native installers, Python provisioning and updates of existing environments remain
-future work.
+The current host still registers project services and can initialize instruments at
+startup. Its existing setup UI and installed-adapter contracts below are transitional
+implementation, not the desired first-run flow. See [application host](application-host.md).
+
+## Ownership without a laboratory container
+
+“Laboratory” may describe an organization or a capability package, but is not a
+required aggregate that owns code, data, devices, process and user navigation.
+
+| Responsibility | Owner |
+| --- | --- |
+| Installation, application endpoint, lifecycle and recovery | Local application runtime |
+| Editable code and immutable submission revision | Explicit registered author source |
+| Logical roles, channels, routes, capabilities and constraints | Revisioned device resolution context, referencing maintained setup |
+| Resolved physical identity, admission, claims and release | Application-wide resource authority |
+| Sample/target, parameters, accepted calibration and publication | Existing scientific models and explicit task/session references |
+| Records and source/parameter evidence | Persistent data space, independent of code location |
+| Disposable tutorial work | Owned practice scope within the application service |
+
+A device resolution context is an input to preparation/execution, not another
+service or a second copy of the setup catalog. It must not own a data root, source
+root, global sample or instrument process. Reuse maintained setup revisions and
+resolve their resource mapping rather than introducing competing configuration writers.
+
+Each page, kernel and draft retains its own explicit context references. Restored
+tasks retain their recorded references; there is no application-wide mutable current
+configuration. Resolve ambiguity inline before physical execution, never by selecting
+the first device. Changing a context affects future requests only, and cannot
+reconfigure an instrument or mutate a submitted task. Freeze the resolved setup,
+source and parameter evidence at the existing submission boundary.
+
+Resource claims use canonical physical identities across contexts and author sources.
+Two names for the same instrument do not create two owners. Conflicting operations
+must queue or fail with a useful explanation before hardware side effects. Switching
+incompatible runtime/device state requires quiescence and explicit preparation;
+serializing submissions alone does not establish equivalent physical state.
+
+## Tutorials and their cleanup
+
+Help opens a prepared task in the same workbench and application service. Each
+practice scope owns its parameter/record namespace, tasks and worker lifecycle.
+The server grants simulation-only backend capabilities to practice execution;
+a client-side label or context name cannot authorize physical devices. This is an
+execution-capability boundary, not an OS sandbox for arbitrary user Python.
+
+Reset/clear fences new work, cancels or drains owned tasks, joins workers, releases
+resources and rejects late writes before deleting app-owned practice records and
+artifacts. Failure remains recoverable and visible; do not report cleanup complete
+while workers still write. User-edited/exported files require an explicit preserve,
+export or discard choice. Real tasks, records, devices and other practice scopes
+are unaffected. A lesson does not require its own service or virtual environment.
+
+## Retiring the manager and legacy source path
+
+Remove the standalone manager product surface. Move task failures and recovery into
+the workbench, connection configuration into **Devices and connections**, installation
+and capability maintenance into **Software and extensions**, storage into **Data**,
+and diagnostics/tutorials into Help. Hiding the old chooser or renaming a laboratory
+does not satisfy this contract. Retain necessary logs and controlled lifecycle actions.
+Application exit must explain active work and offer an explicit stop or background
+choice; failed shutdown remains actionable without Task Manager. Never kill a process
+on PID alone, replay interrupted tasks or take over an unrelated development home.
+
+The current `legacy` service-source identity is an active special path, not the
+archived experiment library. Retire it by making application startup independent of
+an author root and giving every author source the same explicit registration,
+publication and execution contract. Replace GUI, Python, worker and durable-task
+consumers before removing implicit fallbacks. Keep the execution service itself.
+This is not a rename to `default`, an old-format reader or a data-directory deletion.
 
 ## Standard composition
 
@@ -118,7 +186,7 @@ this API does not automatically redact files placed in source directories.
 
 ## Working copies and version ownership
 
-Default to one primary experiment folder; allow additional working copies for
+Remember a preferred experiment folder without making it the service owner; allow additional working copies for
 stable/experimental code, separate authors and alternative analysis. A page or
 kernel binds one code source. Shared libraries are declared dependencies, not
 implicit imports from whichever other folders are open.
@@ -146,24 +214,33 @@ where necessary. Serial runs alone do not establish equivalent hardware state.
 
 Current same-environment workspace publication and independent parameter heads
 provide building blocks. Heterogeneous environments, parameter-contract negotiation
-and consolidated cross-service device authority remain unimplemented contracts;
+and application-wide device authority remain unimplemented contracts;
 see [workspace bindings](workspace-bindings.md) and
 [configuration ownership](configuration-ownership.md).
 
 ## Ordered implementation and evidence
 
-1. Standard capabilities with public starter/teaching consumers and a real private
-   laboratory consumer; preserve lazy imports and frozen execution provenance.
-2. Direct primary-workbench entry, followed by a first-run laboratory connection
-   flow and explicit data/code/settings locations.
-3. A stable and experimental working-copy journey that checks code revisions,
-   parameter-contract compatibility and independent parameter publication.
-4. Shared device authority and controlled runtime switching; native platform
-   installation/update/uninstall qualification.
+1. Separate the application service from author roots and device contexts, qualify
+   shared resource admission, and retire the `legacy` source special case (#671, #613).
+2. Enter the workbench directly and replace manager consumers with contextual
+   actions/settings (#675, #615). Source edits use refresh; runtime updates preserve
+   content identity, data and recoverable installation state (#712).
+3. Run and clear tutorials as owned simulation-only practice scopes (#565).
+4. Qualify the combined software journey (#616): launch directly; create two drafts
+   with independent simulated device contexts on one service; complete tutorial
+   manual peak selection; clear it without changing either draft or retained real
+   records; restart and reopen retained tasks without replay. Test conflicting
+   aliases for one physical resource before admitting real hardware. Verify GUI and
+   Python clients share authority and recovery does not require killing processes.
+5. Only then perform ordinary-user and Windows physical-device qualification of
+   scan → manual peak selection → fine scan → verification → publication → reopen.
+   Simulation, platform usability and scientific validity are separate evidence.
 
 Preserve current-format evidence and recovery. No development-store migration
 chains, supported data baseline or automatic replay are introduced by this work.
-The next human trial should install public, connect a laboratory, open an existing
-experiment and try a second code copy without unintentionally changing the stable
-code or shared parameters. It should not substitute tutorial completion for that
-product journey.
+Software UX convergence is the current P0, before physical acceptance. It can be
+developed on Mac; Windows uses the same product flow plus platform/hardware checks.
+Do not make this depend on a general workflow editor, remote service, tray integration,
+arbitrary dependency isolation or a complete physical-state model. Keep targeted
+scientific, process-ownership and persistence tests; do not preserve retired service
+topology merely to keep its old journeys unchanged.
