@@ -464,11 +464,14 @@ def _install_home_locked(root: Path, home: Path) -> Path:
     finally:
         for path in pending:
             path.unlink(missing_ok=True)
-    from .desktop_install import install_entry
-
-    entry = install_entry(home, python)
+    # This file is also the standalone installer. Use the completed runtime's
+    # helper, without importing package code into the bootstrap interpreter.
+    _ = subprocess.run(  # noqa: S603 - selected installed runtime and fixed module
+        [str(python), "-m", "lab_tools.desktop_install", str(home)], check=True
+    )
     print(
-        f"已准备并选择默认版本 {key}。桌面入口: {entry or '使用 --action desktop'}。\n"
+        f"已准备并选择默认版本 {key}。"
+        "Mac 使用 Scopecat.app；Windows 使用 Scopecat.lnk。\n"
         "正在运行的管理器尚未更换；下次启动时尝试切换，存在进行中的管理操作时会拒绝切换。"
     )
     return launcher

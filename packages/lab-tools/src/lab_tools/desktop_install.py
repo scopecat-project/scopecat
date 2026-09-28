@@ -81,3 +81,7 @@ def install_entry(home: Path, python: Path) -> Path | None:
             config.unlink(missing_ok=True)
         return link
     return None
+
+
+if __name__ == "__main__":
+    print(install_entry(Path(sys.argv[1]).resolve(), Path(sys.executable)))
