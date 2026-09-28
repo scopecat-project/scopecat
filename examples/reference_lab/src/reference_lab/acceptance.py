@@ -333,7 +333,9 @@ def capture_acceptance_fixtures(
     assert all(item.approval is None for item in proposals.items)
     schema = source.measurements().schema
 
-    with lab.instruments.open(temperature_readout("mixing-chamber")):
+    with lab.instruments.open(
+        temperature_readout("mixing-chamber"), setup=lab.setup.active().revision.ref
+    ):
         procedure = lab.procedures.start(
             temperature_diagnostic_procedure,
             TemperatureDiagnosticIntent(initial_config=config),

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type {
+  ActiveConfig,
   ConfigProfileSnapshot,
   InstrumentAcquisition,
   InstrumentConnection,
@@ -7,7 +8,8 @@ import type {
   InstrumentSession,
 } from "../../api-contract";
 import { requestHeaders, requestJson, requestMethod, requestPath } from "../../test/http";
-import { publishConfig } from "../config/config-api";
+import type { SavedSetupRevision as SetupRevision } from "../config/setup-api";
+import type { components } from "../../api-schema";
 import {
   applyInstrumentConfiguredDefaults,
   applyInstrumentState,
@@ -22,20 +24,15 @@ import {
   readInstrumentStateMembers,
   readObservedInstrumentStateMembers,
   renewInstrumentSession,
-  type ActiveConfig,
   type InstrumentAcquisitionTarget,
 } from "./instrument-api";
-
-vi.mock("../config/config-api", () => ({
-  publishConfig: vi.fn(),
-}));
 
 afterEach(() => {
   vi.unstubAllGlobals();
 });
 
 describe("instrument configuration publishing", () => {
-  it("publishes a complete cloned active profile with generation fencing", async () => {
+  it("saves a cloned device context without changing global activation", async () => {
     const randomUUID = vi.fn(() => "123e4567-e89b-12d3-a456-426614174000");
     vi.stubGlobal("crypto", { randomUUID });
     const active = activeConfig();
@@ -47,8 +44,11 @@ describe("instrument configuration publishing", () => {
       options: { termination: "lf" },
     };
 
+    const fetch = vi.fn().mockResolvedValue(Response.json(setupRevision(active)));
+    vi.stubGlobal("fetch", fetch);
     await publishInstrumentSpec({
-      active,
+      revision: setupRevision(active),
+      name: "Bench VLAN",
       spec: {
         ...active.config.system.instrument_registry.instruments[0]!,
         connection,
@@ -58,24 +58,18 @@ describe("instrument configuration publishing", () => {
       note: "Move to the instrument VLAN",
     });
 
-    expect(publishConfig).toHaveBeenCalledOnce();
-    const command = vi.mocked(publishConfig).mock.calls[0]![0];
+    expect(fetch).toHaveBeenCalledOnce();
+    expect(requestPath(fetch.mock.calls[0]![0])).toBe("/api/v1/setup/revisions");
+    const command = await requestJson<components["schemas"]["SetupSaveCommand"]>(
+      fetch.mock.calls[0]![0],
+    );
     expect(command).toMatchObject({
-      operation_id: "ui-config-123e4567-e89b-12d3-a456-426614174000",
       actor: "Ada",
       note: "Move to the instrument VLAN",
-      expected_generation: 7,
-      source: { kind: "direct_config_profile" },
     });
-    expect(command.entry_id).toBe(
-      "lab-instrument-vna-1-ui-config-123e4567-e89b-12d3-a456-426614174000",
-    );
-    expect(randomUUID).toHaveBeenCalledOnce();
-    if (command.source.kind !== "direct_config_profile") {
-      throw new Error("Expected a direct config profile revision.");
-    }
-    expect(command.source.config.id).toBe(command.entry_id);
-    expect(command.source.config.system.instrument_registry.instruments).toEqual([
+    expect(command.revision_id).toBe("Bench VLAN");
+    expect(randomUUID).not.toHaveBeenCalled();
+    expect(command.setup.instrument_registry.instruments).toEqual([
       {
         id: "vna-1",
         exclusivity_key: "vna-1",
@@ -107,9 +101,8 @@ describe("instrument configuration publishing", () => {
         failure_action: "abort_and_release",
       },
     ]);
-    expect(command.source.config.parameter_snapshot.values).toEqual([
-      { id: "readout.frequency", shape: "scalar", value: { value: 6.2, unit: "GHz" } },
-    ]);
+    expect(command).not.toHaveProperty("expected_generation");
+    expect(command.setup).not.toHaveProperty("parameter_snapshot");
     expect(active.config.system.instrument_registry.instruments[0]?.connection).toEqual({
       kind: "tcpip_socket",
       host: "192.0.2.20",
@@ -137,8 +130,11 @@ describe("instrument configuration publishing", () => {
     vi.stubGlobal("crypto", { randomUUID });
     const active = activeConfig();
 
+    const fetch = vi.fn().mockResolvedValue(Response.json(setupRevision(active)));
+    vi.stubGlobal("fetch", fetch);
     await publishInstrumentSpec({
-      active,
+      revision: setupRevision(active),
+      name: "Bench with source",
       spec: {
         id: "source-1",
         exclusivity_key: "source-1",
@@ -153,11 +149,10 @@ describe("instrument configuration publishing", () => {
       note: "",
     });
 
-    const command = vi.mocked(publishConfig).mock.calls[0]![0];
-    if (command.source.kind !== "direct_config_profile") {
-      throw new Error("Expected a direct config profile revision.");
-    }
-    expect(command.source.config.system.instrument_registry.instruments.at(-1)).toEqual({
+    const command = await requestJson<components["schemas"]["SetupSaveCommand"]>(
+      fetch.mock.calls[0]![0],
+    );
+    expect(command.setup.instrument_registry.instruments.at(-1)).toEqual({
       id: "source-1",
       exclusivity_key: "source-1",
       driver_id: "virtual.rf_source",
@@ -461,8 +456,8 @@ describe("interactive collection request shaping", () => {
       operation: { id: "recalibrate", arguments: [] },
     };
 
-    await openInstrumentSession("vna-1", "Ada", "open-retry");
-    await openInstrumentSession("vna-1", "Ada", "open-retry");
+    await openInstrumentSession("vna-1", "Ada", session().setup, "open-retry");
+    await openInstrumentSession("vna-1", "Ada", session().setup, "open-retry");
     const properties = [
       {
         target: {
@@ -633,4 +628,21 @@ function hardwareReceiptResponse(): Response {
     status: 200,
     headers: { "Content-Type": "application/vnd.scopecat.hardware-receipt.v1" },
   });
+}
+
+function setupRevision(active = activeConfig()): SetupRevision {
+  const { topology, instrument_registry, routing, domain_target, scenario } = active.config.system;
+  return {
+    id: "lab",
+    content_hash: "sha256:active",
+    actor: "Ada",
+    note: "",
+    setup: {
+      topology,
+      instrument_registry,
+      routing: routing ?? { roles: [], routes: [] },
+      domain_target: domain_target ?? null,
+      scenario,
+    },
+  };
 }

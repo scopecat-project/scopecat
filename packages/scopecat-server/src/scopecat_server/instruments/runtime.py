@@ -60,6 +60,7 @@ from scopecat.records.instrument import (
     state_member_ref,
 )
 from scopecat.records.measurement import InstrumentAcquisitionEvidence
+from scopecat.records.setup import SetupRevisionRef
 from scopecat.sdk.instruments.backend import (
     BackendAcquisitionPlan,
     BackendApplyRequest,
@@ -237,7 +238,7 @@ class InstrumentRuntime:
     ) -> InstrumentReleaseReceipt:
         """Retire connections behind an acquisition gate without stopping workers."""
         self._require_running()
-        registry = self._setup.current().revision.setup.instrument_registry
+        registry = self._selected_setup_config(command.setup).instrument_registry
         specs = {item.id: item for item in registry.instruments}
         for instrument_id in command.instrument_ids:
             if instrument_id not in specs:
@@ -272,9 +273,8 @@ class InstrumentRuntime:
             raise BackendConflict(str(error)) from error
         return InstrumentReleaseReceipt(instrument_ids=command.instrument_ids)
 
-    def list_instruments(self) -> InstrumentListView:
-        active = self._setup.current()
-        config = setup_config(active.revision)
+    def list_instruments(self, *, setup: SetupRevisionRef) -> InstrumentListView:
+        config = self._selected_setup_config(setup)
         catalog = self.resolve_instrument_contracts(config)
         descriptions = {
             description.instrument_id: description
@@ -315,7 +315,7 @@ class InstrumentRuntime:
             for spec in config.instrument_registry.instruments
         )
         return InstrumentListView(
-            setup=active.revision.ref,
+            setup=setup,
             items=items,
             problems=global_problems,
         )
@@ -366,8 +366,10 @@ class InstrumentRuntime:
             description=description,
         )
 
-    def get_instrument(self, instrument_id: str) -> InstrumentView:
-        instruments = self.list_instruments()
+    def get_instrument(
+        self, instrument_id: str, *, setup: SetupRevisionRef
+    ) -> InstrumentView:
+        instruments = self.list_instruments(setup=setup)
         for item in instruments.items:
             if item.instrument_id == instrument_id:
                 return item
@@ -2408,7 +2410,7 @@ class InstrumentRuntime:
         self,
         command: InstrumentSessionOpenCommand,
     ) -> InstrumentSessionOpenReceipt:
-        # Recover before reading current setup so retries retain the first resolution.
+        # Recover the original acquisition before attempting any new connection.
         try:
             existing = self._control.get_instrument_session_by_open_operation_id(
                 command.operation_id
@@ -2418,8 +2420,7 @@ class InstrumentRuntime:
         else:
             return self._replay_session_open(command, existing)
 
-        active = self._setup.current()
-        config = setup_config(active.revision)
+        config = self._selected_setup_config(command.setup)
         configured = {spec.id: spec for spec in config.instrument_registry.instruments}
         temporary = {binding.id: binding for binding in command.temporary_bindings}
         collisions = tuple(
@@ -2427,7 +2428,7 @@ class InstrumentRuntime:
         )
         if collisions:
             raise BackendConflict(
-                "temporary instrument ids already exist in the current setup: "
+                "temporary instrument ids already exist in the selected setup: "
                 + ", ".join(collisions)
             )
         missing = tuple(
@@ -2482,13 +2483,12 @@ class InstrumentRuntime:
             session = self._control.open_instrument_session(
                 operation_id=command.operation_id,
                 actor=command.actor,
-                setup=active.revision.ref,
+                setup=command.setup,
                 instrument_ids=command.instrument_ids,
                 exclusivity_keys=tuple(
                     selected_specs[instrument_id].exclusivity_key
                     for instrument_id in command.instrument_ids
                 ),
-                expected_setup_generation=active.activation.generation,
                 ttl=self._session_lease_ttl,
             )
         except ControlPlaneConflict as error:
@@ -2542,10 +2542,9 @@ class InstrumentRuntime:
             session = self._control.open_instrument_session(
                 operation_id=command.operation_id,
                 actor=command.actor,
-                setup=existing.setup,
+                setup=command.setup,
                 instrument_ids=command.instrument_ids,
                 exclusivity_keys=existing.exclusivity_keys,
-                expected_setup_generation=None,
                 ttl=self._session_lease_ttl,
             )
         except ControlPlaneConflict as error:
@@ -4123,11 +4122,12 @@ class InstrumentRuntime:
         self,
         session: InstrumentSession,
     ) -> ConfigProfileSnapshot:
-        pinned = self._setup.get(session.setup.revision_id)
-        if pinned.ref != session.setup:
-            raise BackendConflict(
-                "instrument session pinned setup content does not match its revision"
-            )
+        return self._selected_setup_config(session.setup)
+
+    def _selected_setup_config(self, setup: SetupRevisionRef) -> ConfigProfileSnapshot:
+        pinned = self._setup.get(setup.revision_id)
+        if pinned.ref != setup:
+            raise BackendConflict("selected setup content does not match its revision")
         return setup_config(pinned)
 
     @staticmethod

@@ -3,6 +3,7 @@ import type { components } from "../../api-schema";
 import type { ConfigProfileSnapshot } from "../../api-contract";
 
 export type SetupRevision = components["schemas"]["SetupRevision"];
+export type SavedSetupRevision = Awaited<ReturnType<typeof getSetupRevisions>>["items"][number];
 export type ActiveSetupView = components["schemas"]["ActiveSetupView"];
 export type SetupActivateCommand = components["schemas"]["SetupActivateCommand"];
 

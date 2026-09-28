@@ -203,8 +203,13 @@ function InstrumentInspectorContent({
       if (!(cause instanceof ApiError) || ![404, 409].includes(cause.status ?? 0)) {
         return;
       }
+      if (!session) return;
       const canonical = queryClient
-        .getQueryData<{ items: InstrumentView[] }>(["instruments"])
+        .getQueryData<{ items: InstrumentView[] }>([
+          "instruments",
+          session.setup.revision_id,
+          session.setup.content_hash,
+        ])
         ?.items.find((candidate) => candidate.instrument_id === instrumentId);
       const stillOwned =
         canonical?.availability === "active" &&
@@ -415,6 +420,8 @@ function InstrumentInspectorContent({
           onClick={onConfigure}
           disabled={
             connected ||
+            connectPending ||
+            closePending ||
             configurationPending ||
             configurationUnavailable ||
             instrument.availability === "active" ||
@@ -424,9 +431,9 @@ function InstrumentInspectorContent({
             configurationUnavailable
               ? "Driver catalog unavailable"
               : connected
-                ? "Disconnect before changing the immutable config"
+                ? "Disconnect before editing this device context"
                 : instrument.availability === "active" || instrument.availability === "quarantined"
-                  ? "Resolve the current owner before changing the immutable config"
+                  ? "Resolve the current owner before editing this device context"
                   : undefined
           }
         >

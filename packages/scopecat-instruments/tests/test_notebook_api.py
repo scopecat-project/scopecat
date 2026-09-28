@@ -292,6 +292,9 @@ def test_session_handle_renews_lease_in_background() -> None:
         client=daemon,
         instrument_ids=("source-a",),
         actor="test",
+        setup=SetupRevisionRef(
+            revision_id="setup-1", content_hash="sha256:" + "0" * 64
+        ),
     )
 
     try:
@@ -312,7 +315,12 @@ def test_typed_instrument_ref_binds_a_statically_known_client() -> None:
     handle = LabInstrumentOperations(
         daemon,
         operator="test",
-    ).open(source)
+    ).open(
+        source,
+        setup=SetupRevisionRef(
+            revision_id="setup-1", content_hash="sha256:" + "0" * 64
+        ),
+    )
 
     client = handle[source]
     assert_type(client, _TypedSourceClient)
@@ -338,7 +346,12 @@ def test_typed_instrument_ref_validates_required_capabilities_when_bound() -> No
     supported = LabInstrumentOperations(
         supported_daemon,
         operator="test",
-    ).open(source)
+    ).open(
+        source,
+        setup=SetupRevisionRef(
+            revision_id="setup-1", content_hash="sha256:" + "0" * 64
+        ),
+    )
     assert isinstance(supported[source], _TypedSourceClient)
     supported.close()
     supported_daemon.close()
@@ -347,7 +360,12 @@ def test_typed_instrument_ref_validates_required_capabilities_when_bound() -> No
     unsupported = LabInstrumentOperations(
         unsupported_daemon,
         operator="test",
-    ).open(source)
+    ).open(
+        source,
+        setup=SetupRevisionRef(
+            revision_id="setup-1", content_hash="sha256:" + "0" * 64
+        ),
+    )
     with pytest.raises(
         ValueError,
         match=r"source-a.*required interfaces.*test.source/v1",
@@ -387,7 +405,12 @@ def test_typed_instrument_ref_selects_an_exact_interface_mount() -> None:
             ),
         ),
     )
-    handle = LabInstrumentOperations(daemon, operator="test").open(selected)
+    handle = LabInstrumentOperations(daemon, operator="test").open(
+        selected,
+        setup=SetupRevisionRef(
+            revision_id="setup-1", content_hash="sha256:" + "0" * 64
+        ),
+    )
 
     client = handle[selected]
     assert client.session.component_path == ("channels", "2")
@@ -410,7 +433,12 @@ def test_typed_instrument_ref_must_belong_to_the_session() -> None:
     handle = LabInstrumentOperations(
         daemon,
         operator="test",
-    ).open(source)
+    ).open(
+        source,
+        setup=SetupRevisionRef(
+            revision_id="setup-1", content_hash="sha256:" + "0" * 64
+        ),
+    )
 
     with pytest.raises(ValueError, match="is not in this session"):
         handle[other]
@@ -428,6 +456,9 @@ def test_session_handle_immediately_renews_a_late_open_lease() -> None:
         client=daemon,
         instrument_ids=("source-a",),
         actor="test",
+        setup=SetupRevisionRef(
+            revision_id="setup-1", content_hash="sha256:" + "0" * 64
+        ),
     )
 
     try:
@@ -445,6 +476,9 @@ def test_session_handle_close_stops_heartbeat() -> None:
         client=daemon,
         instrument_ids=("source-a",),
         actor="test",
+        setup=SetupRevisionRef(
+            revision_id="setup-1", content_hash="sha256:" + "0" * 64
+        ),
     )
 
     try:
@@ -470,6 +504,9 @@ def test_session_handle_surfaces_renewal_failure() -> None:
         client=daemon,
         instrument_ids=("source-a",),
         actor="test",
+        setup=SetupRevisionRef(
+            revision_id="setup-1", content_hash="sha256:" + "0" * 64
+        ),
     )
 
     try:
@@ -498,6 +535,9 @@ def test_session_handle_keeps_heartbeat_after_close_failure() -> None:
         client=daemon,
         instrument_ids=("source-a",),
         actor="test",
+        setup=SetupRevisionRef(
+            revision_id="setup-1", content_hash="sha256:" + "0" * 64
+        ),
     )
 
     try:
@@ -530,6 +570,9 @@ def test_discarded_session_handle_requests_heartbeat_stop() -> None:
         client=daemon,
         instrument_ids=("source-a",),
         actor="test",
+        setup=SetupRevisionRef(
+            revision_id="setup-1", content_hash="sha256:" + "0" * 64
+        ),
     )
     handle._observed_state()
     heartbeat = handle._heartbeat
@@ -551,6 +594,9 @@ def test_apply_configured_defaults_lazily_opens_and_generates_operation_id() -> 
         client=daemon,
         instrument_ids=("source-a",),
         actor="test",
+        setup=SetupRevisionRef(
+            revision_id="setup-1", content_hash="sha256:" + "0" * 64
+        ),
     )
 
     try:
@@ -582,6 +628,9 @@ def test_session_handle_exposes_opening_observation_without_refresh() -> None:
         client=daemon,
         instrument_ids=("source-a",),
         actor="test",
+        setup=SetupRevisionRef(
+            revision_id="setup-1", content_hash="sha256:" + "0" * 64
+        ),
     )
 
     try:
@@ -602,6 +651,9 @@ def test_apply_configured_defaults_requires_multi_instrument_selection() -> None
         client=daemon,
         instrument_ids=("source-a", "source-b"),
         actor="test",
+        setup=SetupRevisionRef(
+            revision_id="setup-1", content_hash="sha256:" + "0" * 64
+        ),
     )
 
     try:
@@ -637,6 +689,9 @@ def test_notebook_collect_sends_unspecified_results_without_reading_state() -> N
         client=daemon,
         instrument_ids=("bias",),
         actor="test",
+        setup=SetupRevisionRef(
+            revision_id="setup-1", content_hash="sha256:" + "0" * 64
+        ),
     )
 
     try:
@@ -672,6 +727,9 @@ def test_notebook_collect_sends_explicit_result_identity() -> None:
         client=daemon,
         instrument_ids=("bias",),
         actor="test",
+        setup=SetupRevisionRef(
+            revision_id="setup-1", content_hash="sha256:" + "0" * 64
+        ),
     )
 
     try:
@@ -699,7 +757,12 @@ def test_declared_live_client_rejects_incomplete_provider_readback() -> None:
         InstrumentStateSnapshot(instrument_id="readout"),
     )
     target = network_sweep("readout")
-    handle = LabInstrumentOperations(daemon, operator="test").open(target)
+    handle = LabInstrumentOperations(daemon, operator="test").open(
+        target,
+        setup=SetupRevisionRef(
+            revision_id="setup-1", content_hash="sha256:" + "0" * 64
+        ),
+    )
 
     try:
         with pytest.raises(
@@ -774,7 +837,12 @@ def test_declared_live_client_raises_structured_collection_failure(
         collect_receipt=receipt,
     )
     target = temperature_readout("thermometer")
-    handle = LabInstrumentOperations(daemon, operator="test").open(target)
+    handle = LabInstrumentOperations(daemon, operator="test").open(
+        target,
+        setup=SetupRevisionRef(
+            revision_id="setup-1", content_hash="sha256:" + "0" * 64
+        ),
+    )
 
     try:
         with pytest.raises(InstrumentCollectFailure) as raised:
@@ -807,7 +875,12 @@ def test_generated_temperature_client_collects_and_maps_named_results() -> None:
         ),
     )
     target = temperature_readout("thermometer")
-    handle = LabInstrumentOperations(daemon, operator="test").open(target)
+    handle = LabInstrumentOperations(daemon, operator="test").open(
+        target,
+        setup=SetupRevisionRef(
+            revision_id="setup-1", content_hash="sha256:" + "0" * 64
+        ),
+    )
 
     try:
         readback = assert_type(handle[target].sample(), TemperatureReadback)
@@ -847,6 +920,9 @@ def test_notebook_collect_rejects_a_result_from_another_acquisition() -> None:
         client=daemon,
         instrument_ids=("bias",),
         actor="test",
+        setup=SetupRevisionRef(
+            revision_id="setup-1", content_hash="sha256:" + "0" * 64
+        ),
     )
 
     try:
@@ -878,6 +954,9 @@ def test_notebook_invoke_rejects_argument_from_another_operation() -> None:
         client=daemon,
         instrument_ids=("source",),
         actor="test",
+        setup=SetupRevisionRef(
+            revision_id="setup-1", content_hash="sha256:" + "0" * 64
+        ),
     )
     operation = InterfaceRef("test.play_program/v1").operation("play")
     unrelated = (

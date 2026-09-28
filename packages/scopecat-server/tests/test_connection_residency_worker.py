@@ -358,7 +358,10 @@ def test_measured_costs_compare_cold_warm_and_explicit_reconnect(
             if index == 2:
                 [binding] = instrument_bindings(residency_config())
                 client.release_instruments(
-                    InstrumentReleaseCommand(instrument_ids=(binding.id,))
+                    InstrumentReleaseCommand(
+                        instrument_ids=(binding.id,),
+                        setup=client.active_setup().revision.ref,
+                    )
                 )
             result = lab.run(residency_experiment(2))
             assert result.status == "completed"

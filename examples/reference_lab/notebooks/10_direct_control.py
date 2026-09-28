@@ -12,6 +12,7 @@ from scopecat_instruments import (
     temperature_readout,
 )
 
+from reference_lab.configuration import bootstrap_config
 from reference_lab.notebook import show
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -22,14 +23,17 @@ READOUT_VNA = network_sweep("readout-vna")
 
 # %%
 with sc.open_project(PROJECT_ROOT).connect(operator="notebook-demo") as lab:
+    setup = lab.setup.save(bootstrap_config(), name="direct-control").ref
     inventory = [
-        (item.instrument_id, item.availability) for item in lab.instruments.list().items
+        (item.instrument_id, item.availability)
+        for item in lab.instruments.list(setup=setup).items
     ]
 
     with lab.instruments.open(
         FLUX_SOURCE,
         MIXING_CHAMBER,
         READOUT_VNA,
+        setup=setup,
     ) as devices:
         source = devices[FLUX_SOURCE]
         chamber = devices[MIXING_CHAMBER]

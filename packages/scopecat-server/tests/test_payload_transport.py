@@ -151,6 +151,7 @@ def test_opaque_payload_crosses_http_and_spawned_worker_boundary(
                     operation_id="open-spawned-payload-session",
                     actor="payload-test",
                     instrument_ids=("source-0",),
+                    setup=runtime.application.setup.current().revision.ref,
                 )
             )
             payload = _payload_with_contract(
@@ -235,6 +236,7 @@ def test_direct_invoke_uses_the_same_payload_object_boundary(
                 operation_id="open-payload-session",
                 actor="payload-test",
                 instrument_ids=("source-0",),
+                setup=runtime.application.setup.current().revision.ref,
             )
         )
         payload = _inline_payload("direct-program", _PAYLOAD_BYTES)
@@ -288,6 +290,7 @@ def test_direct_payload_decode_rejection_does_not_reach_driver_or_quarantine(
                 operation_id="open-rejected-payload-session",
                 actor="payload-test",
                 instrument_ids=("source-0",),
+                setup=runtime.application.setup.current().revision.ref,
             )
         )
         payload = _inline_payload("rejected-program", _PAYLOAD_BYTES)
@@ -312,7 +315,9 @@ def test_direct_payload_decode_rejection_does_not_reach_driver_or_quarantine(
             ).instrument_id
             == "source-0"
         )
-        [owned] = daemon.list_instruments().items
+        [owned] = daemon.list_instruments(
+            setup=runtime.application.setup.current().revision.ref
+        ).items
         assert owned.availability == "active"
         assert owned.owner_id == session.session_id
 
@@ -335,6 +340,7 @@ def test_direct_invoke_idempotency_uses_payload_content_not_transport_body(
                 operation_id=f"open-canonical-{first_body_kind}",
                 actor="payload-test",
                 instrument_ids=("source-0",),
+                setup=runtime.application.setup.current().revision.ref,
             )
         )
         inline = _inline_payload("canonical-program", _PAYLOAD_BYTES)
@@ -442,6 +448,7 @@ def test_payload_object_upload_rejects_hash_mismatch(tmp_path: Path) -> None:
                 operation_id="open-hash-mismatch-payload-session",
                 actor="payload-test",
                 instrument_ids=("source-0",),
+                setup=runtime.application.setup.current().revision.ref,
             )
         )
         wrong_hexdigest = "0" * 64
@@ -489,6 +496,7 @@ def test_payload_object_upload_rejects_oversize_before_storage(
                 operation_id="open-oversize-payload-session",
                 actor="payload-test",
                 instrument_ids=("source-0",),
+                setup=runtime.application.setup.current().revision.ref,
             )
         )
         response = transport.put(
@@ -652,6 +660,7 @@ def test_closed_direct_session_cannot_leave_an_uploaded_payload(
                 operation_id="open-then-close-payload-session",
                 actor="payload-test",
                 instrument_ids=("source-0",),
+                setup=runtime.application.setup.current().revision.ref,
             )
         )
         _put_session_payload_object(

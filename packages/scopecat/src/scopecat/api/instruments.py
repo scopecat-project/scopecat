@@ -38,6 +38,7 @@ from scopecat.records.instrument import (
     InstrumentStateSnapshot,
     state_member_target,
 )
+from scopecat.records.setup import SetupRevisionRef
 from scopecat.sdk.instruments.commands import (
     ApplyReceipt,
     CollectReceipt,
@@ -247,13 +248,14 @@ class LabInstrumentOperations:
         self._client = client
         self._operator = operator
 
-    def list(self) -> InstrumentListView:
-        return self._client.list_instruments()
+    def list(self, *, setup: SetupRevisionRef) -> InstrumentListView:
+        return self._client.list_instruments(setup=setup)
 
     def release(
         self,
         instrument: str | InstrumentIdentity,
         *additional_instruments: str | InstrumentIdentity,
+        setup: SetupRevisionRef,
     ) -> InstrumentReleaseReceipt:
         """Disconnect idle devices for another controller to use.
 
@@ -263,20 +265,22 @@ class LabInstrumentOperations:
         """
         return self._client.release_instruments(
             InstrumentReleaseCommand(
+                setup=setup,
                 instrument_ids=tuple(
                     item if isinstance(item, str) else item.instrument_id
                     for item in (instrument, *additional_instruments)
-                )
+                ),
             )
         )
 
-    def get(self, instrument_id: str) -> InstrumentView:
-        return self._client.get_instrument(instrument_id)
+    def get(self, instrument_id: str, *, setup: SetupRevisionRef) -> InstrumentView:
+        return self._client.get_instrument(instrument_id, setup=setup)
 
     def open(
         self,
         instrument: InstrumentSelection,
         *additional_instruments: InstrumentSelection,
+        setup: SetupRevisionRef,
     ) -> InstrumentSessionHandle:
         instrument_ids = tuple(
             _selected_instrument_id(item)
@@ -288,6 +292,7 @@ class LabInstrumentOperations:
             if isinstance(item, TemporaryInstrumentRef)
         )
         return InstrumentSessionHandle(
+            setup=setup,
             client=self._client,
             instrument_ids=instrument_ids,
             actor=self._operator,
@@ -302,6 +307,7 @@ class InstrumentSessionHandle:
         self,
         *,
         client: DaemonClient,
+        setup: SetupRevisionRef,
         instrument_ids: tuple[str, ...],
         actor: str,
         temporary_bindings: tuple[InstrumentBindingSpec, ...] = (),
@@ -314,6 +320,7 @@ class InstrumentSessionHandle:
             raise ValueError("direct interaction actor must be non-empty")
         self._client = client
         self._instrument_ids = instrument_ids
+        self._setup = setup
         self._actor = actor
         self._temporary_bindings = temporary_bindings
         self._open_operation_id = _new_command_id("open", instrument_ids[0])
@@ -605,6 +612,7 @@ class InstrumentSessionHandle:
         if session is None:
             session = self._client.open_instrument_session(
                 InstrumentSessionOpenCommand(
+                    setup=self._setup,
                     operation_id=self._open_operation_id,
                     actor=self._actor,
                     instrument_ids=self._instrument_ids,

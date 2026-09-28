@@ -27,8 +27,14 @@ saved setups, task/record reopening and restart without duplicate acquisition.
 The server journey checks alias contention using the same maintained physical
 access key and rejection before acquisition.
 
+Direct-instrument listing, connection and release also require an exact maintained
+setup. They work without global activation. Each Instruments page retains its own
+selection while connected; device edits save a new setup without activating it.
+Open retries check the original setup and retain the original acquisition. Aliases
+sharing a maintained physical access key use the same claims across contexts.
+
 This does **not** yet establish canonical identity for independently declared
-access keys, independent direct-instrument sessions, or removal of active-setup
+access keys, or removal of active-setup
 dependencies from every candidate/config-registry path. The standalone manager
 and per-lesson services also remain. The next gate must implement these boundaries
 and same-service practice cleanup before claiming the combined pre-hardware

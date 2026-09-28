@@ -45,7 +45,6 @@ def test_manual_mutations_invalidate_only_the_compiled_physical_footprint(
             instrument_ids=("other",),
             exclusivity_keys=("physical-b",),
             ttl=timedelta(minutes=1),
-            expected_setup_generation=0,
         )
         control.start_instrument_operation(
             unrelated.session_id,
@@ -64,7 +63,6 @@ def test_manual_mutations_invalidate_only_the_compiled_physical_footprint(
             instrument_ids=("manual-alias",),
             exclusivity_keys=("physical-a",),
             ttl=timedelta(minutes=1),
-            expected_setup_generation=0,
         )
         # Ownership/connection and read-only queries are not mutation facts.
         assert repository.validity(fence).valid

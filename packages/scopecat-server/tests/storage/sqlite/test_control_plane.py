@@ -59,7 +59,6 @@ def _open_instrument_session(
         instrument_ids=(name,),
         exclusivity_keys=(f"visa:{name}",),
         ttl=ttl,
-        expected_setup_generation=0,
         at=at,
     )
 
@@ -443,7 +442,6 @@ def test_inventory_migration_blockers_include_active_instrument_session(
         instrument_ids=("scope",),
         exclusivity_keys=(key.id,),
         ttl=SESSION_TTL,
-        expected_setup_generation=0,
         at=NOW,
     )
 
@@ -477,7 +475,6 @@ def test_inventory_migration_blockers_include_quarantined_session_claim(
         instrument_ids=("scope",),
         exclusivity_keys=(key.id,),
         ttl=SESSION_TTL,
-        expected_setup_generation=0,
         at=NOW,
     )
     store.start_instrument_operation(
@@ -782,19 +779,15 @@ def test_instrument_session_retry_operation_recovery_and_explicit_close(
         instrument_ids=("scope",),
         exclusivity_keys=("visa:scope",),
         ttl=SESSION_TTL,
-        expected_setup_generation=0,
         at=NOW,
     )
     retry = store.open_instrument_session(
         operation_id="open-1",
         actor="alice",
-        setup=SetupRevisionRef(
-            revision_id="replacement", content_hash=f"sha256:{'b' * 64}"
-        ),
+        setup=first.setup,
         instrument_ids=("scope",),
         exclusivity_keys=("visa:replacement",),
         ttl=SESSION_TTL,
-        expected_setup_generation=None,
         at=NOW + timedelta(seconds=1),
     )
 
@@ -827,7 +820,6 @@ def test_instrument_session_retry_operation_recovery_and_explicit_close(
             instrument_ids=("scope",),
             exclusivity_keys=("visa:scope",),
             ttl=SESSION_TTL,
-            expected_setup_generation=None,
             at=NOW + timedelta(seconds=1),
         )
 
@@ -915,13 +907,10 @@ def test_instrument_session_lease_renews_silently_and_expires_idle_session(
         store.open_instrument_session(
             operation_id="open-scope",
             actor="alice",
-            setup=SetupRevisionRef(
-                revision_id="replacement", content_hash=f"sha256:{'b' * 64}"
-            ),
+            setup=opened.setup,
             instrument_ids=("scope",),
             exclusivity_keys=("visa:replacement",),
             ttl=timedelta(minutes=1),
-            expected_setup_generation=None,
             at=NOW + timedelta(seconds=25),
         )
     assert store.get_instrument_session(opened.session_id) == renewed
@@ -1012,7 +1001,6 @@ def test_restart_releases_idle_session_and_quarantines_unfinished_operation(
         instrument_ids=("idle-scope",),
         exclusivity_keys=("visa:idle-scope",),
         ttl=timedelta(seconds=2),
-        expected_setup_generation=0,
         at=NOW,
     )
     active = store.open_instrument_session(
@@ -1024,7 +1012,6 @@ def test_restart_releases_idle_session_and_quarantines_unfinished_operation(
         instrument_ids=("active-scope",),
         exclusivity_keys=("visa:active-scope",),
         ttl=timedelta(seconds=2),
-        expected_setup_generation=0,
         at=NOW,
     )
     store.start_instrument_operation(
@@ -1076,7 +1063,6 @@ def test_instrument_session_cannot_claim_a_run_owned_resource(
             instrument_ids=("scope",),
             exclusivity_keys=("visa:scope",),
             ttl=SESSION_TTL,
-            expected_setup_generation=0,
             at=NOW,
         )
     assert "visa:scope" not in str(caught.value)
@@ -1112,6 +1098,5 @@ def test_instrument_session_rejects_invalid_exclusivity_keys(
             instrument_ids=instrument_ids,
             exclusivity_keys=exclusivity_keys,
             ttl=SESSION_TTL,
-            expected_setup_generation=0,
             at=NOW,
         )
