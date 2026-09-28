@@ -176,7 +176,13 @@ def run(home: Path, source: Path | None = None) -> None:
                 # dispatch must not block that thread waiting for itself.
                 threading.Thread(
                     target=window.run_js,
-                    args=("window.scopecatRequestExit()",),
+                    args=(
+                        (
+                            "if (typeof window.scopecatRequestExit === 'function') "
+                            "{ window.scopecatRequestExit(); } "
+                            "else { pywebview.api.exit(true); }"
+                        ),
+                    ),
                     daemon=True,
                 ).start()
             else:
