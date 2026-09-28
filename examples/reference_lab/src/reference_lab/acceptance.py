@@ -50,6 +50,7 @@ class _ArrowProjection(Protocol):
 
 
 FIXTURE_TIME = datetime(2026, 9, 1, tzinfo=UTC)
+FIXTURE_WORKSPACE = "acceptance-source"
 
 
 def _checked_launch_preview(
@@ -63,6 +64,7 @@ def _checked_launch_preview(
         entry = next(item for item in catalog.entries if item.id == request.experiment)
         preview = authors.preview(request.model_copy(update={"version": entry.version}))
     assert preview.manual_state is not None
+    assert preview.workspace_id == request.workspace_id
     assert preview.code_revision is not None
     assert preview.manual_state.binding.code_revision == preview.code_revision
     # UI shape/science fixtures are not executable permissions. Normalize only
@@ -81,6 +83,7 @@ def _checked_launch_preview(
         )
     return preview.model_copy(
         update={
+            "workspace_id": FIXTURE_WORKSPACE,
             "inspection": inspection,
             "request_hash": "sha256:" + "0" * 64,
             "definition_hash": "sha256:" + "0" * 64,
@@ -108,10 +111,11 @@ def capture_acceptance_fixtures(
     workspace_id = health.author_workspaces[health.project_root]
     with AuthorProject(client.base_url, workspace_id=workspace_id) as authors:
         current_catalog = authors.catalog()
+    assert current_catalog.workspace_id == workspace_id
     # The shared UI fixture contains the three reference scenarios exercised here.
     # Source-derived versions are checked by admission tests, not this shape fixture.
     catalog = LaunchCatalog(
-        workspace_id=workspace_id,
+        workspace_id=FIXTURE_WORKSPACE,
         entries=tuple(
             entry.model_copy(update={"version": "sha256:" + "0" * 64})
             if entry.id != "channel-timing"

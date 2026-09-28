@@ -30,8 +30,25 @@ class ReferenceLabDaemon:
 
 @pytest.fixture(autouse=True)
 def isolate_project_loader() -> Generator[None]:
-    with isolated_project_imports():
-        yield
+    # Test modules retain collection-time classes and declarations. Restore their
+    # matching imports after a cloned project or notebook evicts package modules.
+    original_modules = {
+        name: module
+        for name, module in tuple(sys.modules.items())
+        if name == "reference_lab" or name.startswith("reference_lab.")
+    }
+    try:
+        with isolated_project_imports():
+            yield
+    finally:
+        for name in tuple(sys.modules):
+            if name == "reference_lab" or name.startswith("reference_lab."):
+                del sys.modules[name]
+        sys.modules.update(original_modules)
+        for name, module in original_modules.items():
+            parent, _, child = name.rpartition(".")
+            if parent in original_modules:
+                vars(original_modules[parent])[child] = module
 
 
 @pytest.fixture(scope="session")

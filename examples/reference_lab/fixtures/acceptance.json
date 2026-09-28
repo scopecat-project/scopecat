@@ -823,7 +823,7 @@
       }
     },
     "summary": "Preview fixed or scanned signal controls against the reviewed q0 carrier.\n\nProject limits: at most 64 points; amplitude at most 0.2 V when detuning\nexceeds 0.25 GHz. This analytic model makes no device calls.",
-    "workspace_id": "legacy"
+    "workspace_id": "acceptance-source"
   },
   "controls_scan": {
     "code_revision": {
@@ -1216,7 +1216,7 @@
       }
     },
     "summary": "Preview fixed or scanned signal controls against the reviewed q0 carrier.\n\nProject limits: at most 64 points; amplitude at most 0.2 V when detuning\nexceeds 0.25 GHz. This analytic model makes no device calls.",
-    "workspace_id": "legacy"
+    "workspace_id": "acceptance-source"
   },
   "diagnostic": {
     "dataset_schema": {
@@ -1693,7 +1693,7 @@
         "version": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
       }
     ],
-    "workspace_id": "legacy"
+    "workspace_id": "acceptance-source"
   },
   "launch_preview": {
     "code_revision": {
@@ -1915,7 +1915,7 @@
       }
     },
     "summary": "Retain one thermometer sample without changing device state or defaults.",
-    "workspace_id": "legacy"
+    "workspace_id": "acceptance-source"
   },
   "planned_settings": {
     "planned_setting_limit": 64,

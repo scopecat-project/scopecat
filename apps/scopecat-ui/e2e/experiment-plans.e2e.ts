@@ -3,6 +3,7 @@ import { cp, mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { expect, test } from "@playwright/test";
+import { chooseReferenceContext, prepareReferenceContexts } from "./reference-context";
 const ROOT = resolve(process.cwd(), "../..");
 function uv(args: string[]): string {
   const env = { ...process.env };
@@ -27,6 +28,7 @@ test("saves, reopens, copies and submits an immutable plan without activating co
         recursive: true,
       });
     uv(["scopecat", "start", project, "--port", "0", "--static-dir", resolve("dist")]);
+    prepareReferenceContexts(uv, project);
     const { base_url: endpoint } = JSON.parse(
       await readFile(join(project, ".scopecat/daemon.json"), "utf8"),
     ) as { base_url: string };
@@ -34,6 +36,7 @@ test("saves, reopens, copies and submits an immutable plan without activating co
     await page
       .getByLabel("Experiment", { exact: true })
       .selectOption("reference_lab.frequency_amplitude");
+    await chooseReferenceContext(page);
     await page.getByLabel("Operator", { exact: true }).fill("alice");
     async function preview() {
       const response = page.waitForResponse((r) =>

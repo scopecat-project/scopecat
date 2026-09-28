@@ -12,7 +12,7 @@ from scopecat.project import load_project
 from scopecat_instruments import dc_source, rf_source
 from scopecat_server.lifecycle import start_project, stop_project
 
-from reference_lab.configuration import EXAMPLE_ROOT
+from reference_lab.configuration import EXAMPLE_ROOT, initial_parameters
 
 
 def test_manual_query_apply_release_and_launch_keep_relevant_preview_facts(
@@ -32,6 +32,16 @@ def test_manual_query_apply_release_and_launch_keep_relevant_preview_facts(
             LabApplication().connect(endpoint.base_url) as lab,
             project.authoring() as authors,
         ):
+            content = initial_parameters()
+            revision = authors.parameters.save(
+                name="manual-inputs",
+                catalog=content.catalog,
+                parameters=content.parameters,
+            )
+            authors.parameters.create_branch("manual-inputs", revision=revision)
+            authors.use(
+                parameter_branch="manual-inputs", setup=lab.setup.active().revision.ref
+            )
             with lab.instruments.open(target) as devices:
                 source = devices[target]
                 observation = source.frequency.read_observation()

@@ -130,6 +130,8 @@ def test_public_notebook_entry_forwards_workspace_options(monkeypatch):
 
 
 def test_default_notebook_opens_preferred_software_laboratory(tmp_path, monkeypatch):
+    from scopecat import author_workspaces
+
     root = tmp_path / "software laboratory"
     root.mkdir()
     (root / "scopecat.toml").write_text("[lab]\n")
@@ -141,7 +143,12 @@ def test_default_notebook_opens_preferred_software_laboratory(tmp_path, monkeypa
     store = SimpleNamespace(
         lock=FileLock(home / "services.lock"),
         preferred=lambda: service,
-        list=lambda: [service],
+        for_workspace=lambda _path: (service, "registered-source"),
+    )
+    monkeypatch.setattr(
+        author_workspaces,
+        "local_author_workspaces",
+        lambda _: [SimpleNamespace(root=root)],
     )
     monkeypatch.setattr(author_notebook, "Services", lambda _: store)
     monkeypatch.setattr(

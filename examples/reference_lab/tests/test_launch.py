@@ -270,7 +270,7 @@ def test_real_http_preview_shares_catalog_and_never_admits_acquisition(
         assert lab.config.registry().entries == ()
 
 
-def test_submission_fences_new_stale_work_but_replays_exact_admission(
+def test_exact_context_survives_default_changes_and_replays_exact_admission(
     reference_lab_daemon: _Daemon,
     launch_application: LabApplication,
 ) -> None:
@@ -318,10 +318,18 @@ def test_submission_fences_new_stale_work_but_replays_exact_admission(
         lab.setup.activate(changed_setup)
         try:
             assert provider(lab, command) == admitted
-            with pytest.raises(
-                DaemonConflictError, match="setup differs from current authority"
-            ):
-                provider(lab, submit_request(request, preview, "new-stale-request"))
+            independent = provider(
+                lab, submit_request(request, preview, "new-exact-context-request")
+            )
+            assert isinstance(independent, LaunchSubmission)
+            assert independent.procedure_id != admitted.procedure_id
+            independent_handle = lab.procedures.get(independent.procedure_id).resume()
+            independent_output = independent_handle.output("experiment")
+            assert independent_output.kind == "run"
+            assert (
+                lab.get_run(independent_output.run_id).snapshot.config_source
+                == preview.reviewed.config_source
+            )
         finally:
             lab.setup.activate(original_setup)
         changed = request.model_copy(update={"actor": "another-operator"})

@@ -10,25 +10,42 @@ from pathlib import Path
 
 import pytest
 from scopecat.application import LabApplication
+from scopecat.application.author_project import AuthorProject
 from scopecat.application.launch import LaunchPreview, LaunchSubmission
 from scopecat.daemon.client import DaemonClient
 from scopecat.daemon.preparation import AuthorPreparationFailed
 from scopecat.project import load_project
 from scopecat.records.launch_request import LaunchRequest
+from scopecat_server.author_registration import register_author_workspace
 from scopecat_server.lifecycle import start_project, stop_project
 from scopecat_server.snapshots import create_snapshot, restore_snapshot
 
-from reference_lab.configuration import EXAMPLE_ROOT
+from reference_lab.configuration import EXAMPLE_ROOT, initial_parameters
 
 pytestmark = pytest.mark.usefixtures("reference_lab_author_imports")
 
 
+def create_context(authors: AuthorProject) -> None:
+    content = initial_parameters()
+    revision = authors.parameters.save(
+        name="refresh-inputs", catalog=content.catalog, parameters=content.parameters
+    )
+    authors.parameters.create_branch("refresh-inputs", revision=revision)
+    authors.use(
+        parameter_branch="refresh-inputs", setup=authors.active_setup().revision.ref
+    )
+
+
 def preview_request(project_root: Path) -> tuple[LaunchRequest, LaunchPreview]:
     with load_project(project_root / "scopecat.toml").authoring() as authors:
+        authors.use(
+            parameter_branch="refresh-inputs", setup=authors.active_setup().revision.ref
+        )
         catalog = authors.catalog()
         entry = next(item for item in catalog.entries if item.id == "signal")
         request = LaunchRequest(
             workspace_id=authors.workspace_id,
+            selection=authors.selection.science,
             action="preview",
             experiment=entry.id,
             version=entry.version,
@@ -124,6 +141,8 @@ def test_refresh_freezes_admission_and_analysis_across_restore(
     endpoint = start_project(project)
     try:
         with project.authoring() as authors:
+            create_context(authors)
+            workspace_id = authors.workspace_id
             initial = authors.state()
             assert initial.active is not None
             first = initial.active
@@ -206,6 +225,7 @@ def test_refresh_freezes_admission_and_analysis_across_restore(
     restored_root = tmp_path / "restored"
     restore_snapshot(snapshot, restored_root)
     restored = load_project(restored_root / "scopecat.toml")
+    register_author_workspace(restored.root, restored.root, identity=workspace_id)
     restored_endpoint = start_project(restored)
     try:
         run_admitted(restored_root, admitted)
@@ -278,6 +298,7 @@ def recipe_amplitude() -> float:
     endpoint = start_project(project)
     try:
         with project.authoring() as authors:
+            create_context(authors)
             first = authors.state()
             old_run = admit_without_dispatch(root, "old-recipe")
             helper_path.write_text(

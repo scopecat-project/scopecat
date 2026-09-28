@@ -9,7 +9,7 @@ from scopecat.application.author_project import AuthorPreparedLaunch
 from scopecat.project import load_project
 from scopecat_server.lifecycle import start_project, stop_project
 
-from reference_lab.configuration import EXAMPLE_ROOT
+from reference_lab.configuration import EXAMPLE_ROOT, initial_parameters
 from reference_lab.parameters import QubitParameters
 from reference_lab.workflows.authored.ordinary_analysis import PeakResult
 from reference_lab.workflows.authored.signal import signal as signal_declaration
@@ -50,6 +50,17 @@ def group_peak(data: Dataset) -> sc.AnalysisProducts[PeakResult]:
     analysis = "reference_lab.workflows.authored.ordinary_analysis:group_peak"
     try:
         with project.authoring() as author:
+            content = initial_parameters()
+            revision = author.parameters.save(
+                name="group-inputs",
+                catalog=content.catalog,
+                parameters=content.parameters,
+            )
+            author.parameters.create_branch("group-inputs", revision=revision)
+            author.use(
+                parameter_branch="group-inputs",
+                setup=author.active_setup().revision.ref,
+            )
             author.refresh()
             declaration = signal_declaration
             run = (

@@ -151,7 +151,6 @@ class Services:
         if not path.is_file():
             raise ValueError("代码目录尚未绑定实验室；请先登记作者工作区")
         registry = LocalAuthorWorkspaces.model_validate_json(path.read_bytes())
-        workspace = author_workspace_id(project.root)
         service = next(
             (item for item in self.list() if Path(item.root) == registry.service_root),
             None,
@@ -161,6 +160,7 @@ class Services:
         from .lab_environment import require_completed_update
 
         require_completed_update(self.database.parent.parent, service.id)
+        workspace = author_workspace_id(project.root)
         binding = project.runtime_binding
         owner_binding = open_project(
             service.root, resolve_adapter=False
@@ -170,10 +170,9 @@ class Services:
             owner_binding.deployment_root,
         ):
             raise ValueError("代码目录与实验室运行绑定不一致；请重新检查作者登记")
-        if workspace != "legacy":
-            source = next(item for item in registry.items if item.id == workspace)
-            if source.python != Path(service.python):
-                raise ValueError("作者登记与实验室解释器不一致；请重新检查运行环境")
+        source = next(item for item in registry.items if item.id == workspace)
+        if source.python != Path(service.python):
+            raise ValueError("作者登记与实验室解释器不一致；请重新检查运行环境")
         return service, workspace
 
     def register(
