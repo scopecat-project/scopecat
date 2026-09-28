@@ -19,7 +19,7 @@ On Windows, open `Scopecat-Lab/lab.cmd`; elsewhere run
 Expand **Help · Teaching and practice**, then choose a topic and **Open / continue**; the service prepares the exercise and opens
 its folder and Notebook in VS Code. The installed command `scopecat teach` opens
 the Help section directly. The default page lists experimental services, which
-are registered separately with `scopecat app PATH`. There is no need to activate environments, choose ports or number
+are registered separately with `scopecat app PATH --action open --home HOME`. There is no need to activate environments, choose ports or number
 project folders. Repeated launching connects to the same management service.
 
 Each topic has its own environment and one complete Notebook:

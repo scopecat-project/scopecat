@@ -80,7 +80,7 @@ The experiment GUI has a **Help and maintenance** page. It uses the existing hea
 response to identify the current service and provides supported documentation,
 teaching and maintenance directions. Reopen the original installed `lab.cmd` /
 `lab.py` entry with `--manage` to return to that installation's manager; a qualified
-source installation can use `scopecat app --manage` with its original host-home options. Help does
+source installation can use `scopecat app --action open --manage` with its original host-home options. Help does
 not register directories or start another service merely by being opened.
 
 Failed startup or a changed registration opens maintenance with retained operation

@@ -79,7 +79,7 @@ for both registration and Notebook execution. Stop its service, then register:
 
 ```shell
 scopecat register-workspace "/path/to/author code" --service "/path/to/laboratory"
-scopecat app --workspace "/path/to/author code" --home "/path/to/application home"
+scopecat app --action open --workspace "/path/to/author code" --home "/path/to/application home"
 ```
 
 Registration writes only the local runtime binding and source membership. It does
@@ -203,7 +203,7 @@ repeat **Installed adapter** with a different runtime directory to work around t
 failure. Connect can also add an author folder to a stopped installed laboratory;
 leave the author field blank when no new source registration is needed.
 
-After setup, `scopecat app --workspace AUTHOR --home HOME` and
+After setup, `scopecat app --action open --workspace AUTHOR --home HOME` and
 `scopecat notebook AUTHOR --home HOME` use that binding. Notebook extras must be
 included in the delivery. This removes manual laboratory-manifest authoring and a
 separate register-workspace command for this setup path; building the adapter and
@@ -464,7 +464,7 @@ location; explicit interpreter and GUI overrides remain a maintainer CLI operati
 For example, in PowerShell:
 
 ```powershell
-scopecat app "D:\Lab\experiment" --manage --python "D:\Lab\runtime\Scripts\python.exe" --static-dir "D:\Lab\gui\dist" --home "D:\Scopecat-Lab" --name "Experiment service"
+scopecat app "D:\Lab\experiment" --action open --manage --python "D:\Lab\runtime\Scripts\python.exe" --static-dir "D:\Lab\gui\dist" --home "D:\Scopecat-Lab" --name "Experiment service"
 ```
 
 Replace each example location with the recorded local location; these are not
