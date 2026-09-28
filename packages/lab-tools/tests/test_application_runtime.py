@@ -7,6 +7,7 @@ import psutil
 import pytest
 from filelock import FileLock
 
+from lab_tools import application_runtime
 from lab_tools.application_runtime import ApplicationRuntime
 from scopecat.project import load_captured_project, open_project
 from scopecat.project_sources import capture_sources, materialize_sources
@@ -94,3 +95,48 @@ def test_failed_candidate_does_not_replace_selected_runtime(application):
         application.select(changed)
     assert application.installation() == before
     assert not application.pending.exists()
+
+
+def test_missing_candidate_capability_preserves_running_application(application):
+    before = application.installation()
+    record = application.start()
+    declaration = (application.root / "scopecat.toml").read_bytes()
+    with pytest.raises(ValueError, match="missing-candidate"):
+        application.qualify(
+            before.python,
+            before.static_dir,
+            composition='[lab.adapter]\ndistribution="missing-candidate"\n'
+            'manifest="missing/adapter.toml"\n',
+        )
+    assert application.status().record == record
+    assert application.installation() == before
+    assert (application.root / "scopecat.toml").read_bytes() == declaration
+
+
+def test_interrupted_selection_is_fenced_and_retryable(application, monkeypatch):
+    before = application.installation()
+    candidate = application.qualify(
+        before.python,
+        before.static_dir,
+        composition=before.composition + "# candidate\n",
+    )
+    write = application_runtime._write
+
+    def fail_selection(path, content):
+        if path == application.selection:
+            raise OSError("interrupted selection")
+        write(path, content)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(application_runtime, "_write", fail_selection)
+        with pytest.raises(OSError, match="interrupted selection"):
+            application.select(candidate)
+    assert application.installation() == before
+    with pytest.raises(ValueError, match="切换尚未完成"):
+        application.start()
+    with pytest.raises(ValueError, match="上次尚未完成"):
+        application.select(before)
+    application.select(candidate)
+    assert not application.pending.exists()
+    assert application.installation() == candidate
+    assert application.start().project_root == application.root

@@ -19,7 +19,7 @@ from scopecat.execution_environment import execution_packages
 from scopecat.installed_authors import capture_installed_authors
 from scopecat.kernel.content_identity import sha256_json_hash
 from scopecat.lab_settings import lab_settings_identity
-from scopecat.project import open_project
+from scopecat.project import load_project, open_project
 from scopecat_server.lifecycle import inspect_daemon, start_project, stop_project
 from scopecat_server.static_assets import select_static_dir
 
@@ -33,11 +33,16 @@ class Request(BaseModel):
     adapter_identity: str | None = None
     qualify_sources: bool = False
     workspace: str | None = None
+    manifest: str | None = None
 
 
 def main() -> None:
     request = Request.model_validate_json(sys.argv[1])
-    project = open_project(request.root, resolve_adapter=request.action != "stop")
+    project = (
+        load_project(request.manifest)
+        if request.action == "probe" and request.manifest is not None
+        else open_project(request.root, resolve_adapter=request.action != "stop")
+    )
     if request.action == "stop":
         stop_project(project)
         Path(sys.argv[2]).write_text("{}", encoding="utf-8")
@@ -80,7 +85,12 @@ def main() -> None:
 
             baseline = capture_sources(project)
             for item in local_author_workspaces(project.root):
-                source = open_project(item.root)
+                source = open_project(item.root, resolve_adapter=False)
+                source = load_project(
+                    source.manifest,
+                    lab_adapter=project.lab_adapter if source.author_only else None,
+                    bound_composition=source.author_only,
+                )
                 binding = source.runtime_binding
                 owner = project.runtime_binding
                 if (binding.data_root, binding.deployment_root) != (

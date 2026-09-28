@@ -42,6 +42,18 @@ class Installation(BaseModel):
     settings_identity: str | None = None
     adapter_identity: str | None = None
     drivers: QualifiedDrivers | None = None
+    composition: str
+
+
+def application_declaration(adapter: AdapterReference | None) -> str:
+    return (
+        "[lab]\n[authors]\ndependencies = []\n"
+        if adapter is None
+        else "[lab.adapter]\n"
+        f"distribution = {json.dumps(adapter.distribution)}\n"
+        f"manifest = {json.dumps(adapter.manifest)}\n"
+        "[authors]\ndependencies = []\n"
+    )
 
 
 def runtime_command(python: Path, request: dict[str, object]) -> dict[str, object]:
@@ -113,16 +125,31 @@ class ApplicationRuntime:
     def status(self) -> DaemonStatus:
         return inspect_daemon(open_project(self.root, resolve_adapter=False))
 
-    def qualify(self, python: Path, static_dir: Path | None) -> Installation:
-        result = runtime_command(
-            python,
-            {
-                "action": "probe",
-                "root": str(self.root),
-                "static_dir": str(static_dir) if static_dir else None,
-                "qualify_sources": True,
-            },
-        )
+    def qualify(
+        self,
+        python: Path,
+        static_dir: Path | None,
+        *,
+        composition: str | None = None,
+    ) -> Installation:
+        composition = composition or (self.root / "scopecat.toml").read_text()
+        descriptor, name = tempfile.mkstemp(prefix=".candidate-", dir=self.root)
+        manifest = Path(name)
+        try:
+            with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
+                stream.write(composition)
+            result = runtime_command(
+                python,
+                {
+                    "action": "probe",
+                    "root": str(self.root),
+                    "manifest": str(manifest),
+                    "static_dir": str(static_dir) if static_dir else None,
+                    "qualify_sources": True,
+                },
+            )
+        finally:
+            manifest.unlink(missing_ok=True)
         return Installation(
             python=python.absolute(),
             static_dir=Path(cast("str", result["static_dir"])),
@@ -132,6 +159,7 @@ class ApplicationRuntime:
             drivers=QualifiedDrivers.model_validate_json(json.dumps(result["drivers"]))
             if result["drivers"] is not None
             else None,
+            composition=composition,
         )
 
     def configure(
@@ -147,14 +175,7 @@ class ApplicationRuntime:
             if self.selection.exists():
                 return self.installation()
             manifest = self.root / "scopecat.toml"
-            declaration = (
-                "[lab]\n[authors]\ndependencies = []\n"
-                if adapter is None
-                else "[lab.adapter]\n"
-                f"distribution = {json.dumps(adapter.distribution)}\n"
-                f"manifest = {json.dumps(adapter.manifest)}\n"
-                "[authors]\ndependencies = []\n"
-            )
+            declaration = application_declaration(adapter)
             if manifest.exists() and manifest.read_text() != declaration:
                 raise ValueError("已有应用声明与本次安装不符；原文件保留")
             if not manifest.exists():
@@ -172,7 +193,9 @@ class ApplicationRuntime:
                 {
                     "action": "start",
                     "root": str(self.root),
-                    **selected.model_dump(mode="json", exclude={"python", "drivers"}),
+                    **selected.model_dump(
+                        mode="json", exclude={"python", "drivers", "composition"}
+                    ),
                 },
             )
             status = self.status()
@@ -216,7 +239,11 @@ class ApplicationRuntime:
                     "应用仍在运行或更新中；候选环境保留，可停止后重试"
                 ) from error
             self._require_stopped()
-            qualified = self.qualify(candidate.python, candidate.static_dir)
+            qualified = self.qualify(
+                candidate.python,
+                candidate.static_dir,
+                composition=candidate.composition,
+            )
             if qualified != candidate:
                 raise ValueError("候选环境在准备后改变；请重新准备更新")
             if (
@@ -226,6 +253,7 @@ class ApplicationRuntime:
             ):
                 raise ValueError("请先重试上次尚未完成的环境切换")
             _write(self.pending, candidate.model_dump_json(indent=2))
+            _write(self.root / "scopecat.toml", candidate.composition)
             path = author_bindings_path(self.root)
             if path.is_file():
                 registry = LocalAuthorWorkspaces.model_validate_json(path.read_bytes())
@@ -251,7 +279,9 @@ class ApplicationRuntime:
                     "action": "register_source",
                     "root": str(self.root),
                     "workspace": str(workspace.resolve()),
-                    **selected.model_dump(mode="json", exclude={"python", "drivers"}),
+                    **selected.model_dump(
+                        mode="json", exclude={"python", "drivers", "composition"}
+                    ),
                 },
             )
             return cast("str", result["source_id"])

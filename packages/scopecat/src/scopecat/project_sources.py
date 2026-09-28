@@ -248,12 +248,7 @@ def require_shared_composition(
 ) -> None:
     """Compare shared laboratory ownership separately from author-local maintenance."""
     if source.author_only:
-        from scopecat.author_workspaces import laboratory_adapter
-
-        if (
-            source.lab_adapter != owner.lab_adapter
-            or owner.lab_adapter != laboratory_adapter(owner.root)
-        ) or any(
+        if source.lab_adapter != owner.lab_adapter or any(
             candidate.manifest.installed_authors.get(module)
             != baseline.manifest.installed_authors[module]
             for module, _ in owner.adapter_packages

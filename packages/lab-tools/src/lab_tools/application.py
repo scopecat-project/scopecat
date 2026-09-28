@@ -13,7 +13,7 @@ from urllib.parse import urlencode
 
 from scopecat.installed_adapter import AdapterReference
 
-from .application_runtime import ApplicationRuntime
+from .application_runtime import ApplicationRuntime, application_declaration
 from .bundle import configure_console
 
 
@@ -82,7 +82,9 @@ def main(argv: list[str] | None = None) -> None:
             )
             if args.action == "update":
                 selected = runtime.qualify(
-                    args.python or Path(sys.executable), args.static_dir
+                    args.python or Path(sys.executable),
+                    args.static_dir,
+                    composition=application_declaration(adapter) if adapter else None,
                 )
                 runtime.select(selected)
             print(selected.model_dump_json(indent=2))
