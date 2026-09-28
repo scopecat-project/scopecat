@@ -66,6 +66,7 @@ def _submission(
         sample_revisions={},
     )
     return RunSubmission(
+        execution_setup=runtime.application.setup.resolve("initial").ref,
         scientific_binding=binding,
         submission_id="sample-run-submission",
         config=_config(),
@@ -115,10 +116,9 @@ def test_sample_revision_and_run_binding_survive_restart(tmp_path: Path) -> None
     ):
         with _daemon_client(transport) as client:
             lab = LabClient(client)
-            setup = lab.setup.import_recipe(
-                ExecutableSetupSnapshot.from_config(_config()), name="sample-bench"
+            lab.setup.import_recipe(
+                ExecutableSetupSnapshot.from_config(_config()), name="initial"
             )
-            lab.setup.activate(setup)
             assert lab.config.registry().entries == ()
         parent_response = transport.post(
             "/api/v1/samples",

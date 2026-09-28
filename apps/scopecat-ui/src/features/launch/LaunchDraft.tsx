@@ -1,6 +1,5 @@
 import type { components } from "../../api-schema";
 import {
-  contextSelection,
   defaultSelection,
   normalizeSelection,
   type ScientificSelection,
@@ -26,7 +25,6 @@ import {
   type SubmissionAttempt,
   type SubmissionRequest,
 } from "./launch-submission";
-import type { ConfigContextResolution } from "../config/config-api";
 import type { LaunchCatalogEntry, LaunchPreview } from "./launch-api";
 
 export interface LaunchDraft {
@@ -59,15 +57,9 @@ interface DraftContext {
   selectWorkspace: (workspaceId: string) => void;
   useCurrentSource: (workspaceId?: string) => void;
   authorRefreshed: (workspaceId: string) => void;
-  selectedContext: ConfigContextResolution | undefined;
-  selectContext: (resolution?: ConfigContextResolution) => void;
   selectConfiguration: (choice: components["schemas"]["ConfigurationChoice-Input"]) => void;
   draft: LaunchDraft | undefined;
-  openPlan: (
-    plan: PlanRevision,
-    entry: LaunchCatalogEntry,
-    context?: ConfigContextResolution,
-  ) => void;
+  openPlan: (plan: PlanRevision, entry: LaunchCatalogEntry) => void;
   importHandoff: (entry: LaunchCatalogEntry, handoff: ComparisonHandoff) => void;
   select: (entry: LaunchCatalogEntry, reset?: boolean, workspaceId?: string) => void;
   update: (change: DraftUpdate) => void;
@@ -168,7 +160,6 @@ function ProjectDraft({
   const currentWorkspace = useRef(workspaceId);
   const [selectedConfiguration, setSelectedConfiguration] =
     useState<components["schemas"]["ConfigurationChoice-Input"]>();
-  const [selectedContext, setSelectedContext] = useState<ConfigContextResolution>();
   const [attempt, setAttempt] = useState<SubmissionAttempt>();
   const latest = useRef(draft);
   useEffect(() => {
@@ -216,14 +207,12 @@ function ProjectDraft({
         next.codeRevision = current?.workspaceId === owner ? current.codeRevision : undefined;
         next.selection =
           current?.selection ??
-          (selectedContext
-            ? contextSelection(selectedContext)
-            : selectedConfiguration
-              ? {
-                  ...defaultSelection(),
-                  configuration: selectedConfiguration,
-                }
-              : defaultSelection());
+          (selectedConfiguration
+            ? {
+                ...defaultSelection(),
+                configuration: selectedConfiguration,
+              }
+            : defaultSelection());
         next.collection = current?.collection;
         next.actor = current?.actor ?? "operator";
         if (!reset && current?.workspaceId === owner && current.experiment === entry.id) {
@@ -246,7 +235,7 @@ function ProjectDraft({
         return next;
       });
     },
-    [selectedContext, selectedConfiguration, workspaceId],
+    [selectedConfiguration, workspaceId],
   );
   async function submit(request: SubmissionRequest, definition: string) {
     const wasUnknown = attempt?.status === "unknown";
@@ -320,10 +309,8 @@ function ProjectDraft({
                 )
               : current,
           ),
-        selectedContext,
         selectConfiguration: (choice) => {
           if (!alive.current) return;
-          setSelectedContext(undefined);
           setSelectedConfiguration(choice);
           setDraft((current) =>
             current
@@ -338,34 +325,6 @@ function ProjectDraft({
               : current,
           );
         },
-        selectContext: (resolved) => {
-          if (!alive.current) return;
-          setSelectedContext(resolved);
-          setSelectedConfiguration(undefined);
-          setDraft((current) =>
-            current
-              ? invalidateDraft(
-                  {
-                    ...current,
-                    planDirty: Boolean(current.plan),
-                    selection: resolved
-                      ? {
-                          ...contextSelection(resolved),
-                          subject:
-                            current.selection.subject.kind === "registered_target"
-                              ? current.selection.subject
-                              : contextSelection(resolved).subject,
-                        }
-                      : {
-                          ...current.selection,
-                          configuration: { kind: "unselected" },
-                        },
-                  },
-                  "Parameter context changed. Preview again before starting.",
-                )
-              : current,
-          );
-        },
         draft,
         attempt,
         submit,
@@ -376,7 +335,7 @@ function ProjectDraft({
           draft?.workspaceId === workspaceId &&
           (!draft?.codeRevision ||
             attempt?.request.code_revision?.content_hash === draft.codeRevision.content_hash),
-        openPlan: (plan, entry, context) => {
+        openPlan: (plan, entry) => {
           if (!alive.current) return;
           const current = latest.current;
           const next = initialDraft(
@@ -386,27 +345,21 @@ function ProjectDraft({
           );
           next.collection = current?.collection;
           const d = plan.definition;
-          const imported = importLaunchRequest(
-            next,
-            entry,
-            {
-              workspace_id: d.workspace_id,
-              scan_mode: d.scan_mode,
-              parameter_sweeps: d.parameter_sweeps,
-              action: "preview",
-              request_key: "",
-              experiment: d.experiment,
-              version: d.version,
-              inputs: d.inputs,
-              control_edits: d.control_edits,
-              selection: normalizeSelection(d.selection),
-              actor: current?.actor ?? "operator",
-            },
-            context?.config_source,
-          );
+          const imported = importLaunchRequest(next, entry, {
+            workspace_id: d.workspace_id,
+            scan_mode: d.scan_mode,
+            parameter_sweeps: d.parameter_sweeps,
+            action: "preview",
+            request_key: "",
+            experiment: d.experiment,
+            version: d.version,
+            inputs: d.inputs,
+            control_edits: d.control_edits,
+            selection: normalizeSelection(d.selection),
+            actor: current?.actor ?? "operator",
+          });
           currentWorkspace.current = d.workspace_id;
           setWorkspaceId(d.workspace_id);
-          setSelectedContext(context);
           setDraft({
             ...imported,
             plan,
@@ -429,16 +382,7 @@ function ProjectDraft({
           );
           next.collection = current?.collection;
           try {
-            const imported = importLaunchHandoff(
-              next,
-              entry,
-              handoff,
-              selectedContext?.config_source,
-            );
-            if (
-              normalizeSelection(handoff.request.selection).configuration.kind !== "working_point"
-            )
-              setSelectedContext(undefined);
+            const imported = importLaunchHandoff(next, entry, handoff);
             const owner = imported.workspaceId;
             if (!owner)
               throw new Error("This draft has no author source. Select code and preview again.");

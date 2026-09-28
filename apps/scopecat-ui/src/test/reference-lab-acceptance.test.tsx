@@ -80,12 +80,14 @@ describe("shared reference-lab acceptance", () => {
                   ? {
                       activation: {
                         entry_id:
-                          fixtures.launch_preview.reviewed.config_source.kind === "config_registry"
-                            ? fixtures.launch_preview.reviewed.config_source.entry_id
+                          fixtures.launch_preview.reviewed.config_source.kind ===
+                          "parameter_revision"
+                            ? fixtures.launch_preview.reviewed.config_source.parameters.revision_id
                             : undefined,
                         generation:
-                          fixtures.launch_preview.reviewed.config_source.kind === "config_registry"
-                            ? fixtures.launch_preview.reviewed.config_source.registry_generation
+                          fixtures.launch_preview.reviewed.config_source.kind ===
+                          "parameter_revision"
+                            ? fixtures.launch_preview.reviewed.config_source.setup.revision_id
                             : undefined,
                       },
                       entries: [],
@@ -138,12 +140,12 @@ describe("shared reference-lab acceptance", () => {
           return Response.json({
             activation: {
               entry_id:
-                fixtures.controls_scan.reviewed.config_source.kind === "config_registry"
-                  ? fixtures.controls_scan.reviewed.config_source.entry_id
+                fixtures.controls_scan.reviewed.config_source.kind === "parameter_revision"
+                  ? fixtures.controls_scan.reviewed.config_source.parameters.revision_id
                   : undefined,
               generation:
-                fixtures.controls_scan.reviewed.config_source.kind === "config_registry"
-                  ? fixtures.controls_scan.reviewed.config_source.registry_generation
+                fixtures.controls_scan.reviewed.config_source.kind === "parameter_revision"
+                  ? fixtures.controls_scan.reviewed.config_source.setup.revision_id
                   : undefined,
             },
             entries: [],

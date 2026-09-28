@@ -88,7 +88,6 @@ from scopecat.records.run import (
     RunConfigSource,
 )
 from scopecat.records.sample import SampleBinding
-from scopecat.records.scientific_scope import setup_content_hash
 from scopecat.records.setup import (
     ExecutableSetupSnapshot,
     SetupRevision,
@@ -338,13 +337,6 @@ def publish_config_revision(
 
     _validate_config_revision(revision)
     with unit_of_work() as work:
-        if work.setups.read_current() is None:
-            raise _registry_failure(
-                Conflict,
-                code="config_registry.setup_not_selected",
-                message="select an executable setup before publishing parameters",
-                location=_registry_model_location("setup"),
-            )
         saved = _save_config_revision_locked(
             revision=revision,
             work=work,
@@ -674,22 +666,6 @@ def _commit_config_registry_activation_locked(
         work=work,
     )
     entry = loaded.entry
-    setup = work.setups.read_current()
-    if (
-        setup is None
-        or setup.revision.setup.execution_content_hash
-        != setup_content_hash(loaded.config)
-    ):
-        raise _registry_failure(
-            Conflict,
-            code="config_registry.setup_mismatch",
-            message=(
-                "configuration does not match the active setup; "
-                "explicitly rebind or select the intended setup first"
-            ),
-            location=_registry_model_location("entry_id"),
-            details={"entry_id": entry.id},
-        )
     if isinstance(entry.source, ContextConfigRegistrySource):
         raise _registry_failure(
             Conflict,

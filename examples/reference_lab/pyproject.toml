@@ -37,6 +37,9 @@ exclude = [
   ".scopecat-examples",
 ]
 
+[tool.uv.build-backend]
+module-name = ["reference_lab", "reference_lab_authors"]
+
 [tool.uv.sources]
 scopecat = { workspace = true }
 scopecat-instruments = { workspace = true }

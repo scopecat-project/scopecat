@@ -1,6 +1,5 @@
 import type { LaunchPreview } from "./launch-api";
 import type { components } from "../../api-schema";
-import type { ConfigContextResolution } from "../config/config-api";
 
 export type ScientificSelection = Required<components["schemas"]["ScientificSelection-Input"]>;
 export function normalizeSelection(
@@ -18,21 +17,6 @@ export const defaultSelection = (): ScientificSelection => ({
   configuration: { kind: "unselected" },
   batch: { kind: "unscoped" },
 });
-
-export function contextSelection(resolved: ConfigContextResolution): ScientificSelection {
-  const source = resolved.config_source;
-  return {
-    subject: {
-      kind: "sample",
-      sample_id: source.sample.sample_id,
-      revision: source.sample.revision,
-    },
-    configuration: { kind: "working_point", ref: source.context, overrides: source.overrides },
-    batch: source.sample.batch_id
-      ? { kind: "declared", id: source.sample.batch_id }
-      : { kind: "unscoped" },
-  };
-}
 
 export function selectedBatch(
   selection: components["schemas"]["ScientificSelection-Input"],

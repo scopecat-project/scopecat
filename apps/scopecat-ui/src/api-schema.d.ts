@@ -278,40 +278,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/config-registry/activations": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Config Activation History */
-        get: operations["get_config_activation_history_api_v1_config_registry_activations_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/config-registry/active": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Active Config */
-        get: operations["get_active_config_api_v1_config_registry_active_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/config-registry/contexts/resolve": {
         parameters: {
             query?: never;
@@ -1900,40 +1866,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/setup/activation-operations": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Activate Setup */
-        post: operations["activate_setup_api_v1_setup_activation_operations_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/setup/active": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Active Setup */
-        get: operations["active_setup_api_v1_setup_active_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/setup/definitions": {
         parameters: {
             query?: never;
@@ -2252,20 +2184,6 @@ export interface components {
             preconditions?: components["schemas"]["AcquisitionPreconditionSpec"][];
             /** Results */
             results: components["schemas"]["AcquisitionResultSpec"][];
-        };
-        /**
-         * ActiveConfigView
-         * @description The active registry identity and its resolved immutable snapshot.
-         */
-        ActiveConfigView: {
-            activation: components["schemas"]["ConfigRegistryActivationRecord"];
-            config: components["schemas"]["ConfigProfileSnapshot"];
-            entry: components["schemas"]["ConfigRegistryEntry"];
-        };
-        /** ActiveSetupView */
-        ActiveSetupView: {
-            activation: components["schemas"]["SetupActivationRecord"];
-            revision: components["schemas"]["SetupRevision"];
         };
         /**
          * AdaptiveRegionSpec
@@ -4075,19 +3993,6 @@ export interface components {
             kind: "config_activation";
         };
         /**
-         * ConfigActivationPage
-         * @description Newest-first page of default configuration changes.
-         */
-        ConfigActivationPage: {
-            /**
-             * Items
-             * @default []
-             */
-            items: components["schemas"]["ConfigRegistryActivationRecord"][];
-            /** Next Cursor */
-            next_cursor?: number | null;
-        };
-        /**
          * ConfigCellRef
          * @description Exact source cell before any explicit structural mapping.
          */
@@ -4302,8 +4207,8 @@ export interface components {
             /** Title */
             title?: string | null;
         };
-        "ConfigurationChoice-Input": components["schemas"]["UnselectedConfiguration"] | components["schemas"]["ParameterConfiguration-Input"] | components["schemas"]["SavedConfiguration"] | components["schemas"]["WorkingPointConfiguration-Input"] | components["schemas"]["CandidateConfiguration"];
-        "ConfigurationChoice-Output": components["schemas"]["UnselectedConfiguration"] | components["schemas"]["ParameterConfiguration-Output"] | components["schemas"]["SavedConfiguration"] | components["schemas"]["WorkingPointConfiguration-Output"] | components["schemas"]["CandidateConfiguration"];
+        "ConfigurationChoice-Input": components["schemas"]["UnselectedConfiguration"] | components["schemas"]["ParameterConfiguration-Input"] | components["schemas"]["CandidateConfiguration"];
+        "ConfigurationChoice-Output": components["schemas"]["UnselectedConfiguration"] | components["schemas"]["ParameterConfiguration-Output"] | components["schemas"]["CandidateConfiguration"];
         /** ConfigurationTemplateImportCommand */
         ConfigurationTemplateImportCommand: {
             actor: components["schemas"]["NonEmptyText"];
@@ -4413,26 +4318,6 @@ export interface components {
             kind: "parameter_context";
             publication?: components["schemas"]["CandidateConfigRegistrySource"] | null;
             rebind?: components["schemas"]["SetupRebindRegistrySource"] | null;
-        };
-        /**
-         * ContextRunConfigSource
-         * @description A context resolved without changing the lab's active configuration.
-         */
-        "ContextRunConfigSource-Input": {
-            content_hash: components["schemas"]["ConfigContentHash"];
-            context: components["schemas"]["ConfigContextRef"];
-            /**
-             * Kind
-             * @default parameter_context
-             * @constant
-             */
-            kind: "parameter_context";
-            /**
-             * Overrides
-             * @default []
-             */
-            overrides: components["schemas"]["ParameterUpdate-Input"][];
-            sample: components["schemas"]["SampleBinding"];
         };
         /**
          * ContextRunConfigSource
@@ -5486,40 +5371,6 @@ export interface components {
         };
         /** @enum {string} */
         InstrumentFailureAction: "abort_and_release" | "abort_then_safe_state";
-        InstrumentInventoryChange: components["schemas"]["InstrumentInventoryRemoval"] | components["schemas"]["InstrumentInventoryRekey"] | components["schemas"]["InstrumentInventoryRenameRekey"];
-        /** InstrumentInventoryRekey */
-        InstrumentInventoryRekey: {
-            from_exclusivity_key: components["schemas"]["_NonEmptyText"];
-            instrument_id: components["schemas"]["_NonEmptyText"];
-            /**
-             * @description discriminator enum property added by openapi-typescript
-             * @enum {string}
-             */
-            kind: "rekey";
-            to_exclusivity_key: components["schemas"]["_NonEmptyText"];
-        };
-        /** InstrumentInventoryRemoval */
-        InstrumentInventoryRemoval: {
-            exclusivity_key: components["schemas"]["_NonEmptyText"];
-            instrument_id: components["schemas"]["_NonEmptyText"];
-            /**
-             * @description discriminator enum property added by openapi-typescript
-             * @enum {string}
-             */
-            kind: "remove";
-        };
-        /** InstrumentInventoryRenameRekey */
-        InstrumentInventoryRenameRekey: {
-            from_exclusivity_key: components["schemas"]["_NonEmptyText"];
-            from_instrument_id: components["schemas"]["_NonEmptyText"];
-            /**
-             * @description discriminator enum property added by openapi-typescript
-             * @enum {string}
-             */
-            kind: "rename_rekey";
-            to_exclusivity_key: components["schemas"]["_NonEmptyText"];
-            to_instrument_id: components["schemas"]["_NonEmptyText"];
-        };
         /** InstrumentListView */
         InstrumentListView: {
             /**
@@ -6072,8 +5923,8 @@ export interface components {
             /** Version */
             version: string;
         };
-        "LaunchConfigSource-Input": components["schemas"]["ConfigRegistryRunConfigSource"] | components["schemas"]["ParameterRunConfigSource-Input"] | components["schemas"]["ContextRunConfigSource-Input"] | components["schemas"]["AnalysisCandidateRunConfigSource"];
-        "LaunchConfigSource-Output": components["schemas"]["ConfigRegistryRunConfigSource"] | components["schemas"]["ParameterRunConfigSource-Output"] | components["schemas"]["ContextRunConfigSource-Output"] | components["schemas"]["AnalysisCandidateRunConfigSource"];
+        "LaunchConfigSource-Input": components["schemas"]["ParameterRunConfigSource-Input"] | components["schemas"]["AnalysisCandidateRunConfigSource"];
+        "LaunchConfigSource-Output": components["schemas"]["ParameterRunConfigSource-Output"] | components["schemas"]["AnalysisCandidateRunConfigSource"];
         /** LaunchControl */
         LaunchControl: {
             /** Default */
@@ -7727,12 +7578,6 @@ export interface components {
             publication_hash: components["schemas"]["Sha256ContentHash"];
             /** Run Id */
             run_id: string;
-        };
-        /** PlanConfigRef */
-        PlanConfigRef: {
-            content_hash: components["schemas"]["Sha256ContentHash"];
-            /** Entry Id */
-            entry_id: string;
         };
         "PlanControlEdits-Input": {
             [key: string]: components["schemas"]["ControlEdit-Input"];
@@ -10061,15 +9906,6 @@ export interface components {
              */
             run_count: number;
         };
-        /** SavedConfiguration */
-        SavedConfiguration: {
-            /**
-             * @description discriminator enum property added by openapi-typescript
-             * @enum {string}
-             */
-            kind: "saved";
-            ref: components["schemas"]["PlanConfigRef"];
-        };
         /**
          * Scalar
          * @description A single atom.
@@ -10226,46 +10062,6 @@ export interface components {
             kind: "serial";
             /** Port */
             port: string;
-        };
-        /**
-         * SetupActivateCommand
-         * @description Select executable setup with an independent generation fence.
-         */
-        SetupActivateCommand: {
-            actor: components["schemas"]["NonEmptyText"];
-            /**
-             * Changes
-             * @default []
-             */
-            changes: components["schemas"]["InstrumentInventoryChange"][];
-            /** Expected Generation */
-            expected_generation: number;
-            /**
-             * Note
-             * @default
-             */
-            note: string;
-            operation_id: components["schemas"]["NonEmptyText"];
-            revision: components["schemas"]["SetupRevisionRef"];
-        };
-        /** SetupActivationRecord */
-        SetupActivationRecord: {
-            /** Actor */
-            actor: string;
-            /** Generation */
-            generation: number;
-            /**
-             * Note
-             * @default
-             */
-            note: string;
-            previous_revision?: components["schemas"]["SetupRevisionRef"] | null;
-            /**
-             * Recorded At
-             * Format: date-time
-             */
-            recorded_at?: string;
-            revision: components["schemas"]["SetupRevisionRef"];
         };
         /** SetupDefinition */
         SetupDefinition: {
@@ -10863,34 +10659,6 @@ export interface components {
              */
             retention: "retained" | "unavailable_active_quota";
         };
-        /** WorkingPointConfiguration */
-        "WorkingPointConfiguration-Input": {
-            /**
-             * @description discriminator enum property added by openapi-typescript
-             * @enum {string}
-             */
-            kind: "working_point";
-            /**
-             * Overrides
-             * @default []
-             */
-            overrides: components["schemas"]["ParameterUpdate-Input"][];
-            ref: components["schemas"]["ConfigContextRef"];
-        };
-        /** WorkingPointConfiguration */
-        "WorkingPointConfiguration-Output": {
-            /**
-             * @description discriminator enum property added by openapi-typescript
-             * @enum {string}
-             */
-            kind: "working_point";
-            /**
-             * Overrides
-             * @default []
-             */
-            overrides: components["schemas"]["ParameterUpdate-Output"][];
-            ref: components["schemas"]["ConfigContextRef"];
-        };
     };
     responses: never;
     parameters: never;
@@ -11466,58 +11234,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_config_activation_history_api_v1_config_registry_activations_get: {
-        parameters: {
-            query?: {
-                before?: number | null;
-                limit?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ConfigActivationPage"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_active_config_api_v1_config_registry_active_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ActiveConfigView"];
                 };
             };
         };
@@ -14762,59 +14478,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    activate_setup_api_v1_setup_activation_operations_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SetupActivateCommand"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ActiveSetupView"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    active_setup_api_v1_setup_active_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ActiveSetupView"];
                 };
             };
         };

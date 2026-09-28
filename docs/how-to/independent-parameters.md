@@ -101,7 +101,7 @@ parameter revisions and setup revisions atomically, without selecting defaults.
 Parameter edits and verified publications update explicit parameter branches.
 The former working-point editor and global-default publication API are retired.
 
-Current storage is development schema 100. No prebaseline migration or persistent
+Current storage is development schema 101. No prebaseline migration or persistent
 compatibility promise is introduced. Current-format backup/restore includes
 standalone revisions even when no setup has ever been saved.
 

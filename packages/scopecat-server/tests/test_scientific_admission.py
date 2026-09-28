@@ -8,9 +8,14 @@ from unittest.mock import patch
 import pytest
 from scopecat.config.scientific_binding import bind_scientific_evidence
 from scopecat.control.models import RunPlanSummary
-from scopecat.daemon.wire import RunSubmission, SampleCreateCommand
+from scopecat.daemon.wire import (
+    ParameterResolveCommand,
+    RunSubmission,
+    SampleCreateCommand,
+)
 from scopecat.project import load_project
 from scopecat.records.config import ConfigProfileSnapshot
+from scopecat.records.configuration_fence import SetupRevisionFence
 from scopecat.records.run import AnalysisCandidateRunConfigSource
 from scopecat.records.run_request import RunRequest
 from scopecat.records.sample import SampleRevisionDraft, SampleSelector
@@ -18,8 +23,8 @@ from scopecat.records.scientific_binding import RegisteredTargetSubject
 from scopecat.records.scientific_scope import (
     MeasurementTarget,
     TargetMember,
-    setup_content_hash,
 )
+from scopecat.records.setup import SetupRevisionRef
 from scopecat.records.target_catalog import (
     TargetCreateCommand,
     TargetReviseCommand,
@@ -79,6 +84,8 @@ def _submission(
     config: ConfigProfileSnapshot,
     target: TargetRevision,
     key: str = "target-run",
+    *,
+    setup: SetupRevisionRef | None = None,
 ) -> RunSubmission:
     samples = runtime.application.samples.resolve_bindings(
         (SampleSelector(sample_id="chip", revision=1),)
@@ -91,6 +98,7 @@ def _submission(
         sample_revisions={("chip", 1): runtime.application.samples.revision("chip", 1)},
     )
     return RunSubmission(
+        execution_setup=setup or runtime.application.setup.resolve("initial").ref,
         submission_id=key,
         config=config,
         scientific_binding=binding,
@@ -292,6 +300,9 @@ def test_every_durable_child_checks_step_and_declared_parent_binding(
         )
         command = ProcedureSubmitCommand(
             request_key="scoped-parent",
+            expected_configuration=SetupRevisionFence(
+                revision=original.execution_setup
+            ),
             definition=ProcedureDefinitionRef(
                 id="author", version="1", fingerprint="sha256:" + "a" * 64
             ),
@@ -383,10 +394,9 @@ def test_saved_plan_reuses_authoritative_target_validation(tmp_path: Path) -> No
         ExperimentPlanDefinition,
         ExperimentPlanSave,
     )
-    from scopecat.records.plan_ref import PlanConfigRef
     from scopecat.records.scientific_selection import (
+        ParameterConfiguration,
         RegisteredTargetChoice,
-        SavedConfiguration,
         ScientificSelection,
     )
 
@@ -396,7 +406,13 @@ def test_saved_plan_reuses_authoritative_target_validation(tmp_path: Path) -> No
     ) as runtime:
         target = _target(runtime, config)
         original = _submission(runtime, config, target)
-        active = runtime.application.config.get_active_config()
+        parameters = runtime.application.config.parameter_revision(config.id)
+        setup = runtime.application.setup.resolve("initial")
+        resolved = runtime.application.config.resolve_parameters(
+            ParameterResolveCommand(parameters=parameters.ref, setup=setup.ref)
+        )
+        config = resolved.config
+        original = _submission(runtime, config, target)
         definition = ExperimentPlanDefinition(
             workspace_id="test-source",
             experiment="author",
@@ -404,10 +420,8 @@ def test_saved_plan_reuses_authoritative_target_validation(tmp_path: Path) -> No
             definition_hash="sha256:" + "a" * 64,
             selection=ScientificSelection(
                 subject=RegisteredTargetChoice(ref=target.ref),
-                configuration=SavedConfiguration(
-                    ref=PlanConfigRef(
-                        entry_id=active.entry.id, content_hash=active.entry.content_hash
-                    )
+                configuration=ParameterConfiguration(
+                    ref=parameters.ref, setup=setup.ref
                 ),
             ),
             scientific_binding=original.scientific_binding,
@@ -462,12 +476,11 @@ def test_generic_saved_plan_allows_distinct_stage_configurations(
     )
     from scopecat.records.launch_request import LaunchRequest
     from scopecat.records.manual_preview import ManualPreviewBinding
-    from scopecat.records.plan_ref import PlanConfigRef, ProcedureChildSubmission
-    from scopecat.records.run import ConfigRegistryRunConfigSource
+    from scopecat.records.plan_ref import ProcedureChildSubmission
     from scopecat.records.scientific_selection import (
+        ParameterConfiguration,
         ReviewedScientificSelection,
         SampleSubjectChoice,
-        SavedConfiguration,
         ScientificSelection,
     )
 
@@ -476,7 +489,12 @@ def test_generic_saved_plan_allows_distinct_stage_configurations(
         tmp_path, bootstrap_config=config, instrument_endpoint=signal_endpoint()
     ) as runtime:
         application = runtime.application
-        active = application.config.get_active_config()
+        parameters = application.config.parameter_revision(config.id)
+        setup = application.setup.resolve("initial")
+        resolved = application.config.resolve_parameters(
+            ParameterResolveCommand(parameters=parameters.ref, setup=setup.ref)
+        )
+        config = resolved.config
         _target(runtime, config)
         samples = application.samples.resolve_bindings(
             (SampleSelector(sample_id="chip", revision=1),)
@@ -498,11 +516,8 @@ def test_generic_saved_plan_allows_distinct_stage_configurations(
                     definition_hash="sha256:" + "a" * 64,
                     selection=ScientificSelection(
                         subject=SampleSubjectChoice(sample_id="chip", revision=1),
-                        configuration=SavedConfiguration(
-                            ref=PlanConfigRef(
-                                entry_id=active.entry.id,
-                                content_hash=active.entry.content_hash,
-                            )
+                        configuration=ParameterConfiguration(
+                            ref=parameters.ref, setup=setup.ref
                         ),
                     ),
                     scientific_binding=binding,
@@ -511,13 +526,7 @@ def test_generic_saved_plan_allows_distinct_stage_configurations(
         )
         reviewed = ReviewedScientificSelection(
             binding=binding,
-            config_source=ConfigRegistryRunConfigSource(
-                selector=active.entry.id,
-                entry_id=active.entry.id,
-                config_ref=active.entry.config_ref,
-                content_hash=active.entry.content_hash,
-                registry_generation=active.activation.generation,
-            ),
+            config_source=resolved.config_source,
         )
         preview_request = plan_launch_request(saved, actor="test").model_copy(
             update={"reviewed": reviewed}
@@ -543,6 +552,7 @@ def test_generic_saved_plan_allows_distinct_stage_configurations(
         )
         command = ProcedureSubmitCommand(
             request_key="stages",
+            expected_configuration=SetupRevisionFence(revision=setup.ref),
             definition=ProcedureDefinitionRef(
                 id="stages", version="1", fingerprint="sha256:" + "b" * 64
             ),
@@ -595,6 +605,7 @@ def test_generic_saved_plan_allows_distinct_stage_configurations(
             )
         )
         child = RunSubmission(
+            execution_setup=runtime.application.setup.resolve("initial").ref,
             submission_id=procedure_step_operation_id(
                 parent.procedure_run_id, "second"
             ),
@@ -665,7 +676,6 @@ def test_independent_setup_contexts_admit_without_global_selection(
     from scopecat.records.configuration_fence import SetupRevisionFence
     from scopecat.records.setup import ExecutableSetupSnapshot
 
-    from scopecat_server.errors import BackendNotFound
     from scopecat_server.storage.sqlite.control_plane import RunResourcesBusy
 
     config = load_config()
@@ -722,7 +732,9 @@ def test_independent_setup_contexts_admit_without_global_selection(
                     setup=revision.ref,
                 )
             )
-            child = _submission(runtime, resolved.config, target, key=name)
+            child = _submission(
+                runtime, resolved.config, target, key=name, setup=revision.ref
+            )
             instrument = selected.instrument_registry.instruments[0]
             child = child.model_copy(
                 update={
@@ -776,26 +788,15 @@ def test_independent_setup_contexts_admit_without_global_selection(
             control.start_execution_in_transaction(
                 connection, run_ids[1], executor_id="second", ttl=timedelta(minutes=1)
             )
-        with pytest.raises(BackendNotFound, match="no executable setup"):
-            application.setup.current()
+        assert len(application.setup.definitions()) == 2
 
 
-def test_fixed_setup_fence_survives_parameters_but_rejects_structure(
+def test_procedure_setup_is_explicit_and_independent_of_other_definitions(
     tmp_path: Path,
 ) -> None:
     from scopecat.automation import ProcedureDefinitionRef, ProcedureSubmitCommand
-    from scopecat.daemon.wire import (
-        ConfigPublishCommand,
-        DirectConfigRevisionSource,
-        SetupActivateCommand,
-        SetupImportCommand,
-    )
-    from scopecat.kernel.quantity import Quantity
-    from scopecat.records.configuration_fence import (
-        ActiveConfigurationFence,
-        SetupContentFence,
-    )
-    from scopecat.records.parameter import ScalarParameterValue
+    from scopecat.daemon.wire import SetupImportCommand
+    from scopecat.records.configuration_fence import SetupRevisionFence
     from scopecat.records.setup import ExecutableSetupSnapshot
 
     config = load_config()
@@ -804,112 +805,50 @@ def test_fixed_setup_fence_survives_parameters_but_rejects_structure(
     ) as runtime:
         target = _target(runtime, config)
         child = _submission(runtime, config, target)
-        binding = child.scientific_binding
         command = ProcedureSubmitCommand(
-            request_key="fixed-b",
+            request_key="exact",
             definition=ProcedureDefinitionRef(
                 id="author", version="1", fingerprint="sha256:" + "a" * 64
             ),
             intent={},
-            samples=binding.sample_selectors(),
-            scientific_binding=binding,
-            expected_configuration=SetupContentFence(
-                content_hash=binding.setup_content_hash
-            ),
-        )
-        # A different parameter snapshot/profile remains the same executable setup.
-        changed_parameters = config.model_copy(
-            update={
-                "id": "A-published",
-                "parameter_snapshot": config.parameter_snapshot.model_copy(
-                    update={
-                        "values": (
-                            ScalarParameterValue(
-                                id="drive_frequency", value=Quantity(5.1, "GHz")
-                            ),
-                        )
-                    }
-                ),
-            }
-        )
-        runtime.application.config.publish_config(
-            ConfigPublishCommand(
-                source=DirectConfigRevisionSource(config=changed_parameters),
-                operation_id="publish-A",
-                expected_generation=1,
-                entry_id="A-published",
-                actor="operator",
-            ),
+            samples=child.scientific_binding.sample_selectors(),
+            scientific_binding=child.scientific_binding,
+            expected_configuration=SetupRevisionFence(revision=child.execution_setup),
         )
         service = runtime.application.automation
         parent = service.submit(command).run
         admitted = runtime.application.submit_run(child)
-        assert admitted.snapshot.scientific_binding == binding
-        with pytest.raises(BackendConflict, match="active configuration changed"):
-            service.submit(
-                command.model_copy(
+        changed = ExecutableSetupSnapshot.from_config(config)
+        assert changed.domain_target is not None
+        other = runtime.application.setup.import_recipe(
+            SetupImportCommand(
+                revision_id="other",
+                actor="test",
+                setup=changed.model_copy(
                     update={
-                        "request_key": "active-stale",
-                        "expected_configuration": ActiveConfigurationFence(
-                            generation=1
-                        ),
-                    }
-                )
-            )
-        changed_setup = config.model_copy(
-            update={
-                "system": config.system.model_copy(
-                    update={
-                        "topology": config.system.topology.model_copy(
-                            update={
-                                "entities": [
-                                    entity.model_copy(update={"kind": "rewired"})
-                                    for entity in config.system.topology.entities
-                                ]
-                            }
+                        "domain_target": changed.domain_target.model_copy(
+                            update={"id": "other"}
                         )
                     }
-                )
-            }
-        )
-        revision = runtime.application.setup.import_recipe(
-            SetupImportCommand(
-                revision_id="setup-changed",
-                setup=ExecutableSetupSnapshot.from_config(changed_setup),
-                actor="operator",
+                ),
             )
         )
-        runtime.application.setup.activate(
-            SetupActivateCommand(
-                operation_id="publish-setup",
-                revision=revision.ref,
-                expected_generation=1,
-                actor="operator",
-            )
-        )
-        # Replay is recognized before mutable-authority checks.
         assert service.submit(command).run == parent
         assert runtime.application.submit_run(child).run_id == admitted.run_id
+        assert (
+            service.submit(
+                command.model_copy(update={"request_key": "another-exact"})
+            ).run.scientific_binding
+            == child.scientific_binding
+        )
         before = _counts(tmp_path)
-        with pytest.raises(BackendConflict, match="executable setup differs"):
-            service.submit(command.model_copy(update={"request_key": "new-parent"}))
-        with pytest.raises(BackendConflict, match="executable setup differs"):
-            runtime.application.submit_run(
-                child.model_copy(update={"submission_id": "new-child"})
-            )
-        for fence in (
-            None,
-            SetupContentFence(content_hash=setup_content_hash(changed_setup)),
-        ):
+        for fence in (None, SetupRevisionFence(revision=other.ref)):
             with pytest.raises(
-                BackendConflict, match="procedure executable setup differs"
+                BackendConflict, match=r"exact execution setup|executable setup differs"
             ):
                 service.submit(
                     command.model_copy(
-                        update={
-                            "request_key": "unfenced-stale",
-                            "expected_configuration": fence,
-                        }
+                        update={"request_key": "wrong", "expected_configuration": fence}
                     )
                 )
         assert _counts(tmp_path) == before

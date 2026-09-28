@@ -23,7 +23,7 @@ import json, sys
 import scopecat as sc
 project=sc.open_project(sys.argv[1])
 project.load_application()
-from reference_lab.workflows.frequency_amplitude import frequency_amplitude, FREQUENCY, AMPLITUDE
+from reference_lab_authors.frequency_amplitude import frequency_amplitude, FREQUENCY, AMPLITUDE
 from reference_lab.notebook import gallery_inputs
 with project.connect() as lab:
     inputs = gallery_inputs(lab)
@@ -67,7 +67,7 @@ test("compares retained signals, saves independent results and imports a reviewe
     await expect(
       page.getByRole("button", { name: "Create explicit candidate", exact: true }),
     ).toBeVisible();
-    const modelPath = join(project, "src/reference_lab/workflows/authored/comparison.py");
+    const modelPath = join(project, "src/reference_lab_authors/authored/comparison.py");
     const source = await readFile(modelPath, "utf8");
     await writeFile(
       modelPath,

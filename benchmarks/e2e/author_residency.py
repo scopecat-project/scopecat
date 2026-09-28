@@ -26,7 +26,7 @@ _MODULE_ROLES = {
     "scopecat_server.validation_worker": "prepare",
     "scopecat_server.retained_worker": "analysis",
 }
-_ANALYSIS = "reference_lab.workflows.authored.ordinary_analysis:estimate_peak"
+_ANALYSIS = "reference_lab_authors.authored.ordinary_analysis:estimate_peak"
 
 
 def measure(root: Path, *, revisions: int) -> dict[str, object]:
@@ -116,7 +116,7 @@ def measure(root: Path, *, revisions: int) -> dict[str, object]:
             repeated = snapshot("analysis_repeat")
             assert repeated["analysis"] == initial["analysis"]
             original_pools = repeated
-            source_file = root / "src/reference_lab/workflows/authored/signal.py"
+            source_file = root / "src/reference_lab_authors/authored/signal.py"
             for index in range(1, revisions):
                 source_file.write_text(
                     source_file.read_text(encoding="utf-8")

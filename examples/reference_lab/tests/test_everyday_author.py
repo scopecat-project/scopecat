@@ -21,13 +21,13 @@ def test_everyday_author_retained_inputs_and_unknown_consumer(
     application = create_application(EXAMPLE_ROOT)
     endpoint = independent_lab_daemon
     with application.connect(endpoint) as lab:
-        setup = lab.setup.active()
+        setup = lab.setup.get("initial")
         assert lab.config.registry().entries == ()
         inputs = everyday_author_inputs()
         with pytest.raises((ValueError, KeyError), match="drive_carrier_frequency"):
-            lab.preview(exploratory_signal.build(), config=inputs.missing)
+            lab.preview(exploratory_signal.build(), config=inputs.missing, setup=setup)
         assert (
-            lab.prepare(exploratory_signal.build(), config=inputs.known)
+            lab.prepare(exploratory_signal.build(), config=inputs.known, setup=setup)
             .preview()
             .point_count
             == 5
@@ -50,7 +50,7 @@ def test_everyday_author_retained_inputs_and_unknown_consumer(
         with pytest.raises(ValueError, match="No retained values"):
             flat.analyze(exploratory_mean(minimum=0.5))
         assert {item.id for item in lab.runs().items} == run_ids
-        assert lab.setup.active() == setup
+        assert lab.setup.get("initial") == setup
         assert lab.config.registry().entries == ()
     with application.connect(endpoint) as lab:
         reopened = lab.get_run(acquired.peaked)
@@ -58,5 +58,5 @@ def test_everyday_author_retained_inputs_and_unknown_consumer(
         np.testing.assert_array_equal(
             reopened.measurements()["result"].require_values(), values
         )
-        assert lab.setup.active() == setup
+        assert lab.setup.get("initial") == setup
         assert lab.config.registry().entries == ()

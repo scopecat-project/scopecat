@@ -75,8 +75,6 @@ class SQLiteControlPlane:
         self,
         connection: sqlite3.Connection,
         admission: RunAdmissionRecord,
-        *,
-        expected_setup_generation: int | None,
     ) -> ControlRun:
         """Publish control admission through an existing daemon transaction."""
 
@@ -96,8 +94,6 @@ class SQLiteControlPlane:
             raise ControlPlaneConflict(
                 "submission id is already admitted with different content"
             )
-        if expected_setup_generation is not None:
-            self._require_setup_generation(connection, expected_setup_generation)
         admitted_at = _timestamp(admission.admitted_at)
         try:
             cursor = connection.execute(
@@ -1707,24 +1703,6 @@ class SQLiteControlPlane:
             return None
         existing = _run(rows[0])
         return existing if admission.is_retry_of(existing.admission) else None
-
-    @staticmethod
-    def _require_setup_generation(
-        connection: sqlite3.Connection,
-        expected_generation: int,
-    ) -> None:
-        row = _one(
-            connection.execute(
-                """
-                SELECT COALESCE(MAX(generation), 0) AS generation
-                FROM setup_activations
-                """
-            )
-        )
-        assert row is not None
-        actual_generation = _integer(row, "generation")
-        if actual_generation != expected_generation:
-            raise ControlPlaneConflict("active setup changed")
 
     def _expire_one(
         self,

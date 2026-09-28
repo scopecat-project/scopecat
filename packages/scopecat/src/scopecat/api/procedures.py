@@ -117,6 +117,7 @@ from scopecat.records.run import RunConfigSource
 from scopecat.records.sample import SampleSelector
 from scopecat.records.scientific_binding import ResolvedScientificBinding
 from scopecat.records.scientific_scope import setup_content_hash
+from scopecat.records.setup import SetupRevisionRef
 from scopecat.runs.selectors import RunSelector
 
 type ExperimentSpec = ExperimentInvocation | Experiment[...]
@@ -373,6 +374,7 @@ class LabProcedureContext:
         *,
         config: ConfigProfileSnapshot | CandidateConfig,
         config_source: RunConfigSource | None = None,
+        setup: SetupRevisionRef | None = None,
         scientific_binding: ResolvedScientificBinding | None = None,
         inputs: tuple[ProcedureStepOutputRef, ...] = (),
         name: str | None = None,
@@ -424,6 +426,7 @@ class LabProcedureContext:
             record_collection=record_collection,
             config=selected_config,
             config_source=selected_source,
+            setup=setup,
             name=name,
             tags=tags,
             description=description,

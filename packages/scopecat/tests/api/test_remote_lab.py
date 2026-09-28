@@ -30,7 +30,6 @@ from scopecat.api._runner import _DaemonRunner
 from scopecat.api.analysis import AnalysisContext
 from scopecat.api.lab import LabClient
 from scopecat.api.run import RunHandle
-from scopecat.config.inventory import InstrumentInventoryRekey
 from scopecat.config.registry.records import (
     ConfigRegistryActivationRecord,
     ConfigRegistryEntry,
@@ -76,7 +75,6 @@ from scopecat.daemon.wire import (
     RunInstrumentProvisionReceipt,
     RunRecoveryGroupPage,
     RunSubmission,
-    SetupActivateCommand,
     SetupDefinitionList,
     SetupSaveCommand,
     TerminalRunCommitCommand,
@@ -113,15 +111,17 @@ from scopecat.records.instrument import InstrumentStateSnapshot
 from scopecat.records.measurement import MeasurementScalar
 from scopecat.records.run import ConfigRegistryRunConfigSource, RunSnapshot
 from scopecat.records.setup import (
-    ActiveSetupView,
     ExecutableSetupSnapshot,
-    SetupActivationRecord,
+    SetupRevisionRef,
 )
 from scopecat.runs.data import RunMeasurementDatasetResult
 from scopecat.runs.repository import TerminalRunCommit
 from scopecat.sdk.instruments import InstrumentProviderContext
 
 _NOW = datetime(2026, 7, 23, 9, tzinfo=UTC)
+
+
+_SETUP = SetupRevisionRef(revision_id="bench", content_hash="sha256:" + "e" * 64)
 
 
 def test_run_handle_exposes_bounded_domain_job_diagnostics() -> None:
@@ -216,6 +216,7 @@ def test_run_handle_exposes_bounded_domain_job_diagnostics() -> None:
 
 def test_lab_runs_preserves_bounded_page_navigation() -> None:
     snapshot = RunSnapshot(
+        execution_setup=_SETUP,
         run_id="run-page",
         created_at=_NOW,
         config_content_hash=config_content_hash(load_config()),
@@ -287,6 +288,7 @@ def test_remote_run_uses_full_dataset_batches_and_projected_arrow_pages() -> Non
         metadata={"experiment": "remote-page-test"},
     )
     snapshot = RunSnapshot(
+        execution_setup=_SETUP,
         run_id="run-batches",
         config_content_hash=config_content_hash(load_config()),
         scientific_binding=bind_scientific_evidence(
@@ -428,7 +430,7 @@ def test_lab_preview_and_run_are_direct_prepare_shortcuts(
     invocation = load_invocation()
     preview_result = object()
     run_result = object()
-    prepared_calls: list[tuple[object, object]] = []
+    prepared_calls: list[tuple[object, object, object]] = []
     forwarded: list[tuple[str, dict[str, object]]] = []
 
     class Prepared:
@@ -445,21 +447,28 @@ def test_lab_preview_and_run_are_direct_prepare_shortcuts(
         experiment: object,
         *,
         config: object = None,
+        setup: object = None,
     ) -> Prepared:
-        prepared_calls.append((experiment, config))
+        prepared_calls.append((experiment, config, setup))
         return Prepared()
 
     monkeypatch.setattr(LabClient, "prepare", prepare)
     lab = object.__new__(LabClient)
 
-    assert lab.preview(invocation, config="active", name="preview") is preview_result
+    assert (
+        lab.preview(invocation, config="values", setup=_SETUP, name="preview")
+        is preview_result
+    )
     assert (
         lab.run(
             invocation, config="candidate", name="run", record_collection="cooldown-a"
         )
         is run_result
     )
-    assert prepared_calls == [(invocation, "active"), (invocation, "candidate")]
+    assert prepared_calls == [
+        (invocation, "values", _SETUP),
+        (invocation, "candidate", None),
+    ]
     assert forwarded == [
         (
             "preview",
@@ -1152,9 +1161,7 @@ def test_executor_heartbeat_recovers_from_temporary_unavailability() -> None:
         supervisor.close()
 
 
-def test_lab_setup_save_list_and_explicit_activation_use_independent_authority() -> (
-    None
-):
+def test_lab_setup_save_and_resolve_explicit_definitions() -> None:
     config = load_config()
     setup = ExecutableSetupSnapshot.from_config(config)
     revision = retained_setup_revision(
@@ -1165,13 +1172,7 @@ def test_lab_setup_save_list_and_explicit_activation_use_independent_authority()
     definition = SetupDefinitionRevision(
         id="inventory-v2", definition=setup_definition(setup), actor="notebook-operator"
     )
-    current = ActiveSetupView(
-        revision=revision,
-        activation=SetupActivationRecord(
-            generation=3, revision=revision.ref, actor="notebook-operator"
-        ),
-    )
-    seen: list[SetupSaveCommand | SetupActivateCommand] = []
+    seen: list[SetupSaveCommand] = []
 
     def handler(request: httpx2.Request) -> httpx2.Response:
         path = request.url.path
@@ -1182,11 +1183,6 @@ def test_lab_setup_save_list_and_explicit_activation_use_independent_authority()
             return _model(SetupDefinitionList(items=(definition,)))
         if path == "/api/v1/setup/resolutions/inventory-v2":
             return _model(revision)
-        if path == "/api/v1/setup/active":
-            return _model(current)
-        if path == "/api/v1/setup/activation-operations":
-            seen.append(SetupActivateCommand.model_validate_json(request.content))
-            return _model(current)
         raise AssertionError(f"unexpected request: {request.method} {path}")
 
     lab = LabClient(_client(handler), operator="notebook-operator")
@@ -1194,30 +1190,6 @@ def test_lab_setup_save_list_and_explicit_activation_use_independent_authority()
     assert lab.setup.list() == (definition,)
     assert lab.setup.get("inventory-v2") == revision
     assert len(seen) == 1  # Saving never selects executable authority.
-    change = InstrumentInventoryRekey(
-        instrument_id="source-0",
-        from_exclusivity_key="source-0",
-        to_exclusivity_key="rack/source",
-    )
-    assert (
-        lab.setup.activate(
-            "inventory-v2",
-            expected_generation=2,
-            operation_id="reviewed-selection",
-            changes=(change,),
-        )
-        == current
-    )
-    assert seen[-1] == SetupActivateCommand(
-        operation_id="reviewed-selection",
-        revision=revision.ref,
-        expected_generation=2,
-        actor="notebook-operator",
-        changes=(change,),
-    )
-    lab.setup.activate(revision)
-    assert isinstance(seen[-1], SetupActivateCommand)
-    assert seen[-1].expected_generation == 3
 
 
 def test_run_invocation_plans_against_explicit_snapshot_without_local_storage(
@@ -1243,6 +1215,7 @@ def test_run_invocation_plans_against_explicit_snapshot_without_local_storage(
         )
         assert planned.scientific_binding is not None
         accepted = RunSnapshot(
+            execution_setup=_SETUP,
             run_id="run-scratch",
             config_content_hash=planned.program.config_content_hash,
             scientific_binding=planned.scientific_binding,
@@ -1265,6 +1238,7 @@ def test_run_invocation_plans_against_explicit_snapshot_without_local_storage(
     ).run(
         load_invocation(),
         config=config,
+        setup=_SETUP,
         name="scratch fit",
         tags=("calibration", "demo"),
         description="fit one trace",
@@ -1291,7 +1265,7 @@ def test_run_invocation_plans_against_explicit_snapshot_without_local_storage(
     assert result.status == "completed"
 
 
-def test_run_invocation_uses_active_config_and_bound_system(
+def test_run_invocation_uses_explicit_config_and_bound_system(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     config = load_config()
@@ -1327,6 +1301,7 @@ def test_run_invocation_uses_active_config_and_bound_system(
         assert planned.scientific_binding is not None
         return _terminal_manifest(
             RunSnapshot(
+                execution_setup=_SETUP,
                 run_id="run-scratch",
                 config_content_hash=planned.program.config_content_hash,
                 scientific_binding=planned.scientific_binding,
@@ -1345,7 +1320,7 @@ def test_run_invocation_uses_active_config_and_bound_system(
     result = _DaemonRunner(
         _client(handler),
         build_experiment_system,
-    ).run(load_invocation())
+    ).run(load_invocation(), config=config, setup=_SETUP)
 
     planned = captured["planned"]
     assert isinstance(planned, PlannedRun)
@@ -1377,6 +1352,7 @@ def test_run_invocation_uses_daemon_catalog_without_a_local_builder(
         assert planned.scientific_binding is not None
         return _terminal_manifest(
             RunSnapshot(
+                execution_setup=_SETUP,
                 run_id="run-scratch",
                 config_content_hash=planned.program.config_content_hash,
                 scientific_binding=planned.scientific_binding,
@@ -1398,7 +1374,7 @@ def test_run_invocation_uses_daemon_catalog_without_a_local_builder(
         None,
     )
 
-    result = runner.run(load_invocation(), config=config)
+    result = runner.run(load_invocation(), config=config, setup=_SETUP)
 
     planned = captured["planned"]
     assert isinstance(planned, PlannedRun)
@@ -1406,7 +1382,7 @@ def test_run_invocation_uses_daemon_catalog_without_a_local_builder(
     assert result.status == "completed"
 
 
-def test_preview_invocation_uses_active_config_without_admission() -> None:
+def test_preview_invocation_uses_explicit_inputs_without_admission() -> None:
     config = load_config()
     entry, activation = _config_registry_records(config)
     requests: list[httpx2.Request] = []
@@ -1427,12 +1403,11 @@ def test_preview_invocation_uses_active_config_without_admission() -> None:
     preview = _DaemonRunner(
         _client(handler),
         lambda _config, catalog: ExperimentSystem(instrument_catalog=catalog),
-    ).preview(load_invocation())
+    ).preview(load_invocation(), config=config, setup=_SETUP)
 
     assert preview.point_count is not None
     assert preview.point_count > 0
     assert [request.url.path for request in requests] == [
-        "/api/v1/config-registry/active",
         "/api/v1/instrument-contracts/resolve",
     ]
 
@@ -1447,6 +1422,7 @@ def _planned() -> PlannedRun:
                 instrument_catalog=_instrument_catalog(config),
             ),
         ),
+        execution_setup=_SETUP,
         scientific_binding=bind_scientific_evidence(
             catalog_id="tests", config=config, samples=(), sample_revisions={}
         ),
@@ -1506,6 +1482,7 @@ def _admission(submission: RunSubmission) -> RunAdmission:
     return RunAdmission(
         submission_id=submission.submission_id,
         snapshot=RunSnapshot(
+            execution_setup=_SETUP,
             run_id="run-1",
             created_at=_NOW,
             config_content_hash=config_content_hash(submission.config),
@@ -1719,6 +1696,7 @@ def test_scientific_preparation_freezes_sample_heads_and_canonical_roles() -> No
         load_invocation(),
         config=config,
         config_source=None,
+        setup=_SETUP,
         name=None,
         tags=(),
         description=None,
@@ -1741,6 +1719,7 @@ def test_scientific_preparation_freezes_sample_heads_and_canonical_roles() -> No
         load_invocation(),
         config=config,
         config_source=None,
+        setup=_SETUP,
         name=None,
         tags=(),
         description=None,
@@ -1811,6 +1790,7 @@ def test_retained_context_binding_preserves_roles_after_subject_on_resume() -> N
         load_invocation(),
         config=config,
         config_source=source,
+        setup=_SETUP,
         name=None,
         tags=(),
         description=None,

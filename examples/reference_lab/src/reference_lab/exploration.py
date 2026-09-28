@@ -74,6 +74,7 @@ def exploration_cases() -> tuple[ExplorationCase, ...]:
 
 def seed_exploration(lab: LabClient) -> tuple[str, ...]:
     """Retain four real Scopecat runs in a caller-owned, fresh reference project."""
+    setup = lab.setup.get("initial")
     for sample in ("a", "b"):
         lab.samples.create(
             f"exploration-{sample}",
@@ -88,6 +89,7 @@ def seed_exploration(lab: LabClient) -> tuple[str, ...]:
         lab.run(
             exploratory_signal.build(),
             config=case.config,
+            setup=setup,
             sample=lab.samples.handle(case.sample_id).selector(
                 context_id=case.context_id
             ),

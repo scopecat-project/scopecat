@@ -18,12 +18,14 @@ from scopecat.records.experiment_plan import (
     ExperimentPlanDefinition,
     ExperimentPlanRevision,
 )
-from scopecat.records.plan_ref import ExperimentPlanRef, PlanConfigRef
+from scopecat.records.parameter_revision import ParameterRevisionRef
+from scopecat.records.plan_ref import ExperimentPlanRef
 from scopecat.records.run_request import RunRequest
 from scopecat.records.scientific_selection import (
-    SavedConfiguration,
+    ParameterConfiguration,
     ScientificSelection,
 )
+from scopecat.records.setup import SetupRevisionRef
 
 
 def test_plan_frozen_inputs_current_actor_and_changed_definition() -> None:
@@ -43,10 +45,13 @@ def test_plan_frozen_inputs_current_actor_and_changed_definition() -> None:
         version=entry.version,
         definition_hash=sha256_json_hash(entry.model_dump(mode="json")),
         selection=ScientificSelection(
-            configuration=SavedConfiguration(
-                ref=PlanConfigRef(
-                    entry_id="old-default", content_hash="sha256:" + "b" * 64
-                )
+            configuration=ParameterConfiguration(
+                setup=SetupRevisionRef(
+                    revision_id="bench", content_hash="sha256:" + "e" * 64
+                ),
+                ref=ParameterRevisionRef(
+                    revision_id="old-default", content_hash="sha256:" + "b" * 64
+                ),
             )
         ),
         scientific_binding=bind_scientific_evidence(

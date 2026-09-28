@@ -172,10 +172,9 @@ def test_session_checkout_save_and_concurrent_editor(
             )
             session.parameters.create_branch("daily", revision=original)
             lab = LabClient(session)
-            setup = lab.setup.import_recipe(
+            lab.setup.import_recipe(
                 ExecutableSetupSnapshot.from_config(config), name="bench"
             )
-            lab.setup.activate(setup)
             session.use(parameter_branch="daily", operator="alice")
             frozen = session.selection
             assert frozen.parameter_branch == "daily"

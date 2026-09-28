@@ -206,7 +206,9 @@ def check() -> None:
         start_project(project, timeout=90)
         try:
             with project.authoring() as session:
-                session.use(parameter_branch="starter")
+                session.use(
+                    parameter_branch="starter", setup=session.setup.get("initial")
+                )
                 for run_id, field, expected in (
                     (old_id, "iq", 2 + 3j),
                     (new_id, "average", 4 + 7j),

@@ -12,7 +12,7 @@ immutable Python invocations and the typed launch catalog. The reference lab's
 ```python
 import scopecat as sc
 from reference_lab.configuration import bootstrap_config
-from reference_lab.workflows.frequency_amplitude import (
+from reference_lab_authors.frequency_amplitude import (
     CONTROLS,
     FREQUENCY,
     frequency_amplitude,

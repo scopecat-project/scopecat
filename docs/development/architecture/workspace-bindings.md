@@ -37,11 +37,11 @@ HTTP author operations require their source identity. Python sessions use
 to `AuthorProject(url, workspace_id=...)`. Basic history/data clients need no source.
 
 Exact parameter/setup selections now admit both procedures and runs against the
-saved maintained setup revision, independently of the global active setup. GUI
+saved maintained setup revision. There is no global setup activation. GUI
 drafts expose a device-context picker beside the parameter choice and preserve it
 when adopting another parameter version. Resource claims still share the service's
-physical access domains. Interactive device sessions and legacy configuration
-selectors still use active setup; they are not yet the fully independent target.
+physical access domains. Interactive sessions retain an explicit setup resolution;
+application device maintenance uses the same ownership and retirement gates.
 
 `scopecat.runtime.toml` resolves workspace, data and deployment paths. It is local
 machine configuration, excluded from captured source and snapshots. Runtime paths

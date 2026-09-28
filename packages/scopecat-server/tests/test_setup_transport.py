@@ -2,7 +2,7 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 from scopecat.daemon.wire import SetupSaveCommand
-from scopecat.records.setup import ActiveSetupView, SetupRevision
+from scopecat.records.setup import SetupRevision
 from scopecat_testkit.server.instruments import signal_endpoint
 from scopecat_testkit.workflow_fixtures import load_config
 
@@ -16,13 +16,11 @@ def test_setup_transport_saves_immutable_revision_without_selecting(
         tmp_path, bootstrap_config=load_config(), instrument_endpoint=signal_endpoint()
     ) as runtime:
         client = TestClient(runtime.app())
-        original = ActiveSetupView.model_validate(
-            client.get("/api/v1/setup/active").json()
-        )
+        original = runtime.application.setup.resolve("initial")
         command = SetupSaveCommand(
             revision_id="reviewed/new",
             setup=runtime.application.setup.definition(
-                original.revision.resolution.definition_id
+                original.resolution.definition_id
             ).definition,
             actor="operator",
             note="Save for review",
@@ -50,10 +48,7 @@ def test_setup_transport_saves_immutable_revision_without_selecting(
             item["id"]
             for item in client.get("/api/v1/setup/definitions").json()["items"]
         }
-        assert (
-            ActiveSetupView.model_validate(client.get("/api/v1/setup/active").json())
-            == original
-        )
+        assert runtime.application.setup.resolve("initial") == original
         assert (
             client.post(
                 "/api/v1/setup/revisions",

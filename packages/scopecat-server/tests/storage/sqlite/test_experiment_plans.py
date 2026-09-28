@@ -10,15 +10,17 @@ from scopecat.records.experiment_plan import (
     ExperimentPlanDefinition,
     ExperimentPlanSave,
 )
-from scopecat.records.plan_ref import PlanAnalysisSource, PlanConfigRef
+from scopecat.records.parameter_revision import ParameterRevisionRef
+from scopecat.records.plan_ref import PlanAnalysisSource
 from scopecat.records.scientific_binding import (
     ResolvedScientificBinding,
     UnboundSubject,
 )
 from scopecat.records.scientific_selection import (
-    SavedConfiguration,
+    ParameterConfiguration,
     ScientificSelection,
 )
+from scopecat.records.setup import SetupRevisionRef
 
 from scopecat_server.errors import BackendConflict
 from scopecat_server.storage.sqlite.connection import SQLiteDatabase
@@ -39,10 +41,13 @@ def test_plan_revision_copy_hide_and_exact_reopen(tmp_path: Path) -> None:
         version="1",
         definition_hash="sha256:" + "1" * 64,
         selection=ScientificSelection(
-            configuration=SavedConfiguration(
-                ref=PlanConfigRef(
-                    entry_id="config-1", content_hash="sha256:" + "2" * 64
-                )
+            configuration=ParameterConfiguration(
+                setup=SetupRevisionRef(
+                    revision_id="bench", content_hash="sha256:" + "e" * 64
+                ),
+                ref=ParameterRevisionRef(
+                    revision_id="config-1", content_hash="sha256:" + "2" * 64
+                ),
             )
         ),
         scientific_binding=_binding(),
@@ -133,7 +138,7 @@ def test_schema_64_source_bytes_remain_unchanged(tmp_path: Path) -> None:
         connection.execute("INSERT INTO retained VALUES ('original')")
     before = {path.name: path.read_bytes() for path in tmp_path.iterdir()}
     store = SQLiteProjectStore(SQLiteDatabase(database), tmp_path / "objects")
-    with pytest.raises(SchemaVersionError, match="version: 64; expected 100"):
+    with pytest.raises(SchemaVersionError, match="version: 64; expected 101"):
         store.bootstrap()
     assert {path.name: path.read_bytes() for path in tmp_path.iterdir()} == before
 
@@ -162,10 +167,13 @@ def test_snapshot_retains_hidden_plan_object_and_hash(tmp_path: Path) -> None:
                 version="1",
                 definition_hash="sha256:" + "1" * 64,
                 selection=ScientificSelection(
-                    configuration=SavedConfiguration(
-                        ref=PlanConfigRef(
-                            entry_id="config-1", content_hash="sha256:" + "2" * 64
-                        )
+                    configuration=ParameterConfiguration(
+                        setup=SetupRevisionRef(
+                            revision_id="bench", content_hash="sha256:" + "e" * 64
+                        ),
+                        ref=ParameterRevisionRef(
+                            revision_id="config-1", content_hash="sha256:" + "2" * 64
+                        ),
                     )
                 ),
                 scientific_binding=_binding(),

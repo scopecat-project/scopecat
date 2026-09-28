@@ -40,10 +40,10 @@ def test_manual_query_apply_release_and_launch_keep_relevant_preview_facts(
             )
             authors.parameters.create_branch("manual-inputs", revision=revision)
             authors.use(
-                parameter_branch="manual-inputs", setup=lab.setup.active().revision.ref
+                parameter_branch="manual-inputs", setup=lab.setup.get("initial").ref
             )
             with lab.instruments.open(
-                target, setup=lab.setup.active().revision.ref
+                target, setup=lab.setup.get("initial").ref
             ) as devices:
                 source = devices[target]
                 observation = source.frequency.read_observation()
@@ -59,7 +59,7 @@ def test_manual_query_apply_release_and_launch_keep_relevant_preview_facts(
                     source.apply(frequency=sc.Quantity(4.9, "GHz")).status == "applied"
                 )
             assert lab.instruments.release(
-                target, setup=lab.setup.active().revision.ref
+                target, setup=lab.setup.get("initial").ref
             ).instrument_ids == ("drive-lo-a",)
             prepared = authors.prepare("ramsey")
             assert "drive-lo-a" in prepared.preview.resources
@@ -68,20 +68,20 @@ def test_manual_query_apply_release_and_launch_keep_relevant_preview_facts(
             assert fence.binding.code_revision == prepared.preview.code_revision
             assert authors.manual_preview_validity(fence).valid
             with lab.instruments.open(
-                target, setup=lab.setup.active().revision.ref
+                target, setup=lab.setup.get("initial").ref
             ) as devices:
                 observed = devices[target].frequency.read_observation()
                 assert observed.source == "hardware_query"
             assert authors.manual_preview_validity(fence).valid
             with lab.instruments.open(
-                unrelated, setup=lab.setup.active().revision.ref
+                unrelated, setup=lab.setup.get("initial").ref
             ) as devices:
                 assert (
                     devices[unrelated].apply(output_enabled=False).status == "applied"
                 )
             assert authors.manual_preview_validity(fence).valid
             with lab.instruments.open(
-                target, setup=lab.setup.active().revision.ref
+                target, setup=lab.setup.get("initial").ref
             ) as devices:
                 assert (
                     devices[target].apply(frequency=sc.Quantity(4.95, "GHz")).status
@@ -96,7 +96,7 @@ def test_manual_query_apply_release_and_launch_keep_relevant_preview_facts(
             before_abort = authors.prepare("ramsey")
             assert before_abort.preview.manual_state is not None
             with lab.instruments.open(
-                target, setup=lab.setup.active().revision.ref
+                target, setup=lab.setup.get("initial").ref
             ) as devices:
                 devices.abort()
             assert not authors.manual_preview_validity(
@@ -114,7 +114,7 @@ def test_manual_query_apply_release_and_launch_keep_relevant_preview_facts(
             output = procedure.output("experiment")
             assert output.kind == "run"
             assert lab.get_run(output.run_id).status == "completed"
-            lab.instruments.release(target, setup=lab.setup.active().revision.ref)
+            lab.instruments.release(target, setup=lab.setup.get("initial").ref)
             # A changed manual state blocks new work, while a lost-receipt retry
             # returns the same admitted procedure and does not acquire again.
             assert (

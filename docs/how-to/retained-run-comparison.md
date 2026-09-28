@@ -7,7 +7,7 @@ Python model. This operation never dispatches a procedure or starts acquisition.
 
 The reference lab registers `signal-quadratic` through the maintained adapter in
 `reference_lab/comparison.py`; its editable model lives in
-`reference_lab/workflows/authored/comparison.py`.
+`reference_lab_authors/authored/comparison.py`.
 Acquire two hardware-free `frequency_amplitude` runs over several frequencies,
 then compare them. The quadratic model exposes an adjustable carrier offset. It
 is an analytic teaching example, not physical calibration evidence. Experiment

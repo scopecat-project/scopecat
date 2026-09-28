@@ -37,7 +37,7 @@ from scopecat.records.manual_preview import ManualPreviewFence
 from reference_lab.launch_config import launch_config
 from reference_lab.parameters import ChannelCalibration
 from reference_lab.workflows.ramsey_experiments import RAMSEY_SHOTS, parallel_raw_ramsey
-from reference_lab.workflows.temperature_diagnostic import (
+from reference_lab_authors.temperature_diagnostic import (
     TemperatureDiagnosticIntent,
 )
 
@@ -205,7 +205,9 @@ def launch_provider(lab: LabClient, request: LaunchRequest) -> LaunchResult:
                 "parameter_snapshot": parameters,
             }
         )
-        candidate_preview = lab.preview(invocation, config=candidate)
+        candidate_preview = lab.preview(
+            invocation, config=candidate, setup=source.setup
+        )
         stages.append(
             summarize_preflight(
                 candidate_preview,
@@ -260,6 +262,7 @@ def launch_provider(lab: LabClient, request: LaunchRequest) -> LaunchResult:
         )
     intent = LaunchIntent(
         initial_config=config,
+        setup=launch_configuration_fence(resolved.reviewed).revision,
         config_source=source,
         manual_state=request.manual_state,
         request_hash=request.request_hash,

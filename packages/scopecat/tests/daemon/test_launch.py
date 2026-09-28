@@ -5,12 +5,14 @@ from pydantic import ValidationError
 
 from scopecat.application.launch import LaunchInputSchema
 from scopecat.records.launch_request import LaunchRequest
-from scopecat.records.run import ConfigRegistryRunConfigSource
+from scopecat.records.parameter_revision import ParameterRevisionRef
+from scopecat.records.run import ParameterRunConfigSource
 from scopecat.records.scientific_binding import (
     ResolvedScientificBinding,
     UnboundSubject,
 )
 from scopecat.records.scientific_selection import ReviewedScientificSelection
+from scopecat.records.setup import SetupRevisionRef
 
 
 def test_catalog_retains_project_schema_beyond_console_renderer() -> None:
@@ -47,12 +49,14 @@ def test_submission_rejects_a_changed_preview_request(
             config_content_hash="sha256:" + "a" * 64,
             setup_content_hash="sha256:" + "b" * 64,
         ),
-        config_source=ConfigRegistryRunConfigSource(
-            selector="active",
-            entry_id="baseline",
-            config_ref="baseline",
+        config_source=ParameterRunConfigSource(
+            parameters=ParameterRevisionRef(
+                revision_id="baseline", content_hash="sha256:" + "a" * 64
+            ),
+            setup=SetupRevisionRef(
+                revision_id="bench", content_hash="sha256:" + "e" * 64
+            ),
             content_hash="sha256:" + "a" * 64,
-            registry_generation=1,
         ),
     )
     request = LaunchRequest(

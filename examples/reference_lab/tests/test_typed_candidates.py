@@ -44,10 +44,6 @@ from reference_lab.application import create_application
 from reference_lab.configuration import EXAMPLE_ROOT, bootstrap_config
 from reference_lab.exploration import exploration_config
 from reference_lab.parameters import QubitParameters
-from reference_lab.workflows.authored.ordinary_analysis import (
-    PeakResult,
-    PeakVerification,
-)
 from reference_lab.workflows.drag_beta_analysis import drag_beta_analysis
 from reference_lab.workflows.drag_beta_experiment import drag_beta_experiment
 from reference_lab.workflows.drag_beta_verification import (
@@ -62,6 +58,10 @@ from reference_lab.workflows.drag_branch_calibration import (
     verify_joint_drag,
 )
 from reference_lab.workflows.production_drag_gate import production_drag_experiment
+from reference_lab_authors.authored.ordinary_analysis import (
+    PeakResult,
+    PeakVerification,
+)
 
 from .conftest import ReferenceLabDaemon
 
@@ -101,7 +101,7 @@ def test_joint_branch_procedure_recovers_after_restart_and_lost_publish_response
             parameters=config.parameter_snapshot,
         )
         destination = lab.parameters.create_branch("joint", revision=parameters)
-        setup = lab.setup.active()
+        setup = lab.setup.get("initial")
         registry = lab.config.registry()
         sample = lab.samples.create(
             "joint-chip",
@@ -110,9 +110,7 @@ def test_joint_branch_procedure_recovers_after_restart_and_lost_publish_response
         )
         intent = DragBranchCalibrationIntent(
             targets=("q0", "q1"),
-            initial=lab.parameters.resolve(
-                parameters, setup=lab.setup.active().revision
-            ),
+            initial=lab.parameters.resolve(parameters, setup=lab.setup.get("initial")),
             destination=destination,
             result_revision_id="joint-accepted",
             actor="test",
@@ -197,7 +195,7 @@ def test_joint_branch_procedure_recovers_after_restart_and_lost_publish_response
         assert decision.missing == decision.rejected == ()
         checks = [procedure.output(f"check-{target}") for target in intent.targets]
         assert all(isinstance(check, RunOutputRef) for check in checks)
-        assert lab.config.registry() == registry and lab.setup.active() == setup
+        assert lab.config.registry() == registry and lab.setup.get("initial") == setup
         idle = ProjectAutomationWorker(lab.procedures).cycle()
         assert idle.procedures.dispatched == 0
         assert {run.id for run in lab.runs().items} == run_ids
@@ -232,9 +230,7 @@ def test_sequential_procedure_recovers_lost_composition_response(
         destination = lab.parameters.create_branch("daily", revision=parameters)
         intent = DragBranchCalibrationIntent(
             targets=("q0", "q1"),
-            initial=lab.parameters.resolve(
-                parameters, setup=lab.setup.active().revision
-            ),
+            initial=lab.parameters.resolve(parameters, setup=lab.setup.get("initial")),
             destination=destination,
             result_revision_id="accepted",
             actor="test",
@@ -298,9 +294,7 @@ def test_branch_procedure_rejection_and_stale_destination_do_not_publish(
         destination = lab.parameters.create_branch("daily", revision=parameters)
         intent = DragBranchCalibrationIntent(
             targets=("q0", "q1"),
-            initial=lab.parameters.resolve(
-                parameters, setup=lab.setup.active().revision
-            ),
+            initial=lab.parameters.resolve(parameters, setup=lab.setup.get("initial")),
             destination=destination,
             result_revision_id="accepted",
             actor="test",
@@ -338,7 +332,7 @@ def test_typed_candidates_retain_cells_and_independent_policy(
     candidate_daemon: ReferenceLabDaemon,
 ) -> None:
     project = load_project(candidate_daemon.root / "scopecat.toml")
-    analysis_module = "reference_lab.workflows.authored.ordinary_analysis"
+    analysis_module = "reference_lab_authors.authored.ordinary_analysis"
     with (
         LabApplication().connect(candidate_daemon.url) as lab,
         project.authoring() as author,
@@ -352,7 +346,7 @@ def test_typed_candidates_retain_cells_and_independent_policy(
         branch = lab.parameters.create_branch("daily", revision=baseline)
         registry = lab.config.registry()
         assert registry.entries == () and registry.activation is None
-        setup = lab.setup.active()
+        setup = lab.setup.get("initial")
         sample = lab.samples.create(
             "candidate-sample",
             kind="synthetic",
@@ -503,7 +497,7 @@ def test_typed_candidates_retain_cells_and_independent_policy(
         )
 
         assert lab.config.registry() == registry
-        assert lab.setup.active() == setup
+        assert lab.setup.get("initial") == setup
         assert lab.parameters.get(baseline.id) == baseline
         assert lab.parameters.checkout("daily").head.generation == branch.generation + 1
         assert lab.parameters.checkout("daily").head.revision == advanced.ref
@@ -522,8 +516,8 @@ def test_drag_candidate_publishes_to_branch_and_runs_accepted_gate(
         branch = lab.parameters.create_branch("drag/daily", revision=parameters)
         registry = lab.config.registry()
         assert registry.entries == () and registry.activation is None
-        setup = lab.setup.active()
-        resolved = lab.parameters.resolve(parameters, setup=setup.revision)
+        setup = lab.setup.get("initial")
+        resolved = lab.parameters.resolve(parameters, setup=setup)
         invocation = drag_beta_experiment.build()
         baseline = lab.run(invocation, config=resolved)
         assert baseline.status == "completed"
@@ -570,7 +564,7 @@ def test_drag_candidate_publishes_to_branch_and_runs_accepted_gate(
             for entry in run.contents(role="record").items
         )
         assert lab.config.registry() == registry
-        assert lab.setup.active() == setup
+        assert lab.setup.get("initial") == setup
         assert lab.parameters.checkout("drag/daily").head == branch
         assert lab.parameters.get(parameters.id) == parameters
         # This legacy numerical analysis publishes its own retained decision;
@@ -585,17 +579,17 @@ def test_drag_candidate_publishes_to_branch_and_runs_accepted_gate(
         assert accepted.parameters == check.config.parameter_snapshot
         production = lab.run(
             production_drag_experiment.build(),
-            config=lab.parameters.resolve(accepted, setup=setup.revision),
+            config=lab.parameters.resolve(accepted, setup=setup),
         )
         assert production.status == "completed"
         assert len(production.measurements().records) == 1
         production_source = production.snapshot.config_source
         assert isinstance(production_source, ParameterRunConfigSource)
         assert production_source.parameters == published.revision
-        assert production_source.setup == setup.revision.ref
+        assert production_source.setup == setup.ref
         assert lab.parameters.checkout("drag/daily").head == published
         assert lab.config.registry() == registry
-        assert lab.setup.active() == setup
+        assert lab.setup.get("initial") == setup
         assert lab.parameters.get(parameters.id) == parameters
 
         # Fit another target from the same saved base, then verify the combination.
@@ -683,4 +677,4 @@ def test_drag_candidate_publishes_to_branch_and_runs_accepted_gate(
         )
         assert q1_check.config == q0_check.config
         assert lab.config.registry() == registry
-        assert lab.setup.active() == setup
+        assert lab.setup.get("initial") == setup

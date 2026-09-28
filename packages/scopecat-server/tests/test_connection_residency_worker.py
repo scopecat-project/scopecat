@@ -88,6 +88,8 @@ def _lab(
             ) as client,
             LabClient(
                 client,
+                config=config,
+                setup=client.resolve_setup("initial").ref,
                 build_experiment_system=lambda _config, catalog: ExperimentSystem(
                     instrument_catalog=catalog, domain_compiler=target
                 ),
@@ -361,7 +363,7 @@ def test_measured_costs_compare_cold_warm_and_explicit_reconnect(
                 client.release_instruments(
                     InstrumentReleaseCommand(
                         instrument_ids=(binding.id,),
-                        setup=client.active_setup().revision.ref,
+                        setup=client.resolve_setup("initial").ref,
                     )
                 )
             result = lab.run(residency_experiment(2))

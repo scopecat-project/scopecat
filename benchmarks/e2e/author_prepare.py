@@ -87,7 +87,7 @@ def measure(root: Path, *, repetitions: int) -> dict[str, object]:
                     "points": prepared.preview.point_count,
                 }
             )
-            source_file = root / "src/reference_lab/workflows/authored/signal.py"
+            source_file = root / "src/reference_lab_authors/authored/signal.py"
             source_file.write_text(
                 source_file.read_text(encoding="utf-8")
                 + "\n# benchmark source revision\n",

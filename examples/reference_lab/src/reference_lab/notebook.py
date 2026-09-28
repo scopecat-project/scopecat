@@ -8,7 +8,7 @@ from uuid import uuid4
 from scopecat.api.lab import LabClient
 from scopecat.daemon.views import ParameterResolution
 
-from reference_lab.configuration import initial_parameters, initial_setup
+from reference_lab.configuration import initial_parameters
 
 
 def gallery_inputs(lab: LabClient) -> ParameterResolution:
@@ -23,7 +23,7 @@ def gallery_inputs(lab: LabClient) -> ParameterResolution:
         catalog=content.catalog,
         parameters=content.parameters,
     )
-    setup = lab.setup.import_recipe(initial_setup(), name="gallery-bench")
+    setup = lab.setup.get("initial")
     return lab.parameters.resolve(saved, setup=setup)
 
 

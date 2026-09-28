@@ -103,7 +103,11 @@ def test_static_run_resumes_end_to_end_after_daemon_restart(
                 )
             return translated
 
-        lab = LabClient(_daemon_client(send))
+        lab = LabClient(
+            _daemon_client(send),
+            config=load_config(),
+            setup=first_runtime.application.setup.resolve("initial").ref,
+        )
         with pytest.raises(RunFinalizationFailed) as failed:
             lab.run(load_invocation())
 

@@ -84,8 +84,10 @@ it("allows an explicit batch for a registered target and keeps operator/collecti
 it("only replaces the exact target after an explicit subject edit, retaining configuration", () => {
   const value = draft();
   value.selection.configuration = {
-    kind: "saved",
-    ref: { entry_id: "parameters-A", content_hash: "sha256:parameters" },
+    kind: "parameters",
+    overrides: [],
+    setup: { revision_id: "bench", content_hash: `sha256:${"e".repeat(64)}` },
+    ref: { revision_id: "parameters-A", content_hash: "sha256:parameters" },
   };
   const onChange = vi.fn();
   mount(value, onChange);

@@ -1,5 +1,4 @@
 import { normalizeSelection } from "./scientific-selection";
-import type { ConfigContextResolution } from "../config/config-api";
 import type { ComparisonHandoff } from "../analyses/RunComparison";
 import { initialControlDrafts, type ControlDraft } from "./ControlFields";
 import { definitionKey, invalidateDraft, type LaunchDraft } from "./LaunchDraft";
@@ -24,21 +23,10 @@ export function importLaunchRequest(
   current: LaunchDraft,
   entry: LaunchCatalogEntry,
   request: ComparisonHandoff["request"],
-  selectedSource?: ConfigContextResolution["config_source"],
 ): LaunchDraft {
   if (request.experiment !== entry.id || request.version !== entry.version)
     throw new Error(
       "The suggested experiment definition changed. Reopen the source analysis and review its inputs.",
-    );
-  const configuration = normalizeSelection(request.selection).configuration;
-  if (
-    configuration.kind === "working_point" &&
-    (selectedSource?.context.entry_id !== configuration.ref.entry_id ||
-      selectedSource.context.content_hash !== configuration.ref.content_hash ||
-      JSON.stringify(selectedSource.overrides) !== JSON.stringify(configuration.overrides))
-  )
-    throw new Error(
-      "Select and resolve the suggested exact parameter context and overrides in Configuration first; context instructions cannot be silently dropped.",
     );
   if (request.reviewed || request.action !== "preview")
     throw new Error(
@@ -122,7 +110,6 @@ export function importLaunchHandoff(
   current: LaunchDraft,
   entry: LaunchCatalogEntry,
   handoff: ComparisonHandoff,
-  selectedSource?: ConfigContextResolution["config_source"],
 ): LaunchDraft {
-  return { ...importLaunchRequest(current, entry, handoff.request, selectedSource), handoff };
+  return { ...importLaunchRequest(current, entry, handoff.request), handoff };
 }

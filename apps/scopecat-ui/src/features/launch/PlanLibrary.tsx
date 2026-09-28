@@ -1,4 +1,4 @@
-import { normalizeSelection, subjectLabel } from "./scientific-selection";
+import { subjectLabel } from "./scientific-selection";
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient, apiData } from "../../api-client";
@@ -51,16 +51,7 @@ export function PlanLibrary({ initializing = false }: { initializing?: boolean }
         throw new Error(
           "The saved definition is unavailable. Its plan and history remain readable; restore its supported author revision before reopening.",
         );
-      const configuration = normalizeSelection(plan.definition.selection).configuration;
-      const context =
-        configuration.kind === "working_point"
-          ? await apiData(
-              apiClient.POST("/api/v1/config-registry/contexts/resolve", {
-                body: { context: configuration.ref, overrides: configuration.overrides },
-              }),
-            )
-          : undefined;
-      if (current()) openPlan(plan, entry, context);
+      if (current()) openPlan(plan, entry);
     } catch (caught) {
       if (current()) setError(caught instanceof Error ? caught.message : String(caught));
     }

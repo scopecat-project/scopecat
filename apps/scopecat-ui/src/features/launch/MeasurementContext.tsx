@@ -1,9 +1,8 @@
-import { selectedBatch, subjectSample } from "./scientific-selection";
+import { selectedBatch } from "./scientific-selection";
 import { useId, useState } from "react";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { getSamples } from "../samples/sample-api";
 import { ScopeCatalog } from "../context/ScopeCatalog";
-import type { ConfigContextResolution } from "../config/config-api";
 import { TargetPicker } from "./TargetPicker";
 import { ParameterBranchPicker } from "./ParameterBranchPicker";
 import { DeviceContextPicker } from "./DeviceContextPicker";
@@ -15,12 +14,10 @@ export type MeasurementContextChange = Partial<Pick<LaunchDraft, "actor" | "coll
 
 export function MeasurementContext({
   draft,
-  selectedContext,
   projectId,
   onChange,
 }: {
   draft: LaunchDraft;
-  selectedContext?: ConfigContextResolution;
   projectId?: string;
   onChange: (changes: MeasurementContextChange) => void;
 }) {
@@ -35,26 +32,10 @@ export function MeasurementContext({
     getNextPageParam: (page) => page.next_cursor ?? undefined,
   });
   const subject = draft.selection.subject;
-  const savedSelection = draft.plan?.definition.selection;
   const configuration = draft.selection.configuration;
-  const matchingContext =
-    configuration.kind === "working_point" &&
-    selectedContext?.config_source.context.entry_id === configuration.ref.entry_id &&
-    selectedContext.config_source.context.content_hash === configuration.ref.content_hash;
-  const sameWorkingPoint =
-    configuration.kind === "working_point" &&
-    savedSelection?.configuration?.kind === "working_point" &&
-    configuration.ref.entry_id === savedSelection.configuration.ref.entry_id &&
-    configuration.ref.content_hash === savedSelection.configuration.ref.content_hash;
-  const binding = matchingContext
-    ? selectedContext.config_source.sample
-    : sameWorkingPoint
-      ? subjectSample(draft.plan?.definition.scientific_binding)
-      : undefined;
   const selectedSample = subject.kind === "sample" ? subject.sample_id : "";
   const batch = selectedBatch(draft.selection);
-  const subjectLocked =
-    Boolean(binding) || (subject.kind === "registered_target" && !choosingSubject);
+  const subjectLocked = subject.kind === "registered_target" && !choosingSubject;
   function changeSample(sample_id: string) {
     onChange({
       selection: {
@@ -86,7 +67,7 @@ export function MeasurementContext({
             aria-label="Sample ID"
             list={listId}
             disabled={subjectLocked}
-            value={binding?.sample_id ?? selectedSample}
+            value={selectedSample}
             onChange={(event) => changeSample(event.target.value)}
             className="border rounded p-2"
           />
@@ -122,7 +103,7 @@ export function MeasurementContext({
           });
         }}
       />
-      {subject.kind === "registered_target" && !binding && !choosingSubject && (
+      {subject.kind === "registered_target" && !choosingSubject && (
         <button
           type="button"
           onClick={() => {
@@ -132,12 +113,6 @@ export function MeasurementContext({
         >
           Choose another subject
         </button>
-      )}
-      {binding && (
-        <p>
-          {binding.display_name} · revision {binding.revision}. Sample and batch are bound to this
-          working point.
-        </p>
       )}
       <button type="button" aria-expanded={browse} onClick={() => setBrowse(!browse)}>
         {browse ? "Hide context choices" : "Browse samples, batches and collections"}
@@ -149,21 +124,15 @@ export function MeasurementContext({
             <select
               aria-label="Registered sample"
               disabled={subjectLocked}
-              value={binding?.sample_id ?? selectedSample}
+              value={selectedSample}
               onChange={(event) => changeSample(event.target.value)}
               className="border rounded p-2"
             >
               <option value="">No sample selected</option>
-              {(binding?.sample_id ?? selectedSample) &&
+              {selectedSample &&
                 !samples.data?.pages.some((page) =>
-                  page.items.some(
-                    (sample) => sample.record.id === (binding?.sample_id ?? selectedSample),
-                  ),
-                ) && (
-                  <option value={binding?.sample_id ?? selectedSample}>
-                    {binding?.display_name ?? selectedSample}
-                  </option>
-                )}
+                  page.items.some((sample) => sample.record.id === selectedSample),
+                ) && <option value={selectedSample}>{selectedSample}</option>}
               {samples.data?.pages
                 .flatMap((page) => page.items)
                 .map((sample) => (
@@ -195,7 +164,6 @@ export function MeasurementContext({
               kind="batch"
               owner={projectId}
               value={batch}
-              disabled={Boolean(binding)}
               onChange={(id) =>
                 onChange({
                   selection: {

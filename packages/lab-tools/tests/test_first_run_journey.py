@@ -68,7 +68,7 @@ record = inspect_daemon(project).record
 assert record is not None
 with LabApplication().connect(record.base_url) as lab, project.authoring() as author:
     assert lab.config.registry().entries == ()
-    original_setup = lab.setup.active()
+    original_setup = lab.setup.get("initial")
     templates = lab.setup.templates()
     assert len(templates) == 1 and templates[0].id == 'starter-software'
     imported = lab.setup.import_template(templates[0], name='fresh-software-parameters')
@@ -76,10 +76,7 @@ with LabApplication().connect(record.base_url) as lab, project.authoring() as au
         templates[0], name='fresh-software-parameters'
     ) == imported
     assert lab.config.registry().entries == ()
-    assert lab.setup.active() == original_setup
-    lab.setup.activate(
-        imported.setup, expected_generation=original_setup.activation.generation
-    )
+    assert lab.setup.get("initial") == original_setup
     author.use(selection=imported.selection)
     job = author.prepare(request).run()
     run = job.wait(timeout=60).result()

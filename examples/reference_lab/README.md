@@ -227,7 +227,7 @@ for scalar → scan → default edits and the project constraint boundary.
 
 ## Ordinary experiment authors
 
-The application discovers local experiments in `src/reference_lab/workflows/authored/`.
+The application discovers local experiments in `src/reference_lab_authors/authored/`.
 Edit controls, helpers, Ramsey timing or retained-data analysis there; Launch lists
 them automatically without a per-experiment provider or procedure. Follow the
 [author guide](../../docs/how-to/write-an-experiment.md) for Python and GUI execution,

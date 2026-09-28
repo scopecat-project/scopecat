@@ -92,8 +92,8 @@ multi-member or connected targets are rejected, not flattened into inline sample
 Registered and inline subjects are different contexts even when they name the
 same physical sample, so evidence is not silently reused between them.
 
-An optional `setup=SetupRevisionRef(...)` selects a saved setup; omission reads
-current setup authority. Branch and active setup heads are read in one database
+A required `setup=SetupRevisionRef(...)` pins the equipment independently of the
+parameter branch. Parameter and device revisions are checked in one database
 snapshot. Supplied sample revisions must be exact and are resolved through the
 sample registry. With neither samples nor a target the context is unbound, supporting software
 scenarios but does not establish physical sample capability. Scenario comes from
@@ -259,7 +259,7 @@ actually evaluated. Supply either `profile` or `requirements`, not both.
 
 Profiles belong to the selected project data store, are available through the
 HTTP API without importing author Python, and survive current-format backup and
-restore. Current schema 99 retains their storage; use a fresh development data directory and
+restore. Current schema 101 retains their storage; use a fresh development data directory and
 retain older stores with their original environments. A saved profile is a
 report policy, not an automatic maintenance schedule or complete sample policy.
 

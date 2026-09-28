@@ -54,7 +54,7 @@ def capture(root: Path, *, seed: bool) -> dict[str, JsonValue]:
             # binding the application's imports to this fresh process.
             from reference_lab.acceptance import capture_acceptance_fixtures
             from reference_lab.configuration import bootstrap_config
-            from reference_lab.workflows.temperature_diagnostic import (
+            from reference_lab_authors.temperature_diagnostic import (
                 TemperatureDiagnosticIntent,
                 temperature_diagnostic_procedure,
             )
@@ -122,7 +122,10 @@ def capture(root: Path, *, seed: bool) -> dict[str, JsonValue]:
             )
             ready = lab.procedures.submit(
                 temperature_diagnostic_procedure,
-                TemperatureDiagnosticIntent(initial_config=bootstrap_config()),
+                TemperatureDiagnosticIntent(
+                    initial_config=bootstrap_config(),
+                    setup=lab.setup.get("initial").ref,
+                ),
                 request_key="snapshot-ready",
             )
             assert ready.state == "ready"
@@ -168,9 +171,8 @@ def capture(root: Path, *, seed: bool) -> dict[str, JsonValue]:
                 "snapshot-layers"
             ).model_dump(mode="json"),
             "parameters": client.parameter_revisions().model_dump(mode="json"),
-            "setup": client.active_setup().model_dump(mode="json"),
+            "setup": client.resolve_setup("initial").model_dump(mode="json"),
             "registry": client.config_registry().model_dump(mode="json"),
-            "activations": client.config_activation_history().model_dump(mode="json"),
             "procedures": procedures.model_dump(mode="json"),
         }
 

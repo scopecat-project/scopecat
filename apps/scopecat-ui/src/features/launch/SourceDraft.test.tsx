@@ -142,12 +142,24 @@ it("invalidates same-definition current-source preview keys only for the refresh
 
 it("selects an exact saved configuration before a draft without changing lab defaults", () => {
   mount();
-  const ref = { entry_id: "imported-config", content_hash: "sha256:imported" };
-  act(() => state.selectConfiguration({ kind: "saved", ref }));
+  const ref = { revision_id: "imported-config", content_hash: "sha256:imported" };
+  act(() =>
+    state.selectConfiguration({
+      kind: "parameters",
+      overrides: [],
+      setup: { revision_id: "bench", content_hash: `sha256:${"e".repeat(64)}` },
+      ref,
+    }),
+  );
   expect(state.draft).toBeUndefined();
   act(() => state.select(entry));
-  expect(state.draft?.selection.configuration).toEqual({ kind: "saved", ref });
-  act(() => state.selectContext());
+  expect(state.draft?.selection.configuration).toEqual({
+    kind: "parameters",
+    overrides: [],
+    setup: { revision_id: "bench", content_hash: `sha256:${"e".repeat(64)}` },
+    ref,
+  });
+  act(() => state.selectConfiguration({ kind: "unselected" }));
   expect(state.draft?.selection.configuration).toEqual({ kind: "unselected" });
 });
 it("selects independent parameters with an exact setup before opening an experiment", () => {
@@ -180,14 +192,26 @@ it("changes only a running draft's parameter selection and invalidates its old p
     })),
   );
   const original = state.draft!;
-  const ref = { entry_id: "imported-config", content_hash: "sha256:imported" };
-  act(() => state.selectConfiguration({ kind: "saved", ref }));
+  const ref = { revision_id: "imported-config", content_hash: "sha256:imported" };
+  act(() =>
+    state.selectConfiguration({
+      kind: "parameters",
+      overrides: [],
+      setup: { revision_id: "bench", content_hash: `sha256:${"e".repeat(64)}` },
+      ref,
+    }),
+  );
   expect(state.draft?.selection).toEqual({
     ...original.selection,
-    configuration: { kind: "saved", ref },
+    configuration: {
+      kind: "parameters",
+      overrides: [],
+      setup: { revision_id: "bench", content_hash: `sha256:${"e".repeat(64)}` },
+      ref,
+    },
   });
   expect(state.draft?.actor).toBe("Ada");
   expect(state.draft?.collection).toBe("records");
   expect(state.draft?.requestKey).toBeUndefined();
-  expect(state.selectedContext).toBeUndefined();
+  expect(state.draft?.selection.configuration.kind).toBe("parameters");
 });

@@ -7,7 +7,7 @@ from pydantic import BaseModel, ConfigDict
 from scopecat.api.procedures import LabProcedureContext
 from scopecat.automation import ProcedureRecoveryAdapter, RunOutputRef, procedure
 
-from reference_lab.workflows.temperature_diagnostic import (
+from reference_lab_authors.temperature_diagnostic import (
     TemperatureDiagnosticIntent,
     temperature_diagnostic,
 )
@@ -32,7 +32,10 @@ def failed_temperature_analysis(
     context: LabProcedureContext, intent: TemperatureDiagnosticIntent
 ) -> None:
     run = context.run(
-        "sample", temperature_diagnostic.build(), config=intent.initial_config
+        "sample",
+        temperature_diagnostic.build(),
+        config=intent.initial_config,
+        setup=intent.setup,
     )
     context.analyze_run("summary", run, temperature_summary(fail=True))
 

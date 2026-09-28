@@ -21,7 +21,7 @@ from scopecat_testkit.config_registry import load_config
 from scopecat_testkit.server.instruments import signal_endpoint
 from scopecat_testkit.server.runtime import SQLiteTestRunRepository
 
-from scopecat_server.errors import BackendConflict, BackendNotFound
+from scopecat_server.errors import BackendConflict
 from scopecat_server.instruments.actors import InstrumentActorRegistry
 from scopecat_server.services.devices import DeviceService
 from scopecat_server.services.setup import SetupService
@@ -54,7 +54,6 @@ def services(root: Path) -> tuple[SetupService, SQLiteConfigRegistryStore]:
     service = SetupService(
         control=control,
         config_registry=registry,
-        actors=actors,
         devices=DeviceService(
             control=control, actors=actors, endpoint=signal_endpoint()
         ),
@@ -77,7 +76,7 @@ def test_import_retries_and_reopens_without_changing_authority(tmp_path: Path) -
         expected_generation=0,
         unit_of_work=registry.write_unit_of_work,
     )
-    current = service.current()
+    current = service.list()
     template = service.templates()[0]
     command = ConfigurationTemplateImportCommand(
         template_id=template.id,
@@ -92,7 +91,7 @@ def test_import_retries_and_reopens_without_changing_authority(tmp_path: Path) -
     assert first.selection.configuration.ref == first.parameters.ref
     assert first.selection.configuration.setup == first.setup.ref
     assert service.import_template(command) == first
-    assert service.current() == current
+    assert current[0] in service.list()
     assert (
         load_active_config_registry_snapshot(
             unit_of_work=registry.write_unit_of_work
@@ -160,5 +159,4 @@ def test_empty_lab_import_saves_only_independent_revisions(tmp_path: Path) -> No
             ).fetchone()[0]
             == 0
         )
-    with pytest.raises(BackendNotFound, match="no executable setup"):
-        service.current()
+    assert service.definitions()[0].id == "template-setup:first"

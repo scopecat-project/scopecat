@@ -48,7 +48,7 @@ from scopecat.records.scientific_binding import (
     RegisteredTargetSubject,
     ResolvedScientificBinding,
 )
-from scopecat.records.setup import ActiveSetupView, ExecutableSetupSnapshot
+from scopecat.records.setup import ExecutableSetupSnapshot
 from scopecat.runs.admission import build_run_admission
 from scopecat.runs.repository import (
     TerminalRunCommit,
@@ -119,30 +119,21 @@ class AdmissionService:
                 raise BackendConflict(
                     "submitted run config does not match its source content hash"
                 )
-            provenance = self._resolve_provenance_config(submission.config_source)
-            if isinstance(submission.config_source, ParameterRunConfigSource):
-                # Resolution above checks the immutable maintained setup reference.
-                # Another page changing its default must not invalidate this request.
-                assert provenance is not None
-                active_config = ExecutableSetupSnapshot.from_config(provenance)
-                execution_setup = submission.config_source.setup
-                setup_generation = None
-                resolved_devices = ()
-            elif isinstance(submission.config_source, AnalysisCandidateRunConfigSource):
-                execution_setup = submission.config_source.setup
-                if execution_setup is None:
-                    raise BackendConflict("candidate requires its baseline setup")
-                resolved_setup = self._setup.require_available(execution_setup)
-                resolved_devices = resolved_setup.resolution.devices
-                active_config = resolved_setup.setup
-                setup_generation = None
-            else:
-                active = self._resolve_active_setup()
-                execution_setup = active.revision.ref
-                resolved_setup = self._setup.require_available(active.revision.ref)
-                resolved_devices = resolved_setup.resolution.devices
-                active_config = resolved_setup.setup
-                setup_generation = active.activation.generation
+            self._resolve_provenance_config(submission.config_source)
+            execution_setup = submission.execution_setup
+            source = submission.config_source
+            if (
+                isinstance(
+                    source, ParameterRunConfigSource | AnalysisCandidateRunConfigSource
+                )
+                and source.setup != execution_setup
+            ):
+                raise BackendConflict(
+                    "execution setup differs from the configuration's retained setup"
+                )
+            resolved_setup = self._setup.require_available(execution_setup)
+            resolved_devices = resolved_setup.resolution.devices
+            active_config = resolved_setup.setup
             _require_authoritative_instrument_inventory(
                 submitted=submission.config,
                 authoritative=active_config,
@@ -214,12 +205,10 @@ class AdmissionService:
                         setup=source.setup,
                         overrides=source.overrides,
                     )
-                else:
-                    DeviceRepository(connection).require_current(resolved_devices)
+                DeviceRepository(connection).require_current(resolved_devices)
                 run = self._control.admit_run_in_transaction(
                     connection,
                     admission,
-                    expected_setup_generation=setup_generation,
                 )
                 self._point_plans.initialize_admitted_in_transaction(connection, run)
                 if run.run_id == admission.run_id:
@@ -323,15 +312,6 @@ class AdmissionService:
                 "submission id is already admitted with different content"
             )
         return self._wire_admission(run)
-
-    def _resolve_active_setup(self) -> ActiveSetupView:
-        with self._services.config_registry() as work:
-            active = work.setups.read_current()
-        if active is None:
-            raise BackendConflict(
-                "run instrument inventory requires an executable setup"
-            )
-        return active
 
     def _resolve_provenance_config(
         self,

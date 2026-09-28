@@ -130,6 +130,7 @@ def test_resource_wait_releases_worker_and_reuses_or_cancels_exact_child(
 
     def submission(key: str) -> RunSubmission:
         return RunSubmission(
+            execution_setup=runtime.application.setup.resolve("initial").ref,
             scientific_binding=bind_scientific_evidence(
                 catalog_id="test", config=config, samples=(), sample_revisions={}
             ),

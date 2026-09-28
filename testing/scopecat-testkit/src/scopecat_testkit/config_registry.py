@@ -15,7 +15,6 @@ from scopecat.config.registry.service import (
     load_config_registry_entry_snapshot,
     publish_config_revision,
 )
-from scopecat.kernel.content_identity import sha256_json_hash
 from scopecat.project_state import ProjectStateServices
 from scopecat.records.config import ConfigProfileSnapshot
 from scopecat.records.parameter_change import ParameterChangeApprovalRecord
@@ -54,18 +53,8 @@ def initialize_setup(
     """Explicitly provision a fixture's equipment before parameter publication."""
     setup = ExecutableSetupSnapshot.from_config(config)
     with unit_of_work() as work:
-        revision = work.setups.save_revision(
+        work.setups.save_revision(
             retained_setup_revision(id="fixture-setup", setup=setup, actor="fixture")
-        )
-        work.setups.activate(
-            revision=revision.ref,
-            expected_generation=0,
-            operation_id="fixture-setup",
-            actor="fixture",
-            note="explicit test equipment",
-            intent_hash=sha256_json_hash(
-                {"setup": revision.ref.model_dump(mode="json")}
-            ),
         )
 
 

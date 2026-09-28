@@ -4,13 +4,10 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue
 
-from scopecat.records.config_context import ConfigContextRef, ContextRunConfigSource
 from scopecat.records.parameter_revision import ParameterRevisionRef
 from scopecat.records.parameter_update import ParameterUpdate
-from scopecat.records.plan_ref import PlanConfigRef
 from scopecat.records.run import (
     AnalysisCandidateRunConfigSource,
-    ConfigRegistryRunConfigSource,
     ParameterRunConfigSource,
 )
 from scopecat.records.sample import SampleId
@@ -54,11 +51,6 @@ class UnselectedConfiguration(_SelectionModel):
     kind: Literal["unselected"] = "unselected"
 
 
-class SavedConfiguration(_SelectionModel):
-    kind: Literal["saved"] = "saved"
-    ref: PlanConfigRef
-
-
 class ParameterConfiguration(_SelectionModel):
     """Independent parameters; a draft must select setup before preview."""
 
@@ -68,32 +60,17 @@ class ParameterConfiguration(_SelectionModel):
     overrides: tuple[ParameterUpdate, ...] = Field(default=(), max_length=256)
 
 
-class WorkingPointConfiguration(_SelectionModel):
-    kind: Literal["working_point"] = "working_point"
-    ref: ConfigContextRef
-    overrides: tuple[ParameterUpdate, ...] = Field(default=(), max_length=256)
-
-
 class CandidateConfiguration(_SelectionModel):
     kind: Literal["candidate"] = "candidate"
     source: AnalysisCandidateRunConfigSource
 
 
 type ConfigurationChoice = Annotated[
-    UnselectedConfiguration
-    | ParameterConfiguration
-    | SavedConfiguration
-    | WorkingPointConfiguration
-    | CandidateConfiguration,
+    UnselectedConfiguration | ParameterConfiguration | CandidateConfiguration,
     Field(discriminator="kind"),
 ]
 
-type LaunchConfigSource = (
-    ConfigRegistryRunConfigSource
-    | ParameterRunConfigSource
-    | ContextRunConfigSource
-    | AnalysisCandidateRunConfigSource
-)
+type LaunchConfigSource = ParameterRunConfigSource | AnalysisCandidateRunConfigSource
 
 
 class ScientificSelection(_SelectionModel):

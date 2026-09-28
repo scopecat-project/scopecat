@@ -9,10 +9,7 @@ export function reviewedFixture(
       codec: "scopecat.scientific-binding.v3",
       config_content_hash: config_source.content_hash,
       setup_content_hash: `sha256:${"e".repeat(64)}`,
-      subject:
-        config_source.kind === "parameter_context"
-          ? { kind: "inline_samples", catalog_id: "test-project", samples: [config_source.sample] }
-          : { kind: "unbound" },
+      subject: { kind: "unbound" },
     },
   };
 }

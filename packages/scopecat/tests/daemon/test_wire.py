@@ -15,8 +15,6 @@ from scopecat.analysis.datasets import DerivedDataset
 from scopecat.config.changes import parameter_change_proposal_from_updates
 from scopecat.config.inventory import (
     InstrumentInventoryRekey,
-    InstrumentInventoryRemoval,
-    InstrumentInventoryRenameRekey,
 )
 from scopecat.config.parameters import replace_scalar_parameter
 from scopecat.config.registry.records import (
@@ -70,7 +68,6 @@ from scopecat.daemon.wire import (
     RunRecoveryGroupCommitReceipt,
     RunRecoveryGroupView,
     RunSubmission,
-    SetupActivateCommand,
 )
 from scopecat.kernel.content_identity import sha256_content_hash
 from scopecat.kernel.problems import Problem, ProblemPhase
@@ -103,7 +100,6 @@ from scopecat.records.instrument import InstrumentStateSnapshot, state_member_ta
 from scopecat.records.run import ConfigRegistryRunConfigSource
 from scopecat.records.run_request import RunRequest
 from scopecat.records.setup import (
-    ExecutableSetupSnapshot,
     SetupRevisionRef,
 )
 from scopecat.sdk.instruments import (
@@ -316,42 +312,6 @@ def test_config_publish_receipt_binds_operation_entry_and_activation() -> None:
         )
 
 
-def test_setup_inventory_declarations_is_discriminated_closed_json() -> None:
-    config = load_config()
-    changes = (
-        InstrumentInventoryRemoval(
-            instrument_id="retired-source",
-            exclusivity_key="retired-source",
-        ),
-        InstrumentInventoryRekey(
-            instrument_id="source-0",
-            from_exclusivity_key="source-0",
-            to_exclusivity_key="rack-a/source",
-        ),
-        InstrumentInventoryRenameRekey(
-            from_instrument_id="old-meter",
-            to_instrument_id="meter-0",
-            from_exclusivity_key="old-meter",
-            to_exclusivity_key="rack-a/meter",
-        ),
-    )
-    setup = ExecutableSetupSnapshot.from_config(config)
-    command = SetupActivateCommand(
-        operation_id="activate-setup",
-        revision=SetupRevisionRef(
-            revision_id="inventory-v2", content_hash=setup.content_hash
-        ),
-        changes=changes,
-        actor="operator",
-        expected_generation=1,
-    )
-    restored = SetupActivateCommand.model_validate_json(command.model_dump_json())
-    assert restored == command
-    assert isinstance(restored.changes[0], InstrumentInventoryRemoval)
-    assert isinstance(restored.changes[1], InstrumentInventoryRekey)
-    assert isinstance(restored.changes[2], InstrumentInventoryRenameRekey)
-
-
 def test_instrument_inventory_rekey_rejects_a_noop() -> None:
     with pytest.raises(ValidationError, match="must change"):
         InstrumentInventoryRekey(
@@ -534,6 +494,9 @@ def test_run_submission_is_closed_typed_json_without_executable_state() -> None:
         registry_generation=2,
     )
     submission = RunSubmission(
+        execution_setup=SetupRevisionRef(
+            revision_id="bench", content_hash="sha256:" + "e" * 64
+        ),
         submission_id="submit-1",
         config=config,
         scientific_binding=bind_scientific_evidence(

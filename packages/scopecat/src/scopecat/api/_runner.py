@@ -59,13 +59,15 @@ from scopecat.records.config_context import ContextRunConfigSource
 from scopecat.records.content import Sha256ContentHash
 from scopecat.records.plan_ref import ExperimentPlanRef, ProcedureChildSubmission
 from scopecat.records.run import (
-    ConfigRegistryRunConfigSource,
+    AnalysisCandidateRunConfigSource,
+    ParameterRunConfigSource,
     RunConfigSource,
     RunSnapshot,
 )
 from scopecat.records.run_request import RunRequest
 from scopecat.records.sample import SampleBinding, SampleSelector
 from scopecat.records.scientific_binding import ResolvedScientificBinding
+from scopecat.records.setup import SetupRevisionRef
 
 
 class RunResourcesBlocked(Exception):
@@ -137,6 +139,7 @@ class _DaemonRunner:
         *,
         config: ConfigProfileSnapshot | None = None,
         config_source: RunConfigSource | None = None,
+        setup: SetupRevisionRef | None = None,
         name: str | None = None,
         tags: tuple[str, ...] = (),
         description: str | None = None,
@@ -151,6 +154,7 @@ class _DaemonRunner:
             experiment,
             config=config,
             config_source=config_source,
+            setup=setup,
             name=name,
             tags=tags,
             description=description,
@@ -187,6 +191,7 @@ class _DaemonRunner:
             experiment,
             config=config,
             config_source=detail.snapshot.config_source,
+            setup=detail.snapshot.execution_setup,
             name=request.display_name,
             tags=request.tags,
             description=request.description,
@@ -245,6 +250,7 @@ class _DaemonRunner:
         *,
         config: ConfigProfileSnapshot | None = None,
         config_source: RunConfigSource | None = None,
+        setup: SetupRevisionRef | None = None,
         point: int | Literal["first", "middle", "last"] = "first",
         coordinates: Mapping[str, object] | None = None,
         coordinate_mode: PreviewCoordinateMode = "exact",
@@ -260,6 +266,7 @@ class _DaemonRunner:
             experiment,
             config=config,
             config_source=config_source,
+            setup=setup,
             name=name,
             tags=tags,
             description=description,
@@ -282,6 +289,7 @@ class _DaemonRunner:
         *,
         config: ConfigProfileSnapshot | None = None,
         config_source: RunConfigSource | None = None,
+        setup: SetupRevisionRef | None = None,
         name: str | None = None,
         tags: tuple[str, ...] = (),
         description: str | None = None,
@@ -293,6 +301,7 @@ class _DaemonRunner:
             experiment,
             config=config,
             config_source=config_source,
+            setup=setup,
             name=name,
             tags=tags,
             description=description,
@@ -322,6 +331,7 @@ class _DaemonRunner:
         operator: str | None,
         samples: tuple[SampleSelector, ...] = (),
         scientific_binding: ResolvedScientificBinding | None = None,
+        setup: SetupRevisionRef | None = None,
         plan_ref: ExperimentPlanRef | None = None,
         record_collection: str | None = None,
     ) -> PlannedRun:
@@ -348,19 +358,27 @@ class _DaemonRunner:
                 *(selector for selector in samples if selector.role != binding.role),
                 exact,
             )
-        selected_source = config_source
         if config is None:
-            active = self.client.active_config()
-            selected_config = active.config
-            selected_source = selected_source or ConfigRegistryRunConfigSource(
-                selector="active",
-                entry_id=active.entry.id,
-                config_ref=active.entry.config_ref,
-                content_hash=active.entry.content_hash,
-                registry_generation=active.activation.generation,
+            raise ValueError(
+                "Select parameters or supply configuration data before planning"
             )
-        else:
-            selected_config = config
+        selected_config = config
+        selected_source = config_source
+        source_setup = (
+            config_source.setup
+            if isinstance(
+                config_source,
+                ParameterRunConfigSource | AnalysisCandidateRunConfigSource,
+            )
+            else None
+        )
+        if setup is not None and source_setup is not None and setup != source_setup:
+            raise ValueError(
+                "execution setup differs from the configuration's retained setup"
+            )
+        execution_setup = source_setup or setup
+        if execution_setup is None:
+            raise ValueError("Select an exact experiment setup before planning")
         samples = tuple(sorted(samples, key=lambda selector: selector.role))
         if scientific_binding is None:
             scientific_binding = self._freeze_scientific_binding(
@@ -393,6 +411,7 @@ class _DaemonRunner:
         return replace(
             planned,
             scientific_binding=scientific_binding,
+            execution_setup=execution_setup,
             request=planned.request.model_copy(
                 update={"record_collection": record_collection}
             ),
@@ -657,7 +676,10 @@ def _prepare_run_submission(
 
     if planned.scientific_binding is None:
         raise ValueError("run submission requires resolved scientific evidence")
+    if planned.execution_setup is None:
+        raise ValueError("run submission requires an exact execution setup")
     submission = RunSubmission(
+        execution_setup=planned.execution_setup,
         submission_id=submission_id,
         scientific_binding=planned.scientific_binding,
         config=planned.config,

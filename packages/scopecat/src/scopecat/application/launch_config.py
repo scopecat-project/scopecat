@@ -7,16 +7,13 @@ from scopecat.config.candidates import CandidateConfig
 from scopecat.config.scientific_binding import bind_scientific_evidence
 from scopecat.daemon.wire import ParameterResolveCommand
 from scopecat.records.config import ConfigProfileSnapshot
-from scopecat.records.config_context import ContextRunConfigSource
 from scopecat.records.configuration_fence import (
     ProcedureConfigurationFence,
-    SetupContentFence,
     SetupRevisionFence,
 )
 from scopecat.records.launch_request import LaunchConfigSource, LaunchRequest
 from scopecat.records.run import (
     AnalysisCandidateRunConfigSource,
-    ConfigRegistryRunConfigSource,
     ParameterRunConfigSource,
 )
 from scopecat.records.sample import SampleBinding, SampleRevision
@@ -28,11 +25,9 @@ from scopecat.records.scientific_selection import (
     RegisteredTargetChoice,
     ReviewedScientificSelection,
     SampleSubjectChoice,
-    SavedConfiguration,
     ScientificSelection,
     UnboundSubjectChoice,
     UnselectedConfiguration,
-    WorkingPointConfiguration,
     require_selection_binding,
 )
 
@@ -97,8 +92,8 @@ def resolve_launch_config(
     samples: tuple[SampleBinding, ...] = ()
     revisions: dict[tuple[str, int], SampleRevision] = {}
     if isinstance(subject, UnboundSubjectChoice):
-        if batch_id is not None or isinstance(source, ContextRunConfigSource):
-            raise ValueError("batch or working point requires a subject")
+        if batch_id is not None:
+            raise ValueError("batch requires a subject")
     else:
         if isinstance(subject, RegisteredTargetChoice):
             target = lab.resolve_target(subject.ref)
@@ -112,9 +107,7 @@ def resolve_launch_config(
             assert isinstance(subject, SampleSubjectChoice)
             sample_id, revision_id = subject.sample_id, subject.revision
         exact = (
-            source.sample
-            if isinstance(source, ContextRunConfigSource)
-            else candidate_binding.samples[0]
+            candidate_binding.samples[0]
             if candidate_binding is not None and len(candidate_binding.samples) == 1
             else retained.samples[0]
             if retained is not None and len(retained.samples) == 1
@@ -214,22 +207,6 @@ def _resolve_configuration(
             )
         )
         config, source = resolved.config, resolved.config_source
-    elif isinstance(choice, WorkingPointConfiguration):
-        resolved = lab.config.resolve_context(choice.ref, overrides=choice.overrides)
-        config, source = resolved.config, resolved.config_source
-    elif isinstance(choice, SavedConfiguration):
-        selected = lab.config.entry(choice.ref.entry_id)
-        if selected.entry.content_hash != choice.ref.content_hash:
-            raise ValueError(
-                "saved configuration does not match its exact content hash"
-            )
-        config = selected.config
-        source = ConfigRegistryRunConfigSource(
-            selector=selected.entry.id,
-            entry_id=selected.entry.id,
-            config_ref=selected.entry.config_ref,
-            content_hash=selected.entry.content_hash,
-        )
     else:
         assert isinstance(choice, UnselectedConfiguration)
         raise ValueError(
@@ -249,26 +226,15 @@ def launch_configuration_fence(
     reviewed: ReviewedScientificSelection,
 ) -> ProcedureConfigurationFence:
     source = reviewed.config_source
-    if isinstance(source, ParameterRunConfigSource | AnalysisCandidateRunConfigSource):
-        if source.setup is None:
-            raise ValueError("candidate requires its baseline application setup")
-        return SetupRevisionFence(revision=source.setup)
-    return SetupContentFence(content_hash=reviewed.binding.setup_content_hash)
+    if source.setup is None:
+        raise ValueError("candidate requires its baseline application setup")
+    return SetupRevisionFence(revision=source.setup)
 
 
 def launch_preflight_configuration(
-    source: LaunchConfigSource,
+    _source: LaunchConfigSource,
 ) -> Literal["accepted", "selected_context"]:
-    return (
-        "selected_context"
-        if isinstance(
-            source,
-            ContextRunConfigSource
-            | AnalysisCandidateRunConfigSource
-            | ParameterRunConfigSource,
-        )
-        else "accepted"
-    )
+    return "selected_context"
 
 
 def launch_preflight_meaning(source: LaunchConfigSource) -> str:
@@ -277,14 +243,6 @@ def launch_preflight_meaning(source: LaunchConfigSource) -> str:
             "Uses exact parameter and setup revisions for this run; "
             "no calibration acceptance or default changes."
         )
-    if isinstance(source, AnalysisCandidateRunConfigSource):
-        return (
-            "Uses this exact saved candidate for this run; "
-            "no validation or default change."
-        )
-    if isinstance(source, ContextRunConfigSource):
-        return (
-            "Uses this run's selected saved working point; selection does not "
-            "establish calibration validity or change the lab default."
-        )
-    return "Uses the reviewed saved configuration; no shared state changes."
+    return (
+        "Uses this exact saved candidate for this run; no validation or default change."
+    )

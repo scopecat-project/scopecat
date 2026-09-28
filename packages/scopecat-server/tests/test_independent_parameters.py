@@ -27,14 +27,12 @@ from scopecat.records.experimental_batch import ExperimentalBatchEdit
 from scopecat.records.launch_request import LaunchRequest
 from scopecat.records.parameter import ParameterSnapshot, ScalarParameterValue
 from scopecat.records.parameter_revision import ParameterRevision
-from scopecat.records.plan_ref import PlanConfigRef
 from scopecat.records.run import ParameterRunConfigSource
 from scopecat.records.sample import SampleRevisionDraft
 from scopecat.records.scientific_scope import DeclaredBatch
 from scopecat.records.scientific_selection import (
     ParameterConfiguration,
     SampleSubjectChoice,
-    SavedConfiguration,
     ScientificSelection,
 )
 from scopecat.records.setup import ExecutableSetupSnapshot
@@ -213,11 +211,8 @@ def test_prepared_inputs_retain_subject_batch_and_explicit_setup(
             selection = ScientificSelection(
                 subject=SampleSubjectChoice(sample_id="chip"),
                 batch=DeclaredBatch(id="cooldown"),
-                configuration=SavedConfiguration(
-                    ref=PlanConfigRef(
-                        entry_id=prepared.entry.id,
-                        content_hash=prepared.entry.content_hash,
-                    )
+                configuration=ParameterConfiguration(
+                    ref=parameters.ref, setup=setup.ref
                 ),
             )
             request = LaunchRequest(
@@ -228,12 +223,13 @@ def test_prepared_inputs_retain_subject_batch_and_explicit_setup(
                 selection=selection,
             )
             resolved = resolve_launch_config(lab, request)
-            assert resolved.config == prepared.config
+            assert (
+                resolved.config.parameter_snapshot == prepared.config.parameter_snapshot
+            )
             sample = resolved.reviewed.binding.samples[0]
             assert (sample.sample_id, sample.batch_id) == ("chip", "cooldown")
             assert lab.config.registry().activation is None
             assert lab.parameters.get(parameters.id) == parameters
-            lab.setup.activate(setup)
             collection = client.create_record_collection("Trial")
             registry_before = lab.config.registry()
             with (
@@ -267,11 +263,6 @@ def test_prepared_inputs_retain_subject_batch_and_explicit_setup(
                 with pytest.raises(ValueError, match="requires independent parameters"):
                     other.use(setup=setup)
                 assert other.use(parameters="initial").science.subject.kind == "unbound"
-                assert session.selection == selected
-                with pytest.raises(
-                    ValueError, match="choose parameters or working_point"
-                ):
-                    session.use(parameters=parameters, working_point=None)
                 assert session.selection == selected
                 request = LaunchRequest(
                     workspace_id="test-source",
@@ -341,14 +332,12 @@ def test_prepared_inputs_retain_subject_batch_and_explicit_setup(
                     ),
                     name="changed-setup",
                 )
-                lab.setup.activate(changed)
                 # The branch editor and the session use the same explicit setup,
-                # even after another client changes the daemon's active authority.
+                # even after another client saves a different setup.
                 editor = session.params
                 science = session._prepare_science(
                     selection=INHERIT,
                     target=INHERIT,
-                    context=INHERIT,
                     sample=INHERIT,
                     batch=INHERIT,
                     parameters=editor,
@@ -387,7 +376,7 @@ def test_prepared_inputs_retain_subject_batch_and_explicit_setup(
                     session.selection.science.configuration
                     == ParameterConfiguration(ref=saved_branch.revision)
                 )
-                assert lab.setup.active().revision.ref == changed.ref
+                assert lab.setup.get("changed-setup").ref == changed.ref
                 frozen = request.model_copy(update={"reviewed": original.reviewed})
                 assert resolve_launch_config(lab, frozen) == original
                 assert (

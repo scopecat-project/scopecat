@@ -78,25 +78,26 @@ reopened in VS Code for an explicit trial; they are not promoted merely because
 a fit or connection test succeeded. Device identity and matching parameter values
 do not establish calibration applicability.
 
-## Remaining combined-configuration boundary
+## Execution and retained configuration data
 
-Candidate execution inherits the baseline run's exact persisted setup reference;
-calibration checks retain a separate execution setup alongside their scientific
-context. Neither follows the global setup selection. The low-level combined
-configuration paths still use setup-content authority, and startup bootstrap
-still maintains an active setup.
-Internal registry publication is still used by bootstrap and scientific-proof
-tests. These are not a second supported user editing workflow. Their remaining
-selection dependencies must be removed before declaring ownership cleanup
-complete; deleting the user-facing writer alone does not establish that result.
+Every admitted run supplies an exact execution setup, independently of parameter
+and scientific provenance. Candidate runs retain their baseline's setup; calibration
+checks retain a separate setup alongside the scientific context. Scientific
+procedures use exact setup fences. No path falls back to a global setup selection.
 
-Keep exact scientific subject checks, candidate verification and shared resource
-ownership while replacing those consumers. Do not turn current heads into
-historical evidence or use content equality as proof that hardware was untouched.
+Combined snapshots remain data and provenance. They grant no device access and
+are not another user editing workflow. Author selections and saved plans use
+independent parameters or a retained candidate. Startup atomically seeds a named
+`initial` setup and optional parameter revision once, without selecting either.
+The seed marker is initialization bookkeeping, never execution authority.
+
+Exact subject checks, candidate verification and shared resource ownership remain
+mandatory. Current heads are not historical evidence; content equality does not
+prove that hardware was untouched.
 
 ## Persistence
 
-Development schema 100 retains device registrations, immutable connection
+Development schema 101 retains device registrations, immutable connection
 revisions, declared access aliases, connection-test evidence, setup definitions
 and exact resolutions with the existing parameter and run records. Current-format
 backup/restore covers these owners together.

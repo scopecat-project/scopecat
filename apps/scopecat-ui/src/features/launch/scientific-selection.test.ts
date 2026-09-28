@@ -5,12 +5,11 @@ import { reviewedFixture } from "../../test/scientific-fixtures";
 
 it("preserves target connection endpoints when reviewed evidence becomes a request", () => {
   const reviewed: LaunchPreview["reviewed"] = reviewedFixture({
-    kind: "config_registry",
-    selector: "active",
-    entry_id: "base",
-    config_ref: "base",
+    kind: "parameter_revision",
+    parameters: { revision_id: "base", content_hash: `sha256:${"a".repeat(64)}` },
+    setup: { revision_id: "bench", content_hash: `sha256:${"e".repeat(64)}` },
     content_hash: `sha256:${"a".repeat(64)}`,
-    registry_generation: 1,
+    overrides: [],
   });
   reviewed.binding.subject = {
     kind: "registered_target",

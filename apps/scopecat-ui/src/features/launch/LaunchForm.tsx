@@ -27,8 +27,6 @@ export function LaunchForm({
   const supported = fields.length === allFields.length;
   const {
     projectId,
-    selectedContext,
-    selectContext,
     draft: retained,
     update,
     select,
@@ -219,12 +217,7 @@ export function LaunchForm({
       className="space-y-4 max-w-3xl"
     >
       <p>{entry.description}</p>
-      <MeasurementContext
-        draft={draft}
-        selectedContext={selectedContext}
-        projectId={projectId}
-        onChange={changeInput}
-      />
+      <MeasurementContext draft={draft} projectId={projectId} onChange={changeInput} />
       <PlanSave
         key={`${draft.plan?.ref.plan_id ?? "new"}:${draft.plan?.ref.revision ?? 0}`}
         preview={result}
@@ -243,39 +236,13 @@ export function LaunchForm({
           actor,
         })}
       />
-      {draft.selection.configuration.kind === "saved" && (
-        <p>
-          Using exact saved configuration {draft.selection.configuration.ref.entry_id}.{" "}
-          <button type="button" onClick={() => selectContext()}>
-            Clear parameter selection
-          </button>
-        </p>
-      )}
       {draft.selection.configuration.kind === "parameters" && (
         <p>
           Using parameter revision {draft.selection.configuration.ref.revision_id}. The checked
           preview retains the exact setup used. This does not accept calibration or change defaults.
         </p>
       )}
-      {selectedContext ? (
-        <div>
-          <p>
-            Parameter context: {selectedContext.config_source.context.entry_id} ·{" "}
-            {selectedContext.config_source.sample.display_name} (
-            {selectedContext.config_source.sample.sample_id}, r
-            {selectedContext.config_source.sample.revision}) ·{" "}
-            {selectedContext.config_source.sample.context_id}
-          </p>
-          <button
-            type="button"
-            onClick={() => {
-              selectContext();
-            }}
-          >
-            Clear parameter selection
-          </button>
-        </div>
-      ) : draft.selection.configuration.kind === "unselected" ? (
+      {draft.selection.configuration.kind === "unselected" ? (
         <p>
           Select a parameter branch or use a saved version from Configuration, then choose an
           experiment setup before preview.

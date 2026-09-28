@@ -23,19 +23,17 @@ def test_failed_analysis_recovers_without_reacquisition(
         TEMPERATURE_ANALYSIS_RECOVERY,
         failed_temperature_analysis,
     )
-    from reference_lab.workflows.temperature_diagnostic import (
+    from reference_lab_authors.temperature_diagnostic import (
         TemperatureDiagnosticIntent,
     )
 
     with create_application(Path(EXAMPLE_ROOT)).connect(independent_lab_daemon) as lab:
-        setup = lab.setup.active()
-        inputs = lab.parameters.resolve(
-            independent_parameters, setup=setup.revision.ref
-        )
+        setup = lab.setup.get("initial")
+        inputs = lab.parameters.resolve(independent_parameters, setup=setup.ref)
         before_runs = {run.id for run in lab.runs().items}
         source = lab.procedures.submit(
             failed_temperature_analysis,
-            TemperatureDiagnosticIntent(initial_config=inputs.config),
+            TemperatureDiagnosticIntent(initial_config=inputs.config, setup=setup.ref),
             request_key="known-software-failure",
         )
         with pytest.raises(ValueError, match="demonstration software analysis failure"):
@@ -128,5 +126,5 @@ def test_failed_analysis_recovers_without_reacquisition(
         assert isinstance(kelvin, float)
         assert kelvin > 0
         assert publication.inputs
-        assert lab.setup.active() == setup
+        assert lab.setup.get("initial") == setup
         assert lab.config.registry().entries == ()

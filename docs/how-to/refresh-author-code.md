@@ -7,7 +7,7 @@ modules become available at the next cell. See the
 The explicit operations below remain useful for scripts and controlled source selection.
 
 The reference lab enables author revisions by default. Edit the small files in
-`src/reference_lab/workflows/authored`, then choose **Refresh author code** in
+`src/reference_lab_authors/authored`, then choose **Refresh author code** in
 **Experiments**. Scopecat validates a complete source snapshot in a new process
 before publishing it. Preview the updated controls and submit normally. The
 instrument service stays running; admitted procedures retain their original code.
@@ -45,7 +45,7 @@ Use the same connection/import cell on the first visit and after saving edits:
 ```python
 session = project.authoring()
 session.refresh()
-from reference_lab.workflows.authored.signal import signal
+from reference_lab_authors.authored.signal import signal
 
 request = signal()
 launch = session.prepare(request)
@@ -121,7 +121,7 @@ with project.connect() as lab, project.authoring() as authors:
     )
     result = authors.analyze(
         retained.id,
-        "reference_lab.workflows.authored.signal:selected_mean",
+        "reference_lab_authors.authored.signal:selected_mean",
         code_revision=original,
         key="original-model",
     )
@@ -167,12 +167,12 @@ The maintainer configures these paths once in `scopecat.toml`:
 
 ```toml
 [authors]
-modules = ["reference_lab.workflows.authored"]
+modules = ["reference_lab_authors.authored"]
 source_roots = ["src", "config"]
 refresh_roots = [
-  "src/reference_lab/workflows/authored",
-  "src/reference_lab/workflows/frequency_amplitude.py",
-  "src/reference_lab/workflows/temperature_diagnostic.py",
+  "src/reference_lab_authors/authored",
+  "src/reference_lab_authors/frequency_amplitude.py",
+  "src/reference_lab_authors/temperature_diagnostic.py",
 ]
 ```
 

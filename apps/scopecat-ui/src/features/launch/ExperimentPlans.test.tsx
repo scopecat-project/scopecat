@@ -40,8 +40,10 @@ function plan(id: string, name: string): PlanRevision {
       selection: {
         subject: { kind: "unbound" },
         configuration: {
-          kind: "saved",
-          ref: { entry_id: "saved", content_hash: `sha256:${"d".repeat(64)}` },
+          kind: "parameters",
+          overrides: [],
+          setup: { revision_id: "bench", content_hash: `sha256:${"e".repeat(64)}` },
+          ref: { revision_id: "saved", content_hash: `sha256:${"d".repeat(64)}` },
         },
         batch: { kind: "unscoped" },
       },
@@ -175,12 +177,11 @@ function Harness({
               expected_request_hash: `sha256:${"a".repeat(64)}`,
               inputs: {},
               reviewed: reviewedFixture({
-                kind: "config_registry",
-                selector: "active",
-                entry_id: "saved",
-                config_ref: "saved",
+                kind: "parameter_revision",
+                parameters: { revision_id: "saved", content_hash: `sha256:${"d".repeat(64)}` },
+                setup: { revision_id: "bench", content_hash: `sha256:${"e".repeat(64)}` },
                 content_hash: `sha256:${"d".repeat(64)}`,
-                registry_generation: 1,
+                overrides: [],
               }),
             },
             "original",
@@ -230,7 +231,7 @@ it("opening another plan resets the save name, keeps current actor and preserves
     "fetch",
     vi.fn(async (input: Request) => {
       if (input.url.includes("experiment-launcher/submit")) throw new TypeError("lost response");
-      return reply({ activation: { generation: 1, entry_id: "saved" } });
+      return reply({ items: [] });
     }),
   );
   setup();
@@ -349,12 +350,11 @@ it("waits for initial catalog readiness before allowing a saved plan to open", a
 it("preserves a registered target through reopening, preview, submission and plan save", async () => {
   const reviewed = {
     ...reviewedFixture({
-      kind: "config_registry",
-      selector: "saved",
-      entry_id: "saved",
-      config_ref: "saved",
+      kind: "parameter_revision",
+      parameters: { revision_id: "saved", content_hash: `sha256:${"d".repeat(64)}` },
+      setup: { revision_id: "bench", content_hash: `sha256:${"e".repeat(64)}` },
       content_hash: `sha256:${"d".repeat(64)}`,
-      registry_generation: 1,
+      overrides: [],
     }),
     binding: targetPlan.definition.scientific_binding,
   };
@@ -405,7 +405,9 @@ it("preserves a registered target through reopening, preview, submission and pla
         if (path.endsWith("/experiment-plans")) return reply(targetPlan);
       }
       if (path.endsWith("/experiment-plans")) return reply({ items: [targetPlan] });
-      return reply({ activation: { generation: 1, entry_id: "saved" } });
+      if (path.includes("/setup/revisions/"))
+        return reply({ resolution: { definition_id: "bench" } });
+      return reply({ items: [] });
     }),
   );
   setup();

@@ -5,11 +5,9 @@ from datetime import UTC, datetime, timedelta
 import httpx2
 import pytest
 from pydantic import BaseModel
-from scopecat_testkit.setup_records import retained_setup_revision
 from scopecat_testkit.workflow_fixtures import load_config
 
 from scopecat.automation.wire import ProcedureRunListQuery
-from scopecat.config.inventory import InstrumentInventoryRekey
 from scopecat.config.scientific_binding import bind_scientific_evidence
 from scopecat.control.models import (
     RunExecutionSegment,
@@ -50,7 +48,6 @@ from scopecat.daemon.wire import (
     RunInstrumentProvisionCommand,
     RunInstrumentProvisionReceipt,
     RunSubmission,
-    SetupActivateCommand,
 )
 from scopecat.kernel.content_identity import sha256_content_hash_segments
 from scopecat.kernel.state import PayloadRef, StateValue
@@ -72,9 +69,6 @@ from scopecat.records.instrument import InstrumentStateSnapshot
 from scopecat.records.run import RunSnapshot
 from scopecat.records.run_request import RunRequest
 from scopecat.records.setup import (
-    ActiveSetupView,
-    ExecutableSetupSnapshot,
-    SetupActivationRecord,
     SetupRevisionRef,
 )
 from scopecat.sdk.instruments.catalog import DriverCatalog
@@ -496,47 +490,6 @@ def test_renew_instrument_session_posts_an_empty_heartbeat() -> None:
     assert request.content == b""
 
 
-def test_setup_activation_retries_the_exact_reviewed_command() -> None:
-    requests: list[httpx2.Request] = []
-    setup = ExecutableSetupSnapshot.from_config(load_config())
-    revision = retained_setup_revision(id="inventory-v2", setup=setup, actor="operator")
-    command = SetupActivateCommand(
-        operation_id="activate-setup-2",
-        revision=revision.ref,
-        changes=(
-            InstrumentInventoryRekey(
-                instrument_id="source-0",
-                from_exclusivity_key="source-0",
-                to_exclusivity_key="rack-a/source",
-            ),
-        ),
-        actor="operator",
-        expected_generation=1,
-        note="move source",
-    )
-    receipt = ActiveSetupView(
-        revision=revision,
-        activation=SetupActivationRecord(
-            generation=2, revision=revision.ref, actor="operator"
-        ),
-    )
-
-    def handler(request: httpx2.Request) -> httpx2.Response:
-        requests.append(request)
-        if len(requests) == 1:
-            raise httpx2.ReadError("receipt lost", request=request)
-        return _model(receipt)
-
-    client = DaemonClient(
-        "http://daemon.local/", transport=httpx2.MockTransport(handler)
-    )
-    assert client.activate_setup(command) == receipt
-    assert len(requests) == 2
-    assert requests[0].content == requests[1].content
-    assert requests[1].url.path == "/api/v1/setup/activation-operations"
-    assert SetupActivateCommand.model_validate_json(requests[1].content) == command
-
-
 def test_invoke_externalizes_inline_payload_before_command_post() -> None:
     requests: list[httpx2.Request] = []
     content = b"opaque-program"
@@ -817,6 +770,9 @@ def _admission(submission_id: str) -> RunAdmission:
 
 def _submission(submission_id: str = "submission-1") -> RunSubmission:
     return RunSubmission(
+        execution_setup=SetupRevisionRef(
+            revision_id="bench", content_hash="sha256:" + "e" * 64
+        ),
         submission_id=submission_id,
         config=load_config(),
         scientific_binding=bind_scientific_evidence(

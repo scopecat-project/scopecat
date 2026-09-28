@@ -32,14 +32,15 @@ def create_context(authors: AuthorProject) -> None:
     )
     authors.parameters.create_branch("refresh-inputs", revision=revision)
     authors.use(
-        parameter_branch="refresh-inputs", setup=authors.active_setup().revision.ref
+        parameter_branch="refresh-inputs", setup=authors.resolve_setup("initial").ref
     )
 
 
 def preview_request(project_root: Path) -> tuple[LaunchRequest, LaunchPreview]:
     with load_project(project_root / "scopecat.toml").authoring() as authors:
         authors.use(
-            parameter_branch="refresh-inputs", setup=authors.active_setup().revision.ref
+            parameter_branch="refresh-inputs",
+            setup=authors.resolve_setup("initial").ref,
         )
         catalog = authors.catalog()
         entry = next(item for item in catalog.entries if item.id == "signal")
@@ -93,7 +94,7 @@ def admit_without_dispatch(root: Path, key: str) -> str:
 
 
 def run_admitted(root: Path, procedure_id: str) -> None:
-    subprocess.run(  # noqa: S603 - original intent selects the immutable worker code
+    result = subprocess.run(  # noqa: S603 - original intent selects the immutable worker code
         [
             sys.executable,
             "-m",
@@ -103,9 +104,10 @@ def run_admitted(root: Path, procedure_id: str) -> None:
         ],
         capture_output=True,
         encoding="utf-8",
-        check=True,
+        check=False,
         timeout=60,
     )
+    assert result.returncode == 0, result.stdout + result.stderr
 
 
 def test_refresh_freezes_admission_and_analysis_across_restore(
@@ -117,7 +119,7 @@ def test_refresh_freezes_admission_and_analysis_across_restore(
     for name in ("src", "config"):
         shutil.copytree(EXAMPLE_ROOT / name, root / name)
     shutil.copy2(EXAMPLE_ROOT / "scopecat.toml", root / "scopecat.toml")
-    source_path = root / "src/reference_lab/workflows/authored/signal.py"
+    source_path = root / "src/reference_lab_authors/authored/signal.py"
     source = source_path.read_text()
     # Ordinary code is split into adjacent experiment/helper/analysis files.
     helper_start = source.index("def response(")
@@ -242,7 +244,7 @@ def test_refresh_freezes_admission_and_analysis_across_restore(
             for revision, expected in ((first, 1.0), (fourth.active, 10.0)):
                 result = authors.analyze(
                     retained.id,
-                    "reference_lab.workflows.authored.analysis:selected_mean",
+                    "reference_lab_authors.authored.analysis:selected_mean",
                     code_revision=revision,
                     key=f"revision-{expected}",
                 )
@@ -266,7 +268,7 @@ def test_refreshed_pulse_helper_keeps_admitted_recipe_source(
     for name in ("src", "config"):
         shutil.copytree(EXAMPLE_ROOT / name, root / name)
     shutil.copy2(EXAMPLE_ROOT / "scopecat.toml", root / "scopecat.toml")
-    authored = root / "src/reference_lab/workflows/authored"
+    authored = root / "src/reference_lab_authors/authored"
     example = (
         EXAMPLE_ROOT.parents[1]
         / "packages/scopecat-quantum/examples/quantity_recipe.py"

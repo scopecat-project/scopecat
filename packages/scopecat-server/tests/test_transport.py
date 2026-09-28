@@ -519,6 +519,9 @@ def _wire_admission(submission_id: str) -> RunAdmission:
 
 def _submission(submission_id: str) -> dict[str, object]:
     return RunSubmission(
+        execution_setup=SetupRevisionRef(
+            revision_id="bench", content_hash="sha256:" + "e" * 64
+        ),
         scientific_binding=bind_scientific_evidence(
             catalog_id="test", config=_config(), samples=(), sample_revisions={}
         ),

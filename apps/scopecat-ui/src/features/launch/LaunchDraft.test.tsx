@@ -79,12 +79,11 @@ function preview() {
             setup: { revision_id: "bench", content_hash: `sha256:${"c".repeat(64)}` },
           }
         : {
-            kind: "config_registry",
-            selector: "baseline",
-            entry_id: "baseline",
-            config_ref: "baseline",
+            kind: "parameter_revision",
+            parameters: { revision_id: "baseline", content_hash: `sha256:${"b".repeat(64)}` },
+            setup: { revision_id: "bench", content_hash: `sha256:${"e".repeat(64)}` },
             content_hash: `sha256:${"b".repeat(64)}`,
-            registry_generation: null,
+            overrides: [],
           },
     ),
     summary: "Checked preparation",

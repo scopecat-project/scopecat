@@ -91,14 +91,11 @@ def _admission(
 def _admit(
     store: SQLiteControlPlane,
     admission: RunAdmissionRecord,
-    *,
-    expected_setup_generation: int = 0,
 ) -> ControlRun:
     with store.write_transaction() as connection:
         return store.admit_run_in_transaction(
             connection,
             admission,
-            expected_setup_generation=expected_setup_generation,
         )
 
 
@@ -228,7 +225,6 @@ def test_run_admission_state_and_pagination(tmp_path: Path) -> None:
     assert _admit(
         store,
         retry,
-        expected_setup_generation=999,
     ) == store.get_run("run-0")
     assert second.items[0].admission.submission_id == "submission:run-0"
     assert [event.kind for event in store.list_events(run_id="run-0").items] == [

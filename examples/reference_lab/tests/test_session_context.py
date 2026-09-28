@@ -38,7 +38,7 @@ def test_session_selection_is_local_and_preparation_is_frozen(
         ) as second,
         LabClient(DaemonClient(endpoint)) as lab,
     ):
-        setup = lab.setup.active()
+        setup = lab.setup.get("initial")
         branch = lab.parameters.create_branch(
             f"session-{key}", revision=independent_parameters
         )
@@ -59,7 +59,7 @@ def test_session_selection_is_local_and_preparation_is_frozen(
         selected = first.use(
             sample=samples[0],
             parameters=refs[0],
-            setup=setup.revision.ref,
+            setup=setup.ref,
             collection=alpha.id,
             operator="alice",
         )
@@ -69,7 +69,7 @@ def test_session_selection_is_local_and_preparation_is_frozen(
         second.use(
             sample=samples[1],
             parameters=refs[1],
-            setup=setup.revision.ref,
+            setup=setup.ref,
             collection=beta.id,
             operator="bob",
         )
@@ -113,9 +113,7 @@ def test_session_selection_is_local_and_preparation_is_frozen(
         clear = first.prepare(
             "signal",
             selection=ScientificSelection(
-                configuration=ParameterConfiguration(
-                    ref=refs[0], setup=setup.revision.ref
-                )
+                configuration=ParameterConfiguration(ref=refs[0], setup=setup.ref)
             ),
             record_collection=None,
         )
@@ -148,7 +146,7 @@ def test_session_selection_is_local_and_preparation_is_frozen(
             assert run.samples[0].sample_id == sample_id
             assert isinstance(run.snapshot.config_source, ParameterRunConfigSource)
             assert run.snapshot.config_source.parameters == ref
-            assert run.snapshot.config_source.setup == setup.revision.ref
+            assert run.snapshot.config_source.setup == setup.ref
             assert run.request.operator == actor
         # Saved plans retain scientific scope and inherit only destination/actor.
         plan = prepared.save_plan("Frozen A plan", saved_by="alice")
@@ -157,7 +155,7 @@ def test_session_selection_is_local_and_preparation_is_frozen(
         assert reopened.request.selection.configuration.ref == refs[0]
         assert reopened.request.actor == "bob"
         assert reopened.request.record_collection == beta.id
-        assert lab.setup.active() == setup
+        assert lab.setup.get("initial") == setup
         assert lab.config.registry().entries == ()
         second.use(collection=None)
         assert second.selection.operator == "bob"

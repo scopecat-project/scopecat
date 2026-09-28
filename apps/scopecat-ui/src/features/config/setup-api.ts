@@ -4,12 +4,6 @@ import type { ConfigProfileSnapshot } from "../../api-contract";
 
 export type SetupRevision = components["schemas"]["SetupRevision"];
 export type SavedSetupRevision = Awaited<ReturnType<typeof getSetupRevisions>>["items"][number];
-export type ActiveSetupView = components["schemas"]["ActiveSetupView"];
-export type SetupActivateCommand = components["schemas"]["SetupActivateCommand"];
-
-export function getActiveSetup(signal?: AbortSignal) {
-  return apiData(apiClient.GET("/api/v1/setup/active", { signal }));
-}
 export function getSetupRevisions(signal?: AbortSignal) {
   return apiData(apiClient.GET("/api/v1/setup/revisions", { signal }));
 }
@@ -60,10 +54,6 @@ export function saveSetupDefinition(setup: SetupDefinition, name: string, actor:
     }),
   );
 }
-export function activateSetup(command: SetupActivateCommand) {
-  return apiData(apiClient.POST("/api/v1/setup/activation-operations", { body: command }));
-}
-
 export type ConfigurationTemplateImportCommand =
   components["schemas"]["ConfigurationTemplateImportCommand"];
 export type { ConfigurationTemplateImportResult } from "../../api-contract";

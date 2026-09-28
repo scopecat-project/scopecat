@@ -16,7 +16,7 @@ import httpx2
 
 from benchmarks.e2e.author_prepare import TimingTransport
 from benchmarks.record import BENCHMARK_RESULT_PREFIX, benchmark_record_header
-from reference_lab.workflows.authored.ordinary_analysis import PeakResult
+from reference_lab_authors.authored.ordinary_analysis import PeakResult
 from scopecat.api.run import RunHandle
 from scopecat.application.author_project import AuthorProject
 from scopecat.kernel.quantity import Quantity
@@ -86,7 +86,7 @@ def measure(root: Path, *, repetitions: int) -> dict[str, object]:
                     .result(step="signal")
                 )
             setup_seconds = time.perf_counter() - start
-            name = "reference_lab.workflows.authored.ordinary_analysis:estimate_peak"
+            name = "reference_lab_authors.authored.ordinary_analysis:estimate_peak"
             for i in range(repetitions + 1):
                 timed(
                     "analysis_first" if i == 0 else "analysis_repeat",

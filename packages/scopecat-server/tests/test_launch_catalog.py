@@ -19,13 +19,15 @@ from scopecat.application.launch import (
 )
 from scopecat.records.control_edit import ControlEdit
 from scopecat.records.launch_request import LaunchRequest
+from scopecat.records.parameter_revision import ParameterRevisionRef
 from scopecat.records.plan_ref import ExperimentPlanRef
-from scopecat.records.run import ConfigRegistryRunConfigSource
+from scopecat.records.run import ParameterRunConfigSource
 from scopecat.records.scientific_binding import (
     ResolvedScientificBinding,
     UnboundSubject,
 )
 from scopecat.records.scientific_selection import ReviewedScientificSelection
+from scopecat.records.setup import SetupRevisionRef
 
 from scopecat_server.launch_worker import launch
 
@@ -69,12 +71,14 @@ def composed(monkeypatch: pytest.MonkeyPatch) -> tuple[LabApplication, Mock, Moc
                         config_content_hash="sha256:" + "a" * 64,
                         setup_content_hash="sha256:" + "b" * 64,
                     ),
-                    config_source=ConfigRegistryRunConfigSource(
-                        selector="active",
-                        entry_id="baseline",
-                        config_ref="baseline",
+                    config_source=ParameterRunConfigSource(
+                        parameters=ParameterRevisionRef(
+                            revision_id="baseline", content_hash="sha256:" + "a" * 64
+                        ),
+                        setup=SetupRevisionRef(
+                            revision_id="bench", content_hash="sha256:" + "e" * 64
+                        ),
                         content_hash="sha256:" + "a" * 64,
-                        registry_generation=1,
                     ),
                 ),
             )

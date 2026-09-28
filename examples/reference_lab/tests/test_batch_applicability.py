@@ -16,7 +16,7 @@ from scopecat.records.sample import SampleRevisionDraft
 from scopecat_testkit.authoring import source_workspace_id
 
 from reference_lab.parameters import QubitParameters
-from reference_lab.workflows.authored.signal import signal
+from reference_lab_authors.authored.signal import signal
 
 
 def test_batch_selection_preserves_frozen_evidence(
@@ -34,7 +34,7 @@ def test_batch_selection_preserves_frozen_evidence(
         ) as session,
         LabClient(DaemonClient(endpoint)) as lab,
     ):
-        setup = lab.setup.active()
+        setup = lab.setup.get("initial")
         chip = lab.samples.create(
             f"batch-chip-{key}",
             kind="synthetic",
@@ -47,7 +47,7 @@ def test_batch_selection_preserves_frozen_evidence(
             sample=chip.id,
             batch=first.id,
             parameters=independent_parameters.ref,
-            setup=setup.revision.ref,
+            setup=setup.ref,
             collection=collection.id,
         )
         assert session.selection.science.batch.kind == "declared"
@@ -135,8 +135,8 @@ def test_batch_selection_preserves_frozen_evidence(
         for run in (original, later):
             assert isinstance(run.snapshot.config_source, ParameterRunConfigSource)
             assert run.snapshot.config_source.parameters == independent_parameters.ref
-            assert run.snapshot.config_source.setup == setup.revision.ref
-        assert lab.setup.active() == setup
+            assert run.snapshot.config_source.setup == setup.ref
+        assert lab.setup.get("initial") == setup
         assert lab.config.registry().entries == ()
     with AuthorProject(
         endpoint, workspace_id=source_workspace_id(endpoint)

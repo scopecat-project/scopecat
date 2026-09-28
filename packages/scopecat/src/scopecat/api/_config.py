@@ -21,8 +21,6 @@ from scopecat.config.candidates import (
 from scopecat.config.parameter_updates import ParameterUpdate
 from scopecat.daemon.client import DaemonClient, DaemonNotFoundError
 from scopecat.daemon.views import (
-    ActiveConfigView,
-    ConfigActivationPage,
     ConfigContextResolution,
     ConfigEntryView,
     ConfigRegistryPage,
@@ -98,17 +96,6 @@ class LabConfigOperations:
     ) -> ConfigRegistryPage:
         return self.client.config_registry(limit=limit, before=before)
 
-    def history(
-        self,
-        *,
-        limit: int = 100,
-        before: int | None = None,
-    ) -> ConfigActivationPage:
-        return self.client.config_activation_history(limit=limit, before=before)
-
-    def active(self) -> ActiveConfigView:
-        return self.client.active_config()
-
     def entry(self, entry_id: str) -> ConfigEntryView:
         return self.client.config_entry(entry_id)
 
@@ -139,17 +126,9 @@ class LabConfigOperations:
             selected = self.resolve_context(selected)
         if isinstance(selected, ConfigContextResolution | ParameterResolution):
             return selected.config, selected.config_source
-        if selected is None or selected == "active":
-            active = self.client.active_config()
-            return (
-                active.config,
-                ConfigRegistryRunConfigSource(
-                    selector="active",
-                    entry_id=active.entry.id,
-                    config_ref=active.entry.config_ref,
-                    content_hash=active.entry.content_hash,
-                    registry_generation=active.activation.generation,
-                ),
+        if selected is None:
+            raise ValueError(
+                "Select parameters or supply configuration data before planning"
             )
         if isinstance(selected, str):
             saved = self.entry(selected)

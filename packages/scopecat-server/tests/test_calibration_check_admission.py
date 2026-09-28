@@ -68,7 +68,6 @@ from scopecat.daemon.wire import (
     ParameterSaveCommand,
     RunSubmission,
     SampleCreateCommand,
-    SetupActivateCommand,
     SetupImportCommand,
 )
 from scopecat.kernel.quantity import Quantity
@@ -264,7 +263,7 @@ def test_current_capability_context_freezes_branch_and_setup(
         resolved = MeasurementContextResolution.model_validate(response.json())
         assert resolved.context == declaration.context
         assert resolved.branch == head
-        assert resolved.setup == app.setup.current().revision.ref
+        assert resolved.setup == app.setup.resolve("initial").ref
         invalid = query.model_dump(mode="json")
         invalid["samples"][0]["revision"] = None
         assert (
@@ -345,7 +344,7 @@ def test_current_capability_context_freezes_branch_and_setup(
                 ),
             )
             assert response.status_code == status
-    assert app.setup.current().revision.ref == resolved.setup
+    assert app.setup.resolve("initial").ref == resolved.setup
     assert resolved.setup is not None
     explicit = app.measurement_context.resolve(
         query.model_copy(update={"setup": resolved.setup})
@@ -504,16 +503,8 @@ def _check_case(tmp_path: Path) -> Generator[CheckCase]:
         app = runtime.application
         setup = app.setup.import_recipe(
             SetupImportCommand(
-                revision_id="bench",
+                revision_id="initial",
                 setup=ExecutableSetupSnapshot.from_config(config),
-                actor="test",
-            )
-        )
-        app.setup.activate(
-            SetupActivateCommand(
-                operation_id="bench",
-                revision=setup.ref,
-                expected_generation=0,
                 actor="test",
             )
         )
@@ -540,7 +531,7 @@ def _check_case(tmp_path: Path) -> Generator[CheckCase]:
         resolved = app.config.resolve_parameters(
             ParameterResolveCommand(
                 parameters=revision.ref,
-                setup=app.setup.current().revision.ref,
+                setup=app.setup.resolve("initial").ref,
             )
         )
         binding = bind_scientific_evidence(
@@ -564,6 +555,7 @@ def _check_case(tmp_path: Path) -> Generator[CheckCase]:
             analysis_step="assess",
         )
         child = RunSubmission(
+            execution_setup=setup.ref,
             submission_id="measurement",
             config=resolved.config,
             config_source=resolved.config_source,
@@ -1417,12 +1409,12 @@ def test_exact_retry_survives_setup_change(check_case: CheckCase) -> None:
     app.calibration_tasks.create(spec)
     dispatched = CalibrationTaskDispatch(task_id=spec.task_id, stage_id="a")
     retained = app.calibration_tasks.dispatch(dispatched)
-    current = app.setup.current()
-    changed = app.setup.import_recipe(
+    current = app.setup.resolve("initial")
+    app.setup.import_recipe(
         SetupImportCommand(
             revision_id="changed",
             actor="test",
-            setup=current.revision.setup.model_copy(
+            setup=current.setup.model_copy(
                 update={
                     "scenario": SoftwareExecutionScenario(
                         id="other",
@@ -1433,14 +1425,6 @@ def test_exact_retry_survives_setup_change(check_case: CheckCase) -> None:
                     )
                 }
             ),
-        )
-    )
-    app.setup.activate(
-        SetupActivateCommand(
-            operation_id="change",
-            revision=changed.ref,
-            expected_generation=current.activation.generation,
-            actor="test",
         )
     )
     assert app.automation.submit(command).run == parent
@@ -1479,7 +1463,7 @@ def test_measurement_must_use_admitted_parameter_revision(
         resolved = app.config.resolve_parameters(
             ParameterResolveCommand(
                 parameters=revision.ref,
-                setup=app.setup.current().revision.ref,
+                setup=app.setup.resolve("initial").ref,
             )
         )
         child = child.model_copy(

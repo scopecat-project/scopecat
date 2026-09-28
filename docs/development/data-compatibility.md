@@ -1,7 +1,7 @@
 # Data formats before the compatibility baseline
 
 Scopecat has **no designated persistent-data compatibility baseline yet**. Current
-schema **99** is a development format identifier, not the start of a compatibility
+schema **101** is a development format identifier, not the start of a compatibility
 promise. The target, setup, calibration and application ownership models must
 settle before a supported baseline is explicitly designated with its formats,
 retained fixtures, supported operations and upgrade policy.
@@ -13,6 +13,12 @@ snapshot, plan, source manifest or codec. A successful historical test does not
 turn that format into a supported baseline.
 
 ## What remains supported now
+
+Schema 101 retains application device registrations, immutable connections and
+driver identities, setup definitions and exact resolutions, independent parameter
+branches, and each run's explicit execution setup. First-use seed inputs commit
+atomically without global setup activation. Current-format backup retains these
+records together; earlier development stores are neither migrated nor rewritten.
 
 Schema 99 requires explicit registered source identities for authored requests and
 retained author records. An application store no longer seeds an implicit service

@@ -36,8 +36,8 @@ from scopecat.records.control_edit import ControlEdit
 from scopecat.records.launch_request import LaunchRequest
 
 from reference_lab.parameters import QubitParameters
-from reference_lab.workflows.authored.comparison import MODEL, SignalFit, fit_signal
-from reference_lab.workflows.frequency_amplitude import frequency_amplitude
+from reference_lab_authors.authored.comparison import MODEL, SignalFit, fit_signal
+from reference_lab_authors.frequency_amplitude import frequency_amplitude
 
 
 @dataclass(frozen=True)

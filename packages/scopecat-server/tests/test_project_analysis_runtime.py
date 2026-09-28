@@ -53,7 +53,6 @@ from scopecat.daemon.wire import (
     RunCoverageAdvanceCommand,
     RunSubmission,
     SampleCreateCommand,
-    SetupActivateCommand,
     SetupImportCommand,
     TerminalRunCommitCommand,
 )
@@ -145,11 +144,13 @@ def _events(
 
 
 def _submission(
+    runtime: LocalDaemonRuntime,
     submission_id: str = "submission-1",
     *,
     point_count: int = 1,
 ) -> RunSubmission:
     return RunSubmission(
+        execution_setup=runtime.application.setup.resolve("initial").ref,
         scientific_binding=bind_scientific_evidence(
             catalog_id="test", config=_config(), samples=(), sample_revisions={}
         ),
@@ -202,7 +203,7 @@ def _complete_signal_run(
     entities: tuple[EntityRef, ...] | None = None,
     submission: RunSubmission | None = None,
 ) -> str:
-    request = submission or _submission(submission_id)
+    request = submission or _submission(runtime, submission_id)
     binding = bind_scientific_evidence(
         catalog_id=runtime.application.project_id,
         config=request.config,
@@ -590,18 +591,10 @@ def test_project_analysis_compares_completed_runs_and_reloads_outputs(
 
 def test_sample_analysis_is_scoped_to_runs_bound_to_that_sample(tmp_path: Path) -> None:
     with LocalDaemonRuntime(tmp_path, instrument_endpoint=signal_endpoint()) as runtime:
-        setup = runtime.application.setup.import_recipe(
+        runtime.application.setup.import_recipe(
             SetupImportCommand(
-                revision_id="analysis-bench",
+                revision_id="initial",
                 setup=ExecutableSetupSnapshot.from_config(_config()),
-                actor="maintainer",
-            )
-        )
-        runtime.application.setup.activate(
-            SetupActivateCommand(
-                operation_id="activate-analysis-bench",
-                revision=setup.ref,
-                expected_generation=0,
                 actor="maintainer",
             )
         )
@@ -624,7 +617,7 @@ def test_sample_analysis_is_scoped_to_runs_bound_to_that_sample(tmp_path: Path) 
                 content=SampleRevisionDraft(display_name="Reference 1"),
             )
         )
-        submission = _submission("sample-analysis-run").model_copy(
+        submission = _submission(runtime, "sample-analysis-run").model_copy(
             update={
                 "request": RunRequest(
                     experiment_id="scratch",
@@ -650,7 +643,7 @@ def test_sample_analysis_is_scoped_to_runs_bound_to_that_sample(tmp_path: Path) 
             runtime,
             submission_id="reference-analysis-run",
             signal=1.1,
-            submission=_submission("reference-analysis-run").model_copy(
+            submission=_submission(runtime, "reference-analysis-run").model_copy(
                 update={
                     "request": RunRequest(
                         experiment_id="scratch",
@@ -939,6 +932,17 @@ def test_candidate_acceptance_requires_matching_cross_run_verification(
     with LocalDaemonRuntime(
         tmp_path, bootstrap_config=_config(), instrument_endpoint=signal_endpoint()
     ) as runtime:
+        from scopecat.daemon.wire import DirectConfigRevisionSource
+
+        runtime.application.config.publish_config(
+            ConfigPublishCommand(
+                operation_id="seed-evidence",
+                entry_id="baseline",
+                actor="test",
+                expected_generation=0,
+                source=DirectConfigRevisionSource(config=_config()),
+            )
+        )
         baseline_id = _complete_signal_run(
             runtime,
             submission_id="verified-baseline",
@@ -964,7 +968,9 @@ def test_candidate_acceptance_requires_matching_cross_run_verification(
                 candidate
             )
             assert candidate_source is not None
-            candidate_submission = _submission("verified-candidate").model_copy(
+            candidate_submission = _submission(
+                runtime, "verified-candidate"
+            ).model_copy(
                 update={
                     "config": candidate_config,
                     "config_source": candidate_source,
@@ -1302,7 +1308,7 @@ def test_typed_candidate_policy_uses_retained_decision_and_workpoint(
             kind="synthetic",
             content=SampleRevisionDraft(display_name="Policy sample"),
         )
-        baseline_submission = _submission("policy-baseline").model_copy(
+        baseline_submission = _submission(runtime, "policy-baseline").model_copy(
             update={
                 "request": RunRequest(
                     experiment_id="scratch",
@@ -1327,7 +1333,7 @@ def test_typed_candidate_policy_uses_retained_decision_and_workpoint(
         config, source = lab.config.resolve_with_source(candidate.config)
         for context_id in (None, "different-point"):
             submission_id = f"policy-{context_id}"
-            submission = _submission(submission_id).model_copy(
+            submission = _submission(runtime, submission_id).model_copy(
                 update={
                     "config": config,
                     "config_source": source,
@@ -1373,7 +1379,7 @@ def test_typed_candidate_policy_uses_retained_decision_and_workpoint(
                     .fact_as("decision", schema)
                     .accepted
                 )
-        assert lab.config.active().entry.id != "wrong-point"
+        assert lab.config.registry().activation is None
 
 
 @pytest.mark.parametrize("sequential", [False, True])
@@ -1396,9 +1402,8 @@ def test_verified_parameter_branch_publication_is_atomic_and_restorable(
         lab = LabClient(_daemon_client(transport))
         initial = _config()
         equipment = lab.setup.import_recipe(
-            ExecutableSetupSnapshot.from_config(initial), name="bench"
+            ExecutableSetupSnapshot.from_config(initial), name="initial"
         )
-        lab.setup.activate(equipment)
         revision = lab.parameters.save(
             name="baseline",
             catalog=initial.parameter_catalog,
@@ -1411,7 +1416,7 @@ def test_verified_parameter_branch_publication_is_atomic_and_restorable(
             runtime,
             submission_id="branch-baseline",
             signal=0.8,
-            submission=_submission("branch-baseline").model_copy(
+            submission=_submission(runtime, "branch-baseline").model_copy(
                 update={
                     "config": resolved.config,
                     "config_source": resolved.config_source,
@@ -1440,7 +1445,7 @@ def test_verified_parameter_branch_publication_is_atomic_and_restorable(
             runtime,
             submission_id="branch-candidate",
             signal=1.1,
-            submission=_submission("branch-candidate").model_copy(
+            submission=_submission(runtime, "branch-candidate").model_copy(
                 update={
                     "config": config,
                     "config_source": source,
@@ -1526,7 +1531,7 @@ def test_verified_parameter_branch_publication_is_atomic_and_restorable(
                 runtime,
                 submission_id="final-candidate",
                 signal=1.2,
-                submission=_submission("final-candidate").model_copy(
+                submission=_submission(runtime, "final-candidate").model_copy(
                     update={"config": config, "config_source": source}
                 ),
             )
@@ -1572,7 +1577,7 @@ def test_verified_parameter_branch_publication_is_atomic_and_restorable(
         )
         registry = lab.config.registry()
         assert not registry.entries
-        setup = lab.setup.active()
+        setup = lab.setup.get("initial")
         if intermediate_id is not None:
             incomplete = lab.analysis("Missing stage", key="missing-stage")
             incomplete.measurements(baseline, id="baseline", role="baseline")
@@ -1658,7 +1663,7 @@ def test_verified_parameter_branch_publication_is_atomic_and_restorable(
             )
         assert lab.parameters.checkout("other").head == untouched
         assert lab.config.registry() == registry
-        assert lab.setup.active() == setup
+        assert lab.setup.get("initial") == setup
         ordinary = lab.parameters.checkout("daily").save(
             catalog=initial.parameter_catalog,
             parameters=config.parameter_snapshot,
@@ -1760,18 +1765,15 @@ def test_task_binds_adopted_candidate_atomically_and_replays_after_restart(
     ):
         lab = LabClient(_daemon_client(transport))
         app = runtime.application
-        lab.setup.activate(
-            lab.setup.import_recipe(
-                ExecutableSetupSnapshot.from_config(config), name="bench"
-            )
-        )
         parameters = lab.parameters.save(
             name="initial",
             catalog=config.parameter_catalog,
             parameters=config.parameter_snapshot,
         )
         branch = lab.parameters.create_branch("daily", revision=parameters)
-        setup = lab.setup.get("bench")
+        setup = lab.setup.import_recipe(
+            ExecutableSetupSnapshot.from_config(config), name="initial"
+        )
         context = lab.resolve_context(parameters=parameters, setup=setup).context
         check = CalibrationCheckRequest(
             setup=setup.ref,
@@ -1826,12 +1828,12 @@ def test_task_binds_adopted_candidate_atomically_and_replays_after_restart(
                 expected_run_revision=parent.revision,
             )
         )
-        resolved = lab.parameters.resolve(parameters, setup=lab.setup.get("bench"))
+        resolved = lab.parameters.resolve(parameters, setup=lab.setup.get("initial"))
         run_id = _complete_signal_run(
             runtime,
             submission_id="task-fit",
             signal=1.0,
-            submission=_submission("task-fit").model_copy(
+            submission=_submission(runtime, "task-fit").model_copy(
                 update={
                     "config": resolved.config,
                     "config_source": resolved.config_source,

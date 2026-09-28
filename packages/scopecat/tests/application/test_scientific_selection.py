@@ -230,75 +230,6 @@ def test_session_target_selection_is_atomic_and_pins_head(
         )
 
 
-def test_target_member_a_can_use_matching_working_point_and_batch(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    from scopecat.records.config_context import ConfigContextRef, ContextRunConfigSource
-    from scopecat.records.sample import SampleBinding
-    from scopecat.records.scientific_scope import DeclaredBatch
-    from scopecat.records.scientific_selection import WorkingPointConfiguration
-
-    lab, state, target = _lab()
-    sample = cast("SampleRevision", state["head"])
-    config = load_config()
-    ref = ConfigContextRef(
-        entry_id="working-point", content_hash=config_content_hash(config)
-    )
-    source = ContextRunConfigSource(
-        context=ref,
-        content_hash=config_content_hash(config),
-        sample=SampleBinding(
-            role="subject",
-            sample_id="chip",
-            revision=1,
-            content_hash=sample.content_hash,
-            kind="chip",
-            display_name="chip",
-            context_id="wp",
-            batch_id="cooldown",
-        ),
-    )
-
-    def resolve_context(
-        _ref: ConfigContextRef, *, overrides: object
-    ) -> SimpleNamespace:
-        assert _ref == ref and overrides == ()
-        return SimpleNamespace(config=config, config_source=source)
-
-    def batch(batch_id: str) -> None:
-        assert batch_id == "cooldown"
-
-    monkeypatch.setattr(lab.config, "resolve_context", resolve_context, raising=False)
-    monkeypatch.setattr(lab, "experimental_batch", batch, raising=False)
-    selection = ScientificSelection(
-        subject=RegisteredTargetChoice(ref=target.ref),
-        configuration=WorkingPointConfiguration(ref=ref),
-        batch=DeclaredBatch(id="cooldown"),
-    )
-    request = LaunchRequest(
-        workspace_id="test-source",
-        action="preview",
-        experiment="signal",
-        version="1",
-        selection=selection,
-    )
-    resolved = resolve_launch_config(lab, request)
-    assert resolved.reviewed.binding.samples == (source.sample,)
-    assert resolved.reviewed.binding.subject.kind == "registered_target"
-    assert resolved.reviewed.binding.subject.content.members[0].id == "A"
-    from scopecat.records.scientific_scope import UnscopedBatch
-
-    with pytest.raises(ValueError, match="subject/batch"):
-        resolve_launch_config(
-            lab,
-            request.model_copy(
-                update={
-                    "selection": selection.model_copy(update={"batch": UnscopedBatch()})
-                }
-            ),
-        )
-
-
 def test_saved_target_plan_reopens_retained_binding_with_new_review(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -377,8 +308,7 @@ def test_explicit_clear_in_prepare_does_not_inherit_session_subject(
         science = session._prepare_science(
             selection=INHERIT,
             target=INHERIT,
-            context=None,
-            sample=INHERIT,
+            sample=None,
             batch=INHERIT,
             parameters=None,
             candidate=None,

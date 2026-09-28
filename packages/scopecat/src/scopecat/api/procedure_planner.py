@@ -24,10 +24,8 @@ from scopecat.daemon.client import (
     DaemonConflictError,
     DaemonNotFoundError,
 )
-from scopecat.daemon.views import ActiveConfigView, ConfigEntryView
+from scopecat.daemon.views import ConfigEntryView
 from scopecat.kernel.run_outcome import utc_now
-from scopecat.records.config import ConfigProfileSnapshot
-from scopecat.records.run import ConfigRegistryRunConfigSource
 
 _TRANSIENT_CLIENT_STATUSES = frozenset({408, 425, 429})
 _LOGGER = logging.getLogger(__name__)
@@ -39,21 +37,8 @@ class ProcedurePlanningConfig:
 
     _operations: LabConfigOperations = field(repr=False, compare=False)
 
-    def active(self) -> ActiveConfigView:
-        return self._operations.active()
-
     def entry(self, entry_id: str) -> ConfigEntryView:
         return self._operations.entry(entry_id)
-
-    def resolve_active(
-        self,
-    ) -> tuple[ConfigProfileSnapshot, ConfigRegistryRunConfigSource]:
-        config, source = self._operations.resolve_with_source("active")
-        if not isinstance(source, ConfigRegistryRunConfigSource):
-            raise RuntimeError(
-                "active configuration requires exact registry provenance"
-            )
-        return config, source
 
 
 @dataclass(frozen=True, slots=True)

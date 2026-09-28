@@ -31,6 +31,7 @@ from scopecat.control.models import RunPlanSummary
 from scopecat.daemon.wire import RunSubmission, SampleCreateCommand, SampleReviseCommand
 from scopecat.records.run_request import RunRequest
 from scopecat.records.sample import SampleRevisionDraft, SampleSelector
+from scopecat.records.setup import SetupRevisionRef
 from scopecat_testkit.workflow_fixtures import load_config
 
 from scopecat_server import BackendConflict, LocalDaemonRuntime
@@ -680,6 +681,9 @@ def test_parent_sample_heads_freeze_before_step_replay(tmp_path: Path) -> None:
             sample_revisions={},
         )
         return RunSubmission(
+            execution_setup=SetupRevisionRef(
+                revision_id="bench", content_hash="sha256:" + "e" * 64
+            ),
             submission_id="procedure-step-intent",
             config=config,
             scientific_binding=binding,

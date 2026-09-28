@@ -142,9 +142,7 @@ from scopecat.daemon.reviews import (
     ReviewWorkItem,
 )
 from scopecat.daemon.views import (
-    ActiveConfigView,
     AnalysisContentBytesView,
-    ConfigActivationPage,
     ConfigContextResolution,
     ConfigEntryView,
     ConfigRegistryPage,
@@ -244,7 +242,6 @@ from scopecat.daemon.wire import (
     SampleCreateCommand,
     SampleMutationReceipt,
     SampleReviseCommand,
-    SetupActivateCommand,
     SetupDefinitionList,
     SetupImportCommand,
     SetupRevisionList,
@@ -331,7 +328,6 @@ from scopecat.records.sample_artifact import (
     SampleArtifactPage,
 )
 from scopecat.records.setup import (
-    ActiveSetupView,
     SetupDefinitionRevision,
     SetupRevision,
     SetupRevisionRef,
@@ -1038,10 +1034,6 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
     ) -> ConfigurationTemplateImportResult:
         return application.setup.import_template(command)
 
-    @app.get(f"{_API_PREFIX}/setup/active")
-    def active_setup() -> ActiveSetupView:
-        return application.setup.current()
-
     @app.get(f"{_API_PREFIX}/setup/revisions")
     def list_setup_revisions() -> SetupRevisionList:
         return SetupRevisionList(items=application.setup.list())
@@ -1054,10 +1046,6 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
     def save_setup(command: SetupSaveCommand) -> SetupRevision:
         return application.setup.save(command)
 
-    @app.post(f"{_API_PREFIX}/setup/activation-operations")
-    def activate_setup(command: SetupActivateCommand) -> ActiveSetupView:
-        return application.setup.activate(command)
-
     @app.get(f"{_API_PREFIX}/config-registry")
     def get_config_registry(
         limit: Annotated[int, Query(ge=1, le=500)] = 100,
@@ -1065,25 +1053,11 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
     ) -> ConfigRegistryPage:
         return application.config.get_config_registry(limit=limit, before=before)
 
-    @app.get(f"{_API_PREFIX}/config-registry/activations")
-    def get_config_activation_history(
-        limit: Annotated[int, Query(ge=1, le=500)] = 100,
-        before: Annotated[int | None, Query(ge=1)] = None,
-    ) -> ConfigActivationPage:
-        return application.config.get_config_activation_history(
-            limit=limit,
-            before=before,
-        )
-
     @app.post(f"{_API_PREFIX}/config-registry/contexts/resolve")
     def resolve_context(
         command: ConfigContextResolveCommand,
     ) -> ConfigContextResolution:
         return application.config.resolve_context(command)
-
-    @app.get(f"{_API_PREFIX}/config-registry/active")
-    def get_active_config() -> ActiveConfigView:
-        return application.config.get_active_config()
 
     @app.get(f"{_API_PREFIX}/config-registry/entries/{{entry_id}}")
     def get_config_entry(entry_id: str) -> ConfigEntryView:

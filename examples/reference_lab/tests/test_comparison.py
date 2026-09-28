@@ -33,7 +33,7 @@ from scopecat.records.scientific_selection import (
 from scopecat_testkit.authoring import source_workspace_id
 
 from reference_lab.comparison import FIT_SCHEMA, NEXT_INPUT_SCHEMA, REVIEW_SCHEMA
-from reference_lab.workflows.authored.comparison import MODEL
+from reference_lab_authors.authored.comparison import MODEL
 
 
 def test_two_retained_runs_fit_candidate_rejection_and_handoff(
@@ -46,7 +46,7 @@ def test_two_retained_runs_fit_candidate_rejection_and_handoff(
             base_url=url, timeout=60, headers={"content-type": "application/json"}
         ) as http,
     ):
-        setup = lab.setup.active()
+        setup = lab.setup.get("initial")
         frequencies = [sc.Quantity(value, "GHz") for value in (4.6, 4.7, 4.8, 4.9, 5.0)]
         catalog = LaunchCatalog.model_validate(
             http.get(
@@ -66,7 +66,7 @@ def test_two_retained_runs_fit_candidate_rejection_and_handoff(
             version=entry.version,
             selection=ScientificSelection(
                 configuration=ParameterConfiguration(
-                    ref=independent_parameters.ref, setup=setup.revision.ref
+                    ref=independent_parameters.ref, setup=setup.ref
                 )
             ),
             control_edits={
@@ -275,7 +275,7 @@ def test_two_retained_runs_fit_candidate_rejection_and_handoff(
         assert {run.id for run in lab.runs().items} == run_ids
         assert {item.id for item in lab.procedures.list().items} == procedure_ids
         assert source_procedure.snapshot == closed
-        assert lab.setup.active() == setup
+        assert lab.setup.get("initial") == setup
         assert lab.config.registry().entries == ()
         assert tuple(run.request for run in runs) == original_requests
         assert (

@@ -61,7 +61,7 @@ def _build_intent(
 ) -> _PlannerIntent:
     _BUILDS.append(occurrence)
     return _PlannerIntent(
-        source=cast("str", cast("object", context.config.active())),
+        source=cast("str", cast("object", context.config.entry("seed"))),
         ordinal=occurrence.ordinal,
     )
 
@@ -88,7 +88,7 @@ _NOW = _ANCHOR + timedelta(hours=7, minutes=30)
 class _FakeConfigOperations:
     active_value: str = "active-generation-7"
 
-    def active(self) -> object:
+    def entry(self, _entry_id: str) -> object:
         return self.active_value
 
 
@@ -405,7 +405,7 @@ def test_stop_set_by_builder_prevents_one_shot_creation() -> None:
     ) -> _PlannerIntent:
         stop.set()
         return _PlannerIntent(
-            source=cast("str", cast("object", context.config.active())),
+            source=cast("str", cast("object", context.config.entry("seed"))),
             ordinal=occurrence.ordinal,
         )
 

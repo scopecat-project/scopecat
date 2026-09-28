@@ -246,33 +246,3 @@ def resolved_setup_hash(
             "resolution": resolution.model_dump(mode="json"),
         }
     )
-
-
-class SetupActivationRecord(_SetupModel):
-    generation: int = Field(ge=1)
-    revision: SetupRevisionRef
-    previous_revision: SetupRevisionRef | None = None
-    actor: str = Field(min_length=1)
-    note: str = ""
-    recorded_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
-
-
-class ActiveSetupView(_SetupModel):
-    revision: SetupRevision
-    activation: SetupActivationRecord
-
-    @model_validator(mode="after")
-    def validate_revision(self) -> ActiveSetupView:
-        if self.revision.ref != self.activation.revision:
-            raise ValueError("active setup revision does not match activation")
-        return self
-
-
-class SetupActivationOperation(_SetupModel):
-    operation_id: str = Field(min_length=1)
-    intent_hash: Sha256ContentHash
-    revision: SetupRevisionRef
-    expected_generation: int = Field(ge=0)
-    actor: str = Field(min_length=1)
-    note: str = ""
-    result: ActiveSetupView

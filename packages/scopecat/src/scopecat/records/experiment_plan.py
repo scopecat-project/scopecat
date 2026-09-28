@@ -29,9 +29,7 @@ from scopecat.records.request_sweep import ParameterSweep
 from scopecat.records.scientific_binding import ResolvedScientificBinding
 from scopecat.records.scientific_selection import (
     ParameterConfiguration,
-    SavedConfiguration,
     ScientificSelection,
-    WorkingPointConfiguration,
 )
 
 
@@ -85,11 +83,7 @@ class ExperimentPlanDefinition(BaseModel):
             if choice.setup is None:
                 raise ValueError("parameter plan requires an exact setup reference")
             return self
-        if not isinstance(
-            self.selection.configuration, SavedConfiguration | WorkingPointConfiguration
-        ):
-            raise ValueError("plan requires a saved configuration or working point")
-        return self
+        raise ValueError("plan requires independent parameters and an exact setup")
 
 
 class ExperimentPlanSave(BaseModel):

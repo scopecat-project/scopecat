@@ -91,7 +91,7 @@ def test_parameters_share_exact_setup_and_survive_backup_restore(
             "parameters",
         }
     with store.read_unit_of_work() as work:
-        assert work.setups.read_current() is None
+        assert work.setups.list_revisions() == ()
         assert work.setups.list_revisions() == ()
         for ref, config in zip(refs, configs, strict=True):
             assert config_content_hash(
@@ -140,7 +140,7 @@ def test_standalone_parameters_survive_backup_without_any_setup(tmp_path: Path) 
     with restored.read_unit_of_work() as work:
         assert not work.registry.list_entries()
         assert not work.setups.list_revisions()
-        assert work.setups.read_current() is None
+        assert work.setups.list_revisions() == ()
     restored.sqlite.close()
 
 

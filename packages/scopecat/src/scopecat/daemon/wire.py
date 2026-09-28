@@ -21,7 +21,6 @@ from pydantic import (
 )
 
 from scopecat.analysis.dataset_wire import DerivedDatasetPayload
-from scopecat.config.inventory import InstrumentInventoryChange
 from scopecat.config.parameter_updates import ParameterUpdate
 from scopecat.config.registry.records import (
     CandidateAcceptance,
@@ -467,17 +466,6 @@ class SetupSaveCommand(_WireModel):
     note: str = ""
 
 
-class SetupActivateCommand(_WireModel):
-    """Select executable setup with an independent generation fence."""
-
-    operation_id: NonEmptyText
-    revision: SetupRevisionRef
-    expected_generation: int = Field(ge=0)
-    actor: NonEmptyText
-    note: str = ""
-    changes: tuple[InstrumentInventoryChange, ...] = ()
-
-
 class ConfigEntryActivationCommand(_WireModel):
     """Select a saved revision with generation compare-and-swap."""
 
@@ -807,6 +795,7 @@ class RunSubmission(_WireModel):
     procedure_child: ProcedureChildSubmission | None = None
     submission_id: NonEmptyText
     scientific_binding: ResolvedScientificBinding
+    execution_setup: SetupRevisionRef
     config: ConfigProfileSnapshot
     config_source: RunConfigSource | None = None
     request: RunRequest
@@ -1480,7 +1469,6 @@ __all__ = [
     "SampleCreateCommand",
     "SampleMutationReceipt",
     "SampleReviseCommand",
-    "SetupActivateCommand",
     "SetupRevisionList",
     "SetupSaveCommand",
     "TerminalModelWrite",

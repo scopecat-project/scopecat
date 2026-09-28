@@ -13,7 +13,7 @@ import type {
   InstrumentView,
 } from "../../api-contract";
 import { type SavedSetupRevision as SetupRevision } from "../config/setup-api";
-import type { ActiveConfig } from "../../api-contract";
+import type { ConfigEntryView } from "../../api-contract";
 
 import {
   getDevices,
@@ -1686,9 +1686,9 @@ function flatDcApplyReceipt(): Awaited<ReturnType<typeof applyInstrumentState>> 
   };
 }
 
-function activeConfig(): ActiveConfig {
+function activeConfig(): ConfigEntryView {
   return {
-    activation: {
+    latest_activation: {
       generation: 3,
       action: "activation",
       entry_id: "lab-default",

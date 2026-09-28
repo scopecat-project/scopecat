@@ -56,7 +56,7 @@ from scopecat.records.config_context import ConfigContextRef
 from scopecat.records.experimental_batch import ExperimentalBatch
 from scopecat.records.parameter_revision import ParameterRevision, ParameterRevisionRef
 from scopecat.records.record_collection import RecordCollection
-from scopecat.records.run import RunConfigSource
+from scopecat.records.run import ParameterRunConfigSource, RunConfigSource
 from scopecat.records.sample import SampleSelector
 from scopecat.records.setup import SetupRevision, SetupRevisionRef
 from scopecat.records.target_catalog import (
@@ -80,6 +80,7 @@ class PreparedLabExperiment:
     lab: LabClient
     invocation: ExperimentInvocation
     config: ConfigProfileSnapshot
+    setup: SetupRevisionRef | None = None
     config_source: RunConfigSource | None = None
 
     def preview(
@@ -101,6 +102,7 @@ class PreparedLabExperiment:
             self.invocation,
             config=self.config,
             config_source=self.config_source,
+            setup=self.setup,
             point=point,
             coordinates=coordinates,
             coordinate_mode=coordinate_mode,
@@ -130,6 +132,7 @@ class PreparedLabExperiment:
             self.invocation,
             config=self.config,
             config_source=self.config_source,
+            setup=self.setup,
             name=name,
             tags=tags,
             description=description,
@@ -155,6 +158,7 @@ class PreparedLabExperiment:
             self.invocation,
             config=self.config,
             config_source=self.config_source,
+            setup=self.setup,
             name=name,
             tags=tags,
             description=description,
@@ -174,12 +178,14 @@ class LabClient:
         *,
         build_experiment_system: ExperimentSystemBuilder | None = None,
         config: ConfigProfileSnapshot | None = None,
+        setup: SetupRevision | SetupRevisionRef | None = None,
         procedures: ProcedureRegistry | None = None,
         procedure_schedules: (
             ProcedureScheduleRegistry[ProcedurePlanningContext] | None
         ) = None,
         operator: str = "operator",
     ) -> None:
+        self._execution_setup = setup.ref if isinstance(setup, SetupRevision) else setup
         self._owns_client = isinstance(daemon, str)
         self._client = DaemonClient(daemon) if isinstance(daemon, str) else daemon
         self._runs = RemoteRunOperations(self._client)
@@ -514,6 +520,7 @@ class LabClient:
         | ConfigContextResolution
         | ParameterResolution
         | None = None,
+        setup: SetupRevision | SetupRevisionRef | None = None,
     ) -> PreparedLabExperiment:
         invocation = _experiment_invocation(experiment)
         resolved_config, config_source = self._config.resolve_with_source(config)
@@ -521,8 +528,22 @@ class LabClient:
             lab=self,
             invocation=invocation,
             config=resolved_config,
+            setup=self._selected_setup(
+                setup.ref if isinstance(setup, SetupRevision) else setup, config_source
+            ),
             config_source=config_source,
         )
+
+    def _selected_setup(
+        self, setup: SetupRevisionRef | None, source: RunConfigSource | None
+    ) -> SetupRevisionRef | None:
+        if setup is not None:
+            return setup
+        if isinstance(
+            source, ParameterRunConfigSource | AnalysisCandidateRunConfigSource
+        ):
+            return source.setup
+        return self._execution_setup
 
     def preview(
         self,
@@ -535,6 +556,7 @@ class LabClient:
         | ConfigContextResolution
         | ParameterResolution
         | None = None,
+        setup: SetupRevision | SetupRevisionRef | None = None,
         point: PreviewPoint = "first",
         coordinates: Mapping[str, object] | None = None,
         coordinate_mode: PreviewCoordinateMode = "exact",
@@ -549,7 +571,7 @@ class LabClient:
     ) -> ExperimentPreview:
         """Preview an experiment without requiring an explicit prepare step."""
 
-        return self.prepare(experiment, config=config).preview(
+        return self.prepare(experiment, config=config, setup=setup).preview(
             point=point,
             coordinates=coordinates,
             coordinate_mode=coordinate_mode,
@@ -574,6 +596,7 @@ class LabClient:
         | ConfigContextResolution
         | ParameterResolution
         | None = None,
+        setup: SetupRevision | SetupRevisionRef | None = None,
         name: str | None = None,
         tags: tuple[str, ...] = (),
         description: str | None = None,
@@ -585,7 +608,7 @@ class LabClient:
     ) -> RunHandle:
         """Run an experiment directly; use ``prepare`` when reusing a config."""
 
-        return self.prepare(experiment, config=config).run(
+        return self.prepare(experiment, config=config, setup=setup).run(
             name=name,
             tags=tags,
             description=description,
@@ -607,6 +630,7 @@ class LabClient:
         | ConfigContextResolution
         | ParameterResolution
         | None = None,
+        setup: SetupRevision | SetupRevisionRef | None = None,
         name: str | None = None,
         tags: tuple[str, ...] = (),
         description: str | None = None,
@@ -617,7 +641,7 @@ class LabClient:
     ) -> ExperimentReviewHandle:
         """Open a live GUI backed by this process's pure compiler."""
 
-        return self.prepare(experiment, config=config).review(
+        return self.prepare(experiment, config=config, setup=setup).review(
             name=name,
             tags=tags,
             description=description,
@@ -633,6 +657,7 @@ class LabClient:
         *,
         config: ConfigProfileSnapshot,
         config_source: RunConfigSource | None = None,
+        setup: SetupRevisionRef | None = None,
         point: PreviewPoint = "first",
         coordinates: Mapping[str, object] | None = None,
         coordinate_mode: PreviewCoordinateMode = "exact",
@@ -649,6 +674,7 @@ class LabClient:
             invocation,
             config=config,
             config_source=config_source,
+            setup=self._selected_setup(setup, config_source),
             point=point,
             coordinates=coordinates,
             coordinate_mode=coordinate_mode,
@@ -667,6 +693,7 @@ class LabClient:
         *,
         config: ConfigProfileSnapshot,
         config_source: RunConfigSource | None = None,
+        setup: SetupRevisionRef | None = None,
         name: str | None = None,
         tags: tuple[str, ...] = (),
         description: str | None = None,
@@ -681,6 +708,7 @@ class LabClient:
             invocation,
             config=config,
             config_source=config_source,
+            setup=self._selected_setup(setup, config_source),
             name=name,
             tags=tags,
             description=description,
@@ -698,6 +726,7 @@ class LabClient:
         *,
         config: ConfigProfileSnapshot,
         config_source: RunConfigSource | None = None,
+        setup: SetupRevisionRef | None = None,
         name: str | None = None,
         tags: tuple[str, ...] = (),
         description: str | None = None,
@@ -710,6 +739,7 @@ class LabClient:
             invocation,
             config=config,
             config_source=config_source,
+            setup=self._selected_setup(setup, config_source),
             name=name,
             tags=tags,
             description=description,

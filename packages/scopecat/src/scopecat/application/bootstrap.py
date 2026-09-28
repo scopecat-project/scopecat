@@ -20,9 +20,9 @@ class LabBootstrap:
     the project's full application.
 
     ``setup`` seeds equipment only on first use. ``parameter_defaults`` optionally
-    seeds the transitional execution default; it is not an author parameter
-    branch or a routine save hook. Both factories remain unevaluated on an
-    initialized restart. Authors edit independent parameter branches instead.
+    seeds an independent parameter revision. The setup is named ``initial``;
+    neither input becomes a global selection. Both factories remain unevaluated
+    on an initialized restart. Authors edit independent parameter branches.
     """
 
     setup: Callable[[], ExecutableSetupSnapshot] | None = None

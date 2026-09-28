@@ -60,16 +60,14 @@ def _client(transport: TestClient) -> DaemonClient:
 
 
 def _selection(client: DaemonClient) -> ScientificSelection:
-    active = client.active_config()
+    config = load_config()
     sample = client.create_sample(
         SampleCreateCommand(
             operation_id="create:chip",
             sample_id="chip",
             kind="chip",
             actor="operator",
-            content=SampleRevisionDraft(
-                display_name="Chip", topology=active.config.topology
-            ),
+            content=SampleRevisionDraft(display_name="Chip", topology=config.topology),
         )
     ).revision
     target = client.create_target(
@@ -96,8 +94,8 @@ def _selection(client: DaemonClient) -> ScientificSelection:
     parameters = client.save_parameters(
         ParameterSaveCommand(
             revision_id="parked-v1",
-            catalog=active.config.parameter_catalog,
-            parameters=active.config.parameter_snapshot,
+            catalog=config.parameter_catalog,
+            parameters=config.parameter_snapshot,
             actor="operator",
         )
     )
@@ -113,7 +111,7 @@ def _selection(client: DaemonClient) -> ScientificSelection:
         subject=RegisteredTargetChoice(ref=target.ref),
         configuration=ParameterConfiguration(
             ref=parameters.ref,
-            setup=client.active_setup().revision.ref,
+            setup=client.resolve_setup("initial").ref,
         ),
         batch=DeclaredBatch(id=batch.id),
     )
@@ -213,6 +211,7 @@ def test_target_parameter_preview_and_http_submit_keep_exact_heads(
         )
         assert resolve_launch_config(lab, submit) == checked
         submission = RunSubmission(
+            execution_setup=runtime.application.setup.resolve("initial").ref,
             submission_id="exact-target",
             config=checked.config,
             config_source=checked.reviewed.config_source,

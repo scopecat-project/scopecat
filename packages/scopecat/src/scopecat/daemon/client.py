@@ -126,9 +126,7 @@ from scopecat.daemon.reviews import (
     ReviewWorkItem,
 )
 from scopecat.daemon.views import (
-    ActiveConfigView,
     AnalysisContentBytesView,
-    ConfigActivationPage,
     ConfigContextResolution,
     ConfigEntryView,
     ConfigRegistryPage,
@@ -227,7 +225,6 @@ from scopecat.daemon.wire import (
     SampleCreateCommand,
     SampleMutationReceipt,
     SampleReviseCommand,
-    SetupActivateCommand,
     SetupDefinitionList,
     SetupImportCommand,
     SetupRevisionList,
@@ -315,7 +312,6 @@ from scopecat.records.run import RunSnapshot
 from scopecat.records.sample import SampleArtifactRef, SampleRevision
 from scopecat.records.sample_artifact import SampleArtifactPage
 from scopecat.records.setup import (
-    ActiveSetupView,
     SetupDefinitionRevision,
     SetupRevision,
     SetupRevisionRef,
@@ -1016,9 +1012,6 @@ class DaemonClient:
             ConfigurationTemplateImportResult,
         )
 
-    def active_setup(self) -> ActiveSetupView:
-        return self._get_model(f"{_API_PREFIX}/setup/active", ActiveSetupView)
-
     def parameter_branches(
         self, *, limit: int = 100, after: str | None = None
     ) -> ParameterBranchPage:
@@ -1159,11 +1152,6 @@ class DaemonClient:
             f"{_API_PREFIX}/setup/revisions", command, SetupRevision
         )
 
-    def activate_setup(self, command: SetupActivateCommand) -> ActiveSetupView:
-        return self._post_idempotent_model(
-            f"{_API_PREFIX}/setup/activation-operations", command, ActiveSetupView
-        )
-
     def config_registry(
         self,
         *,
@@ -1177,27 +1165,6 @@ class DaemonClient:
             f"{_API_PREFIX}/config-registry",
             ConfigRegistryPage,
             params=params,
-        )
-
-    def config_activation_history(
-        self,
-        *,
-        limit: int = 100,
-        before: int | None = None,
-    ) -> ConfigActivationPage:
-        params: dict[str, str | int] = {"limit": limit}
-        if before is not None:
-            params["before"] = before
-        return self._get_model(
-            f"{_API_PREFIX}/config-registry/activations",
-            ConfigActivationPage,
-            params=params,
-        )
-
-    def active_config(self) -> ActiveConfigView:
-        return self._get_model(
-            f"{_API_PREFIX}/config-registry/active",
-            ActiveConfigView,
         )
 
     def config_entry(self, entry_id: str) -> ConfigEntryView:

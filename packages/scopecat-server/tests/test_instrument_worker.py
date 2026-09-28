@@ -289,7 +289,9 @@ def test_ragged_point_cloud_run_survives_daemon_and_worker_boundaries(
         TestClient(runtime.app()) as transport,
         _http_daemon_client(transport) as daemon,
     ):
-        with LabClient(daemon) as lab:
+        with LabClient(
+            daemon, config=config, setup=daemon.resolve_setup("initial").ref
+        ) as lab:
             preview = lab.preview(_ragged_point_cloud)
             run = lab.run(_ragged_point_cloud)
 
@@ -705,7 +707,7 @@ def test_runtime_shutdown_fences_a_blocked_session_and_marks_it_unknown(
             operation_id="open-blocked-session",
             actor="alice",
             instrument_ids=("source-0",),
-            setup=runtime.application.setup.current().revision.ref,
+            setup=runtime.application.setup.resolve("initial").ref,
         )
     )
     invoke_errors: list[BaseException] = []
