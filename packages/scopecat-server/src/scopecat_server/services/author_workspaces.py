@@ -5,9 +5,13 @@ from pathlib import Path
 from typing import cast
 
 from scopecat.author_workspaces import local_author_workspaces
-from scopecat.project_sources import require_environment, require_shared_composition
+from scopecat.project import open_project
+from scopecat.project_sources import (
+    capture_sources,
+    require_environment,
+    require_shared_composition,
+)
 from scopecat.records.author_workspace import (
-    SERVICE_AUTHOR_WORKSPACE,
     AuthorWorkspaceCatalog,
     AuthorWorkspaceSummary,
 )
@@ -25,8 +29,7 @@ class AuthorWorkspaceServices:
     def __init__(self, root: Path, store: SQLiteProjectStore) -> None:
         self.store = store
         self.workers = RevisionWorkers()
-        original = AuthorRevisionService(root, store, workers=self.workers)
-        self.services = {SERVICE_AUTHOR_WORKSPACE: original}
+        self.services: dict[str, AuthorRevisionService] = {}
         self.unavailable: dict[str, str] = {}
         binding = load_runtime_binding(root)
         try:
@@ -51,16 +54,17 @@ class AuthorWorkspaceServices:
                     service = AuthorRevisionService(
                         item.root, store, workspace_id=item.id, workers=self.workers
                     )
-                    if original.baseline is None or service.baseline is None:
+                    if service.baseline is None:
                         raise ValueError(
                             "Registered author workspace is unavailable or has a "
                             "different maintained composition"
                         )
-                    assert original.project is not None and service.project is not None
+                    owner = open_project(root)
+                    assert service.project is not None
                     require_shared_composition(
-                        original.project,
+                        owner,
                         service.project,
-                        original.baseline,
+                        capture_sources(owner),
                         service.baseline,
                     )
                     require_environment(service.baseline.manifest)
@@ -130,8 +134,11 @@ class AuthorWorkspaceServices:
         }
 
     def close(self) -> None:
-        for service in self.services.values():
-            service.request_stop()
+        self.request_stop()
         for service in self.services.values():
             service.close()
         self.workers.close()
+
+    def request_stop(self) -> None:
+        for service in self.services.values():
+            service.request_stop()

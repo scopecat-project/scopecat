@@ -49,6 +49,7 @@ def test_candidate_selection_changes_request_identity() -> None:
         content_hash="sha256:" + "b" * 64,
     )
     first = LaunchRequest(
+        workspace_id="test-source",
         action="preview",
         experiment="signal",
         version="v1",

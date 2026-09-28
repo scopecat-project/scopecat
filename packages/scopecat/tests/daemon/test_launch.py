@@ -56,7 +56,11 @@ def test_submission_rejects_a_changed_preview_request(
         ),
     )
     request = LaunchRequest(
-        action="preview", experiment="timing", version="1", reviewed=reviewed
+        workspace_id="test-source",
+        action="preview",
+        experiment="timing",
+        version="1",
+        reviewed=reviewed,
     )
     with pytest.raises(ValidationError, match="request changed"):
         LaunchRequest.model_validate(

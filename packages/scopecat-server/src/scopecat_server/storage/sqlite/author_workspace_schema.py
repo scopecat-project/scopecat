@@ -5,7 +5,6 @@ CREATE TABLE IF NOT EXISTS author_workspaces (
     workspace_id TEXT PRIMARY KEY,
     name TEXT NOT NULL
 );
-INSERT OR IGNORE INTO author_workspaces VALUES ('legacy', 'Original workspace');
 CREATE TABLE IF NOT EXISTS author_workspace_heads (
     workspace_id TEXT PRIMARY KEY REFERENCES author_workspaces(workspace_id),
     generation INTEGER NOT NULL,

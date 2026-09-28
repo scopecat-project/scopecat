@@ -187,6 +187,7 @@ def test_reopen_uses_public_frozen_request_and_checks_exact_owner() -> None:
         ),
     )
     edited = ComparisonRequest(
+        workspace_id="test-source",
         action="candidate",
         primary_run="left",
         analysis_id="fit",

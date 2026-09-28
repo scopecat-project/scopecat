@@ -128,6 +128,7 @@ def test_target_working_point_preview_and_http_submit_keep_exact_heads(
         lab = LabClient(client)
         selection = _selection(client)
         request = LaunchRequest(
+            workspace_id="test-source",
             action="preview",
             experiment="target-check",
             version="1",
@@ -254,6 +255,7 @@ def test_target_http_selection_rejects_foreign_assembly_and_wrong_batch(
         selection = _selection(client)
         assert isinstance(selection.subject, RegisteredTargetChoice)
         request = LaunchRequest(
+            workspace_id="test-source",
             action="preview",
             experiment="target-check",
             version="1",

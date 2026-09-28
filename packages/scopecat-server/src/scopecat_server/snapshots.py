@@ -16,7 +16,7 @@ from typing import Literal, cast
 
 from filelock import FileLock, Timeout
 from pydantic import BaseModel, ConfigDict
-from scopecat.author_workspaces import author_workspace_id
+from scopecat.author_workspaces import service_workspace_root
 from scopecat.project import Project, load_project
 from scopecat.records.sample import SampleRevision
 from scopecat.records.sample_artifact import is_owned_sample_artifact_uri
@@ -68,7 +68,7 @@ class SnapshotManifest(BaseModel):
 
 def create_snapshot(project: Project, destination: Path) -> SnapshotManifest:
     """Capture a stopped project under its existing process and SQLite locks."""
-    if author_workspace_id(project.root) != "legacy":
+    if service_workspace_root(project.root) != project.root:
         raise SnapshotError("Create the snapshot from the deployment service workspace")
     destination = fresh_destination(destination)
     if (

@@ -10,7 +10,7 @@ from scopecat.application import LabApplication
 from scopecat.project import load_project
 from scopecat_server.lifecycle import start_project, stop_project
 
-from reference_lab.configuration import EXAMPLE_ROOT
+from reference_lab.configuration import EXAMPLE_ROOT, initial_parameters
 from reference_lab.everyday_author import acquire_everyday_author_inputs
 from reference_lab.workflows.authored.ordinary_analysis import (
     PeakResult,
@@ -39,6 +39,17 @@ def test_ordinary_analysis_retained_source_arguments_and_restart(
             LabApplication().connect(endpoint.base_url) as lab,
             project.authoring() as authors,
         ):
+            content = initial_parameters()
+            revision = authors.parameters.save(
+                name="analysis-inputs",
+                catalog=content.catalog,
+                parameters=content.parameters,
+            )
+            authors.parameters.create_branch("analysis-inputs", revision=revision)
+            authors.use(
+                parameter_branch="analysis-inputs",
+                setup=lab.setup.active().revision.ref,
+            )
             acquired = acquire_everyday_author_inputs(lab)
             authors.refresh()
             managed = (

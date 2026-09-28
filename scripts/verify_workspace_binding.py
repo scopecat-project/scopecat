@@ -34,6 +34,11 @@ class Summary:
 
 
 def check() -> None:
+    from scopecat.author_workspaces import author_workspace_id
+    from scopecat_server.author_registration import (  # noqa: TID251 - installed integration journey
+        register_author_workspace,
+    )
+
     os.environ.pop(DAEMON_URL_ENV, None)
     with tempfile.TemporaryDirectory(prefix="scopecat-binding-") as temporary:
         root = Path(temporary).resolve()
@@ -46,6 +51,7 @@ def check() -> None:
         shutil.copytree(a, b)
         second = open_project(b)
         endpoint = start_project(first, timeout=90)
+        source_id = author_workspace_id(first.root)
         try:
             # A leftover local record can point at a port now serving another
             # workspace. Check live ownership, not only the recorded paths.
@@ -134,8 +140,8 @@ def check() -> None:
                 identity = client.health().project_id
         finally:
             stop_project(first)
-        shutil.rmtree(a)
-        endpoint = start_project(second, timeout=90)
+        register_author_workspace(first.root, second.root, identity=source_id)
+        endpoint = start_project(first, timeout=90)
         try:
             with DaemonClient(endpoint.base_url) as client:
                 assert client.health().project_id == identity
@@ -171,13 +177,14 @@ def check() -> None:
                         == expected
                     )
         finally:
-            stop_project(second)
+            stop_project(first)
         snapshot, restored = root / "snapshot", root / "restored"
-        create_snapshot(second, snapshot)
-        for path in (b, data, bench):
+        create_snapshot(first, snapshot)
+        for path in (a, b, data, bench):
             shutil.rmtree(path)
         restore_snapshot(snapshot, restored)
         recovered = open_project(restored)
+        register_author_workspace(recovered.root, recovered.root, identity=source_id)
         endpoint = start_project(recovered, timeout=90)
         try:
             with recovered.authoring() as author:

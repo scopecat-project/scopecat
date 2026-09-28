@@ -20,8 +20,8 @@ export function OriginalSubmission({
             : "Original submission awaiting confirmation"}
       </h3>
       <p>
-        Workspace {attempt.request.workspace_id ?? "legacy"} · {attempt.request.experiment} ·
-        version {attempt.request.version} · {attempt.request.actor} ·
+        Workspace {attempt.request.workspace_id} · {attempt.request.experiment} · version{" "}
+        {attempt.request.version} · {attempt.request.actor} ·
         {subjectLabel(attempt.request.selection)}
       </p>
       <p>

@@ -117,6 +117,7 @@ def _lab() -> tuple[LabClient, dict[str, object], TargetRevision]:
 def test_preview_freezes_registered_target_and_hash_rejects_binding_swap() -> None:
     lab, state, target = _lab()
     request = LaunchRequest(
+        workspace_id="test-source",
         action="preview",
         experiment="signal",
         version="1",
@@ -155,6 +156,7 @@ def test_preview_freezes_registered_target_and_hash_rejects_binding_swap() -> No
 def test_inline_sample_preview_does_not_advance_when_submitted() -> None:
     lab, state, _ = _lab()
     request = LaunchRequest(
+        workspace_id="test-source",
         action="preview",
         experiment="signal",
         version="1",
@@ -193,7 +195,7 @@ def test_session_target_selection_is_atomic_and_pins_head(
         return head
 
     monkeypatch.setattr(AuthorProject, "target", current_target)
-    with AuthorProject("http://test") as session:
+    with AuthorProject("http://test", workspace_id="test-source") as session:
         first = session.use(target="target")
         assert first.science.subject == RegisteredTargetChoice(ref=target.ref)
         head = target.model_copy(
@@ -255,7 +257,11 @@ def test_target_member_a_can_use_matching_working_point_and_batch(
         batch=DeclaredBatch(id="cooldown"),
     )
     request = LaunchRequest(
-        action="preview", experiment="signal", version="1", selection=selection
+        workspace_id="test-source",
+        action="preview",
+        experiment="signal",
+        version="1",
+        selection=selection,
     )
     resolved = resolve_launch_config(lab, request)
     assert resolved.reviewed.binding.samples == (source.sample,)
@@ -288,6 +294,7 @@ def test_saved_target_plan_reopens_retained_binding_with_new_review(
 
     lab, state, target = _lab()
     request = LaunchRequest(
+        workspace_id="test-source",
         action="preview",
         experiment="signal",
         version="1",
@@ -296,6 +303,7 @@ def test_saved_target_plan_reopens_retained_binding_with_new_review(
     resolved = resolve_launch_config(lab, request)
     frozen = request.model_copy(update={"reviewed": resolved.reviewed})
     preview = LaunchPreview(
+        workspace_id="test-source",
         experiment_id="signal",
         request_hash=frozen.request_hash,
         reviewed=resolved.reviewed,
@@ -344,7 +352,7 @@ def test_explicit_clear_in_prepare_does_not_inherit_session_subject(
         pass
 
     monkeypatch.setattr(author_module, "validate_editing_selection", accept)
-    with AuthorProject("http://test") as session:
+    with AuthorProject("http://test", workspace_id="test-source") as session:
         session.use(sample="chip")
         science = session._prepare_science(
             selection=INHERIT,
@@ -377,6 +385,7 @@ def test_candidate_preserves_unbound_or_registered_subject(
     original = resolve_launch_config(
         lab,
         LaunchRequest(
+            workspace_id="test-source",
             action="preview",
             experiment="signal",
             version="1",
@@ -409,6 +418,7 @@ def test_candidate_preserves_unbound_or_registered_subject(
     )
     monkeypatch.setattr(lab.config.client, "get_run", original_run, raising=False)
     request = LaunchRequest(
+        workspace_id="test-source",
         action="preview",
         experiment="signal",
         version="1",
@@ -430,7 +440,9 @@ def test_repreview_cannot_attach_new_active_generation_to_old_entry(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     lab, _, _ = _lab()
-    request = LaunchRequest(action="preview", experiment="signal", version="1")
+    request = LaunchRequest(
+        workspace_id="test-source", action="preview", experiment="signal", version="1"
+    )
     reviewed = resolve_launch_config(lab, request).reviewed
     frozen = request.model_copy(update={"reviewed": reviewed})
 

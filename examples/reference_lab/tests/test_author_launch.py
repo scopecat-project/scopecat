@@ -33,6 +33,7 @@ from scopecat.records.scientific_selection import (
 )
 from scopecat_server.author_worker import revision_project
 from scopecat_server.lifecycle import start_project, stop_project
+from scopecat_testkit.authoring import source_workspace_id
 from scopecat_testkit.project_loading import isolated_project_imports
 
 from reference_lab.configuration import EXAMPLE_ROOT, bootstrap_config
@@ -111,7 +112,11 @@ def preview_signal(
         patch.delenv("SCOPECAT_DAEMON_URL", raising=False)
         endpoint = start_project(project)
         try:
-            with DaemonClient(endpoint.base_url, timeout=120) as client:
+            with DaemonClient(
+                endpoint.base_url,
+                workspace_id=source_workspace_id(endpoint.base_url),
+                timeout=120,
+            ) as client:
                 active = client.author_revision_state().active
                 assert active is not None
             with isolated_project_imports():
@@ -157,7 +162,10 @@ def test_copied_author_uses_shared_control_plan_and_real_retained_run(
         fixture.application.connect(fixture.url) as lab,
         httpx2.Client(base_url=fixture.url, timeout=30, trust_env=False) as http,
     ):
-        catalog = http.get("/api/v1/experiment-launcher")
+        catalog = http.get(
+            "/api/v1/experiment-launcher",
+            headers={"X-Scopecat-Workspace": source_workspace_id(fixture.url)},
+        )
         catalog.raise_for_status()
         assert selected.entry in LaunchCatalog.model_validate(catalog.json()).entries
         collection_response = http.put(
@@ -185,6 +193,7 @@ def test_copied_author_uses_shared_control_plan_and_real_retained_run(
                 )
             )
             request = LaunchRequest(
+                workspace_id=source_workspace_id(fixture.url),
                 action="preview",
                 experiment=selected.entry.id,
                 version=selected.entry.version,
@@ -237,7 +246,9 @@ def test_copied_author_uses_shared_control_plan_and_real_retained_run(
             assert run.request.metadata["author_fingerprint"] == selected.fingerprint
             assert "def copied_signal" in selected.source["source"]
             assert run.request.record_collection == "author-cooldown"
-            with AuthorProject(fixture.url) as author:
+            with AuthorProject(
+                fixture.url, workspace_id=source_workspace_id(fixture.url)
+            ) as author:
                 address = author.get_run(run.id).address
                 assert address is not None
                 assert address.number == (1 if mode == "fixed" else 2)
@@ -276,6 +287,7 @@ def test_copied_author_uses_shared_control_plan_and_real_retained_run(
         fitted = python_run.analyze(fixture.analysis)
         assert fitted.fact("mean").value == 2.0
         wrong = LaunchRequest(
+            workspace_id=source_workspace_id(fixture.url),
             action="preview",
             experiment="copied_signal",
             selection=ScientificSelection(configuration=fixture.configuration),
@@ -360,7 +372,9 @@ def test_revision_aware_notebook_prepare_preserves_parameter_context(
             setup=fixture.configuration.setup,
             overrides=overrides,
         )
-        with AuthorProject(fixture.url, timeout=120) as authors:
+        with AuthorProject(
+            fixture.url, workspace_id=source_workspace_id(fixture.url), timeout=120
+        ) as authors:
             prepared = authors.prepare(
                 "copied_signal",
                 selection=ScientificSelection(
@@ -405,7 +419,10 @@ def test_revision_aware_notebook_prepare_preserves_parameter_context(
 def test_required_author_input_diagnostics_survive_the_worker_boundary(
     reference_lab_daemon: AuthorDaemon,
 ) -> None:
-    with AuthorProject(reference_lab_daemon.url) as author:
+    with AuthorProject(
+        reference_lab_daemon.url,
+        workspace_id=source_workspace_id(reference_lab_daemon.url),
+    ) as author:
         author.use(
             parameters=reference_lab_daemon.configuration.ref,
             setup=reference_lab_daemon.configuration.setup,
@@ -445,7 +462,11 @@ def test_editable_request_rebuilds_and_reuses_saved_plan(
         sc.Quantity(value, "GHz") for value in cast("list[float]", frequencies.tolist())
     )
     frequencies[:] = 5.2
-    with AuthorProject(fixture.url, receipts=tmp_path / "receipts") as author:
+    with AuthorProject(
+        fixture.url,
+        workspace_id=source_workspace_id(fixture.url),
+        receipts=tmp_path / "receipts",
+    ) as author:
         author.use(
             parameters=reference_lab_daemon.configuration.ref,
             setup=reference_lab_daemon.configuration.setup,
@@ -504,7 +525,9 @@ def test_imported_request_rejects_changed_declaration_but_can_select_old_revisio
     declaration = fixture.application.authors.get("copied_signal").declaration
     request = declaration(gain=1.0)
     path = fixture.root / "src/reference_lab/workflows/authored/signal.py"
-    with AuthorProject(fixture.url) as author:
+    with AuthorProject(
+        fixture.url, workspace_id=source_workspace_id(fixture.url)
+    ) as author:
         author.use(
             parameters=reference_lab_daemon.configuration.ref,
             setup=reference_lab_daemon.configuration.setup,
@@ -532,7 +555,10 @@ def test_imported_request_rejects_changed_declaration_but_can_select_old_revisio
 def test_required_control_uses_existing_catalog_preview_and_plan_paths(
     reference_lab_daemon: AuthorDaemon,
 ) -> None:
-    with AuthorProject(reference_lab_daemon.url) as author:
+    with AuthorProject(
+        reference_lab_daemon.url,
+        workspace_id=source_workspace_id(reference_lab_daemon.url),
+    ) as author:
         author.use(
             parameters=reference_lab_daemon.configuration.ref,
             setup=reference_lab_daemon.configuration.setup,
@@ -561,7 +587,9 @@ def test_author_inspection_is_bounded_and_retained_without_a_live_client(
     request.values["frequency"] = sc.Scan(
         sc.Quantity(float(value), "GHz") for value in np.linspace(4.7, 4.9, 70)
     )
-    with AuthorProject(fixture.url) as author:
+    with AuthorProject(
+        fixture.url, workspace_id=source_workspace_id(fixture.url)
+    ) as author:
         author.use(
             parameters=reference_lab_daemon.configuration.ref,
             setup=reference_lab_daemon.configuration.setup,
@@ -601,7 +629,11 @@ def test_author_reads_ongoing_preview_after_reconnect(
     fixture = reference_lab_daemon
     release = fixture.root / "release-preview"
     try:
-        with AuthorProject(fixture.url, receipts=fixture.root / "receipts") as author:
+        with AuthorProject(
+            fixture.url,
+            workspace_id=source_workspace_id(fixture.url),
+            receipts=fixture.root / "receipts",
+        ) as author:
             author.use(
                 parameters=reference_lab_daemon.configuration.ref,
                 setup=reference_lab_daemon.configuration.setup,
@@ -611,7 +643,9 @@ def test_author_reads_ongoing_preview_after_reconnect(
                 scans={"frequency": [*np.linspace(4.7, 4.74, 32), 4.8]},
             ).run()
             receipt = job.receipt
-        with AuthorProject(fixture.url) as observer:
+        with AuthorProject(
+            fixture.url, workspace_id=source_workspace_id(fixture.url)
+        ) as observer:
             reopened = observer.reopen(receipt)
             deadline = time.monotonic() + 60
             while True:

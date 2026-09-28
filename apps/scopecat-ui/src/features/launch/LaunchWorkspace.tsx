@@ -32,8 +32,12 @@ export function LaunchWorkspace({
   useEffect(() => {
     void queryClient.invalidateQueries({ queryKey: ["config", "launch-context", projectId] });
   }, [projectId, queryClient]);
-  const workspaceId = handoff ? (handoff.request.workspace_id ?? "legacy") : selectedWorkspaceId;
+  const workspaceId = handoff ? handoff.request.workspace_id : selectedWorkspaceId;
   const sources = useAuthorWorkspaces(projectId);
+  useEffect(() => {
+    const available = sources.data?.items.filter((source) => source.available) ?? [];
+    if (!workspaceId && available.length === 1 && available[0]) selectWorkspace(available[0].id);
+  }, [workspaceId, sources.data, selectWorkspace]);
   const sourceAvailable =
     sources.data?.items.some((source) => source.id === workspaceId && source.available) ?? false;
   const codeRevision = handoff ? handoff.request.code_revision : draft?.codeRevision;

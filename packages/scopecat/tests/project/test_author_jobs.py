@@ -25,11 +25,16 @@ def test_reopen_missing_admission_never_posts(tmp_path: Path) -> None:
         return httpx2.Response(200, json={"items": []})
 
     receipt = tmp_path / "receipt.json"
-    with AuthorProject("http://test", transport=httpx2.MockTransport(respond)) as first:
+    with AuthorProject(
+        "http://test",
+        workspace_id="test-source",
+        transport=httpx2.MockTransport(respond),
+    ) as first:
         job = AuthorJob.retain(
             first,
             receipt,
             LaunchRequest(
+                workspace_id="test-source",
                 action="preview",
                 experiment="signal",
                 version="1",
@@ -38,7 +43,9 @@ def test_reopen_missing_admission_never_posts(tmp_path: Path) -> None:
         )
         assert job.recover() is None
     with AuthorProject(
-        "http://test", transport=httpx2.MockTransport(respond)
+        "http://test",
+        workspace_id="test-source",
+        transport=httpx2.MockTransport(respond),
     ) as second:
         reopened = job.reconnect(second)
         with pytest.raises(AuthorSubmissionUncertain) as caught:
@@ -58,13 +65,19 @@ def test_wait_transport_timeout_is_not_cancellation(tmp_path: Path) -> None:
         raise httpx2.ReadTimeout("delayed", request=request)
 
     with AuthorProject(
-        "http://test", transport=httpx2.MockTransport(respond)
+        "http://test",
+        workspace_id="test-source",
+        transport=httpx2.MockTransport(respond),
     ) as session:
         job = AuthorJob.retain(
             session,
             tmp_path / "receipt.json",
             LaunchRequest(
-                action="preview", experiment="signal", version="1", request_key="key"
+                workspace_id="test-source",
+                action="preview",
+                experiment="signal",
+                version="1",
+                request_key="key",
             ),
         )
         with pytest.raises(AuthorJobTimeout):
@@ -130,13 +143,19 @@ def test_wait_distinguishes_operator_outcomes(
         return httpx2.Response(200, json={"items": [snapshot]})
 
     with AuthorProject(
-        "http://test", transport=httpx2.MockTransport(respond)
+        "http://test",
+        workspace_id="test-source",
+        transport=httpx2.MockTransport(respond),
     ) as session:
         job = AuthorJob.retain(
             session,
             tmp_path / "receipt.json",
             LaunchRequest(
-                action="preview", experiment="signal", version="1", request_key="key"
+                workspace_id="test-source",
+                action="preview",
+                experiment="signal",
+                version="1",
+                request_key="key",
             ),
         )
         with pytest.raises(getattr(author_api, error)):
@@ -168,9 +187,17 @@ def test_submission_rejection_is_distinct_from_unknown(
         return httpx2.Response(status, json={"detail": "test response"})
 
     with AuthorProject(
-        "http://test", receipts=tmp_path, transport=httpx2.MockTransport(respond)
+        "http://test",
+        workspace_id="test-source",
+        receipts=tmp_path,
+        transport=httpx2.MockTransport(respond),
     ) as session:
-        request = LaunchRequest(action="preview", experiment="signal", version="1")
+        request = LaunchRequest(
+            workspace_id="test-source",
+            action="preview",
+            experiment="signal",
+            version="1",
+        )
         source = ConfigRegistryRunConfigSource(
             selector="active",
             entry_id="config",
@@ -191,6 +218,7 @@ def test_submission_rejection_is_distinct_from_unknown(
             session,
             request,
             LaunchPreview(
+                workspace_id="test-source",
                 experiment_id="signal",
                 request_hash=request.request_hash,
                 reviewed=reviewed,

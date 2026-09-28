@@ -82,7 +82,13 @@ export function ParameterBranchPicker({
             type="button"
             disabled={disabled || !branch || heads.isFetching || heads.isError}
             onClick={() =>
-              branch && onChange({ kind: "parameters", ref: branch.revision, overrides: [] })
+              branch &&
+              onChange({
+                kind: "parameters",
+                ref: branch.revision,
+                overrides: [],
+                ...(value.kind === "parameters" && value.setup ? { setup: value.setup } : {}),
+              })
             }
           >
             Use this parameter version

@@ -3,6 +3,7 @@ import { cp, mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { expect, test } from "@playwright/test";
+import { chooseReferenceContext, prepareReferenceContexts } from "./reference-context";
 
 const ROOT = resolve(process.cwd(), "../..");
 function uv(args: string[]): void {
@@ -28,11 +29,13 @@ test("manual changes invalidate a retained preview before a fresh acquisition", 
         recursive: true,
       });
     uv(["scopecat", "start", project, "--port", "0", "--static-dir", resolve("dist")]);
+    prepareReferenceContexts(uv, project);
     const endpoint = JSON.parse(await readFile(join(project, ".scopecat/daemon.json"), "utf8")) as {
       base_url: string;
     };
     await page.goto(`${endpoint.base_url}/#launch`);
     await page.getByLabel("Experiment", { exact: true }).selectOption("ramsey");
+    await chooseReferenceContext(page);
     await page.getByLabel("Delay", { exact: true }).fill("64");
     await page.getByRole("button", { name: "Preview", exact: true }).click();
     await expect(

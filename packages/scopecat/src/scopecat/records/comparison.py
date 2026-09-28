@@ -8,7 +8,6 @@ from pydantic import BaseModel, ConfigDict, Field, FiniteFloat
 
 from scopecat.records.author_revision import AuthorRevisionRef
 from scopecat.records.author_workspace import (
-    SERVICE_AUTHOR_WORKSPACE,
     AuthorWorkspaceId,
 )
 
@@ -43,7 +42,7 @@ class ComparisonSelection(BaseModel):
 class ComparisonRequest(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
     action: Literal["list", "inspect", "fit", "candidate", "reject", "handoff"]
-    workspace_id: AuthorWorkspaceId = SERVICE_AUTHOR_WORKSPACE
+    workspace_id: AuthorWorkspaceId
     code_revision: AuthorRevisionRef | None = None
     model_id: str = ""
     model_version: str = ""
@@ -73,13 +72,13 @@ class ComparisonCurve(BaseModel):
 class ComparisonCatalog(BaseModel):
     kind: Literal["catalog"] = "catalog"
     models: tuple[ComparisonModel, ...] = ()
-    workspace_id: AuthorWorkspaceId = SERVICE_AUTHOR_WORKSPACE
+    workspace_id: AuthorWorkspaceId
     code_revision: AuthorRevisionRef | None = None
 
 
 class ComparisonInspection(BaseModel):
     kind: Literal["inspection"] = "inspection"
-    workspace_id: AuthorWorkspaceId = SERVICE_AUTHOR_WORKSPACE
+    workspace_id: AuthorWorkspaceId
     code_revision: AuthorRevisionRef | None = None
     primary: ComparisonCurve
     secondary: ComparisonCurve

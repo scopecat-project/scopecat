@@ -37,22 +37,14 @@ def launch_notebook(
                         "请先在 Scopecat 中选择并打开实验室，再打开 Notebook"
                     )
                 sources = local_author_workspaces(Path(service.root))
-                if len(sources) > 1:
+                if len(sources) != 1:
                     raise ValueError(
-                        "实验室有多个作者目录；请用 scopecat notebook 指定要打开的目录"
+                        "请登记作者目录；有多个目录时，"
+                        "用 scopecat notebook 指定要打开的目录"
                     )
-                workspace = sources[0].root if sources else Path(service.root)
+                workspace = sources[0].root
             workspace = workspace.resolve()
-            service = next(
-                (item for item in store.list() if Path(item.root) == workspace), None
-            )
-            if service is None:
-                service, identity = store.for_workspace(workspace)
-            else:
-                from .lab_environment import require_completed_update
-
-                require_completed_update(home, service.id)
-                identity = "legacy"
+            service, identity = store.for_workspace(workspace)
             command, env = kernel_command(
                 workspace,
                 python=service.python,

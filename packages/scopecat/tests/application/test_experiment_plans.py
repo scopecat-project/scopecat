@@ -38,6 +38,7 @@ def test_plan_frozen_inputs_current_actor_and_changed_definition() -> None:
         request=LaunchInputSchema(),
     )
     definition = ExperimentPlanDefinition(
+        workspace_id="test-source",
         experiment=entry.id,
         version=entry.version,
         definition_hash=sha256_json_hash(entry.model_dump(mode="json")),
@@ -68,8 +69,8 @@ def test_plan_frozen_inputs_current_actor_and_changed_definition() -> None:
         saved_at=datetime.now(UTC),
     )
     request = plan_launch_request(plan, actor="bob")
-    assert request.workspace_id == definition.workspace_id == "legacy"
-    assert definition.model_dump(mode="json")["workspace_id"] == "legacy"
+    assert request.workspace_id == definition.workspace_id == "test-source"
+    assert definition.model_dump(mode="json")["workspace_id"] == "test-source"
     assert request.actor == "bob"
     assert request.request_key == ""
     assert request.expected_request_hash is None

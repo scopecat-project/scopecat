@@ -103,11 +103,20 @@ def test_maintained_catalog_collision_rejects_direct_preview(
     (tmp_path / "overlapping_author.py").write_text(SOURCE, encoding="utf-8")
     authors = AuthorExperiments.discover("overlapping_author")
     entry = authors.experiments[0].entry
-    provider = authors.compose(lambda _lab, _request: LaunchCatalog(entries=(entry,)))
+    provider = authors.compose(
+        lambda _lab, _request: LaunchCatalog(
+            workspace_id="test-source", entries=(entry,)
+        )
+    )
     with pytest.raises(ValueError, match="overlap"):
         provider(
             cast("LabClient", object()),
-            LaunchRequest(action="preview", experiment=entry.id, version=entry.version),
+            LaunchRequest(
+                workspace_id="test-source",
+                action="preview",
+                experiment=entry.id,
+                version=entry.version,
+            ),
         )
     monkeypatch.delitem(sys.modules, "overlapping_author")
 
@@ -144,12 +153,13 @@ def test_application_replace_preserves_discovered_authors_without_reloading(
     monkeypatch.delitem(sys.modules, "retained_author")
 
 
-@pytest.mark.parametrize("workspace", ["legacy", "secondary"])
+@pytest.mark.parametrize("workspace", ["first", "secondary"])
 def test_project_loading_pins_complete_revision_into_discovered_procedures(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, workspace: str
 ) -> None:
     from scopecat_testkit.project_loading import isolated_project_imports
 
+    from scopecat.author_workspaces import LocalAuthorWorkspace
     from scopecat.project import load_project
     from scopecat.project_sources import loading_revision, loading_workspace
     from scopecat.records.author_revision import AuthorRevisionRef
@@ -164,7 +174,17 @@ def test_project_loading_pins_complete_revision_into_discovered_procedures(
     manifest.write_text('[lab]\napplication="revision_author:create"\n')
     project = load_project(manifest)
     monkeypatch.setattr(
-        "scopecat.author_workspaces.author_workspace_id", Mock(return_value=workspace)
+        "scopecat.author_workspaces.local_author_workspaces",
+        Mock(
+            return_value=(
+                LocalAuthorWorkspace(
+                    id=workspace,
+                    name=workspace,
+                    root=tmp_path,
+                    python=Path(sys.executable),
+                ),
+            )
+        ),
     )
     first = AuthorRevisionRef(content_hash="sha256:" + "1" * 64)
     second = AuthorRevisionRef(content_hash="sha256:" + "2" * 64)
@@ -196,7 +216,7 @@ def test_project_loading_pins_complete_revision_into_discovered_procedures(
             == first.content_hash
         )
     assert loading_revision.get() is None
-    assert loading_workspace.get() == "legacy"
+    assert loading_workspace.get() is None
 
 
 @pytest.mark.parametrize("use_alias", [False, True])

@@ -8,6 +8,7 @@ from scopecat.compiler.bind import BoundPlan, bind_program
 from scopecat.compiler.frontend.resolution import compile_invocation
 from scopecat.config.environment import build_config_environment
 from scopecat.config.parameter_resolution import resolve_config_parameters
+from scopecat.daemon.client import DaemonClient
 from scopecat.kernel.entity import EntityRef
 from scopecat.kernel.quantity import Quantity
 from scopecat.records.config import ConfigProfileSnapshot
@@ -19,6 +20,13 @@ _SET_FREQUENCY = InterfaceRef("test.set_frequency/v1")
 _SET_FREQUENCY_VALUE = _SET_FREQUENCY.property("frequency")
 _SCALAR_SIGNAL = InterfaceRef("test.scalar_signal/v1")
 _SCALAR_SIGNAL_VALUE = _SCALAR_SIGNAL.acquisition("sample").result("signal")
+
+
+def source_workspace_id(base_url: str) -> str:
+    """Identify the explicitly registered source at a fixture service's root."""
+    with DaemonClient(base_url) as client:
+        health = client.health()
+    return health.author_workspaces[health.project_root]
 
 
 def load_config() -> ConfigProfileSnapshot:

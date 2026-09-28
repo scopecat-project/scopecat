@@ -15,6 +15,7 @@ from scopecat.records.scientific_selection import (
     ParameterConfiguration,
     ScientificSelection,
 )
+from scopecat_testkit.authoring import source_workspace_id
 
 
 def test_session_selection_is_local_and_preparation_is_frozen(
@@ -25,8 +26,16 @@ def test_session_selection_is_local_and_preparation_is_frozen(
     endpoint = independent_lab_daemon
     key = uuid4().hex
     with (
-        AuthorProject(endpoint, receipts=tmp_path / "first") as first,
-        AuthorProject(endpoint, receipts=tmp_path / "second") as second,
+        AuthorProject(
+            endpoint,
+            workspace_id=source_workspace_id(endpoint),
+            receipts=tmp_path / "first",
+        ) as first,
+        AuthorProject(
+            endpoint,
+            workspace_id=source_workspace_id(endpoint),
+            receipts=tmp_path / "second",
+        ) as second,
         LabClient(DaemonClient(endpoint)) as lab,
     ):
         setup = lab.setup.active()
@@ -158,7 +167,9 @@ def test_session_selection_is_local_and_preparation_is_frozen(
         global_number = second.run_number(other.id)
         assert second.run(global_number).id == other.id
         assert first.selection == before_failure
-    with AuthorProject(endpoint) as reopened:
+    with AuthorProject(
+        endpoint, workspace_id=source_workspace_id(endpoint)
+    ) as reopened:
         assert reopened.selection.collection is None
         assert reopened.selection.science.configuration.kind == "active"
         assert reopened.selection.operator == "operator"

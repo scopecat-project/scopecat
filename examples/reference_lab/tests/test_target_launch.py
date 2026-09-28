@@ -14,6 +14,7 @@ from scopecat.records.target_catalog import (
     TargetReviseCommand,
     TargetRevisionDraft,
 )
+from scopecat_testkit.authoring import source_workspace_id
 
 
 def test_target_plan_keeps_exact_reviewed_binding_after_catalog_and_session_changes(
@@ -24,7 +25,9 @@ def test_target_plan_keeps_exact_reviewed_binding_after_catalog_and_session_chan
     endpoint = independent_lab_daemon
     key = uuid4().hex
     with (
-        AuthorProject(endpoint, receipts=tmp_path) as session,
+        AuthorProject(
+            endpoint, workspace_id=source_workspace_id(endpoint), receipts=tmp_path
+        ) as session,
         LabClient(DaemonClient(endpoint)) as lab,
     ):
         setup = lab.setup.active()

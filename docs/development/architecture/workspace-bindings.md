@@ -4,10 +4,10 @@ This page describes the current implementation. The target
 [application contract](public-application.md) separates application startup from
 author roots and device resolution contexts. All author sources must use explicit
 registration/execution identities; the service-side `legacy` source special case
-is to be removed, not renamed. Existing source isolation and retained execution
+has been removed. Existing source isolation and retained execution
 evidence remain required. This change does not delete data or add prebaseline readers.
 
-Current format: schema **98** supports workspace-scoped author publication within
+Current format: schema **99** supports workspace-scoped author publication within
 one qualified local service. It is a development format, not a compatibility
 baseline. Earlier schema/migration exercises are retired; this page describes
 current behavior only. See the [data policy](../data-compatibility.md),
@@ -28,6 +28,20 @@ and [current-format restore](../../how-to/backup-and-restore.md#separately-locat
 4. **Registered author source:** each registered workspace has its own publication
    head, preparations and qualified worker binding. Opening a folder or connecting
    a client does not register code, acquire hardware or replace another source.
+
+An application runtime can start with an empty source catalog. Starting a combined
+source project explicitly registers that directory through the same UUID-based
+registration contract as other sources; it does not receive a reserved identity.
+HTTP author operations require their source identity. Python sessions use
+`project.authoring()` from a registered directory, or pass `workspace_id` explicitly
+to `AuthorProject(url, workspace_id=...)`. Basic history/data clients need no source.
+
+Exact parameter/setup selections now admit both procedures and runs against the
+saved maintained setup revision, independently of the global active setup. GUI
+drafts expose a device-context picker beside the parameter choice and preserve it
+when adopting another parameter version. Resource claims still share the service's
+physical access domains. Interactive device sessions and legacy configuration
+selectors still use active setup; they are not yet the fully independent target.
 
 `scopecat.runtime.toml` resolves workspace, data and deployment paths. It is local
 machine configuration, excluded from captured source and snapshots. Runtime paths
@@ -92,8 +106,9 @@ scopecat register-workspace /path/to/second --service /path/to/service
 Then start from the service workspace. The returned stable workspace ID selects
 independent publication state. Opening `Project`/`AuthorProject` from a registered
 source uses that owner automatically; connecting never registers a path. Only the
-service source can start the daemon or snapshot the shared store. The GUI defaults
-to its service owner. Its **Code workspace** selector lists registered source
+service owner can start the daemon or snapshot the shared store. The GUI honors a
+linked source, or selects the sole available source. With multiple sources it asks
+within the authoring action. Its **Code workspace** selector lists registered source
 identities and their current execution availability; retained sources without a
 qualified local binding remain visible as unavailable. Listing performs no source
 publication, registration or environment installation.
@@ -114,7 +129,7 @@ separate from persistent source membership. They are excluded from snapshots.
 After a current-format restore, retained runs and bundles remain readable without
 those paths. For
 executable access, stop the service and explicitly register qualified source with
-`--identity EXISTING_WORKSPACE_ID`; unknown IDs and `legacy` are rejected. Moving
+`--identity EXISTING_WORKSPACE_ID`; unknown IDs are rejected. Moving
 an identity revokes its old location. Portable multi-source installation bundles
 and different dependency environments remain outside this slice.
 
@@ -196,16 +211,15 @@ that preparation stay in one transaction. A workspace refresh must not interrupt
 adopt or report another workspace's preparation. On service restart, mark only
 actually owned unfinished operations interrupted; never replay them automatically.
 
-Replace `application.author_revisions` as the one selected service with an
-owner-resolving catalog/service manager. Reuse `AuthorWorkerBinding` and the existing
+`application.author_workspaces` replaces the single `application.author_revisions`
+service with an owner-resolving catalog. It reuses `AuthorWorkerBinding` and the existing
 binding/revision pool key. Keep the bounded process budget and per-key serialization;
 qualifying another workspace must not introduce an unbounded worker pool.
 Do not retain an implicit globally active workspace for old routes after all
 current callers have moved to the explicit contract.
 
-The service workspace has the explicit reserved identity `legacy` in the current
-format. This is a valid current owner, not a rule for interpreting missing fields
-in old data. Source ownership must be recorded explicitly; do not invent it from
+There is no reserved service-source identity in the current format. Source
+ownership must be recorded explicitly; do not invent it from
 paths, labels, a missing field or today's selected workspace. Machine-local
 locations must be rebound before execution after restore.
 

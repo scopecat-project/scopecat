@@ -3,6 +3,7 @@ import { cp, mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { expect, test, type Page } from "@playwright/test";
+import { chooseReferenceContext, prepareReferenceContexts } from "./reference-context";
 
 const ROOT = resolve(process.cwd(), "../..");
 function uv(args: string[]): void {
@@ -58,6 +59,7 @@ test("two workbench pages retain independent context and share collection number
         recursive: true,
       });
     uv(["scopecat", "start", project, "--port", "0", "--static-dir", resolve("dist")]);
+    prepareReferenceContexts(uv, project);
     const { base_url: url } = JSON.parse(
       await readFile(join(project, ".scopecat/daemon.json"), "utf8"),
     ) as { base_url: string };
@@ -75,6 +77,7 @@ test("two workbench pages retain independent context and share collection number
     }
     await page.goto(`${url}/#launch`);
     await page.getByLabel("Experiment", { exact: true }).selectOption("signal");
+    await chooseReferenceContext(page);
     await page.getByRole("button", { name: "Browse samples, batches and collections" }).click();
     await page.getByLabel("Registered sample", { exact: true }).selectOption("chip-a");
     await page.getByLabel("Operator", { exact: true }).fill("Alice");
@@ -83,6 +86,7 @@ test("two workbench pages retain independent context and share collection number
     const other = await context.newPage();
     await other.goto(`${url}/#launch`);
     await other.getByLabel("Experiment", { exact: true }).selectOption("signal");
+    await chooseReferenceContext(other, "browser-bench-b");
     await expect(other.getByLabel("Sample ID", { exact: true })).toHaveValue("");
     await expect(other.getByLabel("Operator", { exact: true })).toHaveValue("operator");
     await other.getByRole("button", { name: "Browse samples, batches and collections" }).click();
@@ -99,6 +103,7 @@ test("two workbench pages retain independent context and share collection number
     await expect(page.getByLabel("Experimental batch", { exact: true })).toHaveValue(batchA);
     await expect(page.getByLabel("Record collection", { exact: true })).toHaveValue(collection);
     const preparedA = await preview(page);
+    expect(preparedA.reviewed.config_source.setup.revision_id).toBe("browser-bench-a");
     expect(preparedA.reviewed.binding.subject).toMatchObject({
       kind: "inline_samples",
       samples: [{ sample_id: "chip-a", revision: 1, batch_id: batchA }],
@@ -121,6 +126,9 @@ test("two workbench pages retain independent context and share collection number
     await other.getByRole("button", { name: "Refresh project data", exact: true }).click();
     await expect(other.getByLabel("Experimental batch", { exact: true })).toHaveValue(batchB);
     await expect(other.getByLabel("Sample ID", { exact: true })).toHaveValue("chip-b");
+    await expect(other.getByLabel("Device context", { exact: true })).toHaveValue(
+      "browser-bench-b",
+    );
     await other.getByRole("button", { name: "Open First batch recipe r1", exact: true }).click();
     // Explicitly opening a plan imports its scientific selection into this page.
     await expect(other.getByLabel("Experimental batch", { exact: true })).toHaveValue(batchA);
@@ -132,10 +140,15 @@ test("two workbench pages retain independent context and share collection number
     ).toBeDisabled();
     await other.getByLabel("Registered sample", { exact: true }).selectOption("chip-b");
     await other.getByLabel("Experimental batch", { exact: true }).selectOption(batchB);
+    await other.getByLabel("Device context", { exact: true }).selectOption("browser-bench-b");
     await expect(page.getByLabel("Experimental batch", { exact: true })).toHaveValue(batchA);
     await expect(page.getByLabel("Sample ID", { exact: true })).toHaveValue("chip-a");
     await expect(page.getByLabel("Operator", { exact: true })).toHaveValue("Alice");
     const preparedB = await preview(other);
+    expect(preparedB.reviewed.config_source.setup.revision_id).toBe("browser-bench-b");
+    expect(preparedB.reviewed.binding.setup_content_hash).not.toBe(
+      preparedA.reviewed.binding.setup_content_hash,
+    );
     expect(preparedB.reviewed.binding.subject).toMatchObject({
       kind: "inline_samples",
       samples: [{ sample_id: "chip-b", revision: 1, batch_id: batchB }],
@@ -143,6 +156,8 @@ test("two workbench pages retain independent context and share collection number
     await page.screenshot({ path: testInfo.outputPath("page-context.png"), fullPage: true });
     const first = await acquire(page);
     const second = await acquire(other);
+    uv(["scopecat", "stop", project]);
+    uv(["scopecat", "start", project, "--port", "0", "--static-dir", resolve("dist")]);
     uv([
       "python",
       "-c",
@@ -157,6 +172,7 @@ with project.connect() as lab:
     snapshots = [lab.get_run(item.run_id).snapshot for item in runs.items]
     assert {s.samples[0].sample_id for s in snapshots} == {"chip-a", "chip-b"}
     assert {s.samples[0].batch_id for s in snapshots} == {sys.argv[3], sys.argv[4]}
+    assert {s.config_source.setup.revision_id for s in snapshots} == {"browser-bench-a", "browser-bench-b"}
     assert {lab._client.get_run(s.run_id).address.number for s in snapshots} == {1, 2}
 `,
       project,

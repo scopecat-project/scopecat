@@ -38,8 +38,8 @@ export function PlanLibrary({ initializing = false }: { initializing?: boolean }
           params: {
             query: {
               code_revision: plan.definition.code_revision?.content_hash,
-              workspace_id: plan.definition.workspace_id,
             },
+            header: { "X-Scopecat-Workspace": plan.definition.workspace_id },
           },
         }),
       );

@@ -36,7 +36,7 @@ export interface LaunchDraft {
   plan?: PlanRevision;
   planDirty?: boolean;
   selection: ScientificSelection;
-  workspaceId?: string;
+  workspaceId: string;
   codeRevision?: PlanRevision["definition"]["code_revision"];
   definition: string;
   controlDefinition: string;
@@ -97,8 +97,13 @@ const controlDefinitionKey = (entry: LaunchCatalogEntry) =>
     })),
   );
 
-function initialDraft(entry: LaunchCatalogEntry, revision: number): LaunchDraft {
+function initialDraft(
+  entry: LaunchCatalogEntry,
+  revision: number,
+  workspaceId: string,
+): LaunchDraft {
   return {
+    workspaceId,
     experiment: entry.id,
     definition: definitionKey(entry),
     controlDefinition: controlDefinitionKey(entry),
@@ -162,7 +167,7 @@ function ProjectDraft({
 }) {
   const [draft, setDraft] = useState<LaunchDraft>();
   const [workspaceId, setWorkspaceId] = useState(
-    () => new URLSearchParams(window.location.search).get("workspace") || "legacy",
+    () => new URLSearchParams(window.location.search).get("workspace") || "",
   );
   const currentWorkspace = useRef(workspaceId);
   const [selectedConfiguration, setSelectedConfiguration] =
@@ -182,9 +187,12 @@ function ProjectDraft({
     };
   }, []);
   const source = draft?.preview?.reviewed.config_source ?? attempt?.request.reviewed?.config_source;
+  const pinnedSetup = source?.kind === "parameter_revision";
   const configuration = useQuery({
     queryKey: ["config", "launch-context", projectId, source],
-    enabled: Boolean(projectId && (draft?.preview || attempt?.request.reviewed?.config_source)),
+    enabled: Boolean(
+      projectId && !pinnedSetup && (draft?.preview || attempt?.request.reviewed?.config_source),
+    ),
     queryFn: async ({ signal }) =>
       (
         await apiData(
@@ -195,7 +203,8 @@ function ProjectDraft({
         )
       ).activation ?? null,
   });
-  const matchesConfiguration = configuration.isSuccess && matchesActive(source, configuration.data);
+  const matchesConfiguration =
+    pinnedSetup || (configuration.isSuccess && matchesActive(source, configuration.data));
   if (
     draft?.preview &&
     source &&
@@ -240,7 +249,7 @@ function ProjectDraft({
         if (currentWorkspace.current !== owner) return current;
         if (!reset && current?.workspaceId === owner && current.definition === definitionKey(entry))
           return current;
-        const next = initialDraft(entry, (current?.revision ?? 0) + 1);
+        const next = initialDraft(entry, (current?.revision ?? 0) + 1, owner);
         next.workspaceId = owner;
         next.codeRevision = current?.workspaceId === owner ? current.codeRevision : undefined;
         next.selection =
@@ -399,23 +408,28 @@ function ProjectDraft({
         attempt,
         submit,
         checkSubmission,
-        configurationError: configuration.error?.message ?? "",
+        configurationError: pinnedSetup ? "" : (configuration.error?.message ?? ""),
         retryOriginalAllowed:
           attempt?.definition === draft?.definition &&
-          (attempt?.request.workspace_id ?? "legacy") === workspaceId &&
+          attempt?.request.workspace_id === workspaceId &&
           draft?.workspaceId === workspaceId &&
           (!draft?.codeRevision ||
             attempt?.request.code_revision?.content_hash === draft.codeRevision.content_hash) &&
-          configuration.isSuccess &&
-          !configuration.isFetching &&
-          matchesActive(attempt?.request.reviewed?.config_source, configuration.data),
+          (attempt?.request.reviewed?.config_source.kind === "parameter_revision" ||
+            (configuration.isSuccess &&
+              !configuration.isFetching &&
+              matchesActive(attempt?.request.reviewed?.config_source, configuration.data))),
         refreshConfiguration: () => {
           void queryClient.invalidateQueries({ queryKey: ["config", "launch-context", projectId] });
         },
         openPlan: (plan, entry, context) => {
           if (!alive.current) return;
           const current = latest.current;
-          const next = initialDraft(entry, (current?.revision ?? 0) + 1);
+          const next = initialDraft(
+            entry,
+            (current?.revision ?? 0) + 1,
+            plan.definition.workspace_id,
+          );
           next.collection = current?.collection;
           const d = plan.definition;
           const imported = importLaunchRequest(
@@ -454,7 +468,11 @@ function ProjectDraft({
         importHandoff: (entry, handoff) => {
           if (!alive.current) return;
           const current = latest.current;
-          const next = initialDraft(entry, (current?.revision ?? 0) + 1);
+          const next = initialDraft(
+            entry,
+            (current?.revision ?? 0) + 1,
+            handoff.request.workspace_id,
+          );
           next.collection = current?.collection;
           try {
             const imported = importLaunchHandoff(
@@ -467,7 +485,9 @@ function ProjectDraft({
               normalizeSelection(handoff.request.selection).configuration.kind !== "working_point"
             )
               setSelectedContext(undefined);
-            const owner = imported.workspaceId ?? "legacy";
+            const owner = imported.workspaceId;
+            if (!owner)
+              throw new Error("This draft has no author source. Select code and preview again.");
             currentWorkspace.current = owner;
             setWorkspaceId(owner);
             setDraft({ ...imported, workspaceId: owner, actor: current?.actor ?? "operator" });
@@ -486,7 +506,7 @@ function ProjectDraft({
           latest.current?.revision === revision,
         // Background event refreshes must not swallow a click on a checked preview.
         // Admission still validates its configuration; a failed or changed read blocks it.
-        configurationReady: matchesConfiguration && !configuration.isError,
+        configurationReady: matchesConfiguration && (pinnedSetup || !configuration.isError),
       }}
     >
       {children}

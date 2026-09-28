@@ -40,7 +40,12 @@ def test_revision_captures_helper_analysis_and_keeps_previous_objects(
     )
     store.bootstrap()
     try:
-        repository = AuthorRevisionRepository(store)
+        with store.sqlite.write_transaction() as connection:
+            connection.execute(
+                "INSERT INTO author_workspaces VALUES (?, ?)",
+                ("test-source", "Authors"),
+            )
+        repository = AuthorRevisionRepository(store, "test-source")
         repository.publish(first, expected_generation=0)
         repository.publish(second, expected_generation=1)
         with pytest.raises(AuthorRevisionConflict):
@@ -84,7 +89,7 @@ def test_maintenance_change_is_rejected_before_author_validation(
     )
     store.bootstrap()
     try:
-        service = AuthorRevisionService(tmp_path, store)
+        service = AuthorRevisionService(tmp_path, store, workspace_id="test-source")
         assert service.baseline is not None
         with pytest.raises(ValueError, match="recorded Python"):
             require_environment(

@@ -33,7 +33,7 @@ def _forbid_source_state(
     raise AssertionError("catalog listing must not inspect or initialize author state")
 
 
-def test_catalog_keeps_baselineless_service_available_without_initialization(
+def test_service_starts_without_an_author_source_or_implicit_identity(
     tmp_path: Path,
     monkeypatch: MonkeyPatch,
 ) -> None:
@@ -41,21 +41,13 @@ def test_catalog_keeps_baselineless_service_available_without_initialization(
         LocalDaemonRuntime(tmp_path, bootstrap_config=load_config()) as runtime,
         TestClient(runtime.app()) as transport,
     ):
-        assert runtime.application.author_revisions.baseline is None
+        assert not runtime.application.author_workspaces.services
         monkeypatch.setattr(AuthorRevisionService, "state", _forbid_source_state)
         _assert_no_author_publication(runtime)
         response = transport.get("/api/v1/author-workspaces")
         assert response.status_code == 200
-        assert response.json() == {
-            "items": [
-                {
-                    "id": "legacy",
-                    "name": "Original workspace",
-                    "available": True,
-                    "unavailable_reason": None,
-                }
-            ]
-        }
+        assert response.json() == {"items": []}
+        assert transport.get("/api/v1/author-revisions").status_code == 422
         _assert_no_author_publication(runtime)
 
 
@@ -64,6 +56,7 @@ def test_catalog_reports_qualified_rejected_and_retained_unbound_sources_readonl
     monkeypatch: MonkeyPatch,
 ) -> None:
     owner = initialize_project(tmp_path / "owner")
+    primary = register_author_workspace(owner.root, owner.root)
     second = initialize_project(tmp_path / "second")
     qualified = register_author_workspace(
         owner.root, second.root, name="Other experiments"
@@ -102,7 +95,7 @@ def test_catalog_reports_qualified_rejected_and_retained_unbound_sources_readonl
         before_bindings = bindings_path.read_bytes()
         _assert_no_author_publication(runtime)
         monkeypatch.setattr(AuthorRevisionService, "state", _forbid_source_state)
-        for workspace_header in ("legacy", "retained"):
+        for workspace_header in (primary.id, "retained"):
             response = transport.get(
                 "/api/v1/author-workspaces",
                 headers={"X-Scopecat-Workspace": workspace_header},
@@ -110,8 +103,8 @@ def test_catalog_reports_qualified_rejected_and_retained_unbound_sources_readonl
             assert response.status_code == 200
             catalog = AuthorWorkspaceCatalog.model_validate(response.json())
             by_id = {item.id: item for item in catalog.items}
-            assert set(by_id) == {"legacy", qualified.id, "rejected", "retained"}
-            assert by_id["legacy"].available
+            assert set(by_id) == {primary.id, qualified.id, "rejected", "retained"}
+            assert by_id[primary.id].available
             assert by_id[qualified.id].available
             assert by_id[qualified.id].name == "Other experiments"
             assert by_id[qualified.id].unavailable_reason is None

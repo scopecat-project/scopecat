@@ -6,6 +6,7 @@ import sys
 from collections.abc import Generator
 from dataclasses import dataclass
 from pathlib import Path
+from types import ModuleType
 from uuid import uuid4
 
 import pytest
@@ -28,10 +29,38 @@ class ReferenceLabDaemon:
     root: Path
 
 
+@pytest.fixture(scope="session")
+def reference_collection_modules() -> dict[str, ModuleType]:
+    # Test modules retain collection-time classes and declarations. Restore their
+    # matching imports even when a module-scoped fixture loaded a cloned project
+    # before function-scoped isolation started.
+    return {
+        name: module
+        for name, module in tuple(sys.modules.items())
+        if name == "reference_lab" or name.startswith("reference_lab.")
+    }
+
+
 @pytest.fixture(autouse=True)
-def isolate_project_loader() -> Generator[None]:
-    with isolated_project_imports():
-        yield
+def isolate_project_loader(
+    reference_collection_modules: dict[str, ModuleType],
+) -> Generator[None]:
+    def restore() -> None:
+        for name in tuple(sys.modules):
+            if name == "reference_lab" or name.startswith("reference_lab."):
+                del sys.modules[name]
+        sys.modules.update(reference_collection_modules)
+        for name, module in reference_collection_modules.items():
+            parent, _, child = name.rpartition(".")
+            if parent in reference_collection_modules:
+                vars(reference_collection_modules[parent])[child] = module
+
+    try:
+        with isolated_project_imports():
+            restore()
+            yield
+    finally:
+        restore()
 
 
 @pytest.fixture(scope="session")

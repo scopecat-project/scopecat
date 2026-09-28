@@ -24,6 +24,7 @@ from scopecat.records.author_revision import (
     AuthorRevisionState,
 )
 
+from scopecat_server.author_registration import register_author_workspace
 from scopecat_server.http.transport import create_app
 from scopecat_server.services.application import DaemonApplication
 from scopecat_server.services.author_revisions import AuthorRevisionService
@@ -55,9 +56,21 @@ def preparation_project(
         SQLiteDatabase(tmp_path / "control.sqlite3"), tmp_path / "objects"
     )
     store.bootstrap()
-    service = AuthorRevisionService(tmp_path, store)
+    identity = register_author_workspace(tmp_path, tmp_path).id
+    with store.sqlite.write_transaction() as connection:
+        connection.execute(
+            "INSERT INTO author_workspaces VALUES (?, ?)", (identity, "Authors")
+        )
+    service = AuthorRevisionService(tmp_path, store, workspace_id=identity)
+
+    def get_source(key: str) -> AuthorRevisionService:
+        return {identity: service}[key]
+
     application = cast(
-        "DaemonApplication", cast("object", SimpleNamespace(author_revisions=service))
+        "DaemonApplication",
+        cast(
+            "object", SimpleNamespace(author_workspaces=SimpleNamespace(get=get_source))
+        ),
     )
     web = TestClient(create_app(application))
 
@@ -70,7 +83,11 @@ def preparation_project(
         )
         return httpx2.Response(response.status_code, content=response.content)
 
-    client = AuthorProject("http://testserver", transport=httpx2.MockTransport(request))
+    client = AuthorProject(
+        "http://testserver",
+        workspace_id=identity,
+        transport=httpx2.MockTransport(request),
+    )
     try:
         yield tmp_path, service, client
     finally:
@@ -177,7 +194,9 @@ def test_restart_marks_unfinished_operation_interrupted(
         update={"status": "running", "error": None}
     )
     service.repository.save_preparation(record)
-    restarted = AuthorRevisionService(root, service.repository.store)
+    restarted = AuthorRevisionService(
+        root, service.repository.store, workspace_id=service.repository.workspace_id
+    )
     try:
         assert restarted.repository.preparation(operation.id).status == "interrupted"
         assert (
@@ -211,7 +230,9 @@ def test_lost_submission_response_keeps_original_request(
 
     with (
         AuthorProject(
-            "http://testserver", transport=httpx2.MockTransport(lose_response)
+            "http://testserver",
+            workspace_id=service.repository.workspace_id,
+            transport=httpx2.MockTransport(lose_response),
         ) as disconnected,
         pytest.raises(AuthorPreparationSubmissionUncertain) as error,
     ):
@@ -233,7 +254,9 @@ def test_observation_disconnect_retains_handle() -> None:
         raise httpx2.ConnectError("daemon unavailable")
 
     with AuthorProject(
-        "http://testserver", transport=httpx2.MockTransport(disconnected)
+        "http://testserver",
+        workspace_id="test-source",
+        transport=httpx2.MockTransport(disconnected),
     ) as client:
         operation = client.preparation("accepted-before-disconnect")
         with pytest.raises(AuthorPreparationDisconnected) as error:
@@ -265,7 +288,7 @@ def test_daemon_shutdown_drains_http_waiting_for_cold_catalog(
 
     from scopecat_server.lifecycle import start_project, stop_project
 
-    root, _, _ = preparation_project
+    root, service, _ = preparation_project
     project = open_project(root)
     endpoint = start_project(project)
     try:
@@ -273,6 +296,7 @@ def test_daemon_shutdown_drains_http_waiting_for_cold_catalog(
             waiting = requests.submit(
                 httpx2.get,
                 endpoint.base_url + "/api/v1/experiment-launcher",
+                headers={"X-Scopecat-Workspace": service.repository.workspace_id},
                 timeout=30,
                 trust_env=False,
             )

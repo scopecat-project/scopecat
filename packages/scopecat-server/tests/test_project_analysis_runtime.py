@@ -172,7 +172,9 @@ def _submission(
     )
 
 
-def _daemon_client(transport: TestClient) -> DaemonClient:
+def _daemon_client(
+    transport: TestClient, *, workspace_id: str | None = None
+) -> DaemonClient:
     def send(request: httpx2.Request) -> httpx2.Response:
         response = transport.request(
             request.method,
@@ -188,6 +190,7 @@ def _daemon_client(transport: TestClient) -> DaemonClient:
 
     return DaemonClient(
         "http://testserver",
+        workspace_id=workspace_id,
         transport=httpx2.MockTransport(send),
     )
 
@@ -1262,15 +1265,18 @@ def test_typed_candidate_policy_uses_retained_decision_and_workpoint(
         '[authors]\nsource_roots=["src"]\nrefresh_roots=["src"]\n'
     )
     bundle = capture_sources(load_project(tmp_path / "scopecat.toml"))
+    from scopecat_server.author_registration import register_author_workspace
+
+    source = register_author_workspace(tmp_path, tmp_path)
     schema = ordinary_result_schema(_CandidateDecision)
     with (
         LocalDaemonRuntime(tmp_path, bootstrap_config=_config()) as runtime,
         TestClient(runtime.app()) as transport,
     ):
-        runtime.application.author_revisions.repository.publish(
+        runtime.application.author_workspaces.get(source.id).repository.publish(
             bundle, expected_generation=0
         )
-        lab = LabClient(_daemon_client(transport))
+        lab = LabClient(_daemon_client(transport, workspace_id=source.id))
         sample = lab.samples.create(
             "policy-sample",
             kind="synthetic",

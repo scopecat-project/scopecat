@@ -127,18 +127,26 @@ class AuthorProject(DaemonClient):
         receipts: Path | None = None,
         project_root: Path | None = None,
         source_project: SourceProject | None = None,
+        workspace_id: str | None = None,
         timeout: float | httpx2.Timeout | None = 120,
         transport: httpx2.BaseTransport | None = None,
     ) -> None:
         from scopecat.author_workspaces import author_workspace_id
 
+        identity = (
+            author_workspace_id(project_root)
+            if project_root is not None
+            else workspace_id
+        )
+        if identity is None:
+            raise ValueError(
+                "AuthorProject requires a registered source or workspace_id"
+            )
         super().__init__(
             base_url,
             timeout=timeout,
             transport=transport,
-            workspace_id=author_workspace_id(project_root)
-            if project_root is not None
-            else "legacy",
+            workspace_id=identity,
         )
         self.receipts = receipts.resolve() if receipts is not None else None
         self.project_root = project_root.resolve() if project_root is not None else None
@@ -343,6 +351,7 @@ class AuthorProject(DaemonClient):
             resolve_launch_config(
                 LabClient(self),
                 LaunchRequest(
+                    workspace_id=self.workspace_id,
                     action="preview",
                     experiment="selection",
                     version="1",

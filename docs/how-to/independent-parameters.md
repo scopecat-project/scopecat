@@ -28,14 +28,15 @@ This preserves the selected subject, batch, operator and record collection.
 Independent parameters replace the configuration choice, not the whole context;
 they do not inherit a working point's calibration publication ownership. Choose
 either `parameters` or `working_point` in one `use` call. Other sessions are
-unaffected. Selection and editing require no executable setup; the maintainer
-must select one before previewing or running an experiment. For repeated editing,
+unaffected. Selection and editing require no executable setup; select a saved
+setup in this session before previewing or running an experiment. For repeated editing,
 use [a parameter branch and `session.params`](parameter-branches.md).
 
 Preview resolves the parameter revision and selected setup through the common
 measurement resolver without creating a configuration-registry entry. Reviewed
 requests retain both exact references; a later setup selection or session edit
-cannot silently replace them. An incompatible active setup blocks admission.
+cannot silently replace them. Admission uses that saved setup, independently of
+other clients' defaults; common physical resources still share ownership checks.
 Saved experiment plans pin both references and reuse the same resolver.
 
 The low-level runner can use the same read-only resolution:
@@ -63,8 +64,14 @@ starts a fresh scientific selection, so select its parameters/setup together.
 
 Standalone branch editors can use `params.preview(setup=setup)`; omission uses the
 active setup. Session preparation supplies its selected setup to the editor.
-Neither operation activates equipment: an incompatible active setup still blocks
-run admission.
+Neither operation activates equipment. Explicit setup references do not require
+a global active setup and are not invalidated when another client selects one.
+
+In the workbench, choose a parameter branch and adopt its version, then use
+the **Device context** field to select a saved setup for this page. Preview becomes
+available after this selection. Another browser page may use a different context
+on the same service. Refreshing either list or adopting a new parameter version
+preserves the selected setup; only an explicit change replaces it.
 
 Low-level callers can supply an exact `setup=` to `resolve`, or choose
 `ParameterConfiguration(ref=..., setup=...)` inside a scientific selection.
@@ -90,7 +97,7 @@ consumers still need ownership cleanup, tracked in
 `lab.config.set_parameter_default(...)` specifically publishes a global default;
 ordinary parameter authoring should not use it just to save a revision.
 
-Current storage is development schema 98. No prebaseline migration or persistent
+Current storage is development schema 99. No prebaseline migration or persistent
 compatibility promise is introduced. Current-format backup/restore includes
 standalone revisions even when no setup has ever been saved.
 

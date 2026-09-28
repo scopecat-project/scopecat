@@ -12,6 +12,7 @@ from scopecat.daemon.wire import RunAdmission, RunSubmission
 from scopecat.records.parameter_revision import ParameterRevision, ParameterRevisionRef
 from scopecat.records.run import ParameterRunConfigSource
 from scopecat.records.sample import SampleRevisionDraft
+from scopecat_testkit.authoring import source_workspace_id
 
 from reference_lab.application import create_application
 from reference_lab.configuration import EXAMPLE_ROOT
@@ -162,6 +163,7 @@ def test_context_launch_survives_unrelated_parameter_publication(
         lab.samples.revise(sample_id, SampleRevisionDraft(display_name="Replay r2"))
         assert application.authors is not None
         request = LaunchRequest(
+            workspace_id=source_workspace_id(independent_lab_daemon),
             action="preview",
             experiment="reference_lab.frequency_amplitude",
             version=application.authors.get(

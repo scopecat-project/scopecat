@@ -129,8 +129,12 @@ def _application(root: Path, *, attempt: int = 1) -> tuple[DaemonApplication, Mo
                 manual_previews=ManualPreviewService(
                     SQLiteDatabase(root / "store.sqlite3"), Mock(), Mock()
                 ),
-                author_revisions=SimpleNamespace(
-                    root=root, state=lambda: AuthorRevisionState()
+                author_workspaces=SimpleNamespace(
+                    get=Mock(
+                        return_value=SimpleNamespace(
+                            root=root, state=lambda: AuthorRevisionState()
+                        )
+                    )
                 ),
                 automation=SimpleNamespace(
                     get=Mock(return_value=procedure),
@@ -177,6 +181,7 @@ def test_unknown_child_never_dispatches_including_exact_submission_retry(
     from scopecat.records.run import ConfigRegistryRunConfigSource
 
     request = LaunchRequest(
+        workspace_id="test-source",
         action="preview",
         experiment="diagnostic",
         version="1",
@@ -286,12 +291,15 @@ def test_author_preview_reads_exact_current_child_not_latest_history(
         )
 
     with AuthorProject(
-        "http://test", transport=httpx2.MockTransport(respond)
+        "http://test",
+        workspace_id="test-source",
+        transport=httpx2.MockTransport(respond),
     ) as author:
         job = AuthorJob.retain(
             author,
             tmp_path / "job.json",
             LaunchRequest(
+                workspace_id="test-source",
                 action="preview",
                 experiment="signal",
                 version="1",

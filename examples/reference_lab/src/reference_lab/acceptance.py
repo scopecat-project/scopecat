@@ -50,16 +50,21 @@ class _ArrowProjection(Protocol):
 
 
 FIXTURE_TIME = datetime(2026, 9, 1, tzinfo=UTC)
+FIXTURE_WORKSPACE = "acceptance-source"
 
 
 def _checked_launch_preview(
     client: DaemonClient, request: LaunchRequest
 ) -> LaunchPreview:
-    with AuthorProject(client.base_url) as authors:
+    health = client.health()
+    with AuthorProject(
+        client.base_url, workspace_id=health.author_workspaces[health.project_root]
+    ) as authors:
         catalog = authors.catalog()
         entry = next(item for item in catalog.entries if item.id == request.experiment)
         preview = authors.preview(request.model_copy(update={"version": entry.version}))
     assert preview.manual_state is not None
+    assert preview.workspace_id == request.workspace_id
     assert preview.code_revision is not None
     assert preview.manual_state.binding.code_revision == preview.code_revision
     # UI shape/science fixtures are not executable permissions. Normalize only
@@ -78,6 +83,7 @@ def _checked_launch_preview(
         )
     return preview.model_copy(
         update={
+            "workspace_id": FIXTURE_WORKSPACE,
             "inspection": inspection,
             "request_hash": "sha256:" + "0" * 64,
             "definition_hash": "sha256:" + "0" * 64,
@@ -101,11 +107,15 @@ def capture_acceptance_fixtures(
     lab: LabClient, client: DaemonClient
 ) -> dict[str, JsonValue]:
     """Caller owns a fresh isolated daemon; all device access uses its virtual lab."""
-    with AuthorProject(client.base_url) as authors:
+    health = client.health()
+    workspace_id = health.author_workspaces[health.project_root]
+    with AuthorProject(client.base_url, workspace_id=workspace_id) as authors:
         current_catalog = authors.catalog()
+    assert current_catalog.workspace_id == workspace_id
     # The shared UI fixture contains the three reference scenarios exercised here.
     # Source-derived versions are checked by admission tests, not this shape fixture.
     catalog = LaunchCatalog(
+        workspace_id=FIXTURE_WORKSPACE,
         entries=tuple(
             entry.model_copy(update={"version": "sha256:" + "0" * 64})
             if entry.id != "channel-timing"
@@ -117,7 +127,7 @@ def capture_acceptance_fixtures(
                 "reference_lab.frequency_amplitude",
                 "reference_lab.temperature_diagnostic",
             }
-        )
+        ),
     )
     registry = lab.config.registry()
     setup = lab.setup.active()
@@ -136,6 +146,7 @@ def capture_acceptance_fixtures(
     setting_preview = launch_provider(
         lab,
         LaunchRequest(
+            workspace_id=workspace_id,
             action="preview",
             experiment="channel-timing",
             version="1",
@@ -148,6 +159,7 @@ def capture_acceptance_fixtures(
     launch_preview = _checked_launch_preview(
         client,
         LaunchRequest(
+            workspace_id=workspace_id,
             action="preview",
             experiment="reference_lab.temperature_diagnostic",
             version="1",
@@ -155,6 +167,7 @@ def capture_acceptance_fixtures(
         ),
     )
     scalar_request = LaunchRequest(
+        workspace_id=workspace_id,
         action="preview",
         experiment="reference_lab.frequency_amplitude",
         version="1",

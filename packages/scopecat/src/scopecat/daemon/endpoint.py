@@ -112,7 +112,7 @@ def verify_daemon_binding(endpoint: str, root: Path) -> None:
             or Path(health.deployment_root).resolve() != binding.deployment_root
         ):
             raise DaemonEndpointError("daemon endpoint belongs to another binding")
-    except (httpx2.HTTPError, ValidationError) as error:
+    except (httpx2.HTTPError, ValueError) as error:
         raise DaemonEndpointError(f"cannot verify daemon binding: {error}") from error
 
 

@@ -30,6 +30,7 @@ from scopecat_server.services.revision_workers import (
 
 def _submission_request() -> dict[str, object]:
     request = LaunchRequest(
+        workspace_id="test-source",
         action="preview",
         experiment="diagnostic",
         version="1",
@@ -90,32 +91,39 @@ def client(
                         project_root=Path.cwd(),
                         calibration_tasks=Mock(),
                         manual_previews=_manual_previews(),
-                        author_revisions=service
-                        or SimpleNamespace(
-                            root=Path.cwd(),
-                            state=lambda: state or AuthorRevisionState(),
-                            get=Mock(),
-                            worker_binding=AuthorWorkerBinding(
-                                Path.cwd(), Path(sys.executable)
-                            ),
-                            workers=RevisionWorkers(),
-                            close=Mock(),
+                        author_workspaces=SimpleNamespace(
+                            get=Mock(
+                                return_value=service
+                                or SimpleNamespace(
+                                    root=Path.cwd(),
+                                    state=lambda: state or AuthorRevisionState(),
+                                    get=Mock(),
+                                    worker_binding=AuthorWorkerBinding(
+                                        Path.cwd(), Path(sys.executable)
+                                    ),
+                                    workers=RevisionWorkers(),
+                                    close=Mock(),
+                                )
+                            )
                         ),
                     ),
                 ),
             )
-        )
+        ),
+        headers={"X-Scopecat-Workspace": "test-source"},
     )
 
 
 def test_catalog_runs_a_fixed_separate_worker() -> None:
     with patch("scopecat_server.http.transport.subprocess.run") as run:
         run.return_value = SimpleNamespace(
-            returncode=0, stdout='{"entries": []}', stderr=""
+            returncode=0,
+            stdout='{"workspace_id":"test-source","entries": []}',
+            stderr="",
         )
         response = client().get("/api/v1/experiment-launcher")
         assert response.json() == {
-            "workspace_id": "legacy",
+            "workspace_id": "test-source",
             "entries": [],
             "code_revision": None,
         }
@@ -135,6 +143,7 @@ def test_preview_failure_is_visible_and_start_is_not_supported() -> None:
         response = client().post(
             "/api/v1/experiment-launcher/preview",
             json={
+                "workspace_id": "test-source",
                 "action": "preview",
                 "experiment": "rabi",
                 "version": "1",
@@ -171,7 +180,12 @@ def test_timeout_identifies_operation_without_retry(
         elif action == "preview":
             response = client().post(
                 "/api/v1/experiment-launcher/preview",
-                json={"action": "preview", "experiment": "signal", "version": "1"},
+                json={
+                    "workspace_id": "test-source",
+                    "action": "preview",
+                    "experiment": "signal",
+                    "version": "1",
+                },
             )
         else:
             response = client().post(
@@ -199,7 +213,9 @@ def test_worker_loads_manifest_file_and_supports_empty_project(
     from scopecat_server import launch_worker
 
     monkeypatch.setattr("sys.argv", ["launch_worker", str(tmp_path)])
-    monkeypatch.setattr("sys.stdin", io.StringIO('{"action":"list"}'))
+    monkeypatch.setattr(
+        "sys.stdin", io.StringIO('{"workspace_id":"test-source","action":"list"}')
+    )
     with patch.object(launch_worker, "load_project") as load:
         load.return_value.source_roots = ()
         load.return_value.load_application.return_value = SimpleNamespace(
@@ -209,7 +225,7 @@ def test_worker_loads_manifest_file_and_supports_empty_project(
         load.assert_called_once_with(tmp_path / "scopecat.toml")
     assert (
         capsys.readouterr().out.strip()
-        == '{"workspace_id":"legacy","code_revision":null,"entries":[]}'
+        == '{"workspace_id":"test-source","code_revision":null,"entries":[]}'
     )
 
 
@@ -227,10 +243,14 @@ def test_admission_survives_dispatch_failure(tmp_path: Path, routing: bool) -> N
                     project_root=tmp_path,
                     calibration_tasks=Mock(),
                     automation=automation,
-                    author_revisions=SimpleNamespace(
-                        root=Path.cwd(),
-                        state=lambda: AuthorRevisionState(),
-                        close=Mock(),
+                    author_workspaces=SimpleNamespace(
+                        get=Mock(
+                            return_value=SimpleNamespace(
+                                root=Path.cwd(),
+                                state=lambda: AuthorRevisionState(),
+                                close=Mock(),
+                            )
+                        )
                     ),
                     manual_previews=_manual_previews(),
                 ),
@@ -552,7 +572,7 @@ def test_http_lifespan_starts_and_stops_manager() -> None:
                             project_root=Path.cwd(),
                             calibration_tasks=Mock(),
                             manual_previews=_manual_previews(),
-                            author_revisions=SimpleNamespace(
+                            author_workspaces=SimpleNamespace(
                                 root=Path.cwd(),
                                 state=lambda: AuthorRevisionState(),
                                 close=Mock(),
@@ -596,7 +616,7 @@ from scopecat.application.launch import (
 def provider(lab, request):
     assert request.actor == "操作者 → μ"
     print(request.actor)
-    return LaunchCatalog(entries=(LaunchCatalogEntry(
+    return LaunchCatalog(workspace_id=request.workspace_id, entries=(LaunchCatalogEntry(
         id="diagnostic", version="1", title=request.actor,
         description="测量 → 结果", actions=("preview",), kind="diagnostic",
         configuration_effect="none", request=LaunchInputSchema(),
@@ -616,7 +636,9 @@ with (
 """
     result = subprocess.run(  # noqa: S603 - fixed test interpreter and script
         [sys.executable, "-c", script, str(tmp_path)],
-        input=LaunchRequest(action="list", actor="操作者 → μ").model_dump_json(),
+        input=LaunchRequest(
+            workspace_id="test-source", action="list", actor="操作者 → μ"
+        ).model_dump_json(),
         capture_output=True,
         encoding="utf-8",
         env={**os.environ, "PYTHONIOENCODING": "ascii"},
@@ -650,6 +672,7 @@ def test_worker_rejects_undeclared_control_edits_before_provider_action(
 
     provider = Mock(
         return_value=LaunchCatalog(
+            workspace_id="test-source",
             entries=(
                 LaunchCatalogEntry(
                     id="legacy",
@@ -661,14 +684,14 @@ def test_worker_rejects_undeclared_control_edits_before_provider_action(
                     configuration_effect="none",
                     request=LaunchInputSchema(properties={}),
                 ),
-            )
+            ),
         )
     )
     monkeypatch.setattr("sys.argv", ["launch_worker", str(tmp_path)])
     monkeypatch.setattr(
         "sys.stdin",
         io.StringIO(
-            '{"action":"preview","experiment":"legacy","version":"1",'
+            '{"workspace_id":"test-source","action":"preview","experiment":"legacy","version":"1",'
             '"control_edits":{"frequency":{"mode":"fixed","value":5.0}}}'
         ),
     )
@@ -748,7 +771,7 @@ def test_pinned_catalog_uses_pool_and_exposes_nested_timing() -> None:
         call.return_value = subprocess.CompletedProcess(
             "worker",
             0,
-            '{"entries": []}',
+            '{"workspace_id":"test-source","entries": []}',
             'Scopecat launch timing: {"provider": 0.002, "worker": 0.003}\n',
         )
         response = client(AuthorRevisionState(enabled=True, active=ref)).get(
@@ -774,7 +797,12 @@ def test_request_rejection_is_reported_as_422() -> None:
         )
         response = client().post(
             "/api/v1/experiment-launcher/preview",
-            json={"action": "preview", "experiment": "diagnostic", "version": "1"},
+            json={
+                "workspace_id": "test-source",
+                "action": "preview",
+                "experiment": "diagnostic",
+                "version": "1",
+            },
         )
         assert response.status_code == 422
         assert response.json()["detail"] == "unknown control 'amplitudes'"

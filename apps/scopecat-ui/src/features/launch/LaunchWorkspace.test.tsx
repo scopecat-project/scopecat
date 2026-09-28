@@ -101,6 +101,7 @@ const manualFence = {
 const previewResult = {
   manual_state: manualFence,
   experiment_id: "rabi",
+  workspace_id: "legacy",
   request_hash: "sha256:" + "a".repeat(64),
   point_count: 2,
   reviewed: reviewedFixture({
@@ -115,7 +116,11 @@ const previewResult = {
   resolved_inputs: {},
   controls: [],
 };
-function mount(manualValidity = () => Response.json({ valid: true, changes: [] })) {
+function mount(
+  manualValidity = () => Response.json({ valid: true, changes: [] }),
+  configuration = () =>
+    Response.json({ activation: { entry_id: "baseline", generation: 1 }, entries: [] }),
+) {
   const fetcher = globalThis.fetch;
   vi.stubGlobal("fetch", (request: Request) =>
     new URL(request.url).pathname.endsWith("/author-workspaces")
@@ -123,9 +128,7 @@ function mount(manualValidity = () => Response.json({ valid: true, changes: [] }
       : new URL(request.url).pathname.endsWith("/experiment-plans")
         ? Promise.resolve(Response.json({ items: [] }))
         : new URL(request.url).pathname.endsWith("/config-registry")
-          ? Promise.resolve(
-              Response.json({ activation: { entry_id: "baseline", generation: 1 }, entries: [] }),
-            )
+          ? Promise.resolve(configuration())
           : request.url.endsWith("/author-revisions")
             ? Promise.resolve(Response.json({ enabled: false, generation: 0, active: null }))
             : new URL(request.url).pathname.endsWith("/experiment-launcher/validity")
@@ -204,6 +207,8 @@ it("previews a chosen branch version and invalidates only when another version i
           ],
           next_cursor: null,
         });
+      if (path.endsWith("/setup/revisions"))
+        return Response.json({ items: [{ id: "bench", content_hash: "sha256:bench" }] });
       if (path.endsWith("/preview")) {
         requests.push(await request.json());
         return Response.json({
@@ -223,7 +228,10 @@ it("previews a chosen branch version and invalidates only when another version i
       return Response.json({ entries: [entry] });
     }),
   );
-  mount();
+  const unavailableDefault = vi.fn(() =>
+    Response.json({ detail: "No global default" }, { status: 404 }),
+  );
+  mount(undefined, unavailableDefault);
   fireEvent.change(await screen.findByLabelText("Qubit"), { target: { value: "Q12" } });
   fireEvent.change(screen.getByLabelText("Amplitude"), { target: { value: "0.4" } });
   fireEvent.change(screen.getByLabelText("Sample ID"), { target: { value: "chip-a" } });
@@ -231,6 +239,9 @@ it("previews a chosen branch version and invalidates only when another version i
   await screen.findByRole("option", { name: /daily.*generation 1/ });
   fireEvent.change(screen.getByLabelText("Parameter branch"), { target: { value: "daily" } });
   fireEvent.click(screen.getByRole("button", { name: "Use this parameter version" }));
+  expect(screen.getByRole("button", { name: "Preview" })).toBeDisabled();
+  await screen.findByRole("option", { name: "bench" });
+  fireEvent.change(screen.getByLabelText("Device context"), { target: { value: "bench" } });
   fireEvent.click(screen.getByRole("button", { name: "Preview" }));
   await screen.findByText("Preview ready");
   expect(requests[0]?.selection).toEqual({
@@ -239,6 +250,7 @@ it("previews a chosen branch version and invalidates only when another version i
     configuration: {
       kind: "parameters",
       ref: { revision_id: "values-1", content_hash: "sha256:1" },
+      setup: { revision_id: "bench", content_hash: "sha256:bench" },
       overrides: [],
     },
   });
@@ -252,6 +264,7 @@ it("previews a chosen branch version and invalidates only when another version i
   await screen.findByText("Preview ready");
   expect(requests[1]?.selection.configuration.ref.revision_id).toBe("values-2");
   expect(requests[1]?.selection.subject).toEqual(requests[0]?.selection.subject);
+  expect(unavailableDefault).not.toHaveBeenCalled();
 });
 it("shows compilation failure without a successful preview", async () => {
   vi.stubGlobal(

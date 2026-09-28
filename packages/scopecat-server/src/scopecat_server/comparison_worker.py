@@ -43,7 +43,7 @@ def compare(
     if application.comparison_provider is None:
         if request.action != "list":
             raise ValueError("Project has no retained-run comparison provider")
-        result = ComparisonCatalog()
+        result = ComparisonCatalog(workspace_id=request.workspace_id)
     else:
         with application.connect(
             resolve_daemon_endpoint(root), operator=request.actor

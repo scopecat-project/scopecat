@@ -19,7 +19,7 @@ function mount() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
-      <AuthorRefresh projectId="lab" />
+      <AuthorRefresh projectId="lab" workspaceId="test-source" />
     </QueryClientProvider>,
   );
 }
@@ -110,7 +110,7 @@ it("announces readiness only after the consumer catalog has updated", async () =
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
     <QueryClientProvider client={client}>
-      <AuthorRefresh projectId="lab" onRefreshed={() => updated} />
+      <AuthorRefresh projectId="lab" workspaceId="test-source" onRefreshed={() => updated} />
     </QueryClientProvider>,
   );
   await waitFor(() =>

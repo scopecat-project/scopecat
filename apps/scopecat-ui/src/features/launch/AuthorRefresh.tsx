@@ -9,7 +9,7 @@ type Request = { operation_id: string; expected_generation: number };
 
 type Props = {
   projectId: string | undefined;
-  workspaceId?: string;
+  workspaceId: string;
   disabled?: boolean;
   onRefreshed?: () => void | Promise<void>;
 };
@@ -18,12 +18,7 @@ export function AuthorRefresh(props: Props) {
   return <AuthorRefreshPanel key={`${props.projectId}:${props.workspaceId}`} {...props} />;
 }
 
-function AuthorRefreshPanel({
-  projectId,
-  onRefreshed,
-  workspaceId = "legacy",
-  disabled = false,
-}: Props) {
+function AuthorRefreshPanel({ projectId, onRefreshed, workspaceId, disabled = false }: Props) {
   const queryClient = useQueryClient();
   const headers = { "X-Scopecat-Workspace": workspaceId };
   const [request, setRequest] = useState<Request>();
@@ -32,14 +27,16 @@ function AuthorRefreshPanel({
   const state = useQuery({
     queryKey: ["author-revisions", projectId, workspaceId],
     enabled: Boolean(projectId && !disabled),
-    queryFn: () => apiData(apiClient.GET("/api/v1/author-revisions", { headers })),
+    queryFn: () =>
+      apiData(apiClient.GET("/api/v1/author-revisions", { params: { header: headers } })),
     refetchInterval: (query) =>
       query.state.data?.enabled && !query.state.data.active ? 1000 : false,
   });
   const history = useQuery({
     queryKey: ["author-preparations", projectId, workspaceId],
     enabled: Boolean(projectId && !disabled && state.data?.enabled),
-    queryFn: () => apiData(apiClient.GET("/api/v1/author-preparations", { headers })),
+    queryFn: () =>
+      apiData(apiClient.GET("/api/v1/author-preparations", { params: { header: headers } })),
     refetchInterval: (query) =>
       !state.data?.active || query.state.data?.some((item) => !terminal(item.status))
         ? 1000
@@ -53,8 +50,7 @@ function AuthorRefreshPanel({
     queryFn: () =>
       apiData(
         apiClient.GET("/api/v1/author-preparations/{operation_id}", {
-          params: { path: { operation_id: identity! } },
-          headers,
+          params: { path: { operation_id: identity! }, header: headers },
         }),
       ),
     retry: false,
@@ -63,7 +59,7 @@ function AuthorRefreshPanel({
   });
   const refresh = useMutation({
     mutationFn: (body: Request) =>
-      apiData(apiClient.POST("/api/v1/author-preparations", { body, headers })),
+      apiData(apiClient.POST("/api/v1/author-preparations", { body, params: { header: headers } })),
     retry: false,
     onError: (error) => {
       if (error instanceof ApiError && (error.status === 409 || error.status === 422)) {
@@ -87,8 +83,7 @@ function AuthorRefreshPanel({
     mutationFn: () =>
       apiData(
         apiClient.POST("/api/v1/author-preparations/{operation_id}/cancel", {
-          params: { path: { operation_id: identity! } },
-          headers,
+          params: { path: { operation_id: identity! }, header: headers },
         }),
       ),
     onSuccess: (next) =>

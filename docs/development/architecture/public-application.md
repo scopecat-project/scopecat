@@ -6,7 +6,33 @@ This contract supersedes the first-run laboratory chooser and per-project/per-le
 service topology. It is not a claim that the target is implemented. Native desktop
 entry, explicit launch actions, recovery from interpreter mismatch and valid stale
 process records are delivered foundations (#801–#804); shared execution authority,
-independent device contexts and same-service practice cleanup remain to be built.
+full device-context interaction and same-service practice cleanup remain to be built.
+The first implementation slice removes the implicit service-source identity and
+admits exact parameter/setup requests independently of global setup selection.
+Workbench drafts can choose their own saved setup. These changes do not yet
+replace the host's service registry or provide practice-scope cleanup.
+
+### Implemented boundary and the next software gate
+
+Explicit source registration now covers GUI, Python, workers, retained plans and
+the optional Notebook launcher. Moving an author source does not move application
+process ownership or recreate its old location on restart. A service without an
+available author source can still expose retained data.
+
+For independent parameter requests, each draft selects an exact maintained setup
+revision. Another draft's selection or a changed application default does not
+invalidate that reference. Submission checks the maintained revision, freezes its
+evidence and uses shared resource claims. The browser journey covers distinct
+saved setups, task/record reopening and restart without duplicate acquisition.
+The server journey checks alias contention using the same maintained physical
+access key and rejection before acquisition.
+
+This does **not** yet establish canonical identity for independently declared
+access keys, independent direct-instrument sessions, or removal of active-setup
+dependencies from every candidate/config-registry path. The standalone manager
+and per-lesson services also remain. The next gate must implement these boundaries
+and same-service practice cleanup before claiming the combined pre-hardware
+journey below; passing the source/context tests alone is insufficient.
 
 ## Installation and everyday use
 

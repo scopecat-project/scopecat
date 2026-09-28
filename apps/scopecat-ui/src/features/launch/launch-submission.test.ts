@@ -4,7 +4,7 @@ import { matchesSubmissionIntent, type SubmissionRequest } from "./launch-submis
 
 it("matches an exact context admission without treating the active entry as its source", () => {
   const request: SubmissionRequest = {
-    workspace_id: "legacy",
+    workspace_id: "test-source",
     scan_mode: "cartesian",
     parameter_sweeps: [],
     action: "submit",

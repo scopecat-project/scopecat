@@ -11,7 +11,6 @@ from pydantic import BaseModel, ConfigDict, Field, JsonValue, field_validator
 from scopecat.kernel.content_identity import sha256_json_hash
 from scopecat.records.analysis_grouping import AnalysisGrouping
 from scopecat.records.author_workspace import (
-    SERVICE_AUTHOR_WORKSPACE,
     AuthorWorkspaceId,
 )
 from scopecat.records.content import Sha256ContentHash
@@ -119,7 +118,7 @@ class AuthorPreparation(BaseModel):
 
 
 class AuthorAnalysisRequest(BaseModel):
-    workspace_id: AuthorWorkspaceId = SERVICE_AUTHOR_WORKSPACE
+    workspace_id: AuthorWorkspaceId
     model_config = ConfigDict(extra="forbid", frozen=True)
     code_revision: AuthorRevisionRef
     run_id: str = Field(min_length=1)
