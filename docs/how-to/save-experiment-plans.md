@@ -41,12 +41,15 @@ suggestions alone remains a session draft; saving establishes the durable bridge
 
 ## Python
 
-The author client uses the same launch, plan and preview records as the GUI:
+The author client uses the same launch, plan and preview records as the GUI.
+From a registered code folder, select your existing parameter branch and saved
+device context (replace `daily` and `bench-a` with your names):
 
 ```python
-from scopecat.application.author_project import AuthorProject
+import scopecat as sc
 
-with AuthorProject(endpoint) as author:
+with sc.open_project().authoring() as author:
+    author.use(parameter_branch="daily", setup=author.setup_revision("bench-a").ref)
     prepared = author.prepare("reference_lab.frequency_amplitude", actor="alice")
     saved = prepared.save_plan("Frequency check", saved_by="alice")
 
