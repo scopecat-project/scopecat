@@ -87,7 +87,7 @@ try:
                 Channel: [Channel(id=t, offset=0.1) for t in TARGETS]}),
         )
         destination = lab.parameters.create_branch("daily", revision=original)
-        initial = lab.parameters.resolve(original, setup=setup.revision.ref)
+        initial = lab.parameters.resolve(original, setup=setup.ref)
         task = create_task(lab, initial, destination,
             failed_group="readout-b" if case == "readout-failure" else None,
             drift_target="q4" if case == "drift" else None)
