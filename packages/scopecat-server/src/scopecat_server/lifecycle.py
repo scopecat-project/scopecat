@@ -185,6 +185,7 @@ def serve_project(
             base_url=_base_url(host, actual_port),
             shutdown_token=shutdown_token,
             started_at=datetime.now(UTC),
+            python=Path(sys.executable).absolute(),
         )
         write_daemon_endpoint_record(record)
         server: uvicorn.Server

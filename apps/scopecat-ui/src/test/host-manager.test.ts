@@ -146,6 +146,21 @@ it("opens experiments inside the application and preserves settings without shar
   expect(frame).not.toHaveAttribute("src");
   expect(frame).not.toBeVisible();
 });
+it("offers explicit stop when opening failed but the service is still running", async () => {
+  const host = mount();
+  host.control.failOperation = true;
+  fireEvent.click(await screen.findByRole("button", { name: "启动 / 检查工作台" }));
+  const stop = await screen.findByRole("button", { name: "停止仍在运行的服务" });
+  host.control.failOperation = false;
+  fireEvent.click(stop);
+  await waitFor(() =>
+    expect(host.requests.at(-1)?.body).toMatchObject({
+      action: "service_stop",
+      service: "service-a",
+    }),
+  );
+  expect(host.confirm).toHaveBeenCalled();
+});
 it("retains startup failure evidence and never offers the stale running URL", async () => {
   const host = mount();
   host.control.failOperation = true;

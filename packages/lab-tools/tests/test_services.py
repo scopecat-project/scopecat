@@ -153,7 +153,7 @@ def test_installed_launcher_routes_workbench_and_explicit_teaching(
 
 
 @pytest.mark.parametrize("state", ["running", "degraded"])
-def test_stop_rejects_foreign_interpreter_without_loading_gui(
+def test_stop_allows_changed_interpreter_without_loading_gui(
     tmp_path, monkeypatch, state
 ):
     import json
@@ -174,15 +174,11 @@ def test_stop_rejects_foreign_interpreter_without_loading_gui(
         "inspect_daemon",
         lambda _: SimpleNamespace(state=state, record=SimpleNamespace(pid=99)),
     )
-    monkeypatch.setattr(
-        service_runtime.psutil,
-        "Process",
-        lambda _: SimpleNamespace(cmdline=lambda: [str(tmp_path / "foreign-python")]),
-    )
+    stopped = []
     monkeypatch.setattr(
         service_runtime,
         "stop_project",
-        lambda _: pytest.fail("must not stop foreign interpreter"),
+        lambda project: stopped.append(project.root),
     )
     request = {
         "action": "stop",
@@ -191,7 +187,7 @@ def test_stop_rejects_foreign_interpreter_without_loading_gui(
         "settings_identity": None,
         "adapter_identity": None,
         "environment": {
-            "prefix": sys.prefix,
+            "prefix": str(tmp_path / "removed-environment"),
             "python": sys.version,
             "scopecat": "test",
             "server": "test",
@@ -200,8 +196,8 @@ def test_stop_rejects_foreign_interpreter_without_loading_gui(
     monkeypatch.setattr(
         sys, "argv", ["runtime", json.dumps(request), str(tmp_path / "result")]
     )
-    with pytest.raises(ValueError, match="another interpreter"):
-        service_runtime.main()
+    service_runtime.main()
+    assert stopped == [tmp_path]
 
 
 def test_pending_service_operation_blocks_removal(tmp_path, monkeypatch):

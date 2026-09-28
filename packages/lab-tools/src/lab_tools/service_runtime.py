@@ -13,7 +13,6 @@ from importlib.metadata import version
 from pathlib import Path
 from typing import Literal
 
-import psutil
 from pydantic import BaseModel, Field
 
 from scopecat.execution_environment import execution_packages
@@ -39,13 +38,15 @@ class Request(BaseModel):
 def main() -> None:
     request = Request.model_validate_json(sys.argv[1])
     project = open_project(request.root, resolve_adapter=request.action != "stop")
-    if request.action != "stop" and project.author_only:
+    if request.action == "stop":
+        stop_project(project)
+        Path(sys.argv[2]).write_text("{}", encoding="utf-8")
+        return
+    if project.author_only:
         raise ValueError(
             "作者目录不能登记为实验服务；请使用 scopecat app --workspace 打开所属实验室"
         )
-    settings_identity = (
-        None if request.action == "stop" else lab_settings_identity(project.root)
-    )
+    settings_identity = lab_settings_identity(project.root)
     adapter_identity = (
         sha256_json_hash(
             {
@@ -55,7 +56,7 @@ def main() -> None:
                 ).items()
             }
         )
-        if request.action != "stop" and project.adapter_packages
+        if project.adapter_packages
         else None
     )
     if (
@@ -97,13 +98,9 @@ def main() -> None:
                 *(name for _, name in project.installed_packages),
             )
         )
-    gui = (
-        None
-        if request.action == "stop"
-        else select_static_dir(
-            static_dir=Path(request.static_dir) if request.static_dir else None,
-            api_only=False,
-        )
+    gui = select_static_dir(
+        static_dir=Path(request.static_dir) if request.static_dir else None,
+        api_only=False,
     )
     environment = {
         "prefix": sys.prefix,
@@ -119,40 +116,37 @@ def main() -> None:
             raise ValueError("登记的 Python 环境已改变；请先复检实验室环境")
         assert request.workspace is not None
         source_id = register_author_workspace(project.root, Path(request.workspace)).id
-    if request.action in ("start", "stop"):
+    if request.action == "start":
         if environment != request.environment:
             raise ValueError(
-                "登记的 Python 环境已改变。请恢复原环境，或在实际运行环境中"
-                "显式执行 scopecat stop 后重新登记；本次没有停止或启动服务。"
+                "登记的 Python 环境已改变。请先点击“停止服务”，"
+                "再点击“重新检查环境”，完成后重新启动。"
             )
         status = inspect_daemon(project)
         if status.state in ("running", "degraded") and status.record is not None:
-            executable = psutil.Process(status.record.pid).cmdline()[0]
-            if os.path.normcase(str(Path(executable).absolute())) != os.path.normcase(
-                str(Path(sys.executable).absolute())
-            ):
+            executable = status.record.python
+            if executable is None or os.path.normcase(
+                str(executable.absolute())
+            ) != os.path.normcase(str(Path(sys.executable).absolute())):
                 raise ValueError(
-                    "Existing daemon uses another interpreter; stop it explicitly "
-                    "before switching environments"
+                    "实验室仍在运行，但无法确认它使用当前环境。"
+                    "请点击“停止服务”，停止完成后重新启动；已有记录保留。"
                 )
-        if request.action == "stop":
-            stop_project(project)
-        else:
-            record = start_project(
-                project,
-                static_dir=gui,
-                on_progress=lambda elapsed, stage: print(
-                    f"Starting ({elapsed:.0f}s): {stage}", flush=True
-                ),
+        record = start_project(
+            project,
+            static_dir=gui,
+            on_progress=lambda elapsed, stage: print(
+                f"Starting ({elapsed:.0f}s): {stage}", flush=True
+            ),
+        )
+        executable = record.python
+        if executable is None or os.path.normcase(
+            str(executable.absolute())
+        ) != os.path.normcase(str(Path(sys.executable).absolute())):
+            raise ValueError(
+                "服务已启动，但运行环境未通过检查。"
+                "请点击“停止服务”后重试；已有记录保留。"
             )
-            executable = psutil.Process(record.pid).cmdline()[0]
-            if os.path.normcase(str(Path(executable).absolute())) != os.path.normcase(
-                str(Path(sys.executable).absolute())
-            ):
-                raise ValueError(
-                    "Daemon started in another interpreter; "
-                    "retain it and stop explicitly before switching"
-                )
     Path(sys.argv[2]).write_text(
         json.dumps(
             {

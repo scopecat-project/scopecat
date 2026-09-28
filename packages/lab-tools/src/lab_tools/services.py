@@ -22,7 +22,7 @@ from scopecat.author_workspaces import (
     author_workspace_id,
 )
 from scopecat.project import open_project
-from scopecat_server.lifecycle import inspect_daemon
+from scopecat_server.lifecycle import inspect_daemon, stop_project
 
 
 class Service(BaseModel):
@@ -566,15 +566,9 @@ class Services:
     def stop(self, identity: str) -> None:
         with self.lock:
             service = self.get(identity)
-            _run(
-                service.python,
-                {
-                    "action": "stop",
-                    "root": service.root,
-                    "static_dir": None,
-                    "environment": service.environment,
-                },
-            )
+            # Explicit shutdown targets the registered binding and exact process,
+            # even if its old interpreter has changed or is no longer installed.
+            stop_project(open_project(service.root, resolve_adapter=False))
             if (
                 inspect_daemon(open_project(service.root, resolve_adapter=False)).state
                 != "stopped"

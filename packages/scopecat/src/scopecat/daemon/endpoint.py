@@ -36,6 +36,9 @@ class DaemonEndpointRecord(BaseModel):
     base_url: str = Field(min_length=1)
     shutdown_token: str = Field(min_length=32)
     started_at: datetime
+    # An already-running process may not have reported its interpreter yet.
+    # It remains stoppable through its binding, PID and creation time.
+    python: Path | None = None
 
 
 def daemon_record_path(project_root: str | Path) -> Path:

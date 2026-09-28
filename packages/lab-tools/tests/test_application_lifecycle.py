@@ -8,7 +8,39 @@ import pytest
 from lab_tools.host_client import ensure_host, process_alive
 from lab_tools.host_models import Command
 from lab_tools.services import Services
-from scopecat_server.lifecycle import initialize_project, inspect_daemon, stop_project
+from scopecat_server.lifecycle import (
+    initialize_project,
+    inspect_daemon,
+    stop_project,
+    write_daemon_endpoint_record,
+)
+
+
+def test_environment_conflict_can_be_stopped_and_restarted_in_manager(tmp_path):
+    project = initialize_project(tmp_path / "project")
+    gui = tmp_path / "gui"
+    gui.mkdir()
+    (gui / "index.html").write_text("<html>fixture</html>")
+    store = Services(tmp_path / "home")
+    service = store.register(
+        project.root, Path(sys.executable), name="test", static_dir=gui
+    )
+    try:
+        store.start(service.id)
+        record = inspect_daemon(project).record
+        assert record is not None
+        assert record.python == Path(sys.executable).absolute()
+        # An already-running release with unknown interpreter remains recoverable.
+        write_daemon_endpoint_record(record.model_copy(update={"python": None}))
+        with pytest.raises(ValueError, match="停止服务"):
+            store.start(service.id)
+        assert inspect_daemon(project).state == "running"
+        store.stop(service.id)
+        assert inspect_daemon(project).state == "stopped"
+        store.start(service.id)
+        assert inspect_daemon(project).state == "running"
+    finally:
+        stop_project(project)
 
 
 @pytest.mark.parametrize("stop_started", [False, True])
