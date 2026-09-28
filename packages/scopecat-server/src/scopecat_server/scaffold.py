@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
 _PROJECT_FILES = {
     "scopecat.toml": """\
@@ -366,4 +367,66 @@ def write_project_scaffold(root: Path) -> None:
         destination.write_text(content, encoding="utf-8")
 
 
-__all__ = ["scaffold_paths", "write_project_scaffold"]
+def write_author_scaffold(root: Path) -> None:
+    """Create editable analytic source, with no service or installed environment."""
+    if root.exists() or root.is_symlink():
+        raise FileExistsError(root)
+    selected = {
+        name: _PROJECT_FILES[name]
+        for name in (
+            "src/scopecat_lab/__init__.py",
+            "src/scopecat_lab/authored/__init__.py",
+            "src/scopecat_lab/authored/parameters.py",
+            "src/scopecat_lab/authored/signal.py",
+            "notebooks/02_edit_scan.py",
+        )
+    }
+    selected["scopecat.toml"] = (
+        '[authors]\nmodules = ["scopecat_lab.authored"]\ndependencies = []\n'
+        'source_roots = ["src"]\nrefresh_roots = ["src"]\n'
+    )
+    selected["src/scopecat_lab/configuration.py"] = '''\
+"""Explicit analytic setup; no device connections or physical calibration claims."""
+
+from scopecat.kernel.entity import EntityRef
+from scopecat.records.config import InstrumentRegistry, RoutingGraph, Topology
+from scopecat.records.execution_scenario import SoftwareExecutionScenario
+from scopecat.records.setup import ExecutableSetupSnapshot
+
+
+def initial_setup() -> ExecutableSetupSnapshot:
+    return ExecutableSetupSnapshot(
+        scenario=SoftwareExecutionScenario(
+            id="analytic-starter",
+            label="Analytic signal experiment",
+            model_id="scopecat.starter.responses",
+            model_version="1",
+            capabilities=("Analytic signal scans",),
+            limitations=("Synthetic responses; no physical sample or devices.",),
+        ),
+        domain_target=None,
+        topology=Topology(entities=[EntityRef(id="subject", kind="logical_subject")]),
+        instrument_registry=InstrumentRegistry(instruments=[]),
+        routing=RoutingGraph(routes=[]),
+    )
+'''
+    selected[".gitignore"] = ".scopecat/\nscopecat.runtime.toml\n__pycache__/\n"
+    selected["README.md"] = (
+        "# Experiment source\n\n"
+        "Open this folder in VS Code and use the application's Python interpreter. "
+        "After registration, open Scopecat and run "
+        "notebooks/02_edit_scan.py cell by cell. "
+        "Preview first; submitting again creates another run. Saved records belong to "
+        "the application, independently of this code folder.\n"
+    )
+    root.parent.mkdir(parents=True, exist_ok=True)
+    with TemporaryDirectory(prefix=".author-", dir=root.parent) as directory:
+        staged = Path(directory) / "source"
+        for name, content in selected.items():
+            destination = staged / name
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.write_text(content, encoding="utf-8")
+        staged.rename(root)
+
+
+__all__ = ["scaffold_paths", "write_author_scaffold", "write_project_scaffold"]

@@ -21,15 +21,14 @@ import sysconfig
 import tempfile
 import time
 import uuid
-from collections.abc import Callable, Generator
+from collections.abc import Generator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Literal, Protocol, TypedDict, cast
+from typing import Protocol, TypedDict, cast
 
 MANIFEST = "bundle.json"
 CURRENT_DELIVERY = "delivery-current.json"
 RECEIPT = "scopecat-lab-delivery.json"
-OWNERSHIP = ".scopecat-environment-owner"
 
 
 class Bundle(TypedDict):
@@ -168,36 +167,15 @@ def verify_bundle(root: Path, *, gui_only: bool = False) -> Bundle:
     return bundle
 
 
-def _run_install(
-    command: list[str],
-    on_process: Callable[[int | Literal["not-started"] | None], None] | None,
-) -> None:
-    if on_process is None:
-        _ = subprocess.run(command, check=True)  # noqa: S603 - fixed installer command
-        return
-    # Persist the launch intent before spawning: an interrupted unrecorded launch
-    # must never be mistaken for proof that no installer is still writing.
-    on_process(None)
-    try:
-        process = subprocess.Popen(command)  # noqa: S603 - fixed installer command
-    except OSError:
-        # Popen did not return a child: unlike an interrupted launch, this is
-        # positive evidence that this command has no process still writing.
-        on_process("not-started")
-        raise
-    with process:
-        on_process(process.pid)
-        if process.wait() != 0:
-            raise subprocess.CalledProcessError(process.returncode, command)
+def _run_install(command: list[str]) -> None:
+    _ = subprocess.run(  # noqa: S603 - fixed installer command
+        command,
+        check=True,
+        creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
+    )
 
 
-def install_bundle(
-    root: Path,
-    destination: Path,
-    *,
-    ownership_token: str | None = None,
-    on_process: Callable[[int | Literal["not-started"] | None], None] | None = None,
-) -> Path:
+def install_bundle(root: Path, destination: Path) -> Path:
     root = resolve_delivery(root)
     destination = destination.resolve()
     if destination.exists():
@@ -206,20 +184,15 @@ def install_bundle(
     uv = shutil.which("uv")
     if uv is None:
         raise ValueError("离线安装前请准备 uv 和匹配的 Python 解释器")
-    if ownership_token is not None:
-        destination.mkdir()
-        (destination / OWNERSHIP).write_text(ownership_token, encoding="utf-8")
     _run_install(
         [
             uv,
             "venv",
             "--offline",
-            *(["--allow-existing"] if ownership_token else []),
             "--python",
             sys.executable,
             str(destination),
         ],
-        on_process,
     )
     python = destination / (
         "Scripts/python.exe" if sys.platform == "win32" else "bin/python"
@@ -239,7 +212,6 @@ def install_bundle(
             "-r",
             str(root / "requirements.lock"),
         ],
-        on_process,
     )
     staged_receipt = destination / f".{RECEIPT}-{uuid.uuid4().hex}"
     _ = staged_receipt.write_text(
@@ -375,10 +347,21 @@ def _retain_bundle_locked(root: Path, home: Path) -> Path:
     return bundle
 
 
-def _install_home_locked(root: Path, home: Path) -> Path:
+def prepare_home(root: Path, home: Path) -> tuple[Path, Path]:
+    """Retain a candidate runtime without selecting software or touching data."""
+    root = resolve_delivery(root)
+    home = home.resolve()
+    if home.is_relative_to(root):
+        raise ValueError("安装中心不能位于待复制的交付目录内")
+    _ = verify_bundle(root)
+    home.mkdir(parents=True, exist_ok=True)
+    with _installation_lock(home):
+        return _prepare_home_locked(root, home)
+
+
+def _prepare_home_locked(root: Path, home: Path) -> tuple[Path, Path]:
     bundle = _retain_bundle_locked(root, home)
     release = bundle.parent
-    key = release.name
     environment = managed_path(home, release / "runtime")
     receipt = managed_path(home, environment / RECEIPT)
     if environment.exists() and not receipt.is_file():
@@ -392,6 +375,12 @@ def _install_home_locked(root: Path, home: Path) -> Path:
     python = environment / (
         "Scripts/python.exe" if sys.platform == "win32" else "bin/python"
     )
+    return python, bundle
+
+
+def _install_home_locked(root: Path, home: Path) -> Path:
+    python, bundle = _prepare_home_locked(root, home)
+    key = bundle.parent.name
     _ = subprocess.run(  # noqa: S603 - explicit local tool and argument list
         [
             str(python),
@@ -408,9 +397,11 @@ def _install_home_locked(root: Path, home: Path) -> Path:
     )
     launcher = home / "lab.py"
     launcher_text = (
-        "import subprocess, sys\nfrom pathlib import Path\n"
+        "import json, subprocess, sys\nfrom pathlib import Path\n"
         "home = Path(__file__).resolve().parent\n"
-        f"python = home / {python.relative_to(home).as_posix()!r}\n"
+        "selection = json.loads((home / 'installation.json')"
+        ".read_text(encoding='utf-8'))\n"
+        "python = Path(selection['python'])\n"
         "args = sys.argv[1:]\n"
         "entries = {'teach': 'lab_tools.sandbox', "
         "'notebook': 'lab_tools.author_notebook'}\n"
@@ -440,8 +431,8 @@ def _install_home_locked(root: Path, home: Path) -> Path:
         '#!/bin/sh\ncd -- "$(dirname -- "$0")" || exit 1\n'
         'exec ./Scopecat.command notebook "$@"\n'
     )
-    # Both files are complete before replacement. Either retained interpreter can
-    # bootstrap lab.py; only lab.py chooses the selected application release.
+    # Retained interpreters can bootstrap the stable entry; installation.json is
+    # the only release selection, including updates prepared inside the workbench.
     pending: list[Path] = []
     try:
         entries = [

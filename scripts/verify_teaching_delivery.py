@@ -116,7 +116,6 @@ def verify(bundle: Path, destination: Path) -> None:
     assert Path(receipt["bundle"]).is_relative_to(home)
     # The retained bundle lives inside home; users can disconnect transfer media.
     launcher = home / "lab.py"
-    host_instance: str | None = None
     for topic in ("parameters", "compute", "refresh", "groups"):
         subprocess.run(  # noqa: S603 - explicit local tool and argument list
             [str(python), str(launcher), "teach", topic, "--verify"],
@@ -124,15 +123,7 @@ def verify(bundle: Path, destination: Path) -> None:
             env=env,
             check=True,
         )
-        from lab_tools.host_client import HostClient, HostRecord
-
-        record = HostRecord.model_validate_json(
-            (home / "host/endpoint.json").read_text(encoding="utf-8")
-        )
-        if host_instance is None:
-            host_instance = record.instance
-        assert record.instance == host_instance
-    manager = HostClient(record)
+    assert not (home / "host/endpoint.json").exists()
     current = next((home / "sandboxes").glob("*/parameters/current.json"))
     before = current.read_text(encoding="utf-8")
     subprocess.run(  # noqa: S603 - explicit local tool and argument list
@@ -149,15 +140,13 @@ def verify(bundle: Path, destination: Path) -> None:
         check=True,
     )
     assert current.read_text(encoding="utf-8") != before
-    from lab_tools.host_operations import Command
+    from lab_tools.cleanup import remove_old_sandbox
 
     old_generation = cast("dict[str, str]", json.loads(before))["generation"]
-    deletion = Command(action="delete", workspace=old_generation)
-    result = manager.wait(manager.submit(deletion))
-    assert manager.submit(deletion).command.id == result.command.id
+    remove_old_sandbox(
+        home, current.parent.parent.name, current.parent / old_generation
+    )
     assert not (current.parent / old_generation).exists()
-    assert all(item.status == "succeeded" for item in manager.state().operations)
-    manager.shutdown()
     installed_python = receipts[0].parent / (
         "Scripts/python.exe" if os.name == "nt" else "bin/python"
     )
@@ -185,7 +174,7 @@ def verify(bundle: Path, destination: Path) -> None:
                 "topics": ["parameters", "compute", "refresh", "groups"],
                 "reinstall": "passed",
                 "reset": "passed",
-                "single_host": "passed",
+                "no_management_service": "passed",
                 "managed_cleanup": "passed",
                 "installed_application": "passed",
             },

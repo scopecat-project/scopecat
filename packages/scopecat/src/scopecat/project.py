@@ -437,6 +437,7 @@ def _expand_adapter(
                     *declaration.author_modules,
                     *declaration.procedures,
                     *declaration.procedure_schedules,
+                    *(spec for _, spec in declaration.domain_systems),
                     declaration.experiment_system,
                     declaration.launch_provider,
                     declaration.comparison_provider,
@@ -749,7 +750,7 @@ def _parse_capabilities(value: object) -> LabCapabilities:
         "launch_provider",
         "comparison_provider",
     }
-    unknown = set(table) - sequence_fields - object_fields
+    unknown = set(table) - sequence_fields - object_fields - {"domain_systems"}
     if unknown:
         raise ProjectManifestError(
             f"unknown [lab.capabilities] field(s): {', '.join(sorted(unknown))}"
@@ -766,9 +767,21 @@ def _parse_capabilities(value: object) -> LabCapabilities:
             )
         sequences[name] = tuple(cast("list[str]", items))
     objects = {name: _optional_text(table, name) for name in object_fields}
+    domains = table.get("domain_systems", {})
+    if not isinstance(domains, dict) or any(
+        not kind.strip() or not isinstance(spec, str) or not spec.strip()
+        for kind, spec in cast("dict[str, object]", domains).items()
+    ):
+        raise ProjectManifestError(
+            "domain_systems must map target kinds to import names"
+        )
+    domain_systems = tuple(sorted(cast("dict[str, str]", domains).items()))
+    if domain_systems and objects["experiment_system"] is not None:
+        raise ProjectManifestError("experiment_system and domain_systems are exclusive")
     for name, specs in (
         *((name, values) for name, values in sequences.items()),
         *((name, (spec,)) for name, spec in objects.items() if spec is not None),
+        ("domain_systems", tuple(spec for _, spec in domain_systems)),
     ):
         for spec in specs:
             module, separator, attribute = spec.partition(":")
@@ -788,6 +801,7 @@ def _parse_capabilities(value: object) -> LabCapabilities:
         procedures=sequences["procedures"],
         procedure_schedules=sequences["procedure_schedules"],
         experiment_system=objects["experiment_system"],
+        domain_systems=domain_systems,
         launch_provider=objects["launch_provider"],
         comparison_provider=objects["comparison_provider"],
     )

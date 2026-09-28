@@ -229,6 +229,25 @@ export function InstrumentsWorkspace({ daemonUnavailable }: { daemonUnavailable:
           <button onClick={refresh}>Refresh</button>
         </div>
       </header>
+      <details className="rounded-lg border border-line bg-panel p-4">
+        <summary>Installed drivers</summary>
+        <p className="my-2 text-sm text-text-dim">
+          Viewing driver metadata does not connect devices. Prepare capability updates in{" "}
+          <a className="underline" href="#settings">
+            Application settings
+          </a>
+          .
+        </p>
+        {catalog.error && <p role="alert">{errorMessage(catalog.error)}</p>}
+        {catalog.data?.drivers.length === 0 && <p>No optional drivers are installed.</p>}
+        <ul>
+          {catalog.data?.drivers.map((driver) => (
+            <li key={driver.driver_id}>
+              {driver.label} · {driver.implementation_version} · {driver.driver_id}
+            </li>
+          ))}
+        </ul>
+      </details>
       {devicesQuery.error && <p role="alert">{errorMessage(devicesQuery.error)}</p>}
       <div className="grid min-h-[640px] grid-cols-[300px_minmax(0,1fr)] gap-3 max-[880px]:grid-cols-1">
         <aside

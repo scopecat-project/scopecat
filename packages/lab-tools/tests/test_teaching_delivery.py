@@ -228,7 +228,7 @@ def test_failed_validation_or_publication_keeps_old_selection(
     monkeypatch.setattr(bundle.os, "replace", replace)
     monkeypatch.setattr(bundle.subprocess, "run", lambda *_args, **_kwargs: None)
     bundle.install_home(delivery, home)
-    assert launcher.read_bytes() != old
+    assert launcher.read_bytes() == old  # Stable entry reads installation.json.
     assert len(fake_runtime) == 2
 
 
@@ -289,6 +289,10 @@ def test_installed_launchers_select_notebook_and_quote_shell_paths(
     home = tmp_path / "实验室's application"
     launcher = bundle.install_home(delivery, home)
     calls = []
+    selected = fake_runtime[0] / (
+        "Scripts/python.exe" if sys.platform == "win32" else "bin/python"
+    )
+    (home / "installation.json").write_text(json.dumps({"python": str(selected)}))
     monkeypatch.setattr(
         bundle.subprocess, "call", lambda command: calls.append(command) or 0
     )
@@ -310,6 +314,11 @@ def test_installed_launchers_select_notebook_and_quote_shell_paths(
     assert 'notebook "$@"' in (home / "Notebook.command").read_text()
     assert not (home / "Manage.command").exists()
     assert not (home / "Manage.cmd").exists()
+    replacement = home / "another-release/bin/python"
+    (home / "installation.json").write_text(json.dumps({"python": str(replacement)}))
+    with pytest.raises(SystemExit):
+        runpy.run_path(str(launcher), run_name="__main__")
+    assert calls[-1][0] == str(replacement)
 
 
 def test_public_install_bundle_still_refuses_existing_destination(delivery, tmp_path):

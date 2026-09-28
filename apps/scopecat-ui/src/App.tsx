@@ -33,11 +33,17 @@ type ProjectView =
   | "reviews"
   | "instruments"
   | "configuration"
+  | "settings"
   | "help";
 
 const HelpWorkspace = lazy(async () => {
   const module = await import("./features/help/HelpWorkspace");
   return { default: module.HelpWorkspace };
+});
+
+const ApplicationSettings = lazy(async () => {
+  const module = await import("./features/application/ApplicationSettings");
+  return { default: module.ApplicationSettings };
 });
 
 const LaunchWorkspace = lazy(async () => {
@@ -336,7 +342,7 @@ export default function App() {
             onClick={() => selectView("instruments")}
           >
             <Cable size={15} aria-hidden="true" />
-            Instruments
+            Devices and drivers
           </button>
           <button
             type="button"
@@ -346,6 +352,14 @@ export default function App() {
           >
             <Settings2 size={15} aria-hidden="true" />
             Configuration
+          </button>
+          <button
+            type="button"
+            className={navigationClass(view === "settings")}
+            aria-current={view === "settings" ? "page" : undefined}
+            onClick={() => selectView("settings")}
+          >
+            <Settings2 size={15} aria-hidden="true" /> Settings
           </button>
           <button
             type="button"
@@ -388,13 +402,8 @@ export default function App() {
               className="m-0 flex-none text-base font-[650] tracking-[-0.015em]"
               id="workspace-title"
             >
-              {healthQuery.data?.projectName ?? "Scopecat project"}
+              Scopecat
             </h1>
-            {healthQuery.data?.projectRoot && (
-              <code className="max-w-[min(60vw,900px)] overflow-hidden text-[0.64rem] text-ellipsis whitespace-nowrap text-text-dim max-[680px]:max-w-[65vw]">
-                {healthQuery.data.projectRoot}
-              </code>
-            )}
           </div>
           <div
             className="inline-flex flex-none items-center gap-[7px] text-[0.64rem] font-semibold text-text-dim"
@@ -402,7 +411,7 @@ export default function App() {
           >
             {lastUpdated > 0
               ? `Updated ${formatClock(new Date(lastUpdated).toISOString())}`
-              : "Waiting for daemon"}
+              : "Connecting to application"}
           </div>
         </section>
 
@@ -450,6 +459,10 @@ export default function App() {
         {view === "help" ? (
           <Suspense fallback={<p>Loading help…</p>}>
             <HelpWorkspace health={healthQuery.data} reachable={daemonReachable} />
+          </Suspense>
+        ) : view === "settings" ? (
+          <Suspense fallback={<p>Loading settings…</p>}>
+            <ApplicationSettings health={healthQuery.data} />
           </Suspense>
         ) : view === "runs" ? (
           <RunsWorkspace
@@ -632,6 +645,7 @@ function selectedSampleRevisionFromUrl(): number | undefined {
 
 function projectViewFromLocation(): ProjectView {
   if (window.location.hash === "#help") return "help";
+  if (window.location.hash === "#settings") return "settings";
   if (window.location.hash === "#launch") return "launch";
   if (window.location.hash === "#configuration") return "configuration";
   if (window.location.hash === "#instruments") return "instruments";

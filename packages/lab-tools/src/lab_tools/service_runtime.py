@@ -48,9 +48,7 @@ def main() -> None:
         Path(sys.argv[2]).write_text("{}", encoding="utf-8")
         return
     if project.author_only:
-        raise ValueError(
-            "作者目录不能登记为实验服务；请使用 scopecat app --workspace 打开所属实验室"
-        )
+        raise ValueError("作者目录不能作为应用运行目录；请通过应用 Settings 登记源码")
     settings_identity = lab_settings_identity(project.root)
     adapter_identity = (
         sha256_json_hash(
@@ -68,12 +66,12 @@ def main() -> None:
         request.action in ("start", "register_source")
         and adapter_identity != request.adapter_identity
     ):
-        raise ValueError("实验室适配包已改变；请先停止服务并复检登记，再重新启动")
+        raise ValueError("应用能力包已改变；请选择“停止并重新核验当前环境”后重试")
     if (
         request.action in ("start", "register_source")
         and settings_identity != request.settings_identity
     ):
-        raise ValueError("实验室设置已改变；请先停止服务并复检登记，再重新启动")
+        raise ValueError("本机设置已改变；请选择“停止并重新核验当前环境”后重试")
     if request.action == "probe":
         if request.qualify_sources:
             from scopecat.author_workspaces import local_author_workspaces
@@ -143,14 +141,14 @@ def main() -> None:
         from scopecat_server.author_registration import register_author_workspace
 
         if environment != request.environment:
-            raise ValueError("登记的 Python 环境已改变；请先复检实验室环境")
+            raise ValueError("登记的 Python 环境已改变；请先重新核验当前应用环境")
         assert request.workspace is not None
         source_id = register_author_workspace(project.root, Path(request.workspace)).id
     if request.action == "start":
         if environment != request.environment:
             raise ValueError(
-                "登记的 Python 环境已改变。请先点击“停止服务”，"
-                "再点击“重新检查环境”，完成后重新启动。"
+                "选定的 Python 环境已改变。请选择"
+                "“停止并重新核验当前环境”，完成后重新启动。"
             )
         status = inspect_daemon(project)
         if status.state in ("running", "degraded") and status.record is not None:
@@ -159,8 +157,8 @@ def main() -> None:
                 str(executable.absolute())
             ) != os.path.normcase(str(Path(sys.executable).absolute())):
                 raise ValueError(
-                    "实验室仍在运行，但无法确认它使用当前环境。"
-                    "请点击“停止服务”，停止完成后重新启动；已有记录保留。"
+                    "应用仍在运行，但无法确认它使用当前环境。"
+                    "请选择“停止后台并重新启动”；已有记录保留。"
                 )
         record = start_project(
             project,
@@ -175,7 +173,7 @@ def main() -> None:
         ) != os.path.normcase(str(Path(sys.executable).absolute())):
             raise ValueError(
                 "服务已启动，但运行环境未通过检查。"
-                "请点击“停止服务”后重试；已有记录保留。"
+                "请选择“停止后台并重新启动”；已有记录保留。"
             )
     Path(sys.argv[2]).write_text(
         json.dumps(

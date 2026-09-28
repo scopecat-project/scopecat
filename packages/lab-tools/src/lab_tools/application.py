@@ -27,6 +27,7 @@ class Arguments(Protocol):
     no_browser: bool
     distribution: str | None
     manifest: str | None
+    bundle: Path | None
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -38,6 +39,8 @@ def main(argv: list[str] | None = None) -> None:
             "status",
             "configure",
             "update",
+            "prepare-update",
+            "apply-update",
             "register-source",
             "start",
             "stop",
@@ -57,6 +60,7 @@ def main(argv: list[str] | None = None) -> None:
         "--source", type=Path, help="Framework checkout for development GUI assets"
     )
     parser.add_argument("--no-browser", action="store_true")
+    parser.add_argument("--bundle", type=Path, help="Candidate delivery directory")
     parser.add_argument(
         "--distribution", help="Installed capability distribution for initial setup"
     )
@@ -66,6 +70,8 @@ def main(argv: list[str] | None = None) -> None:
         parser.error("--distribution 与 --manifest 需一起填写")
     if args.action == "register-source" and args.workspace is None:
         parser.error("登记源码需要 --workspace")
+    if args.action == "prepare-update" and args.bundle is None:
+        parser.error("准备更新需要 --bundle")
     runtime = ApplicationRuntime(args.home)
     try:
         if args.action in ("configure", "update"):
@@ -88,6 +94,15 @@ def main(argv: list[str] | None = None) -> None:
                 )
                 runtime.select(selected)
             print(selected.model_dump_json(indent=2))
+        elif args.action == "prepare-update":
+            assert args.bundle is not None
+            print(runtime.prepare_update(args.bundle).model_dump_json(indent=2))
+        elif args.action == "apply-update":
+            candidate = runtime.prepared_update()
+            if candidate is None:
+                raise ValueError("请先准备更新，资格核验通过后再切换")
+            runtime.select(candidate)
+            print("已切换应用环境；请重新打开 Scopecat 并重启 Python 内核。")
         elif args.action == "register-source":
             assert args.workspace is not None
             print(runtime.register_source(args.workspace))

@@ -13,19 +13,26 @@ export interface ApplicationStatus {
   home: string;
   state: string;
   detail: string | null;
-  installation: {
-    python: string;
-    static_dir: string;
-    environment: Record<string, string>;
-    adapter_identity: string | null;
-  };
+  installation: InstallationStatus;
+  candidate: InstallationStatus | null;
+}
+
+export interface InstallationStatus {
+  python: string;
+  static_dir: string;
+  environment: Record<string, string>;
+  adapter_identity: string | null;
 }
 
 interface DesktopAPI {
   status(): Promise<ApplicationStatus>;
   retry(): Promise<void>;
   restart(): Promise<void>;
+  requalify(): Promise<void>;
   exit(background: boolean): Promise<void>;
+  prepare_update(directory: string): Promise<InstallationStatus>;
+  apply_update(): Promise<void>;
+  register_source(directory: string): Promise<string>;
 }
 
 declare global {

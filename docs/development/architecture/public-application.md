@@ -49,9 +49,10 @@ Candidate environments and capability declarations are qualified before selectio
 including driver metadata and content identity without device connection. Selection
 requires stopped process ownership, updates source interpreter bindings under the
 same start fence, and retains an interrupted selection for explicit retry. This is
-not yet the combined installed qualification: driver maintenance UX, remaining
-manager consumers and same-service practice cleanup must meet their batch gates
-before claiming the complete pre-hardware journey below.
+the application maintenance boundary: software/settings actions live in the
+workbench, and the separate manager and per-directory service registry are removed.
+Teaching commands now execute directly; same-service practice cleanup remains the
+next batch and must pass before claiming the complete pre-hardware journey below.
 
 ## Installation and everyday use
 

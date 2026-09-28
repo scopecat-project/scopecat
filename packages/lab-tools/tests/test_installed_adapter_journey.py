@@ -10,8 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from lab_tools.first_run import SetupRequest, setup
-from lab_tools.services import Services
+from lab_tools.application_runtime import ApplicationRuntime
 from scopecat_server.scaffold import write_project_scaffold
 
 
@@ -37,6 +36,12 @@ def build_adapter(tmp_path: Path, environment: dict[str, str]) -> Path:
     build = tmp_path / "adapter-build"
     package = build / "src/test_lab"
     shutil.copytree(source, package)
+    parameters = package / "authored/parameters.py"
+    parameters.write_text(
+        parameters.read_text().replace(
+            "from scopecat_lab.configuration", "from test_lab.configuration"
+        )
+    )
     trace = """
 import json, os
 from pathlib import Path
@@ -293,6 +298,8 @@ def check_notebook_kernel(project: Path, python: Path, kernel_home: Path) -> Non
 def test_installed_adapter_wheel_local_refresh_and_missing_adapter_stop(
     tmp_path: Path, monkeypatch, delivery: Path
 ) -> None:
+    from scopecat.installed_adapter import AdapterReference
+
     environment = dict(os.environ)
     environment.pop("SCOPECAT_DAEMON_URL", None)
     trace = tmp_path / "adapter-origins.jsonl"
@@ -306,90 +313,28 @@ def test_installed_adapter_wheel_local_refresh_and_missing_adapter_stop(
         .read_text()
         .replace("from .parameters import", "from test_lab.authored.parameters import")
     )
-    (project / "scopecat.toml").write_text("""[authors]
-modules = ["local_experiments"]
-source_roots = ["src"]
-refresh_roots = ["src"]
-dependencies = []
-""")
-    laboratory = tmp_path / "laboratory"
-    services = Services(tmp_path / "home")
-    # Use a real replacement interpreter and installed private wheel. The small
-    # delivery fixture avoids rebuilding every public wheel in this runtime test;
-    # installation receipts/GUI verification have dedicated delivery tests.
-    from lab_tools import bundle, lab_environment
-
-    def install(source, destination, *, ownership_token, on_process):
-        install_adapter_environment(destination, wheel, environment, tmp_path)
-        (destination / bundle.OWNERSHIP).write_text(ownership_token)
-        (destination / bundle.RECEIPT).write_text(
-            json.dumps(
-                {
-                    "bundle": str(source),
-                    "manifest_sha256": bundle.file_hash(source / bundle.MANIFEST),
-                }
-            )
-        )
-        return destination
-
-    def prepared(destination, retained):
-        return lab_environment.PreparedEnvironment(
-            python=destination
-            / ("Scripts/python.exe" if sys.platform == "win32" else "bin/python"),
-            gui=retained / "gui",
-        )
-
-    with monkeypatch.context() as setup_patch:
-        setup_patch.setattr(bundle, "install_bundle", install)
-        setup_patch.setattr(lab_environment, "_prepared", prepared)
-        service = setup(
-            tmp_path / "home",
-            SetupRequest(
-                mode="adapter",
-                project=str(laboratory),
-                name="installed adapter",
-                adapter_distribution="test-lab-adapter",
-                adapter_manifest="test_lab/adapter.toml",
-                environment_bundle=str(delivery),
-                author_workspace=str(project),
-            ),
-        )
-        original_binding = services.for_workspace(project)
-        retried = setup(
-            tmp_path / "home",
-            SetupRequest(
-                mode="connect",
-                project=str(laboratory),
-                name="installed adapter",
-                environment_bundle=str(delivery),
-                author_workspace=str(project),
-            ),
-        )
-        assert retried == service
-        assert services.for_workspace(project) == original_binding
-    python = Path(service.python)
-    gui = Path(service.static_dir)
-    site = Path(
-        run(
-            [
-                str(python),
-                "-c",
-                "import sysconfig; print(sysconfig.get_path('purelib'))",
-            ],
-            cwd=tmp_path,
-            environment=environment,
-        ).strip()
+    (project / "scopecat.toml").write_text(
+        '[authors]\nmodules = ["local_experiments"]\nsource_roots = ["src"]\n'
+        'refresh_roots = ["src"]\ndependencies = []\n'
     )
-    selected_service, workspace_id = services.for_workspace(project)
-    assert selected_service.id == service.id and workspace_id != "legacy"
-    with pytest.raises(ValueError, match="作者目录不能登记为实验服务"):
-        services.register(
-            project, python, name="Not a second laboratory", static_dir=gui
-        )
-    assert len(services.list()) == 1
-    assert not trace.exists(), "registration imported or invoked adapter code"
+    application = ApplicationRuntime(tmp_path / "home")
+    python, site = install_adapter_environment(
+        tmp_path / "first-runtime", wheel, environment, tmp_path
+    )
+    selected = application.configure(
+        python=python,
+        static_dir=delivery / "gui",
+        adapter=AdapterReference("test-lab-adapter", "test_lab/adapter.toml"),
+    )
+    workspace_id = application.register_source(project)
+    assert application.register_source(project) == workspace_id
+    assert application.source(project) == workspace_id
+    assert not (application.home / "host/services.sqlite").exists()
+    # Qualification invokes metadata in a worker, never bootstrap or acquisition.
+    origins = [json.loads(line) for line in trace.read_text().splitlines()]
+    assert {item["role"] for item in origins} == {"instrument"}
     try:
-        services.start(service.id)
+        application.start()
         origins = [json.loads(line) for line in trace.read_text().splitlines()]
         bootstrap = next(item for item in origins if item["role"] == "bootstrap")
         instrument = next(item for item in origins if item["role"] == "instrument")
@@ -415,13 +360,13 @@ dependencies = []
             cwd=project,
             environment=environment,
         )
-        services.stop(service.id)
+        application.stop()
         run(
             [
                 str(python),
                 "-c",
                 _RECOVERY_CHECK,
-                str(laboratory),
+                str(application.root),
                 str(project),
                 str(tmp_path / "snapshot"),
                 str(tmp_path / "restored"),
@@ -430,31 +375,16 @@ dependencies = []
             cwd=tmp_path,
             environment=environment,
         )
-        with monkeypatch.context() as update_patch:
-            update_patch.setattr(bundle, "install_bundle", install)
-            update_patch.setattr(lab_environment, "_prepared", prepared)
-            updated = services.update_environment(
-                service.id, delivery, operation_id="journey"
-            )
-        assert updated.id == service.id and updated.root == service.root
-        assert updated.python != service.python and Path(service.python).is_file()
-        assert services.for_workspace(project) == (updated, workspace_id)
-        service = updated
-        python = Path(updated.python)
-        check_notebook_kernel(project, python, tmp_path / "notebook-kernels")
-        site = Path(
-            run(
-                [
-                    str(python),
-                    "-c",
-                    "import sysconfig; print(sysconfig.get_path('purelib'))",
-                ],
-                cwd=tmp_path,
-                environment=environment,
-            ).strip()
+        replacement, site = install_adapter_environment(
+            tmp_path / "replacement-runtime", wheel, environment, tmp_path
         )
-        services.start(service.id)
-        # Stored source evidence remains readable in the replacement environment.
+        updated = application.qualify(replacement, delivery / "gui")
+        application.select(updated)
+        assert updated.python != selected.python and selected.python.is_file()
+        assert application.source(project) == workspace_id
+        python = replacement
+        check_notebook_kernel(project, python, tmp_path / "notebook-kernels")
+        application.start()
         run(
             [
                 str(python),
@@ -471,15 +401,15 @@ dependencies = []
         original = resource.read_bytes()
         try:
             resource.write_bytes(original + b"\n# same-version installation changed\n")
-            with pytest.raises(ValueError, match="适配包已改变"):
-                services.start(service.id)
-            assert services.views()[0].state == "running"
+            with pytest.raises(ValueError, match="能力包已改变"):
+                application.start()
+            assert application.status().state == "running"
         finally:
             resource.write_bytes(original)
-        # Removing the adapter must not make a live worker impossible to stop.
+        # Explicit shutdown remains available after loss of an optional package.
         shutil.rmtree(site / "test_lab")
         shutil.rmtree(site / "test_lab_adapter-1.0.0.dist-info")
-        services.stop(service.id)
-        assert services.views()[0].state == "stopped"
+        application.stop()
+        assert application.status().state == "stopped"
     finally:
-        services.stop(service.id)
+        application.stop()

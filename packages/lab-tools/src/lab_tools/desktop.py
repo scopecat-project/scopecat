@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import logging
 import threading
-from collections.abc import Callable
+from collections.abc import Callable, Generator
+from contextlib import contextmanager
 from html import escape
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
@@ -29,29 +30,77 @@ class DesktopAPI:
         self._runtime = runtime
         self._window = window
         self._closing = closing
+        self._operation_lock = threading.Lock()
+
+    @contextmanager
+    def _operation(self) -> Generator[None]:
+        if not self._operation_lock.acquire(blocking=False):
+            raise ValueError("应用正在准备更新或更改源码登记，请等待操作完成")
+        try:
+            yield
+        finally:
+            self._operation_lock.release()
 
     def status(self) -> dict[str, object]:
         status = self._runtime.status()
+        candidate = self._runtime.prepared_update()
         return {
             "home": str(self._runtime.home),
             "state": status.state,
             "detail": status.detail,
             "installation": self._runtime.installation().model_dump(mode="json"),
+            "candidate": candidate.model_dump(mode="json") if candidate else None,
         }
 
+    def prepare_update(self, directory: str) -> dict[str, object]:
+        path = Path(directory)
+        if not path.is_absolute():
+            raise ValueError("请选择交付目录的完整路径")
+        with self._operation():
+            return self._runtime.prepare_update(path).model_dump(mode="json")
+
+    def apply_update(self) -> None:
+        with self._operation():
+            candidate = self._runtime.prepared_update()
+            if candidate is None:
+                raise ValueError("请先准备更新，资格核验通过后再切换")
+            self._runtime.stop()
+            self._runtime.select(candidate)
+            self.retry()
+
+    def register_source(self, directory: str) -> str:
+        path = Path(directory)
+        if not path.is_absolute():
+            raise ValueError("请选择作者代码目录的完整路径")
+        with self._operation():
+            self._runtime.stop()
+            identity = self._runtime.register_source(path)
+            self.retry()
+            return identity
+
     def restart(self) -> None:
-        self._runtime.stop()
-        self.retry()
+        with self._operation():
+            self._runtime.stop()
+            self.retry()
+
+    def requalify(self) -> None:
+        with self._operation():
+            selected = self._runtime.installation()
+            self._runtime.stop()
+            candidate = self._runtime.qualify(selected.python, selected.static_dir)
+            self._runtime.select(candidate)
+            self.retry()
 
     def retry(self) -> None:
         record = self._runtime.start()
         self._window().load_url(record.base_url)
 
     def exit(self, background: bool) -> None:
-        if not background:
-            self._runtime.stop()
-        self._closing.set()
-        self._window().destroy()
+        with self._operation():
+            if not background:
+                self._runtime.stop()
+            self._closing.set()
+            self._window().destroy()
 
 
 def run(home: Path, source: Path | None = None) -> None:
@@ -90,6 +139,8 @@ def run(home: Path, source: Path | None = None) -> None:
                 "重试</button> "
                 '<button onclick="pywebview.api.restart().catch(showError)">'
                 "停止后台并重新启动</button>"
+                '<button onclick="pywebview.api.requalify().catch(showError)">'
+                "停止并重新核验当前环境</button>"
                 '<button onclick="pywebview.api.exit(true)">关闭窗口</button>'
                 '<p id="error"></p><script>function showError(e) {'
                 "document.getElementById('error').textContent = e.message; }"

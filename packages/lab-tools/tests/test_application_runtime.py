@@ -77,7 +77,7 @@ def test_conflicting_interpreter_has_explicit_stop_recovery(application):
     record = application.start()
     assert record.python == Path(sys.executable).absolute()
     write_daemon_endpoint_record(record.model_copy(update={"python": None}))
-    with pytest.raises(ValueError, match="停止服务"):
+    with pytest.raises(ValueError, match="停止后台并重新启动"):
         application.start()
     application.stop()
     assert application.start().python == Path(sys.executable).absolute()
@@ -140,3 +140,18 @@ def test_interrupted_selection_is_fenced_and_retryable(application, monkeypatch)
     assert not application.pending.exists()
     assert application.installation() == candidate
     assert application.start().project_root == application.root
+
+
+def test_stopping_development_does_not_stop_another_application_home(
+    application, tmp_path
+):
+    other = ApplicationRuntime(tmp_path / "daily")
+    other.configure(static_dir=application.installation().static_dir)
+    try:
+        daily = other.start()
+        application.start()
+        application.stop()
+        assert other.status().record == daily
+        assert other.status().state == "running"
+    finally:
+        other.stop()

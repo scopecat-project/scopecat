@@ -10,97 +10,58 @@ export function HelpWorkspace({
   health?: ProjectHealth;
   reachable: boolean;
 }) {
-  const dataRoot = health?.details.data_root;
   return (
     <section aria-labelledby="help-heading" className="grid max-w-4xl gap-4 p-6">
       <h2 id="help-heading" className="text-lg font-semibold">
-        Help and maintenance
+        Help
       </h2>
-      <section className={section} aria-label="Current application">
-        <h3 className="font-semibold">Know which service you are using</h3>
-        {health ? (
-          <dl className="grid gap-2 break-all">
-            <div>
-              <dt>Project</dt>
-              <dd>{health.projectName}</dd>
-            </div>
-            <div>
-              <dt>Project directory</dt>
-              <dd>{health.projectRoot}</dd>
-            </div>
-            {typeof dataRoot === "string" && (
-              <div>
-                <dt>Scientific data directory</dt>
-                <dd>{dataRoot}</dd>
-              </div>
-            )}
-          </dl>
-        ) : (
-          <p>Current service information is unavailable.</p>
-        )}
-        {!reachable && (
-          <p role="status">
-            The service cannot currently be reached. Any project details above are from the last
-            successful connection.
-          </p>
-        )}
-        <p>
-          Closing this browser tab does not stop the experiment service. Use the application manager
-          when you need to stop it, after finishing measurements and Notebook work.
+      {!reachable && (
+        <p role="status">
+          The application cannot currently be reached. Reopen Scopecat and use its recovery action
+          to stop and restart the recorded background process.
         </p>
-      </section>
+      )}
       <section className={section}>
-        <h3 className="font-semibold">Choose code and measurement context</h3>
+        <h3 className="font-semibold">Start an experiment</h3>
         <ol className="list-decimal space-y-2 pl-5">
+          <li>
+            Open your code folder in VS Code. Select the Python interpreter shown in{" "}
+            <a className="underline" href="#settings">
+              Application settings
+            </a>
+            . Python files and notebooks use the same application as this window.
+          </li>
           <li>
             In{" "}
             <a className="underline" href="#launch">
               Experiments
             </a>
-            , select a registered Code workspace, then an experiment. Refresh author code prepares
-            that workspace's current source. A saved plan pinned to a code revision keeps that
-            revision until you choose Use current source.
+            , select your code and experiment. Refresh author code after editing; this does not
+            rebuild dependencies.
           </li>
           <li>
-            Choose the sample or exact registered target, working point and batch for the
-            measurement. Operator and record collection are independent choices. Preview checks
-            their compatibility before starting.
-          </li>
-          <li>
-            To add or reconnect a code directory, ask the maintainer to register it from the local
-            environment with the service stopped. The Code workspace menu selects existing
-            registrations; it does not register filesystem paths.
+            Choose the setup and saved parameters for this measurement, then preview and submit.
+            Reopening a result does not run it again.
           </li>
         </ol>
-        <a
-          className="underline"
-          href={`${docs}reference/project-layout/`}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Code workspace registration and project layout
-        </a>
       </section>
       <section className={section}>
-        <h3 className="font-semibold">Maintain setup and saved parameters</h3>
+        <h3 className="font-semibold">Devices and measurement context</h3>
         <p>
-          In{" "}
-          <a className="underline" href="#configuration">
-            Configuration
+          Maintain devices in{" "}
+          <a className="underline" href="#instruments">
+            Devices and drivers
           </a>
-          , save and review an executable setup before explicitly selecting it. Setup controls
-          topology, routing and instrument declarations. Parameter defaults and saved working points
-          are selected separately.
+          . Setup selects device revisions, topology and routing. Parameter branches and saved
+          working points are independent selections for each task.
         </p>
         <p>
-          Existing working points retain their setup. Explicitly rebind their parameters when moving
-          to a different setup; rebinding does not carry calibration acceptance forward. Finish
-          active measurements and close instrument sessions before changes that require the devices
-          to be free.
+          Finish active measurements and close instrument sessions before changing connections or
+          applying a software update.
         </p>
         <a
           className="underline"
-          href={`${docs}how-to/maintain-executable-setup/`}
+          href={docs + "how-to/maintain-executable-setup/"}
           target="_blank"
           rel="noopener noreferrer"
         >
@@ -108,60 +69,25 @@ export function HelpWorkspace({
         </a>
       </section>
       <section className={section}>
-        <h3 className="font-semibold">Open application management and tutorials</h3>
-        <ol className="list-decimal space-y-2 pl-5">
-          <li>
-            If the application manager is still open in another tab, return to that tab. Starting a
-            service there provides a separate Open workbench link.
-          </li>
-          <li>
-            For an installed delivery, reopen its original launcher: double-click{" "}
-            <code>lab.cmd</code> on Windows, or run <code>python lab.py</code> from that
-            installation directory. The launcher uses that installation's environment and management
-            home.
-          </li>
-          <li>
-            In a Python environment with <code>scopecat-lab-tools</code> installed,{" "}
-            <code>scopecat app</code> reopens its manager. If you used a custom home or source
-            checkout, reuse your original <code>--home</code> and <code>--source</code> arguments.
-          </li>
-          <li>
-            In the manager, expand Help · Teaching and practice (帮助 · 教学与练习). Available
-            tutorials prepare disposable synthetic-data sandboxes. Teaching requires an installed
-            tutorial delivery or a configured source checkout; an experiment-only environment may
-            have no tutorials.
-          </li>
-        </ol>
-        <p>Use the original launcher to reopen the manager for the correct installation.</p>
-        <a
-          className="underline"
-          href={`${docs}tutorials/teaching-sandboxes/`}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Teaching sandbox guide
-        </a>
-      </section>
-      <section className={section}>
-        <h3 className="font-semibold">Stop, update and retain records</h3>
+        <h3 className="font-semibold">Finish work or keep it running</h3>
         <p>
-          Finish active work and close Notebook connections before stopping a service or replacing
-          its environment. Keep the installation's project and data locations recorded. After an
-          in-place environment update, use Recheck environment (重新检查环境) in the manager while
-          the service is stopped, then start it after a successful check. Rechecking updates the
-          registered identity without installing software or starting the service. If it fails, the
-          previous registration remains; inspect the operation log and fix the environment before
-          retrying. Moving to another interpreter or GUI directory still requires trusted local
-          registration with your original management-home arguments.
+          Save your files and close Python sessions. Closing the Scopecat window lets you stop the
+          application, keep it running in the background, or cancel. Closing a browser tab only
+          closes that view.
         </p>
         <p>
-          Removing a service registration preserves project files and scientific records. Resetting
-          a tutorial creates a new copy; old copies remain until you explicitly delete an eligible
-          one. These are separate actions.
+          Application settings shows software updates, source registration and data locations.
+          Updates preserve records and source files. After switching environments, reopen Python
+          kernels with the selected interpreter.
         </p>
+        {health && typeof health.details.data_root === "string" && (
+          <p>
+            Scientific data: <code>{health.details.data_root}</code>
+          </p>
+        )}
         <a
           className="underline"
-          href={`${docs}how-to/backup-and-restore/`}
+          href={docs + "how-to/backup-and-restore/"}
           target="_blank"
           rel="noopener noreferrer"
         >
@@ -169,11 +95,26 @@ export function HelpWorkspace({
         </a>
         <a
           className="underline"
-          href={`${docs}how-to/maintain-application/`}
+          href={docs + "how-to/maintain-application/"}
           target="_blank"
           rel="noopener noreferrer"
         >
-          Application management
+          Maintain the application
+        </a>
+      </section>
+      <section className={section}>
+        <h3 className="font-semibold">Practice without devices</h3>
+        <p>
+          Tutorial deliveries include editable synthetic-data examples. The current tutorial command
+          prints a folder to open in VS Code; it does not open a management page.
+        </p>
+        <a
+          className="underline"
+          href={docs + "tutorials/teaching-sandboxes/"}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          Teaching sandbox guide
         </a>
       </section>
     </section>

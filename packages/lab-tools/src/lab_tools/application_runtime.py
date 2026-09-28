@@ -25,7 +25,7 @@ from scopecat.project import open_project
 from scopecat.sdk.instruments.catalog import DriverCatalog
 from scopecat_server.lifecycle import DaemonStatus, inspect_daemon, stop_project
 
-from .bundle import managed_path
+from .bundle import managed_path, prepare_home
 
 
 class QualifiedDrivers(BaseModel):
@@ -111,6 +111,9 @@ class ApplicationRuntime:
         self.root = managed_path(self.home, self.home / "runtime")
         self.selection = managed_path(self.home, self.home / "installation.json")
         self.pending = managed_path(self.home, self.home / "installation-pending.json")
+        self.candidate = managed_path(
+            self.home, self.home / "installation-candidate.json"
+        )
         self.lock = FileLock(self.home / "application.lock", timeout=30)
 
     def installation(self) -> Installation:
@@ -124,6 +127,21 @@ class ApplicationRuntime:
 
     def status(self) -> DaemonStatus:
         return inspect_daemon(open_project(self.root, resolve_adapter=False))
+
+    def prepare_update(self, delivery: Path) -> Installation:
+        python, bundle = prepare_home(delivery, self.home)
+        candidate = self.qualify(python, bundle / "gui")
+        with self.lock:
+            _write(self.candidate, candidate.model_dump_json(indent=2))
+        return candidate
+
+    def prepared_update(self) -> Installation | None:
+        if self.pending.is_file():
+            return Installation.model_validate_json(self.pending.read_bytes())
+        if not self.candidate.is_file():
+            return None
+        candidate = Installation.model_validate_json(self.candidate.read_bytes())
+        return candidate if candidate != self.installation() else None
 
     def qualify(
         self,

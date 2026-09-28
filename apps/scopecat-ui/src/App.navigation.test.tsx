@@ -169,7 +169,7 @@ afterEach(() => {
 it("opens Help through navigation and a direct hash without leaving the workbench", async () => {
   renderApp();
   fireEvent.click(screen.getByRole("button", { name: "Help" }));
-  expect(await screen.findByRole("heading", { name: "Help and maintenance" })).toBeVisible();
+  expect(await screen.findByRole("heading", { name: "Help" })).toBeVisible();
   expect(window.location.hash).toBe("#help");
   expect(screen.getByRole("button", { name: "Help" })).toHaveAttribute("aria-current", "page");
   fireEvent.click(screen.getByRole("button", { name: "Experiments" }));
@@ -178,7 +178,7 @@ it("opens Help through navigation and a direct hash without leaving the workbenc
     window.history.replaceState(null, "", "#help");
     window.dispatchEvent(new HashChangeEvent("hashchange"));
   });
-  expect(await screen.findByRole("heading", { name: "Help and maintenance" })).toBeVisible();
+  expect(await screen.findByRole("heading", { name: "Help" })).toBeVisible();
 });
 
 describe("config provenance navigation", () => {
@@ -257,7 +257,7 @@ describe("config provenance navigation", () => {
     renderApp();
 
     expect(await screen.findByText("Instrument workspace")).toBeVisible();
-    expect(screen.getByRole("button", { name: "Instruments" })).toHaveAttribute(
+    expect(screen.getByRole("button", { name: "Devices and drivers" })).toHaveAttribute(
       "aria-current",
       "page",
     );
@@ -265,7 +265,7 @@ describe("config provenance navigation", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Configuration" }));
     expect(window.location.hash).toBe("#configuration");
-    fireEvent.click(screen.getByRole("button", { name: "Instruments" }));
+    fireEvent.click(screen.getByRole("button", { name: "Devices and drivers" }));
     expect(window.location.hash).toBe("#instruments");
   });
 

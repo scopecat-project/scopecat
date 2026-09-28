@@ -12,7 +12,16 @@ afterEach(() => {
 it("leaves background work running only after the user chooses it", async () => {
   const exit = vi.fn().mockResolvedValue(undefined);
   window.pywebview = {
-    api: { exit, status: vi.fn(), retry: vi.fn(), restart: vi.fn() },
+    api: {
+      exit,
+      status: vi.fn(),
+      retry: vi.fn(),
+      restart: vi.fn(),
+      requalify: vi.fn(),
+      prepare_update: vi.fn(),
+      apply_update: vi.fn(),
+      register_source: vi.fn(),
+    },
   };
   render(<DesktopSession />);
   expect(exit).not.toHaveBeenCalled();
@@ -28,7 +37,16 @@ it("leaves background work running only after the user chooses it", async () => 
 it("keeps a failed stop recoverable in the current window", async () => {
   const exit = vi.fn().mockRejectedValueOnce(new Error("Device release is still pending"));
   window.pywebview = {
-    api: { exit, status: vi.fn(), retry: vi.fn(), restart: vi.fn() },
+    api: {
+      exit,
+      status: vi.fn(),
+      retry: vi.fn(),
+      restart: vi.fn(),
+      requalify: vi.fn(),
+      prepare_update: vi.fn(),
+      apply_update: vi.fn(),
+      register_source: vi.fn(),
+    },
   };
   render(<DesktopSession />);
   act(() => window.scopecatRequestExit?.());

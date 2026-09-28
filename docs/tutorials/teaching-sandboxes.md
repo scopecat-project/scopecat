@@ -14,13 +14,10 @@ into that same home. Failed preparation keeps the previous default entry; after
 fixing the reported cause, rerun the installer without manually deleting incomplete
 managed environments. See [fixed delivery maintenance](../how-to/maintain-application.md#install-a-newer-fixed-delivery).
 
-On Windows, open `Scopecat-Lab/lab.cmd`; elsewhere run
-`python ~/Scopecat-Lab/lab.py`. This opens the local Scopecat management page.
-Expand **Help · Teaching and practice**, then choose a topic and **Open / continue**; the service prepares the exercise and opens
-its folder and Notebook in VS Code. The installed command `scopecat teach` opens
-the Help section directly. The default page lists experimental services, which
-are registered separately with `scopecat app PATH --action open --home HOME`. There is no need to activate environments, choose ports or number
-project folders. Repeated launching connects to the same management service.
+From the installed home run `python lab.py teach compute`. The command prepares
+the exercise, starts its runtime and prints its code folder. Open that folder
+normally in VS Code; no management page or automatic editor launch is involved.
+Use `python lab.py teach --status` to list existing exercises.
 
 Each topic has its own environment and one complete Notebook:
 
@@ -39,21 +36,18 @@ rejects the wrong interpreter. Run All before making one small change. The curre
 Notebook instructions are in Chinese; this page explains the common entry in English.
 Detailed API explanations follow the [learning path](../getting-started/learning-path.md).
 
-Repeated opening continues the same exercise. To reset, first close its Notebook
-kernel and use **Stop exercise service**, then **Reset exercise**. A fresh copy is
-created; the old copy and its edits remain in the list. **Delete old copy** requires
-confirmation and is unavailable for the current copy or a copy with running
-processes. Old copies are never deleted automatically. Copy any source or Notebook
-you want to retain elsewhere. Cleanup does not delete release bundles or manage
-real projects.
+Repeated opening continues the same exercise. Close its Notebook kernel, then run
+`python lab.py teach compute --stop` before resetting with
+`python lab.py teach compute --reset`. The old copy and its edits remain.
+`python lab.py teach --clean` lists eligible old copies and asks before deleting.
+Current copies and copies with running processes are protected. Keep source edits
+you want before cleanup; releases and real experiment directories are outside it.
 
-The page shows operation progress, results and logs. Closing the browser does not
-interrupt preparation or verification. Reopen the launcher to reconnect. If an
-operation process exits unexpectedly, its status becomes interrupted; inspect its
-retained files and logs before retrying. It is never silently replayed. Exiting the
-management service leaves exercise services running; stop those explicitly from
-their cards when finished. Installing a newer release selects the new manager on
-next launch; active management work must finish first.
+Commands execute in the foreground and report failures there. A per-home teaching
+lock prevents overlapping preparation. Interrupted preparation never publishes
+a partial exercise as current; fix the cause and retry. Stop an exercise explicitly
+when finished. The application manager and its operation database have been retired;
+same-service practice scopes are a separate, unfinished product batch.
 
 Real scientific projects and retained experimental evidence do not belong in this
 resettable directory and continue to use [current-format backup/restore](../how-to/backup-and-restore.md).
@@ -63,7 +57,7 @@ Earlier development data follows the [prebaseline policy](../development/data-co
 
 From a Scopecat checkout, run `uv run python teach.py source`, or double-click
 `teach.cmd` and choose 1 on Windows. The entry installs local wheels and locked
-teaching dependencies and opens the local management page. Exercise services use
+teaching dependencies and prints the exercise inventory. Pass a topic such as `compute` to prepare it. Exercise services use
 the API-only runtime.
 It does not build the GUI or require Node. Only the exercise's author package is
 editable; new framework/tutorial contents receive a new sandbox identity.
@@ -90,8 +84,7 @@ release bundles separately. Successful CI is software evidence, not human or
 physical-device acceptance.
 
 An explicit standalone tutorial workspace can also be generated with
-`scopecat init PATH --topic compute` in a teaching installation. The management page is the
-default for disposable exercises; `init` without a topic still creates the small
+`scopecat init PATH --topic compute` in a teaching installation. The explicit teaching command manages disposable exercises; `init` without a topic still creates the small
 virtual-instrument project used for integration and application development.
 
 Laboratory-specific package selection, SDKs, addresses, bindings, acceptance
@@ -200,16 +193,10 @@ uses `session.history(before=page.next_cursor)`.
 
 ## Development and automated acceptance
 
-The ordinary installation uses one host at `~/Scopecat-Lab`. Development and tests
-may select an isolated home with `--home PATH`; each gets its own lock, endpoint,
-operation database and logs. Topic arguments such as
-`scopecat teach parameters --verify --home PATH` call the same management API as
-the page. `--status` reports managed state; `--shutdown` closes only that host.
-Source development stops its manager before updating the source runtime, preserving
-exercise processes and rejecting the update while management work is still active.
+Development and tests use an isolated `--home PATH`. Commands such as
+`scopecat teach parameters --verify --home PATH` run the installed lesson directly.
+`--status` reports exercise locations; `--stop` stops the selected exercise.
 
-The manager also opens explicitly registered experiment services. Teaching remains
-synthetic and separately managed. Child services retain their own execution and
-physical-device ownership; the manager does not establish cross-service exclusion,
-enable LAN access, install a tray icon or register system autostart.
-See the [application host architecture](../development/architecture/application-host.md).
+Exercises still retain separate synthetic runtimes until same-service practice
+scopes are delivered. The main application already uses a single runtime for
+registered author folders. See [application runtime ownership](../development/architecture/application-host.md).
