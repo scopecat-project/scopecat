@@ -20,6 +20,7 @@ import uvicorn
 from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, JSONResponse, Response
 from filelock import FileLock
+from pydantic import BaseModel
 
 from lab_teaching.lessons import TOPICS
 
@@ -34,6 +35,10 @@ from .host_operations import (
     workspaces,
 )
 from .services import Services
+
+
+class ExitRequest(BaseModel):
+    stop_started_services: bool = False
 
 
 def _require_teaching(key: str | None) -> str:
@@ -54,7 +59,7 @@ def _validate_command_capability(key: str | None, command: Command) -> None:
         _require_teaching(key)
 
 
-def application(
+def application(  # noqa: C901 - route handlers share one admission/closing boundary
     home: Path, source: Path | None, record: HostRecord, shutdown: Callable[[], None]
 ) -> FastAPI:
     app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
@@ -87,6 +92,7 @@ def application(
         response.headers["Referrer-Policy"] = "no-referrer"
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; script-src 'self'; style-src 'self'; "
+            "frame-src http://127.0.0.1:*; "
             "frame-ancestors 'none'; base-uri 'none'"
         )
         response.headers["X-Content-Type-Options"] = "nosniff"
@@ -115,6 +121,7 @@ def application(
     @app.get("/api/state")
     def state() -> HostState:
         store.reconcile()
+        preferred = Services(home).preferred()
         return HostState(
             home=str(home),
             version=key or "local",
@@ -122,6 +129,7 @@ def application(
             workspaces=workspaces(home, key) if key is not None else [],
             operations=store.list(),
             services=Services(home).views(),
+            preferred_service=preferred.id if preferred else None,
             setup_defaults={
                 "project": str(home / "main"),
             },
@@ -133,7 +141,46 @@ def application(
             if closing:
                 raise ValueError("管理服务正在退出，请重新打开安装入口")
             _validate_command_capability(key, command)
-            return launch(home, source, command)
+            previous = next(
+                (item for item in store.list() if item.command.id == command.id), None
+            )
+            session = previous.command.session if previous else record.instance
+            return launch(home, source, command.model_copy(update={"session": session}))
+
+    @app.get("/api/exit")
+    def exit_plan() -> dict[str, object]:
+        services = Services(home)
+        owned = {item.id for item in services.owned(record.instance)}
+        return {
+            "services": [
+                {
+                    "id": view.service.id,
+                    "name": view.service.name,
+                    "owned": view.service.id in owned,
+                }
+                for view in services.views()
+                if view.state != "stopped"
+            ],
+        }
+
+    @app.post("/api/exit")
+    def exit_application(request: ExitRequest) -> dict[str, str]:
+        nonlocal closing
+        with admission:
+            if closing:
+                raise ValueError("应用正在退出")
+            store.reconcile()
+            if any(item.status in ("starting", "running") for item in store.list()):
+                raise ValueError("正在接入、启动或更新实验室，请等待操作结束后退出")
+            closing = True
+            try:
+                if request.stop_started_services:
+                    Services(home).stop_owned(record.instance)
+            except Exception:
+                closing = False
+                raise
+            shutdown()
+        return {"detail": "应用已退出；保留的后台可在下次打开时重新连接"}
 
     @app.get("/api/operations/{identity}")
     def operation(identity: str) -> Operation:

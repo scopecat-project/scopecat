@@ -124,12 +124,12 @@ with LabApplication().connect(record.base_url) as lab, project.authoring() as au
             assert scenario["id"] == "starter-software"
             assert scenario["limitations"]
         store.stop(service.id)
-        # Daily entry has no project path, teaching topic, or management step.
-        application.main(["--home", str(home)])
+        # Headless start is explicit and does not replay acquisition or open a browser.
+        application.main(["--home", str(home), "--action", "start"])
         reopened = inspect_daemon(project)
         assert reopened.state == "running" and reopened.record is not None
         assert reopened.record != first.record
-        assert opened == [reopened.record.base_url]
+        assert opened == []
         assert store.preferred() == service
         with httpx2.Client(trust_env=False) as http:
             after = http.get(reopened.record.base_url + "/api/v1/runs")

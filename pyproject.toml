@@ -25,8 +25,8 @@ dev = [
   "ruff>=0.16.0",
   { include-group = "delivery" },
 ]
-delivery = ["scopecat-lab-tools[kernel]", "uv_build>=0.12.3,<0.13"]
-delivery-build = ["pip>=25"]
+delivery = ["scopecat-lab-tools[kernel,desktop]", "uv_build>=0.12.3,<0.13"]
+delivery-build = ["pip>=25", "setuptools>=80", "wheel>=0.45"]
 delivery-notebook = ["scopecat-lab-tools[notebook]", { include-group = "delivery" }]
 docs = [
   "mkdocstrings-python>=2",
@@ -428,6 +428,7 @@ fast_paths = [
 integration_paths = [
   "packages/scopecat-server/tests",
   "packages/lab-tools/tests/test_application_entry.py",
+  "packages/lab-tools/tests/test_desktop_install.py",
   "packages/lab-tools/tests/test_author_notebook.py",
   "packages/lab-tools/tests/test_calibration_smoke.py",
   "packages/lab-tools/tests/test_delivery_recipe.py",
@@ -448,6 +449,7 @@ journey_paths = [
   "packages/lab-tools/tests/test_installed_adapter_journey.py",
   "packages/lab-tools/tests/test_calibration_teaching_journey.py",
   "packages/lab-tools/tests/test_host_journey.py",
+  "packages/lab-tools/tests/test_application_lifecycle.py",
   "packages/lab-tools/tests/test_notebook_workspace_journey.py",
   "packages/lab-tools/tests/test_unknown_parameter_authoring.py",
   "packages/lab-tools/tests/test_minimal_teaching_journey.py",

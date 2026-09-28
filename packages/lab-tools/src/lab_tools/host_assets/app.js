@@ -14,7 +14,54 @@ const setupForm = document.getElementById("setup-form");
 const setupPanel = document.getElementById("setup-panel");
 const setupFields = document.getElementById("setup-fields");
 const readyServices = new Map();
+const failedServices = new Set();
 const updateDrafts = new Map();
+let activeService = null, selectedOnce = false;
+const frame = document.getElementById("experiment-frame");
+function showSettings() {
+  document.getElementById("workbench").hidden = true;
+  document.getElementById("settings").hidden = false;
+}
+function openWorkbench(identity, url, workspace) {
+  const selected = new URL(workbenchUrl(url));
+  if (workspace) selected.searchParams.set("workspace", workspace);
+  if (frame.src !== selected.href) frame.src = selected.href;
+  activeService = identity;
+  document.getElementById("workbench").hidden = false;
+  document.getElementById("settings").hidden = true;
+}
+window.scopecatRequestExit = async () => {
+  try {
+    const plan = await api("/api/exit");
+    document.getElementById("exit-services").replaceChildren(...plan.services.map(service =>
+      element("li", `${service.name} · ${service.owned ? "本次启动" : "独立后台服务，将保留"}`)));
+    document.getElementById("exit-error").textContent = busy || managerRunning ? "请等待当前设置操作完成。" : "";
+    document.getElementById("exit-stop").disabled = busy || managerRunning;
+    document.getElementById("exit-keep").disabled = busy || managerRunning;
+    document.getElementById("exit-dialog").showModal();
+  } catch (error) { message(error.message, true); }
+};
+async function finishExit(stopStarted) {
+  try {
+    const result = await api("/api/exit", { stop_started_services: stopStarted });
+    stopped = true;
+    clearInterval(polling);
+    frame.removeAttribute("src");
+    showSettings();
+    document.getElementById("exit-dialog").close();
+    document.querySelectorAll("button").forEach(button => { button.disabled = true; });
+    message(result.detail);
+  } catch (error) { document.getElementById("exit-error").textContent = error.message; }
+}
+document.getElementById("show-settings").addEventListener("click", showSettings);
+document.getElementById("show-experiment").addEventListener("click", () => {
+  if (activeService && readyServices.has(activeService)) openWorkbench(activeService, readyServices.get(activeService), fragment.get("workspace"));
+  else { showSettings(); message("请选择实验室并启动，随后将在此窗口进入实验。"); }
+});
+document.getElementById("request-exit").addEventListener("click", window.scopecatRequestExit);
+document.getElementById("exit-stop").addEventListener("click", () => finishExit(true));
+document.getElementById("exit-keep").addEventListener("click", () => finishExit(false));
+document.getElementById("exit-cancel").addEventListener("click", () => document.getElementById("exit-dialog").close());
 function message(text, error = false) {
   notice.textContent = text;
   notice.classList.toggle("error", error);
@@ -54,6 +101,9 @@ function workbenchUrl(value) {
 }
 function forgetReadyLinks() {
   readyServices.clear();
+  activeService = null;
+  frame.removeAttribute("src");
+  showSettings();
   document.querySelectorAll("[data-workbench-link]").forEach(link => link.remove());
 }
 async function submit(command) {
@@ -75,7 +125,13 @@ async function submit(command) {
       await new Promise(resolve => setTimeout(resolve, 1200));
       operation = await api(`/api/operations/${command.id}`);
     }
-    if (operation.status !== "succeeded") throw new Error(operation.detail);
+    if (operation.status !== "succeeded") {
+      if (command.service) {
+        failedServices.add(command.service);
+        readyServices.delete(command.service);
+      }
+      throw new Error(operation.detail);
+    }
     message(operation.detail || "已完成。");
     if (["service_start", "setup"].includes(command.action)) {
       const state = await api("/api/state");
@@ -83,14 +139,10 @@ async function submit(command) {
       const service = state.services.find(item => item.service.id === identity);
       if (service?.state !== "running" || !service.url) throw new Error("实验服务尚未就绪，请查看日志。");
       const url = workbenchUrl(service.url);
-      if (command.action === "setup") {
-        const selected = new URL(url);
-        if (operation.workspace) selected.searchParams.set("workspace", operation.workspace);
-        location.assign(selected.href);
-        return;
-      }
       readyServices.set(identity, url);
-      message("实验服务已就绪。点击“打开工作台（新标签页）”；本管理页面会保留，方便返回帮助、教学和服务管理。");
+      failedServices.delete(identity);
+      openWorkbench(identity, url, operation.workspace || fragment.get("workspace"));
+      message("实验服务已就绪。");
     }
     if (command.action === "open" && operation.workspace) await openEditor(operation.workspace);
   } finally {
@@ -104,13 +156,29 @@ async function refresh() {
   try { state = await api("/api/state"); }
   catch (error) { forgetReadyLinks(); throw error; }
   if (stopped) return;
+  for (const item of state.services) {
+    if (item.state === "running" && item.url && !failedServices.has(item.service.id)) readyServices.set(item.service.id, workbenchUrl(item.url));
+  }
   for (const [identity, url] of readyServices) {
     const service = state.services.find(item => item.service.id === identity);
     if (service?.state !== "running" || !service.url || service.url.replace(/\/$/, "") !== url.replace(/\/$/, "")) readyServices.delete(identity);
   }
+  if (activeService && !readyServices.has(activeService)) {
+    activeService = null;
+    frame.removeAttribute("src");
+    showSettings();
+  }
+  if (!selectedOnce) {
+    selectedOnce = true;
+    const selected = fragment.get("service") || state.preferred_service;
+    if (!["settings", "help"].includes(fragment.get("view")) && readyServices.has(selected))
+      openWorkbench(selected, readyServices.get(selected), fragment.get("workspace"));
+  }
   const running = state.operations.some(op => ["starting", "running"].includes(op.status));
   managerRunning = running;
   const disabled = busy || running;
+  document.getElementById("exit-stop").disabled = disabled;
+  document.getElementById("exit-keep").disabled = disabled;
   setupFields.disabled = disabled;
   if (!setupInitialized) {
     setupInitialized = true;
@@ -134,10 +202,7 @@ async function refresh() {
     row.append(button("启动 / 检查工作台", () => submit({ action: "service_start", service: item.service.id }), "primary", disabled));
     const readyUrl = readyServices.get(item.service.id);
     if (readyUrl && !disabled) {
-      const link = element("a", "打开工作台（新标签页）", "workbench-link");
-      link.href = readyUrl;
-      link.target = "_blank";
-      link.rel = "noopener noreferrer";
+      const link = button("进入实验", () => openWorkbench(item.service.id, readyUrl, fragment.get("workspace")), "workbench-link");
       link.dataset.workbenchLink = item.service.id;
       row.append(link);
     }
@@ -274,16 +339,7 @@ setupForm.addEventListener("submit", event => {
     data_root: value("setup-data") || null, settings_file: value("setup-settings") || null, environment_bundle: value("setup-bundle") || null, name: value("setup-name") || null,
   } }).catch(error => message(error.message, true));
 });
-document.getElementById("shutdown").addEventListener("click", async () => {
-  try {
-    const result = await api("/api/shutdown", {});
-    stopped = true;
-    forgetReadyLinks();
-    clearInterval(polling);
-    document.querySelectorAll("button").forEach(button => { button.disabled = true; });
-    message(result.detail + "。再次打开 Scopecat 安装入口可启动管理服务。");
-  } catch (error) { message(error.message, true); }
-});
+document.getElementById("shutdown").addEventListener("click", window.scopecatRequestExit);
 refresh().then(() => message("已连接本机 Scopecat。接入实验代码，或打开已有工作台。"))
   .catch(error => message(error.message, true));
 polling = setInterval(() => refresh().catch(error => message(`连接暂不可用：${error.message}。请从 Scopecat 安装入口重新打开。`, true)), 2500);

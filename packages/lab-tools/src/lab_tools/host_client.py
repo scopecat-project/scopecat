@@ -42,6 +42,7 @@ class HostState(BaseModel):
     workspaces: list[Workspace]
     operations: list[Operation]
     services: list[ServiceView]
+    preferred_service: str | None = None
     setup_defaults: dict[str, str] = Field(default_factory=dict)
 
 
@@ -120,11 +121,35 @@ class HostClient:
 
     def shutdown(self) -> None:
         self.request("POST", "/api/shutdown", body={})
+        self.wait_stopped()
+
+    def exit(self, *, stop_started: bool) -> None:
+        self.request("POST", "/api/exit", body={"stop_started_services": stop_started})
+        self.wait_stopped()
+
+    def wait_stopped(self) -> None:
         deadline = time.monotonic() + 30
         while process_alive(self.record) and time.monotonic() < deadline:
             time.sleep(0.1)
         if process_alive(self.record):
             raise ValueError("管理服务尚未退出，请稍后重试；原记录与日志保留")
+
+
+def existing_host(home: Path) -> HostClient | None:
+    """Inspect an existing host without launching or upgrading anything."""
+    path = home / "host" / "endpoint.json"
+    if not path.exists():
+        return None
+    record = HostRecord.model_validate_json(path.read_text(encoding="utf-8"))
+    if not process_alive(record):
+        return None
+    client = HostClient(record)
+    if client.request("GET", "/api/identity") != {
+        "instance": record.instance,
+        "protocol": 1,
+    }:
+        raise ValueError("本机服务身份不匹配；保留记录并检查 host 日志")
+    return client
 
 
 def ensure_host(home: Path, source: Path | None) -> HostClient:

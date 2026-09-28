@@ -84,6 +84,7 @@ class Command(BaseModel):
     workspace: str | None = Field(default=None, pattern=r"^[0-9a-f]{32}$")
     reset: bool = False
     service: str | None = Field(default=None, pattern=r"^[0-9a-f]{32}$")
+    session: str | None = Field(default=None, pattern=r"^[0-9a-f]{32}$")
 
 
 class Operation(BaseModel):

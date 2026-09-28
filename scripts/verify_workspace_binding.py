@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import os
 import shutil
+import subprocess
+import sys
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -85,7 +87,29 @@ def check() -> None:
                     pass
                 else:
                     raise AssertionError("foreign workspace lifecycle action allowed")
+            # Initialize fixture parameters in another client: this journey must
+            # still switch roots without retaining the first root's Python modules.
+            _ = subprocess.run(
+                [
+                    sys.executable,
+                    "-c",
+                    (
+                        "import importlib, sys, scopecat as sc\n"
+                        "from pathlib import Path\n"
+                        "sys.path.insert(0, str(Path.cwd() / 'src'))\n"
+                        "with sc.open_project('.').authoring() as session:\n"
+                        "    session.refresh()\n"
+                        "    parameters = importlib.import_module("
+                        "'scopecat_lab.authored.parameters')\n"
+                        "    parameters.open_parameters(session)\n"
+                    ),
+                ],
+                cwd=first.root,
+                check=True,
+                timeout=60,
+            )
             with first.authoring() as author:
+                author.use(parameter_branch="starter")
                 job = (
                     author.prepare(
                         "signal",

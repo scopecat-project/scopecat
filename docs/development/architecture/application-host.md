@@ -11,37 +11,37 @@ with tutorial inventory or establish shared physical-device ownership.
 Run the following in the project's environment, with `scopecat-lab-tools` installed:
 
 ```sh
-scopecat app /path/to/existing-project
+scopecat app /path/to/existing-project --home /tmp/scopecat-dev --action start
 ```
 
 For a separate target interpreter or a source GUI build:
 
 ```sh
-scopecat app /path/to/existing-project --python /path/to/environment/bin/python --static-dir /path/to/gui/dist
+scopecat app /path/to/existing-project --home /tmp/scopecat-dev --action start --python /path/to/environment/bin/python --static-dir /path/to/gui/dist
 ```
 
 On Windows the interpreter is typically `environment\Scripts\python.exe`.
 The paths are trusted local CLI inputs. The browser only submits a registered
 service ID; it cannot register an arbitrary path or interpreter. Registration
 validates the actual project root, environment and GUI without starting its
-daemon. Normal CLI entry then starts/checks the workbench through a durable
-`service_start` operation in that environment and opens the qualified service URL.
-Use `--manage` to register without starting and open maintenance instead; use
-`--no-browser` to retain registration plus state output without service startup or
-changing the remembered selection. Starting/checking uses the existing startup lifecycle. After successful startup and a fresh matching running-service
-check, an explicit **Open workbench (new tab)** link opens the service GUI while
-keeping the authenticated manager page available. The link carries no manager
-credential and isolates opener/referrer state. Startup may initialize the project's configured
+daemon. CLI actions are explicit: `status` (default), `start`, `stop`, `open`,
+`desktop`, and `quit`. Only `open` launches a browser; errors never do.
+`--home` is required so source development does not accidentally use a daily home.
+The installed native entry explicitly chooses `desktop`. `--action open --no-browser`
+starts/connects the host and prints state; plain `status` never starts the host.
+Starting/checking uses the existing startup lifecycle. In the desktop, a successful
+`service_start` or setup operation displays the service GUI in a sandboxed loopback
+iframe. Settings remain in the parent window. No manager token is passed to the
+experiment frame. Startup may initialize the project's configured
 instruments; it does not submit a measurement. Existing hardware startup policy
 remains the project's responsibility.
 
-`scopecat app` without a project reopens the last successfully selected deployment,
-or the sole registered deployment before a choice has been saved. Explicit project
-entry selects and remembers that deployment only after successful startup and a
-fresh matching running-service check. With no registrations, multiple unselected
-registrations or a removed remembered ID, entry opens the manager without selecting
-another service. `scopecat app --manage` always opens maintenance without starting
-a service. Installed `lab.cmd` / `lab.py` launchers use this entry. **Help** contains managed teaching exercises;
+Desktop launch reconnects to a running preferred service; a stopped service requires
+an explicit start. Successful start remembers the deployment. With no registrations,
+multiple unselected registrations or a removed preferred ID, the window shows settings.
+`Scopecat.app` and `Scopecat.lnk` use a native webview without a console. The per-home
+desktop lock and activation signal reuse the existing window on repeated launches.
+`lab.py` and terminal launchers remain explicit scripting entries. **Help** contains managed teaching exercises;
 `scopecat teach` opens it directly. Explicit installed tutorial automation uses
 `python lab.py teach compute --verify`. A normal installation without a tutorial
 delivery can still manage experiment services; Help reports teaching unavailable.
@@ -80,7 +80,7 @@ The experiment GUI has a **Help and maintenance** page. It uses the existing hea
 response to identify the current service and provides supported documentation,
 teaching and maintenance directions. Reopen the original installed `lab.cmd` /
 `lab.py` entry with `--manage` to return to that installation's manager; a qualified
-source installation can use `scopecat app --manage` with its original host-home options. Help does
+source installation can use `scopecat app --action open --manage` with its original host-home options. Help does
 not register directories or start another service merely by being opened.
 
 Failed startup or a changed registration opens maintenance with retained operation
@@ -139,6 +139,12 @@ observable; absent workers become interrupted, with files and logs preserved.
 Interrupted work is never replayed automatically. Creating a new copy publishes
 the current pointer only after its environment is ready.
 
+Window close opens an exit decision: stop services started by this host session,
+retain background services, or cancel. Ownership receipts record PID and process
+creation time; reused or externally restarted services are never stopped as owned.
+Independent services are shown in the exit dialog and remain running. Stopping is
+an explicit interruption choice, not an automatic claim that measurements are idle.
+VS Code kernels are independent clients and are never killed by desktop exit.
 Graceful host shutdown and runtime replacement reject active management work.
 Replacing the manager does not stop an already running exercise. Fixed releases
 live in separate installed directories. Per-home installation serializes preparation,
@@ -148,8 +154,8 @@ published atomically, with `lab.py` as the release-selection point; neither reta
 releases nor registered service paths are redirected by manager installation.
 Selecting a prepared release does not itself replace a running host: the next launch
 still requires management work to be idle. Source-development entry stops its manager
-before replacing the source runtime. UI and CLI both use the operation API, so
-there is one lifecycle owner rather than two competing filesystem implementations.
+before replacing the source runtime. UI operations and headless service commands use
+the same registered-service lifecycle and lock.
 
 ## Development and acceptance
 

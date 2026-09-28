@@ -157,8 +157,8 @@ def _installed_journey(bundle: Path) -> None:
     )
     project_manifest.write_text(
         project_manifest.read_text().replace(
-            'author_modules = ["scopecat_lab.authored"]',
-            'author_modules = ["pilot_methods", "scopecat_lab.authored"]',
+            'modules = ["scopecat_lab.authored"]',
+            'modules = ["pilot_methods", "scopecat_lab.authored"]',
         )
     )
     local = project_root / "src/scopecat_lab/authored/signal.py"
@@ -273,6 +273,7 @@ def _installed_journey(bundle: Path) -> None:
 def _shared_author_journey(project: Project, local_run_id: str) -> str:
     """Exercise installed discovery and retained local analysis in the same daemon."""
     with project.authoring() as author:
+        author.use(parameter_branch="starter")
         shared = author.prepare(
             "shared_signal",
             inputs={"center": 0.0},

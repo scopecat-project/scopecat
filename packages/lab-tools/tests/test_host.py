@@ -97,7 +97,7 @@ def test_http_boundary_and_managed_inventory(tmp_path: Path, monkeypatch) -> Non
         assert (
             client.post("/api/operations", json=command.model_dump()).status_code == 200
         )
-        assert received == [command]
+        assert received == [command.model_copy(update={"session": record.instance})]
         assert client.post("/api/shutdown").status_code == 200
         assert (
             client.post("/api/operations", json=command.model_dump()).status_code == 409
@@ -142,7 +142,7 @@ def test_app_only_host_admits_environment_maintenance(
         assert (
             client.post("/api/operations", json=command.model_dump()).status_code == 200
         )
-        assert received == [command]
+        assert received == [command.model_copy(update={"session": record.instance})]
         assert (
             client.post(
                 "/api/operations", json={"action": "open", "topic": "parameters"}

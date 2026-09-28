@@ -1,16 +1,17 @@
 # Maintain a local application
 
-Use the application manager to inspect and maintain registered experiment services.
-Run `lab.cmd --manage` on Windows or `python lab.py --manage` from the original
-installation directory. A source installation uses `scopecat app --manage` with the same
-`--home` and `--source` options used when it was registered.
+Open `Scopecat.app` on Mac or `Scopecat.lnk` on Windows. Use **设置与帮助** in
+the same window to inspect and maintain experiment services. Opening the application
+does not initialize devices; explicitly start a stopped laboratory to enter experiments.
+At exit, choose whether to stop services started by this application session or keep
+them running. Existing independent services are listed and preserved. Stopping may
+interrupt measurements and connected clients; save work and close VS Code kernels first.
 
-Ordinary launch opens the last successfully selected experiment workbench (or the
-sole service before the first choice), starting/checking its existing runtime.
-It can initialize configured instruments, but never submits or resumes a measurement.
-Use `--manage` for maintenance without starting a service. Explicit `scopecat app
-PROJECT` selects a different primary workbench after a successful check. An absent
-remembered registration returns to management instead of selecting another service.
+For scripts, `python lab.py --action status` reports state without launching a host.
+Use `--action start` or `--action stop` for service control, `--action desktop` for
+the desktop, and `--action open` only when a browser is wanted. `--action quit`
+requires `--stop-started` or `--keep-background`. Source commands also require an
+explicit `--home`; use a temporary home for development and tests.
 
 The workbench's **Help and maintenance** page links to this guide. Returning to the
 manager does not change a notebook's scientific selection or start a measurement.
@@ -21,12 +22,12 @@ After a maintainer has registered an author workspace with the existing laborato
 open its workbench without registering another service:
 
 ```shell
-scopecat app --workspace "/path/to/author code" --home "/path/to/application home"
+scopecat app --action open --workspace "/path/to/author code" --home "/path/to/application home"
 ```
 
 The application resolves the folder's existing source identity and laboratory owner,
-uses the owner's registered interpreter/GUI/settings, and follows the normal durable
-service start checks. Startup may initialize instruments; opening never submits a
+uses the owner's registered interpreter/GUI/settings. Start a stopped service explicitly
+in the application. Startup may initialize instruments; opening never submits a
 measurement. The workbench selects that source before loading its experiment catalog.
 The laboratory must already be registered in this application home. Unknown sources,
 missing owners and interpreter/binding mismatches fail without creating or rebinding
@@ -34,8 +35,9 @@ a service. A retained but unavailable source stays unavailable in the workbench;
 never silently selects the service owner's code.
 
 `--workspace` cannot be combined with a positional project or `--python`, `--name`,
-`--static-dir`: those options change deployment registration. `--manage` and
-`--no-browser` retain their maintenance/state-only behavior without starting a service.
+`--static-dir`: those options change deployment registration. With `--action open`,
+`--manage` selects settings and `--no-browser` prints host state without opening a browser.
+Use `--action status` when no host should be launched at all.
 The remembered primary choice is still the laboratory, not a global code selection;
 opening a source is page-local. Subsequent launch without `--workspace` opens that
 laboratory with its normal default code selection.
@@ -77,7 +79,7 @@ for both registration and Notebook execution. Stop its service, then register:
 
 ```shell
 scopecat register-workspace "/path/to/author code" --service "/path/to/laboratory"
-scopecat app --workspace "/path/to/author code" --home "/path/to/application home"
+scopecat app --action open --workspace "/path/to/author code" --home "/path/to/application home"
 ```
 
 Registration writes only the local runtime binding and source membership. It does
@@ -201,7 +203,7 @@ repeat **Installed adapter** with a different runtime directory to work around t
 failure. Connect can also add an author folder to a stopped installed laboratory;
 leave the author field blank when no new source registration is needed.
 
-After setup, `scopecat app --workspace AUTHOR --home HOME` and
+After setup, `scopecat app --action open --workspace AUTHOR --home HOME` and
 `scopecat notebook AUTHOR --home HOME` use that binding. Notebook extras must be
 included in the delivery. This removes manual laboratory-manifest authoring and a
 separate register-workspace command for this setup path; building the adapter and
@@ -257,6 +259,7 @@ lock_project = "."
 public_source = "scopecat"
 dependency_group = "lab-delivery"
 include_project = true
+source_builds = ["proxy-tools"] # required when including the desktop extra
 packages = [".", "packages/shared-methods", "scopecat/packages/scopecat",
   "scopecat/packages/scopecat-server", "scopecat/packages/scopecat-instruments",
   "scopecat/packages/lab-teaching", "scopecat/packages/lab-tools"]
@@ -268,6 +271,11 @@ lock project supplies dependencies and build constraints; `include_project = tru
 includes its runtime dependencies as well as the named dependency group. The public
 checkout supplies the installer, GUI and locked download toolchain. The builder
 rejects duplicate distributions and records recipe identity in the delivery.
+Third-party dependencies use published wheels by default. `source_builds` explicitly
+allows named, hash-locked source archives to become wheels during maintainer builds,
+using the public checkout's locked `delivery-build` toolchain without build isolation.
+The final offline installation still uses wheels only. The desktop's `proxy-tools`
+dependency currently requires this declaration.
 
 For a public checkout outside the recipe directory, select it explicitly:
 
@@ -456,7 +464,7 @@ location; explicit interpreter and GUI overrides remain a maintainer CLI operati
 For example, in PowerShell:
 
 ```powershell
-scopecat app "D:\Lab\experiment" --manage --python "D:\Lab\runtime\Scripts\python.exe" --static-dir "D:\Lab\gui\dist" --home "D:\Scopecat-Lab" --name "Experiment service"
+scopecat app "D:\Lab\experiment" --action open --manage --python "D:\Lab\runtime\Scripts\python.exe" --static-dir "D:\Lab\gui\dist" --home "D:\Scopecat-Lab" --name "Experiment service"
 ```
 
 Replace each example location with the recorded local location; these are not

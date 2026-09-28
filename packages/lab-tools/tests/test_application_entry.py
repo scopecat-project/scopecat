@@ -70,68 +70,78 @@ def entry(tmp_path, monkeypatch):
     )
 
 
-def test_explicit_then_remembered_selection_uses_durable_start(entry):
+def test_explicit_start_remembers_selection_without_browser(entry, monkeypatch):
+    started = []
+    monkeypatch.setattr(
+        services.Services, "start", lambda _self, identity: started.append(identity)
+    )
     other = entry.register("other")
-    entry.invoke(str(entry.tmp_path / "main"))
+    entry.invoke("--action", "start", str(entry.tmp_path / "main"))
     selected = entry.store.preferred()
     assert selected is not None and selected.id != other.id
-    assert entry.submitted[-1].service == selected.id
-    assert entry.submitted[-1].action == "service_start"
-    assert entry.opened == ["http://127.0.0.1:1234"]
-    entry.invoke()
-    assert entry.submitted[-1].service == selected.id
+    assert started == [selected.id]
+    assert entry.opened == []
+    entry.invoke("--action", "start")
+    assert started == [selected.id, selected.id]
 
 
 def test_sole_selection_and_management_override(entry):
     selected = entry.register("main")
-    entry.invoke("--manage")
+    entry.invoke("--action", "open", "--manage")
     assert entry.submitted == []
     assert "#token=" in entry.opened[-1]
-    entry.invoke()
-    assert entry.submitted[-1].service == selected.id
+    entry.invoke("--action", "open")
+    assert f"service={selected.id}" in entry.opened[-1]
+    assert not entry.submitted
     assert entry.store.preferred() == selected
 
 
 def test_unselected_multiple_or_removed_primary_never_redirects(entry):
     first = entry.register("first")
     second = entry.register("second")
-    entry.invoke()
+    entry.invoke("--action", "open")
     assert entry.submitted == []
     entry.store.remember(first.id)
     with closing(sqlite3.connect(entry.store.database)) as db, db:
         db.execute("DELETE FROM services WHERE id=?", (first.id,))
     assert entry.store.list() == [second]
     assert entry.store.preferred() is None
-    entry.invoke()
+    entry.invoke("--action", "open")
     assert entry.submitted == []
     assert "#token=" in entry.opened[-1]
 
 
 def test_no_browser_keeps_state_only_and_does_not_choose(entry, capsys):
-    entry.invoke(str(entry.tmp_path / "main"), "--no-browser")
+    entry.invoke("--action", "open", str(entry.tmp_path / "main"), "--no-browser")
     entry.register("other")
     assert entry.store.preferred() is None
     assert entry.opened == entry.submitted == []
     assert "state-only" in capsys.readouterr().out
 
 
-@pytest.mark.parametrize("failure", ["operation", "fresh-state"])
-def test_failed_start_keeps_previous_choice_and_opens_manager(entry, failure):
+def test_failed_start_keeps_previous_choice_without_opening_browser(entry, monkeypatch):
     first = entry.register("first")
     entry.store.remember(first.id)
-    if failure == "operation":
 
-        def wait(operation):
-            raise ValueError(f"startup failed; operation {operation.command.id}")
+    def fail(self, identity):
+        raise ValueError("startup failed")
 
-        entry.client.wait = wait
-    else:
-        entry.client.state = lambda: SimpleNamespace(services=[])
+    monkeypatch.setattr(services.Services, "start", fail)
     with pytest.raises(SystemExit) as error:
-        entry.invoke(str(entry.tmp_path / "second"))
+        entry.invoke("--action", "start", str(entry.tmp_path / "second"))
     assert error.value.code == 2
     assert entry.store.preferred() == first
-    assert len(entry.opened) == 1 and "#token=" in entry.opened[0]
+    assert entry.opened == []
+
+
+def test_default_status_does_not_start_host(entry, monkeypatch, capsys):
+    def unexpected(*args):
+        pytest.fail("status must not start a host")
+
+    monkeypatch.setattr(application, "ensure_host", unexpected)
+    entry.invoke()
+    assert json.loads(capsys.readouterr().out) == {"host": None, "services": []}
+    assert not entry.opened
 
 
 def bind_source(entry, owner, *, python=None):
@@ -176,10 +186,10 @@ def test_bound_source_opens_existing_owner_without_registration(entry, monkeypat
         pytest.fail("Opening bound code must not register or probe another service")
 
     monkeypatch.setattr(services.Services, "register", unexpected)
-    entry.invoke("--workspace", str(root))
+    entry.invoke("--action", "open", "--workspace", str(root))
     assert entry.store.list() == [owner]
-    assert entry.submitted[-1].service == owner.id
-    assert entry.opened == ["http://127.0.0.1:1234?workspace=source-b"]
+    assert not entry.submitted
+    assert f"service={owner.id}&workspace=source-b" in entry.opened[-1]
     assert entry.store.preferred() == owner
 
 
@@ -198,7 +208,7 @@ def test_source_binding_failure_does_not_start_or_register(entry, failure):
             db.execute("DELETE FROM services")
     before = entry.store.list()
     with pytest.raises(SystemExit) as error:
-        entry.invoke("--workspace", str(root))
+        entry.invoke("--action", "open", "--workspace", str(root))
     assert error.value.code == 2
     assert entry.store.list() == before
     assert not entry.opened and not entry.submitted

@@ -406,6 +406,8 @@ def _install_home_locked(root: Path, home: Path) -> Path:
         "module = entries.get(args[0], 'lab_tools.application') "
         "if args else 'lab_tools.application'\n"
         "if args and args[0] in entries: args = args[1:]\n"
+        "if '--action' in args and 'desktop' in args and sys.platform == 'win32':\n"
+        "    python = python.with_name('pythonw.exe')\n"
         "command = [str(python), '-m', module, '--home', str(home)]\n"
         "raise SystemExit(subprocess.call([*command, *args]))\n"
     )
@@ -434,12 +436,15 @@ def _install_home_locked(root: Path, home: Path) -> Path:
         entries = [
             ("lab.cmd", command_text),
             ("Notebook.cmd", notebook_command),
-            ("Manage.cmd", '@echo off\ncall "%~dp0lab.cmd" --manage %*\n'),
+            (
+                "Manage.cmd",
+                '@echo off\ncall "%~dp0lab.cmd" --action open --manage %*\n',
+            ),
             ("Scopecat.command", shell_command),
             ("Notebook.command", notebook_shell),
             (
                 "Manage.command",
-                notebook_shell.replace('notebook "$@"', '--manage "$@"'),
+                notebook_shell.replace('notebook "$@"', '--action open --manage "$@"'),
             ),
             ("lab.py", launcher_text),
         ]
@@ -459,9 +464,14 @@ def _install_home_locked(root: Path, home: Path) -> Path:
     finally:
         for path in pending:
             path.unlink(missing_ok=True)
+    # This file is also the standalone installer. Use the completed runtime's
+    # helper, without importing package code into the bootstrap interpreter.
+    _ = subprocess.run(  # noqa: S603 - selected installed runtime and fixed module
+        [str(python), "-m", "lab_tools.desktop_install", str(home)], check=True
+    )
     print(
-        f"已准备并选择默认版本 {key}。Windows 双击 {home / 'lab.cmd'}; "
-        f"Mac 双击 {home / 'Scopecat.command'}。Notebook 使用同目录的 Notebook 入口。\n"
+        f"已准备并选择默认版本 {key}。"
+        "Mac 使用 Scopecat.app；Windows 使用 Scopecat.lnk。\n"
         "正在运行的管理器尚未更换；下次启动时尝试切换，存在进行中的管理操作时会拒绝切换。"
     )
     return launcher

@@ -2,6 +2,9 @@
 <html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Scopecat · 实验工作台</title><link rel="stylesheet" href="/app.css"><script src="/app.js" defer></script></head>
 <body><main><header><p class="eyebrow">SCOPECAT</p><h1>实验工作台</h1><p>选择实验代码与数据位置，进入实验工作台。日常启动会直接打开主要工作台；本页提供接入、帮助与服务管理。</p></header>
 <p id="notice" role="status" aria-live="polite">正在连接本机服务…</p>
+<nav aria-label="应用导航"><button id="show-experiment">实验</button><button id="show-settings">设置与帮助</button><button id="request-exit">退出 Scopecat</button></nav>
+<section id="workbench" hidden><iframe id="experiment-frame" title="实验工作台" sandbox="allow-scripts allow-same-origin allow-forms allow-downloads" referrerpolicy="no-referrer"></iframe></section>
+<div id="settings">
 <details id="setup-panel" open><summary id="setup-title">设置主要实验工作台</summary>
 <form id="setup-form" class="setup-card">
 <fieldset id="setup-fields"><legend>开始使用 Scopecat</legend>
@@ -24,5 +27,7 @@
 <section><h2>我的练习</h2><p>重复打开继续当前练习。重置创建新副本，原来的修改仍然保留。</p><p>重置前关闭 Notebook 内核并停止该练习服务；旧副本由你选择删除。</p><div id="workspaces"></div></section>
 </details>
 <section><h2>最近的操作</h2><p>关闭此页面不会中断操作；重新打开可以查看结果。</p><div id="operations"></div><details id="log-panel"><summary>操作日志</summary><pre id="log"></pre></details></section>
-<footer><p>此入口帮助接入和管理实验服务。关闭页面或退出管理服务不会停止实验服务，也不会删除科学记录。</p><button id="shutdown" class="secondary">退出管理服务</button><small>退出不会停止已有练习服务或实验。重新打开 Scopecat 可再次连接。</small></footer>
+<footer><p>实验与记录在此窗口中使用；编辑代码和 Notebook 时，用 VS Code 打开代码文件夹。</p><button id="shutdown" class="secondary">退出 Scopecat</button></footer>
+</div>
+<dialog id="exit-dialog"><h2>退出 Scopecat</h2><p>停止服务可能中断测量和 VS Code 连接。停止只作用于此应用会话启动的实验服务；原本已运行的服务会保留。已有科学记录不会删除。</p><ul id="exit-services"></ul><p id="exit-error" role="alert"></p><button id="exit-stop">停止本次服务并退出</button><button id="exit-keep">保留后台服务并退出</button><button id="exit-cancel">取消</button></dialog>
 </main></body></html>

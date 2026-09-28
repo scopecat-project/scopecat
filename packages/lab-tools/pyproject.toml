@@ -10,6 +10,7 @@ dependencies = ["fastapi>=0.116", "filelock>=3.18", "httpx2", "psutil>=7", "pyda
 scopecat-lab = "lab_tools.cli:main"
 
 [project.optional-dependencies]
+desktop = ["pywebview>=6"]
 kernel = ["ipykernel>=6.30", "nbclient>=0.10", "nbformat>=5.10"]
 notebook = ["scopecat-lab-tools[kernel]", "jupyterlab>=4.4"]
 

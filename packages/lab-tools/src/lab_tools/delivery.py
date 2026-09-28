@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -54,6 +55,7 @@ class DeliveryRecipe:
     dependency_group: str
     include_project: bool
     packages: tuple[Path, ...]
+    source_builds: tuple[str, ...] = ()
 
 
 def load_recipe(path: Path, *, public_source: Path | None = None) -> DeliveryRecipe:
@@ -71,7 +73,10 @@ def load_recipe(path: Path, *, public_source: Path | None = None) -> DeliveryRec
         "include_project",
         "packages",
     }
-    if not required <= set(table) or set(table) - required - {"public_source"}:
+    if not required <= set(table) or set(table) - required - {
+        "public_source",
+        "source_builds",
+    }:
         raise ValueError(
             "delivery recipe requires lock_project, dependency_group, "
             "include_project and packages"
@@ -127,12 +132,20 @@ def load_recipe(path: Path, *, public_source: Path | None = None) -> DeliveryRec
         raise ValueError("include_project must be a boolean")
     if not isinstance(packages, list) or not packages:
         raise ValueError("packages must list the local packages to build")
+    source_builds = table.get("source_builds", [])
+    if not isinstance(source_builds, list) or any(
+        not isinstance(item, str)
+        or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", item)
+        for item in cast("list[object]", source_builds)
+    ):
+        raise ValueError("source_builds must list distribution names")
     result = DeliveryRecipe(
         directory(table["lock_project"], path.parent),
         public,
         group,
         include,
         tuple(package(item) for item in cast("list[object]", packages)),
+        tuple(cast("list[str]", source_builds)),
     )
     if len(set(result.packages)) != len(result.packages):
         raise ValueError("recipe packages contains duplicate directories")
@@ -160,6 +173,7 @@ def _default_recipe(repository: Path, notebook: bool) -> DeliveryRecipe:
                 "lab-tools",
             )
         ),
+        ("proxy-tools",),
     )
 
 
@@ -303,11 +317,17 @@ def build_delivery(
             "python",
             "-m",
             "pip",
-            "download",
+            "wheel",
             "--no-deps",
             "--require-hashes",
             "--only-binary=:all:",
-            "--dest",
+            *(
+                ["--no-binary=" + ",".join(plan.source_builds)]
+                if plan.source_builds
+                else []
+            ),
+            "--no-build-isolation",
+            "--wheel-dir",
             str(wheels),
             "-r",
             str(dependency_lock),
