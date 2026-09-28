@@ -8,20 +8,24 @@ designed to be served by the daemon so all API calls stay on relative
 pnpm install
 ```
 
-For frontend development, run an API-only daemon and Vite in separate
-terminals:
+For frontend development, use an installed, isolated development application home.
+Start it explicitly and point Vite at the same home (from this UI directory):
 
 ```sh
-uv run --project ../.. scopecat serve <project> --api-only --port 8765
+uv run --project ../.. scopecat app --home /path/to/development/application --action start
+export SCOPECAT_APPLICATION_HOME=/path/to/development/application
 pnpm run dev
 ```
 
-Vite proxies `/api` to `http://127.0.0.1:8765`. Set
-`SCOPECAT_DAEMON_ORIGIN` to use a different local daemon address.
+In PowerShell set `$env:SCOPECAT_APPLICATION_HOME = "C:\path\to\development\application"`.
+Vite reads that application's selected interpreter and verified running endpoint;
+there is no fixed backend port or fallback to another application. It does not open
+a browser. Open the printed preview URL explicitly. Ctrl-C stops Vite; the application
+keeps its tasks until you explicitly run `scopecat app --home HOME --action stop`.
+Restart Vite after restarting the application so it reads the new endpoint.
 
 `pnpm run build` writes only to this application's ignored `dist/` directory.
-From the repository root, use that bundle for a source-checkout preview with
-`scopecat start <project> --static-dir apps/scopecat-ui/dist`.
+Use the complete delivery workflow to install a changed bundle into the application.
 The repository-level `scripts/build_server_distribution.py` assembles the
 server in a temporary directory and verifies that its wheel and source
 distribution contain the same bundle.
