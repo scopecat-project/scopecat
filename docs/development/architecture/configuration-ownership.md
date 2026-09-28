@@ -1,5 +1,10 @@
 # Configuration ownership and execution fences
 
+The target now separates registered devices and connection/driver revisions from
+setup roles, routes and experiment policy. See
+[device management](device-management.md). The implementation history below is not
+a requirement to preserve global setup authority or embedded device editing.
+
 The implemented slices of #645 separate fixed scientific selections from default
 changes (#647), publish verified candidates to one exact working point (#648),
 and give bounded automatic calibration cohorts that same independent ownership
@@ -30,9 +35,9 @@ publication records acceptance evidence.
 | Fixed working-point version | Executable setup content | Exact context, sample/workpoint/batch and overrides |
 | Analysis candidate | Executable setup content | Exact proposal, source run and scientific binding |
 
-Procedure admission uses a typed choice of activation-generation or setup-content
-fence. For fixed choices, changing only default parameter values does not invalidate
-the preview. Relevant executable structure changes still reject admission. The
+Remaining combined-config procedure admission uses activation-generation or
+setup-content fences. For those fixed choices, changing only default parameter
+values does not invalidate the preview. Relevant executable structure changes still reject admission. The
 child run also checks its exact setup against current authority; a parent accepted
 earlier cannot authorize a later child against a different setup.
 
@@ -49,10 +54,11 @@ Exact request/source/code hashes and resource-scoped manual mutation cursors sti
 protect reviewed launches. Resource ownership, actor state and unknown-effect
 quarantine remain separate runtime responsibilities.
 
-Resource admission and direct session acquisition compare the independent setup
-activation generation inside the write transaction. A parameter-only default
-change cannot invalidate that authority-read/resource-claim fence. An explicit
-active-parameter choice still has its separate default-generation freshness check.
+Independent parameter/setup admission (#806) and direct session acquisition (#808)
+use exact maintained setup references without global activation generation fences.
+Remaining combined-config/candidate consumers still have active-authority checks;
+they must be replaced at their actual preparation and admission boundaries. An
+explicit active-parameter choice still has its separate default-generation check.
 Instrument removal/rekey keeps its retirement gate, queued-reservation and live-claim
 drain checks, and transactional recheck. Idempotent submissions replay retained
 results before stale preview checks.
@@ -84,8 +90,9 @@ origins remain provenance for estimates, not a transfer of calibration applicabi
 The read-only preview and save use the same composition contract. No implicit
 rebase, migration or background synchronization is provided.
 
-One active setup is the current executable deployment authority. This slice does
-not authorize simultaneously incompatible setups or infer physical connectivity.
+Active setup is a remaining authority for older combined-config consumers, not the
+target application-wide device owner. Explicit independent contexts can coexist;
+their declarations do not prove physical identity or authorize concurrent access.
 See [the maintenance guide](../../how-to/maintain-executable-setup.md).
 
 ## Verified publication into one working point (#648)

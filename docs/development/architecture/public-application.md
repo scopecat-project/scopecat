@@ -12,6 +12,12 @@ admits exact parameter/setup requests independently of global setup selection.
 Workbench drafts can choose their own saved setup. These changes do not yet
 replace the host's service registry or provide practice-scope cleanup.
 
+The product direction is stronger abstractions within one application, not a
+collection of project services hidden behind one window. The concrete device,
+connection, driver and setup boundaries are defined in
+[device and driver management](device-management.md). Independent device ownership
+replaces setup-owned connection copies; complete resolved snapshots remain evidence.
+
 ### Implemented boundary and the next software gate
 
 Explicit source registration now covers GUI, Python, workers, retained plans and
@@ -71,6 +77,8 @@ required aggregate that owns code, data, devices, process and user navigation.
 | --- | --- |
 | Installation, application endpoint, lifecycle and recovery | Local application runtime |
 | Editable code and immutable submission revision | Explicit registered author source |
+| Stable device identity and versioned connections | Application device registry |
+| Driver discovery, qualification and controlled replacement | Application capability management |
 | Logical roles, channels, routes, capabilities and constraints | Revisioned device resolution context, referencing maintained setup |
 | Resolved physical identity, admission, claims and release | Application-wide resource authority |
 | Sample/target, parameters, accepted calibration and publication | Existing scientific models and explicit task/session references |
@@ -79,8 +87,10 @@ required aggregate that owns code, data, devices, process and user navigation.
 
 A device resolution context is an input to preparation/execution, not another
 service or a second copy of the setup catalog. It must not own a data root, source
-root, global sample or instrument process. Reuse maintained setup revisions and
-resolve their resource mapping rather than introducing competing configuration writers.
+root, global sample or instrument process. Reuse maintained setup revisions for
+roles, routes and execution policy, referencing registered devices rather than
+maintaining independent copies of their connection settings. The current embedded
+instrument registry is transitional; it must not remain a competing device writer.
 
 Each page, kernel and draft retains its own explicit context references. Restored
 tasks retain their recorded references; there is no application-wide mutable current
@@ -113,19 +123,20 @@ are unaffected. A lesson does not require its own service or virtual environment
 ## Retiring the manager and legacy source path
 
 Remove the standalone manager product surface. Move task failures and recovery into
-the workbench, connection configuration into **Devices and connections**, installation
-and capability maintenance into **Software and extensions**, storage into **Data**,
+the workbench, device connections and driver maintenance into **Devices and drivers**,
+application updates into settings, storage into **Data**,
 and diagnostics/tutorials into Help. Hiding the old chooser or renaming a laboratory
 does not satisfy this contract. Retain necessary logs and controlled lifecycle actions.
+Devices and drivers is a direct workbench destination, reachable from the
+affected experiment action; it is not an obligatory maintenance gateway.
 Application exit must explain active work and offer an explicit stop or background
 choice; failed shutdown remains actionable without Task Manager. Never kill a process
 on PID alone, replay interrupted tasks or take over an unrelated development home.
 
-The current `legacy` service-source identity is an active special path, not the
-archived experiment library. Retire it by making application startup independent of
-an author root and giving every author source the same explicit registration,
-publication and execution contract. Replace GUI, Python, worker and durable-task
-consumers before removing implicit fallbacks. Keep the execution service itself.
+The reserved `legacy` service-source identity was removed in #806. The remaining
+work is independent application startup and retirement of project-service topology,
+not another source rename. Every author source uses the same explicit registration,
+publication and execution contract. Keep the execution service itself.
 This is not a rename to `default`, an old-format reader or a data-directory deletion.
 
 ## Standard composition
@@ -230,7 +241,7 @@ implicit imports from whichever other folders are open.
 | Experiment/procedure/analysis code | Editable working copy, frozen to exact source on submission |
 | Parameter declarations and access code | Explicit required structure, types, units and semantics; compatibility is not inferred from matching table names |
 | Values and accepted calibration | Versioned working-point state; experimental branches have separate mutable heads |
-| Executable setup | Maintained routes/device declarations and current execution authority |
+| Executable setup | Maintained roles/routes, registered device references and execution policy |
 
 These concepts may live in one repository. Independent ownership does not require
 one repository per concept. Each admitted run must retain its resolved combination;
@@ -252,8 +263,10 @@ see [workspace bindings](workspace-bindings.md) and
 
 ## Ordered implementation and evidence
 
-1. Separate the application service from author roots and device contexts, qualify
-   shared resource admission, and retire the `legacy` source special case (#671, #613).
+1. Establish device/connection ownership, setup references and unified physical
+   access, including probes and resident connections. Build on explicit sources and
+   contexts from #806/#808; replace embedded connection editing, not merely the
+   service chooser. Follow [device management](device-management.md) under #671/#754.
 2. Enter the workbench directly and replace manager consumers with contextual
    actions/settings (#675, #615). Source edits use refresh; runtime updates preserve
    content identity, data and recoverable installation state (#712).
