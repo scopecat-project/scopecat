@@ -393,7 +393,18 @@ def _install_home_locked(root: Path, home: Path) -> Path:
         "Scripts/python.exe" if sys.platform == "win32" else "bin/python"
     )
     _ = subprocess.run(  # noqa: S603 - explicit local tool and argument list
-        [str(python), "-m", "lab_tools.application", "--help"], check=True
+        [
+            str(python),
+            "-m",
+            "lab_tools.application",
+            "--home",
+            str(home),
+            "--action",
+            "update",
+            "--static-dir",
+            str(bundle / "gui"),
+        ],
+        check=True,
     )
     launcher = home / "lab.py"
     launcher_text = (
@@ -436,16 +447,8 @@ def _install_home_locked(root: Path, home: Path) -> Path:
         entries = [
             ("lab.cmd", command_text),
             ("Notebook.cmd", notebook_command),
-            (
-                "Manage.cmd",
-                '@echo off\ncall "%~dp0lab.cmd" --action open --manage %*\n',
-            ),
             ("Scopecat.command", shell_command),
             ("Notebook.command", notebook_shell),
-            (
-                "Manage.command",
-                notebook_shell.replace('notebook "$@"', '--action open --manage "$@"'),
-            ),
             ("lab.py", launcher_text),
         ]
         for name, content in entries:
@@ -472,7 +475,7 @@ def _install_home_locked(root: Path, home: Path) -> Path:
     print(
         f"已准备并选择默认版本 {key}。"
         "Mac 使用 Scopecat.app；Windows 使用 Scopecat.lnk。\n"
-        "正在运行的管理器尚未更换；下次启动时尝试切换，存在进行中的管理操作时会拒绝切换。"
+        "应用保持停止；打开入口直接进入工作台。作者目录和科学数据保留。"
     )
     return launcher
 

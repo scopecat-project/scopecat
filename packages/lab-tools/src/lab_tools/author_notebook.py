@@ -1,4 +1,4 @@
-"""Foreground Notebook entry for code bound to one registered laboratory."""
+"""Optional foreground Notebook entry for code bound to the application."""
 
 from __future__ import annotations
 
@@ -8,9 +8,9 @@ import tempfile
 from pathlib import Path
 from typing import Protocol, cast
 
+from .application_runtime import ApplicationRuntime
 from .bundle import configure_console
 from .notebook import kernel_command
-from .services import Services
 
 
 class Arguments(Protocol):
@@ -23,7 +23,7 @@ def launch_notebook(
     workspace: Path | None, home: Path, *, no_browser: bool = False
 ) -> int:
     home = home.resolve()
-    store = Services(home)
+    store = ApplicationRuntime(home)
     # A session gets its own kernelspec. A later launch must not redirect kernels
     # created by a still-running Jupyter server from an earlier environment.
     with tempfile.TemporaryDirectory(prefix="scopecat-notebook-") as directory:
@@ -31,12 +31,7 @@ def launch_notebook(
             if workspace is None:
                 from scopecat.author_workspaces import local_author_workspaces
 
-                service = store.preferred()
-                if service is None:
-                    raise ValueError(
-                        "请先在 Scopecat 中选择并打开实验室，再打开 Notebook"
-                    )
-                sources = local_author_workspaces(Path(service.root))
+                sources = local_author_workspaces(store.root)
                 if len(sources) != 1:
                     raise ValueError(
                         "请登记作者目录；有多个目录时，"
@@ -44,10 +39,11 @@ def launch_notebook(
                     )
                 workspace = sources[0].root
             workspace = workspace.resolve()
-            service, identity = store.for_workspace(workspace)
+            identity = store.source(workspace)
+            installation = store.installation()
             command, env = kernel_command(
                 workspace,
-                python=service.python,
+                python=str(installation.python),
                 source_path=False,
                 kernel_home=Path(directory),
             )
@@ -55,7 +51,7 @@ def launch_notebook(
                 env.pop(name, None)
             checked = subprocess.run(  # noqa: S603 - registered interpreter, fixed probe
                 [
-                    service.python,
+                    str(installation.python),
                     "-I",
                     "-c",
                     (
@@ -81,9 +77,9 @@ def launch_notebook(
                 command.append("--no-browser")
             print(
                 f"Notebook 作者目录: {workspace} ({identity})\n"
-                f"实验室: {service.name}\n解释器: {service.python}\n"
-                "仅打开编辑环境；实验服务请通过工作台显式启动。"
-                "更新实验室前请先关闭此 Notebook 服务和全部内核。",
+                f"应用: {store.home}\n解释器: {installation.python}\n"
+                "仅打开编辑环境；打开 Scopecat 即可启动应用。"
+                "切换运行环境前请先关闭此 Notebook 服务和全部内核。",
                 flush=True,
             )
             process = subprocess.Popen(command, cwd=workspace, env=env)  # noqa: S603 - fixed Jupyter entry in registered interpreter
@@ -101,7 +97,7 @@ def main(argv: list[str] | None = None) -> None:
         "workspace",
         type=Path,
         nargs="?",
-        help="作者目录；省略时使用当前实验室的唯一作者目录",
+        help="作者目录；省略时使用应用的唯一作者目录",
     )
     parser.add_argument("--home", type=Path, default=Path.home() / "Scopecat-Lab")
     parser.add_argument("--no-browser", action="store_true")

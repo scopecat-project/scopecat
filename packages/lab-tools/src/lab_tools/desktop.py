@@ -4,13 +4,54 @@ from __future__ import annotations
 
 import logging
 import threading
+from collections.abc import Callable
+from html import escape
 from pathlib import Path
-from typing import cast
-from urllib.parse import urlencode
+from typing import TYPE_CHECKING, cast
 
 from filelock import FileLock, Timeout
 
-from .host_client import ensure_host, process_alive
+from .application_runtime import ApplicationRuntime
+
+if TYPE_CHECKING:
+    import webview
+
+
+class DesktopAPI:
+    """Native operations act on this home only, without another HTTP service."""
+
+    def __init__(
+        self,
+        runtime: ApplicationRuntime,
+        window: Callable[[], webview.Window],
+        closing: threading.Event,
+    ):
+        self._runtime = runtime
+        self._window = window
+        self._closing = closing
+
+    def status(self) -> dict[str, object]:
+        status = self._runtime.status()
+        return {
+            "home": str(self._runtime.home),
+            "state": status.state,
+            "detail": status.detail,
+            "installation": self._runtime.installation().model_dump(mode="json"),
+        }
+
+    def restart(self) -> None:
+        self._runtime.stop()
+        self.retry()
+
+    def retry(self) -> None:
+        record = self._runtime.start()
+        self._window().load_url(record.base_url)
+
+    def exit(self, background: bool) -> None:
+        if not background:
+            self._runtime.stop()
+        self._closing.set()
+        self._window().destroy()
 
 
 def run(home: Path, source: Path | None = None) -> None:
@@ -18,7 +59,7 @@ def run(home: Path, source: Path | None = None) -> None:
     import webview
 
     home.mkdir(parents=True, exist_ok=True)
-    directory = home / "host"
+    directory = home / "desktop"
     directory.mkdir(exist_ok=True)
     logging.basicConfig(filename=directory / "desktop.log", level=logging.INFO)
     lock = FileLock(directory / "desktop.lock", timeout=0)
@@ -29,30 +70,43 @@ def run(home: Path, source: Path | None = None) -> None:
         activate.touch()
         return
     try:
+        runtime = ApplicationRuntime(home)
+        closing = threading.Event()
+        api = DesktopAPI(runtime, lambda: window, closing)
+        url = None
+        failure = None
         try:
-            client = ensure_host(home, source)
-        except Exception:
-            logging.getLogger(__name__).exception("Application startup failed")
-            webview.create_window(  # pyright: ignore[reportUnknownMemberType]
-                "Scopecat · 启动失败",
-                html=(
-                    "<h1>启动未完成</h1><p>请查看安装目录中的 host/desktop.log "
-                    "和 host/host.log。数据与已有服务保留。</p>"
-                ),
+            runtime.configure(
+                static_dir=source / "apps/scopecat-ui/dist" if source else None
             )
-            webview.start()
-            return
+            url = runtime.start().base_url
+        except Exception as error:
+            logging.getLogger(__name__).exception("Application startup failed")
+            failure = (
+                "<h1>启动未完成</h1>"
+                f"<p>{escape(str(error))}</p>"
+                "<p>数据与源码保留。可以重试，或停止此应用的后台再启动。</p>"
+                '<button onclick="pywebview.api.retry().catch(showError)">'
+                "重试</button> "
+                '<button onclick="pywebview.api.restart().catch(showError)">'
+                "停止后台并重新启动</button>"
+                '<button onclick="pywebview.api.exit(true)">关闭窗口</button>'
+                '<p id="error"></p><script>function showError(e) {'
+                "document.getElementById('error').textContent = e.message; }"
+                "window.scopecatRequestExit = () => pywebview.api.exit(true);</script>"
+            )
         window = cast(
             "webview.Window",
             webview.create_window(  # pyright: ignore[reportUnknownMemberType]
                 "Scopecat",
-                f"{client.record.url}/#{urlencode({'token': client.record.token})}",
+                url=url,
+                html=failure,
+                js_api=api,
                 width=1280,
                 height=900,
                 min_size=(800, 600),
             ),
         )
-        closing = threading.Event()
         loaded = threading.Event()
         window.events.loaded += loaded.set
 
@@ -68,7 +122,6 @@ def run(home: Path, source: Path | None = None) -> None:
                     daemon=True,
                 ).start()
             else:
-                client.shutdown()
                 closing.set()
                 return True
             return False
@@ -81,9 +134,6 @@ def run(home: Path, source: Path | None = None) -> None:
                     activate.unlink(missing_ok=True)
                     window.restore()
                     window.show()
-                if not process_alive(client.record):
-                    closing.set()
-                    window.destroy()
 
         # The GUI runs on the main thread. Its supervisor never opens a browser.
         webview.start(supervise)

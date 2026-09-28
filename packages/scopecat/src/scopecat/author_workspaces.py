@@ -59,12 +59,14 @@ def service_workspace_root(root: Path) -> Path:
     return LocalAuthorWorkspaces.model_validate_json(path.read_bytes()).service_root
 
 
-def laboratory_adapter(root: Path) -> AdapterReference:
-    """Require an installed laboratory without project-local composition additions."""
+def laboratory_adapter(root: Path) -> AdapterReference | None:
+    """Read application capabilities without requiring an installed capability."""
     from scopecat.installed_adapter import parse_adapter_reference
 
     document = tomllib.loads((root / "scopecat.toml").read_text(encoding="utf-8"))
     lab = document.get("lab")
+    if lab == {}:
+        return None
     if not isinstance(lab, dict) or set(cast("dict[str, object]", lab)) != {"adapter"}:
         raise ValueError(
             "Author-only folders require a laboratory with only [lab.adapter]; "
@@ -73,7 +75,7 @@ def laboratory_adapter(root: Path) -> AdapterReference:
     return parse_adapter_reference(cast("dict[str, object]", lab)["adapter"])
 
 
-def bound_lab_adapter(root: Path) -> AdapterReference:
+def bound_lab_adapter(root: Path) -> AdapterReference | None:
     """Resolve only an explicitly registered author's laboratory declaration."""
     path = author_bindings_path(root)
     if not path.is_file():

@@ -10,7 +10,6 @@ from filelock import FileLock
 from typer.testing import CliRunner
 
 from lab_tools import author_notebook
-from lab_tools.lab_environment import environment_switch_path
 from scopecat_server.cli import app
 
 
@@ -24,11 +23,12 @@ def laboratory(tmp_path, monkeypatch):
         id="a" * 32, name="Lab", python="first-environment/python"
     )
     store = SimpleNamespace(
+        home=home,
         lock=FileLock(home / "services.lock"),
-        list=list,
-        for_workspace=lambda root: (service, "source-id") if root == source else None,
+        installation=lambda: service,
+        source=lambda root: "source-id" if root == source else None,
     )
-    monkeypatch.setattr(author_notebook, "Services", lambda _: store)
+    monkeypatch.setattr(author_notebook, "ApplicationRuntime", lambda _: store)
     monkeypatch.setattr(
         author_notebook.subprocess,
         "run",
@@ -85,39 +85,15 @@ def test_missing_notebook_extra_does_not_launch_or_install(laboratory, monkeypat
 
 
 def test_pending_environment_switch_prevents_notebook_launch(tmp_path, monkeypatch):
-    import sys
+    from lab_tools.application_runtime import ApplicationRuntime
 
-    from lab_tools import services
-    from scopecat.author_workspaces import LocalAuthorWorkspaces
-
-    root = tmp_path / "laboratory"
-    root.mkdir()
-    (root / "scopecat.toml").write_text("[lab]\n")
-    monkeypatch.setattr(
-        services,
-        "_run",
-        lambda *_: {
-            "root": str(root),
-            "static_dir": str(tmp_path / "gui"),
-            "environment": {},
-            "adapter_identity": None,
-            "settings_identity": None,
-        },
-    )
     home = tmp_path / "application"
-    store = services.Services(home)
-    service = store.register(root, Path(sys.executable), name="Lab")
-    state = root / ".scopecat"
-    state.mkdir()
-    (state / "author-workspaces.json").write_text(
-        LocalAuthorWorkspaces(service_root=root, items=()).model_dump_json()
-    )
-    marker = environment_switch_path(home, service.id)
-    marker.parent.mkdir()
-    marker.write_text("{}")
+    home.mkdir()
+    store = ApplicationRuntime(home)
+    store.pending.write_text("{}")
     monkeypatch.setattr(author_notebook.subprocess, "run", pytest.fail)
-    with pytest.raises(ValueError, match="环境切换未完成"):
-        author_notebook.launch_notebook(root, home)
+    with pytest.raises(ValueError, match="环境切换尚未完成"):
+        author_notebook.launch_notebook(tmp_path / "author", home)
 
 
 def test_public_notebook_entry_forwards_workspace_options(monkeypatch):
@@ -129,7 +105,7 @@ def test_public_notebook_entry_forwards_workspace_options(monkeypatch):
     assert received == arguments
 
 
-def test_default_notebook_opens_preferred_software_laboratory(tmp_path, monkeypatch):
+def test_default_notebook_opens_sole_registered_source(tmp_path, monkeypatch):
     from scopecat import author_workspaces
 
     root = tmp_path / "software laboratory"
@@ -141,16 +117,18 @@ def test_default_notebook_opens_preferred_software_laboratory(tmp_path, monkeypa
         id="a" * 32, root=str(root), python="installed/python", name="Software"
     )
     store = SimpleNamespace(
+        home=home,
         lock=FileLock(home / "services.lock"),
-        preferred=lambda: service,
-        for_workspace=lambda _path: (service, "registered-source"),
+        root=root,
+        installation=lambda: service,
+        source=lambda _path: "registered-source",
     )
     monkeypatch.setattr(
         author_workspaces,
         "local_author_workspaces",
         lambda _: [SimpleNamespace(root=root)],
     )
-    monkeypatch.setattr(author_notebook, "Services", lambda _: store)
+    monkeypatch.setattr(author_notebook, "ApplicationRuntime", lambda _: store)
     monkeypatch.setattr(
         author_notebook.subprocess,
         "run",

@@ -19,6 +19,7 @@ import { parameterProposalKeys } from "./data/parameter-proposals/query-keys";
 import { getEvents, getHealth } from "./data/project-api";
 import { LaunchDraftProvider, useLaunchDraft } from "./features/launch/LaunchDraft";
 import { RunsWorkspace } from "./features/runs/RunsWorkspace";
+import { DesktopSession } from "./features/application/DesktopSession";
 import { titleCase } from "./lib/presentation";
 import { classes, iconButton } from "./ui/styles";
 
@@ -545,6 +546,7 @@ export default function App() {
           </Suspense>
         ) : null}
       </main>
+      <DesktopSession />
     </div>
   );
 }

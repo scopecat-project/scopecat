@@ -68,6 +68,8 @@ class SourceProject(Protocol):
     @property
     def author_only(self) -> bool: ...
     @property
+    def composition_bound(self) -> bool: ...
+    @property
     def lab_adapter(self) -> AdapterReference | None: ...
     @property
     def adapter_packages(self) -> tuple[tuple[str, str], ...]: ...
@@ -77,13 +79,17 @@ def capture_sources(project: SourceProject) -> AuthorRevisionBundle:
     """Snapshot all declared roots, including helpers, analysis and local resources."""
     files: dict[str, bytes] = {"scopecat.toml": project.manifest.read_bytes()}
     if project.author_only:
+        if not project.composition_bound:
+            raise ValueError("Author-only source capture requires a bound application")
         adapter = project.lab_adapter
-        if adapter is None:
-            raise ValueError("Author-only source capture requires a bound laboratory")
         files[LABORATORY_MANIFEST_NAME] = (
-            "[lab.adapter]\n"
-            f"distribution = {json.dumps(adapter.distribution)}\n"
-            f"manifest = {json.dumps(adapter.manifest)}\n"
+            (
+                "[lab.adapter]\n"
+                f"distribution = {json.dumps(adapter.distribution)}\n"
+                f"manifest = {json.dumps(adapter.manifest)}\n"
+            )
+            if adapter is not None
+            else "[lab]\n"
         ).encode()
     for name in (
         ()
