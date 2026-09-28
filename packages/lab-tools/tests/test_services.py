@@ -336,7 +336,9 @@ def test_recheck_failed_probe_retains_registration(stopped_service, monkeypatch)
 def test_recheck_requires_stopped(stopped_service, monkeypatch, state):
     _, store, registered, _ = stopped_service
     monkeypatch.setattr(
-        services, "inspect_daemon", lambda _: SimpleNamespace(state=state)
+        services,
+        "inspect_daemon",
+        lambda _: SimpleNamespace(state=state, record=None, detail=None),
     )
     monkeypatch.setattr(services, "_run", lambda *_: pytest.fail("must not probe"))
     with pytest.raises(ValueError, match="已停止"):
@@ -348,7 +350,9 @@ def test_recheck_rejects_start_during_probe(stopped_service, monkeypatch):
     _, store, registered, result = stopped_service
     states = iter(["stopped", "running"])
     monkeypatch.setattr(
-        services, "inspect_daemon", lambda _: SimpleNamespace(state=next(states))
+        services,
+        "inspect_daemon",
+        lambda _: SimpleNamespace(state=next(states), detail=None),
     )
     result["environment"] = {"scopecat": "after"}
     with pytest.raises(ValueError, match="已停止"):
