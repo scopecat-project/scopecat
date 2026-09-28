@@ -3,13 +3,16 @@
 These documents explain the present implementation and clearly marked future
 directions to Scopecat contributors:
 
+- [One application, independent execution contexts](public-application.md) is the
+  canonical product target: direct workbench entry, shared resource authority,
+  same-service practice scopes and retirement of the manager/legacy source path.
 - [Experiment execution semantics](execution.md) covers authoring ownership,
   specialization, domain lowering, effects, completion, and evidence.
 - [Experiment workbench and session contexts](experiment-contexts.md) defines the
   selected product direction, implemented ownership boundaries and staged
   acceptance. Use the [current platform status](../platform-status.md) for remaining work.
-- [Local application host](application-host.md) covers the experiment application entry,
-  managed operations and the boundaries retained for future deployment.
+- [Local application host](application-host.md) describes the transitional registered-service
+  implementation and reusable lifecycle controls, not the target product topology.
 - [Configuration ownership](configuration-ownership.md) separates fixed scientific
   selection fences from default activation and records scoped publication work.
 - [Lab daemon](daemon.md) covers durable run ownership, instrument workers,

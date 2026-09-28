@@ -1,5 +1,12 @@
 # Workspace, data space and execution binding
 
+This page describes the current implementation. The target
+[application contract](public-application.md) separates application startup from
+author roots and device resolution contexts. All author sources must use explicit
+registration/execution identities; the service-side `legacy` source special case
+is to be removed, not renamed. Existing source isolation and retained execution
+evidence remain required. This change does not delete data or add prebaseline readers.
+
 Current format: schema **98** supports workspace-scoped author publication within
 one qualified local service. It is a development format, not a compatibility
 baseline. Earlier schema/migration exercises are retired; this page describes

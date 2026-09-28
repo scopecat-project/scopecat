@@ -1,8 +1,10 @@
 # Local application host
 
-Status: an application entry for explicitly registered experiment services, with
-teaching under Help. The selected product direction remains the
-[experiment workbench with session contexts](experiment-contexts.md).
+Status: transitional implementation for explicitly registered experiment services,
+with teaching under Help. The canonical target is
+[one application, independent execution contexts](public-application.md): remove the
+standalone manager and per-project/per-lesson service topology. Reuse the lifecycle
+safety mechanisms below; do not extend this topology as the product model.
 The host opens each service's real workbench; it does not replace that workbench
 with tutorial inventory or establish shared physical-device ownership.
 
@@ -55,18 +57,21 @@ the maintainer can stop it explicitly. Before changing an environment, finish ac
 After an in-place update, **Recheck environment** validates the existing registered
 interpreter, project and GUI and atomically updates its environment identity.
 It retains the deployment ID and paths, records the operation, and leaves the service
-stopped. A failed probe retains the old registration. Rechecking rejects any state
-other than stopped and shares the registration/operation lock; it cannot overlap
+stopped. A failed probe retains the old registration. A valid stale process record
+can be reconciled under the daemon lock and status is checked again before updating.
+Live, degraded, malformed or lock-held states remain rejected. Rechecking shares
+the registration/operation lock; it cannot overlap
 re-registration or another management operation. New interpreter or GUI paths still
 require explicit trusted local registration. See the [maintenance guide](../../how-to/maintain-application.md). This version check
 is not a lockfile/content attestation of every dependency or editable source byte.
 Failed startup stays visible in the operation log; there is no fallback interpreter.
 
 **Stop service** asks for confirmation because it can interrupt active work and
-Notebook connections. It uses the registered interpreter and existing daemon
-lifecycle, including graceful shutdown and its existing timeout policy. The
-process identity and interpreter must match; a failed check leaves the service
-untouched and retains the operation log. Stopping does not require GUI assets.
+Notebook connections. It uses the existing daemon lifecycle, including graceful
+shutdown and its timeout policy. A daemon started by another interpreter remains
+stoppable through its recorded binding and PID/creation-time identity; the former
+interpreter need not still be usable. Failed ownership checks leave the process
+untouched and retain the operation log. Stopping does not require GUI assets.
 It never automatically restarts the service or resumes measurement.
 
 **Remove registration** is available after the service is stopped, with no other
@@ -78,7 +83,8 @@ maintenance error, rather than guessing that its process is safe to forget.
 
 The experiment GUI has a **Help and maintenance** page. It uses the existing health
 response to identify the current service and provides supported documentation,
-teaching and maintenance directions. Reopen the original installed `lab.cmd` /
+teaching and maintenance directions. The native window retains settings around the
+embedded workbench. For a standalone browser workbench, reopen the installed `lab.cmd` /
 `lab.py` entry with `--manage` to return to that installation's manager; a qualified
 source installation can use `scopecat app --action open --manage` with its original host-home options. Help does
 not register directories or start another service merely by being opened.
@@ -87,7 +93,8 @@ Failed startup or a changed registration opens maintenance with retained operati
 logs and leaves the previous remembered selection unchanged; it never chooses a
 replacement runtime. Normal reopening can initialize instruments through the same
 startup contract, but does not replay measurements or interrupted operations.
-There is no authenticated one-click return from a workbench to a particular manager. The daemon is not paired with an
+An independently opened browser workbench has no authenticated one-click return to
+a particular manager. The daemon is not paired with an
 installation host: deployment/source identities do not identify its manager port,
 home or credentials. Do not expose `host.json`, infer a manager address from a
 project path, or add an unauthenticated cross-origin management endpoint to make
@@ -168,8 +175,7 @@ deletes the selected old copy and shuts down the host.
 
 ## Further deployment decisions
 
-Follow the context, session execution, workbench integration and maintenance order
-in the [implementation slices](experiment-contexts.md#ordered-implementation-slices).
+Follow the [canonical application implementation order](public-application.md#ordered-implementation-and-evidence).
 Lifecycle reuse is useful, but further teaching-launcher expansion and tray work
 are not the next architectural step.
 
