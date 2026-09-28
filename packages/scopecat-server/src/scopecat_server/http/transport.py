@@ -287,7 +287,7 @@ from scopecat.records.calibration_policy import (
 from scopecat.records.comparison import ComparisonRequest
 from scopecat.records.config import ConfigProfileSnapshot
 from scopecat.records.config_context import ConfigContextRef
-from scopecat.records.content import ContentEntry
+from scopecat.records.content import ContentEntry, Sha256ContentHash
 from scopecat.records.costs import RunMeasuredCosts
 from scopecat.records.experiment_plan import (
     ExperimentPlanList,
@@ -337,7 +337,7 @@ from scopecat.records.sample_artifact import (
     MAX_SAMPLE_ARTIFACT_BYTES,
     SampleArtifactPage,
 )
-from scopecat.records.setup import ActiveSetupView, SetupRevision
+from scopecat.records.setup import ActiveSetupView, SetupRevision, SetupRevisionRef
 from scopecat.records.target_catalog import (
     TargetCatalogPage,
     TargetCreateCommand,
@@ -1478,8 +1478,15 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
         return application.samples.revise(sample_id, command)
 
     @app.get(f"{_API_PREFIX}/instruments")
-    def list_instruments() -> InstrumentListView:
-        return application.instruments.list_instruments()
+    def list_instruments(
+        setup_revision_id: Annotated[str, Query(min_length=1)],
+        setup_content_hash: Sha256ContentHash,
+    ) -> InstrumentListView:
+        return application.instruments.list_instruments(
+            setup=SetupRevisionRef(
+                revision_id=setup_revision_id, content_hash=setup_content_hash
+            )
+        )
 
     @app.post(f"{_API_PREFIX}/instruments/release")
     def release_instruments(
@@ -1498,8 +1505,17 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
         return application.instruments.probe_driver(command)
 
     @app.get(f"{_API_PREFIX}/instruments/{{instrument_id}}")
-    def get_instrument(instrument_id: str) -> InstrumentView:
-        return application.instruments.get_instrument(instrument_id)
+    def get_instrument(
+        instrument_id: str,
+        setup_revision_id: Annotated[str, Query(min_length=1)],
+        setup_content_hash: Sha256ContentHash,
+    ) -> InstrumentView:
+        return application.instruments.get_instrument(
+            instrument_id,
+            setup=SetupRevisionRef(
+                revision_id=setup_revision_id, content_hash=setup_content_hash
+            ),
+        )
 
     @app.post(f"{_API_PREFIX}/instrument-contracts/resolve")
     def resolve_instrument_contracts(

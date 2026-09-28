@@ -966,7 +966,6 @@ class SQLiteControlPlane:
         instrument_ids: tuple[str, ...],
         exclusivity_keys: tuple[str, ...],
         ttl: timedelta,
-        expected_setup_generation: int | None,
         at: datetime | None = None,
     ) -> InstrumentSession:
         """Atomically reserve instruments for one direct-interaction session."""
@@ -1010,8 +1009,11 @@ class SQLiteControlPlane:
             )
             if retry_row is not None:
                 retry = _instrument_session(retry_row)
-                # Config identity is server-resolved output from the first command.
-                if retry.actor != actor or retry.instrument_ids != instrument_ids:
+                if (
+                    retry.actor != actor
+                    or retry.instrument_ids != instrument_ids
+                    or retry.setup != setup
+                ):
                     raise ControlPlaneConflict(
                         "instrument session operation id has different content"
                     )
@@ -1024,12 +1026,6 @@ class SQLiteControlPlane:
                         "instrument session open retry has expired"
                     )
                 return retry
-            if expected_setup_generation is None:
-                raise ValueError("new instrument session requires a config generation")
-            self._require_setup_generation(
-                connection,
-                expected_setup_generation,
-            )
             conflicts = tuple(
                 resource
                 for resource in resources

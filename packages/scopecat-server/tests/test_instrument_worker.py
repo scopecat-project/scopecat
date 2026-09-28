@@ -710,6 +710,7 @@ def test_runtime_shutdown_fences_a_blocked_session_and_marks_it_unknown(
             operation_id="open-blocked-session",
             actor="alice",
             instrument_ids=("source-0",),
+            setup=runtime.application.setup.current().revision.ref,
         )
     )
     invoke_errors: list[BaseException] = []

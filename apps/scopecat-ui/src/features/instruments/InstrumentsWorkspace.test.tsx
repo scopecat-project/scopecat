@@ -12,6 +12,11 @@ import type {
   InstrumentState,
   InstrumentView,
 } from "../../api-contract";
+import { getSetupRevisions, type SavedSetupRevision as SetupRevision } from "../config/setup-api";
+import type { ActiveConfig } from "../../api-contract";
+
+vi.mock("../config/setup-api", () => ({ getSetupRevisions: vi.fn() }));
+
 import { InstrumentsWorkspace } from "./InstrumentsWorkspace";
 import {
   abortInstrumentSession,
@@ -19,7 +24,6 @@ import {
   applyInstrumentState,
   closeInstrumentSession,
   collectInstrumentAcquisition,
-  getActiveConfig,
   getDriverCatalog,
   getInstruments,
   invokeInstrumentOperation,
@@ -38,7 +42,6 @@ vi.mock("./instrument-api", async (importOriginal) => ({
   applyInstrumentState: vi.fn(),
   closeInstrumentSession: vi.fn(),
   collectInstrumentAcquisition: vi.fn(),
-  getActiveConfig: vi.fn(),
   getDriverCatalog: vi.fn(),
   getInstruments: vi.fn(),
   invokeInstrumentOperation: vi.fn(),
@@ -56,7 +59,7 @@ beforeEach(() => {
     problems: [],
     items: [instrument()],
   });
-  vi.mocked(getActiveConfig).mockResolvedValue(activeConfig());
+  vi.mocked(getSetupRevisions).mockResolvedValue({ items: [setupRevision()] });
   vi.mocked(getDriverCatalog).mockResolvedValue(driverCatalog());
   vi.mocked(openInstrumentSession).mockResolvedValue(session());
   vi.mocked(renewInstrumentSession).mockResolvedValue(sessionLease());
@@ -90,7 +93,7 @@ beforeEach(() => {
     },
     problems: [],
   });
-  vi.mocked(publishInstrumentSpec).mockResolvedValue();
+  vi.mocked(publishInstrumentSpec).mockResolvedValue(setupRevision());
   vi.mocked(resolveInstrumentAttention).mockResolvedValue();
 });
 
@@ -100,6 +103,38 @@ afterEach(() => {
 });
 
 describe("instrument workspace", () => {
+  it("keeps explicit contexts local and requires disconnect before switching", async () => {
+    const first = setupRevision();
+    const second = { ...first, id: "bench-b", content_hash: "sha256:second" };
+    vi.mocked(getSetupRevisions).mockResolvedValue({ items: [first, second] });
+    renderWorkspace();
+    await screen.findByRole("option", { name: "bench-b" });
+    expect(getInstruments).not.toHaveBeenCalled();
+    const picker = screen.getByRole("combobox", { name: "Device context" });
+    fireEvent.change(picker, { target: { value: "lab-default" } });
+    await screen.findByText("Drive source");
+    expect(openInstrumentSession).not.toHaveBeenCalled();
+    await connectInstrument();
+    expect(picker).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Configure device" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Disconnect" }));
+    await waitFor(() => expect(picker).toBeEnabled());
+    fireEvent.change(picker, { target: { value: "bench-b" } });
+    await screen.findByText("Drive source");
+    fireEvent.click(screen.getByRole("button", { name: "Connect" }));
+    await waitFor(() =>
+      expect(openInstrumentSession).toHaveBeenLastCalledWith(
+        "drive-source",
+        "local-operator",
+        { revision_id: "bench-b", content_hash: "sha256:second" },
+        expect.any(String),
+      ),
+    );
+    expect(vi.mocked(openInstrumentSession).mock.calls[0]?.[3]).not.toBe(
+      vi.mocked(openInstrumentSession).mock.calls[1]?.[3],
+    );
+  });
+
   it("shows unscoped provider problems at workspace level", async () => {
     vi.mocked(getInstruments).mockResolvedValue({
       setup: { revision_id: "lab-default", content_hash: "sha256:active" },
@@ -158,7 +193,7 @@ describe("instrument workspace", () => {
     expect(screen.getByText("Run in progress")).toBeVisible();
     expect(screen.queryByText("run-42")).not.toBeInTheDocument();
     expect(screen.queryByText("keysight.pna")).not.toBeInTheDocument();
-    expect(screen.queryByText("lab-default")).not.toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "Device context" })).toHaveValue("lab-default");
     expect(openInstrumentSession).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByTitle("Inspect instrument vna-1"));
@@ -198,6 +233,7 @@ describe("instrument workspace", () => {
       expect(openInstrumentSession).toHaveBeenCalledWith(
         "drive-source",
         "local-operator",
+        { revision_id: "lab-default", content_hash: "sha256:active" },
         expect.stringMatching(/^ui-open-/),
       ),
     );
@@ -1095,7 +1131,7 @@ describe("instrument workspace", () => {
     expect(vi.mocked(closeInstrumentSession).mock.calls[1]).toEqual(["session-1"]);
   });
 
-  it("loads the active config only after connection editing is requested", async () => {
+  it("edits the selected saved context without connecting devices", async () => {
     const active = activeConfig();
     active.config.system.instrument_registry.instruments[0]!.driver_id = "keysight.pna";
     active.config.system.instrument_registry.instruments[0]!.connection = {
@@ -1117,24 +1153,11 @@ describe("instrument workspace", () => {
       problems: [],
       items: [tcpInstrument],
     });
-    let resolveConfig: ((value: Awaited<ReturnType<typeof getActiveConfig>>) => void) | undefined;
-    vi.mocked(getActiveConfig).mockImplementation(
-      () =>
-        new Promise((resolve) => {
-          resolveConfig = resolve;
-        }),
-    );
+    vi.mocked(getSetupRevisions).mockResolvedValue({ items: [setupRevision(active)] });
     renderWorkspace();
-
     await screen.findByText("Drive source");
-    expect(getActiveConfig).not.toHaveBeenCalled();
-
+    expect(openInstrumentSession).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Configure device" }));
-
-    await waitFor(() => expect(getActiveConfig).toHaveBeenCalledOnce());
-    expect(screen.getByRole("button", { name: "Loading configuration" })).toBeDisabled();
-    if (!resolveConfig) throw new Error("Expected the active config request to be pending.");
-    resolveConfig(active);
     expect(await screen.findByRole("dialog")).toBeVisible();
   });
 
@@ -1182,7 +1205,7 @@ describe("instrument workspace", () => {
       problems: [],
       items: [tcpInstrument],
     });
-    vi.mocked(getActiveConfig).mockResolvedValue(active);
+    vi.mocked(getSetupRevisions).mockResolvedValue({ items: [setupRevision(active)] });
     renderWorkspace();
 
     await screen.findByText("Drive source");
@@ -1205,7 +1228,7 @@ describe("instrument workspace", () => {
     fireEvent.change(within(dialog).getByRole("combobox", { name: "After successful run" }), {
       target: { value: "restore_baseline" },
     });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Publish default" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save device context" }));
 
     await waitFor(() =>
       expect(publishInstrumentSpec).toHaveBeenCalledWith(
@@ -1281,7 +1304,7 @@ describe("instrument workspace", () => {
       name: "Configure default for CW frequency",
     });
     fireEvent.click(configureFrequency);
-    expect(within(dialog).getByRole("button", { name: "Publish default" })).toBeDisabled();
+    expect(within(dialog).getByRole("button", { name: "Save device context" })).toBeDisabled();
     const frequencyRow = configureFrequency.closest(
       '[data-testid^="instrument-default-property-"]',
     );
@@ -1292,7 +1315,7 @@ describe("instrument workspace", () => {
     fireEvent.change(within(dialog).getByRole("combobox", { name: "Start policy" }), {
       target: { value: "apply_default_state" },
     });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Publish default" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save device context" }));
 
     await waitFor(() =>
       expect(publishInstrumentSpec).toHaveBeenCalledWith(
@@ -1354,7 +1377,7 @@ describe("instrument workspace", () => {
       }),
     );
     expect(await within(dialog).findByText("Connected to Detected device")).toBeVisible();
-    fireEvent.click(within(dialog).getByRole("button", { name: "Publish default" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save device context" }));
 
     await waitFor(() =>
       expect(publishInstrumentSpec).toHaveBeenCalledWith(
@@ -1912,7 +1935,7 @@ function flatDcApplyReceipt(): Awaited<ReturnType<typeof applyInstrumentState>> 
   };
 }
 
-function activeConfig(): Awaited<ReturnType<typeof getActiveConfig>> {
+function activeConfig(): ActiveConfig {
   return {
     activation: {
       generation: 3,
@@ -2057,5 +2080,22 @@ function driverCatalog(): Awaited<ReturnType<typeof getDriverCatalog>> {
         ],
       },
     ],
+  };
+}
+
+function setupRevision(active = activeConfig()): SetupRevision {
+  const { topology, instrument_registry, routing, domain_target, scenario } = active.config.system;
+  return {
+    id: "lab-default",
+    content_hash: "sha256:active",
+    actor: "Ada",
+    note: "",
+    setup: {
+      topology,
+      instrument_registry,
+      routing: routing ?? { roles: [], routes: [] },
+      domain_target: domain_target ?? null,
+      scenario,
+    },
   };
 }

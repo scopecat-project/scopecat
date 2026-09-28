@@ -3223,7 +3223,10 @@ def test_release_rejects_admitted_run_before_and_after_provision(
     with _runtime(tmp_path, provider) as runtime:
         run_id, lease_id = _start_run(runtime, load_config())
         instruments = runtime.application.instruments
-        command = InstrumentReleaseCommand(instrument_ids=("source-0",))
+        command = InstrumentReleaseCommand(
+            instrument_ids=("source-0",),
+            setup=runtime.application.setup.current().revision.ref,
+        )
         with pytest.raises(BackendConflict, match="idle devices"):
             instruments.release_idle_instruments(command)
         assert not provider.drivers

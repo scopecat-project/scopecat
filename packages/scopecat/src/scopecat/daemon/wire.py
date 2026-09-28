@@ -1218,6 +1218,7 @@ class InstrumentDriverProbeReceipt(_WireModel):
 class InstrumentReleaseCommand(_WireModel):
     """Disconnect idle configured instruments; active owners block release."""
 
+    setup: SetupRevisionRef
     instrument_ids: tuple[NonEmptyText, ...] = Field(min_length=1)
 
     @field_validator("instrument_ids")
@@ -1235,6 +1236,7 @@ class InstrumentReleaseReceipt(_WireModel):
 class InstrumentSessionOpenCommand(_WireModel):
     """Acquire configured instruments plus optional session-only bindings."""
 
+    setup: SetupRevisionRef
     operation_id: NonEmptyText
     actor: NonEmptyText
     instrument_ids: tuple[NonEmptyText, ...] = Field(min_length=1)

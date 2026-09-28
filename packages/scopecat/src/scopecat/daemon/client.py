@@ -320,7 +320,7 @@ from scopecat.records.research_project import (
 from scopecat.records.run import RunSnapshot
 from scopecat.records.sample import SampleArtifactRef, SampleRevision
 from scopecat.records.sample_artifact import SampleArtifactPage
-from scopecat.records.setup import ActiveSetupView, SetupRevision
+from scopecat.records.setup import ActiveSetupView, SetupRevision, SetupRevisionRef
 from scopecat.records.target_catalog import (
     TargetCatalogPage,
     TargetCreateCommand,
@@ -1262,10 +1262,14 @@ class DaemonClient:
             f"{_API_PREFIX}/instruments/release", command, InstrumentReleaseReceipt
         )
 
-    def list_instruments(self) -> InstrumentListView:
+    def list_instruments(self, *, setup: SetupRevisionRef) -> InstrumentListView:
         return self._get_model(
             f"{_API_PREFIX}/instruments",
             InstrumentListView,
+            params={
+                "setup_revision_id": setup.revision_id,
+                "setup_content_hash": setup.content_hash,
+            },
         )
 
     def list_samples(
@@ -1470,10 +1474,16 @@ class DaemonClient:
             InstrumentDriverProbeReceipt,
         )
 
-    def get_instrument(self, instrument_id: str) -> InstrumentView:
+    def get_instrument(
+        self, instrument_id: str, *, setup: SetupRevisionRef
+    ) -> InstrumentView:
         return self._get_model(
             f"{_API_PREFIX}/instruments/{quote(instrument_id, safe='')}",
             InstrumentView,
+            params={
+                "setup_revision_id": setup.revision_id,
+                "setup_content_hash": setup.content_hash,
+            },
         )
 
     def resolve_instrument_contracts(

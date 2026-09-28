@@ -5640,6 +5640,7 @@ export interface components {
             /** Instrument Ids */
             instrument_ids: components["schemas"]["NonEmptyText"][];
             operation_id: components["schemas"]["NonEmptyText"];
+            setup: components["schemas"]["SetupRevisionRef"];
             /**
              * Temporary Bindings
              * @default []
@@ -12797,7 +12798,10 @@ export interface operations {
     };
     list_instruments_api_v1_instruments_get: {
         parameters: {
-            query?: never;
+            query: {
+                setup_content_hash: string;
+                setup_revision_id: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -12813,11 +12817,23 @@ export interface operations {
                     "application/json": components["schemas"]["InstrumentListView"];
                 };
             };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
     };
     get_instrument_api_v1_instruments__instrument_id__get: {
         parameters: {
-            query?: never;
+            query: {
+                setup_content_hash: string;
+                setup_revision_id: string;
+            };
             header?: never;
             path: {
                 instrument_id: string;

@@ -24,7 +24,9 @@ import {
   secondaryButton,
 } from "../../ui/styles";
 import { InstrumentDefaultsEditor } from "./InstrumentDefaultsEditor";
-import { probeInstrumentDriver, publishInstrumentSpec, type ActiveConfig } from "./instrument-api";
+import { probeInstrumentDriver, publishInstrumentSpec } from "./instrument-api";
+
+import type { SavedSetupRevision as SetupRevision } from "../config/setup-api";
 
 type ConnectionKind = InstrumentConnection["kind"];
 type TcpConnection = Extract<InstrumentConnection, { kind: "tcpip_socket" }>;
@@ -49,22 +51,22 @@ interface OptionField {
 }
 
 export function InstrumentConfigDialog({
-  active,
+  revision,
   catalog,
   instrumentId,
   description,
   onCancel,
   onPublished,
 }: {
-  active: ActiveConfig;
+  revision: SetupRevision;
   catalog: DriverCatalog;
   instrumentId?: string;
   description?: InstrumentDescription;
   onCancel: () => void;
-  onPublished: (instrumentId: string) => void | Promise<void>;
+  onPublished: (instrumentId: string, revision: SetupRevision) => void | Promise<void>;
 }) {
   const existing = instrumentId
-    ? active.config.system.instrument_registry.instruments.find(
+    ? revision.setup.instrument_registry.instruments.find(
         (instrument) => instrument.id === instrumentId,
       )
     : undefined;
@@ -73,7 +75,7 @@ export function InstrumentConfigDialog({
   }
   return (
     <InstrumentConfigEditor
-      active={active}
+      revision={revision}
       catalog={catalog}
       existing={existing}
       configuredDescription={description}
@@ -84,19 +86,19 @@ export function InstrumentConfigDialog({
 }
 
 function InstrumentConfigEditor({
-  active,
+  revision,
   catalog,
   existing,
   configuredDescription,
   onCancel,
   onPublished,
 }: {
-  active: ActiveConfig;
+  revision: SetupRevision;
   catalog: DriverCatalog;
   existing?: InstrumentSpec;
   configuredDescription?: InstrumentDescription;
   onCancel: () => void;
-  onPublished: (instrumentId: string) => void | Promise<void>;
+  onPublished: (instrumentId: string, revision: SetupRevision) => void | Promise<void>;
 }) {
   const initialDriver = catalog.drivers.find((driver) => driver.driver_id === existing?.driver_id);
   const firstDriver = initialDriver ?? catalog.drivers[0];
@@ -118,6 +120,7 @@ function InstrumentConfigEditor({
   const [invalidOptionFields, setInvalidOptionFields] = useState<Set<string>>(new Set());
   const [probedDescription, setProbedDescription] = useState<InstrumentDescription>();
   const [note, setNote] = useState("");
+  const [contextName, setContextName] = useState(`${revision.id} (edited)`);
   const [probe, setProbe] = useState<InstrumentDriverProbeReceipt>();
   const [probePending, setProbePending] = useState(false);
   const [publishPending, setPublishPending] = useState(false);
@@ -152,14 +155,14 @@ function InstrumentConfigEditor({
     spec.id.length > 0 &&
     !(
       !existing &&
-      active.config.system.instrument_registry.instruments.some(
-        (candidate) => candidate.id === spec.id,
-      )
+      revision.setup.instrument_registry.instruments.some((candidate) => candidate.id === spec.id)
     ) &&
     connectionIsValid(connection) &&
     optionsAreValid(options, optionFields) &&
     invalidOptionFields.size === 0;
   const publishValid =
+    contextName.trim().length > 0 &&
+    contextName.trim() !== revision.id &&
     bindingValid &&
     defaultsValid &&
     (runStart === "preserve" || defaultState.length > 0) &&
@@ -218,14 +221,15 @@ function InstrumentConfigEditor({
     setPublishPending(true);
     setError(undefined);
     try {
-      await publishInstrumentSpec({
-        active,
+      const saved = await publishInstrumentSpec({
+        revision,
+        name: contextName.trim(),
         spec,
         originalInstrumentId: existing?.id,
         actor: "local-operator",
         note: note.trim(),
       });
-      await onPublished(spec.id);
+      await onPublished(spec.id, saved);
     } catch (cause) {
       setError(errorMessage(cause));
     } finally {
@@ -261,8 +265,8 @@ function InstrumentConfigEditor({
                   )}
                 >
                   {existing
-                    ? `${existing.id} · publishes a new immutable default`
-                    : "Choose a registered driver and publish it to the active laboratory config"}
+                    ? `${existing.id} · save changes as a new device context`
+                    : "Choose a registered driver and save a new device context"}
                 </Dialog.Description>
               </div>
               <Dialog.Close
@@ -393,6 +397,17 @@ function InstrumentConfigEditor({
 
               <div className="grid grid-cols-1 gap-2.5 border-t border-line pt-3">
                 <label className="grid gap-[5px]">
+                  <span>Save as device context</span>
+                  <input
+                    value={contextName}
+                    onChange={(event) => setContextName(event.target.value)}
+                  />
+                </label>
+                <p className={configNote}>
+                  Saves a new context for this page. Other pages and submitted work keep their
+                  selections.
+                </p>
+                <label className="grid gap-[5px]">
                   <span>Note</span>
                   <input
                     value={note}
@@ -441,7 +456,7 @@ function InstrumentConfigEditor({
                 ) : (
                   <Save size={15} />
                 )}
-                Publish default
+                Save device context
               </button>
             </footer>
           </Dialog.Popup>
@@ -1015,7 +1030,7 @@ function MissingInstrumentDialog({
               <div>
                 <Dialog.Title className={dialogTitle}>Instrument changed</Dialog.Title>
                 <Dialog.Description className={dialogDescription}>
-                  {instrumentId} is no longer present in the active configuration. Refresh before
+                  {instrumentId} is no longer present in the selected device context. Refresh before
                   editing.
                 </Dialog.Description>
               </div>

@@ -1422,7 +1422,6 @@ def test_setup_release_before_commit_fences_old_session_claim(
                 setup=active.revision.ref,
                 instrument_ids=("source-0",),
                 exclusivity_keys=("source-0",),
-                expected_setup_generation=active.activation.generation,
                 ttl=timedelta(seconds=30),
             )
 
@@ -2805,7 +2804,6 @@ def test_queued_run_reports_interactive_session_blocker(tmp_path: Path) -> None:
             setup=runtime.application.setup.current().revision.ref,
             instrument_ids=("source-0",),
             exclusivity_keys=("source-0",),
-            expected_setup_generation=runtime.application.setup.current().activation.generation,
             ttl=timedelta(seconds=30),
         )
         waiting = runtime.application.submit_run(_submission("session-waiter"))

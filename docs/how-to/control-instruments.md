@@ -14,8 +14,8 @@ generation, configuration, and driver tests live in the
 
 ## Use a configured device now
 
-Create a typed physical reference from the configured instrument id, then open
-it through a lab session:
+Choose a saved device context, create a typed reference from its instrument id,
+then connect explicitly. Listing or choosing a context does not connect devices.
 
 ```python
 import scopecat as sc
@@ -25,7 +25,8 @@ from scopecat_instruments import network_sweep
 READOUT_VNA = network_sweep("readout-vna")
 
 with sc.open_project(".").connect(operator="alice") as lab:
-    with lab.instruments.open(READOUT_VNA) as devices:
+    setup = lab.setup.get("bench-a").ref
+    with lab.instruments.open(READOUT_VNA, setup=setup) as devices:
         vna = devices[READOUT_VNA]
         vna.apply(
             start_frequency=sc.Quantity(4.9, "GHz"),
@@ -41,13 +42,22 @@ triggers hardware and returns typed readback with receipt evidence. The session
 owns synchronization and the same exclusive claim used by experiment runs; it
 does not create a one-point experiment.
 
+Use `lab.setup.list()` to discover saved contexts and
+`lab.instruments.list(setup=setup)` to inspect their devices. The exact setup
+stays with the session; another notebook or browser page cannot change it.
+In the workbench's Instruments page, choose **Device context**, inspect a device,
+and click **Connect**. With one saved context, its devices appear directly.
+Disconnect before choosing another context. Editing a device saves a new context
+and selects it only on that page; it does not activate a global configuration.
+
 Closing a session ends ownership and applies its configured finish policy, while
 keeping the connection available for subsequent work. To hand a configured device
 to another program after all runs and sessions have ended, disconnect it explicitly:
 
 ```python
 with sc.open_project(".").connect(operator="alice") as lab:
-    lab.instruments.release(READOUT_VNA)  # Configured id strings also work.
+    setup = lab.setup.get("bench-a").ref
+    lab.instruments.release(READOUT_VNA, setup=setup)
 ```
 
 Release rejects devices reserved by unfinished runs or sessions. It leaves the
@@ -68,7 +78,8 @@ from scopecat_instruments import rf_output
 PUMP_2 = rf_output("pump-source", component_path=("channels", "2"))
 
 with sc.open_project(".").connect(operator="alice") as lab:
-    with lab.instruments.open(PUMP_2) as devices:
+    setup = lab.setup.get("bench-a").ref
+    with lab.instruments.open(PUMP_2, setup=setup) as devices:
         source = devices[PUMP_2]
         source.apply(frequency=sc.Quantity(6, "GHz"), output_enabled=True)
 ```
@@ -99,7 +110,8 @@ BENCH_VNA = sc.temporary_instrument(
 )
 
 with sc.open_project(".").connect(operator="alice") as lab:
-    with lab.instruments.open(BENCH_VNA) as devices:
+    setup = lab.setup.get("bench-a").ref
+    with lab.instruments.open(BENCH_VNA, setup=setup) as devices:
         trace = devices[BENCH_VNA].sweep()
 ```
 

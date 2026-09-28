@@ -203,8 +203,13 @@ function InstrumentInspectorContent({
       if (!(cause instanceof ApiError) || ![404, 409].includes(cause.status ?? 0)) {
         return;
       }
+      if (!session) return;
       const canonical = queryClient
-        .getQueryData<{ items: InstrumentView[] }>(["instruments"])
+        .getQueryData<{ items: InstrumentView[] }>([
+          "instruments",
+          session.setup.revision_id,
+          session.setup.content_hash,
+        ])
         ?.items.find((candidate) => candidate.instrument_id === instrumentId);
       const stillOwned =
         canonical?.availability === "active" &&

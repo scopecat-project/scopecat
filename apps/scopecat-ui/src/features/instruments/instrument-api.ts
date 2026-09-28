@@ -1,8 +1,6 @@
 import { ApiError } from "../../api-client";
 import { apiClient, apiData } from "../../api-client";
 import type {
-  ActiveConfig,
-  ConfigProfileSnapshot,
   DriverCatalog,
   InstrumentAcquisition,
   InstrumentApplyReceipt,
@@ -24,11 +22,10 @@ import type {
   InstrumentStateValue,
   InstrumentView,
 } from "../../api-contract";
-import { publishConfig } from "../config/config-api";
-import { safeConfigEntryId } from "../config/config-utils";
+import type { SavedSetupRevision as SetupRevision } from "../config/setup-api";
 import { decodeCollectReceipt, HARDWARE_RECEIPT_MEDIA_TYPE } from "./hardware-receipt-wire";
 
-export type { ActiveConfig, InstrumentList } from "../../api-contract";
+export type { InstrumentList } from "../../api-contract";
 
 export interface StagedInstrumentMember {
   target: InstrumentStateTarget;
@@ -49,8 +46,18 @@ export interface InstrumentOperationTarget {
 
 export type InstrumentOperationArgument = NonNullable<InstrumentInvokeCommand["arguments"]>[number];
 
-export async function getInstruments(signal?: AbortSignal): Promise<InstrumentList> {
-  return apiData(apiClient.GET("/api/v1/instruments", { signal }));
+export async function getInstruments(
+  setup: InstrumentList["setup"],
+  signal?: AbortSignal,
+): Promise<InstrumentList> {
+  return apiData(
+    apiClient.GET("/api/v1/instruments", {
+      params: {
+        query: { setup_revision_id: setup.revision_id, setup_content_hash: setup.content_hash },
+      },
+      signal,
+    }),
+  );
 }
 
 export async function getDriverCatalog(signal?: AbortSignal): Promise<DriverCatalog> {
@@ -67,18 +74,16 @@ export async function probeInstrumentDriver(
   );
 }
 
-export async function getActiveConfig(signal?: AbortSignal): Promise<ActiveConfig> {
-  return apiData(apiClient.GET("/api/v1/config-registry/active", { signal }));
-}
-
 export async function openInstrumentSession(
   instrumentId: string,
   actor: string,
+  setup: InstrumentList["setup"],
   operationId = createInstrumentCommandId("open"),
 ): Promise<InstrumentSession> {
   return apiData(
     apiClient.POST("/api/v1/instrument-sessions", {
       body: {
+        setup,
         operation_id: operationId,
         actor,
         instrument_ids: [instrumentId],
@@ -314,46 +319,39 @@ export async function resolveInstrumentAttention(sessionId: string): Promise<voi
 }
 
 export async function publishInstrumentSpec({
-  active,
+  revision,
+  name,
   spec,
   originalInstrumentId,
   actor,
   note,
 }: {
-  active: ActiveConfig;
+  revision: SetupRevision;
+  name: string;
   spec: InstrumentSpec;
   originalInstrumentId?: string;
   actor: string;
   note: string;
-}): Promise<void> {
-  const config = cloneConfig(active.config);
-  const instruments = config.system.instrument_registry.instruments;
+}): Promise<SetupRevision> {
+  const setup = structuredClone(revision.setup);
+  const instruments = setup.instrument_registry.instruments;
   if (originalInstrumentId === undefined) {
     if (instruments.some((instrument) => instrument.id === spec.id)) {
-      throw new Error(`The active config already contains ${spec.id}.`);
+      throw new Error(`The selected context already contains ${spec.id}.`);
     }
     instruments.push(spec);
   } else {
     const index = instruments.findIndex((instrument) => instrument.id === originalInstrumentId);
     if (index < 0) {
-      throw new Error(`The active config no longer contains ${originalInstrumentId}.`);
+      throw new Error(`The selected context no longer contains ${originalInstrumentId}.`);
     }
     instruments[index] = spec;
   }
-  const suffix = createInstrumentCommandId("config");
-  const entryId = safeConfigEntryId(`${config.id}-instrument-${spec.id}-${suffix}`);
-  config.id = entryId;
-  await publishConfig({
-    operation_id: suffix,
-    source: {
-      kind: "direct_config_profile",
-      config,
-    },
-    entry_id: entryId,
-    actor,
-    note,
-    expected_generation: active.activation.generation,
-  });
+  return apiData(
+    apiClient.POST("/api/v1/setup/revisions", {
+      body: { revision_id: name, setup, actor, note },
+    }),
+  );
 }
 
 export function connectionSummary(connection: InstrumentView["connection"]): string {
@@ -379,10 +377,6 @@ export function createInstrumentCommandId(prefix: string): string {
 
 export function retryTransientInstrumentMutation(failureCount: number, error: unknown): boolean {
   return failureCount < 1 && error instanceof ApiError && error.status === undefined;
-}
-
-function cloneConfig(source: ActiveConfig["config"]): ConfigProfileSnapshot {
-  return JSON.parse(JSON.stringify(source)) as ConfigProfileSnapshot;
 }
 
 async function responseDetail(response: Response): Promise<string | undefined> {
