@@ -105,6 +105,10 @@ def verify(bundle: Path, destination: Path) -> None:
         check=True,
     )
     receipts = list((home / "releases").glob("*/runtime/scopecat-lab-delivery.json"))
+    if sys.platform == "win32":
+        # Shell links must retain Unicode arguments, not the ANSI code page's '?'.
+        shortcut = (home / "Scopecat.lnk").read_bytes()
+        assert str(home / "lab.py").encode("utf-16-le") in shortcut
     assert len(receipts) == 1
     receipt = cast(
         "dict[str, str]", json.loads(receipts[0].read_text(encoding="utf-8"))
