@@ -3,6 +3,7 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 from scopecat.daemon.wire import SetupSaveCommand
 from scopecat.records.setup import ActiveSetupView, SetupRevision
+from scopecat_testkit.server.instruments import signal_endpoint
 from scopecat_testkit.workflow_fixtures import load_config
 
 from scopecat_server.runtime import LocalDaemonRuntime
@@ -11,14 +12,18 @@ from scopecat_server.runtime import LocalDaemonRuntime
 def test_setup_transport_saves_immutable_revision_without_selecting(
     tmp_path: Path,
 ) -> None:
-    with LocalDaemonRuntime(tmp_path, bootstrap_config=load_config()) as runtime:
+    with LocalDaemonRuntime(
+        tmp_path, bootstrap_config=load_config(), instrument_endpoint=signal_endpoint()
+    ) as runtime:
         client = TestClient(runtime.app())
         original = ActiveSetupView.model_validate(
             client.get("/api/v1/setup/active").json()
         )
         command = SetupSaveCommand(
             revision_id="reviewed/new",
-            setup=original.revision.setup,
+            setup=runtime.application.setup.definition(
+                original.revision.resolution.definition_id
+            ).definition,
             actor="operator",
             note="Save for review",
         )
@@ -27,7 +32,7 @@ def test_setup_transport_saves_immutable_revision_without_selecting(
         )
         assert response.status_code == 200
         revision = SetupRevision.model_validate(response.json())
-        assert revision.id == "reviewed/new"
+        assert revision.resolution.definition_id == "reviewed/new"
         assert (
             client.post(
                 "/api/v1/setup/revisions", json=command.model_dump(mode="json")
@@ -35,11 +40,15 @@ def test_setup_transport_saves_immutable_revision_without_selecting(
             == response.json()
         )
         assert (
-            client.get("/api/v1/setup/revisions/reviewed%2Fnew").json()
+            client.get(f"/api/v1/setup/revisions/{revision.id}").json()
             == response.json()
         )
         assert revision.id in {
             item["id"] for item in client.get("/api/v1/setup/revisions").json()["items"]
+        }
+        assert "reviewed/new" in {
+            item["id"]
+            for item in client.get("/api/v1/setup/definitions").json()["items"]
         }
         assert (
             ActiveSetupView.model_validate(client.get("/api/v1/setup/active").json())

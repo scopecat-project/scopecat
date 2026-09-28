@@ -211,11 +211,13 @@ def _resolve_configuration(
             or (choice.setup is not None and old.setup != choice.setup)
         ):
             raise ValueError("parameter selection differs from reviewed inputs")
-        setup = (
-            old.setup
-            if isinstance(old, ParameterRunConfigSource)
-            else choice.setup or lab.config.client.active_setup().revision.ref
-        )
+        setup = old.setup if isinstance(old, ParameterRunConfigSource) else choice.setup
+        if setup is None:
+            raise ValueError(
+                "Select an experiment setup alongside the parameters; "
+                "use session.use(parameters=..., setup=...) or choose a setup "
+                "in the workbench."
+            )
         resolved = lab.config.client.resolve_parameters(
             ParameterResolveCommand(
                 parameters=choice.ref, setup=setup, overrides=choice.overrides
@@ -291,7 +293,9 @@ def launch_configuration_fence(
     reviewed: ReviewedScientificSelection,
 ) -> ProcedureConfigurationFence:
     source = reviewed.config_source
-    if isinstance(source, ParameterRunConfigSource):
+    if isinstance(source, ParameterRunConfigSource | AnalysisCandidateRunConfigSource):
+        if source.setup is None:
+            raise ValueError("candidate requires its baseline application setup")
         return SetupRevisionFence(revision=source.setup)
     if (
         isinstance(source, ConfigRegistryRunConfigSource)

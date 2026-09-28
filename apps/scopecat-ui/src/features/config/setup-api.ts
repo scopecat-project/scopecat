@@ -13,10 +13,18 @@ export function getActiveSetup(signal?: AbortSignal) {
 export function getSetupRevisions(signal?: AbortSignal) {
   return apiData(apiClient.GET("/api/v1/setup/revisions", { signal }));
 }
-export function saveSetupFromConfig(config: ConfigProfileSnapshot, name: string, actor: string) {
+export function getSetupRevision(id: string, signal?: AbortSignal) {
+  return apiData(
+    apiClient.GET("/api/v1/setup/revisions/{revision_id}", {
+      params: { path: { revision_id: id } },
+      signal,
+    }),
+  );
+}
+export function importSetupRecipe(config: ConfigProfileSnapshot, name: string, actor: string) {
   const { topology, instrument_registry, routing, domain_target, scenario } = config.system;
   return apiData(
-    apiClient.POST("/api/v1/setup/revisions", {
+    apiClient.POST("/api/v1/setup/recipe-imports", {
       body: {
         revision_id: name,
         actor,
@@ -29,6 +37,26 @@ export function saveSetupFromConfig(config: ConfigProfileSnapshot, name: string,
           scenario: scenario ?? null,
         },
       },
+    }),
+  );
+}
+export type SetupDefinition = Awaited<
+  ReturnType<typeof getSetupDefinitions>
+>["items"][number]["definition"];
+export function getSetupDefinitions(signal?: AbortSignal) {
+  return apiData(apiClient.GET("/api/v1/setup/definitions", { signal }));
+}
+export function resolveSetupDefinition(id: string) {
+  return apiData(
+    apiClient.POST("/api/v1/setup/resolutions/{definition_id}", {
+      params: { path: { definition_id: id } },
+    }),
+  );
+}
+export function saveSetupDefinition(setup: SetupDefinition, name: string, actor: string) {
+  return apiData(
+    apiClient.POST("/api/v1/setup/revisions", {
+      body: { setup, revision_id: name, actor, note: "" },
     }),
   );
 }

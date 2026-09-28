@@ -5,13 +5,15 @@ from scopecat.api.parameter_revisions import BranchParameterEditor
 from scopecat.application.author_project import AuthorProject
 from scopecat.daemon.client import DaemonNotFoundError
 from my_experiment.parameters import Drive
+from workspace_app import initial_setup
 
 
 def open_parameters(session: AuthorProject) -> BranchParameterEditor:
     """Open the teaching parameter branch without creating a sample or working point."""
+    setup = session.setup.import_recipe(initial_setup(), name="teaching-bench")
     name = "teaching-table"
     try:
-        session.use(parameter_branch=name)
+        session.use(parameter_branch=name, setup=setup)
     except DaemonNotFoundError:
         initial = session.parameters.save(
             name="teaching-initial",
@@ -22,5 +24,5 @@ def open_parameters(session: AuthorProject) -> BranchParameterEditor:
             note="教学输入; 非测量结果",
         )
         session.parameters.create_branch(name, revision=initial)
-        session.use(parameter_branch=name)
+        session.use(parameter_branch=name, setup=setup)
     return session.params

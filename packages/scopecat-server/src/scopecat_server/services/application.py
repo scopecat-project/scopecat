@@ -37,6 +37,7 @@ from .analyses import AnalysisService
 from .author_workspaces import AuthorWorkspaceServices
 from .automation import AutomationService
 from .config import ConfigService
+from .devices import DeviceService
 from .executor import ExecutorService
 from .experiment_plans import ExperimentPlanService
 from .leases import OwnershipLeaseSupervisor
@@ -65,6 +66,7 @@ class DaemonApplication:
         services: ProjectStateServices,
         config: ConfigService,
         setup: SetupService,
+        devices: DeviceService,
         analyses: AnalysisService,
         runs: RunService,
         admission: AdmissionService,
@@ -104,6 +106,7 @@ class DaemonApplication:
         )
         self.config = config
         self.setup = setup
+        self.devices = devices
         self.manual_previews = ManualPreviewService(project_store.sqlite, config, runs)
         self.analyses = analyses
         self.runs = runs

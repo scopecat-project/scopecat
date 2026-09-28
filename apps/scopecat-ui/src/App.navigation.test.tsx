@@ -40,16 +40,7 @@ vi.mock("./features/runs/run-api", async (importOriginal) => ({
 }));
 
 vi.mock("./features/config/ConfigWorkspace", () => ({
-  ConfigWorkspace: ({ onOpenRun }: { onOpenRun?: (runId: string) => void }) => (
-    <>
-      <button type="button" onClick={() => onOpenRun?.("run-2")}>
-        Open listed producing run
-      </button>
-      <button type="button" onClick={() => onOpenRun?.("run-archive")}>
-        Open unlisted producing run
-      </button>
-    </>
-  ),
+  ConfigWorkspace: () => <p>Experiment configuration</p>,
 }));
 
 vi.mock("./features/analyses/AnalysesWorkspace", () => ({
@@ -301,7 +292,7 @@ describe("config provenance navigation", () => {
   it("does not mount the run browser while configuration is active", async () => {
     renderApp();
 
-    await screen.findByRole("button", { name: "Open listed producing run" });
+    await screen.findByText("Experiment configuration");
     expect(getRuns).not.toHaveBeenCalled();
     expect(window.location.search).toBe("");
     expect(window.location.hash).toBe("#configuration");
@@ -309,37 +300,6 @@ describe("config provenance navigation", () => {
       "aria-current",
       "page",
     );
-  });
-
-  it("opens the producing run and selects it in the existing Runs view", async () => {
-    renderApp();
-
-    fireEvent.click(await screen.findByRole("button", { name: "Open listed producing run" }));
-
-    expect(screen.getByRole("button", { name: "Runs" })).toHaveAttribute("aria-current", "page");
-    await waitFor(() =>
-      expect(screen.getByTitle("Inspect run run-2")).toHaveAttribute("aria-current", "true"),
-    );
-    expect(window.location.hash).toBe("");
-    expect(window.location.search).toBe("?run=run-2");
-    await waitFor(() =>
-      expect(getRunEvents).toHaveBeenCalledWith("run-2", expect.any(AbortSignal)),
-    );
-  });
-
-  it("preserves a producing run that is outside the latest run index", async () => {
-    renderApp();
-
-    fireEvent.click(
-      await screen.findByRole("button", {
-        name: "Open unlisted producing run",
-      }),
-    );
-
-    expect(screen.getByRole("button", { name: "Runs" })).toHaveAttribute("aria-current", "page");
-    expect(await screen.findByTitle("run-archive")).toHaveTextContent("run-archive");
-    expect(screen.getByTitle("Inspect run run-1")).not.toHaveAttribute("aria-current");
-    expect(screen.getByTitle("Inspect run run-2")).not.toHaveAttribute("aria-current");
   });
 
   it("selects the first indexed run when no explicit run was requested", async () => {

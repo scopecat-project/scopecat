@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, Check, CircleOff, LoaderCircle, Pencil, RotateCcw } from "lucide-react";
+import { AlertTriangle, Check, CircleOff, LoaderCircle, RotateCcw } from "lucide-react";
 import type {
   InstrumentCollectReceipt,
   InstrumentConfiguredDefaultsApplyReceipt,
@@ -58,13 +58,10 @@ interface InstrumentInspectorProps {
   sessionError?: string;
   connectPending: boolean;
   closePending: boolean;
-  configurationPending: boolean;
-  configurationUnavailable: boolean;
   onConnect: () => void;
   onClose: () => void;
   onSessionLost: (message: string) => void;
   onDisconnectOwner: () => void;
-  onConfigure: () => void;
 }
 
 export function InstrumentInspector(props: InstrumentInspectorProps) {
@@ -90,13 +87,10 @@ function InstrumentInspectorContent({
   sessionError,
   connectPending,
   closePending,
-  configurationPending,
-  configurationUnavailable,
   onConnect,
   onClose,
   onSessionLost,
   onDisconnectOwner,
-  onConfigure,
 }: InstrumentInspectorProps) {
   const queryClient = useQueryClient();
   const instrumentId = instrument.instrument_id;
@@ -414,36 +408,6 @@ function InstrumentInspectorContent({
             </p>
           )}
         </div>
-        <button
-          type="button"
-          className={classes(secondaryButton, "max-[460px]:justify-self-start")}
-          onClick={onConfigure}
-          disabled={
-            connected ||
-            connectPending ||
-            closePending ||
-            configurationPending ||
-            configurationUnavailable ||
-            instrument.availability === "active" ||
-            instrument.availability === "quarantined"
-          }
-          title={
-            configurationUnavailable
-              ? "Driver catalog unavailable"
-              : connected
-                ? "Disconnect before editing this device context"
-                : instrument.availability === "active" || instrument.availability === "quarantined"
-                  ? "Resolve the current owner before editing this device context"
-                  : undefined
-          }
-        >
-          {configurationPending ? (
-            <LoaderCircle className="animate-spin" size={14} />
-          ) : (
-            <Pencil size={14} />
-          )}
-          {configurationPending ? "Loading configuration" : "Configure device"}
-        </button>
       </header>
 
       <InstrumentSessionPanel

@@ -133,6 +133,7 @@ def resolve_parameter_composition(
                 proposal_id=ref.proposal_id,
                 base_config_content_hash=proposal.base_config_content_hash,
                 content_hash=config_content_hash(final_config),
+                setup=snapshot.execution_setup,
             )
     provenance = ParameterProposalComposition(
         base=source.parameters, sources=canonical, mode=mode

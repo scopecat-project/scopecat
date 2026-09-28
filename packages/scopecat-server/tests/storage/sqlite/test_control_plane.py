@@ -53,9 +53,7 @@ def _open_instrument_session(
     return store.open_instrument_session(
         operation_id=f"open-{name}",
         actor="alice",
-        setup=SetupRevisionRef(
-            revision_id="baseline", content_hash=f"sha256:{'a' * 64}"
-        ),
+        setup=_baseline(store),
         instrument_ids=(name,),
         exclusivity_keys=(f"visa:{name}",),
         ttl=ttl,
@@ -436,9 +434,7 @@ def test_inventory_migration_blockers_include_active_instrument_session(
     session = store.open_instrument_session(
         operation_id="open-1",
         actor="alice",
-        setup=SetupRevisionRef(
-            revision_id="baseline", content_hash=f"sha256:{'a' * 64}"
-        ),
+        setup=_baseline(store),
         instrument_ids=("scope",),
         exclusivity_keys=(key.id,),
         ttl=SESSION_TTL,
@@ -469,9 +465,7 @@ def test_inventory_migration_blockers_include_quarantined_session_claim(
     session = store.open_instrument_session(
         operation_id="open-1",
         actor="alice",
-        setup=SetupRevisionRef(
-            revision_id="baseline", content_hash=f"sha256:{'a' * 64}"
-        ),
+        setup=_baseline(store),
         instrument_ids=("scope",),
         exclusivity_keys=(key.id,),
         ttl=SESSION_TTL,
@@ -773,9 +767,7 @@ def test_instrument_session_retry_operation_recovery_and_explicit_close(
     first = store.open_instrument_session(
         operation_id="open-1",
         actor="alice",
-        setup=SetupRevisionRef(
-            revision_id="baseline", content_hash=f"sha256:{'a' * 64}"
-        ),
+        setup=_baseline(store),
         instrument_ids=("scope",),
         exclusivity_keys=("visa:scope",),
         ttl=SESSION_TTL,
@@ -805,7 +797,7 @@ def test_instrument_session_retry_operation_recovery_and_explicit_close(
         "operation_id": "open-1",
         "actor": "alice",
         "instrument_ids": ["scope"],
-        "setup_revision_id": "baseline",
+        "setup_revision_id": first.setup.revision_id,
     }
     assert store.get_instrument_session_by_open_operation_id("open-1") == first
     with pytest.raises(ControlPlaneNotFound):
@@ -814,9 +806,7 @@ def test_instrument_session_retry_operation_recovery_and_explicit_close(
         store.open_instrument_session(
             operation_id="open-1",
             actor="bob",
-            setup=SetupRevisionRef(
-                revision_id="baseline", content_hash=f"sha256:{'a' * 64}"
-            ),
+            setup=_baseline(store),
             instrument_ids=("scope",),
             exclusivity_keys=("visa:scope",),
             ttl=SESSION_TTL,
@@ -995,9 +985,7 @@ def test_restart_releases_idle_session_and_quarantines_unfinished_operation(
     idle = store.open_instrument_session(
         operation_id="open-idle",
         actor="alice",
-        setup=SetupRevisionRef(
-            revision_id="baseline", content_hash=f"sha256:{'a' * 64}"
-        ),
+        setup=_baseline(store),
         instrument_ids=("idle-scope",),
         exclusivity_keys=("visa:idle-scope",),
         ttl=timedelta(seconds=2),
@@ -1006,9 +994,7 @@ def test_restart_releases_idle_session_and_quarantines_unfinished_operation(
     active = store.open_instrument_session(
         operation_id="open-active",
         actor="alice",
-        setup=SetupRevisionRef(
-            revision_id="baseline", content_hash=f"sha256:{'a' * 64}"
-        ),
+        setup=_baseline(store),
         instrument_ids=("active-scope",),
         exclusivity_keys=("visa:active-scope",),
         ttl=timedelta(seconds=2),
@@ -1057,9 +1043,7 @@ def test_instrument_session_cannot_claim_a_run_owned_resource(
         store.open_instrument_session(
             operation_id="open-1",
             actor="alice",
-            setup=SetupRevisionRef(
-                revision_id="baseline", content_hash=f"sha256:{'a' * 64}"
-            ),
+            setup=_baseline(store),
             instrument_ids=("scope",),
             exclusivity_keys=("visa:scope",),
             ttl=SESSION_TTL,
@@ -1092,11 +1076,25 @@ def test_instrument_session_rejects_invalid_exclusivity_keys(
         store.open_instrument_session(
             operation_id="open-1",
             actor="alice",
-            setup=SetupRevisionRef(
-                revision_id="baseline", content_hash=f"sha256:{'a' * 64}"
-            ),
+            setup=_baseline(store),
             instrument_ids=instrument_ids,
             exclusivity_keys=exclusivity_keys,
             ttl=SESSION_TTL,
             at=NOW,
         )
+
+
+def _baseline(store: SQLiteControlPlane) -> SetupRevisionRef:
+    from scopecat_testkit.server.instruments import seed_device_setup
+
+    names = (
+        "scope",
+        "validated",
+        "starting",
+        "finishing",
+        "idle-scope",
+        "active-scope",
+    )
+    return seed_device_setup(
+        store, name="baseline", bindings={name: f"visa:{name}" for name in names}
+    )

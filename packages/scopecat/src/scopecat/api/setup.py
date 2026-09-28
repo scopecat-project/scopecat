@@ -10,12 +10,15 @@ from scopecat.daemon.wire import (
     ConfigurationTemplateImportResult,
     ConfigurationTemplateView,
     SetupActivateCommand,
+    SetupImportCommand,
     SetupSaveCommand,
 )
 from scopecat.records.config import ConfigProfileSnapshot
 from scopecat.records.setup import (
     ActiveSetupView,
     ExecutableSetupSnapshot,
+    SetupDefinition,
+    SetupDefinitionRevision,
     SetupRevision,
     SetupRevisionRef,
 )
@@ -54,26 +57,48 @@ class LabSetupOperations:
         return self.client.active_setup()
 
     def get(self, name: str) -> SetupRevision:
-        return self.client.setup_revision(name)
+        """Resolve a named definition against the current registered devices."""
+        return self.client.resolve_setup(name)
 
-    def list(self) -> tuple[SetupRevision, ...]:
-        return self.client.setup_revisions().items
+    def revision(self, revision_id: str) -> SetupRevision:
+        """Read an exact retained resolution without following device heads."""
+        return self.client.setup_revision(revision_id)
+
+    def definition(self, name: str) -> SetupDefinitionRevision:
+        return self.client.setup_definition(name)
+
+    def list(self) -> tuple[SetupDefinitionRevision, ...]:
+        return self.client.setup_definitions().items
 
     def save(
+        self,
+        setup: SetupDefinition,
+        *,
+        name: str,
+        note: str = "",
+    ) -> SetupRevision:
+        """Save a named immutable revision; saving does not select it."""
+        return self.client.save_setup(
+            SetupSaveCommand(
+                revision_id=name, setup=setup, actor=self.operator, note=note
+            )
+        )
+
+    def import_recipe(
         self,
         setup: ExecutableSetupSnapshot | ConfigProfileSnapshot,
         *,
         name: str,
         note: str = "",
     ) -> SetupRevision:
-        """Save a named immutable revision; saving does not select it."""
+        """Register a recipe's devices and save references; never update connections."""
         snapshot = (
             ExecutableSetupSnapshot.from_config(setup)
             if isinstance(setup, ConfigProfileSnapshot)
             else setup
         )
-        return self.client.save_setup(
-            SetupSaveCommand(
+        return self.client.import_setup(
+            SetupImportCommand(
                 revision_id=name, setup=snapshot, actor=self.operator, note=note
             )
         )

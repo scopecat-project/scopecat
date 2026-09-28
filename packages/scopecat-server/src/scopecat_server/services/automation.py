@@ -103,6 +103,7 @@ from scopecat_server.storage.sqlite.config_registry import (
     SQLiteConfigRegistryRepository,
 )
 from scopecat_server.storage.sqlite.control_plane import SQLiteControlPlane
+from scopecat_server.storage.sqlite.devices import DeviceRepository
 from scopecat_server.storage.sqlite.experiment_plan_repository import (
     ExperimentPlanRepository,
 )
@@ -1816,6 +1817,10 @@ def _require_configuration_authority(
             ) from error
         if revision.ref != expected_configuration.revision:
             raise AutomationConflict("selected executable setup reference changed")
+        try:
+            DeviceRepository(connection).require_current(revision.resolution.devices)
+        except ValueError as error:
+            raise AutomationConflict(str(error)) from error
         if scientific_binding is not None and (
             scientific_binding.setup_content_hash
             != revision.setup.execution_content_hash

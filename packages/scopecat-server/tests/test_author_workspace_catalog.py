@@ -7,6 +7,7 @@ from pytest import MonkeyPatch
 from scopecat.author_workspaces import LocalAuthorWorkspaces, author_bindings_path
 from scopecat.records.author_workspace import AuthorWorkspaceCatalog
 from scopecat_testkit.config_registry import load_config
+from scopecat_testkit.server.instruments import signal_endpoint
 
 from scopecat_server.author_registration import register_author_workspace
 from scopecat_server.lifecycle import initialize_project
@@ -38,7 +39,11 @@ def test_service_starts_without_an_author_source_or_implicit_identity(
     monkeypatch: MonkeyPatch,
 ) -> None:
     with (
-        LocalDaemonRuntime(tmp_path, bootstrap_config=load_config()) as runtime,
+        LocalDaemonRuntime(
+            tmp_path,
+            bootstrap_config=load_config(),
+            instrument_endpoint=signal_endpoint(),
+        ) as runtime,
         TestClient(runtime.app()) as transport,
     ):
         assert not runtime.application.author_workspaces.services

@@ -28,6 +28,7 @@ from scopecat.records.target_catalog import (
 )
 from scopecat.runs.refs import SCIENTIFIC_BINDING_REF
 from scopecat_testkit.config_registry import load_config
+from scopecat_testkit.server.instruments import signal_endpoint
 
 from scopecat_server import BackendConflict, LocalDaemonRuntime
 from scopecat_server.snapshots import create_snapshot, restore_snapshot
@@ -131,7 +132,9 @@ def test_target_binding_retains_exact_revision_retry_and_restore(
     manifest = source / "scopecat.toml"
     manifest.write_text("[lab]\n")
     config = load_config()
-    with LocalDaemonRuntime(source, bootstrap_config=config) as runtime:
+    with LocalDaemonRuntime(
+        source, bootstrap_config=config, instrument_endpoint=signal_endpoint()
+    ) as runtime:
         first = _target(runtime, config)
         request = _submission(runtime, config, first)
         second = runtime.application.targets.revise(
@@ -191,7 +194,9 @@ def test_foreign_binding_and_mismatched_projection_allocate_nothing(
     tmp_path: Path,
 ) -> None:
     config = load_config()
-    with LocalDaemonRuntime(tmp_path, bootstrap_config=config) as runtime:
+    with LocalDaemonRuntime(
+        tmp_path, bootstrap_config=config, instrument_endpoint=signal_endpoint()
+    ) as runtime:
         target = _target(runtime, config)
         request = _submission(runtime, config, target)
         subject = request.scientific_binding.subject
@@ -226,7 +231,9 @@ def test_scientific_ref_failure_rolls_back_admission_and_address(
     tmp_path: Path,
 ) -> None:
     config = load_config()
-    with LocalDaemonRuntime(tmp_path, bootstrap_config=config) as runtime:
+    with LocalDaemonRuntime(
+        tmp_path, bootstrap_config=config, instrument_endpoint=signal_endpoint()
+    ) as runtime:
         request = _submission(runtime, config, _target(runtime, config))
         before = _counts(tmp_path)
         original = SQLiteRunRepository.commit_run_skeleton_in_transaction
@@ -270,7 +277,9 @@ def test_every_durable_child_checks_step_and_declared_parent_binding(
     from scopecat.records.plan_ref import ProcedureChildSubmission
 
     config = load_config()
-    with LocalDaemonRuntime(tmp_path, bootstrap_config=config) as runtime:
+    with LocalDaemonRuntime(
+        tmp_path, bootstrap_config=config, instrument_endpoint=signal_endpoint()
+    ) as runtime:
         target = _target(runtime, config)
         original = _submission(runtime, config, target)
         changed = runtime.application.targets.revise(
@@ -382,7 +391,9 @@ def test_saved_plan_reuses_authoritative_target_validation(tmp_path: Path) -> No
     )
 
     config = load_config()
-    with LocalDaemonRuntime(tmp_path, bootstrap_config=config) as runtime:
+    with LocalDaemonRuntime(
+        tmp_path, bootstrap_config=config, instrument_endpoint=signal_endpoint()
+    ) as runtime:
         target = _target(runtime, config)
         original = _submission(runtime, config, target)
         active = runtime.application.config.get_active_config()
@@ -461,7 +472,9 @@ def test_generic_saved_plan_allows_distinct_stage_configurations(
     )
 
     config = load_config()
-    with LocalDaemonRuntime(tmp_path, bootstrap_config=config) as runtime:
+    with LocalDaemonRuntime(
+        tmp_path, bootstrap_config=config, instrument_endpoint=signal_endpoint()
+    ) as runtime:
         application = runtime.application
         active = application.config.get_active_config()
         _target(runtime, config)
@@ -647,7 +660,7 @@ def test_independent_setup_contexts_admit_without_global_selection(
     from scopecat.daemon.wire import (
         ParameterResolveCommand,
         ParameterSaveCommand,
-        SetupSaveCommand,
+        SetupImportCommand,
     )
     from scopecat.records.configuration_fence import SetupRevisionFence
     from scopecat.records.setup import ExecutableSetupSnapshot
@@ -656,7 +669,7 @@ def test_independent_setup_contexts_admit_without_global_selection(
     from scopecat_server.storage.sqlite.control_plane import RunResourcesBusy
 
     config = load_config()
-    with LocalDaemonRuntime(tmp_path) as runtime:
+    with LocalDaemonRuntime(tmp_path, instrument_endpoint=signal_endpoint()) as runtime:
         application = runtime.application
         target = _target(runtime, config)
         parameters = application.config.save_parameters(
@@ -696,8 +709,8 @@ def test_independent_setup_contexts_admit_without_global_selection(
         claims = []
         run_ids: list[str] = []
         for name, selected in (("first", setup), ("second", alternate)):
-            revision = application.setup.save(
-                SetupSaveCommand(
+            revision = application.setup.import_recipe(
+                SetupImportCommand(
                     revision_id=name,
                     setup=selected,
                     actor="maintainer",
@@ -775,7 +788,7 @@ def test_fixed_setup_fence_survives_parameters_but_rejects_structure(
         ConfigPublishCommand,
         DirectConfigRevisionSource,
         SetupActivateCommand,
-        SetupSaveCommand,
+        SetupImportCommand,
     )
     from scopecat.kernel.quantity import Quantity
     from scopecat.records.configuration_fence import (
@@ -786,7 +799,9 @@ def test_fixed_setup_fence_survives_parameters_but_rejects_structure(
     from scopecat.records.setup import ExecutableSetupSnapshot
 
     config = load_config()
-    with LocalDaemonRuntime(tmp_path, bootstrap_config=config) as runtime:
+    with LocalDaemonRuntime(
+        tmp_path, bootstrap_config=config, instrument_endpoint=signal_endpoint()
+    ) as runtime:
         target = _target(runtime, config)
         child = _submission(runtime, config, target)
         binding = child.scientific_binding
@@ -857,8 +872,8 @@ def test_fixed_setup_fence_survives_parameters_but_rejects_structure(
                 )
             }
         )
-        revision = runtime.application.setup.save(
-            SetupSaveCommand(
+        revision = runtime.application.setup.import_recipe(
+            SetupImportCommand(
                 revision_id="setup-changed",
                 setup=ExecutableSetupSnapshot.from_config(changed_setup),
                 actor="operator",

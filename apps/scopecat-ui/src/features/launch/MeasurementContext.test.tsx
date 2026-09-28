@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import type { LaunchDraft } from "./LaunchDraft";
-import { MeasurementContext } from "./MeasurementContext";
+import { MeasurementContext, type MeasurementContextChange } from "./MeasurementContext";
 vi.mock("../samples/sample-api", () => ({ getSamples: vi.fn(async () => ({ items: [] })) }));
 vi.mock("./TargetPicker", () => ({ TargetPicker: () => <p>Exact target chooser</p> }));
 vi.mock("../context/ScopeCatalog", () => ({
@@ -57,7 +57,7 @@ function draft(): LaunchDraft {
     notice: "",
   };
 }
-function mount(value: LaunchDraft, onChange: (change: Partial<LaunchDraft>) => void) {
+function mount(value: LaunchDraft, onChange: (change: MeasurementContextChange) => void) {
   return render(
     <QueryClientProvider
       client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
@@ -74,7 +74,7 @@ it("allows an explicit batch for a registered target and keeps operator/collecti
   expect(screen.getByLabelText("batch")).toBeEnabled();
   fireEvent.change(screen.getByLabelText("batch"), { target: { value: "cooldown-B" } });
   expect(onChange).toHaveBeenLastCalledWith({
-    selection: { ...value.selection, batch: { kind: "declared", id: "cooldown-B" } },
+    selection: { batch: { kind: "declared", id: "cooldown-B" } },
   });
   fireEvent.change(screen.getByLabelText("Operator"), { target: { value: "Bob" } });
   expect(onChange).toHaveBeenLastCalledWith({ actor: "Bob" });
@@ -94,6 +94,6 @@ it("only replaces the exact target after an explicit subject edit, retaining con
   expect(screen.getByLabelText("Sample ID")).toBeEnabled();
   fireEvent.change(screen.getByLabelText("Sample ID"), { target: { value: "chip-B" } });
   expect(onChange).toHaveBeenCalledWith({
-    selection: { ...value.selection, subject: { kind: "sample", sample_id: "chip-B" } },
+    selection: { subject: { kind: "sample", sample_id: "chip-B" } },
   });
 });

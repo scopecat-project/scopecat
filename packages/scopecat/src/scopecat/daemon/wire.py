@@ -38,6 +38,7 @@ from scopecat.config.registry.records import (
 )
 from scopecat.config.structure import ParameterStructurePlan
 from scopecat.control.models import RunPlanSummary
+from scopecat.daemon.device_views import DeviceView
 from scopecat.kernel.content_identity import stable_content_hash
 from scopecat.kernel.problems import Problem
 from scopecat.kernel.run_outcome import RunOutcome
@@ -65,6 +66,11 @@ from scopecat.records.config import (
 from scopecat.records.config_context import ConfigContextRef
 from scopecat.records.configuration_template import ConfigurationTemplate
 from scopecat.records.content import ContentEntry, Sha256ContentHash
+from scopecat.records.device import (
+    DeviceConnection,
+    DeviceRevisionRef,
+    DriverImplementationRef,
+)
 from scopecat.records.execution import (
     DomainJobInvocationTransition,
     DomainJobTransitionRecord,
@@ -109,6 +115,8 @@ from scopecat.records.scientific_selection import (
 )
 from scopecat.records.setup import (
     ExecutableSetupSnapshot,
+    SetupDefinition,
+    SetupDefinitionRevision,
     SetupRevision,
     SetupRevisionRef,
 )
@@ -405,11 +413,56 @@ class SetupRevisionList(_WireModel):
     items: tuple[SetupRevision, ...]
 
 
+class SetupDefinitionList(_WireModel):
+    items: tuple[SetupDefinitionRevision, ...]
+
+
+class DeviceList(_WireModel):
+    items: tuple[DeviceView, ...]
+
+
+class DriverImplementationList(_WireModel):
+    items: tuple[DriverImplementationRef, ...]
+
+
+class DeviceSaveCommand(_WireModel):
+    device_id: NonEmptyText
+    label: NonEmptyText
+    revision_id: NonEmptyText
+    connection: DeviceConnection
+    expected_head: DeviceRevisionRef | None
+    actor: NonEmptyText
+    note: str = ""
+
+
+class DeviceRenameCommand(_WireModel):
+    label: NonEmptyText
+
+
+class DeviceRetireCommand(_WireModel):
+    expected_head: DeviceRevisionRef
+
+
+class DeviceProbeCommand(_WireModel):
+    expected_head: DeviceRevisionRef
+    operation_id: NonEmptyText
+    actor: NonEmptyText
+
+
+class SetupImportCommand(_WireModel):
+    """Explicit recipe import. Existing device connections are never overwritten."""
+
+    revision_id: NonEmptyText
+    setup: ExecutableSetupSnapshot
+    actor: NonEmptyText
+    note: str = ""
+
+
 class SetupSaveCommand(_WireModel):
     """Save an immutable executable setup revision without activating it."""
 
     revision_id: NonEmptyText
-    setup: ExecutableSetupSnapshot
+    setup: SetupDefinition
     actor: NonEmptyText
     note: str = ""
 
@@ -1237,13 +1290,12 @@ class InstrumentReleaseReceipt(_WireModel):
 
 
 class InstrumentSessionOpenCommand(_WireModel):
-    """Acquire configured instruments plus optional session-only bindings."""
+    """Acquire registered devices through an exact resolved setup."""
 
     setup: SetupRevisionRef
     operation_id: NonEmptyText
     actor: NonEmptyText
     instrument_ids: tuple[NonEmptyText, ...] = Field(min_length=1)
-    temporary_bindings: tuple[InstrumentBindingSpec, ...] = ()
 
     @field_validator("instrument_ids")
     @classmethod
@@ -1251,23 +1303,6 @@ class InstrumentSessionOpenCommand(_WireModel):
         if len(value) != len(set(value)):
             raise ValueError("instrument session ids must be unique")
         return value
-
-    @model_validator(mode="after")
-    def validate_temporary_bindings(self) -> InstrumentSessionOpenCommand:
-        binding_ids = tuple(binding.id for binding in self.temporary_bindings)
-        if len(binding_ids) != len(set(binding_ids)):
-            raise ValueError("temporary instrument binding ids must be unique")
-        unknown = tuple(
-            instrument_id
-            for instrument_id in binding_ids
-            if instrument_id not in self.instrument_ids
-        )
-        if unknown:
-            raise ValueError(
-                "temporary bindings must belong to the opened session: "
-                + ", ".join(unknown)
-            )
-        return self
 
 
 class InstrumentSessionLeaseReceipt(_WireModel):

@@ -17,21 +17,6 @@ export type SoftwareExecutionScenario = components["schemas"]["SoftwareExecution
 
 export type RunControlView = components["schemas"]["RunControlView"];
 export type ConfigActivationRecord = components["schemas"]["ConfigRegistryActivationRecord"];
-export type ConfigDraftCommand = components["schemas"]["ConfigDraftCommand"];
-export type ConfigPublishCommand = components["schemas"]["ConfigPublishCommand"];
-export type ConfigPublishReceipt = Omit<
-  PostResponse<"/api/v1/config-registry/publish-operations">,
-  "deltas"
-> & {
-  deltas: ParameterValueDelta[];
-};
-export type ConfigDraftPreview = Omit<
-  PostResponse<"/api/v1/config-registry/drafts/preview">,
-  "config" | "deltas"
-> & {
-  config?: ConfigProfileSnapshot | null;
-  deltas: ParameterValueDelta[];
-};
 export type ConfigProfileSnapshot = components["schemas"]["ConfigProfileSnapshot"];
 export type ConfigRegistryEntry = components["schemas"]["ConfigRegistryEntry"];
 export type ConfigRegistryPage = GetResponse<"/api/v1/config-registry">;
@@ -121,7 +106,7 @@ export type EventPage = GetResponse<"/api/v1/events">;
 export type ParameterAtom = components["schemas"]["ParameterAtomValue"];
 export type ParameterDefinition = components["schemas"]["ParameterDefinition"];
 export type ParameterEntity = components["schemas"]["EntityRef"];
-export type ParameterUpdate = components["schemas"]["ConfigDraftCommand"]["updates"][number];
+export type ParameterUpdate = components["schemas"]["ParameterUpdate-Input"];
 export type ParameterQuantity = components["schemas"]["scopecat__kernel__quantity__Quantity"];
 export type ParameterScalarType = components["schemas"]["PersistableScalarWire"];
 export type ParameterValueDelta = Omit<

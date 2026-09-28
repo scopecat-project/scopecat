@@ -4,6 +4,7 @@ import { cp, mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { expect, test } from "@playwright/test";
+import { chooseReferenceContext, prepareReferenceContexts } from "./reference-context";
 
 const ROOT = resolve(process.cwd(), "../..");
 function uv(args: string[]): string {
@@ -23,13 +24,16 @@ const ADMIT = `
 import sys
 import scopecat as sc
 from scopecat.records.launch_request import LaunchRequest
+from scopecat.records.scientific_selection import ScientificSelection, ParameterConfiguration
 from scopecat.author_workspaces import author_workspace_id
 project = sc.open_project(sys.argv[1])
 application = project.load_application()
 with project.connect() as lab:
     provider = application.launch_provider
     entry = application.authors.get("reference_lab.temperature_diagnostic").entry
-    request = LaunchRequest(workspace_id=author_workspace_id(project.root), action="preview", experiment=entry.id, version=entry.version)
+    parameters = lab.parameters.checkout("browser").head.revision
+    setup = lab.setup.get("browser-bench-a")
+    request = LaunchRequest(workspace_id=author_workspace_id(project.root), action="preview", experiment=entry.id, version=entry.version, selection=ScientificSelection(configuration=ParameterConfiguration(ref=parameters, setup=setup.ref)))
     preview = provider(lab, request)
     admitted = provider(lab, LaunchRequest.model_validate({
         **request.model_dump(), "action": "submit", "request_key": "browser-retained",
@@ -60,6 +64,7 @@ const retainedProcedureTest = test.extend<{ retainedProcedure: RetainedProcedure
       ) as {
         base_url: string;
       };
+      prepareReferenceContexts(uv, project);
       const procedureId = uv(["python", "-c", ADMIT, project]);
       uv(["scopecat", "stop", project]);
       uv([
@@ -106,7 +111,7 @@ retainedProcedureTest(
         path: reopenedScreenshot,
         contentType: "image/png",
       });
-      await page.getByRole("button", { name: "Dispatch existing procedure" }).click();
+      await page.getByRole("button", { name: "Continue task", exact: true }).click();
       await expect(page.getByRole("status").filter({ hasText: /^Completed$/ })).toBeVisible();
       await page.reload();
       await expect(page.getByRole("status").filter({ hasText: /^Completed$/ })).toBeVisible();
@@ -119,6 +124,7 @@ retainedProcedureTest(
       await testInfo.attach("Retained run", { path: runScreenshot, contentType: "image/png" });
       await page.goto(`${endpoint.base_url}/#launch`);
       await page.getByLabel("Experiment", { exact: true }).selectOption("channel-timing");
+      await chooseReferenceContext(page);
       await page.getByRole("button", { name: "Preview", exact: true }).click();
       await expect(page.getByText("Preview ready", { exact: true })).toBeVisible();
       const sourceScope = page.getByRole("region", { name: "Selected-configuration source run" });
@@ -205,9 +211,11 @@ const CHANGE_DRAFT_CONFIG = `
 import sys
 import scopecat as sc
 with sc.open_project(sys.argv[1]).connect() as lab:
-    original = lab.config.active()
-    revised = original.config.model_copy(update={"id": original.config.id + "-draft-context"})
-    lab.config.set_default(revised, actor="draft-browser", note="Verify preview invalidation")
+    setup = lab.setup.get("browser-bench-a")
+    device_id = setup.resolution.devices[0].device_id
+    device = next(item for item in lab.devices.list() if item.device.id == device_id)
+    revised = device.revision.content.model_copy(update={"access_aliases": (*device.revision.content.access_aliases, "browser:updated-connection")})
+    lab.devices.update(device, connection=revised, note="Verify explicit setup invalidation")
 `;
 
 test("retains launch inputs across workspaces and invalidates previews without submitting", async ({
@@ -238,12 +246,14 @@ test("retains launch inputs across workspaces and invalidates previews without s
       },
     });
     expect(sample.status(), await sample.text()).toBe(201);
+    prepareReferenceContexts(uv, project);
     await page.goto(`${endpoint.base_url}/#launch`);
     await page
       .getByLabel("Experiment", { exact: true })
       .selectOption("reference_lab.frequency_amplitude");
+    await chooseReferenceContext(page);
     await page.getByLabel("Sample ID").fill("sample-navigation");
-    await page.getByLabel("Operator", { exact: true }).fill("draft-author");
+    await page.getByRole("textbox", { name: "Operator", exact: true }).fill("draft-author");
     await page.getByLabel("Frequency source").selectOption("range");
     await page.getByLabel("Frequency unit").selectOption("MHz");
     await page.getByLabel("Frequency start").fill("4700");
@@ -262,7 +272,9 @@ test("retains launch inputs across workspaces and invalidates previews without s
         "reference_lab.frequency_amplitude",
       );
       await expect(page.getByLabel("Sample ID")).toHaveValue("sample-navigation");
-      await expect(page.getByLabel("Operator", { exact: true })).toHaveValue("draft-author");
+      await expect(page.getByRole("textbox", { name: "Operator", exact: true })).toHaveValue(
+        "draft-author",
+      );
       await expect(page.getByLabel("Frequency source")).toHaveValue("range");
       await expect(page.getByLabel("Frequency unit")).toHaveValue("MHz");
       await expect(page.getByLabel("Frequency start")).toHaveValue("4700");
@@ -278,9 +290,8 @@ test("retains launch inputs across workspaces and invalidates previews without s
     await page.getByRole("button", { name: "Preview", exact: true }).click();
     await expect(page.getByText("Preview ready", { exact: true })).toBeVisible();
     uv(["python", "-c", CHANGE_DRAFT_CONFIG, project]);
-    await expect(
-      page.getByText(/Configuration changed. Editable inputs are retained/),
-    ).toBeVisible();
+    await page.getByRole("button", { name: "Preview", exact: true }).click();
+    await expect(page.getByRole("alert").filter({ hasText: /changed; prepare/ })).toBeVisible();
     await expect(page.getByRole("button", { name: "Start acquisition" })).toBeDisabled();
     const shot = testInfo.outputPath("retained-launch-draft.png");
     await page.screenshot({ path: shot, fullPage: true });
@@ -291,7 +302,9 @@ test("retains launch inputs across workspaces and invalidates previews without s
     await page.getByRole("button", { name: "Reset launch draft" }).click();
     await expect(page.getByLabel("Frequency", { exact: true })).toHaveValue("4.8");
     await expect(page.getByLabel("Sample ID")).toHaveValue("sample-navigation");
-    await expect(page.getByLabel("Operator", { exact: true })).toHaveValue("draft-author");
+    await expect(page.getByRole("textbox", { name: "Operator", exact: true })).toHaveValue(
+      "draft-author",
+    );
     expect(submissions).toBe(0);
   } catch (error) {
     failed = true;
@@ -324,10 +337,12 @@ test("reopens a lost launch receipt after context changes without a second submi
     const endpoint = JSON.parse(await readFile(join(project, ".scopecat/daemon.json"), "utf8")) as {
       base_url: string;
     };
+    prepareReferenceContexts(uv, project);
     await page.goto(`${endpoint.base_url}/#launch`);
     await page
       .getByLabel("Experiment", { exact: true })
       .selectOption("reference_lab.frequency_amplitude");
+    await chooseReferenceContext(page);
     await page.getByRole("button", { name: "Preview", exact: true }).click();
     await expect(page.getByText("Preview ready", { exact: true })).toBeVisible();
     await page.route("**/api/v1/experiment-launcher/submit", async (route) => {
@@ -346,7 +361,6 @@ test("reopens a lost launch receipt after context changes without a second submi
       .getByRole("navigation", { name: "Project sections" })
       .getByRole("button", { name: "Configuration", exact: true })
       .click();
-    uv(["python", "-c", CHANGE_DRAFT_CONFIG, project]);
     await page.route("**/api/v1/experiment-launcher", async (route) => {
       const response = await route.fetch();
       const catalog = (await response.json()) as {

@@ -18,6 +18,7 @@ from scopecat.analysis.facts import ordinary_result_schema
 from scopecat.api._config import LabConfigOperations
 from scopecat.api._remote import RemoteRunOperations
 from scopecat.api.apparatus_history import LabApparatusOperations
+from scopecat.api.devices import LabDeviceOperations
 from scopecat.api.lab import LabClient
 from scopecat.api.parameter_candidates import ParameterCandidate
 from scopecat.api.parameter_revisions import (
@@ -32,6 +33,7 @@ from scopecat.api.published_analysis import (
     GroupedAnalysisResult,
 )
 from scopecat.api.run import RunHandle
+from scopecat.api.setup import LabSetupOperations
 from scopecat.application.authoring import AuthorExperiment
 from scopecat.application.experiment_plans import plan_definition, plan_launch_request
 from scopecat.application.inspection import LaunchInspection
@@ -197,8 +199,8 @@ class AuthorProject(DaemonClient):
         sample and batch unless an explicit subject is supplied alongside it.
         Independent parameters preserve subject/batch but replace working-point
         ownership. Preview pins their exact inputs without saving a combined entry.
-        Setup may be pinned alongside independent parameters; setup=None resolves
-        active authority at the next preview. Branch edits retain this choice.
+        Select setup alongside independent parameters before preview;
+        setup=None clears that choice. Branch edits retain a selected setup.
         Independent parameter/subject selection requires no executable setup;
         preview checks compatibility and execution support.
         Selection never activates configuration or submits hardware operations.
@@ -377,6 +379,14 @@ class AuthorProject(DaemonClient):
     @property
     def parameters(self) -> LabParameterOperations:
         return LabParameterOperations(self, operator=self.selection.operator)
+
+    @property
+    def setup(self) -> LabSetupOperations:
+        return LabSetupOperations(self, operator=self.selection.operator)
+
+    @property
+    def devices(self) -> LabDeviceOperations:
+        return LabDeviceOperations(self, operator=self.selection.operator)
 
     def live[**P, ResultT](
         self, experiment: Experiment[P, ResultT]

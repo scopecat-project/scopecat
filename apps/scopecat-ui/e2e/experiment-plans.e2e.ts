@@ -37,7 +37,7 @@ test("saves, reopens, copies and submits an immutable plan without activating co
       .getByLabel("Experiment", { exact: true })
       .selectOption("reference_lab.frequency_amplitude");
     await chooseReferenceContext(page);
-    await page.getByLabel("Operator", { exact: true }).fill("alice");
+    await page.getByRole("textbox", { name: "Operator", exact: true }).fill("alice");
     async function preview() {
       const response = page.waitForResponse((r) =>
         r.url().endsWith("/experiment-launcher/preview"),
@@ -67,7 +67,7 @@ test("saves, reopens, copies and submits an immutable plan without activating co
     await expect(
       page.getByRole("button", { name: "Start acquisition", exact: true }),
     ).toBeDisabled();
-    await page.getByLabel("Operator", { exact: true }).fill("bob");
+    await page.getByRole("textbox", { name: "Operator", exact: true }).fill("bob");
     await preview();
     await page.getByLabel("Plan name").fill("Signal copy");
     const copied = await save("Save as copy");

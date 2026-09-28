@@ -14,6 +14,7 @@ from scopecat.application.author_project import AuthorProject
 from scopecat.daemon.client import DaemonNotFoundError
 from scopecat.records.author_revision import AuthorRevisionRef
 
+from .application import initial_setup
 from .parameters import Drive
 
 
@@ -35,9 +36,10 @@ class RabiReport:
 
 def open_parameters(session: AuthorProject) -> BranchParameterEditor:
     """Open the teaching parameter branch without creating a sample or working point."""
+    setup = session.setup.import_recipe(initial_setup(), name="teaching-bench")
     name = "teaching-table"
     try:
-        session.use(parameter_branch=name)
+        session.use(parameter_branch=name, setup=setup)
     except DaemonNotFoundError:
         initial = session.parameters.save(
             name="teaching-initial",
@@ -49,7 +51,7 @@ def open_parameters(session: AuthorProject) -> BranchParameterEditor:
             note="教学输入; 非测量结果",
         )
         session.parameters.create_branch(name, revision=initial)
-        session.use(parameter_branch=name)
+        session.use(parameter_branch=name, setup=setup)
     return session.params
 
 

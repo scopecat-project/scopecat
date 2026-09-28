@@ -64,6 +64,7 @@ from scopecat_server.storage.sqlite.control_plane import (
     ControlPlaneNotFound,
     SQLiteControlPlane,
 )
+from scopecat_server.storage.sqlite.devices import DeviceRepository
 from scopecat_server.storage.sqlite.record_collections import allocate_address
 from scopecat_server.storage.sqlite.run_repository import SQLiteRunRepository
 from scopecat_server.storage.sqlite.samples import SQLiteSampleStore
@@ -75,6 +76,7 @@ from .parameter_resolution import resolve_parameters
 from .point_plans import RunPointPlanService
 from .samples import SampleService
 from .scientific_binding import validate_scientific_binding
+from .setup import SetupService
 
 
 class AdmissionService:
@@ -90,6 +92,7 @@ class AdmissionService:
         samples: SampleService,
         sample_store: SQLiteSampleStore,
         targets: TargetCatalogStore,
+        setup: SetupService,
         deployment_id: str | None = None,
     ) -> None:
         self._control = control
@@ -99,6 +102,7 @@ class AdmissionService:
         self._samples = samples
         self._sample_store = sample_store
         self._targets = targets
+        self._setup = setup
         self._deployment_id = deployment_id
 
     def submit_run(self, submission: RunSubmission) -> RunAdmission:
@@ -121,10 +125,23 @@ class AdmissionService:
                 # Another page changing its default must not invalidate this request.
                 assert provenance is not None
                 active_config = ExecutableSetupSnapshot.from_config(provenance)
+                execution_setup = submission.config_source.setup
+                setup_generation = None
+                resolved_devices = ()
+            elif isinstance(submission.config_source, AnalysisCandidateRunConfigSource):
+                execution_setup = submission.config_source.setup
+                if execution_setup is None:
+                    raise BackendConflict("candidate requires its baseline setup")
+                resolved_setup = self._setup.require_available(execution_setup)
+                resolved_devices = resolved_setup.resolution.devices
+                active_config = resolved_setup.setup
                 setup_generation = None
             else:
                 active = self._resolve_active_setup()
-                active_config = active.revision.setup
+                execution_setup = active.revision.ref
+                resolved_setup = self._setup.require_available(active.revision.ref)
+                resolved_devices = resolved_setup.resolution.devices
+                active_config = resolved_setup.setup
                 setup_generation = active.activation.generation
             _require_authoritative_instrument_inventory(
                 submitted=submission.config,
@@ -160,6 +177,7 @@ class AdmissionService:
                 config_source=submission.config_source,
                 samples=sample_bindings,
                 scientific_binding=submission.scientific_binding,
+                execution_setup=execution_setup,
             )
             admission = RunAdmissionRecord(
                 submission_id=submission.submission_id,
@@ -188,6 +206,16 @@ class AdmissionService:
         prepared = self._runs.prepare_run_skeleton(skeleton)
         try:
             with self._control.write_transaction() as connection:
+                if isinstance(submission.config_source, ParameterRunConfigSource):
+                    source = submission.config_source
+                    resolve_parameters(
+                        connection,
+                        parameters=source.parameters,
+                        setup=source.setup,
+                        overrides=source.overrides,
+                    )
+                else:
+                    DeviceRepository(connection).require_current(resolved_devices)
                 run = self._control.admit_run_in_transaction(
                     connection,
                     admission,
@@ -216,7 +244,7 @@ class AdmissionService:
                         connection,
                         skeleton.snapshot,
                     )
-        except ControlPlaneConflict as error:
+        except (ControlPlaneConflict, ValueError) as error:
             raise BackendConflict(str(error)) from error
         record_timing(
             "run_admitted",
@@ -316,6 +344,7 @@ class AdmissionService:
         if isinstance(source, ContextRunConfigSource):
             return self._resolve_context_source(source)
         if isinstance(source, ParameterRunConfigSource):
+            self._setup.require_available(source.setup)
             with self._control.sqlite.read_transaction() as connection:
                 resolved = resolve_parameters(
                     connection,

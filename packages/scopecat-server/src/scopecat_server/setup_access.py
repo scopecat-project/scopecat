@@ -4,7 +4,7 @@ from typing import Protocol
 
 from scopecat.records.config import ConfigProfileSnapshot, SystemSpec
 from scopecat.records.parameter import ParameterCatalog, ParameterSnapshot
-from scopecat.records.setup import ActiveSetupView, SetupRevision
+from scopecat.records.setup import ActiveSetupView, SetupRevision, SetupRevisionRef
 
 
 class SetupReader(Protocol):
@@ -13,6 +13,8 @@ class SetupReader(Protocol):
     def current(self) -> ActiveSetupView: ...
 
     def get(self, revision_id: str) -> SetupRevision: ...
+
+    def require_available(self, ref: SetupRevisionRef) -> SetupRevision: ...
 
 
 def setup_config(revision: SetupRevision) -> ConfigProfileSnapshot:

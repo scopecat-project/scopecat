@@ -30,6 +30,7 @@ from scopecat.records.scientific_binding import (
     ResolvedScientificBinding,
     UnboundSubject,
 )
+from scopecat.records.setup import SetupRevisionRef
 
 HASH = "sha256:" + "a" * 64
 
@@ -64,6 +65,7 @@ def _stage(id: str, *dependencies: str) -> CalibrationTaskStage:
         id=id,
         depends_on=dependencies,
         check=CalibrationCheckRequest(
+            setup=SetupRevisionRef(revision_id="bench", content_hash=HASH),
             scope=CalibrationScope("drive", (id,), "idle", "1"),
             context=MeasurementContext(
                 ParameterRevisionRef(revision_id="p", content_hash=HASH),

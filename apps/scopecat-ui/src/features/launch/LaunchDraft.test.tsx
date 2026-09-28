@@ -45,6 +45,7 @@ let deferCatalog: boolean;
 let catalogResponse: ((response: Response) => void) | undefined;
 let generation: number;
 let fixedSource: boolean;
+let candidateSource: boolean;
 let manualEventId: number;
 let configFails: boolean;
 let rejectSubmission: boolean;
@@ -69,14 +70,26 @@ function preview() {
       },
     },
     point_count: 1,
-    reviewed: reviewedFixture({
-      kind: "config_registry",
-      selector: fixedSource ? "baseline" : "active",
-      entry_id: "baseline",
-      config_ref: "baseline",
-      content_hash: `sha256:${"b".repeat(64)}`,
-      registry_generation: fixedSource ? null : generation,
-    }),
+    reviewed: reviewedFixture(
+      candidateSource
+        ? {
+            kind: "analysis_candidate",
+            source_run_id: "baseline-run",
+            analysis_record_id: "fit-r1",
+            proposal_id: "proposal",
+            base_config_content_hash: `sha256:${"a".repeat(64)}`,
+            content_hash: `sha256:${"b".repeat(64)}`,
+            setup: { revision_id: "bench", content_hash: `sha256:${"c".repeat(64)}` },
+          }
+        : {
+            kind: "config_registry",
+            selector: fixedSource ? "baseline" : "active",
+            entry_id: "baseline",
+            config_ref: "baseline",
+            content_hash: `sha256:${"b".repeat(64)}`,
+            registry_generation: fixedSource ? null : generation,
+          },
+    ),
     summary: "Checked preparation",
     resources: [],
     resolved_inputs: {},
@@ -108,6 +121,7 @@ beforeEach(() => {
   lookupMatch = "none";
   generation = 1;
   fixedSource = false;
+  candidateSource = false;
   manualEventId = 0;
   configFails = false;
   rejectSubmission = false;
@@ -255,6 +269,24 @@ it("retains the complete project draft across pages and resets explicitly withou
   expect(screen.getByLabelText("Operator")).toHaveValue("scientist");
   expect(screen.getByLabelText("Frequency")).toHaveValue(4.8);
 });
+it("retries a retained candidate without consulting the global configuration", async () => {
+  candidateSource = true;
+  configFails = true;
+  render(<Harness />);
+  await selectPrepared();
+  await previewReady();
+  fireEvent.click(screen.getByRole("button", { name: "Start acquisition" }));
+  await screen.findByRole("alert");
+  const original = submissions[0];
+  fireEvent.click(screen.getByRole("button", { name: "configuration" }));
+  await returnToLaunch();
+  const retry = screen.getByRole("button", { name: "Retry original submission" });
+  expect(retry).toBeEnabled();
+  fireEvent.click(retry);
+  await waitFor(() => expect(submissions).toHaveLength(2));
+  expect(submissions[1]).toEqual(original);
+});
+
 it("keeps an unknown submission key across navigation and temporary configuration read failure", async () => {
   render(<Harness />);
   await selectPrepared();

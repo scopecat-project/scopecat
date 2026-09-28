@@ -15,6 +15,7 @@ from scopecat.api.analysis import AnalysisContext, AnalysisStep
 from scopecat.api.apparatus_history import LabApparatusOperations
 from scopecat.api.calibration_checks import LabCalibrationChecks
 from scopecat.api.calibration_tasks import LabCalibrationTasks
+from scopecat.api.devices import LabDeviceOperations
 from scopecat.api.instruments import LabInstrumentOperations
 from scopecat.api.parameter_candidates import ParameterCandidate
 from scopecat.api.parameter_revisions import LabParameterOperations
@@ -190,6 +191,7 @@ class LabClient:
             operator=operator,
         )
         self._setup = LabSetupOperations(self._client, operator=operator)
+        self._devices = LabDeviceOperations(self._client, operator=operator)
         self._parameters = LabParameterOperations(self._client, operator=operator)
         self._control = LabControlOperations(self._client)
         self._instruments = LabInstrumentOperations(
@@ -251,6 +253,10 @@ class LabClient:
     @property
     def plans(self) -> LabPlanOperations:
         return LabPlanOperations(self._client)
+
+    @property
+    def devices(self) -> LabDeviceOperations:
+        return self._devices
 
     @property
     def setup(self) -> LabSetupOperations:
@@ -316,9 +322,8 @@ class LabClient:
 
         Choose a branch, saved parameters or a retained candidate. Candidates keep
         their original subject/setup; do not supply replacement selections.
-        Branch and active setup heads
-        are resolved together. The receipt retains
-        their versions; no experiment is imported or hardware acquired.
+        Saved parameters require an explicit setup. The receipt retains the
+        selected versions; no experiment is imported or hardware acquired.
         """
         if candidate is not None:
             if parameters is not None or branch is not None:

@@ -2,7 +2,7 @@
 import "@testing-library/jest-dom/vitest";
 import { useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within, waitFor } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { DeviceContextPicker } from "./DeviceContextPicker";
 import { ParameterBranchPicker } from "./ParameterBranchPicker";
@@ -40,6 +40,15 @@ it("keeps two drafts independent through refresh and parameter changes without c
     "fetch",
     vi.fn(async (request: Request) => {
       calls.push(request);
+      const path = new URL(request.url).pathname;
+      if (path.includes("/setup/resolutions/") || path.includes("/setup/revisions/")) {
+        const id = path.split("/").at(-1)!;
+        const setup = setups.find((item) => item.id === id)!;
+        return Response.json({
+          ...setup,
+          resolution: { definition_id: id, definition_hash: "sha256:definition", devices: [] },
+        });
+      }
       return Response.json(
         new URL(request.url).pathname.endsWith("branches")
           ? {
@@ -68,19 +77,25 @@ it("keeps two drafts independent through refresh and parameter changes without c
   const first = within(screen.getByRole("region", { name: "First draft" }));
   const second = within(screen.getByRole("region", { name: "Second draft" }));
   await first.findByRole("option", { name: "bench-a" });
-  fireEvent.change(first.getByLabelText("Device context"), { target: { value: "bench-a" } });
+  fireEvent.change(first.getByLabelText("Experiment setup"), { target: { value: "bench-a" } });
   await second.findByRole("option", { name: "bench-b" });
-  fireEvent.change(second.getByLabelText("Device context"), { target: { value: "bench-b" } });
+  fireEvent.change(second.getByLabelText("Experiment setup"), { target: { value: "bench-b" } });
+  await waitFor(() => expect(first.getByLabelText("Experiment setup")).toHaveValue("bench-a"));
+  await waitFor(() => expect(second.getByLabelText("Experiment setup")).toHaveValue("bench-b"));
   setups = [...setups, { id: "bench-c", content_hash: "sha256:c" }];
-  fireEvent.click(first.getByRole("button", { name: "Refresh device contexts" }));
+  fireEvent.click(first.getByRole("button", { name: "Refresh setups" }));
   await first.findByRole("option", { name: "bench-c" });
   fireEvent.click(first.getByRole("button", { name: "Choose parameter branch" }));
   await first.findByRole("option", { name: /trial/ });
   fireEvent.change(first.getByLabelText("Parameter branch"), { target: { value: "trial" } });
   fireEvent.click(first.getByRole("button", { name: "Use this parameter version" }));
   expect(first.getByRole("status")).toHaveTextContent('"revision_id":"next"');
-  expect(first.getByLabelText("Device context")).toHaveValue("bench-a");
+  expect(first.getByLabelText("Experiment setup")).toHaveValue("bench-a");
   expect(second.getByRole("status")).toHaveTextContent('"revision_id":"initial"');
-  expect(second.getByLabelText("Device context")).toHaveValue("bench-b");
-  expect(calls.every((request) => request.method === "GET")).toBe(true);
+  expect(second.getByLabelText("Experiment setup")).toHaveValue("bench-b");
+  expect(
+    calls
+      .filter((request) => request.method !== "GET")
+      .map((request) => new URL(request.url).pathname),
+  ).toEqual(["/api/v1/setup/resolutions/bench-a", "/api/v1/setup/resolutions/bench-b"]);
 });

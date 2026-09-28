@@ -153,6 +153,7 @@ def check_declaration(
     initial: ParameterResolution, tolerance: float
 ) -> CalibrationCheckRequest:
     return CalibrationCheckRequest(
+        setup=initial.config_source.setup,
         scope=check_scope(tolerance),
         context=MeasurementContext(
             initial.config_source.parameters,

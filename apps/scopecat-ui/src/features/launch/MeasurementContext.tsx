@@ -9,6 +9,10 @@ import { ParameterBranchPicker } from "./ParameterBranchPicker";
 import { DeviceContextPicker } from "./DeviceContextPicker";
 import type { LaunchDraft } from "./LaunchDraft";
 
+export type MeasurementContextChange = Partial<Pick<LaunchDraft, "actor" | "collection">> & {
+  selection?: Partial<LaunchDraft["selection"]>;
+};
+
 export function MeasurementContext({
   draft,
   selectedContext,
@@ -18,7 +22,7 @@ export function MeasurementContext({
   draft: LaunchDraft;
   selectedContext?: ConfigContextResolution;
   projectId?: string;
-  onChange: (changes: Partial<Pick<LaunchDraft, "selection" | "actor" | "collection">>) => void;
+  onChange: (changes: MeasurementContextChange) => void;
 }) {
   const [browse, setBrowse] = useState(Boolean(selectedBatch(draft.selection) || draft.collection));
   const [choosingSubject, setChoosingSubject] = useState(false);
@@ -54,7 +58,6 @@ export function MeasurementContext({
   function changeSample(sample_id: string) {
     onChange({
       selection: {
-        ...draft.selection,
         subject: sample_id ? { kind: "sample", sample_id } : { kind: "unbound" },
       },
     });
@@ -66,18 +69,14 @@ export function MeasurementContext({
         value={configuration}
         projectId={projectId}
         disabled={draft.pending}
-        onChange={(choice) =>
-          onChange({ selection: { ...draft.selection, configuration: choice } })
-        }
+        onChange={(choice) => onChange({ selection: { configuration: choice } })}
       />
       {configuration.kind === "parameters" && (
         <DeviceContextPicker
           value={configuration}
           projectId={projectId}
           disabled={draft.pending}
-          onChange={(choice) =>
-            onChange({ selection: { ...draft.selection, configuration: choice } })
-          }
+          onChange={(choice) => onChange({ selection: { configuration: choice } })}
         />
       )}
       <div className="flex flex-wrap gap-3">
@@ -119,7 +118,7 @@ export function MeasurementContext({
         onChange={(ref) => {
           setChoosingSubject(false);
           onChange({
-            selection: { ...draft.selection, subject: { kind: "registered_target", ref } },
+            selection: { subject: { kind: "registered_target", ref } },
           });
         }}
       />
@@ -200,7 +199,6 @@ export function MeasurementContext({
               onChange={(id) =>
                 onChange({
                   selection: {
-                    ...draft.selection,
                     batch: id ? { kind: "declared", id } : { kind: "unscoped" },
                   },
                 })

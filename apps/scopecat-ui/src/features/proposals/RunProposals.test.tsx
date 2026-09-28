@@ -2,11 +2,9 @@
 
 import "@testing-library/jest-dom/vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { getConfigRegistry } from "../config/config-api";
 import {
-  acceptProposal,
   getOlderRunParameterProposals,
   getRunParameterProposals,
 } from "../../data/parameter-proposals/api";
@@ -16,15 +14,10 @@ import type {
 } from "../../data/parameter-proposals/types";
 import { RunProposals } from "./RunProposals";
 
-vi.mock("../config/config-api", () => ({
-  getConfigRegistry: vi.fn(),
-}));
-
 vi.mock("../../data/parameter-proposals/api", async (importOriginal) => {
   const original = await importOriginal<typeof import("../../data/parameter-proposals/api")>();
   return {
     ...original,
-    acceptProposal: vi.fn(),
     getOlderRunParameterProposals: vi.fn(),
     getRunParameterProposals: vi.fn(),
   };
@@ -36,68 +29,17 @@ afterEach(() => {
 });
 
 describe("RunProposals", () => {
-  it("can accept each approved proposal as the default without exposing generations", async () => {
-    const older = approvedProposal({
-      id: "older-proposal",
-      proposedAt: "2026-07-22T10:00:00Z",
-    });
-    const latest = approvedProposal({
-      id: "latest-proposal",
-      proposedAt: "2026-07-23T10:00:00Z",
-    });
-    vi.mocked(getRunParameterProposals).mockResolvedValue(proposalList(older, latest));
-    vi.mocked(getConfigRegistry).mockResolvedValue({
-      activation: configActivation(),
-      activation_history: [],
-      entries: [],
-    });
-    vi.mocked(acceptProposal).mockResolvedValue();
+  it("shows candidate evidence and an explicit VS Code trial without a global default action", async () => {
+    vi.mocked(getRunParameterProposals).mockResolvedValue(
+      proposalList(approvedProposal(), pendingProposal({ id: "new-fit" })),
+    );
     renderProposals();
 
-    const setDefault = await screen.findAllByRole("button", {
-      name: "Accept as default",
-    });
-    expect(screen.getAllByTestId("proposal-state")).toHaveLength(2);
+    expect(await screen.findByText("Approval recorded")).toBeVisible();
     expect(screen.getAllByText("selected-fit")).toHaveLength(2);
-    expect(setDefault).toHaveLength(2);
-    await waitFor(() => expect(setDefault[1]).toBeEnabled());
-    fireEvent.click(setDefault[1]!);
-    const defaultDialog = await screen.findByRole("alertdialog");
-    expect(defaultDialog).toHaveTextContent(
-      "Accept proposal latest-proposal and set its configuration as the default.",
-    );
-    fireEvent.click(within(defaultDialog).getByRole("button", { name: "Accept as default" }));
-
-    await waitFor(() =>
-      expect(acceptProposal).toHaveBeenCalledWith({
-        runId: "run-1",
-        proposalId: "latest-proposal",
-        actor: "local-operator",
-        expectedGeneration: 3,
-        note: "",
-      }),
-    );
-  });
-
-  it("accepts a pending proposal in one action and reports publish failure", async () => {
-    vi.mocked(getRunParameterProposals).mockResolvedValue(proposalList(pendingProposal()));
-    vi.mocked(getConfigRegistry).mockResolvedValue({
-      activation: configActivation(),
-      activation_history: [],
-      entries: [],
-    });
-    vi.mocked(acceptProposal).mockRejectedValue(new Error("generation conflict"));
-    renderProposals();
-
-    const accept = await screen.findByRole("button", {
-      name: "Accept as default",
-    });
-    await waitFor(() => expect(accept).toBeEnabled());
-    fireEvent.click(accept);
-    const defaultDialog = await screen.findByRole("alertdialog");
-    fireEvent.click(within(defaultDialog).getByRole("button", { name: "Accept as default" }));
-
-    expect(await screen.findByText("generation conflict")).toBeInTheDocument();
+    expect(screen.getAllByText("Try this candidate in VS Code")).toHaveLength(2);
+    expect(screen.getByText(/session.config.candidate\("run-1", "new-fit"\)/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Accept as default" })).not.toBeInTheDocument();
   });
 
   it("loads older proposal pages explicitly", async () => {
@@ -108,11 +50,6 @@ describe("RunProposals", () => {
     vi.mocked(getOlderRunParameterProposals).mockResolvedValue(
       proposalList(pendingProposal({ id: "older-proposal" })),
     );
-    vi.mocked(getConfigRegistry).mockResolvedValue({
-      activation: configActivation(),
-      activation_history: [],
-      entries: [],
-    });
     renderProposals();
 
     fireEvent.click(await screen.findByRole("button", { name: "Load older proposals" }));
@@ -125,18 +62,6 @@ describe("RunProposals", () => {
     );
   });
 });
-
-function configActivation() {
-  return {
-    generation: 3,
-    action: "activation" as const,
-    entry_id: "baseline",
-    entry_content_hash: "sha256:base",
-    actor: "Ada",
-    note: "",
-    recorded_at: "2026-07-24T08:00:00Z",
-  };
-}
 
 function renderProposals() {
   const queryClient = new QueryClient({

@@ -12,10 +12,28 @@ import type {
   InstrumentState,
   InstrumentView,
 } from "../../api-contract";
-import { getSetupRevisions, type SavedSetupRevision as SetupRevision } from "../config/setup-api";
+import { type SavedSetupRevision as SetupRevision } from "../config/setup-api";
 import type { ActiveConfig } from "../../api-contract";
 
-vi.mock("../config/setup-api", () => ({ getSetupRevisions: vi.fn() }));
+import {
+  getDevices,
+  getDeviceDrivers,
+  prepareDeviceAccess,
+  saveDevice,
+  testDeviceConnection,
+  retireDevice,
+  renameDevice,
+  type DeviceView,
+} from "./device-api";
+vi.mock("./device-api", () => ({
+  getDevices: vi.fn(),
+  getDeviceDrivers: vi.fn(),
+  prepareDeviceAccess: vi.fn(),
+  saveDevice: vi.fn(),
+  testDeviceConnection: vi.fn(),
+  retireDevice: vi.fn(),
+  renameDevice: vi.fn(),
+}));
 
 import { InstrumentsWorkspace } from "./InstrumentsWorkspace";
 import {
@@ -28,8 +46,6 @@ import {
   getInstruments,
   invokeInstrumentOperation,
   openInstrumentSession,
-  probeInstrumentDriver,
-  publishInstrumentSpec,
   readInstrumentState,
   renewInstrumentSession,
   resolveInstrumentAttention,
@@ -46,20 +62,32 @@ vi.mock("./instrument-api", async (importOriginal) => ({
   getInstruments: vi.fn(),
   invokeInstrumentOperation: vi.fn(),
   openInstrumentSession: vi.fn(),
-  probeInstrumentDriver: vi.fn(),
-  publishInstrumentSpec: vi.fn(),
   readInstrumentState: vi.fn(),
   renewInstrumentSession: vi.fn(),
   resolveInstrumentAttention: vi.fn(),
 }));
 
 beforeEach(() => {
-  vi.mocked(getInstruments).mockResolvedValue({
+  vi.resetAllMocks();
+  mockInventory({
     setup: { revision_id: "lab-default", content_hash: "sha256:active" },
     problems: [],
     items: [instrument()],
   });
-  vi.mocked(getSetupRevisions).mockResolvedValue({ items: [setupRevision()] });
+  vi.mocked(prepareDeviceAccess).mockResolvedValue(setupRevision());
+  vi.mocked(getDeviceDrivers).mockResolvedValue({
+    items: driverCatalog().drivers.map((item) => ({
+      driver_id: item.driver_id,
+      provider_id: "test",
+      artifact_hash: "sha256:driver",
+    })),
+  });
+  vi.mocked(saveDevice).mockResolvedValue(registeredDevice(instrument()));
+  vi.mocked(renameDevice).mockResolvedValue(registeredDevice(instrument()));
+  vi.mocked(retireDevice).mockResolvedValue({
+    ...registeredDevice(instrument()).device,
+    state: "retired",
+  });
   vi.mocked(getDriverCatalog).mockResolvedValue(driverCatalog());
   vi.mocked(openInstrumentSession).mockResolvedValue(session());
   vi.mocked(renewInstrumentSession).mockResolvedValue(sessionLease());
@@ -82,7 +110,7 @@ beforeEach(() => {
     status: "invoked",
     problems: [],
   });
-  vi.mocked(probeInstrumentDriver).mockResolvedValue({
+  vi.mocked(testDeviceConnection).mockResolvedValue({
     status: "connected",
     description: {
       instrument_id: "candidate",
@@ -93,7 +121,6 @@ beforeEach(() => {
     },
     problems: [],
   });
-  vi.mocked(publishInstrumentSpec).mockResolvedValue(setupRevision());
   vi.mocked(resolveInstrumentAttention).mockResolvedValue();
 });
 
@@ -103,40 +130,22 @@ afterEach(() => {
 });
 
 describe("instrument workspace", () => {
-  it("keeps explicit contexts local and requires disconnect before switching", async () => {
-    const first = setupRevision();
-    const second = { ...first, id: "bench-b", content_hash: "sha256:second" };
-    vi.mocked(getSetupRevisions).mockResolvedValue({ items: [first, second] });
+  it("opens registered devices without choosing an experiment setup", async () => {
     renderWorkspace();
-    await screen.findByRole("option", { name: "bench-b" });
-    expect(getInstruments).not.toHaveBeenCalled();
-    const picker = screen.getByRole("combobox", { name: "Device context" });
-    fireEvent.change(picker, { target: { value: "lab-default" } });
-    await screen.findByText("Drive source");
+    await screen.findByRole("button", { name: "Connect" });
+    expect(screen.queryByRole("combobox", { name: "Device context" })).not.toBeInTheDocument();
     expect(openInstrumentSession).not.toHaveBeenCalled();
     await connectInstrument();
-    expect(picker).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Configure device" })).toBeDisabled();
-    fireEvent.click(screen.getByRole("button", { name: "Disconnect" }));
-    await waitFor(() => expect(picker).toBeEnabled());
-    fireEvent.change(picker, { target: { value: "bench-b" } });
-    await screen.findByText("Drive source");
-    fireEvent.click(screen.getByRole("button", { name: "Connect" }));
-    await waitFor(() =>
-      expect(openInstrumentSession).toHaveBeenLastCalledWith(
-        "drive-source",
-        "local-operator",
-        { revision_id: "bench-b", content_hash: "sha256:second" },
-        expect.any(String),
-      ),
-    );
-    expect(vi.mocked(openInstrumentSession).mock.calls[0]?.[3]).not.toBe(
-      vi.mocked(openInstrumentSession).mock.calls[1]?.[3],
+    expect(openInstrumentSession).toHaveBeenCalledWith(
+      "drive-source",
+      "local-operator",
+      { revision_id: "lab-default", content_hash: "sha256:active" },
+      expect.any(String),
     );
   });
 
   it("shows unscoped provider problems at workspace level", async () => {
-    vi.mocked(getInstruments).mockResolvedValue({
+    mockInventory({
       setup: { revision_id: "lab-default", content_hash: "sha256:active" },
       problems: [
         {
@@ -156,7 +165,7 @@ describe("instrument workspace", () => {
   });
 
   it("lists connection and ownership without exposing internal identity", async () => {
-    vi.mocked(getInstruments).mockResolvedValue({
+    mockInventory({
       setup: { revision_id: "lab-default", content_hash: "sha256:active" },
       problems: [],
       items: [
@@ -186,19 +195,19 @@ describe("instrument workspace", () => {
 
     renderWorkspace();
 
-    expect(await screen.findByText("Drive source")).toBeVisible();
-    expect(screen.getByText("Virtual · local simulator")).toBeVisible();
+    expect((await screen.findAllByText("Drive source"))[0]).toBeVisible();
+    expect(screen.getAllByText("Virtual · local simulator")[0]).toBeVisible();
     expect(screen.getByText("Readout VNA")).toBeVisible();
     expect(screen.getByText("TCP/IP · 192.0.2.12:5025")).toBeVisible();
     expect(screen.getByText("Run in progress")).toBeVisible();
     expect(screen.queryByText("run-42")).not.toBeInTheDocument();
     expect(screen.queryByText("keysight.pna")).not.toBeInTheDocument();
-    expect(screen.getByRole("combobox", { name: "Device context" })).toHaveValue("lab-default");
+    expect(screen.queryByRole("combobox", { name: "Device context" })).not.toBeInTheDocument();
     expect(openInstrumentSession).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByTitle("Inspect instrument vna-1"));
     expect(await screen.findByText("Manual controls unavailable")).toBeVisible();
-    expect(screen.getByRole("button", { name: "Configure device" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Edit device" })).toBeDisabled();
     expect(screen.queryByRole("button", { name: "Connect" })).not.toBeInTheDocument();
   });
 
@@ -208,7 +217,7 @@ describe("instrument workspace", () => {
       ...prefixed.description!,
       implementation_version: "v1",
     };
-    vi.mocked(getInstruments).mockResolvedValue({
+    mockInventory({
       setup: { revision_id: "lab-default", content_hash: "sha256:active" },
       problems: [],
       items: [prefixed],
@@ -225,7 +234,7 @@ describe("instrument workspace", () => {
     vi.mocked(readInstrumentState).mockResolvedValueOnce(instrumentState(6_000_000_000));
     const rendered = renderWorkspace();
 
-    await screen.findByText("Drive source");
+    await screen.findAllByText("Drive source");
     expect(openInstrumentSession).not.toHaveBeenCalled();
     await connectInstrument();
 
@@ -273,9 +282,7 @@ describe("instrument workspace", () => {
       .mockRejectedValueOnce(new Error("daemon unavailable"));
     renderWorkspace();
 
-    await vi.waitFor(() =>
-      expect(screen.getByRole("heading", { name: "Drive source" })).toBeVisible(),
-    );
+    await vi.waitFor(() => expect(screen.getByRole("button", { name: "Connect" })).toBeVisible());
     vi.setSystemTime(new Date("2026-07-27T09:00:05Z"));
     fireEvent.click(screen.getByRole("button", { name: "Connect" }));
     await vi.waitFor(() => expect(screen.getByText("Interactive session connected")).toBeVisible());
@@ -291,7 +298,7 @@ describe("instrument workspace", () => {
     await act(async () => vi.advanceTimersByTimeAsync(1_000));
 
     expect(renewInstrumentSession).toHaveBeenCalledTimes(2);
-    expect(screen.getByText(/instrument session lease was lost/i)).toBeVisible();
+    expect(screen.getByText(/device session was interrupted/i)).toBeVisible();
     expect(screen.getByRole("button", { name: "Connect" })).toBeVisible();
   });
 
@@ -302,7 +309,7 @@ describe("instrument workspace", () => {
     vi.mocked(readInstrumentState).mockResolvedValueOnce(instrumentState(6_000_000_000));
     renderWorkspace();
 
-    await screen.findByText("Drive source");
+    await screen.findAllByText("Drive source");
     expect(
       screen.queryByRole("button", { name: "Apply configured defaults" }),
     ).not.toBeInTheDocument();
@@ -325,7 +332,7 @@ describe("instrument workspace", () => {
 
   it("clears stale operation results after applying configured defaults", async () => {
     const withOperations = instrumentWithOperations();
-    vi.mocked(getInstruments).mockResolvedValue({
+    mockInventory({
       setup: { revision_id: "lab-default", content_hash: "sha256:active" },
       problems: [],
       items: [withOperations],
@@ -350,7 +357,7 @@ describe("instrument workspace", () => {
 
   it("hides configured defaults when the pinned session has none", async () => {
     renderWorkspace();
-    await screen.findByText("Drive source");
+    await screen.findAllByText("Drive source");
     await connectInstrument();
 
     expect(
@@ -375,7 +382,7 @@ describe("instrument workspace", () => {
         }),
     );
     renderWorkspace();
-    await screen.findByText("Drive source");
+    await screen.findAllByText("Drive source");
     await connectInstrument();
     const frequency = await screen.findByRole("spinbutton", { name: /CW frequency/ });
     const applyDefaults = screen.getByRole("button", {
@@ -400,7 +407,7 @@ describe("instrument workspace", () => {
 
   it("blocks other device interactions while configured defaults are pending", async () => {
     const withOperations = instrumentWithOperations();
-    vi.mocked(getInstruments).mockResolvedValue({
+    mockInventory({
       setup: { revision_id: "lab-default", content_hash: "sha256:active" },
       problems: [],
       items: [withOperations],
@@ -467,7 +474,7 @@ describe("instrument workspace", () => {
       ],
     });
     renderWorkspace();
-    await screen.findByText("Drive source");
+    await screen.findAllByText("Drive source");
     await connectInstrument();
     fireEvent.click(await screen.findByRole("button", { name: "Apply configured defaults" }));
 
@@ -487,7 +494,7 @@ describe("instrument workspace", () => {
       .mockRejectedValueOnce(new ApiError("Defaults request lost."))
       .mockResolvedValueOnce(configuredDefaultsReceipt("unchanged", instrumentState()));
     renderWorkspace();
-    await screen.findByText("Drive source");
+    await screen.findAllByText("Drive source");
     await connectInstrument();
     const applyDefaults = await screen.findByRole("button", {
       name: "Apply configured defaults",
@@ -511,7 +518,7 @@ describe("instrument workspace", () => {
       new ApiError("The session is no longer active.", 409),
     );
     renderWorkspace();
-    await screen.findByText("Drive source");
+    await screen.findAllByText("Drive source");
     await connectInstrument();
     fireEvent.click(await screen.findByRole("button", { name: "Apply configured defaults" }));
 
@@ -522,7 +529,7 @@ describe("instrument workspace", () => {
   });
 
   it("allows an operator to disconnect a daemon-owned interactive session", async () => {
-    vi.mocked(getInstruments).mockResolvedValue({
+    mockInventory({
       setup: { revision_id: "lab-default", content_hash: "sha256:active" },
       problems: [],
       items: [
@@ -545,7 +552,7 @@ describe("instrument workspace", () => {
 
   it("stages typed properties locally and sends one apply command", async () => {
     renderWorkspace();
-    await screen.findByText("Drive source");
+    await screen.findAllByText("Drive source");
     await connectInstrument();
     const frequency = await screen.findByRole("spinbutton", {
       name: /CW frequency/,
@@ -584,7 +591,7 @@ describe("instrument workspace", () => {
 
   it("renders every flat interface property in declaration order", async () => {
     const flatInstrument = instrumentWithFlatDcState();
-    vi.mocked(getInstruments).mockResolvedValue({
+    mockInventory({
       setup: { revision_id: "lab-default", content_hash: "sha256:active" },
       problems: [],
       items: [flatInstrument],
@@ -623,7 +630,7 @@ describe("instrument workspace", () => {
 
   it("uses physical interface mounts, implementation overrides, and device state targets", async () => {
     const mountedInstrument = instrumentWithMountedAndDeviceState();
-    vi.mocked(getInstruments).mockResolvedValue({
+    mockInventory({
       setup: { revision_id: "lab-default", content_hash: "sha256:active" },
       problems: [],
       items: [mountedInstrument],
@@ -684,7 +691,7 @@ describe("instrument workspace", () => {
 
   it("applies only explicitly staged flat properties", async () => {
     const flatInstrument = instrumentWithFlatDcState();
-    vi.mocked(getInstruments).mockResolvedValue({
+    mockInventory({
       setup: { revision_id: "lab-default", content_hash: "sha256:active" },
       problems: [],
       items: [flatInstrument],
@@ -742,7 +749,7 @@ describe("instrument workspace", () => {
 
   it("keeps flat property drafts independent when one is reset", async () => {
     const flatInstrument = instrumentWithFlatDcState();
-    vi.mocked(getInstruments).mockResolvedValue({
+    mockInventory({
       setup: { revision_id: "lab-default", content_hash: "sha256:active" },
       problems: [],
       items: [flatInstrument],
@@ -781,7 +788,7 @@ describe("instrument workspace", () => {
 
   it("fills typed operation arguments locally and invokes once outside staged apply", async () => {
     const withOperations = instrumentWithOperations();
-    vi.mocked(getInstruments).mockResolvedValue({
+    mockInventory({
       setup: { revision_id: "lab-default", content_hash: "sha256:active" },
       problems: [],
       items: [withOperations],
@@ -851,7 +858,7 @@ describe("instrument workspace", () => {
 
   it("uses the existing quarantine semantics for an unknown invoke receipt", async () => {
     const withOperations = instrumentWithOperations();
-    vi.mocked(getInstruments).mockResolvedValue({
+    mockInventory({
       setup: { revision_id: "lab-default", content_hash: "sha256:active" },
       problems: [],
       items: [withOperations],
@@ -911,7 +918,7 @@ describe("instrument workspace", () => {
       },
     });
     renderWorkspace();
-    await screen.findByText("Drive source");
+    await screen.findAllByText("Drive source");
     await connectInstrument();
     fireEvent.click(await screen.findByRole("button", { name: "Collect" }));
 
@@ -933,7 +940,7 @@ describe("instrument workspace", () => {
       new ApiError("The local daemon did not respond."),
     );
     renderWorkspace();
-    await screen.findByText("Drive source");
+    await screen.findAllByText("Drive source");
     await connectInstrument();
     const frequency = await screen.findByRole("spinbutton", { name: /CW frequency/ });
     fireEvent.change(frequency, { target: { value: "6000000000" } });
@@ -966,7 +973,7 @@ describe("instrument workspace", () => {
       new Error("Collect request lost."),
     );
     renderWorkspace();
-    await screen.findByText("Drive source");
+    await screen.findAllByText("Drive source");
     await connectInstrument();
     const frequency = await screen.findByRole("spinbutton", { name: /CW frequency/ });
 
@@ -1042,7 +1049,7 @@ describe("instrument workspace", () => {
         },
       ],
     };
-    vi.mocked(getInstruments).mockResolvedValue({
+    mockInventory({
       setup: { revision_id: "lab-default", content_hash: "sha256:active" },
       problems: [],
       items: [delegatedInstrument],
@@ -1052,7 +1059,7 @@ describe("instrument workspace", () => {
     );
 
     renderWorkspace();
-    await screen.findByText("Drive source");
+    await screen.findAllByText("Drive source");
     await connectInstrument();
 
     expect(await screen.findByText("Current sample")).toBeVisible();
@@ -1077,7 +1084,7 @@ describe("instrument workspace", () => {
       .mockRejectedValueOnce(new ApiError("Close request lost."))
       .mockRejectedValueOnce(new ApiError("Close request lost again."));
     renderWorkspace();
-    await screen.findByText("Drive source");
+    await screen.findAllByText("Drive source");
     await connectInstrument();
 
     fireEvent.click(screen.getByRole("button", { name: "Disconnect" }));
@@ -1109,14 +1116,14 @@ describe("instrument workspace", () => {
         interfaces: [],
       },
     });
-    vi.mocked(getInstruments).mockResolvedValue({
+    mockInventory({
       setup: { revision_id: "lab-default", content_hash: "sha256:active" },
       problems: [],
       items: [instrument(), monitor],
     });
     vi.mocked(closeInstrumentSession).mockRejectedValueOnce(new Error("Switch close failed."));
     renderWorkspace();
-    await screen.findByText("Drive source");
+    await screen.findAllByText("Drive source");
     await connectInstrument();
 
     fireEvent.click(screen.getByTitle("Inspect instrument monitor"));
@@ -1131,141 +1138,33 @@ describe("instrument workspace", () => {
     expect(vi.mocked(closeInstrumentSession).mock.calls[1]).toEqual(["session-1"]);
   });
 
-  it("edits the selected saved context without connecting devices", async () => {
-    const active = activeConfig();
-    active.config.system.instrument_registry.instruments[0]!.driver_id = "keysight.pna";
-    active.config.system.instrument_registry.instruments[0]!.connection = {
-      kind: "tcpip_socket",
-      host: "192.0.2.20",
-      port: 5025,
-      timeout_seconds: 5,
-    };
-    const tcpInstrument = instrument({
+  it("edits registered connection options without opening a session", async () => {
+    const device = instrument({
       driver_id: "keysight.pna",
-      connection: {
-        kind: "tcpip_socket",
-        host: "192.0.2.20",
-        port: 5025,
-      },
+      connection: { kind: "tcpip_socket", host: "192.0.2.20", port: 5025 },
     });
-    vi.mocked(getInstruments).mockResolvedValue({
-      setup: { revision_id: "lab-default", content_hash: "sha256:active" },
-      problems: [],
-      items: [tcpInstrument],
-    });
-    vi.mocked(getSetupRevisions).mockResolvedValue({ items: [setupRevision(active)] });
-    renderWorkspace();
-    await screen.findByText("Drive source");
-    expect(openInstrumentSession).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole("button", { name: "Configure device" }));
-    expect(await screen.findByRole("dialog")).toBeVisible();
-  });
-
-  it("edits a device from the registered driver catalog", async () => {
-    const active = activeConfig();
-    active.config.system.instrument_registry.instruments[0]!.driver_id = "keysight.pna";
-    active.config.system.instrument_registry.instruments[0]!.connection = {
-      kind: "tcpip_socket",
-      host: "192.0.2.20",
-      port: 5025,
-      timeout_seconds: 5,
-      options: { channel: 1, vendor_extension: { calibration: "external" } },
+    mockInventory({ setup: session().setup, items: [device], problems: [] });
+    const registered = registeredDevice(device);
+    registered.revision.content.connection.options = {
+      channel: 1,
+      vendor_extension: { calibration: "external" },
     };
-    active.config.system.instrument_registry.instruments[0]!.failure_action =
-      "abort_then_safe_state";
-    active.config.system.instrument_registry.instruments[0]!.safe_state = [
-      {
-        target: {
-          kind: "interface",
-          interface_id: "scopecat.rf_output/v1",
-          component_path: [],
-          property_id: "frequency",
-        },
-        value: { value: 5_000_000_000, unit: "Hz" },
-      },
-    ];
-    active.config.system.instrument_registry.instruments[0]!.safe_operations = [
-      {
-        interface_id: "scopecat.rf_output/v1",
-        component_path: [],
-        operation_id: "disable",
-        arguments: [],
-      },
-    ];
-    active.config.system.instrument_registry.instruments[0]!.safe_state_requirement = "required";
-    const tcpInstrument = instrument();
-    tcpInstrument.driver_id = "keysight.pna";
-    tcpInstrument.connection = {
-      kind: "tcpip_socket",
-      host: "192.0.2.20",
-      port: 5025,
-    };
-    vi.mocked(getInstruments).mockResolvedValue({
-      setup: { revision_id: "lab-default", content_hash: "sha256:active" },
-      problems: [],
-      items: [tcpInstrument],
-    });
-    vi.mocked(getSetupRevisions).mockResolvedValue({ items: [setupRevision(active)] });
+    vi.mocked(getDevices).mockResolvedValue({ items: [registered] });
     renderWorkspace();
-
-    await screen.findByText("Drive source");
-    fireEvent.click(screen.getByRole("button", { name: "Configure device" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Edit device" }));
     const dialog = await screen.findByRole("dialog");
-    expect(within(dialog).getByRole("combobox", { name: "Driver" })).toHaveValue("keysight.pna");
-    expect(within(dialog).queryByRole("textbox", { name: "Driver id" })).not.toBeInTheDocument();
-    expect(
-      within(dialog).queryByRole("textbox", { name: "Configuration actor" }),
-    ).not.toBeInTheDocument();
-    expect(
-      within(dialog).getByRole("option", { name: "Apply configured safe state" }),
-    ).toBeEnabled();
-    fireEvent.change(within(dialog).getByLabelText("Host"), {
-      target: { value: "192.0.2.24" },
-    });
-    fireEvent.change(within(dialog).getByLabelText("Timeout (seconds)"), {
-      target: { value: "8" },
-    });
-    fireEvent.change(within(dialog).getByRole("combobox", { name: "After successful run" }), {
-      target: { value: "restore_baseline" },
-    });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Save device context" }));
-
+    fireEvent.change(within(dialog).getByLabelText("Host"), { target: { value: "192.0.2.24" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save device" }));
     await waitFor(() =>
-      expect(publishInstrumentSpec).toHaveBeenCalledWith(
+      expect(saveDevice).toHaveBeenCalledWith(
         expect.objectContaining({
-          originalInstrumentId: "drive-source",
-          spec: expect.objectContaining({
-            id: "drive-source",
-            driver_id: "keysight.pna",
-            connection: {
-              kind: "tcpip_socket",
+          device_id: "drive-source",
+          expected_head: registeredDevice(device).device.head,
+          connection: expect.objectContaining({
+            connection: expect.objectContaining({
               host: "192.0.2.24",
-              port: 5025,
-              timeout_seconds: 8,
               options: { channel: 1, vendor_extension: { calibration: "external" } },
-            },
-            success_action: "restore_baseline",
-            failure_action: "abort_then_safe_state",
-            safe_state: [
-              {
-                target: {
-                  kind: "interface",
-                  interface_id: "scopecat.rf_output/v1",
-                  component_path: [],
-                  property_id: "frequency",
-                },
-                value: { value: 5_000_000_000, unit: "Hz" },
-              },
-            ],
-            safe_operations: [
-              {
-                interface_id: "scopecat.rf_output/v1",
-                component_path: [],
-                operation_id: "disable",
-                arguments: [],
-              },
-            ],
-            safe_state_requirement: "required",
+            }),
           }),
         }),
       ),
@@ -1273,191 +1172,37 @@ describe("instrument workspace", () => {
     expect(openInstrumentSession).not.toHaveBeenCalled();
   });
 
-  it("configures virtual instruments without a special endpoint path", async () => {
-    renderWorkspace();
-
-    await screen.findByText("Drive source");
-    fireEvent.click(screen.getByRole("button", { name: "Configure device" }));
-    const dialog = await screen.findByRole("dialog");
-    expect(within(dialog).getByRole("combobox", { name: "Driver" })).toHaveValue(
-      "virtual.rf_source",
-    );
-    expect(within(dialog).getByRole("combobox", { name: "Connection" })).toHaveValue("virtual");
-    expect(within(dialog).queryByLabelText("Host")).not.toBeInTheDocument();
-    expect(
-      within(dialog).getByRole("option", { name: "Apply configured safe state" }),
-    ).toBeDisabled();
-  });
-
-  it("publishes sparse interface-derived defaults and an explicit start policy", async () => {
-    renderWorkspace();
-
-    await screen.findByText("Drive source");
-    fireEvent.click(screen.getByRole("button", { name: "Configure device" }));
-    const dialog = await screen.findByRole("dialog");
-    expect(
-      within(dialog).queryByRole("checkbox", {
-        name: "Configure default for Measured temperature",
-      }),
-    ).not.toBeInTheDocument();
-    const configureFrequency = within(dialog).getByRole("checkbox", {
-      name: "Configure default for CW frequency",
-    });
-    fireEvent.click(configureFrequency);
-    expect(within(dialog).getByRole("button", { name: "Save device context" })).toBeDisabled();
-    const frequencyRow = configureFrequency.closest(
-      '[data-testid^="instrument-default-property-"]',
-    );
-    if (!frequencyRow) throw new Error("Expected the frequency default row.");
-    fireEvent.change(within(frequencyRow as HTMLElement).getByRole("spinbutton"), {
-      target: { value: "6200000000" },
-    });
-    fireEvent.change(within(dialog).getByRole("combobox", { name: "Start policy" }), {
-      target: { value: "apply_default_state" },
-    });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Save device context" }));
-
-    await waitFor(() =>
-      expect(publishInstrumentSpec).toHaveBeenCalledWith(
-        expect.objectContaining({
-          spec: expect.objectContaining({
-            default_state: [
-              {
-                target: {
-                  kind: "interface",
-                  interface_id: "scopecat.rf_output/v1",
-                  component_path: [],
-                  property_id: "frequency",
-                },
-                value: { value: 6_200_000_000, unit: "Hz" },
-              },
-            ],
-            run_start: "apply_default_state",
-          }),
-        }),
-      ),
-    );
-  });
-
-  it("adds and probes a registered device before publishing it", async () => {
-    renderWorkspace();
-
-    await screen.findByText("Drive source");
-    fireEvent.click(screen.getByRole("button", { name: "Add instrument" }));
-    const dialog = await screen.findByRole("dialog");
-    fireEvent.change(within(dialog).getByLabelText("Instrument ID"), {
-      target: { value: "bias-source" },
-    });
-    fireEvent.change(within(dialog).getByRole("combobox", { name: "Driver" }), {
-      target: { value: "yokogawa.gs200" },
-    });
-    fireEvent.change(within(dialog).getByLabelText("Host"), {
-      target: { value: "192.0.2.40" },
-    });
-    fireEvent.click(within(dialog).getByLabelText("Remote Sense"));
-    fireEvent.click(within(dialog).getByRole("button", { name: "Test connection" }));
-
-    await waitFor(() =>
-      expect(probeInstrumentDriver).toHaveBeenCalledWith({
-        setup: { revision_id: expect.any(String), content_hash: expect.any(String) },
-        operation_id: expect.stringContaining("connection-test"),
-        actor: "local-operator",
-        binding: {
-          id: "bias-source",
-          driver_id: "yokogawa.gs200",
-          connection: {
-            kind: "tcpip_socket",
-            host: "192.0.2.40",
-            port: 5025,
-            timeout_seconds: 5,
-            options: {
-              guard_enabled: false,
-              monitor_option: false,
-              remote_sense: true,
+  it("tests a registered device without publishing experiment configuration", async () => {
+    const device = registeredDevice(instrument());
+    vi.mocked(testDeviceConnection).mockImplementation(async () => {
+      vi.mocked(getDevices).mockResolvedValue({
+        items: [
+          {
+            ...device,
+            last_connection_test: {
+              operation_id: "test",
+              revision: device.device.head,
+              actor: "operator",
+              recorded_at: "2026-09-28T00:00:00Z",
+              description: instrument().description,
             },
           },
-        },
-      }),
-    );
-    expect(await within(dialog).findByText("Connected to Detected device")).toBeVisible();
-    fireEvent.click(within(dialog).getByRole("button", { name: "Save device context" }));
-
-    await waitFor(() =>
-      expect(publishInstrumentSpec).toHaveBeenCalledWith(
-        expect.objectContaining({
-          spec: {
-            id: "bias-source",
-            exclusivity_key: "bias-source",
-            driver_id: "yokogawa.gs200",
-            connection: {
-              kind: "tcpip_socket",
-              host: "192.0.2.40",
-              port: 5025,
-              timeout_seconds: 5,
-              options: {
-                guard_enabled: false,
-                monitor_option: false,
-                remote_sense: true,
-              },
-            },
-            default_state: [],
-            run_start: "preserve",
-            success_action: "release",
-            failure_action: "abort_and_release",
-          },
-        }),
-      ),
-    );
-  });
-
-  it("edits structured options for a driver-managed controller", async () => {
+        ],
+      });
+      return { status: "connected", description: instrument().description, problems: [] };
+    });
     renderWorkspace();
-
-    await screen.findByText("Drive source");
-    fireEvent.click(screen.getByRole("button", { name: "Add instrument" }));
-    const dialog = await screen.findByRole("dialog");
-    fireEvent.change(within(dialog).getByLabelText("Instrument ID"), {
-      target: { value: "controller" },
-    });
-    fireEvent.change(within(dialog).getByRole("combobox", { name: "Driver" }), {
-      target: { value: "example.controller" },
-    });
-    expect(within(dialog).getByRole("combobox", { name: "Connection" })).toHaveValue(
-      "driver_managed",
+    fireEvent.click(await screen.findByRole("button", { name: "Test connection" }));
+    expect(await screen.findByRole("status")).toHaveTextContent("Connection test passed");
+    expect(testDeviceConnection).toHaveBeenCalledWith(
+      registeredDevice(instrument()),
+      expect.any(String),
     );
-    fireEvent.change(within(dialog).getByRole("textbox", { name: "Master Board Name" }), {
-      target: { value: "box-a" },
-    });
-    const addresses = within(dialog).getByRole("textbox", { name: "Box Addresses" });
-    fireEvent.change(addresses, { target: { value: "{" } });
-    expect(within(dialog).getByText("Enter a valid JSON object.")).toBeVisible();
-    expect(within(dialog).getByRole("button", { name: "Test connection" })).toBeDisabled();
-    fireEvent.change(addresses, { target: { value: '{"box-a":"192.0.2.50"}' } });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Test connection" }));
-
-    await waitFor(() =>
-      expect(probeInstrumentDriver).toHaveBeenCalledWith({
-        setup: { revision_id: "lab-default", content_hash: "sha256:active" },
-        operation_id: expect.stringContaining("connection-test"),
-        actor: "local-operator",
-        binding: {
-          id: "controller",
-          driver_id: "example.controller",
-          connection: {
-            kind: "driver_managed",
-            options: {
-              dac_channels: ["readout"],
-              box_addresses: { "box-a": "192.0.2.50" },
-              master_board_name: "box-a",
-            },
-          },
-        },
-      }),
-    );
+    expect(saveDevice).not.toHaveBeenCalled();
   });
 
   it("shows quarantined ownership and the operator resolution action", async () => {
-    vi.mocked(getInstruments).mockResolvedValue({
+    mockInventory({
       setup: { revision_id: "lab-default", content_hash: "sha256:active" },
       problems: [],
       items: [
@@ -2092,6 +1837,7 @@ function driverCatalog(): Awaited<ReturnType<typeof getDriverCatalog>> {
 function setupRevision(active = activeConfig()): SetupRevision {
   const { topology, instrument_registry, routing, domain_target, scenario } = active.config.system;
   return {
+    resolution: { definition_id: "bench", definition_hash: "sha256:definition", devices: [] },
     id: "lab-default",
     content_hash: "sha256:active",
     actor: "Ada",
@@ -2104,4 +1850,64 @@ function setupRevision(active = activeConfig()): SetupRevision {
       scenario,
     },
   };
+}
+
+function registeredDevice(item: InstrumentView): DeviceView {
+  const connection =
+    item.connection.kind === "tcpip_socket"
+      ? { ...item.connection, timeout_seconds: 5 }
+      : item.connection.kind === "serial"
+        ? {
+            ...item.connection,
+            timeout_seconds: 5,
+            write_timeout_seconds: 5,
+            data_bits: 8 as const,
+            stop_bits: 1 as const,
+            parity: "none" as const,
+            dsrdtr: false,
+            rtscts: false,
+            xonxoff: false,
+          }
+        : item.connection;
+  const content = {
+    driver: { driver_id: item.driver_id, provider_id: "test", artifact_hash: "sha256:driver" },
+    connection,
+    safety: {
+      safe_state: [],
+      safe_operations: [],
+      safe_state_requirement: "best_effort" as const,
+      require_safe_success: false,
+      require_safe_failure: false,
+    },
+    access_aliases: [],
+  };
+  return {
+    device: {
+      id: item.instrument_id,
+      label: item.description?.label ?? item.instrument_id,
+      state: "available",
+      head: {
+        device_id: item.instrument_id,
+        revision_id: item.instrument_id + "-v1",
+        content_hash: "sha256:connection",
+      },
+    },
+    revision: {
+      id: item.instrument_id + "-v1",
+      device_id: item.instrument_id,
+      content,
+      actor: "operator",
+      note: "",
+    },
+    availability:
+      item.availability === "active" || item.availability === "quarantined"
+        ? item.availability
+        : "idle",
+    owner_kind: item.owner_kind,
+    owner_id: item.owner_id,
+  };
+}
+function mockInventory(view: Awaited<ReturnType<typeof getInstruments>>) {
+  vi.mocked(getDevices).mockResolvedValue({ items: view.items.map(registeredDevice) });
+  return vi.mocked(getInstruments).mockResolvedValue(view);
 }

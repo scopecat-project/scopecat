@@ -60,7 +60,7 @@ class SavedConfiguration(_SelectionModel):
 
 
 class ParameterConfiguration(_SelectionModel):
-    """Independent parameters; omitted setup resolves current authority at preview."""
+    """Independent parameters; a draft must select setup before preview."""
 
     kind: Literal["parameters"] = "parameters"
     ref: ParameterRevisionRef

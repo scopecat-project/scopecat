@@ -14,7 +14,6 @@ import type {
   InstrumentOperation,
   InstrumentSession,
   InstrumentSessionLease,
-  InstrumentSpec,
   InstrumentState,
   InstrumentStateCache,
   InstrumentStateReadback,
@@ -22,7 +21,6 @@ import type {
   InstrumentStateValue,
   InstrumentView,
 } from "../../api-contract";
-import type { SavedSetupRevision as SetupRevision } from "../config/setup-api";
 import { decodeCollectReceipt, HARDWARE_RECEIPT_MEDIA_TYPE } from "./hardware-receipt-wire";
 
 export type { InstrumentList } from "../../api-contract";
@@ -87,7 +85,6 @@ export async function openInstrumentSession(
         operation_id: operationId,
         actor,
         instrument_ids: [instrumentId],
-        temporary_bindings: [],
       },
     }),
   );
@@ -314,42 +311,6 @@ export async function resolveInstrumentAttention(sessionId: string): Promise<voi
   await apiData(
     apiClient.POST("/api/v1/instrument-sessions/{session_id}/attention", {
       params: { path: { session_id: sessionId } },
-    }),
-  );
-}
-
-export async function publishInstrumentSpec({
-  revision,
-  name,
-  spec,
-  originalInstrumentId,
-  actor,
-  note,
-}: {
-  revision: SetupRevision;
-  name: string;
-  spec: InstrumentSpec;
-  originalInstrumentId?: string;
-  actor: string;
-  note: string;
-}): Promise<SetupRevision> {
-  const setup = structuredClone(revision.setup);
-  const instruments = setup.instrument_registry.instruments;
-  if (originalInstrumentId === undefined) {
-    if (instruments.some((instrument) => instrument.id === spec.id)) {
-      throw new Error(`The selected context already contains ${spec.id}.`);
-    }
-    instruments.push(spec);
-  } else {
-    const index = instruments.findIndex((instrument) => instrument.id === originalInstrumentId);
-    if (index < 0) {
-      throw new Error(`The selected context no longer contains ${originalInstrumentId}.`);
-    }
-    instruments[index] = spec;
-  }
-  return apiData(
-    apiClient.POST("/api/v1/setup/revisions", {
-      body: { revision_id: name, setup, actor, note },
     }),
   );
 }

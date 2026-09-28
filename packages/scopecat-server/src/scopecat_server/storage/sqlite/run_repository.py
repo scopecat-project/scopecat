@@ -41,6 +41,7 @@ from scopecat.records.measurement_recording import MeasurementDatasetHeader
 from scopecat.records.run import RunConfigSource, RunSnapshot
 from scopecat.records.sample import SampleBinding
 from scopecat.records.scientific_binding import ResolvedScientificBinding
+from scopecat.records.setup import SetupRevisionRef
 from scopecat.runs.admission import RunSkeleton
 from scopecat.runs.provenance import validate_run_config_provenance
 from scopecat.runs.refs import (
@@ -743,6 +744,7 @@ class SQLiteRunRepository:
             )
         try:
             config_source_json = cast("str | None", row["config_source_json"])
+            execution_setup_json = cast("str | None", row["execution_setup_json"])
             outcome_json = cast("str | None", row["outcome_json"])
             binding_rows = _all(
                 connection.execute(
@@ -780,6 +782,11 @@ class SQLiteRunRepository:
                 scientific_binding=binding,
                 created_at=datetime.fromisoformat(_text(row, "created_at")),
                 config_content_hash=_text(row, "config_content_hash"),
+                execution_setup=(
+                    None
+                    if execution_setup_json is None
+                    else SetupRevisionRef.model_validate_json(execution_setup_json)
+                ),
                 config_source=(
                     None
                     if config_source_json is None
@@ -861,19 +868,24 @@ class SQLiteRunRepository:
         connection.execute(
             """
             INSERT INTO runs(
-                run_id, created_at, config_content_hash, config_source_json
+                run_id, created_at, config_content_hash, config_source_json,
+                execution_setup_json
             )
-            VALUES (?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?)
             ON CONFLICT(run_id) DO UPDATE SET
                 created_at = excluded.created_at,
                 config_content_hash = excluded.config_content_hash,
-                config_source_json = excluded.config_source_json
+                config_source_json = excluded.config_source_json,
+                execution_setup_json = excluded.execution_setup_json
             """,
             (
                 snapshot.run_id,
                 snapshot.created_at.isoformat(),
                 snapshot.config_content_hash,
                 None if source is None else _encode_model(source).decode(),
+                None
+                if snapshot.execution_setup is None
+                else snapshot.execution_setup.model_dump_json(),
             ),
         )
         connection.execute(

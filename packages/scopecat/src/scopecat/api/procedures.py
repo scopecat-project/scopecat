@@ -29,8 +29,6 @@ from scopecat.api.run import RunHandle
 from scopecat.authoring.experiments import Experiment, ExperimentInvocation
 from scopecat.automation import (
     AnalysisPublicationOutputRef,
-    ConfigActivationOutputRef,
-    ConfigPublishOutputRef,
     InterpretationActorKind,
     InterpretationOutputRef,
     InterpretationRequest,
@@ -72,22 +70,12 @@ from scopecat.automation.recovery import (
 )
 from scopecat.automation.worker import ProcedureNeedsAttention, ProcedureWaitResources
 from scopecat.config.candidates import CandidateConfig
-from scopecat.config.registry.records import (
-    CandidateConfigRegistrySource,
-    CrossRunCandidateAcceptance,
-)
 from scopecat.daemon.client import (
     DaemonClient,
-    DaemonClientError,
     DaemonNotFoundError,
     DaemonUnavailableError,
 )
 from scopecat.daemon.wire import (
-    CandidateConfigRevisionSource,
-    ConfigActivationReceipt,
-    ConfigEntryActivationCommand,
-    ConfigPublishCommand,
-    ConfigPublishReceipt,
     ParameterBranchPublishCommand,
     ParameterCandidateComposeCommand,
 )
@@ -623,63 +611,6 @@ class LabProcedureContext:
         _validate_exact_analysis_ref(published, ref)
         return published
 
-    def activate_config_entry(
-        self,
-        step_key: str,
-        entry_id: str,
-        *,
-        expected_generation: int,
-        actor: str,
-        note: str = "",
-        inputs: tuple[ProcedureStepOutputRef, ...] = (),
-    ) -> ConfigActivationOutputRef:
-        """Activate one saved entry through an exact replayable command."""
-
-        intent = ConfigEntryActivationCommand(
-            operation_id="procedure-step:validation",
-            entry_id=entry_id,
-            expected_generation=expected_generation,
-            actor=actor,
-            note=note,
-        )
-        intent_hash = intent.intent_hash
-
-        def activate(operation_id: str) -> ConfigActivationOutputRef:
-            receipt = _execute_replayable_config_operation(
-                operation_id=operation_id,
-                operation_name="config activation",
-                execute=lambda: self._config.activate_entry(
-                    intent.entry_id,
-                    operation_id=operation_id,
-                    expected_generation=intent.expected_generation,
-                    actor=intent.actor,
-                    note=intent.note,
-                ),
-                lookup=self._config.activation_operation,
-                validate=lambda candidate: _validate_config_activation_receipt(
-                    candidate,
-                    operation_id=operation_id,
-                    intent_hash=intent_hash,
-                    entry_id=intent.entry_id,
-                    expected_generation=intent.expected_generation,
-                    actor=intent.actor,
-                    note=intent.note,
-                ),
-            )
-            return ConfigActivationOutputRef(
-                generation=receipt.activation.generation,
-                entry_id=receipt.activation.entry_id,
-                entry_content_hash=receipt.activation.entry_content_hash,
-            )
-
-        return self.step(
-            step_key,
-            operation="config_activation",
-            intent_hash=intent_hash,
-            effect=activate,
-            inputs=inputs,
-        )
-
     def combine_parameter_candidates(
         self,
         step_key: str,
@@ -857,104 +788,6 @@ class LabProcedureContext:
         return self.step(
             step_key,
             operation="parameter_publish",
-            intent_hash=intent_hash,
-            effect=publish,
-            inputs=(candidate_ref, verification),
-        )
-
-    def accept_verified_candidate(
-        self,
-        step_key: str,
-        candidate_ref: AnalysisPublicationOutputRef,
-        *,
-        proposal_id: str,
-        verification: AnalysisPublicationOutputRef,
-        decision_output_id: str,
-        expected_generation: int,
-        actor: str,
-        entry_id: str,
-        note: str = "",
-    ) -> ConfigPublishOutputRef:
-        """Publish and activate one candidate backed by an exact positive decision."""
-
-        if not isinstance(candidate_ref.subject, RunAnalysisSubject):
-            raise TypeError("candidate must identify an exact run analysis")
-        candidate_run_id = candidate_ref.subject.run_id
-        if not isinstance(verification.subject, ProjectAnalysisSubject):
-            raise TypeError("candidate verification must identify a project analysis")
-        intent_hash = _verified_candidate_publish_step_intent_hash(
-            procedure_run_id=self.procedure_run_id,
-            step_key=step_key,
-            candidate_ref=candidate_ref,
-            proposal_id=proposal_id,
-            verification=verification,
-            decision_output_id=decision_output_id,
-            expected_generation=expected_generation,
-            actor=actor,
-            entry_id=entry_id,
-            note=note,
-        )
-
-        def publish(operation_id: str) -> ConfigPublishOutputRef:
-            candidate_analysis = self.published_analysis(candidate_ref)
-            verification_analysis = self.published_analysis(verification)
-            proposal = _parameter_proposal(candidate_analysis, proposal_id)
-            if (
-                proposal.source_run_id != candidate_run_id
-                or proposal.analysis_record_id != candidate_ref.analysis_record_id
-            ):
-                raise ValueError(
-                    "candidate proposal does not belong to its exact analysis reference"
-                )
-            decision = verification_analysis.fact(decision_output_id)
-            if (
-                not isinstance(decision.value, dict)
-                or decision.value.get("accepted") is not True
-            ):
-                raise ValueError(
-                    "candidate verification decision must contain accepted=true"
-                )
-            command = ConfigPublishCommand(
-                operation_id=operation_id,
-                source=CandidateConfigRevisionSource(
-                    run_id=proposal.source_run_id,
-                    proposal_id=proposal.id,
-                    acceptance=CrossRunCandidateAcceptance(
-                        decision=ProjectAnalysisDecisionReference(
-                            analysis_record_id=verification.analysis_record_id,
-                            output_id=decision_output_id,
-                            schema_id=decision.schema_id,
-                            schema_hash=decision.schema_hash,
-                        )
-                    ),
-                ),
-                expected_generation=expected_generation,
-                actor=actor,
-                entry_id=entry_id,
-                note=note,
-            )
-            receipt = _execute_replayable_config_operation(
-                operation_id=operation_id,
-                operation_name="config publish",
-                execute=lambda: self._config.publish_config(command),
-                lookup=self._config.publish_operation,
-                validate=lambda candidate: _validate_config_publish_receipt(
-                    candidate,
-                    command=command,
-                    proposal_base_config_content_hash=(
-                        proposal.base_config_content_hash
-                    ),
-                ),
-            )
-            return ConfigPublishOutputRef(
-                generation=receipt.activation.generation,
-                entry_id=receipt.entry.id,
-                entry_content_hash=receipt.entry.content_hash,
-            )
-
-        return self.step(
-            step_key,
-            operation="config_publish",
             intent_hash=intent_hash,
             effect=publish,
             inputs=(candidate_ref, verification),
@@ -1465,35 +1298,6 @@ def _analysis_step_intent_hash(
     return f"sha256:{stable_content_hash(identity)}"
 
 
-def _verified_candidate_publish_step_intent_hash(
-    *,
-    procedure_run_id: str,
-    step_key: str,
-    candidate_ref: AnalysisPublicationOutputRef,
-    proposal_id: str,
-    verification: AnalysisPublicationOutputRef,
-    decision_output_id: str,
-    expected_generation: int,
-    actor: str,
-    entry_id: str,
-    note: str,
-) -> Sha256ContentHash:
-    identity = {
-        "codec": _VERIFIED_CANDIDATE_PUBLISH_STEP_INTENT_CODEC,
-        "procedure_run_id": procedure_run_id,
-        "step_key": step_key,
-        "candidate": candidate_ref.model_dump(mode="json"),
-        "proposal_id": proposal_id,
-        "verification": verification.model_dump(mode="json"),
-        "decision_output_id": decision_output_id,
-        "expected_generation": expected_generation,
-        "actor": actor,
-        "entry_id": entry_id,
-        "note": note,
-    }
-    return f"sha256:{stable_content_hash(identity)}"
-
-
 def _analysis_arguments_identity(analysis: AnalysisStep) -> object:
     if not isinstance(analysis, AnalysisInvocation):
         return {
@@ -1689,118 +1493,6 @@ def _parameter_proposal(
         raise ValueError(
             f"candidate analysis does not own proposal {proposal_id!r}"
         ) from None
-
-
-def _execute_replayable_config_operation[ReceiptT](
-    *,
-    operation_id: str,
-    operation_name: str,
-    execute: Callable[[], ReceiptT],
-    lookup: Callable[[str], ReceiptT],
-    validate: Callable[[ReceiptT], None],
-) -> ReceiptT:
-    try:
-        receipt = execute()
-        validate(receipt)
-        return receipt
-    except (
-        httpx2.HTTPError,
-        DaemonUnavailableError,
-        ProcedureNeedsAttention,
-        ValidationError,
-    ):
-        try:
-            receipt = lookup(operation_id)
-            validate(receipt)
-            return receipt
-        except (
-            DaemonClientError,
-            httpx2.HTTPError,
-            ProcedureNeedsAttention,
-            ValidationError,
-        ) as lookup_error:
-            raise ProcedureNeedsAttention(
-                f"{operation_name} outcome for operation {operation_id!r} is unknown"
-            ) from lookup_error
-
-
-def _validate_config_activation_receipt(
-    receipt: ConfigActivationReceipt,
-    *,
-    operation_id: str,
-    intent_hash: Sha256ContentHash,
-    entry_id: str,
-    expected_generation: int,
-    actor: str,
-    note: str,
-) -> None:
-    operation = receipt.operation
-    expected_identity = (
-        operation_id,
-        intent_hash,
-        entry_id,
-        expected_generation,
-        actor,
-        note,
-    )
-    actual_identity = (
-        operation.operation_id,
-        operation.intent_hash,
-        operation.entry_id,
-        operation.expected_generation,
-        operation.actor,
-        operation.note,
-    )
-    if actual_identity != expected_identity:
-        raise ProcedureNeedsAttention(
-            "config activation receipt does not match its exact procedure command"
-        )
-
-
-def _validate_config_publish_receipt(
-    receipt: ConfigPublishReceipt,
-    *,
-    command: ConfigPublishCommand,
-    proposal_base_config_content_hash: Sha256ContentHash,
-) -> None:
-    source = command.source
-    if not isinstance(source, CandidateConfigRevisionSource):
-        raise TypeError("procedure candidate publication requires a candidate source")
-    operation = receipt.operation
-    expected_operation_identity = (
-        command.operation_id,
-        command.intent_hash,
-        command.source_intent_hash,
-        command.entry_id,
-        command.expected_generation,
-        command.actor,
-        command.note,
-    )
-    actual_operation_identity = (
-        operation.operation_id,
-        operation.intent_hash,
-        operation.source_intent_hash,
-        operation.entry_id,
-        operation.expected_generation,
-        operation.actor,
-        operation.note,
-    )
-    entry_source = receipt.entry.source
-    if (
-        actual_operation_identity != expected_operation_identity
-        or operation.activation_generation != receipt.activation.generation
-        or receipt.entry.id != command.entry_id
-        or receipt.activation.entry_id != receipt.entry.id
-        or receipt.activation.entry_content_hash != receipt.entry.content_hash
-        or not isinstance(entry_source, CandidateConfigRegistrySource)
-        or entry_source.run_id != source.run_id
-        or entry_source.proposal_id != source.proposal_id
-        or entry_source.base_config_content_hash != proposal_base_config_content_hash
-        or entry_source.acceptance != source.acceptance
-    ):
-        raise ProcedureNeedsAttention(
-            "config publish receipt does not match its exact procedure command"
-        )
 
 
 def _procedure_sample_selectors(

@@ -13,6 +13,7 @@ from scopecat.records.run import ParameterRunConfigSource
 from scopecat.records.setup import SetupRevisionRef
 
 from scopecat_server.errors import BackendConflict, BackendNotFound
+from scopecat_server.storage.sqlite.devices import DeviceRepository
 from scopecat_server.storage.sqlite.parameter_revisions import (
     ParameterRevisionRepository,
 )
@@ -34,6 +35,7 @@ def resolve_parameters(
     if values.ref != parameters or equipment.ref != setup:
         raise BackendConflict("parameter/setup reference differs from saved content")
     try:
+        DeviceRepository(connection).require_current(equipment.resolution.devices)
         config = compose_configuration(
             equipment.setup,
             id=values.id,

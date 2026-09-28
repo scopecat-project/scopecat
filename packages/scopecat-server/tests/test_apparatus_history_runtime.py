@@ -10,6 +10,7 @@ from scopecat.application.author_project import AuthorProject
 from scopecat.daemon.client import DaemonClient, DaemonConflictError
 from scopecat.records.apparatus_history import MAX_APPARATUS_ATTACHMENT_BYTES
 from scopecat_testkit.config_registry import load_config
+from scopecat_testkit.server.instruments import signal_endpoint
 
 from scopecat_server import LocalDaemonRuntime
 
@@ -42,7 +43,9 @@ def test_notebook_records_room_temperature_history_and_owned_document(
     document = tmp_path / "室温测量.txt"
     document.write_bytes(b"room temperature only")
     with (
-        LocalDaemonRuntime(root, bootstrap_config=load_config()) as runtime,
+        LocalDaemonRuntime(
+            root, bootstrap_config=load_config(), instrument_endpoint=signal_endpoint()
+        ) as runtime,
         TestClient(runtime.app()) as transport,
     ):
         lab = LabClient(_client(transport), operator="Alice")
@@ -104,7 +107,11 @@ def test_notebook_records_room_temperature_history_and_owned_document(
 
 def test_attachment_http_bound_and_safe_download_filename(tmp_path: Path) -> None:
     with (
-        LocalDaemonRuntime(tmp_path, bootstrap_config=load_config()) as runtime,
+        LocalDaemonRuntime(
+            tmp_path,
+            bootstrap_config=load_config(),
+            instrument_endpoint=signal_endpoint(),
+        ) as runtime,
         TestClient(runtime.app()) as transport,
     ):
         client = _client(transport)

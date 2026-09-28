@@ -7,7 +7,7 @@ import { apiClient, apiData, ApiError } from "../../api-client";
 import type { LaunchCatalogEntry, LaunchPreview } from "./launch-api";
 import { ControlFields, ControlSummary, controlEdits } from "./ControlFields";
 import { invalidateDraft, useLaunchDraft, type LaunchDraft } from "./LaunchDraft";
-import { MeasurementContext } from "./MeasurementContext";
+import { MeasurementContext, type MeasurementContextChange } from "./MeasurementContext";
 import { PlanSave } from "./PlanSave";
 import { PreflightSummary } from "./PreflightSummary";
 import { canRenderField, type FormField } from "./launch-fields";
@@ -78,15 +78,14 @@ export function LaunchForm({
     );
   }, [fence, manual.data, update]);
   function changeInput(
-    changes: Partial<
-      Pick<LaunchDraft, "values" | "controls" | "selection" | "actor" | "collection">
-    >,
+    changes: Partial<Pick<LaunchDraft, "values" | "controls">> & MeasurementContextChange,
   ) {
     update((current) =>
       invalidateDraft(
         {
           ...current,
           ...changes,
+          selection: { ...current.selection, ...changes.selection },
           planDirty:
             current.planDirty ||
             (Boolean(current.plan) &&

@@ -66,6 +66,7 @@ from scopecat.records.sample import SampleSelector
 
 resolved = lab.resolve_context(
     branch="daily",
+    setup=lab.setup.get("bench-v1"),
     samples=(SampleSelector(sample_id="chip-a", revision=2),),
 )
 report = lab.calibration_checks.report(
@@ -78,7 +79,9 @@ To retain registered target identity and its entity projection:
 
 ```python
 target = lab.target("chip-target", revision=2)
-resolved = lab.resolve_context(branch="daily", target=target.ref)
+resolved = lab.resolve_context(
+    branch="daily", target=target.ref, setup=lab.setup.get("bench-v1")
+)
 ```
 
 Pass either `target` or inline `samples`. The resolver checks the target's catalog,

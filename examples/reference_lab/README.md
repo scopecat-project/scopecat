@@ -159,7 +159,7 @@ tables, and temporary scan axes belong to experiment invocations.
   session guarantees, setup invalidation, and acquisition placement.
 - The AWG/scope experiment uses entityless routes because the cable is temporary
   and no qubit mapping is needed. A completely unregistered diagnostic device
-  uses `temporary_instrument(...)` in a direct session instead.
+  uses `lab.devices.open(device_id)` with a registered diagnostic device instead.
 - Instrument snapshots, requested state, intents, and receipts remain run
   evidence. Experiments record only scientifically meaningful values; output
   enable remains an ordinary state that an experiment may vary.

@@ -14,12 +14,10 @@ import {
 
 export function ConfigurationTemplatesPanel({
   actor,
-  activeSetupHash,
   onImported,
   onSelectConfiguration,
 }: {
   actor: string;
-  activeSetupHash?: string;
   onImported: (result: ConfigurationTemplateImportResult) => Promise<void>;
   onSelectConfiguration?: (choice: components["schemas"]["ConfigurationChoice-Input"]) => void;
 }) {
@@ -43,8 +41,8 @@ export function ConfigurationTemplatesPanel({
     >
       <h4>Configuration templates</h4>
       <p>
-        Import a complete setup and its independent parameters from the current adapter. Importing
-        changes neither the service setup nor the lab parameter default.
+        Import a setup and independent parameters from an installed template. Registered device
+        connections are reused and never overwritten by a template.
       </p>
       <label>
         Available template{" "}
@@ -100,18 +98,16 @@ export function ConfigurationTemplatesPanel({
       {result && (
         <div role="status">
           <p>
-            Imported setup <code>{result.setup.id}</code> and parameters{" "}
+            Imported setup <code>{result.setup.resolution.definition_id}</code> and parameters{" "}
             <code>{result.parameters.id}</code>.
           </p>
           <p>
-            Review and confirm the imported setup below. Setup selection affects this entire
-            experiment service, including other pages and notebooks; the parameter default stays
-            unchanged.
+            Use these inputs for your next experiment, or edit them first. Other pages and submitted
+            work keep their selected inputs.
           </p>
           {onSelectConfiguration && (
             <button
               className={secondaryButton}
-              disabled={activeSetupHash !== result.setup.content_hash}
               onClick={() =>
                 onSelectConfiguration({
                   kind: "parameters",

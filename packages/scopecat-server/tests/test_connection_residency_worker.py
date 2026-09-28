@@ -268,6 +268,7 @@ from scopecat.sdk.instruments import (
     DriverRejected, DriverCatalog, InstrumentBackend, DriverFault,
 )
 from scopecat.sdk.problems import ProblemPhase, problem
+from scopecat_testkit.signal_instruments import signal_driver_catalog
 from scopecat_testkit.connection_residency import (
     VolatileProgramDriver, VolatileProgramProvider, ResidencyProbe,
 )
@@ -296,7 +297,7 @@ def create_backend(root):
     provider = Provider(ResidencyProbe(root))
     return InstrumentBackend(
         provider=provider,
-        driver_catalog=DriverCatalog(provider_id=provider.provider_id),
+        driver_catalog=signal_driver_catalog(provider.provider_id),
     )
 """,
         encoding="utf-8",

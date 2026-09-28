@@ -9,6 +9,7 @@ from scopecat.records.sample import SampleSelector
 
 receipt = lab.resolve_context(
     branch="daily",
+    setup=lab.setup.get("bench-v1"),
     samples=(SampleSelector(sample_id="chip", revision=3),),
 )
 context = receipt.context
@@ -34,8 +35,8 @@ The sample workbench exposes the same choice under **Capability evidence from
 saved parameters**. Select **Exact saved revision** and enter the saved version's
 name; the workbench obtains its exact reference without asking you to copy a hash.
 
-Omitting `setup` reads the active setup in the same transaction as the parameter
-resolution. Pass a saved `SetupRevision` or exact reference to select another setup. For a registered
+Pass an explicit `SetupRevision` or exact reference. No global setup is substituted.
+For a registered
 target, pass `target=target.ref` instead of `samples`; the current execution
 binding supports one target member without target-level connections.
 
@@ -48,7 +49,7 @@ The result separates two responsibilities:
   With exact parameters, `receipt.branch` is `None`; the parameter reference is
   retained in `receipt.context.parameters`.
 
-Moving the branch or activating another setup does not change an existing context.
+Moving the branch or selecting another setup does not change an existing context.
 Resolve again when you want a fresh snapshot. With neither samples nor a target,
 the context is unbound; this does not establish physical sample capability.
 
@@ -66,11 +67,11 @@ report = lab.calibration_checks.report(
 
 Do not pass a branch, saved parameters, setup or subject override with a candidate.
 The server validates the exact retained proposal and resolved content, preserving
-its original subject, setup hash, scenario and mapping. Both receipt selections
-are `None`: no current setup or branch is substituted. The context's parameter
+its original subject, setup hash, scenario and mapping. `receipt.setup` retains
+the baseline's exact execution setup; `receipt.branch` is `None`. The context's parameter
 input is explicitly an `analysis_candidate`, not a saved parameter revision.
 Checks can declare this context before running the verification measurement.
-Actual admission still checks the current setup authority.
+Actual admission verifies that the retained device connections remain available.
 
 Candidate evidence applies only to that exact candidate context. Matching values
 or publishing those values as a saved revision do not automatically transfer the

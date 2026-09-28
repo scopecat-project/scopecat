@@ -42,6 +42,7 @@ from scopecat.sdk.instruments.contracts import (
 from .backend import (
     ConnectedInstrument,
     InstrumentBackendEndpoint,
+    InstrumentBackendUnavailable,
     InstrumentHandle,
 )
 
@@ -386,7 +387,9 @@ class _InstrumentActor:
                 binding=binding,
                 owner=owner,
                 epoch=self._epoch,
-                description=description,
+                description=description.model_copy(
+                    update={"instrument_id": instrument_id}
+                ),
                 reused_connection=reused_connection,
                 connection_generation=sha256(
                     f"{self._handle.endpoint_id}:{self._handle.token}".encode()
@@ -412,7 +415,9 @@ class _InstrumentActor:
             endpoint, handle = self._require_owned(owned)
             cache = self._require_cache()
             try:
-                readback = endpoint.read_state(handle, request)
+                readback = self._project_readback(
+                    endpoint.read_state(handle, request), owned
+                )
             except Exception:
                 cache.mark(
                     request.targets,
@@ -426,6 +431,17 @@ class _InstrumentActor:
                 reason="state_read_unconfirmed",
             )
             return readback
+
+    def _project_readback(
+        self, readback: InstrumentStateReadback, owned: OwnedInstrument
+    ) -> InstrumentStateReadback:
+        """The driver retains its connection identity; each owner has its own alias."""
+        assert self._description is not None
+        if readback.instrument_id != self._description.instrument_id:
+            raise InstrumentBackendUnavailable(
+                "driver readback has an unexpected instrument identity"
+            )
+        return readback.model_copy(update={"instrument_id": owned.instrument_id})
 
     def assumed_state(
         self,
@@ -480,6 +496,12 @@ class _InstrumentActor:
             targets = tuple(assignment.target for assignment in request.assignments)
             try:
                 receipt = endpoint.apply_state(handle, request)
+                if receipt.readback is not None:
+                    receipt = receipt.model_copy(
+                        update={
+                            "readback": self._project_readback(receipt.readback, owned)
+                        }
+                    )
             except Exception:
                 cache.mark(
                     targets,
@@ -512,6 +534,12 @@ class _InstrumentActor:
             targets = tuple(state_member_target(target) for target in invalidated)
             try:
                 receipt = endpoint.invoke(handle, request)
+                if receipt.readback is not None:
+                    receipt = receipt.model_copy(
+                        update={
+                            "readback": self._project_readback(receipt.readback, owned)
+                        }
+                    )
             except Exception:
                 cache.mark(
                     targets,
@@ -867,6 +895,11 @@ class InstrumentActorRegistry:
 
         with self._lock:
             self._accepting = False
+
+    def has_actor(self, key: str) -> bool:
+        """Whether this process still retains an actor after failed retirement."""
+        with self._lock:
+            return key in self._actors
 
     def shutdown(self) -> None:
         with self._lock:

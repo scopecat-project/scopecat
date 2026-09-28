@@ -33,6 +33,8 @@ from scopecat.records.research_project import RunHistoryFilter
 from scopecat.records.setup import SetupRevisionRef
 
 from scopecat_server.storage.sqlite.connection import SQLiteDatabase
+from scopecat_server.storage.sqlite.devices import DeviceRepository
+from scopecat_server.storage.sqlite.setups import SQLiteSetupRepository
 
 _JSON_OBJECT = TypeAdapter(dict[str, JsonValue])
 _STRING_TUPLE = TypeAdapter(tuple[str, ...])
@@ -1026,6 +1028,17 @@ class SQLiteControlPlane:
                         "instrument session open retry has expired"
                     )
                 return retry
+            try:
+                resolved = SQLiteSetupRepository(connection).read_revision(
+                    setup.revision_id
+                )
+                if resolved.ref != setup:
+                    raise ValueError("setup reference differs from saved content")
+                DeviceRepository(connection).require_current(
+                    resolved.resolution.devices
+                )
+            except (KeyError, ValueError) as error:
+                raise ControlPlaneConflict(str(error)) from error
             conflicts = tuple(
                 resource
                 for resource in resources
@@ -1250,6 +1263,16 @@ class SQLiteControlPlane:
                 at=checked_at,
             )
 
+    def validate_instrument_session_in_transaction(
+        self,
+        connection: sqlite3.Connection,
+        session_id: str,
+    ) -> InstrumentSession:
+        """Fence a device mutation with the lease in the same write transaction."""
+        return self._live_instrument_session(
+            connection, session_id=session_id, at=datetime.now(tz=UTC)
+        )
+
     def start_instrument_operation(
         self,
         session_id: str,
@@ -1352,29 +1375,41 @@ class SQLiteControlPlane:
         status: str,
         at: datetime | None = None,
     ) -> InstrumentSession:
+        with self.write_transaction() as connection:
+            return self.close_instrument_session_in_transaction(
+                connection, session_id, status=status, at=at
+            )
+
+    def close_instrument_session_in_transaction(
+        self,
+        connection: sqlite3.Connection,
+        session_id: str,
+        *,
+        status: str,
+        at: datetime | None = None,
+    ) -> InstrumentSession:
         if status not in {"closed", "aborted"}:
             raise ValueError(f"unsupported instrument session end status: {status}")
         closed_at = at or datetime.now(tz=UTC)
-        with self.write_transaction() as connection:
-            current = self._instrument_session_row(connection, session_id)
-            if current.state == "closed":
-                return current
-            if current.state != "active":
-                raise InstrumentSessionNotActive(
-                    "instrument session requires operator attention"
-                )
-            if current.active_operation_id is not None:
-                raise ControlPlaneConflict(
-                    "instrument session cannot close during an active operation"
-                )
-            self._close_instrument_session_in_transaction(
-                connection,
-                current,
-                status=status,
-                at=closed_at,
-                event_kind="instrument_session_closed",
+        current = self._instrument_session_row(connection, session_id)
+        if current.state == "closed":
+            return current
+        if current.state != "active":
+            raise InstrumentSessionNotActive(
+                "instrument session requires operator attention"
             )
-            return self._instrument_session_row(connection, session_id)
+        if current.active_operation_id is not None:
+            raise ControlPlaneConflict(
+                "instrument session cannot close during an active operation"
+            )
+        self._close_instrument_session_in_transaction(
+            connection,
+            current,
+            status=status,
+            at=closed_at,
+            event_kind="instrument_session_closed",
+        )
+        return self._instrument_session_row(connection, session_id)
 
     def expire_instrument_session(
         self,

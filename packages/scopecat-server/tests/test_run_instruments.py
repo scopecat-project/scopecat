@@ -68,7 +68,6 @@ from scopecat.sdk.instruments import (
     AcquisitionResultRef,
     DriverAcquisition,
     DriverAcquisitionPlan,
-    DriverCatalog,
     DriverOperation,
     DriverOutcome,
     DriverPayload,
@@ -114,6 +113,7 @@ from scopecat.sdk.instruments.execution import (
 )
 from scopecat_testkit.instrument_drivers import SignalInstrumentDriver, load_config
 from scopecat_testkit.payload_codecs import json_payload_codecs
+from scopecat_testkit.signal_instruments import signal_driver_catalog
 
 from scopecat_server import LocalDaemonRuntime
 from scopecat_server.errors import BackendConflict
@@ -2482,9 +2482,15 @@ def test_unknown_failure_safe_state_quarantines_the_run(tmp_path: Path) -> None:
         _assert_run_state_discarded(instruments, run_id)
 
 
+@pytest.mark.parametrize("switch_setup", [False, True])
 def test_analysis_candidate_run_keeps_connection_until_shutdown(
     tmp_path: Path,
+    switch_setup: bool,
 ) -> None:
+    from scopecat.daemon.wire import SetupActivateCommand, SetupImportCommand
+    from scopecat.records.execution_scenario import SoftwareExecutionScenario
+    from scopecat.records.setup import ExecutableSetupSnapshot
+
     provider = _Provider(fail_action="disconnect")
     config = load_config()
     with _runtime(tmp_path, provider) as runtime:
@@ -2551,16 +2557,50 @@ def test_analysis_candidate_run_keeps_connection_until_shutdown(
         )
         source = AnalysisCandidateRunConfigSource(
             source_run_id=source_admission.run_id,
+            setup=runtime.application.runs.get_run(
+                source_admission.run_id
+            ).snapshot.execution_setup,
             analysis_record_id=proposal.analysis_record_id,
             proposal_id=proposal.id,
             base_config_content_hash=proposal.base_config_content_hash,
             content_hash=config_content_hash(candidate),
         )
+        if switch_setup:
+            current = runtime.application.setup.current()
+            unrelated = runtime.application.setup.import_recipe(
+                SetupImportCommand(
+                    revision_id="unrelated-context",
+                    actor="test",
+                    setup=ExecutableSetupSnapshot.from_config(config).model_copy(
+                        update={
+                            "scenario": SoftwareExecutionScenario(
+                                id="other",
+                                label="Other",
+                                model_id="other",
+                                model_version="1",
+                                capabilities=("simulation",),
+                            )
+                        }
+                    ),
+                )
+            )
+            runtime.application.setup.activate(
+                SetupActivateCommand(
+                    operation_id="switch-context",
+                    revision=unrelated.ref,
+                    expected_generation=current.activation.generation,
+                    actor="test",
+                )
+            )
         run_id, lease_id = _start_run(
             runtime,
             candidate,
             config_source=source,
             submission_id="analysis-candidate",
+        )
+        assert (
+            runtime.application.runs.get_run(run_id).snapshot.execution_setup
+            == source.setup
         )
         instruments = runtime.application.instruments
         instruments.provision_run(run_id, _provision(lease_id))
@@ -2894,7 +2934,7 @@ def _runtime(
         instrument_endpoint=LocalInstrumentBackendEndpoint(
             InstrumentBackend(
                 provider=provider,
-                driver_catalog=DriverCatalog(provider_id=provider.provider_id),
+                driver_catalog=signal_driver_catalog(provider.provider_id),
                 payload_codecs=json_payload_codecs("pulse_program"),
             )
         ),

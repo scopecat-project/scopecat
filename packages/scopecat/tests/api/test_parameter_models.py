@@ -6,8 +6,8 @@ import pytest
 
 import scopecat as sc
 from scopecat.api.parameters import (
+    ParameterEditor,
     ParameterTable,
-    ParameterWorkspace,
     TypedParameterTable,
     _TableData,
 )
@@ -107,7 +107,7 @@ def test_composite_keys_require_every_component_and_fields_keep_units() -> None:
 
 if TYPE_CHECKING:
 
-    def type_contract(params: ParameterWorkspace) -> None:
+    def type_contract(params: ParameterEditor) -> None:
         row = Drive(qubit="q0")
         assert_type(row.duration, float)
         assert_type(row.amplitude, float | None)

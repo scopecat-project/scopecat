@@ -12,6 +12,7 @@ from scopecat.records.apparatus_history import (
     ApparatusObservationDraft,
 )
 from scopecat_testkit.config_registry import load_config
+from scopecat_testkit.server.instruments import signal_endpoint
 
 from scopecat_server import LocalDaemonRuntime
 from scopecat_server.snapshots import (
@@ -30,7 +31,9 @@ def test_observation_recovery_retains_original_bytes_and_object_revision(
     manifest = source / "scopecat.toml"
     manifest.write_text("[lab]\n")
     content = b"original presentation bytes\x00\xff"
-    with LocalDaemonRuntime(source, bootstrap_config=load_config()) as runtime:
+    with LocalDaemonRuntime(
+        source, bootstrap_config=load_config(), instrument_endpoint=signal_endpoint()
+    ) as runtime:
         history = runtime.application.apparatus_history
         line = history.create_object(
             ApparatusObjectCreate(

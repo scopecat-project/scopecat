@@ -2,10 +2,11 @@ import { spawnSync } from "node:child_process";
 import { cp, mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
+import { prepareReferenceContexts } from "./reference-context";
 
 const ROOT = resolve(process.cwd(), "../..");
-function uv(args: string[]): void {
+function uv(args: string[]): string {
   const env = { ...process.env };
   delete env.SCOPECAT_DAEMON_URL;
   const result = spawnSync("uv", ["run", "--locked", "--project", ROOT, ...args], {
@@ -15,46 +16,100 @@ function uv(args: string[]): void {
   });
   if (result.error || result.status !== 0)
     throw new Error(result.error?.message ?? result.stdout + result.stderr);
+  return result.stdout.trim();
+}
+
+async function start(project: string) {
+  for (const name of ["src", "config", "scopecat.toml"])
+    await cp(join(ROOT, "examples/reference_lab", name), join(project, name), { recursive: true });
+  uv(["scopecat", "start", project, "--port", "0", "--static-dir", resolve("dist")]);
+  prepareReferenceContexts(uv, project);
+  return (
+    JSON.parse(await readFile(join(project, ".scopecat/daemon.json"), "utf8")) as {
+      base_url: string;
+    }
+  ).base_url;
+}
+
+async function editVersion(page: Page, name: string) {
+  await page
+    .getByRole("navigation", { name: "Project sections" })
+    .getByRole("button", { name: "Configuration", exact: true })
+    .click();
+  await page
+    .getByRole("combobox", { name: "Saved parameter version", exact: true })
+    .selectOption(name);
+  await page.getByRole("button", { name: "Edit a copy", exact: true }).click();
+}
+
+async function saveVersion(page: Page, name: string) {
+  await page.getByLabel("New version name", { exact: true }).fill(name);
+  const response = page.waitForResponse(
+    (item) =>
+      new URL(item.url()).pathname === "/api/v1/parameters/revisions" &&
+      item.request().method() === "POST",
+  );
+  await page.getByRole("button", { name: "Save parameter version", exact: true }).click();
+  const saved = await response;
+  expect(saved.status(), await saved.text()).toBe(200);
+  await expect(
+    page.getByRole("combobox", { name: "Saved parameter version", exact: true }),
+  ).toHaveValue(name);
+}
+
+async function launchVersion(page: Page) {
+  await page.getByRole("button", { name: "Use for next experiment", exact: true }).click();
+  await page.getByLabel("Experiment", { exact: true }).selectOption("signal");
+  await page.getByLabel("Experiment setup", { exact: true }).selectOption("browser-bench-a");
+}
+
+async function acquire(page: Page): Promise<string> {
+  const submitting = page.waitForResponse(
+    (response) =>
+      response.url().endsWith("/experiment-launcher/submit") &&
+      response.request().method() === "POST",
+  );
+  await page.getByRole("button", { name: "Start acquisition", exact: true }).click();
+  const response = await submitting;
+  expect(response.status(), await response.text()).toBe(200);
+  const receipt = (await response.json()) as { procedure_id: string };
+  await expect(page).toHaveURL(new RegExp(`procedure=${receipt.procedure_id}`));
+  await expect(page.getByText("experiment: Completed", { exact: true })).toBeVisible();
+  await page.getByRole("link", { name: /^Open retained run:/ }).click();
+  await expect(page.getByTestId("run-status")).toHaveText("Succeeded");
+  const run = new URL(page.url()).searchParams.get("run");
+  expect(run).toBeTruthy();
+  return run!;
 }
 
 const VERIFY = `
 import sys
 import scopecat as sc
-from scopecat.records.config_context import ContextRunConfigSource
-project = sc.open_project(sys.argv[1])
-with project.connect() as lab:
+from scopecat.records.run import ParameterRunConfigSource
+with sc.open_project(sys.argv[1]).connect() as lab:
     run = lab.get_run(sys.argv[2])
-    assert isinstance(run.snapshot.config_source, ContextRunConfigSource)
-    assert run.snapshot.config_source.context.entry_id == sys.argv[3]
+    source = run.snapshot.config_source
+    assert isinstance(source, ParameterRunConfigSource)
+    expected = lab.parameters.get(sys.argv[3]).ref
+    assert source.parameters == expected, (source.parameters, expected, run.id)
+    assert source.setup == run.snapshot.execution_setup
     assert run.samples[0].sample_id == sys.argv[4]
     assert run.samples[0].revision == 1
     assert run.samples[0].batch_id == (sys.argv[6] or None)
-    assert run.config.parameter_snapshot.get("qubits").rows[0]["drive_carrier_frequency"].value == float(sys.argv[5])
+    assert run.config.parameter_snapshot.get("qubits").rows[0]["drive_carrier_frequency"] == sc.Quantity(float(sys.argv[5]), "GHz")
+    assert not lab.config.registry().entries
 `;
 
 for (const scoped of [false, true]) {
-  test(`saves and launches two physical samples at two working points${scoped ? " in declared batches" : ""} without activating them`, async ({
+  test(`launches two samples with independent parameter versions${scoped ? " and declared batches" : ""}`, async ({
     page,
-  }, testInfo) => {
+  }) => {
     test.setTimeout(120_000);
-    const project = await mkdtemp(join(tmpdir(), "scopecat-context-e2e-"));
-    let completed = false;
+    const project = await mkdtemp(join(tmpdir(), "scopecat-parameters-e2e-"));
     try {
-      for (const name of ["src", "config", "scopecat.toml"])
-        await cp(join(ROOT, "examples/reference_lab", name), join(project, name), {
-          recursive: true,
-        });
-      uv(["scopecat", "start", project, "--port", "0", "--static-dir", resolve("dist")]);
-      const endpoint = JSON.parse(
-        await readFile(join(project, ".scopecat/daemon.json"), "utf8"),
-      ) as {
-        base_url: string;
-      };
-      const active = await (
-        await page.request.get(`${endpoint.base_url}/api/v1/config-registry?limit=100`)
-      ).json();
+      const url = await start(project);
       for (const sample of ["a", "b"]) {
-        const created = await page.request.post(`${endpoint.base_url}/api/v1/samples`, {
+        const created = await page.request.post(`${url}/api/v1/samples`, {
           data: {
             operation_id: `create-${sample}`,
             sample_id: `context-${sample}`,
@@ -64,217 +119,107 @@ for (const scoped of [false, true]) {
           },
         });
         expect(created.status()).toBe(201);
+        if (scoped) {
+          const batch = await page.request.put(
+            `${url}/api/v1/experimental-batches/cooldown-${sample}`,
+            {
+              data: { name: `cooldown-${sample}`, expected_revision: 0 },
+            },
+          );
+          expect(batch.status()).toBe(200);
+        }
       }
-      for (const batch of scoped ? ["cooldown-a", "cooldown-b"] : []) {
-        const created = await page.request.put(
-          `${endpoint.base_url}/api/v1/experimental-batches/${batch}`,
-          { data: { name: batch, expected_revision: 0 } },
-        );
-        expect(created.status()).toBe(200);
-      }
-      await page.goto(`${endpoint.base_url}/#configuration`);
+      await page.goto(`${url}/#configuration`);
       for (let index = 0; index < 4; index++) {
         const sample = index < 2 ? "a" : "b";
-        const point = index % 2 === 0 ? "parked" : "shifted";
-        const frequency = 4.8e9 + index * 1e8;
-        await page.getByRole("button", { name: "Configuration", exact: true }).click();
-        await page.getByRole("button", { name: "Save working point copy", exact: true }).click();
+        const frequency = 4.8 + index / 10;
+        const name = `values-${index}`;
+        await editVersion(page, "browser-values");
         await page
-          .getByLabel("Physical sample", { exact: true })
-          .selectOption(`context-${sample}@1`);
+          .getByLabel("qubits[1].drive_carrier_frequency", { exact: true })
+          .fill(String(frequency));
+        await page
+          .getByLabel("qubits[1].drive_carrier_frequency unit", { exact: true })
+          .fill("GHz");
+        await saveVersion(page, name);
+        await launchVersion(page);
+        await page.getByLabel("Sample ID", { exact: true }).fill(`context-${sample}`);
         if (scoped) {
           await page
-            .getByRole("button", { name: "Choose experimental batch", exact: true })
+            .getByRole("button", { name: "Browse samples, batches and collections", exact: true })
             .click();
           await page
             .getByLabel("Experimental batch", { exact: true })
             .selectOption(`cooldown-${sample}`);
         }
-        await page.getByLabel("Working point", { exact: true }).fill(point);
-        await page.getByLabel("Context label", { exact: true }).fill(`${sample} ${point}`);
-        await page
-          .getByLabel("qubits[q0].drive_carrier_frequency", { exact: true })
-          .fill(String(frequency));
-        const saving = page.waitForResponse(
-          (response) =>
-            response.url().endsWith("/config-registry/contexts") &&
-            response.request().method() === "POST",
-        );
-        await page.getByRole("button", { name: "Save context", exact: true }).click();
-        const savedResponse = await saving;
-        expect(savedResponse.status()).toBe(200);
-        const saved = await savedResponse.json();
-        const catalogReady = page.waitForResponse(
-          (response) =>
-            new URL(response.url()).pathname.endsWith("/experiment-launcher") &&
-            response.request().method() === "GET",
-        );
-        await page.getByRole("button", { name: "Use for next experiment", exact: true }).click();
-        const catalogResponse = await catalogReady;
-        expect(catalogResponse.status(), await catalogResponse.text()).toBe(200);
-        await expect(page.getByLabel("Experiment", { exact: true })).toBeVisible();
-        await expect(
-          page.getByText(new RegExp(`Parameter context: ${saved.entry.id}`)),
-        ).toBeVisible();
-        await page
-          .getByLabel("Experiment", { exact: true })
-          .selectOption(scoped || index % 2 === 0 ? "signal" : "reference_lab.frequency_amplitude");
-        await page.getByLabel("Frequency", { exact: true }).fill(String(4.8 + index / 10));
         const previewing = page.waitForResponse((response) =>
           response.url().endsWith("/experiment-launcher/preview"),
         );
         await page.getByRole("button", { name: "Preview", exact: true }).click();
-        const preview = await previewing;
-        expect(preview.status()).toBe(200);
-        const prepared = await preview.json();
-        const expectedSample = {
-          sample_id: `context-${sample}`,
-          revision: 1,
-          context_id: point,
-          ...(scoped ? { batch_id: `cooldown-${sample}` } : {}),
-        };
+        const response = await previewing;
+        expect(response.status(), await response.text()).toBe(200);
+        const prepared = await response.json();
         expect(prepared.reviewed.config_source).toMatchObject({
-          kind: "parameter_context",
-          context: { entry_id: saved.entry.id },
-          sample: expectedSample,
+          kind: "parameter_revision",
+          parameters: { revision_id: name },
         });
         expect(prepared.reviewed.binding.subject).toMatchObject({
           kind: "inline_samples",
-          samples: [expectedSample],
+          samples: [
+            {
+              sample_id: `context-${sample}`,
+              revision: 1,
+              ...(scoped ? { batch_id: `cooldown-${sample}` } : {}),
+            },
+          ],
         });
-        if (!scoped) {
-          expect(prepared.reviewed.config_source.sample.batch_id).toBeUndefined();
-          expect(prepared.reviewed.binding.subject.samples[0].batch_id).toBeUndefined();
-        }
-        await expect(page.getByText("Preview ready", { exact: true })).toBeVisible();
-        const submitting = page.waitForResponse(
-          (response) =>
-            response.url().endsWith("/experiment-launcher/submit") &&
-            response.request().method() === "POST",
-        );
-        await page.getByRole("button", { name: "Start acquisition", exact: true }).click();
-        const submission = await submitting;
-        expect(submission.status(), await submission.text()).toBe(200);
-        expect(submission.request().postDataJSON()).toMatchObject({
-          experiment: scoped || index % 2 === 0 ? "signal" : "reference_lab.frequency_amplitude",
-          selection: {
-            subject: { kind: "sample", sample_id: `context-${sample}`, revision: 1 },
-            configuration: { kind: "working_point", ref: { entry_id: saved.entry.id } },
-            batch: scoped ? { kind: "declared", id: `cooldown-${sample}` } : { kind: "unscoped" },
-          },
-          reviewed: prepared.reviewed,
-        });
-        await expect(page.getByText("experiment: Completed", { exact: true })).toBeVisible();
-        await page.getByRole("link", { name: /^Open retained run:/ }).click();
-        await expect(page.getByTestId("run-status")).toHaveText("Succeeded");
-        const runId = new URL(page.url()).searchParams.get("run");
-        expect(runId).toBeTruthy();
+        const runId = await acquire(page);
         uv([
           "python",
           "-c",
           VERIFY,
           project,
-          runId!,
-          saved.entry.id,
+          runId,
+          name,
           `context-${sample}`,
           String(frequency),
           scoped ? `cooldown-${sample}` : "",
         ]);
       }
-      const after = await (
-        await page.request.get(`${endpoint.base_url}/api/v1/config-registry?limit=100`)
-      ).json();
-      expect(after.activation).toEqual(active.activation);
-      expect(
-        after.entries.filter(
-          (entry: { source: { kind: string } }) => entry.source.kind === "parameter_context",
-        ),
-      ).toHaveLength(4);
-      completed = true;
     } finally {
       uv(["scopecat", "stop", project]);
-      if (completed) await rm(project, { recursive: true, force: true });
-      else
-        await testInfo.attach("Preserved context project", {
-          body: project,
-          contentType: "text/plain",
-        });
+      await rm(project, { recursive: true, force: true });
     }
   });
 }
 
-test("adds an unknown optional table column through the GUI and launches the saved structure", async ({
+test("opens an optional column created in Python and retains unknown values through GUI save and launch", async ({
   page,
-}, testInfo) => {
-  test.setTimeout(120_000);
+}) => {
   const project = await mkdtemp(join(tmpdir(), "scopecat-structure-e2e-"));
-  let completed = false;
   try {
-    for (const name of ["src", "config", "scopecat.toml"])
-      await cp(join(ROOT, "examples/reference_lab", name), join(project, name), {
-        recursive: true,
-      });
-    uv(["scopecat", "start", project, "--port", "0", "--static-dir", resolve("dist")]);
-    const endpoint = JSON.parse(await readFile(join(project, ".scopecat/daemon.json"), "utf8")) as {
-      base_url: string;
-    };
-    const active = await (
-      await page.request.get(`${endpoint.base_url}/api/v1/config-registry?limit=100`)
-    ).json();
-    const created = await page.request.post(`${endpoint.base_url}/api/v1/samples`, {
-      data: {
-        operation_id: "create-structure",
-        sample_id: "structure-a",
-        kind: "synthetic",
-        actor: "operator",
-        content: { display_name: "Structure A" },
-      },
-    });
-    expect(created.status()).toBe(201);
-    await page.goto(`${endpoint.base_url}/#configuration`);
-    await page.getByRole("button", { name: "Save working point copy", exact: true }).click();
-    await page.getByLabel("Physical sample", { exact: true }).selectOption("structure-a@1");
-    await page.getByLabel("Working point", { exact: true }).fill("parked");
-    await page.getByLabel("Context label", { exact: true }).fill("Original structure");
-    await page.getByRole("button", { name: "Save context", exact: true }).click();
-    await page.getByRole("button", { name: "Change table structure", exact: true }).click();
-    await page.getByLabel("Structure table", { exact: true }).selectOption("qubits");
-    await page.getByLabel("Structure column ID", { exact: true }).fill("quality");
-    await page
-      .getByLabel("Structure note", { exact: true })
-      .fill("Optional analysis column, values are unknown");
-    await page.getByRole("button", { name: "Preview structure change", exact: true }).click();
-    await expect(page.getByLabel("Structure impact preview")).toContainText("qubits[0].quality");
-    const saving = page.waitForResponse(
-      (response) =>
-        response.url().endsWith("/config-registry/contexts") &&
-        response.request().method() === "POST",
-    );
-    await page.getByRole("button", { name: "Save revised working point", exact: true }).click();
-    const savedResponse = await saving;
-    expect(savedResponse.status()).toBe(200);
-    const saved = await savedResponse.json();
-    await page.getByText(/^Detailed cell origins/).click();
-    await expect(
-      page
-        .getByText("unknown · Optional analysis column, values are unknown", { exact: true })
-        .first(),
-    ).toBeVisible();
-    expect(saved.entry.source.context.structure.edits[0]).toMatchObject({
-      kind: "add_column",
-      parameter_id: "qubits",
-      column: { id: "quality" },
-    });
-    await page.getByRole("button", { name: "Use for next experiment", exact: true }).click();
-    await page.getByLabel("Experiment", { exact: true }).selectOption("signal");
+    const url = await start(project);
+    const optionalVersion = uv([
+      "python",
+      "-c",
+      `
+import sys
+import scopecat as sc
+with sc.open_project(sys.argv[1]).connect() as lab:
+    params = lab.parameters.workspace("browser")
+    params.add_column("qubits", "quality", float | None)
+    print(params.save().id)
+`,
+      project,
+    ]);
+    await page.goto(`${url}/#configuration`);
+    await editVersion(page, optionalVersion);
+    await expect(page.getByLabel("qubits[1].quality", { exact: true })).toHaveValue("");
+    await saveVersion(page, "gui-optional-quality");
+    await launchVersion(page);
     await page.getByRole("button", { name: "Preview", exact: true }).click();
     await expect(page.getByText("Preview ready", { exact: true })).toBeVisible();
-    await page.getByRole("button", { name: "Start acquisition", exact: true }).click();
-    await expect(page.getByText("experiment: Completed", { exact: true })).toBeVisible();
-    await page.getByRole("link", { name: /^Open retained run:/ }).click();
-    await expect(page.getByTestId("run-status")).toHaveText("Succeeded");
-    const runId = new URL(page.url()).searchParams.get("run");
-    expect(runId).toBeTruthy();
+    const run = await acquire(page);
     uv([
       "python",
       "-c",
@@ -283,99 +228,64 @@ import sys
 import scopecat as sc
 with sc.open_project(sys.argv[1]).connect() as lab:
     run = lab.get_run(sys.argv[2])
-    assert run.snapshot.config_source.context.entry_id == sys.argv[3]
+    assert run.snapshot.config_source.parameters == lab.parameters.get("gui-optional-quality").ref
     table = run.config.parameter_catalog.get("qubits").value_type
     assert any(column.id == "quality" for column in table.columns)
     assert all("quality" not in row for row in run.config.parameter_snapshot.get("qubits").rows)
 `,
       project,
-      runId!,
-      saved.entry.id,
+      run,
     ]);
-    const after = await (
-      await page.request.get(`${endpoint.base_url}/api/v1/config-registry?limit=100`)
-    ).json();
-    expect(after.activation).toEqual(active.activation);
-    completed = true;
   } finally {
     uv(["scopecat", "stop", project]);
-    if (completed) await rm(project, { recursive: true, force: true });
-    else
-      await testInfo.attach("Preserved structure project", {
-        body: project,
-        contentType: "text/plain",
-      });
+    await rm(project, { recursive: true, force: true });
   }
 });
 
-test("ordinary workspace keeps keyboard edits and Python units across navigation", async ({
+test("keeps keyboard edits and Python units across navigation without changing the original version", async ({
   page,
 }, info) => {
   const project = await mkdtemp(join(tmpdir(), "scopecat-workspace-e2e-"));
   try {
-    for (const name of ["src", "config", "scopecat.toml"])
-      await cp(join(ROOT, "examples/reference_lab", name), join(project, name), {
-        recursive: true,
-      });
-    uv(["scopecat", "start", project, "--port", "0", "--static-dir", resolve("dist")]);
-    const { base_url: url } = JSON.parse(
-      await readFile(join(project, ".scopecat/daemon.json"), "utf8"),
-    );
-    await page.request.post(`${url}/api/v1/samples`, {
-      data: {
-        operation_id: "author",
-        sample_id: "author",
-        kind: "synthetic",
-        actor: "operator",
-        content: { display_name: "Author" },
-      },
-    });
-    await page.goto(`${url}/#configuration`);
-    await page.getByRole("button", { name: "Save working point copy", exact: true }).click();
-    await page.getByLabel("Physical sample", { exact: true }).selectOption("author@1");
-    await page.getByLabel("Working point", { exact: true }).fill("parked");
-    await page.getByLabel("Context label", { exact: true }).fill("Initial");
-    const saving = page.waitForResponse(
-      (r) => r.url().endsWith("/config-registry/contexts") && r.request().method() === "POST",
-    );
-    await page.getByRole("button", { name: "Save context", exact: true }).click();
-    const saved = await (await saving).json();
-    uv([
+    const url = await start(project);
+    const pythonVersion = uv([
       "python",
       "-c",
       `
 import sys
 import scopecat as sc
 with sc.open_project(sys.argv[1]).connect() as lab:
-    p = lab.config.workspace(context=sys.argv[2])
-    p['qubits']['q0']['drive_carrier_frequency'] = sc.Quantity(5100, 'MHz')
-    p.save('python-roundtrip')
+    params = lab.parameters.workspace("browser")
+    params['qubits']['q0']['drive_carrier_frequency'] = sc.Quantity(5100, 'MHz')
+    print(params.save().id)
 `,
       project,
-      saved.entry.id,
     ]);
-    await page.reload();
-    await page.getByRole("button", { name: /python-roundtrip/ }).click();
-    await page.getByRole("button", { name: "Save working point copy", exact: true }).click();
-    const frequency = page.getByLabel("qubits[q0].drive_carrier_frequency", { exact: true });
+    await page.goto(`${url}/#configuration`);
+    await editVersion(page, pythonVersion);
+    const frequency = page.getByLabel("qubits[1].drive_carrier_frequency", { exact: true });
     await expect(frequency).toHaveValue("5100");
     await expect(
-      page.getByLabel("qubits[q0].drive_carrier_frequency unit", { exact: true }),
+      page.getByLabel("qubits[1].drive_carrier_frequency unit", { exact: true }),
     ).toHaveValue("MHz");
     await frequency.focus();
     await frequency.press("ControlOrMeta+A");
     await frequency.pressSequentially("5200");
     await frequency.press("Tab");
-    await page.getByRole("button", { name: "Runs", exact: true }).click();
-    await page.getByRole("button", { name: "Configuration", exact: true }).click();
+    await page
+      .getByRole("navigation", { name: "Project sections" })
+      .getByRole("button", { name: "Runs", exact: true })
+      .click();
+    await page
+      .getByRole("navigation", { name: "Project sections" })
+      .getByRole("button", { name: "Configuration", exact: true })
+      .click();
     await expect(frequency).toHaveValue("5200");
-    await expect(page.getByText("Manual · unsaved · MHz", { exact: true })).toBeVisible();
-    await page.screenshot({ path: info.outputPath("ordinary-workspace.png"), fullPage: true });
-    const resaving = page.waitForResponse(
-      (r) => r.url().endsWith("/config-registry/contexts") && r.request().method() === "POST",
-    );
-    await page.getByRole("button", { name: "Save context", exact: true }).click();
-    const final = await (await resaving).json();
+    await page.screenshot({
+      path: info.outputPath("independent-parameter-draft.png"),
+      fullPage: true,
+    });
+    await saveVersion(page, "gui-roundtrip");
     uv([
       "python",
       "-c",
@@ -383,18 +293,20 @@ with sc.open_project(sys.argv[1]).connect() as lab:
 import sys
 import scopecat as sc
 with sc.open_project(sys.argv[1]).connect() as lab:
-    p = lab.config.workspace(context=sys.argv[2])
-    assert p['qubits']['q0']['drive_carrier_frequency'] == sc.Quantity(5200, 'MHz')
-    old = lab.config.resolve_context(lab.config.workspace(context='python-roundtrip').version.context)
-    new = lab.config.resolve_context(p.version.context)
-    untouched = lambda origins: [o for o in origins if o.parameter_id != 'qubits' or o.field_id != 'drive_carrier_frequency']
-    assert untouched(old.value_origins) == untouched(new.value_origins)
+    old = lab.parameters.get(sys.argv[2])
+    new = lab.parameters.get("gui-roundtrip")
+    assert old.parameters.get("qubits").rows[0]["drive_carrier_frequency"] == sc.Quantity(5100, "MHz")
+    assert new.parameters.get("qubits").rows[0]["drive_carrier_frequency"] == sc.Quantity(5200, "MHz")
+    untouched = lambda revision: {v.id: v for v in revision.parameters.values if v.id != "qubits"}
+    assert untouched(old) == untouched(new)
+    assert old.catalog == new.catalog
+    assert lab.parameters.checkout("browser").head.revision == old.ref
 `,
       project,
-      final.entry.id,
+      pythonVersion,
     ]);
   } finally {
     uv(["scopecat", "stop", project]);
-    await info.attach("Workspace project", { body: project, contentType: "text/plain" });
+    await rm(project, { recursive: true, force: true });
   }
 });

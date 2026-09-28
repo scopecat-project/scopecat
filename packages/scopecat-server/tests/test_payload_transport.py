@@ -34,7 +34,6 @@ from scopecat.records.content import (
 from scopecat.records.run_request import RunRequest
 from scopecat.sdk.attachments import AttachmentBundle
 from scopecat.sdk.instruments import (
-    DriverCatalog,
     DriverOperation,
     DriverOutcome,
     DriverPayload,
@@ -62,6 +61,7 @@ from scopecat.sdk.payloads import (
     command_payload_from_encoded_content,
 )
 from scopecat_testkit.instrument_drivers import SignalInstrumentDriver, load_config
+from scopecat_testkit.signal_instruments import signal_driver_catalog
 
 from scopecat_server import LocalDaemonRuntime
 from scopecat_server.command_payloads import (
@@ -925,7 +925,7 @@ def _runtime(
         instrument_endpoint=LocalInstrumentBackendEndpoint(
             InstrumentBackend(
                 provider=provider,
-                driver_catalog=DriverCatalog(provider_id=provider.provider_id),
+                driver_catalog=signal_driver_catalog(provider.provider_id),
                 payload_codecs=(
                     _payload_codecs() if payload_codecs is None else payload_codecs
                 ),

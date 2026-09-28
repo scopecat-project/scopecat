@@ -9,7 +9,7 @@ version. It never activates a default or supplies verified calibration evidence.
 ```python
 from pathlib import Path
 
-params = author.config.workspace(context="my-working-point")
+params = author.parameters.workspace("my-parameter-branch")
 drive = params[Drive]
 path = Path("drive.json")
 path.write_text(drive.export_json(), encoding="utf-8")

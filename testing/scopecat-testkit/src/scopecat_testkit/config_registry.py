@@ -20,8 +20,9 @@ from scopecat.project_state import ProjectStateServices
 from scopecat.records.config import ConfigProfileSnapshot
 from scopecat.records.parameter_change import ParameterChangeApprovalRecord
 from scopecat.records.parameter_revision import ParameterRevisionContent
-from scopecat.records.setup import ExecutableSetupSnapshot, SetupRevision
+from scopecat.records.setup import ExecutableSetupSnapshot
 
+from scopecat_testkit.setup_records import retained_setup_revision
 from scopecat_testkit.workflow_fixtures import load_config as load_workflow_config
 
 
@@ -54,12 +55,7 @@ def initialize_setup(
     setup = ExecutableSetupSnapshot.from_config(config)
     with unit_of_work() as work:
         revision = work.setups.save_revision(
-            SetupRevision(
-                id="fixture-setup",
-                setup=setup,
-                content_hash=setup.content_hash,
-                actor="fixture",
-            )
+            retained_setup_revision(id="fixture-setup", setup=setup, actor="fixture")
         )
         work.setups.activate(
             revision=revision.ref,

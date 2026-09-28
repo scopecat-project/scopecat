@@ -1,589 +1,160 @@
 // @vitest-environment jsdom
-
 import "@testing-library/jest-dom/vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { getRunAnalysis } from "../runs/run-api";
-import {
-  activateConfigEntry,
-  getConfigRegistry,
-  getConfigRegistryEntry,
-  getOlderConfigActivationHistory,
-  getOlderConfigRegistryEntries,
-} from "./config-api";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { ApiError } from "../../api-client";
 import { ConfigWorkspace } from "./ConfigWorkspace";
-import type { ConfigProfileSnapshot, ConfigRegistryEntry } from "../../api-contract";
-import { getRunParameterProposals } from "../../data/parameter-proposals/api";
-
-vi.mock("../runs/run-api", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../runs/run-api")>()),
-  getRunAnalysis: vi.fn(),
+import { getSetupDefinitions } from "./setup-api";
+import {
+  commitParameterBranch,
+  getParameterRevisions,
+  saveParameterRevision,
+  type ParameterRevision,
+} from "./parameter-api";
+vi.mock("./SetupPanel", () => ({ SetupPanel: () => null }));
+vi.mock("./setup-api", () => ({ getSetupDefinitions: vi.fn() }));
+vi.mock("./parameter-api", () => ({
+  getParameterRevisions: vi.fn(),
+  saveParameterRevision: vi.fn(),
+  commitParameterBranch: vi.fn(),
 }));
-
-vi.mock("./config-api", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("./config-api")>()),
-  activateConfigEntry: vi.fn(),
-  getConfigRegistry: vi.fn(),
-  getConfigRegistryEntry: vi.fn(),
-  getOlderConfigActivationHistory: vi.fn(),
-  getOlderConfigRegistryEntries: vi.fn(),
-}));
-
-vi.mock("../../data/parameter-proposals/api", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../../data/parameter-proposals/api")>()),
-  getRunParameterProposals: vi.fn(),
-}));
-
+const base: ParameterRevision = {
+  id: "initial",
+  content_hash: "sha256:initial",
+  actor: "author",
+  note: "Measured manually",
+  catalog: {
+    id: "schema",
+    definitions: [
+      {
+        id: "frequency",
+        value_type: { shape: "scalar", atom: { type: "quantity", finite: true, unit: "GHz" } },
+      },
+      { id: "unknown", value_type: { shape: "scalar", atom: { type: "float", finite: true } } },
+    ],
+  },
+  parameters: {
+    id: "values",
+    values: [{ id: "frequency", shape: "scalar", value: { value: 4.8, unit: "GHz" } }],
+  },
+};
+let generation = 3;
 beforeEach(() => {
-  vi.mocked(getRunParameterProposals).mockResolvedValue({
-    runId: "run-calibration",
-    items: [],
-  });
-  vi.mocked(getRunAnalysis).mockRejectedValue(new Error("analysis unavailable"));
-  vi.mocked(getOlderConfigRegistryEntries).mockResolvedValue({ entries: [] });
-  vi.mocked(getOlderConfigActivationHistory).mockResolvedValue({ items: [] });
+  vi.resetAllMocks();
+  generation = 3;
+  vi.mocked(getSetupDefinitions).mockResolvedValue({ items: [] });
+  vi.mocked(getParameterRevisions).mockResolvedValue({ items: [base] });
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (request: Request) => {
+      const path = new URL(request.url).pathname;
+      const branch = {
+        name: "daily",
+        generation,
+        revision: { revision_id: base.id, content_hash: base.content_hash },
+        actor: "author",
+        note: "",
+      };
+      if (path.endsWith("/branches")) return Response.json({ items: [branch], next_cursor: null });
+      if (path.endsWith("/branches/daily")) return Response.json(branch);
+      if (path.includes("/parameters/revisions/")) return Response.json({ ...base, id: "revised" });
+      throw new Error(`Unexpected request: ${path}`);
+    }),
+  );
 });
-
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
 });
-
-describe("ConfigWorkspace", () => {
-  it("pins an old active entry even when it is outside the registry head page", async () => {
-    const current = configEntry("old-active", "sha256:old-active");
-    const recent = configEntry("recent", "sha256:recent");
-    vi.mocked(getConfigRegistry).mockResolvedValue({
-      activation: activation(120, current.id, current.content_hash),
-      activation_history: [activation(120, current.id, current.content_hash)],
-      entries: [recent],
-      entries_next_cursor: 119,
-    });
-    vi.mocked(getConfigRegistryEntry).mockImplementation(async (entryId) =>
-      entryDetail(entryId === current.id ? current : recent),
-    );
-
-    renderWorkspace();
-
-    expect(await screen.findByRole("button", { name: /old-active/i })).toBeInTheDocument();
-    expect(screen.getAllByText("Default").length).toBeGreaterThan(0);
-    expect(getConfigRegistryEntry).toHaveBeenCalledWith("old-active", expect.any(AbortSignal));
-  });
-
-  it("loads older saved versions and activation history independently", async () => {
-    const current = configEntry("current", "sha256:current");
-    const older = configEntry("older", "sha256:older");
-    vi.mocked(getConfigRegistry).mockResolvedValue({
-      activation: activation(3, current.id, current.content_hash),
-      activation_history: [activation(3, current.id, current.content_hash)],
-      entries: [current],
-      entries_next_cursor: 2,
-      activation_history_next_cursor: 3,
-    });
-    vi.mocked(getOlderConfigRegistryEntries).mockResolvedValue({
-      entries: [older],
-      activation: activation(3, current.id, current.content_hash),
-    });
-    vi.mocked(getOlderConfigActivationHistory).mockResolvedValue({
-      items: [activation(2, older.id, older.content_hash)],
-    });
-    vi.mocked(getConfigRegistryEntry).mockImplementation(async (entryId) =>
-      entryDetail(entryId === older.id ? older : current),
-    );
-
-    renderWorkspace();
-
-    expect(await screen.findByRole("button", { name: "Undo" })).toBeDisabled();
-    fireEvent.click(await screen.findByRole("button", { name: "Load older versions" }));
-    expect((await screen.findAllByText("older")).length).toBeGreaterThan(0);
-    expect(getOlderConfigRegistryEntries).toHaveBeenCalledWith(2);
-
-    fireEvent.click(screen.getByRole("button", { name: "Load older changes" }));
-    expect(await screen.findByText("G2")).toBeInTheDocument();
-    expect(getOlderConfigActivationHistory).toHaveBeenCalledWith(3);
-    expect(screen.getByRole("button", { name: "Undo" })).toBeEnabled();
-  });
-
-  it("presents saved versions as defaults and undo without generation ceremony", async () => {
-    vi.mocked(getConfigRegistry).mockResolvedValue({
-      activation: activation(3, "baseline", "sha256:baseline"),
-      activation_history: [
-        activation(3, "baseline", "sha256:baseline", "baseline"),
-        activation(2, "baseline", "sha256:baseline", "calibrated"),
-        activation(1, "calibrated", "sha256:calibrated", undefined, "inventory_migration"),
-      ],
-      entries: [
-        configEntry("baseline", "sha256:baseline"),
-        configEntry("calibrated", "sha256:calibrated"),
-      ],
-    });
-    vi.mocked(getConfigRegistryEntry).mockImplementation(async (entryId) => {
-      const contentHash = `sha256:${entryId}`;
-      return {
-        entry: configEntry(entryId, contentHash),
-        config: emptyConfig(entryId),
-        summary: {
-          id: entryId,
-          parameterCount: 0,
-          instrumentCount: 0,
-        },
-      };
-    });
-    vi.mocked(activateConfigEntry).mockResolvedValue();
-
-    renderWorkspace();
-
-    expect(await screen.findByRole("heading", { name: "Parameter workspace" })).toBeInTheDocument();
-    expect(screen.getAllByText("Saved versions").length).toBeGreaterThan(0);
-    expect(screen.getByRole("button", { name: "Undo" })).toBeEnabled();
-    expect(screen.queryByText("Runtime-derived default")).not.toBeInTheDocument();
-    expect(await screen.findByText("Direct configuration profile")).toBeInTheDocument();
-    expect(screen.getByText("Saved from one complete config snapshot.")).toBeInTheDocument();
-    expect(screen.queryByText(/application-provided/i)).not.toBeInTheDocument();
-    expect(screen.getByText("Inventory migration")).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { name: /calibrated.*direct profile/i }));
-    const setDefault = await screen.findByRole("button", { name: "Set as default" });
-    await waitFor(() => expect(setDefault).toBeEnabled());
-    fireEvent.click(setDefault);
-    const activateDialog = await screen.findByRole("alertdialog");
-    expect(activateDialog).toHaveTextContent("Set calibrated as the default configuration?");
-    fireEvent.click(within(activateDialog).getByRole("button", { name: "Set as default" }));
-
-    await waitFor(() =>
-      expect(activateConfigEntry).toHaveBeenCalledWith({
-        operation_id: expect.stringMatching(/^ui-config-activate-/),
-        entry_id: "calibrated",
-        actor: "local-operator",
-        note: "",
-        expected_generation: 3,
-      }),
-    );
-
-    const undo = screen.getByRole("button", { name: "Undo" });
-    await waitFor(() => expect(undo).toBeEnabled());
-    fireEvent.click(undo);
-    const undoDialog = await screen.findByRole("alertdialog");
-    expect(undoDialog).toHaveTextContent("Restore calibrated as the default configuration?");
-    fireEvent.click(within(undoDialog).getByRole("button", { name: "Restore default" }));
-    await waitFor(() =>
-      expect(activateConfigEntry).toHaveBeenLastCalledWith({
-        operation_id: expect.stringMatching(/^ui-config-undo-/),
-        entry_id: "calibrated",
-        actor: "local-operator",
-        note: "",
-        expected_generation: 3,
-      }),
-    );
-  });
-
-  it.each(["manual_parameter_updates", "candidate_config"] as const)(
-    "distinguishes accepting and restoring a %s entry outside the history page",
-    async (sourceKind) => {
-      const entry = runtimeDerivedEntry(sourceKind);
-      const current = configEntry("current", "sha256:current");
-      vi.mocked(getConfigRegistry).mockResolvedValue({
-        activation: activation(120, current.id, current.content_hash),
-        activation_history: [activation(120, current.id, current.content_hash)],
-        activation_history_next_cursor: 120,
-        entries: [current, entry],
-      });
-      let prior: ReturnType<typeof activation> | null = null;
-      vi.mocked(getConfigRegistryEntry).mockImplementation(async (entryId) => ({
-        ...entryDetail(entryId === current.id ? current : entry),
-        latestActivation: entryId === entry.id ? prior : null,
-      }));
-      vi.mocked(activateConfigEntry).mockResolvedValue();
-      renderWorkspace();
-      fireEvent.click(await screen.findByRole("button", { name: new RegExp(entry.id) }));
-      expect(await screen.findByRole("button", { name: "Accept as default" })).toBeEnabled();
-      cleanup();
-
-      prior = activation(2, entry.id, entry.content_hash);
-      const { queryClient } = renderWorkspace();
-      fireEvent.click(await screen.findByRole("button", { name: new RegExp(entry.id) }));
-      const restore = await screen.findByRole("button", { name: "Restore default" });
-      await waitFor(() => expect(restore).toBeEnabled());
-      expect(screen.getByText(/Previously selected at G2/)).toHaveTextContent(
-        "does not renew calibration validity or run devices",
-      );
-      fireEvent.click(restore);
-      const dialog = await screen.findByRole("alertdialog");
-      expect(dialog).toHaveTextContent("exact saved parameters from G2");
-      expect(dialog).toHaveTextContent("calibration validity is not renewed");
-      // Polling must not silently retarget the reviewed command to a newer head.
-      await act(async () => {
-        queryClient.setQueryData(["config", "registry"], {
-          activation: activation(121, current.id, current.content_hash),
-          activation_history: [activation(121, current.id, current.content_hash)],
-          entries: [current, entry],
-        });
-      });
-      fireEvent.click(within(dialog).getByRole("button", { name: "Restore default" }));
-      await waitFor(() =>
-        expect(activateConfigEntry).toHaveBeenLastCalledWith({
-          operation_id: expect.stringMatching(/^ui-config-activate-/),
-          entry_id: entry.id,
-          actor: "local-operator",
-          note: "",
-          expected_generation: 120,
-        }),
-      );
-      expect(getOlderConfigActivationHistory).not.toHaveBeenCalled();
-    },
+function mount() {
+  const selected = vi.fn();
+  render(
+    <QueryClientProvider
+      client={
+        new QueryClient({
+          defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+        })
+      }
+    >
+      <ConfigWorkspace daemonUnavailable={false} onSelectConfiguration={selected} />
+    </QueryClientProvider>,
   );
-
-  it.each(["manual_parameter_updates", "candidate_config"] as const)(
-    "marks a %s default as runtime-derived without claiming source drift",
-    async (sourceKind) => {
-      const entry = runtimeDerivedEntry(sourceKind);
-      vi.mocked(getConfigRegistry).mockResolvedValue({
-        activation: activation(3, entry.id, entry.content_hash),
-        activation_history: [activation(3, entry.id, entry.content_hash)],
-        entries: [entry],
-      });
-      vi.mocked(getConfigRegistryEntry).mockResolvedValue({
-        entry,
-        config: emptyConfig(entry.id),
-        summary: {
-          id: entry.id,
-          parameterCount: 0,
-          instrumentCount: 0,
-        },
-      });
-
-      renderWorkspace();
-
-      const notice = await screen.findByRole("note");
-      expect(within(notice).getByText("Runtime-derived default")).toBeInTheDocument();
-      expect(notice).toHaveTextContent(
-        "cannot tell whether the project's Git/Python configuration source is synchronized",
-      );
-      expect(notice).toHaveTextContent("scopecat config diff .");
-      expect(notice).not.toHaveTextContent(/drift/i);
-    },
-  );
-
-  it("opens the immutable base entry for a manual parameter update", async () => {
-    const entry = runtimeDerivedEntry("manual_parameter_updates");
-    const baseline = configEntry("baseline", "sha256:baseline");
-    const entries = [entry, baseline];
-    vi.mocked(getConfigRegistry).mockResolvedValue({
-      activation: activation(3, entry.id, entry.content_hash),
-      activation_history: [activation(3, entry.id, entry.content_hash)],
-      entries,
-    });
-    vi.mocked(getConfigRegistryEntry).mockImplementation(async (entryId) => {
-      const selected = entries.find((item) => item.id === entryId)!;
-      return entryDetail(selected);
-    });
-
-    renderWorkspace();
-
-    expect(await screen.findByText("Manual parameter update")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Open base version baseline" }));
-
-    expect(await screen.findByRole("heading", { name: "baseline" })).toBeInTheDocument();
-    expect(screen.getByText("Direct configuration profile")).toBeInTheDocument();
+  return selected;
+}
+async function edit() {
+  await screen.findByRole("option", { name: "initial" });
+  fireEvent.change(screen.getByLabelText("Saved parameter version"), {
+    target: { value: "initial" },
   });
-
-  it("follows a refreshed default until the operator selects a saved version", async () => {
-    const baseline = configEntry("baseline", "sha256:baseline");
-    const candidate = runtimeDerivedEntry("candidate_config");
-    const imported = configEntry("imported", "sha256:imported");
-    const initial = {
-      activation: activation(1, baseline.id, baseline.content_hash),
-      activation_history: [activation(1, baseline.id, baseline.content_hash)],
-      entries: [baseline],
-    };
-    const accepted = {
-      activation: activation(2, candidate.id, candidate.content_hash),
-      activation_history: [
-        activation(2, candidate.id, candidate.content_hash),
-        ...initial.activation_history,
-      ],
-      entries: [candidate, baseline],
-    };
-    const importedDefault = {
-      activation: activation(3, imported.id, imported.content_hash),
-      activation_history: [
-        activation(3, imported.id, imported.content_hash),
-        ...accepted.activation_history,
-      ],
-      entries: [imported, ...accepted.entries],
-    };
-    vi.mocked(getConfigRegistry)
-      .mockResolvedValueOnce(initial)
-      .mockResolvedValueOnce(accepted)
-      .mockResolvedValue(importedDefault);
-    vi.mocked(getConfigRegistryEntry).mockImplementation(async (entryId) => {
-      const entry = importedDefault.entries.find((item) => item.id === entryId)!;
-      return entryDetail(entry);
-    });
-
-    const { queryClient } = renderWorkspace();
-
-    expect(await screen.findByRole("heading", { name: baseline.id })).toBeInTheDocument();
-    await queryClient.invalidateQueries({ queryKey: ["config", "registry"] });
-    expect(await screen.findByText("Analysis candidate")).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { name: /baseline.*direct profile/i }));
-    expect(await screen.findByRole("heading", { name: baseline.id })).toBeInTheDocument();
-    await queryClient.invalidateQueries({ queryKey: ["config", "registry"] });
-    expect(screen.getByRole("heading", { name: baseline.id })).toBeInTheDocument();
-    await waitFor(() =>
-      expect(screen.getByTestId("active-config-entry")).toHaveTextContent(imported.id),
-    );
+  fireEvent.click(screen.getByRole("button", { name: "Edit a copy" }));
+  fireEvent.change(screen.getByLabelText("New version name"), { target: { value: "revised" } });
+}
+it("selects exact independent parameters without a device or global default", async () => {
+  const selected = mount();
+  await screen.findByRole("option", { name: "initial" });
+  fireEvent.change(screen.getByLabelText("Saved parameter version"), {
+    target: { value: "initial" },
   });
-
-  it("joins candidate proposals, analyses, and approval", async () => {
-    const entry = runtimeDerivedEntry("candidate_config");
-    vi.mocked(getConfigRegistry).mockResolvedValue({
-      activation: activation(3, entry.id, entry.content_hash),
-      activation_history: [activation(3, entry.id, entry.content_hash)],
-      entries: [entry],
-    });
-    vi.mocked(getConfigRegistryEntry).mockResolvedValue(entryDetail(entry));
-    vi.mocked(getRunParameterProposals).mockResolvedValue({
-      runId: "run-calibration",
-      items: [
-        {
-          id: "fit-result",
-          sourceRunId: "run-calibration",
-          analysisRecordId: "analysis-fit-r1",
-          baseConfigId: "baseline",
-          baseContentHash: "sha256:baseline",
-          reason: "Peak moved",
-          evidenceOutputIds: ["selected-fit"],
-          confidence: 0.98,
-          deltas: [],
-          approval: {
-            actor: "nightly-calibration",
-            note: "High-confidence fit",
-            approvedAt: "2026-07-24T08:00:00Z",
-          },
-        },
-        {
-          id: "endpoint-only-result",
-          sourceRunId: "run-calibration",
-          analysisRecordId: "analysis-endpoint-only-r1",
-          baseConfigId: "baseline",
-          baseContentHash: "sha256:baseline",
-          reason: "Not part of this candidate",
-          evidenceOutputIds: [],
-          confidence: 0.9,
-          deltas: [],
-        },
-      ],
-    });
-    vi.mocked(getRunAnalysis).mockResolvedValue({
-      id: "analysis-fit-r1",
-      title: "Frequency fit",
-      key: "fit",
-      revision: 1,
-      publicationHash: "sha256:analysis-fit-r1",
-      publishedAt: "2026-08-17T12:00:00Z",
-      subject: "run",
-      inputs: [],
-      executions: [],
-      outputs: [],
-    });
-    const openRun = vi.fn();
-
-    renderWorkspace(openRun);
-
-    expect(await screen.findByText("Analysis candidate")).toBeInTheDocument();
-    expect(screen.getByText("run-calibration")).toBeInTheDocument();
-    const evidence = await screen.findAllByRole("article", {
-      name: /^Proposal /,
-    });
-    expect(evidence).toHaveLength(1);
-    expect(evidence.map((item) => item.getAttribute("aria-label"))).toEqual([
-      "Proposal fit-result",
-    ]);
-    expect(
-      screen.queryByRole("article", {
-        name: "Proposal endpoint-only-result",
-      }),
-    ).not.toBeInTheDocument();
-    expect(await screen.findByText("analysis-fit-r1")).toBeInTheDocument();
-    expect(screen.getByText("Frequency fit")).toBeInTheDocument();
-    expect(screen.getByText("Approved · nightly-calibration")).toBeInTheDocument();
-    expect(screen.getByText("analysis-candidate-verification-r1")).toBeInTheDocument();
-    expect(screen.getByText("decision")).toBeInTheDocument();
-    expect(screen.getByText("High-confidence fit")).toBeInTheDocument();
-    expect(document.querySelector('time[datetime="2026-07-24T08:00:00Z"]')).toBeInTheDocument();
-    expect(getRunAnalysis).toHaveBeenCalledWith(
-      "run-calibration",
-      "analysis-fit-r1",
-      expect.any(AbortSignal),
-    );
-
-    fireEvent.click(screen.getByRole("button", { name: "Open producing run" }));
-    expect(openRun).toHaveBeenCalledWith("run-calibration");
+  fireEvent.click(screen.getByRole("button", { name: "Use for next experiment" }));
+  expect(selected).toHaveBeenCalledWith({
+    kind: "parameters",
+    ref: { revision_id: "initial", content_hash: "sha256:initial" },
+    overrides: [],
   });
-
-  it("keeps approval note and time unresolved while proposals load", async () => {
-    const entry = runtimeDerivedEntry("candidate_config");
-    vi.mocked(getConfigRegistry).mockResolvedValue({
-      activation: activation(3, entry.id, entry.content_hash),
-      activation_history: [activation(3, entry.id, entry.content_hash)],
-      entries: [entry],
-    });
-    vi.mocked(getConfigRegistryEntry).mockResolvedValue(entryDetail(entry));
-    vi.mocked(getRunParameterProposals).mockImplementation(
-      () => new Promise<Awaited<ReturnType<typeof getRunParameterProposals>>>(() => undefined),
-    );
-
-    renderWorkspace();
-
-    const evidence = await screen.findByRole("article", {
-      name: "Proposal fit-result",
-    });
-    expect(within(evidence).getByText("Loading proposal")).toBeInTheDocument();
-    expect(within(evidence).getByText("Loading approval")).toBeInTheDocument();
-    expect(within(evidence).queryByText("Note")).not.toBeInTheDocument();
-    expect(within(evidence).queryByText("Approved")).not.toBeInTheDocument();
-  });
-
-  it("does not report missing approval note or time when proposals fail", async () => {
-    const entry = runtimeDerivedEntry("candidate_config");
-    vi.mocked(getConfigRegistry).mockResolvedValue({
-      activation: activation(3, entry.id, entry.content_hash),
-      activation_history: [activation(3, entry.id, entry.content_hash)],
-      entries: [entry],
-    });
-    vi.mocked(getConfigRegistryEntry).mockResolvedValue(entryDetail(entry));
-    vi.mocked(getRunParameterProposals).mockRejectedValue(new Error("proposal store offline"));
-
-    renderWorkspace();
-
-    expect(
-      await screen.findByText("Proposal evidence unavailable: proposal store offline"),
-    ).toBeInTheDocument();
-    const evidence = screen.getByRole("article", {
-      name: "Proposal fit-result",
-    });
-    expect(within(evidence).getByText("Proposal details unavailable")).toBeInTheDocument();
-    expect(within(evidence).getByText("Approval unavailable")).toBeInTheDocument();
-    expect(within(evidence).queryByText("Note")).not.toBeInTheDocument();
-    expect(within(evidence).queryByText("Approved")).not.toBeInTheDocument();
-  });
+  expect(saveParameterRevision).not.toHaveBeenCalled();
+  expect(commitParameterBranch).not.toHaveBeenCalled();
 });
-
-function renderWorkspace(onOpenRun?: (runId: string) => void) {
-  const queryClient = new QueryClient({
-    defaultOptions: {
-      queries: { retry: false },
-      mutations: { retry: false },
-    },
+it("preserves unknown values and retains the draft after validation fails", async () => {
+  vi.mocked(saveParameterRevision).mockRejectedValue(new Error("Invalid frequency"));
+  mount();
+  await edit();
+  fireEvent.change(screen.getByLabelText("frequency"), { target: { value: "4.9" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save parameter version" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("Invalid frequency");
+  expect(screen.getByLabelText("frequency")).toHaveValue(4.9);
+  expect(saveParameterRevision).toHaveBeenCalledWith(
+    expect.objectContaining({
+      revision_id: "revised",
+      parameters: {
+        id: "values",
+        values: [{ id: "frequency", shape: "scalar", value: { value: 4.9, unit: "GHz" } }],
+      },
+    }),
+  );
+  expect(base.parameters.values).toEqual([
+    { id: "frequency", shape: "scalar", value: { value: 4.8, unit: "GHz" } },
+  ]);
+});
+it("keeps the reviewed branch generation until the operator explicitly refreshes it", async () => {
+  vi.mocked(commitParameterBranch).mockRejectedValue(
+    new ApiError("Branch changed; review latest head", 409),
+  );
+  mount();
+  await edit();
+  fireEvent.change(screen.getByLabelText("Named branch (optional)"), {
+    target: { value: "daily" },
   });
-  return {
-    ...render(
-      <QueryClientProvider client={queryClient}>
-        <ConfigWorkspace daemonUnavailable={false} onOpenRun={onOpenRun} />
-      </QueryClientProvider>,
+  await screen.findByText(/Update daily from generation 3/);
+  generation = 4;
+  const save = screen.getByRole("button", { name: "Save parameter version" });
+  fireEvent.click(save);
+  await screen.findByRole("alert");
+  expect(commitParameterBranch).toHaveBeenLastCalledWith(
+    expect.objectContaining({ name: "daily", expected_generation: 3 }),
+  );
+  fireEvent.click(save);
+  await waitFor(() => expect(commitParameterBranch).toHaveBeenCalledTimes(2));
+  expect(commitParameterBranch).toHaveBeenLastCalledWith(
+    expect.objectContaining({ expected_generation: 3 }),
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Review latest branch head" }));
+  await screen.findByText(/Update daily from generation 4/);
+  fireEvent.click(save);
+  await waitFor(() =>
+    expect(commitParameterBranch).toHaveBeenLastCalledWith(
+      expect.objectContaining({ expected_generation: 4 }),
     ),
-    queryClient,
-  };
-}
-
-function configEntry(id: string, contentHash: string): ConfigRegistryEntry {
-  return {
-    id,
-    content_hash: contentHash,
-    config_ref: `entries/${id}.json`,
-    actor: "Ada",
-    recorded_at: "2026-07-24T08:00:00Z",
-    source: { kind: "direct_config_profile" },
-    note: "",
-  };
-}
-
-function runtimeDerivedEntry(
-  kind: "manual_parameter_updates" | "candidate_config",
-  proposalId = "fit-result",
-): ConfigRegistryEntry {
-  const entry = configEntry("runtime-default", "sha256:runtime-default");
-  return {
-    ...entry,
-    source:
-      kind === "manual_parameter_updates"
-        ? {
-            kind,
-            base_entry_id: "baseline",
-            base_config_content_hash: "sha256:baseline",
-            base_registry_generation: 2,
-          }
-        : {
-            kind,
-            proposal_id: proposalId,
-            run_id: "run-calibration",
-            base_config_content_hash: "sha256:baseline",
-            acceptance: {
-              kind: "cross_run_verification",
-              decision: {
-                analysis_record_id: "analysis-candidate-verification-r1",
-                output_id: "decision",
-                schema_id: "tests.candidate-decision.v1",
-                schema_hash: `sha256:${"a".repeat(64)}`,
-              },
-            },
-          },
-  };
-}
-
-function activation(
-  generation: number,
-  entryId: string,
-  entryContentHash: string,
-  previousEntryId?: string,
-  action: "activation" | "inventory_migration" = "activation",
-) {
-  return {
-    generation,
-    action,
-    entry_id: entryId,
-    entry_content_hash: entryContentHash,
-    previous_entry_id: previousEntryId,
-    actor: "Ada",
-    note: "",
-    recorded_at: "2026-07-24T08:00:00Z",
-  };
-}
-
-function entryDetail(entry: ConfigRegistryEntry) {
-  return {
-    entry,
-    config: emptyConfig(entry.id),
-    summary: {
-      id: entry.id,
-      parameterCount: 0,
-      instrumentCount: 0,
-    },
-  };
-}
-
-function emptyConfig(id: string): ConfigProfileSnapshot {
-  return {
-    id,
-    system: {
-      id: "system",
-      topology: {
-        entities: [],
-      },
-      instrument_registry: { instruments: [] },
-      routing: { roles: [], routes: [] },
-      domain_target: null,
-      parameter_catalog: {
-        id: "parameters",
-        definitions: [],
-      },
-    },
-    parameter_snapshot: {
-      id: "parameters",
-      values: [],
-    },
-  };
-}
+  );
+  expect(screen.getByLabelText("New version name")).toHaveValue("revised");
+});

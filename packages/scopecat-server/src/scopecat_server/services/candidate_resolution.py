@@ -61,6 +61,11 @@ def resolve_candidate_input(
             CandidateConfig(parameter_proposal=proposal),
             services=services,
         )
+        baseline = services.runs.read_snapshot(source.source_run_id)
+        if source.setup is None or source.setup != baseline.execution_setup:
+            raise BackendConflict(
+                "candidate must retain its baseline's exact application setup"
+            )
         if config_content_hash(resolved) != source.content_hash:
             raise BackendConflict(
                 "analysis candidate source does not match its resolved configuration"

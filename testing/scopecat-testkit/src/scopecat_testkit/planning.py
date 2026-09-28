@@ -213,6 +213,7 @@ def resolve_test_config(
                 proposal_id=config.proposal_id,
                 base_config_content_hash=config.base_config_content_hash,
                 content_hash=config_content_hash(selected),
+                setup=services.runs.read_snapshot(config.source_run_id).execution_setup,
             ),
         )
     if isinstance(config, ConfigProfileSnapshot):

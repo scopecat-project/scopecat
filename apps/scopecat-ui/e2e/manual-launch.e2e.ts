@@ -18,7 +18,7 @@ function uv(args: string[]): void {
     throw new Error(result.error?.message ?? result.stdout + result.stderr);
 }
 
-test("direct device pages keep separate contexts and share ownership", async ({
+test("registered devices share ownership across pages without setup selection", async ({
   page,
   context,
 }, testInfo) => {
@@ -37,45 +37,49 @@ test("direct device pages keep separate contexts and share ownership", async ({
     const second = await context.newPage();
     await page.goto(`${endpoint.base_url}/#instruments`);
     await second.goto(`${endpoint.base_url}/#instruments`);
-    await page.getByLabel("Device context", { exact: true }).selectOption("browser-bench-a");
-    await second.getByLabel("Device context", { exact: true }).selectOption("browser-bench-b");
+    await expect(page.getByLabel("Experiment setup", { exact: true })).toHaveCount(0);
     await page.getByTitle("Inspect instrument drive-lo-a").click();
     await second.getByTitle("Inspect instrument drive-lo-a").click();
-    await second.getByRole("button", { name: "Configure device", exact: true }).click();
-    const connectionDialog = second.getByRole("dialog");
-    await expect(connectionDialog).toBeVisible();
     const opening = page.waitForRequest((request) =>
       request.url().endsWith("/instrument-sessions"),
     );
     await page.getByRole("button", { name: "Connect", exact: true }).click();
-    expect((await opening).postDataJSON().setup.revision_id).toBe("browser-bench-a");
+    const deviceSetup = (await opening).postDataJSON().setup;
+    expect(deviceSetup.revision_id).toMatch(/^resolved:/);
     await expect(page.getByText("Interactive session connected")).toBeVisible();
-    await expect(page.getByLabel("Device context", { exact: true })).toBeDisabled();
-    await connectionDialog.getByRole("button", { name: "Test connection", exact: true }).click();
-    await expect(connectionDialog.getByRole("alert")).toContainText("resources are busy");
-    await connectionDialog.getByRole("button", { name: "Cancel", exact: true }).click();
-    await second.getByRole("button", { name: "Refresh instruments", exact: true }).click();
-    await expect(second.getByRole("button", { name: "Connect", exact: true })).not.toBeVisible();
-    await expect(second.getByLabel("Device context", { exact: true })).toHaveValue(
-      "browser-bench-b",
+    const inventory = await (
+      await second.request.get(`${endpoint.base_url}/api/v1/devices`)
+    ).json();
+    const device = inventory.items.find(
+      (item: { device: { id: string } }) => item.device.id === "drive-lo-a",
     );
+    const blocked = await second.request.post(
+      `${endpoint.base_url}/api/v1/devices/drive-lo-a/connection-tests`,
+      {
+        data: {
+          expected_head: device.device.head,
+          actor: "browser-test",
+          operation_id: "competing-probe",
+        },
+      },
+    );
+    expect(blocked.status()).toBe(409);
+    expect(await blocked.text()).toContain("resources are busy");
+    await second.getByRole("button", { name: "Refresh", exact: true }).click();
+    await expect(second.getByRole("button", { name: "Connect", exact: true })).not.toBeVisible();
     await page.getByRole("button", { name: "Disconnect", exact: true }).click();
-    await expect(page.getByLabel("Device context", { exact: true })).toBeEnabled();
-    await second.getByRole("button", { name: "Refresh instruments", exact: true }).click();
+    await second.getByRole("button", { name: "Refresh", exact: true }).click();
     const nextOpening = second.waitForRequest((request) =>
       request.url().endsWith("/instrument-sessions"),
     );
     await second.getByRole("button", { name: "Connect", exact: true }).click();
-    expect((await nextOpening).postDataJSON().setup.revision_id).toBe("browser-bench-b");
+    expect((await nextOpening).postDataJSON().setup).toEqual(deviceSetup);
     await expect(second.getByText("Interactive session connected")).toBeVisible();
     await second.getByRole("button", { name: "Disconnect", exact: true }).click();
-    await expect(second.getByLabel("Device context", { exact: true })).toBeEnabled();
-    await second.getByRole("button", { name: "Configure device", exact: true }).click();
-    await connectionDialog.getByRole("button", { name: "Test connection", exact: true }).click();
-    await expect(connectionDialog.getByRole("status")).toContainText(
-      /Connected to|Connection succeeded/,
-    );
-    await connectionDialog.getByRole("button", { name: "Cancel", exact: true }).click();
+    await second.getByRole("button", { name: "Test connection", exact: true }).click();
+    await expect(
+      second.getByText(/Connection test passed; the test session was released/),
+    ).toBeVisible();
     await second.close();
     completed = true;
   } finally {
@@ -122,7 +126,7 @@ from scopecat.application import LabApplication
 from scopecat_instruments import rf_source
 with LabApplication().connect(sys.argv[1]) as lab:
     target = rf_source("drive-lo-a")
-    with lab.instruments.open(target, setup=lab.setup.active().revision.ref) as devices:
+    with lab.devices.open("drive-lo-a") as devices:
         observed = devices[target].frequency.read_observation()
         assert observed.source == "hardware_query"
         assert devices[target].apply(frequency=sc.Quantity(4.95, "GHz")).status == "applied"

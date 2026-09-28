@@ -14,7 +14,6 @@ from scopecat.api.instruments import (
     InstrumentRef,
     InstrumentSessionHandle,
     instrument,
-    temporary_instrument,
 )
 from scopecat.api.lab import LabClient
 from scopecat.config.scientific_binding import bind_scientific_evidence
@@ -29,7 +28,7 @@ from scopecat.daemon.wire import (
     InstrumentSessionOpenCommand,
     RunSubmission,
     SetupActivateCommand,
-    SetupSaveCommand,
+    SetupImportCommand,
 )
 from scopecat.kernel.problems import ProblemPhase, model_location, problem
 from scopecat.kernel.quantity import Quantity
@@ -58,6 +57,7 @@ from scopecat.records.setup import (
     ActiveSetupView,
     ExecutableSetupSnapshot,
     SetupRevision,
+    SetupRevisionRef,
 )
 from scopecat.sdk.instruments import (
     AcquisitionResultRef,
@@ -104,6 +104,7 @@ from scopecat.sdk.instruments.commands import (
 )
 from scopecat_testkit.instrument_drivers import SignalInstrumentDriver, load_config
 from scopecat_testkit.payload_codecs import json_payload_codecs
+from scopecat_testkit.server.instruments import signal_driver_catalog
 
 import scopecat_server.instruments.runtime as instrument_service_module
 from scopecat_server import LocalDaemonRuntime
@@ -843,19 +844,22 @@ def test_candidate_virtual_probe_does_not_borrow_a_configured_virtual_device(
                 instrument_ids=(binding.id,),
             )
         )
-        result = daemon.probe_driver(
-            InstrumentDriverProbeCommand(
-                setup=setup,
-                operation_id="new-virtual-test",
-                actor="bob",
-                binding=binding.model_copy(update={"id": "new-simulator"}),
-            )
+        from scopecat.records.device import DeviceConnection
+
+        lab = LabClient(daemon, operator="bob")
+        device = lab.devices.register(
+            device_id="new-simulator",
+            label="New simulator",
+            connection=DeviceConnection(
+                driver=lab.devices.drivers()[0], connection=binding.connection
+            ),
         )
+        result = lab.devices.test_connection(device)
         assert result.description is not None
         assert result.description.instrument_id == "new-simulator"
         assert len(provider.drivers) == 2
         assert not provider.drivers[0].disconnected
-        assert provider.drivers[1].disconnect_count == 1
+        assert provider.drivers[1].disconnect_count == 0
         records = runtime.application.executor._control.list_instrument_sessions()
         assert {record.state for record in records} == {"active", "closed"}
         daemon.close_instrument_session(owner.session_id)
@@ -1041,7 +1045,9 @@ def test_exact_observed_member_reads_the_current_actor_cache_without_hardware_io
             daemon.close_instrument_session(session.session_id)
 
 
-def test_notebook_can_attach_a_session_only_instrument(tmp_path: Path) -> None:
+def test_notebook_can_open_registered_device_without_experiment_setup(
+    tmp_path: Path,
+) -> None:
     provider = _TrackingProvider()
     config = load_config()
     [configured] = config.instrument_registry.instruments
@@ -1065,13 +1071,7 @@ def test_notebook_can_attach_a_session_only_instrument(tmp_path: Path) -> None:
             ),
         ),
     )
-    monitor = temporary_instrument(
-        _raw_instrument("monitor-scope"),
-        driver_id=configured.driver_id,
-        connection=VirtualInstrumentConnection(
-            options={"purpose": "inspect-awg-output"}
-        ),
-    )
+    monitor = _raw_instrument("monitor-scope")
 
     with (
         _runtime(tmp_path, provider, config=config, driver_catalog=catalog) as runtime,
@@ -1079,9 +1079,19 @@ def test_notebook_can_attach_a_session_only_instrument(tmp_path: Path) -> None:
     ):
         lab = LabClient(_daemon_client(transport), operator="debugger")
 
-        with lab.instruments.open(
-            monitor, setup=runtime.application.setup.current().revision.ref
-        ) as session:
+        from scopecat.records.device import DeviceConnection
+
+        lab.devices.register(
+            device_id="monitor-scope",
+            label="Monitor scope",
+            connection=DeviceConnection(
+                driver=lab.devices.drivers()[0],
+                connection=VirtualInstrumentConnection(
+                    options={"purpose": "inspect-awg-output"}
+                ),
+            ),
+        )
+        with lab.devices.open("monitor-scope") as session:
             assert session[monitor] is session
             assert session._describe().instrument_id == "monitor-scope"
             assert session._observed_state().instrument_id == "monitor-scope"
@@ -1680,11 +1690,13 @@ def test_session_open_retains_selected_setup_across_global_activation(
     with _runtime(tmp_path, provider) as runtime:  # noqa: SIM117
         with TestClient(runtime.app()) as transport:
             original = runtime.application.setup.current()
-            get_setup = runtime.application.setup.get
+            get_setup = runtime.application.setup.require_available
 
-            def resolve_then_activate(revision_id: str) -> SetupRevision:
-                resolved = get_setup(revision_id)
-                monkeypatch.setattr(runtime.application.setup, "get", get_setup)
+            def resolve_then_activate(reference: SetupRevisionRef) -> SetupRevision:
+                resolved = get_setup(reference)
+                monkeypatch.setattr(
+                    runtime.application.setup, "require_available", get_setup
+                )
                 _select_setup(
                     runtime,
                     config.model_copy(update={"id": "activated-during-open"}),
@@ -1695,7 +1707,7 @@ def test_session_open_retains_selected_setup_across_global_activation(
 
             monkeypatch.setattr(
                 runtime.application.setup,
-                "get",
+                "require_available",
                 resolve_then_activate,
             )
             daemon = _daemon_client(transport)
@@ -1710,7 +1722,7 @@ def test_session_open_retains_selected_setup_across_global_activation(
             )
             assert opened.setup == original.revision.ref
             assert (
-                runtime.application.setup.current().revision.id
+                runtime.application.setup.current().revision.resolution.definition_id
                 == "activated-during-open"
             )
             assert len(provider.drivers) == 1
@@ -1723,7 +1735,7 @@ def test_saved_device_contexts_work_without_activation_and_share_claims(
     provider = _TrackingProvider()
     backend = InstrumentBackend(
         provider=provider,
-        driver_catalog=DriverCatalog(provider_id=provider.provider_id),
+        driver_catalog=signal_driver_catalog(provider.provider_id),
     )
     with (
         LocalDaemonRuntime(
@@ -1752,8 +1764,8 @@ def test_saved_device_contexts_work_without_activation_and_share_claims(
                 ),
             }
         )
-        first = lab.setup.save(original, name="bench-a").ref
-        second = lab.setup.save(alias, name="bench-b").ref
+        first = lab.setup.import_recipe(original, name="bench-a").ref
+        second = lab.setup.import_recipe(alias, name="bench-b").ref
         assert transport.get("/api/v1/setup/active").status_code == 404
         assert transport.get("/api/v1/instruments").status_code == 422
         assert lab.instruments.list(setup=first).items[0].instrument_id == "source-0"
@@ -1869,8 +1881,8 @@ def test_exclusivity_key_survives_logical_instrument_rename(tmp_path: Path) -> N
                 )
             )
 
-            assert len(provider.drivers) == 2
-            assert provider.drivers[0].disconnect_count == 1
+            assert len(provider.drivers) == 1
+            assert provider.drivers[0].disconnect_count == 0
             daemon.close_instrument_session(second.session_id)
 
 
@@ -1886,8 +1898,21 @@ def test_binding_identity_change_reconnects_idle_instrument(
     tmp_path: Path,
     instrument_update: dict[str, object],
 ) -> None:
+    from scopecat.records.device import DeviceConnection
+
     provider = _TrackingProvider()
-    with _runtime(tmp_path, provider) as runtime:  # noqa: SIM117
+    catalog = signal_driver_catalog(provider.provider_id)
+    catalog = catalog.model_copy(
+        update={
+            "drivers": (
+                *catalog.drivers,
+                catalog.drivers[0].model_copy(
+                    update={"driver_id": "tests.alternate_signal_instrument"}
+                ),
+            )
+        }
+    )
+    with _runtime(tmp_path, provider, driver_catalog=catalog) as runtime:  # noqa: SIM117
         with TestClient(runtime.app()) as transport:
             daemon = _daemon_client(transport)
             first = daemon.open_instrument_session(
@@ -1904,27 +1929,30 @@ def test_binding_identity_change_reconnects_idle_instrument(
             config = load_config()
             [instrument] = config.instrument_registry.instruments
             updated_instrument = instrument.model_copy(update=instrument_update)
-            registry = config.instrument_registry.model_copy(
-                update={"instruments": [updated_instrument]}
-            )
-            updated = config.model_copy(
-                update={
-                    "id": "updated-binding",
-                    "system": config.system.model_copy(
-                        update={"instrument_registry": registry}
+            lab = LabClient(daemon, operator="operator")
+            [device] = lab.devices.list()
+            lab.devices.update(
+                device,
+                connection=DeviceConnection(
+                    driver=runtime.application.devices.driver_ref(
+                        updated_instrument.driver_id
                     ),
-                }
+                    connection=updated_instrument.connection,
+                    safety=device.revision.content.safety,
+                    access_aliases=device.revision.content.access_aliases,
+                ),
             )
-            _select_setup(
-                runtime, updated, revision_id="updated-binding", expected_generation=1
+            definition_id = (
+                runtime.application.setup.current().revision.resolution.definition_id
             )
+            resolved = lab.setup.get(definition_id)
 
             second = daemon.open_instrument_session(
                 InstrumentSessionOpenCommand(
                     operation_id="open-after-binding-change",
                     actor="bob",
                     instrument_ids=("source-0",),
-                    setup=runtime.application.setup.current().revision.ref,
+                    setup=resolved.ref,
                 )
             )
             assert len(provider.drivers) == 2
@@ -3010,7 +3038,7 @@ def test_provider_instance_and_virtual_state_survive_across_sessions(
             instrument_endpoint=LocalInstrumentBackendEndpoint(
                 InstrumentBackend(
                     provider=provider,
-                    driver_catalog=DriverCatalog(provider_id=provider.provider_id),
+                    driver_catalog=signal_driver_catalog(provider.provider_id),
                 )
             ),
         ) as runtime,
@@ -3076,7 +3104,7 @@ def test_contract_catalog_is_empty_without_an_instrument_backend(
 ) -> None:
     config = load_config()
     with (
-        LocalDaemonRuntime(tmp_path, bootstrap_config=config) as runtime,
+        LocalDaemonRuntime(tmp_path) as runtime,
         TestClient(runtime.app()) as transport,
     ):
         catalog = _daemon_client(transport).resolve_instrument_contracts(config)
@@ -3231,7 +3259,7 @@ def _runtime(
             InstrumentBackend(
                 provider=provider,
                 driver_catalog=(
-                    DriverCatalog(provider_id=provider.provider_id)
+                    signal_driver_catalog(provider.provider_id)
                     if driver_catalog is None
                     else driver_catalog
                 ),
@@ -3670,8 +3698,8 @@ def _select_setup(
     revision_id: str,
     expected_generation: int,
 ) -> ActiveSetupView:
-    revision = runtime.application.setup.save(
-        SetupSaveCommand(
+    revision = runtime.application.setup.import_recipe(
+        SetupImportCommand(
             revision_id=revision_id,
             setup=ExecutableSetupSnapshot.from_config(config),
             actor="operator",

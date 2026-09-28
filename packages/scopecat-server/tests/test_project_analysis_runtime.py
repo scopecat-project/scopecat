@@ -28,7 +28,6 @@ from scopecat.config.registry import (
     CandidateConfigRegistrySource,
     CrossRunCandidateAcceptance,
 )
-from scopecat.config.registry.records import ContextConfigRegistrySource
 from scopecat.config.scientific_binding import bind_scientific_evidence
 from scopecat.control.models import (
     DurableEvent,
@@ -55,7 +54,7 @@ from scopecat.daemon.wire import (
     RunSubmission,
     SampleCreateCommand,
     SetupActivateCommand,
-    SetupSaveCommand,
+    SetupImportCommand,
     TerminalRunCommitCommand,
 )
 from scopecat.execution.evidence import build_terminal_contents
@@ -79,7 +78,6 @@ from scopecat.records.analysis import (
 from scopecat.records.config import (
     ConfigProfileSnapshot,
 )
-from scopecat.records.config_context import ConfigContextRef
 from scopecat.records.measurement import (
     MeasurementArray,
     MeasurementDatasetSchema,
@@ -103,6 +101,7 @@ from scopecat.records.parameter_change import (
 from scopecat.records.run_request import RunRequest
 from scopecat.records.sample import SampleRevisionDraft, SampleSelector
 from scopecat.records.setup import ExecutableSetupSnapshot
+from scopecat_testkit.server.instruments import signal_endpoint
 
 from scopecat_server import BackendConflict, LocalDaemonRuntime
 from scopecat_server.storage.sqlite.control_plane import (
@@ -380,7 +379,9 @@ def _analysis_command(proposal: ParameterChangeProposal) -> AnalysisSaveCommand:
 def test_project_analysis_compares_completed_runs_and_reloads_outputs(
     tmp_path: Path,
 ) -> None:
-    with LocalDaemonRuntime(tmp_path, bootstrap_config=_config()) as runtime:
+    with LocalDaemonRuntime(
+        tmp_path, bootstrap_config=_config(), instrument_endpoint=signal_endpoint()
+    ) as runtime:
         baseline_id = _complete_signal_run(
             runtime,
             submission_id="comparison-baseline",
@@ -588,9 +589,9 @@ def test_project_analysis_compares_completed_runs_and_reloads_outputs(
 
 
 def test_sample_analysis_is_scoped_to_runs_bound_to_that_sample(tmp_path: Path) -> None:
-    with LocalDaemonRuntime(tmp_path) as runtime:
-        setup = runtime.application.setup.save(
-            SetupSaveCommand(
+    with LocalDaemonRuntime(tmp_path, instrument_endpoint=signal_endpoint()) as runtime:
+        setup = runtime.application.setup.import_recipe(
+            SetupImportCommand(
                 revision_id="analysis-bench",
                 setup=ExecutableSetupSnapshot.from_config(_config()),
                 actor="maintainer",
@@ -745,7 +746,9 @@ def test_sample_analysis_is_scoped_to_runs_bound_to_that_sample(tmp_path: Path) 
 def test_project_analysis_allocates_distinct_revisions_for_concurrent_saves(
     tmp_path: Path,
 ) -> None:
-    with LocalDaemonRuntime(tmp_path, bootstrap_config=_config()) as runtime:
+    with LocalDaemonRuntime(
+        tmp_path, bootstrap_config=_config(), instrument_endpoint=signal_endpoint()
+    ) as runtime:
         run_id = _complete_signal_run(
             runtime,
             submission_id="concurrent-project-analysis",
@@ -797,7 +800,9 @@ def test_project_analysis_allocates_distinct_revisions_for_concurrent_saves(
 def test_project_analysis_consumes_project_datasets_facts_and_artifacts(
     tmp_path: Path,
 ) -> None:
-    with LocalDaemonRuntime(tmp_path, bootstrap_config=_config()) as runtime:
+    with LocalDaemonRuntime(
+        tmp_path, bootstrap_config=_config(), instrument_endpoint=signal_endpoint()
+    ) as runtime:
         run_id = _complete_signal_run(
             runtime,
             submission_id="project-analysis-inputs",
@@ -871,7 +876,9 @@ def test_project_analysis_publication_rolls_back_index_and_event_together(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    with LocalDaemonRuntime(tmp_path, bootstrap_config=_config()) as runtime:
+    with LocalDaemonRuntime(
+        tmp_path, bootstrap_config=_config(), instrument_endpoint=signal_endpoint()
+    ) as runtime:
         run_id = _complete_signal_run(
             runtime,
             submission_id="project-analysis-atomic",
@@ -929,7 +936,9 @@ def test_project_analysis_publication_rolls_back_index_and_event_together(
 def test_candidate_acceptance_requires_matching_cross_run_verification(
     tmp_path: Path,
 ) -> None:
-    with LocalDaemonRuntime(tmp_path, bootstrap_config=_config()) as runtime:
+    with LocalDaemonRuntime(
+        tmp_path, bootstrap_config=_config(), instrument_endpoint=signal_endpoint()
+    ) as runtime:
         baseline_id = _complete_signal_run(
             runtime,
             submission_id="verified-baseline",
@@ -1058,10 +1067,25 @@ def test_candidate_acceptance_requires_matching_cross_run_verification(
                         expected_generation=1,
                     )
                 )
-            accepted = lab.config.accept_verified(
-                proposal_analysis,
-                verified_by=(verification, "decision"),
-                entry_id="verified-candidate-config",
+            accepted = runtime.application.config.publish_config(
+                ConfigPublishCommand(
+                    operation_id="publish:verified-candidate",
+                    source=CandidateConfigRevisionSource(
+                        run_id=baseline_id,
+                        proposal_id=proposal.id,
+                        acceptance=CrossRunCandidateAcceptance(
+                            decision=ProjectAnalysisDecisionReference(
+                                analysis_record_id=verification.id,
+                                output_id="decision",
+                                schema_id=verification_decision.schema_id,
+                                schema_hash=verification_decision.schema_hash,
+                            )
+                        ),
+                    ),
+                    entry_id="verified-candidate-config",
+                    actor="nightly-calibration",
+                    expected_generation=1,
+                )
             )
 
             assert isinstance(accepted.entry.source, CandidateConfigRegistrySource)
@@ -1121,16 +1145,6 @@ def test_candidate_acceptance_requires_matching_cross_run_verification(
                     )
                 )
 
-            with pytest.raises(
-                ValueError,
-                match="must contain accepted=true",
-            ):
-                lab.config.accept_verified(
-                    proposal_analysis,
-                    verified_by=(rejected_verification, "decision"),
-                    entry_id="client-rejected-candidate",
-                )
-
 
 def _compare_entity_runs(baseline: Dataset, candidate: Dataset) -> DerivedDataset:
     left, right = baseline.align_entities(candidate, "entity", join="outer")
@@ -1153,7 +1167,9 @@ def _compare_entity_runs(baseline: Dataset, candidate: Dataset) -> DerivedDatase
 def test_cross_run_entity_comparison_freezes_sources_and_survives_restart(
     tmp_path: Path,
 ) -> None:
-    with LocalDaemonRuntime(tmp_path, bootstrap_config=_config()) as runtime:
+    with LocalDaemonRuntime(
+        tmp_path, bootstrap_config=_config(), instrument_endpoint=signal_endpoint()
+    ) as runtime:
         baseline_id = _complete_signal_run(
             runtime,
             submission_id="entity-baseline",
@@ -1214,7 +1230,9 @@ def test_cross_run_entity_comparison_freezes_sources_and_survives_restart(
 def test_primary_run_analysis_checks_secondary_owner_and_exact_content(
     tmp_path: Path,
 ) -> None:
-    with LocalDaemonRuntime(tmp_path, bootstrap_config=_config()) as runtime:
+    with LocalDaemonRuntime(
+        tmp_path, bootstrap_config=_config(), instrument_endpoint=signal_endpoint()
+    ) as runtime:
         primary_id = _complete_signal_run(runtime, submission_id="primary", signal=0.8)
         secondary_id = _complete_signal_run(
             runtime, submission_id="secondary", signal=1.1
@@ -1270,7 +1288,9 @@ def test_typed_candidate_policy_uses_retained_decision_and_workpoint(
     source = register_author_workspace(tmp_path, tmp_path)
     schema = ordinary_result_schema(_CandidateDecision)
     with (
-        LocalDaemonRuntime(tmp_path, bootstrap_config=_config()) as runtime,
+        LocalDaemonRuntime(
+            tmp_path, bootstrap_config=_config(), instrument_endpoint=signal_endpoint()
+        ) as runtime,
         TestClient(runtime.app()) as transport,
     ):
         runtime.application.author_workspaces.get(source.id).repository.publish(
@@ -1361,6 +1381,7 @@ def test_verified_parameter_branch_publication_is_atomic_and_restorable(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, sequential: bool
 ) -> None:
     from scopecat.daemon.wire import ParameterBranchPublishCommand
+    from scopecat.records.candidate_input import AnalysisCandidateRunConfigSource
 
     from scopecat_server.snapshots import create_snapshot, restore_snapshot
     from scopecat_server.storage.sqlite.parameter_branches import (
@@ -1369,12 +1390,12 @@ def test_verified_parameter_branch_publication_is_atomic_and_restorable(
 
     root = tmp_path / "source"
     with (
-        LocalDaemonRuntime(root) as runtime,
+        LocalDaemonRuntime(root, instrument_endpoint=signal_endpoint()) as runtime,
         TestClient(runtime.app()) as transport,
     ):
         lab = LabClient(_daemon_client(transport))
         initial = _config()
-        equipment = lab.setup.save(
+        equipment = lab.setup.import_recipe(
             ExecutableSetupSnapshot.from_config(initial), name="bench"
         )
         lab.setup.activate(equipment)
@@ -1385,7 +1406,7 @@ def test_verified_parameter_branch_publication_is_atomic_and_restorable(
         )
         branch = lab.parameters.create_branch("daily", revision=revision)
         untouched = lab.parameters.create_branch("other", revision=revision)
-        resolved = lab.parameters.resolve(revision)
+        resolved = lab.parameters.resolve(revision, setup=equipment)
         baseline_id = _complete_signal_run(
             runtime,
             submission_id="branch-baseline",
@@ -1460,7 +1481,8 @@ def test_verified_parameter_branch_publication_is_atomic_and_restorable(
                 second.then(first, name="wrong-order")
             chained = first.then(second, name="sequence")
             candidate_context = lab.resolve_context(candidate=chained)
-            assert candidate_context.branch is None and candidate_context.setup is None
+            assert candidate_context.branch is None
+            assert candidate_context.setup == baseline.snapshot.execution_setup
             with pytest.raises(ValueError, match="not both"):
                 lab.resolve_context(candidate=chained, branch="daily")
             candidate = chained.config
@@ -1648,6 +1670,14 @@ def test_verified_parameter_branch_publication_is_atomic_and_restorable(
     create_snapshot(load_project(root / "scopecat.toml"), tmp_path / "snapshot")
     restore_snapshot(tmp_path / "snapshot", tmp_path / "restored")
     with LocalDaemonRuntime(tmp_path / "restored") as recovered:
+        assert (
+            recovered.application.runs.get_run(baseline_id).snapshot.execution_setup
+            == resolved.config_source.setup
+        )
+        assert (
+            recovered.application.runs.get_run(candidate_id).snapshot.execution_setup
+            == resolved.config_source.setup
+        )
         assert recovered.application.config.parameter_branch("daily") == ordinary
         assert (
             recovered.application.config.publish_parameter_branch(command) == published
@@ -1665,7 +1695,12 @@ def test_verified_parameter_branch_publication_is_atomic_and_restorable(
                     .candidate_config()
                 )
                 assert retained.parameter_proposal == proposal
-                assert restored_lab.config.resolve_with_source(retained)[0] == config
+                restored_config, restored_source = (
+                    restored_lab.config.resolve_with_source(retained)
+                )
+                assert restored_config == config
+                assert isinstance(restored_source, AnalysisCandidateRunConfigSource)
+                assert restored_source.setup == resolved.config_source.setup
 
 
 def test_task_binds_adopted_candidate_atomically_and_replays_after_restart(
@@ -1720,13 +1755,15 @@ def test_task_binds_adopted_candidate_atomically_and_replays_after_restart(
         }
     )
     with (
-        LocalDaemonRuntime(tmp_path) as runtime,
+        LocalDaemonRuntime(tmp_path, instrument_endpoint=signal_endpoint()) as runtime,
         TestClient(runtime.app()) as transport,
     ):
         lab = LabClient(_daemon_client(transport))
         app = runtime.application
         lab.setup.activate(
-            lab.setup.save(ExecutableSetupSnapshot.from_config(config), name="bench")
+            lab.setup.import_recipe(
+                ExecutableSetupSnapshot.from_config(config), name="bench"
+            )
         )
         parameters = lab.parameters.save(
             name="initial",
@@ -1734,8 +1771,10 @@ def test_task_binds_adopted_candidate_atomically_and_replays_after_restart(
             parameters=config.parameter_snapshot,
         )
         branch = lab.parameters.create_branch("daily", revision=parameters)
-        context = lab.resolve_context(parameters=parameters).context
+        setup = lab.setup.get("bench")
+        context = lab.resolve_context(parameters=parameters, setup=setup).context
         check = CalibrationCheckRequest(
+            setup=setup.ref,
             scope=CalibrationScope("drive", ("q0",), "test", "1"),
             context=context,
             measurement_step="measure",
@@ -1787,7 +1826,7 @@ def test_task_binds_adopted_candidate_atomically_and_replays_after_restart(
                 expected_run_revision=parent.revision,
             )
         )
-        resolved = lab.parameters.resolve(parameters)
+        resolved = lab.parameters.resolve(parameters, setup=lab.setup.get("bench"))
         run_id = _complete_signal_run(
             runtime,
             submission_id="task-fit",
@@ -1953,240 +1992,3 @@ def test_task_binds_adopted_candidate_atomically_and_replays_after_restart(
     restore_snapshot(archive, restored)
     with LocalDaemonRuntime(restored) as recovered:
         assert recovered.application.calibration_tasks.dispatch(command) == bound
-
-
-def test_verified_candidates_publish_to_independent_working_points(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    from scopecat.api.parameter_candidates import VerifiedParameterCandidate
-    from scopecat.daemon.wire import ConfigContextPublishCommand
-
-    from scopecat_server.storage.sqlite.config_operations import (
-        SQLiteConfigOperationStore,
-    )
-
-    project_root = tmp_path / "source"
-    with (
-        LocalDaemonRuntime(project_root, bootstrap_config=_config()) as runtime,
-        TestClient(runtime.app()) as transport,
-    ):
-        lab = LabClient(_daemon_client(transport))
-        active = lab.config.active()
-        base = ConfigContextRef(
-            entry_id=active.entry.id, content_hash=active.entry.content_hash
-        )
-        commands: list[ConfigContextPublishCommand] = []
-        verified_candidates: list[VerifiedParameterCandidate] = []
-        for sample_id in ("a", "b"):
-            sample = lab.samples.create(
-                sample_id,
-                kind="synthetic",
-                content=SampleRevisionDraft(display_name=sample_id),
-            )
-            saved = lab.config.save_context(
-                entry_id=f"{sample_id}-parked",
-                base=base,
-                sample=SampleSelector(sample_id=sample.id, revision=1),
-                working_point_id="parked",
-                label=f"{sample_id} parked",
-            )
-            ref = ConfigContextRef(
-                entry_id=saved.entry.id, content_hash=saved.entry.content_hash
-            )
-            context = lab.config.resolve_context(ref)
-            samples = (
-                SampleSelector(sample_id=sample.id, revision=1, context_id="parked"),
-            )
-            baseline_id = _complete_signal_run(
-                runtime,
-                submission_id=f"{sample_id}-baseline",
-                signal=0.8,
-                submission=_submission(f"{sample_id}-baseline").model_copy(
-                    update={
-                        "config": context.config,
-                        "config_source": context.config_source,
-                        "request": RunRequest(experiment_id="scratch", samples=samples),
-                    }
-                ),
-            )
-            proposal = _analysis_proposal(baseline_id)
-            runtime.application.runs.save_run_analysis(
-                baseline_id, _analysis_command(proposal)
-            )
-            baseline = lab.get_run(baseline_id)
-            candidate = baseline.published_analysis("fit").candidate_config()
-            config, source = lab.config.resolve_with_source(candidate)
-            candidate_id = _complete_signal_run(
-                runtime,
-                submission_id=f"{sample_id}-candidate",
-                signal=1.1,
-                submission=_submission(f"{sample_id}-candidate").model_copy(
-                    update={
-                        "config": config,
-                        "config_source": source,
-                        "request": RunRequest(experiment_id="scratch", samples=samples),
-                    }
-                ),
-            )
-            comparison = lab.analysis(f"Verify {sample_id}", key=f"verify-{sample_id}")
-            comparison.measurements(baseline, id="baseline", role="baseline")
-            comparison.measurements(
-                lab.get_run(candidate_id), id="candidate", role="candidate"
-            )
-            verification = (
-                comparison.result()
-                .fact(
-                    "decision",
-                    _CandidateDecision(accepted=True),
-                    schema=_CANDIDATE_DECISION_SCHEMA,
-                )
-                .save()
-            )
-            verified_candidates.append(
-                VerifiedParameterCandidate(
-                    ParameterCandidate(lab.config, candidate),
-                    verification,
-                )
-            )
-            decision = verification.fact("decision")
-            commands.append(
-                ConfigContextPublishCommand(
-                    operation_id=f"publish-context:{sample_id}",
-                    base=ref,
-                    run_id=baseline_id,
-                    proposal_id=proposal.id,
-                    verification=ProjectAnalysisDecisionReference(
-                        analysis_record_id=verification.id,
-                        output_id="decision",
-                        schema_id=decision.schema_id,
-                        schema_hash=decision.schema_hash,
-                    ),
-                    entry_id=f"{sample_id}-calibrated",
-                    actor="operator",
-                )
-            )
-        a, b = commands
-        # Identical configuration bytes cannot authorize cross-object publication.
-        assert a.base.content_hash == b.base.content_hash
-        with pytest.raises(BackendConflict, match="exact working point"):
-            runtime.application.config.publish_context(
-                a.model_copy(update={"base": b.base})
-            )
-
-        rejected_context = lab.analysis("Rejected", key="rejected")
-        rejected_context.measurements(
-            lab.get_run(a.run_id), id="baseline", role="baseline"
-        )
-        rejected = (
-            rejected_context.result()
-            .fact(
-                "decision",
-                _CandidateDecision(accepted=False),
-                schema=_CANDIDATE_DECISION_SCHEMA,
-            )
-            .save()
-        )
-        rejection = rejected.fact("decision")
-        with pytest.raises(BackendConflict, match="did not accept"):
-            runtime.application.config.publish_context(
-                a.model_copy(
-                    update={
-                        "verification": ProjectAnalysisDecisionReference(
-                            analysis_record_id=rejected.id,
-                            output_id="decision",
-                            schema_id=rejection.schema_id,
-                            schema_hash=rejection.schema_hash,
-                        ),
-                    }
-                )
-            )
-
-        # A failure at the final ledger write rolls back approval, entry, and head.
-        def fail_receipt(*args: object) -> None:
-            raise RuntimeError("receipt unavailable")
-
-        with monkeypatch.context() as patch:
-            patch.setattr(
-                SQLiteConfigOperationStore, "commit_in_transaction", fail_receipt
-            )
-            with pytest.raises(RuntimeError, match="receipt unavailable"):
-                runtime.application.config.publish_context(a)
-        assert lab.config.latest_context(a.base).entry.id == a.base.entry_id
-        with pytest.raises(DaemonNotFoundError):
-            lab.config.entry(a.entry_id)
-        assert not any(
-            event.kind == "parameter_proposal_approved"
-            for event in _events(runtime).items
-        )
-        assert _approval_count(runtime, (a.run_id, b.run_id)) == 0
-        receipt = lab.config.publish_context(a)
-        assert isinstance(receipt.entry.source, ContextConfigRegistrySource)
-        assert isinstance(
-            receipt.entry.source.publication, CandidateConfigRegistrySource
-        )
-        assert isinstance(
-            receipt.entry.source.publication.acceptance, CrossRunCandidateAcceptance
-        )
-        assert receipt.entry.source.publication.acceptance.decision == a.verification
-        assert lab.config.context_publish_operation(a.operation_id) == receipt
-        assert lab.config.publish_context(a) == receipt
-        with pytest.raises(DaemonConflictError, match="different intent"):
-            lab.config.publish_context(a.model_copy(update={"note": "changed"}))
-        with pytest.raises(DaemonConflictError, match="Working point changed"):
-            lab.config.publish_context(
-                a.model_copy(update={"operation_id": "new-operation"})
-            )
-        assert lab.config.latest_context(b.base).entry.id == b.base.entry_id
-        published = verified_candidates[1].publish_to(
-            working_point=b.base,
-            name=b.entry_id,
-            operation_id=b.operation_id,
-        )
-        assert (
-            verified_candidates[1].publish_to(
-                working_point=b.base,
-                name=b.entry_id,
-                operation_id=b.operation_id,
-            )
-            == published
-        )
-        second = lab.config.entry(published.name)
-        assert lab.config.latest_context(a.base).entry == receipt.entry
-        assert lab.config.latest_context(b.base).entry == second.entry
-        assert lab.config.active() == active
-    with LocalDaemonRuntime(project_root) as restarted:
-        assert (
-            restarted.application.config.get_context_publish_operation(a.operation_id)
-            == receipt
-        )
-
-    from scopecat_server.snapshots import create_snapshot, restore_snapshot
-
-    (project_root / "scopecat.toml").write_text("[lab]\n")
-    snapshot = tmp_path / "snapshot"
-    restored = tmp_path / "restored"
-    create_snapshot(load_project(project_root / "scopecat.toml"), snapshot)
-    restore_snapshot(snapshot, restored)
-    with LocalDaemonRuntime(restored) as recovered:
-        assert (
-            recovered.application.config.get_context_publish_operation(a.operation_id)
-            == receipt
-        )
-        assert (
-            recovered.application.config.latest_context(a.base).entry == receipt.entry
-        )
-
-
-def _approval_count(
-    runtime: LocalDaemonRuntime,
-    baseline_run_ids: tuple[str, ...],
-) -> int:
-    return sum(
-        len(
-            runtime.application.runs.list_run_contents(
-                run_id,
-                kind="parameter_change_approval_record",
-            ).items
-        )
-        for run_id in baseline_run_ids
-    )

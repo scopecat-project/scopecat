@@ -1,5 +1,5 @@
-import { useQuery } from "@tanstack/react-query";
-import { getSetupRevisions } from "../config/setup-api";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { getSetupDefinitions, getSetupRevision, resolveSetupDefinition } from "../config/setup-api";
 import type { ScientificSelection } from "./scientific-selection";
 
 type Parameters = Extract<ScientificSelection["configuration"], { kind: "parameters" }>;
@@ -17,38 +17,41 @@ export function DeviceContextPicker({
 }) {
   const revisions = useQuery({
     queryKey: ["setup-revisions", projectId],
-    queryFn: ({ signal }) => getSetupRevisions(signal),
+    queryFn: ({ signal }) => getSetupDefinitions(signal),
   });
+  const resolution = useMutation({
+    mutationFn: resolveSetupDefinition,
+    onSuccess: (selected) =>
+      onChange({
+        ...value,
+        setup: { revision_id: selected.id, content_hash: selected.content_hash },
+      }),
+  });
+  const retained = useQuery({
+    queryKey: ["setup-revision", value.setup?.revision_id],
+    queryFn: ({ signal }) => getSetupRevision(value.setup!.revision_id, signal),
+    enabled: !!value.setup,
+    staleTime: Infinity,
+  });
+  const selectedDefinition = retained.data?.resolution.definition_id;
   const items = revisions.data?.items ?? [];
   return (
     <div className="space-y-2">
       <label className="flex flex-col gap-1">
-        Device context
+        Experiment setup
         <select
-          aria-label="Device context"
+          aria-label="Experiment setup"
           className="border rounded p-2"
-          value={value.setup?.revision_id ?? ""}
-          disabled={disabled || revisions.isPending || revisions.isError}
+          value={selectedDefinition ?? ""}
+          disabled={disabled || revisions.isPending || revisions.isError || resolution.isPending}
           onChange={(event) => {
             const selected = items.find((item) => item.id === event.target.value);
-            if (selected)
-              onChange({
-                ...value,
-                setup: {
-                  revision_id: selected.id,
-                  content_hash: selected.content_hash,
-                },
-              });
+            if (selected) resolution.mutate(selected.id);
           }}
         >
           <option value="" disabled>
-            Choose devices for this page
+            Choose experiment roles and devices
           </option>
-          {value.setup && !items.some((item) => item.id === value.setup?.revision_id) && (
-            <option value={value.setup.revision_id}>
-              {value.setup.revision_id} · retained selection
-            </option>
-          )}
           {items.map((item) => (
             <option key={item.id} value={item.id}>
               {item.id}
@@ -61,11 +64,21 @@ export function DeviceContextPicker({
         disabled={disabled || revisions.isFetching}
         onClick={() => void revisions.refetch()}
       >
-        Refresh device contexts
+        Refresh setups
       </button>
       {revisions.error && <p role="alert">{revisions.error.message}</p>}
+      {resolution.error && <p role="alert">{resolution.error.message}</p>}
+      {retained.error && <p role="alert">{retained.error.message}</p>}
+      {selectedDefinition && (
+        <button
+          disabled={disabled || resolution.isPending}
+          onClick={() => resolution.mutate(selectedDefinition)}
+        >
+          Recheck device connections
+        </button>
+      )}
       {revisions.isSuccess && items.length === 0 && (
-        <p>No device contexts saved yet. Save a setup in Configuration.</p>
+        <p>No setups saved yet. Create one in Configuration.</p>
       )}
       <p className="text-sm">
         Applies to this page. Selection does not connect devices or change submitted work.

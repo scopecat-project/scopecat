@@ -18,10 +18,12 @@ from scopecat.records.parameter_revision import (
 from scopecat.records.scientific_selection import ParameterConfiguration
 from scopecat.records.setup import ExecutableSetupSnapshot
 from scopecat_testkit.config_registry import load_config
+from scopecat_testkit.server.instruments import signal_endpoint
 from scopecat_testkit.server.runtime import SQLiteTestRunRepository
 
 from scopecat_server.errors import BackendConflict, BackendNotFound
 from scopecat_server.instruments.actors import InstrumentActorRegistry
+from scopecat_server.services.devices import DeviceService
 from scopecat_server.services.setup import SetupService
 from scopecat_server.storage.sqlite.config_registry import SQLiteConfigRegistryStore
 from scopecat_server.storage.sqlite.connection import SQLiteDatabase
@@ -47,10 +49,15 @@ def services(root: Path) -> tuple[SetupService, SQLiteConfigRegistryStore]:
         catalog=config.parameter_catalog,
         parameters=config.parameter_snapshot,
     )
+    control = SQLiteControlPlane(database)
+    actors = InstrumentActorRegistry()
     service = SetupService(
-        control=SQLiteControlPlane(database),
+        control=control,
         config_registry=registry,
-        actors=InstrumentActorRegistry(),
+        actors=actors,
+        devices=DeviceService(
+            control=control, actors=actors, endpoint=signal_endpoint()
+        ),
         templates=(template,),
     )
     return service, registry

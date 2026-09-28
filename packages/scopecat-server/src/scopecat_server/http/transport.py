@@ -79,10 +79,6 @@ from scopecat.automation.wire import (
     ProcedureStepResourceWaitCommand,
     ProcedureStepResourceWaitReceipt,
 )
-from scopecat.config.structure import (
-    ParameterStructurePlan,
-    ParameterStructurePreview,
-)
 from scopecat.control.models import (
     ControlRunState,
     EventPage,
@@ -107,6 +103,7 @@ from scopecat.daemon.calibration_tasks import (
     CalibrationTaskPage,
     CalibrationTaskView,
 )
+from scopecat.daemon.device_views import DeviceView
 from scopecat.daemon.endpoint import (
     DAEMON_SHUTDOWN_PATH,
     DAEMON_SHUTDOWN_TOKEN_HEADER,
@@ -149,7 +146,6 @@ from scopecat.daemon.views import (
     AnalysisContentBytesView,
     ConfigActivationPage,
     ConfigContextResolution,
-    ConfigDraftPreview,
     ConfigEntryView,
     ConfigRegistryPage,
     DaemonHealth,
@@ -188,20 +184,16 @@ from scopecat.daemon.wire import (
     AnalysisSaveReceipt,
     AttentionResolutionCommand,
     AttentionResolutionReceipt,
-    ConfigActivationReceipt,
-    ConfigContextPublishCommand,
-    ConfigContextPublishReceipt,
     ConfigContextResolveCommand,
-    ConfigContextSaveCommand,
-    ConfigDraftCommand,
-    ConfigEntryActivationCommand,
-    ConfigPublishCommand,
-    ConfigPublishReceipt,
-    ConfigSetupRebindCommand,
-    ConfigSetupRebindPreviewCommand,
     ConfigurationTemplateImportCommand,
     ConfigurationTemplateImportResult,
     ConfigurationTemplateList,
+    DeviceList,
+    DeviceProbeCommand,
+    DeviceRenameCommand,
+    DeviceRetireCommand,
+    DeviceSaveCommand,
+    DriverImplementationList,
     ExecutorHeartbeat,
     ExecutorLease,
     ExecutorStartRequest,
@@ -253,6 +245,8 @@ from scopecat.daemon.wire import (
     SampleMutationReceipt,
     SampleReviseCommand,
     SetupActivateCommand,
+    SetupDefinitionList,
+    SetupImportCommand,
     SetupRevisionList,
     SetupSaveCommand,
     TerminalRunCommitCommand,
@@ -285,10 +279,9 @@ from scopecat.records.calibration_policy import (
     CalibrationProfileRecord,
 )
 from scopecat.records.comparison import ComparisonRequest
-from scopecat.records.config import ConfigProfileSnapshot
-from scopecat.records.config_context import ConfigContextRef
 from scopecat.records.content import ContentEntry, Sha256ContentHash
 from scopecat.records.costs import RunMeasuredCosts
+from scopecat.records.device import RegisteredDevice
 from scopecat.records.experiment_plan import (
     ExperimentPlanList,
     ExperimentPlanRevision,
@@ -337,7 +330,12 @@ from scopecat.records.sample_artifact import (
     MAX_SAMPLE_ARTIFACT_BYTES,
     SampleArtifactPage,
 )
-from scopecat.records.setup import ActiveSetupView, SetupRevision, SetupRevisionRef
+from scopecat.records.setup import (
+    ActiveSetupView,
+    SetupDefinitionRevision,
+    SetupRevision,
+    SetupRevisionRef,
+)
 from scopecat.records.target_catalog import (
     TargetCatalogPage,
     TargetCreateCommand,
@@ -978,6 +976,62 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
     def configuration_templates() -> ConfigurationTemplateList:
         return ConfigurationTemplateList(items=application.setup.templates())
 
+    @app.get(f"{_API_PREFIX}/devices")
+    def list_devices() -> DeviceList:
+        return DeviceList(items=application.devices.list())
+
+    @app.get(f"{_API_PREFIX}/devices/drivers")
+    def device_drivers() -> DriverImplementationList:
+        endpoint = application.devices.endpoint
+        if endpoint is None:
+            return DriverImplementationList(items=())
+        return DriverImplementationList(
+            items=tuple(
+                application.devices.driver_ref(driver.driver_id)
+                for driver in endpoint.driver_catalog.drivers
+            )
+        )
+
+    @app.post(f"{_API_PREFIX}/devices")
+    def save_device(command: DeviceSaveCommand) -> DeviceView:
+        return application.devices.save(command)
+
+    @app.post(f"{_API_PREFIX}/devices/{{device_id:path}}/access")
+    def prepare_device_access(device_id: str) -> SetupRevision:
+        return application.devices.access_setup(device_id)
+
+    @app.post(f"{_API_PREFIX}/devices/{{device_id:path}}/connection-tests")
+    def test_device_connection(
+        device_id: str, command: DeviceProbeCommand
+    ) -> InstrumentDriverProbeReceipt:
+        return application.devices.test_connection(
+            device_id, command, application.instruments
+        )
+
+    @app.post(f"{_API_PREFIX}/devices/{{device_id:path}}/name")
+    def rename_device(device_id: str, command: DeviceRenameCommand) -> RegisteredDevice:
+        return application.devices.rename(device_id, command.label)
+
+    @app.post(f"{_API_PREFIX}/devices/{{device_id:path}}/retirement")
+    def retire_device(device_id: str, command: DeviceRetireCommand) -> RegisteredDevice:
+        return application.devices.retire(device_id, command.expected_head)
+
+    @app.get(f"{_API_PREFIX}/setup/definitions")
+    def list_setup_definitions() -> SetupDefinitionList:
+        return SetupDefinitionList(items=application.setup.definitions())
+
+    @app.get(f"{_API_PREFIX}/setup/definitions/{{definition_id:path}}")
+    def get_setup_definition(definition_id: str) -> SetupDefinitionRevision:
+        return application.setup.definition(definition_id)
+
+    @app.post(f"{_API_PREFIX}/setup/resolutions/{{definition_id:path}}")
+    def resolve_setup_definition(definition_id: str) -> SetupRevision:
+        return application.setup.resolve(definition_id)
+
+    @app.post(f"{_API_PREFIX}/setup/recipe-imports")
+    def import_setup_recipe(command: SetupImportCommand) -> SetupRevision:
+        return application.setup.import_recipe(command)
+
     @app.post(f"{_API_PREFIX}/setup/template-imports")
     def import_configuration_template(
         command: ConfigurationTemplateImportCommand,
@@ -1004,16 +1058,6 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
     def activate_setup(command: SetupActivateCommand) -> ActiveSetupView:
         return application.setup.activate(command)
 
-    @app.post(f"{_API_PREFIX}/config-registry/setup-rebindings/preview")
-    def preview_setup_rebind(
-        command: ConfigSetupRebindPreviewCommand,
-    ) -> ConfigProfileSnapshot:
-        return application.config.preview_setup_rebind(command)
-
-    @app.post(f"{_API_PREFIX}/config-registry/setup-rebindings")
-    def rebind_setup(command: ConfigSetupRebindCommand) -> ConfigEntryView:
-        return application.config.rebind_setup(command)
-
     @app.get(f"{_API_PREFIX}/config-registry")
     def get_config_registry(
         limit: Annotated[int, Query(ge=1, le=500)] = 100,
@@ -1031,30 +1075,6 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
             before=before,
         )
 
-    @app.post(f"{_API_PREFIX}/config-registry/contexts/publish-operations")
-    def publish_context(
-        command: ConfigContextPublishCommand,
-    ) -> ConfigContextPublishReceipt:
-        return application.config.publish_context(command)
-
-    @app.get(
-        f"{_API_PREFIX}/config-registry/contexts/publish-operations/{{operation_id:path}}"
-    )
-    def context_publish_operation(operation_id: str) -> ConfigContextPublishReceipt:
-        return application.config.get_context_publish_operation(operation_id)
-
-    @app.post(f"{_API_PREFIX}/config-registry/contexts")
-    def save_context(command: ConfigContextSaveCommand) -> ConfigEntryView:
-        return application.config.save_context(command)
-
-    @app.post(f"{_API_PREFIX}/config-registry/contexts/latest")
-    def latest_context(context: ConfigContextRef) -> ConfigEntryView:
-        return application.config.latest_context(context)
-
-    @app.post(f"{_API_PREFIX}/config-registry/contexts/structure/preview")
-    def preview_structure(plan: ParameterStructurePlan) -> ParameterStructurePreview:
-        return application.config.preview_structure(plan)
-
     @app.post(f"{_API_PREFIX}/config-registry/contexts/resolve")
     def resolve_context(
         command: ConfigContextResolveCommand,
@@ -1068,34 +1088,6 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
     @app.get(f"{_API_PREFIX}/config-registry/entries/{{entry_id}}")
     def get_config_entry(entry_id: str) -> ConfigEntryView:
         return application.config.get_config_entry(entry_id)
-
-    @app.get(f"{_API_PREFIX}/config-registry/publish-operations/{{operation_id:path}}")
-    def get_config_publish_operation(operation_id: str) -> ConfigPublishReceipt:
-        return application.config.get_config_publish_operation(operation_id)
-
-    @app.post(f"{_API_PREFIX}/config-registry/publish-operations")
-    def publish_config(command: ConfigPublishCommand) -> ConfigPublishReceipt:
-        return application.config.publish_config(command)
-
-    @app.post(f"{_API_PREFIX}/config-registry/drafts/preview")
-    def preview_config_draft(
-        command: ConfigDraftCommand,
-    ) -> ConfigDraftPreview:
-        return application.config.preview_config_draft(command)
-
-    @app.get(
-        f"{_API_PREFIX}/config-registry/activation-operations/{{operation_id:path}}"
-    )
-    def get_config_activation_operation(
-        operation_id: str,
-    ) -> ConfigActivationReceipt:
-        return application.config.get_config_activation_operation(operation_id)
-
-    @app.post(f"{_API_PREFIX}/config-registry/activation-operations")
-    def activate_config_entry(
-        command: ConfigEntryActivationCommand,
-    ) -> ConfigActivationReceipt:
-        return application.config.activate_config_entry(command)
 
     @app.get(f"{_API_PREFIX}/apparatus-objects")
     def list_apparatus_objects(
@@ -1504,7 +1496,7 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
     ) -> InstrumentDriverProbeReceipt:
         return application.instruments.probe_driver(command)
 
-    @app.get(f"{_API_PREFIX}/instruments/{{instrument_id}}")
+    @app.get(f"{_API_PREFIX}/instruments/{{instrument_id:path}}")
     def get_instrument(
         instrument_id: str,
         setup_revision_id: Annotated[str, Query(min_length=1)],

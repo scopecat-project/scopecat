@@ -306,7 +306,9 @@ def test_exact_context_survives_default_changes_and_replays_exact_admission(
         target = original_setup.setup.domain_target
         assert target is not None
         changed_setup = lab.setup.save(
-            original_setup.setup.model_copy(
+            lab.setup.definition(
+                original_setup.resolution.definition_id
+            ).definition.model_copy(
                 update={
                     "domain_target": target.model_copy(
                         update={"id": "changed-launch-target"}

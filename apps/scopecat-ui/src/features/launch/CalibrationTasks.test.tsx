@@ -9,6 +9,7 @@ import { CalibrationTasks } from "./CalibrationTasks";
 type View = components["schemas"]["CalibrationTaskView"];
 function fixture(): View {
   const check: components["schemas"]["CalibrationCheckRequest"] = {
+    setup: { revision_id: "bench", content_hash: "sha256:setup" },
     codec: "scopecat.calibration-check.v1",
     result_output: "check",
     scope: { capability: "readout", targets: ["q0"], conditions: "idle", policy_version: "1" },

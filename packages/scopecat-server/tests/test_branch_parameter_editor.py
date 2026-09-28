@@ -126,7 +126,7 @@ def test_session_edits_before_setup_and_rejects_invalid_selection_atomically(
     assert session.selection == selected
     assert session.params is params
     # Editing succeeds with incomplete calibration and no executable setup.
-    with pytest.raises(DaemonNotFoundError, match="setup"):
+    with pytest.raises(ValueError, match="Select an experiment setup"):
         params.preview()
     session.use(parameter_branch=None)
     assert session.selection.parameter_branch is None

@@ -187,7 +187,8 @@ function ProjectDraft({
     };
   }, []);
   const source = draft?.preview?.reviewed.config_source ?? attempt?.request.reviewed?.config_source;
-  const pinnedSetup = source?.kind === "parameter_revision";
+  const pinnedSetup =
+    source?.kind === "parameter_revision" || source?.kind === "analysis_candidate";
   const configuration = useQuery({
     queryKey: ["config", "launch-context", projectId, source],
     enabled: Boolean(
@@ -416,6 +417,7 @@ function ProjectDraft({
           (!draft?.codeRevision ||
             attempt?.request.code_revision?.content_hash === draft.codeRevision.content_hash) &&
           (attempt?.request.reviewed?.config_source.kind === "parameter_revision" ||
+            attempt?.request.reviewed?.config_source.kind === "analysis_candidate" ||
             (configuration.isSuccess &&
               !configuration.isFetching &&
               matchesActive(attempt?.request.reviewed?.config_source, configuration.data))),

@@ -66,6 +66,7 @@ from scopecat_testkit.server.runtime import (
     sqlite_project_services,
     sqlite_run_repository,
 )
+from scopecat_testkit.setup_records import retained_setup_revision
 
 
 @dataclass(frozen=True)
@@ -981,15 +982,13 @@ def _select_setup(
     work: ConfigRegistryUnitOfWorkFactory, config: ConfigProfileSnapshot, *, name: str
 ) -> None:
     from scopecat.kernel.content_identity import sha256_json_hash
-    from scopecat.records.setup import ExecutableSetupSnapshot, SetupRevision
+    from scopecat.records.setup import ExecutableSetupSnapshot
 
     # Registry ownership fixture; service tests cover device drain.
     with work() as transaction:
         setup = ExecutableSetupSnapshot.from_config(config)
         revision = transaction.setups.save_revision(
-            SetupRevision(
-                id=name, content_hash=setup.content_hash, setup=setup, actor="operator"
-            )
+            retained_setup_revision(id=name, setup=setup, actor="operator")
         )
         current = transaction.setups.read_current()
         assert current is not None

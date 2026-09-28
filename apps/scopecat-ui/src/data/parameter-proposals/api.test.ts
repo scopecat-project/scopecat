@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { requestHeaders, requestJson, requestMethod, requestPath } from "../../test/http";
-import { acceptProposal, getOlderRunParameterProposals, getRunParameterProposals } from "./api";
+import { requestPath } from "../../test/http";
+import { getOlderRunParameterProposals, getRunParameterProposals } from "./api";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -97,56 +97,6 @@ describe("parameter proposal reads", () => {
   });
 });
 
-describe("parameter proposal commands", () => {
-  it("accepts and publishes a proposal in one generation-checked request", async () => {
-    const fetchMock = vi.fn((_input: string | URL | Request) => Promise.resolve(jsonResponse({})));
-    vi.stubGlobal("fetch", fetchMock);
-    vi.stubGlobal("crypto", {
-      randomUUID: () => "123e4567-e89b-12d3-a456-426614174000",
-    });
-
-    await acceptProposal({
-      runId: "run-a",
-      proposalId: "drive-frequency",
-      actor: "Ada",
-      expectedGeneration: 4,
-      note: "Promote calibrated frequency",
-    });
-
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    await expectRequest(fetchMock, "/api/v1/config-registry/publish-operations", {
-      operation_id: "ui-config-accept-proposal-123e4567-e89b-12d3-a456-426614174000",
-      source: {
-        kind: "candidate_config",
-        run_id: "run-a",
-        proposal_id: "drive-frequency",
-        acceptance: { kind: "manual_review" },
-      },
-      actor: "Ada",
-      entry_id: "drive-frequency-ui-config-accept-proposal-123e4567-e89b-12d3-a456-426614174000",
-      expected_generation: 4,
-      note: "Promote calibrated frequency",
-    });
-  });
-
-  it("surfaces a daemon conflict detail", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(() => Promise.resolve(jsonResponse({ detail: "active generation changed" }, 409))),
-    );
-
-    await expect(
-      acceptProposal({
-        runId: "run-a",
-        proposalId: "drive-frequency",
-        actor: "Ada",
-        expectedGeneration: 4,
-        note: "",
-      }),
-    ).rejects.toThrow("active generation changed");
-  });
-});
-
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -160,18 +110,4 @@ function scalarValue(value: number) {
     shape: "scalar",
     value,
   };
-}
-
-async function expectRequest(
-  fetchMock: ReturnType<typeof vi.fn>,
-  path: string,
-  body: Record<string, unknown>,
-) {
-  const call = fetchMock.mock.calls[0];
-  expect(requestPath(call?.[0])).toBe(path);
-  expect(requestMethod(call?.[0], call?.[1])).toBe("POST");
-  const headers = requestHeaders(call?.[0], call?.[1]);
-  expect(headers.get("Accept")).toBe("application/json");
-  expect(headers.get("Content-Type")).toBe("application/json");
-  await expect(requestJson(call?.[0], call?.[1])).resolves.toEqual(body);
 }

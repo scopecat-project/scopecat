@@ -7,8 +7,8 @@ import pytest
 
 import scopecat as sc
 from scopecat.api.parameters import (
+    ParameterEditor,
     ParameterTable,
-    ParameterWorkspace,
     TypedParameterTable,
     _TableData,
 )
@@ -154,7 +154,7 @@ def test_optional_annotation_nesting_and_frozen_declarations() -> None:
 
 if TYPE_CHECKING:
 
-    def editor_examples(params: ParameterWorkspace) -> None:
+    def editor_examples(params: ParameterEditor) -> None:
         table = assert_type(
             params.table("drive", row_type=Drive), TypedParameterTable[Drive]
         )

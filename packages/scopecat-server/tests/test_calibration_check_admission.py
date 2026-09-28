@@ -69,7 +69,7 @@ from scopecat.daemon.wire import (
     RunSubmission,
     SampleCreateCommand,
     SetupActivateCommand,
-    SetupSaveCommand,
+    SetupImportCommand,
 )
 from scopecat.kernel.quantity import Quantity
 from scopecat.project import load_project
@@ -146,7 +146,9 @@ def test_capability_context_retains_exact_registered_target(
             ),
         )
     )
-    query = MeasurementContextResolve(branch="target-branch", target=target.ref)
+    query = MeasurementContextResolve(
+        branch="target-branch", target=target.ref, setup=declaration.setup
+    )
     with TestClient(runtime.app()) as client:
         response = client.post(
             "/api/v1/measurement-context/resolve", json=query.model_dump(mode="json")
@@ -234,6 +236,7 @@ def test_current_capability_context_freezes_branch_and_setup(
     direct = app.measurement_context.resolve(
         MeasurementContextResolve(
             parameters=declaration.context.parameters,
+            setup=declaration.setup,
             samples=(SampleSelector(sample_id="chip", revision=1),),
         )
     )
@@ -249,7 +252,9 @@ def test_current_capability_context_freezes_branch_and_setup(
         )
     )
     query = MeasurementContextResolve(
-        branch="daily", samples=(SampleSelector(sample_id="chip", revision=1),)
+        branch="daily",
+        samples=(SampleSelector(sample_id="chip", revision=1),),
+        setup=declaration.setup,
     )
     with TestClient(runtime.app()) as client:
         response = client.post(
@@ -492,11 +497,13 @@ def check_case(
 
 @contextmanager
 def _check_case(tmp_path: Path) -> Generator[CheckCase]:
+    from scopecat_testkit.server.instruments import signal_endpoint
+
     config = load_config()
-    with LocalDaemonRuntime(tmp_path) as runtime:
+    with LocalDaemonRuntime(tmp_path, instrument_endpoint=signal_endpoint()) as runtime:
         app = runtime.application
-        setup = app.setup.save(
-            SetupSaveCommand(
+        setup = app.setup.import_recipe(
+            SetupImportCommand(
                 revision_id="bench",
                 setup=ExecutableSetupSnapshot.from_config(config),
                 actor="test",
@@ -545,6 +552,7 @@ def _check_case(tmp_path: Path) -> Generator[CheckCase]:
             ),
         )
         declaration = CalibrationCheckRequest(
+            setup=resolved.config_source.setup,
             scope=CalibrationScope("readout", ("q0",), "cold", "1"),
             context=MeasurementContext(
                 revision.ref,
@@ -628,6 +636,7 @@ def test_candidate_context_is_resolved_admitted_and_bound_to_child(
     )
     source = AnalysisCandidateRunConfigSource(
         source_run_id=baseline.run_id,
+        setup=app.runs.get_run(baseline.run_id).snapshot.execution_setup,
         proposal_id=proposal.id,
         analysis_record_id=proposal.analysis_record_id,
         base_config_content_hash=proposal.base_config_content_hash,
@@ -636,7 +645,7 @@ def test_candidate_context_is_resolved_admitted_and_bound_to_child(
     captured = app.measurement_context.resolve(
         MeasurementContextResolve(parameters=source)
     )
-    assert captured.branch is None and captured.setup is None
+    assert captured.branch is None and captured.setup == declaration.setup
     assert captured.context == replace(declaration.context, parameters=source)
     with pytest.raises(BackendConflict, match="resolved configuration"):
         app.measurement_context.resolve(
@@ -1409,8 +1418,8 @@ def test_exact_retry_survives_setup_change(check_case: CheckCase) -> None:
     dispatched = CalibrationTaskDispatch(task_id=spec.task_id, stage_id="a")
     retained = app.calibration_tasks.dispatch(dispatched)
     current = app.setup.current()
-    changed = app.setup.save(
-        SetupSaveCommand(
+    changed = app.setup.import_recipe(
+        SetupImportCommand(
             revision_id="changed",
             actor="test",
             setup=current.revision.setup.model_copy(
@@ -1436,16 +1445,12 @@ def test_exact_retry_survives_setup_change(check_case: CheckCase) -> None:
     )
     assert app.automation.submit(command).run == parent
     assert app.calibration_tasks.dispatch(dispatched) == retained
-    with pytest.raises(BackendConflict, match="check setup"):
-        app.calibration_tasks.dispatch(
-            CalibrationTaskDispatch(task_id=spec.task_id, stage_id="b")
-        )
-    assert (
-        app.calibration_tasks.get(spec.task_id).task.executions
-        == retained.task.executions
+    advanced = app.calibration_tasks.dispatch(
+        CalibrationTaskDispatch(task_id=spec.task_id, stage_id="b")
     )
-    with pytest.raises(BackendConflict, match="check setup"):
-        app.automation.submit(command.model_copy(update={"request_key": "new"}))
+    assert len(advanced.task.executions) == len(retained.task.executions) + 1
+    fresh = app.automation.submit(command.model_copy(update={"request_key": "new"})).run
+    assert fresh.procedure_run_id != parent.procedure_run_id
 
 
 @pytest.mark.parametrize("different_revision", [False, True])

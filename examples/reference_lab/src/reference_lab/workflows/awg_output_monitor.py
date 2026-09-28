@@ -86,7 +86,7 @@ def awg_output_monitor(
     name and description carry operator intent, routing identifies the physical
     source and scope input, and the dataset records only the scientific trace.
     An unregistered diagnostic scope instead belongs in a direct
-    ``temporary_instrument`` session.
+    ``lab.devices.open(device_id)`` session with a registered diagnostic device.
     """
 
     source = sc.capability_resource(

@@ -110,7 +110,9 @@ def test_joint_branch_procedure_recovers_after_restart_and_lost_publish_response
         )
         intent = DragBranchCalibrationIntent(
             targets=("q0", "q1"),
-            initial=lab.parameters.resolve(parameters),
+            initial=lab.parameters.resolve(
+                parameters, setup=lab.setup.active().revision
+            ),
             destination=destination,
             result_revision_id="joint-accepted",
             actor="test",
@@ -230,7 +232,9 @@ def test_sequential_procedure_recovers_lost_composition_response(
         destination = lab.parameters.create_branch("daily", revision=parameters)
         intent = DragBranchCalibrationIntent(
             targets=("q0", "q1"),
-            initial=lab.parameters.resolve(parameters),
+            initial=lab.parameters.resolve(
+                parameters, setup=lab.setup.active().revision
+            ),
             destination=destination,
             result_revision_id="accepted",
             actor="test",
@@ -294,7 +298,9 @@ def test_branch_procedure_rejection_and_stale_destination_do_not_publish(
         destination = lab.parameters.create_branch("daily", revision=parameters)
         intent = DragBranchCalibrationIntent(
             targets=("q0", "q1"),
-            initial=lab.parameters.resolve(parameters),
+            initial=lab.parameters.resolve(
+                parameters, setup=lab.setup.active().revision
+            ),
             destination=destination,
             result_revision_id="accepted",
             actor="test",

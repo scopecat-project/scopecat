@@ -148,6 +148,7 @@ def create_task(
     calls: dict[str, CalibrationTaskCall] = {}
     for target in intent.targets:
         check = CalibrationCheckRequest(
+            setup=intent.initial.config_source.setup,
             scope=CalibrationScope(
                 "teaching.fit-input",
                 (target,),

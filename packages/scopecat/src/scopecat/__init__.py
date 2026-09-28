@@ -41,9 +41,7 @@ if TYPE_CHECKING:
     from scopecat.api.instruments import (
         InstrumentClientFactory,
         InstrumentRef,
-        TemporaryInstrumentRef,
         instrument,
-        temporary_instrument,
     )
     from scopecat.api.parameters import TypedParameterTable
     from scopecat.api.procedure_planner import ProcedurePlanningContext
@@ -390,10 +388,6 @@ _EXPORTS: dict[str, tuple[str, str]] = {
         "scopecat.automation",
         "ProcedureScheduleRegistry",
     ),
-    "TemporaryInstrumentRef": (
-        "scopecat.api.instruments",
-        "TemporaryInstrumentRef",
-    ),
     "Quantity": ("scopecat.kernel.quantity", "Quantity"),
     "AdaptiveRegion": ("scopecat.adaptive_domains", "AdaptiveRegion"),
     "DomainProposalAttempt": (
@@ -460,10 +454,6 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "analysis_function": ("scopecat.api.analysis", "analysis_function"),
     "analysis_step": ("scopecat.api.analysis", "analysis_step"),
     "instrument": ("scopecat.api.instruments", "instrument"),
-    "temporary_instrument": (
-        "scopecat.api.instruments",
-        "temporary_instrument",
-    ),
 }
 
 

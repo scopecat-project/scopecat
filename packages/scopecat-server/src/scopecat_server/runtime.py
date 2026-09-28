@@ -19,7 +19,7 @@ from scopecat.daemon.wire import (
     ConfigPublishCommand,
     ParameterConfigRevisionSource,
     SetupActivateCommand,
-    SetupSaveCommand,
+    SetupImportCommand,
 )
 from scopecat.project import load_bootstrap_factory
 from scopecat.project_state import ProjectStateServices
@@ -39,6 +39,7 @@ from scopecat_server.services.application import DaemonApplication
 from scopecat_server.services.automation import AutomationService
 from scopecat_server.services.calibration_checks import CalibrationCheckAdmission
 from scopecat_server.services.config import ConfigService
+from scopecat_server.services.devices import DeviceService
 from scopecat_server.services.executor import ExecutorService
 from scopecat_server.services.leases import OwnershipLeaseSupervisor
 from scopecat_server.services.point_plans import RunPointPlanService
@@ -219,10 +220,14 @@ class LocalDaemonRuntime:
                 services=services,
                 analyses=analysis_service,
             )
+            devices = DeviceService(
+                control=control, actors=instrument_actors, endpoint=instrument_endpoint
+            )
             setup_service = SetupService(
                 control=control,
                 config_registry=config_registry,
                 actors=instrument_actors,
+                devices=devices,
             )
             run_service = RunService(
                 control=control,
@@ -232,6 +237,7 @@ class LocalDaemonRuntime:
                 point_plans=point_plans,
             )
             admission = AdmissionService(
+                setup=setup_service,
                 control=control,
                 runs=runs,
                 services=services,
@@ -280,6 +286,7 @@ class LocalDaemonRuntime:
                 config=config_service,
                 setup=setup_service,
                 analyses=analysis_service,
+                devices=devices,
                 runs=run_service,
                 admission=admission,
                 executor=executor,
@@ -444,8 +451,8 @@ def _initialize_setup(
     setup_service: SetupService, equipment: ExecutableSetupSnapshot
 ) -> SetupRevision:
     note = "imported while bootstrapping a new lab instance"
-    setup = setup_service.save(
-        SetupSaveCommand(
+    setup = setup_service.import_recipe(
+        SetupImportCommand(
             revision_id=f"setup-{equipment.content_hash.removeprefix('sha256:')}",
             setup=equipment,
             actor="scopecat",

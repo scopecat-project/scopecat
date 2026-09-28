@@ -35,7 +35,6 @@ from scopecat.daemon.wire import (
 )
 from scopecat.kernel.content_identity import (
     model_wire_content_hash,
-    stable_content_hash,
 )
 from scopecat.kernel.problems import Problem, ProblemPhase
 from scopecat.planning.catalog import InstrumentContractCatalog
@@ -363,26 +362,21 @@ class InstrumentRuntime:
         )
         if len(matching) > 1:
             raise BackendConflict("candidate connection has ambiguous device ownership")
-        binding = command.binding.model_copy(
-            update={
-                "id": matching[0].id
-                if matching
-                else f"connection-test:{command.binding.id}"
-            }
-        )
+        if not matching:
+            raise BackendConflict(
+                "register this device and prepare its connection before testing"
+            )
+        binding = command.binding.model_copy(update={"id": matching[0].id})
         session = self.open_session(
             InstrumentSessionOpenCommand(
                 setup=command.setup,
                 operation_id=command.operation_id,
                 actor=command.actor,
                 instrument_ids=(binding.id,),
-                temporary_bindings=() if matching else (binding,),
             )
         )
         try:
-            self._end_session(
-                session.session_id, abort=False, discard_connections=not matching
-            )
+            self._end_session(session.session_id, abort=False)
         except BackendConflict as error:
             raise BackendConflict(
                 f"connection test needs session recovery ({session.session_id}): "
@@ -809,10 +803,18 @@ class InstrumentRuntime:
                     binding=InstrumentBindingKey(
                         provider_id=endpoint.provider_id,
                         binding_fingerprint=model_wire_content_hash(
-                            bindings[instrument_id]
+                            bindings[instrument_id].model_copy(
+                                update={"id": specs[instrument_id].exclusivity_key}
+                            )
                         ),
                         contract_fingerprint=model_wire_content_hash(
-                            expected[instrument_id]
+                            expected[instrument_id].model_copy(
+                                update={
+                                    "instrument_id": specs[
+                                        instrument_id
+                                    ].exclusivity_key
+                                }
+                            )
                         ),
                     ),
                     owner=owner,
@@ -2450,21 +2452,12 @@ class InstrumentRuntime:
         else:
             return self._replay_session_open(command, existing)
 
-        config = self._selected_setup_config(command.setup)
+        config = setup_config(self._setup.require_available(command.setup))
         configured = {spec.id: spec for spec in config.instrument_registry.instruments}
-        temporary = {binding.id: binding for binding in command.temporary_bindings}
-        collisions = tuple(
-            instrument_id for instrument_id in temporary if instrument_id in configured
-        )
-        if collisions:
-            raise BackendConflict(
-                "temporary instrument ids already exist in the selected setup: "
-                + ", ".join(collisions)
-            )
         missing = tuple(
             instrument_id
             for instrument_id in command.instrument_ids
-            if instrument_id not in configured and instrument_id not in temporary
+            if instrument_id not in configured
         )
         if missing:
             raise BackendNotFound(f"instrument was not found: {', '.join(missing)}")
@@ -2486,29 +2479,10 @@ class InstrumentRuntime:
                     instrument_ids=configured_ids,
                 )
             )
-        if temporary:
-            for binding in temporary.values():
-                self._require_supported_binding(endpoint, binding)
-            descriptions.update(
-                self._describe_temporary_bindings(
-                    endpoint,
-                    bindings=tuple(temporary.values()),
-                )
-            )
         selected_bindings = {
             binding.id: binding for binding in instrument_bindings(config)
         }
-        selected_bindings.update(temporary)
-        selected_specs = dict(configured)
-        selected_specs.update(
-            {
-                binding.id: self._temporary_instrument_spec(
-                    binding,
-                    configured=tuple(configured.values()),
-                )
-                for binding in temporary.values()
-            }
-        )
+        selected_specs = configured
         try:
             session = self._control.open_instrument_session(
                 operation_id=command.operation_id,
@@ -2580,17 +2554,6 @@ class InstrumentRuntime:
         except ControlPlaneConflict as error:
             raise BackendConflict(str(error)) from error
         runtime = self._live_runtime(session.session_id)
-        pinned = self._pinned_session_config(session)
-        configured_ids = {spec.id for spec in pinned.instrument_registry.instruments}
-        runtime_temporary_ids = set(runtime.bindings) - configured_ids
-        requested_temporary_ids = {binding.id for binding in command.temporary_bindings}
-        if runtime_temporary_ids != requested_temporary_ids or any(
-            runtime.bindings.get(binding.id) != binding
-            for binding in command.temporary_bindings
-        ):
-            raise BackendConflict(
-                "instrument session open operation has different temporary bindings"
-            )
         return self._wire_session(session, runtime)
 
     def _renew_open_session(self, session: InstrumentSession) -> InstrumentSession:
@@ -3364,6 +3327,16 @@ class InstrumentRuntime:
         with self._open_lock, self._attention_lock:
             try:
                 session = self._control.get_instrument_session(session_id)
+                if (
+                    session.attention_reason == "device_connection_retirement_failed"
+                    and any(
+                        self._actors.has_actor(key) for key in session.exclusivity_keys
+                    )
+                ):
+                    raise BackendConflict(
+                        "restart the application before resolving "
+                        "failed device connection retirement"
+                    )
                 if session.state == "attention_required":
                     self._cleanup_session_runtime(session_id)
                 self._control.resolve_instrument_session_attention(session_id)
@@ -4036,91 +4009,6 @@ class InstrumentRuntime:
                 f"instrument provider does not expose: {', '.join(missing)}"
             )
         return descriptions
-
-    @staticmethod
-    def _require_supported_binding(
-        endpoint: InstrumentBackendEndpoint,
-        binding: InstrumentBindingSpec,
-    ) -> None:
-        registered = endpoint.driver_catalog.get(binding.driver_id)
-        if registered is None:
-            raise BackendNotFound(
-                f"instrument driver was not found: {binding.driver_id}"
-            )
-        connection_kind = binding.connection.kind
-        if all(
-            connection.kind != connection_kind for connection in registered.connections
-        ):
-            raise BackendConflict(
-                f"{binding.driver_id} does not support {connection_kind} connections"
-            )
-
-    @staticmethod
-    def _describe_temporary_bindings(
-        endpoint: InstrumentBackendEndpoint,
-        *,
-        bindings: tuple[InstrumentBindingSpec, ...],
-    ) -> dict[str, InstrumentDescription]:
-        try:
-            advertised = endpoint.describe(bindings)
-        except InstrumentBackendUnavailable as error:
-            raise BackendConflict(
-                "instrument provider cannot describe temporary bindings"
-            ) from error
-        if advertised.provider_id != endpoint.provider_id or advertised.problems:
-            raise BackendConflict(
-                "instrument provider cannot describe temporary bindings"
-            )
-        descriptions = {
-            description.instrument_id: description
-            for description in advertised.instruments
-        }
-        requested_ids = tuple(binding.id for binding in bindings)
-        if set(descriptions) != set(requested_ids):
-            raise BackendConflict(
-                "instrument provider description does not match temporary bindings"
-            )
-        return descriptions
-
-    @staticmethod
-    def _temporary_instrument_spec(
-        binding: InstrumentBindingSpec,
-        *,
-        configured: tuple[InstrumentSpec, ...],
-    ) -> InstrumentSpec:
-        matching = next(
-            (
-                spec
-                for spec in configured
-                if spec.driver_id == binding.driver_id
-                and spec.connection == binding.connection
-                and binding.connection.kind != "virtual"
-            ),
-            None,
-        )
-        access_key = (
-            matching.exclusivity_key
-            if matching is not None
-            else "temporary:"
-            + stable_content_hash(
-                {
-                    "driver_id": binding.driver_id,
-                    "connection": binding.connection.model_dump(mode="json"),
-                    "virtual_instance": binding.id
-                    if binding.connection.kind == "virtual"
-                    else None,
-                }
-            )
-        )
-        return InstrumentSpec(
-            id=binding.id,
-            exclusivity_key=access_key,
-            driver_id=binding.driver_id,
-            connection=binding.connection.model_copy(deep=True),
-            run_start="preserve",
-            success_action="release",
-            failure_action="abort_and_release",
-        )
 
     def _wire_session(
         self,

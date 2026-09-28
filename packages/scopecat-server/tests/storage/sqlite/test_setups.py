@@ -11,6 +11,7 @@ from scopecat.records.scientific_scope import setup_content_hash
 from scopecat.records.setup import ExecutableSetupSnapshot, SetupRevision
 from scopecat_testkit.config_registry import initialize_setup, load_config
 from scopecat_testkit.server.runtime import SQLiteTestRunRepository
+from scopecat_testkit.setup_records import retained_setup_revision
 
 from scopecat_server.setup_access import setup_config
 from scopecat_server.snapshots import create_snapshot, restore_snapshot
@@ -30,9 +31,7 @@ def _store(root: Path) -> SQLiteConfigRegistryStore:
 
 def _revision(name: str) -> SetupRevision:
     setup = ExecutableSetupSnapshot.from_config(load_config())
-    return SetupRevision(
-        id=name, content_hash=setup.content_hash, setup=setup, actor="maintainer"
-    )
+    return retained_setup_revision(id=name, setup=setup, actor="maintainer")
 
 
 def test_setup_payload_preserves_execution_identity_and_explicit_composition() -> None:
@@ -277,12 +276,7 @@ def test_reopened_setup_retains_software_model_inputs(tmp_path: Path) -> None:
     config = load_config()
     config.system.scenario = scenario
     setup = ExecutableSetupSnapshot.from_config(config)
-    revision = SetupRevision(
-        id="software",
-        content_hash=setup.content_hash,
-        setup=setup,
-        actor="maintainer",
-    )
+    revision = retained_setup_revision(id="software", setup=setup, actor="maintainer")
     with store.write_unit_of_work() as work:
         work.setups.save_revision(revision)
     reopened = _store(tmp_path)
@@ -296,5 +290,5 @@ def test_reopened_setup_retains_software_model_inputs(tmp_path: Path) -> None:
     assert setup_content_hash(projected) == retained.setup.execution_content_hash
     assert (
         ExecutableSetupSnapshot.from_config(projected).content_hash
-        == retained.content_hash
+        == retained.setup.content_hash
     )

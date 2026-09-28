@@ -97,36 +97,25 @@ that the interface is mounted there. `describe()`, `observed_state()`, and
 diagnostics. Configured defaults also belong to that owner and therefore cannot
 be applied through a component-scoped client.
 
-A genuinely temporary diagnostic device can use a session-only binding without
-publishing configuration or defining entity routes:
+For a diagnostic device, register its connection once in **Devices and drivers**.
+No experiment setup or entity routing is required. A notebook can open the same
+registered device directly:
 
 ```python
 import scopecat as sc
-from scopecat.records.config import TcpipSocketInstrumentConnection
 from scopecat_instruments import network_sweep
 
-
-BENCH_VNA = sc.temporary_instrument(
-    network_sweep("temporary-bench-vna"),
-    driver_id="scopecat.keysight.e5080b",
-    connection=TcpipSocketInstrumentConnection(
-        host="192.0.2.40",
-        port=5025,
-    ),
-)
+BENCH_VNA = network_sweep("bench-vna")  # the registered device ID
 
 with sc.open_project(".").connect(operator="alice") as lab:
-    setup = lab.setup.get("bench-a").ref
-    with lab.instruments.open(BENCH_VNA, setup=setup) as devices:
+    with lab.devices.open("bench-vna") as devices:
         trace = devices[BENCH_VNA].sweep()
 ```
 
-The daemon probes the installed driver, owns the connection, and claims a stable
-identity for the session. The attachment disappears when the session closes and
-does not enter experiment routing. Keep transient cable and operator intent in
-the notebook cell. When a diagnostic should become a reproducible run, add the
-device to inventory, write a small named experiment, and record its meaningful
-result.
+The device remains registered after the manual session closes. Experiments and
+manual sessions share its ownership, even when experiments give it different
+logical names. Retire a device from the device page when it is no longer used;
+its execution records remain available.
 
 ## Return from manual work to an experiment
 
