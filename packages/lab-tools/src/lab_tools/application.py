@@ -15,6 +15,7 @@ from scopecat.installed_adapter import AdapterReference
 
 from .application_runtime import ApplicationRuntime, application_declaration
 from .bundle import configure_console
+from .development import prepare_capability
 
 
 class Arguments(Protocol):
@@ -28,6 +29,7 @@ class Arguments(Protocol):
     distribution: str | None
     manifest: str | None
     bundle: Path | None
+    package: Path | None
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -40,6 +42,7 @@ def main(argv: list[str] | None = None) -> None:
             "configure",
             "update",
             "prepare-update",
+            "prepare-capability",
             "apply-update",
             "register-source",
             "start",
@@ -62,6 +65,9 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--no-browser", action="store_true")
     parser.add_argument("--bundle", type=Path, help="Candidate delivery directory")
     parser.add_argument(
+        "--package", type=Path, help="Editable capability package source"
+    )
+    parser.add_argument(
         "--distribution", help="Installed capability distribution for initial setup"
     )
     parser.add_argument("--manifest", help="Distribution-owned capability manifest")
@@ -72,6 +78,8 @@ def main(argv: list[str] | None = None) -> None:
         parser.error("登记源码需要 --workspace")
     if args.action == "prepare-update" and args.bundle is None:
         parser.error("准备更新需要 --bundle")
+    if args.action == "prepare-capability" and args.package is None:
+        parser.error("开发能力快照需要 --package")
     runtime = ApplicationRuntime(args.home)
     try:
         if args.action in ("configure", "update"):
@@ -97,6 +105,9 @@ def main(argv: list[str] | None = None) -> None:
         elif args.action == "prepare-update":
             assert args.bundle is not None
             print(runtime.prepare_update(args.bundle).model_dump_json(indent=2))
+        elif args.action == "prepare-capability":
+            assert args.package is not None
+            print(prepare_capability(runtime, args.package).model_dump_json(indent=2))
         elif args.action == "apply-update":
             candidate = runtime.prepared_update()
             if candidate is None:

@@ -131,6 +131,12 @@ def run(home: Path, source: Path | None = None) -> None:
             url = runtime.start().base_url
         except Exception as error:
             logging.getLogger(__name__).exception("Application startup failed")
+            resume_update = (
+                '<button onclick="pywebview.api.apply_update().catch(showError)">'
+                "继续完成上次更新</button>"
+                if runtime.pending.exists()
+                else ""
+            )
             failure = (
                 "<h1>启动未完成</h1>"
                 f"<p>{escape(str(error))}</p>"
@@ -141,6 +147,7 @@ def run(home: Path, source: Path | None = None) -> None:
                 "停止后台并重新启动</button>"
                 '<button onclick="pywebview.api.requalify().catch(showError)">'
                 "停止并重新核验当前环境</button>"
+                f"{resume_update}"
                 '<button onclick="pywebview.api.exit(true)">关闭窗口</button>'
                 '<p id="error"></p><script>function showError(e) {'
                 "document.getElementById('error').textContent = e.message; }"

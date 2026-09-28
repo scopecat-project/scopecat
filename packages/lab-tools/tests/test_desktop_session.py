@@ -64,3 +64,18 @@ def test_failed_requalification_does_not_publish_or_reopen():
     runtime.select.assert_not_called()
     runtime.start.assert_not_called()
     window.load_url.assert_not_called()
+
+
+def test_interrupted_selection_can_retry_without_closing_window():
+    runtime = Mock()
+    runtime.select.side_effect = [OSError("interrupted selection"), None]
+    runtime.start.return_value = SimpleNamespace(base_url="http://localhost:1234")
+    window = Mock()
+    api = DesktopAPI(runtime, lambda: window, threading.Event())
+    with pytest.raises(OSError, match="interrupted selection"):
+        api.apply_update()
+    runtime.start.assert_not_called()
+    window.destroy.assert_not_called()
+    api.apply_update()
+    assert runtime.select.call_args_list[0] == runtime.select.call_args_list[1]
+    window.load_url.assert_called_once_with("http://localhost:1234")

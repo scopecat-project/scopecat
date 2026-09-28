@@ -65,6 +65,27 @@ Explicit installed capabilities use paired `--distribution` and `--manifest`
 arguments during configure/update. The capability distribution owns its manifest;
 author folders do not copy driver or application composition.
 
+## Develop a capability in VS Code
+
+Use an isolated development home with the capability's complete delivery installed.
+Edit its package normally in VS Code, then prepare a snapshot of that source:
+
+```sh
+scopecat app --home /path/to/development --action prepare-capability --package /path/to/capability-package
+```
+
+This rebuilds only the selected capability wheel, reuses the installed delivery's
+GUI and dependency wheelhouse, and qualifies a separate immutable candidate.
+Unchanged candidate contents reuse the retained environment. The running application
+keeps its selected software until you explicitly stop and apply the candidate through
+Settings or `--action apply-update`. Restart Python kernels afterwards.
+
+This is an editable-source workflow, not a mutable `pip install -e` runtime: saving
+a driver file cannot silently change a live connection or an admitted task's identity.
+Changed dependencies or build backends require a complete delivery; candidate failure
+leaves the selected environment intact. Author-only edits still use ordinary source
+refresh and do not need this operation.
+
 ## Recovery
 
 If startup detects another interpreter, use the desktop's **Stop background and
