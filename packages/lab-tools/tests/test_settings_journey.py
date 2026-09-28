@@ -6,19 +6,18 @@ from pathlib import Path
 
 import pytest
 
-from lab_tools.services import Services
+from lab_tools.application_runtime import ApplicationRuntime
 from scopecat.lab_settings import lab_settings_identity
 from scopecat.project import open_project
 from scopecat_server.lifecycle import inspect_daemon, stop_project
-from scopecat_server.scaffold import write_project_scaffold
 
 
 def test_settings_edit_requires_stopped_recheck_and_missing_file_allows_stop(
     tmp_path: Path,
 ) -> None:
-    root = tmp_path / "experiment"
-    root.mkdir()
-    write_project_scaffold(root)
+    store = ApplicationRuntime(tmp_path / "home")
+    root = store.root
+    root.mkdir(parents=True)
     settings = tmp_path / "lab.json"
     settings.write_text('{"initial_configuration":"simulator"}')
     state = root / ".scopecat"
@@ -30,28 +29,29 @@ def test_settings_edit_requires_stopped_recheck_and_missing_file_allows_stop(
     gui = tmp_path / "gui"
     gui.mkdir()
     (gui / "index.html").write_text("<html>workbench</html>")
-    store = Services(tmp_path / "home")
-    service = store.register(root, Path(sys.executable), name="lab", static_dir=gui)
+    service = store.configure(static_dir=gui)
     assert service.settings_identity == lab_settings_identity(root)
     project = open_project(root)
     original_binding = (root / "scopecat.runtime.toml").read_bytes()
     try:
-        store.start(service.id)
+        store.start()
         assert (root / "scopecat.runtime.toml").read_bytes() == original_binding
         settings.write_text('{"initial_configuration":"physical"}')
-        with pytest.raises(ValueError, match="已停止"):
-            store.recheck(service.id, operation_id="test")
-        store.stop(service.id)
+        candidate = store.qualify(Path(sys.executable), gui)
+        with pytest.raises(ValueError, match="仍在运行或更新中"):
+            store.select(candidate)
+        store.stop()
         with pytest.raises(ValueError, match="设置已改变"):
-            store.start(service.id)
+            store.start()
         assert inspect_daemon(project).state == "stopped"
-        updated = store.recheck(service.id, operation_id="test")
+        store.select(candidate)
+        updated = store.installation()
         assert updated.settings_identity != service.settings_identity
-        store.start(service.id)
+        store.start()
         settings.unlink()
-        store.stop(service.id)
+        store.stop()
         assert inspect_daemon(project).state == "stopped"
         with pytest.raises(ValueError, match="cannot read lab settings"):
-            store.start(service.id)
+            store.start()
     finally:
         stop_project(project)

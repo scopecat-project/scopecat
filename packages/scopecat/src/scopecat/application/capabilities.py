@@ -19,6 +19,7 @@ class LabCapabilities:
 
     author_modules: tuple[str, ...] = ()
     experiment_system: str | None = None
+    domain_systems: tuple[tuple[str, str], ...] = ()
     procedures: tuple[str, ...] = ()
     procedure_schedules: tuple[str, ...] = ()
     launch_provider: str | None = None

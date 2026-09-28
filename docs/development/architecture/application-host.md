@@ -1,193 +1,66 @@
-# Local application host
+# Application runtime ownership
 
-Status: transitional implementation for explicitly registered experiment services,
-with teaching under Help. The canonical target is
-[one application, independent execution contexts](public-application.md): remove the
-standalone manager and per-project/per-lesson service topology. Reuse the lifecycle
-safety mechanisms below; do not extend this topology as the product model.
-The host opens each service's real workbench; it does not replace that workbench
-with tutorial inventory or establish shared physical-device ownership.
+One installation home selects one application runtime. The native window loads
+that runtime's workbench directly; there is no manager HTTP server, service
+catalog, preferred laboratory, nested workbench frame or lifecycle operation queue.
 
-## Register and open an existing experiment service
+The canonical model is [one application with independent contexts](public-application.md).
+Devices, drivers, source identities, setup and parameters remain independent
+concepts. Registered author folders share the application's device/data authority.
 
-Run the following in the project's environment, with `scopecat-lab-tools` installed:
+## Selected software
 
-```sh
-scopecat app /path/to/existing-project --home /tmp/scopecat-dev --action start
-```
+`ApplicationRuntime` owns a fixed `HOME/runtime` composition and an
+`installation.json` selection. Candidate deliveries live at content-addressed,
+retained release paths. A candidate probe runs in its interpreter, checks source
+dependencies and obtains driver metadata in an isolated worker without connecting
+devices. Optional SDK imports belong to connection, not catalog discovery.
 
-For a separate target interpreter or a source GUI build:
+Selection requires the application/deployment/data locks and a stopped owner.
+The candidate is requalified, a pending marker is persisted, the composition and
+author interpreter bindings are updated, and then selection commits. An interrupted
+switch blocks startup and is completed by retrying the same candidate. It does
+not create a new data identity or rewrite scientific data.
 
-```sh
-scopecat app /path/to/existing-project --home /tmp/scopecat-dev --action start --python /path/to/environment/bin/python --static-dir /path/to/gui/dist
-```
+The stable launcher reads the same selection, including after an in-window update.
+Native shell and Python clients must reopen to adopt changed installed software.
+There is no fallback to a previous driver identity after a qualification failure.
 
-On Windows the interpreter is typically `environment\Scripts\python.exe`.
-The paths are trusted local CLI inputs. The browser only submits a registered
-service ID; it cannot register an arbitrary path or interpreter. Registration
-validates the actual project root, environment and GUI without starting its
-daemon. CLI actions are explicit: `status` (default), `start`, `stop`, `open`,
-`desktop`, and `quit`. Only `open` launches a browser; errors never do.
-`--home` is required so source development does not accidentally use a daily home.
-The installed native entry explicitly chooses `desktop`. `--action open --no-browser`
-starts/connects the host and prints state; plain `status` never starts the host.
-Starting/checking uses the existing startup lifecycle. In the desktop, a successful
-`service_start` or setup operation displays the service GUI in a sandboxed loopback
-iframe. Settings remain in the parent window. No manager token is passed to the
-experiment frame. Startup may initialize the project's configured
-instruments; it does not submit a measurement. Existing hardware startup policy
-remains the project's responsibility.
+## Runtime and window lifecycle
 
-Desktop launch reconnects to a running preferred service; a stopped service requires
-an explicit start. Successful start remembers the deployment. With no registrations,
-multiple unselected registrations or a removed preferred ID, the window shows settings.
-`Scopecat.app` and `Scopecat.lnk` use a native webview without a console. The per-home
-desktop lock and activation signal reuse the existing window on repeated launches.
-`lab.py` and terminal launchers remain explicit scripting entries. **Help** contains managed teaching exercises;
-`scopecat teach` opens it directly. Explicit installed tutorial automation uses
-`python lab.py teach compute --verify`. A normal installation without a tutorial
-delivery can still manage experiment services; Help reports teaching unavailable.
-Source users pass `--source CHECKOUT` to enable source-backed teaching.
+The existing daemon lifecycle owns PID/creation-time verification, data locks,
+startup readiness, graceful shutdown and valid stale-record reconciliation.
+The application does not create a second process-state database.
+Stop does not import optional adapters and remains usable after interpreter changes.
 
-The service registration records an absolute interpreter path without resolving
-venv symlinks, its prefix/Python/package versions and selected GUI directory.
-Startup checks that identity and refuses a running daemon from another interpreter,
-an API-only service or a mismatched GUI. It leaves an existing service running so
-the maintainer can stop it explicitly. Before changing an environment, finish active management work and stop the service.
-After an in-place update, **Recheck environment** validates the existing registered
-interpreter, project and GUI and atomically updates its environment identity.
-It retains the deployment ID and paths, records the operation, and leaves the service
-stopped. A failed probe retains the old registration. A valid stale process record
-can be reconciled under the daemon lock and status is checked again before updating.
-Live, degraded, malformed or lock-held states remain rejected. Rechecking shares
-the registration/operation lock; it cannot overlap
-re-registration or another management operation. New interpreter or GUI paths still
-require explicit trusted local registration. See the [maintenance guide](../../how-to/maintain-application.md). This version check
-is not a lockfile/content attestation of every dependency or editable source byte.
-Failed startup stays visible in the operation log; there is no fallback interpreter.
+A per-home desktop lock and activation signal reuse the window. Native bridge
+operations act on that home only. Preparation blocks ordinary window exit until
+it completes. Closing otherwise offers explicit stop, background retention or
+cancel; it does not own or kill VS Code kernels.
 
-**Stop service** asks for confirmation because it can interrupt active work and
-Notebook connections. It uses the existing daemon lifecycle, including graceful
-shutdown and its timeout policy. A daemon started by another interpreter remains
-stoppable through its recorded binding and PID/creation-time identity; the former
-interpreter need not still be usable. Failed ownership checks leave the process
-untouched and retain the operation log. Stopping does not require GUI assets.
-It never automatically restarts the service or resumes measurement.
+CLI status, installation, source registration and start are headless. Only explicit
+open launches a browser. Tests use temporary homes and serial real-process checks.
 
-**Remove registration** is available after the service is stopped, with no other
-pending management operation. It only removes the deployment catalog row. Project
-files, scientific data and operation history remain, and the CLI can register that
-project again. Retrying the same successful removal operation returns its retained
-result. A stopped service with an unreadable/missing project remains an explicit
-maintenance error, rather than guessing that its process is safe to forget.
+## Source and capability composition
 
-The experiment GUI has a **Help and maintenance** page. It uses the existing health
-response to identify the current service and provides supported documentation,
-teaching and maintenance directions. The native window retains settings around the
-embedded workbench. For a standalone browser workbench, reopen the installed `lab.cmd` /
-`lab.py` entry with `--manage` to return to that installation's manager; a qualified
-source installation can use `scopecat app --action open --manage` with its original host-home options. Help does
-not register directories or start another service merely by being opened.
+Author-only manifests inherit the selected application composition. Captured source
+pins even an empty capability declaration, so archived code does not consult today's
+registration. Source refresh and runtime replacement are separate operations.
 
-Failed startup or a changed registration opens maintenance with retained operation
-logs and leaves the previous remembered selection unchanged; it never chooses a
-replacement runtime. Normal reopening can initialize instruments through the same
-startup contract, but does not replay measurements or interrupted operations.
-An independently opened browser workbench has no authenticated one-click return to
-a particular manager. The daemon is not paired with an
-installation host: deployment/source identities do not identify its manager port,
-home or credentials. Do not expose `host.json`, infer a manager address from a
-project path, or add an unauthenticated cross-origin management endpoint to make
-a return link work. A future direct return flow requires an explicit pairing
-contract.
-It retains separate child daemons; it does not establish one shared executor or
-cross-service hardware exclusion. Those remain tracked in the [current platform work](../platform-status.md) and
-runtime design; #614 only delivered the earlier application-entry slice. Notebook/page scientific selections are unchanged.
+Capabilities can register domain-system builders by target kind using
+`[lab.capabilities.domain_systems]`. No-domain tasks use the ordinary computation
+system; a declared target kind selects its explicit builder. Unknown target kinds
+fail with a missing-capability error rather than selecting the first provider.
+A custom whole-application `experiment_system` and domain dispatch are mutually
+exclusive.
 
-## Ownership
+## Remaining boundary
 
-The host owns a local deployment catalog, the teaching inventory and serialized
-lifecycle operations. `host/services.sqlite` assigns stable deployment IDs to
-canonical project roots and explicit runtimes. Registration and operation admission
-share a lock; queued/running startup prevents rebinding its environment. This is
-separate from the implemented daemon workspace-source catalog and from scientific
-applicability identity.
-The managed directory UUID identifies a teaching workspace; API requests use that
-identity rather than accepting arbitrary filesystem paths. Existing managed copies
-are discovered from their teaching metadata, version and current-generation record.
-All mutation paths revalidate membership and reject symlink escape. Current copies
-and copies with running processes are protected from deletion. Real experiment
-workspaces and data spaces are not admitted to this disposable inventory.
+Teaching CLI commands execute directly with a file lock and retain their existing
+isolated exercise environments. Same-service practice ownership and cleanup belong
+to the following batch. This transitional teaching path does not restore the
+removed management service.
 
-Each exercise retains its installed Python environment and project daemon. The host
-never imports its author package or acquires its devices. This preserves dependency,
-module-name, source-revision, data-writer and failure boundaries during the migration.
-A host restart does not stop exercise services, rewrite retained data or redirect
-Notebook requests. This is one application entry with managed child services, not
-a claim that every execution now shares one Python process.
-
-## Process and operation lifecycle
-
-A launch lock serializes concurrent clients; a separate owner lock protects the
-host lifetime. A private endpoint record carries process creation time, instance
-identity, protocol, runtime content identity and a random token. The host listens
-only on loopback, validates Host/Origin and requires the token for API access.
-The browser receives it in a URL fragment and removes the fragment immediately;
-API replies and logs do not expose it. This is a trusted local-user service, not
-an isolation boundary against arbitrary code running as that same OS user.
-
-Operations persist in `host/operations.sqlite3`; output is retained per operation.
-Client-generated IDs make resubmission idempotent. Only one management operation
-runs at a time, and admission/claim transitions use SQLite writer transactions.
-A short-lived worker runs in the manager's installed environment and uses each
-exercise's interpreter for execution. Its process identity and completion are
-persisted independently of the HTTP process. After restart, live workers remain
-observable; absent workers become interrupted, with files and logs preserved.
-Interrupted work is never replayed automatically. Creating a new copy publishes
-the current pointer only after its environment is ready.
-
-Window close opens an exit decision: stop services started by this host session,
-retain background services, or cancel. Ownership receipts record PID and process
-creation time; reused or externally restarted services are never stopped as owned.
-Independent services are shown in the exit dialog and remain running. Stopping is
-an explicit interruption choice, not an automatic claim that measurements are idle.
-VS Code kernels are independent clients and are never killed by desktop exit.
-Graceful host shutdown and runtime replacement reject active management work.
-Replacing the manager does not stop an already running exercise. Fixed releases
-live in separate installed directories. Per-home installation serializes preparation,
-stages and checks the copied bundle, and preserves incomplete runtime attempts before
-retrying. Virtual environments are built at their final path. Complete launchers are
-published atomically, with `lab.py` as the release-selection point; neither retained
-releases nor registered service paths are redirected by manager installation.
-Selecting a prepared release does not itself replace a running host: the next launch
-still requires management work to be idle. Source-development entry stops its manager
-before replacing the source runtime. UI operations and headless service commands use
-the same registered-service lifecycle and lock.
-
-## Development and acceptance
-
-Tests use explicit temporary homes and dynamic loopback ports. They do not install
-an OS service or depend on the user's default installation. Real-process tests
-cover concurrent launch, identity reuse, authenticated access, interrupted HTTP
-ownership and operation reconnection. Installed Windows/Linux acceptance creates
-all four topics through the same host, runs the shipped Notebooks, resets a copy,
-deletes the selected old copy and shuts down the host.
-
-## Further deployment decisions
-
-Follow the [canonical application implementation order](public-application.md#ordered-implementation-and-evidence).
-Lifecycle reuse is useful, but further teaching-launcher expansion and tray work
-are not the next architectural step.
-
-The existing workspace/data-space/deployment binding remains authoritative for
-project execution. Before generalizing this host to laboratories, define stable
-workspace and deployment IDs independent of paths, cross-workspace physical-device
-ownership, session authorization and compatible runtime upgrade rules. Independent
-stores currently do not establish exclusion for two declarations targeting the same
-physical instrument. A management wrapper does not solve that problem by itself.
-
-Tray integration and login startup can be added to this entry after its lifecycle
-has been exercised. Unattended machine services need an explicit OS identity and
-device-access policy. LAN access needs authenticated clients and distinct rights for
-reading results, publishing source, changing parameters and controlling devices.
-These features are not enabled by this initial local teaching implementation.
+Separate application homes remain independent physical-device authorities.
+LAN authorization, unattended OS services and cross-home hardware exclusion are
+not implied by the local desktop runtime.

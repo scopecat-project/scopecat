@@ -223,8 +223,7 @@ def test_author_only_capture_pins_laboratory_without_copying_live_manifest(
     archive = materialize_sources(bundle, source.parent / "archive")
     # Retained composition does not follow later edits to the live owner.
     (owner / "scopecat.toml").write_text("[lab]\n")
-    with pytest.raises(ValueError, match=r"only \[lab.adapter\]"):
-        open_project(source)
+    assert open_project(source).lab_adapter is None
     retained = load_captured_project(archive)
     assert retained.author_only and retained.lab_adapter == project.lab_adapter
     assert retained.bootstrap_spec == "test_lab_adapter.bootstrap:create"

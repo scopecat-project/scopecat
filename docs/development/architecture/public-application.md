@@ -4,13 +4,11 @@ Canonical product target, tracked by [#610](https://github.com/scopecat-project/
 and [#671](https://github.com/scopecat-project/scopecat/issues/671).
 This contract supersedes the first-run laboratory chooser and per-project/per-lesson
 service topology. It is not a claim that the target is implemented. Native desktop
-entry, explicit launch actions, recovery from interpreter mismatch and valid stale
-process records are delivered foundations (#801–#804); shared execution authority,
-full device-context interaction and same-service practice cleanup remain to be built.
-The first implementation slice removes the implicit service-source identity and
-admits exact parameter/setup requests independently of global setup selection.
-Workbench drafts can choose their own saved setup. These changes do not yet
-replace the host's service registry or provide practice-scope cleanup.
+entry, explicit launch actions and recovery from interpreter mismatch and valid
+stale process records are delivered foundations (#801–#804). The first product
+batch (#812) delivers registered device ownership, canonical physical access,
+independent setup/parameter editing and exact setup admission without a global
+active setup. Same-service practice cleanup remains a separate delivery batch.
 
 The product direction is stronger abstractions within one application, not a
 collection of project services hidden behind one window. The concrete device,
@@ -35,16 +33,26 @@ access key and rejection before acquisition.
 
 Direct-instrument listing, connection and release also require an exact maintained
 setup. They work without global activation. Each Instruments page retains its own
-selection while connected; device edits save a new setup without activating it.
+selection while connected. Device maintenance edits the application device registry;
+setups reference stable devices and freeze exact connection/driver revisions for work.
 Open retries check the original setup and retain the original acquisition. Aliases
 sharing a maintained physical access key use the same claims across contexts.
 
-This does **not** yet establish canonical identity for independently declared
-access keys, or removal of active-setup
-dependencies from every candidate/config-registry path. The standalone manager
-and per-lesson services also remain. The next gate must implement these boundaries
-and same-service practice cleanup before claiming the combined pre-hardware
-journey below; passing the source/context tests alone is insufficient.
+The application entry now owns one fixed runtime root under its installation home.
+Author folders register with that owner and do not create endpoints or installations.
+The native window loads the workbench directly and offers explicit stop/background
+choices when closing. An empty application can register independent author folders
+without requiring an installed capability package. Captured sources retain their
+bound composition even when the live application changes.
+
+Candidate environments and capability declarations are qualified before selection,
+including driver metadata and content identity without device connection. Selection
+requires stopped process ownership, updates source interpreter bindings under the
+same start fence, and retains an interrupted selection for explicit retry. This is
+the application maintenance boundary: software/settings actions live in the
+workbench, and the separate manager and per-directory service registry are removed.
+Teaching commands now execute directly; same-service practice cleanup remains the
+next batch and must pass before claiming the complete pre-hardware journey below.
 
 ## Installation and everyday use
 
@@ -64,9 +72,10 @@ device contexts do not create separate application services, ports or installati
 Qualified workers may use different processes; one service does not mean one Python
 process. Heterogeneous runtime support is not a prerequisite for this first target.
 
-The current host still registers project services and can initialize instruments at
-startup. Its existing setup UI and installed-adapter contracts below are transitional
-implementation, not the desired first-run flow. See [application host](application-host.md).
+The old host's service registration and setup UI are retirement targets, not an
+alternative product entry. Its remaining teaching/installation consumers must be
+replaced together with their ownership assertions; see
+[application host](application-host.md).
 
 ## Ownership without a laboratory container
 

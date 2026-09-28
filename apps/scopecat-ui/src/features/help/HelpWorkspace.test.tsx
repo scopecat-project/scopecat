@@ -23,9 +23,10 @@ it("shows current locations and qualified maintenance steps without discovering 
     />,
   );
   expect(screen.getByText("/lab/scientific-data")).toBeVisible();
-  expect(screen.getByText("/lab/project")).toBeVisible();
-  expect(screen.getByText("scopecat app")).toBeVisible();
-  expect(screen.getByText("scopecat-lab-tools")).toBeVisible();
+  expect(screen.getByRole("link", { name: "Application settings" })).toHaveAttribute(
+    "href",
+    "#settings",
+  );
   expect(screen.queryByText("never-display")).not.toBeInTheDocument();
   expect(screen.getByRole("link", { name: "Experiments" })).toHaveAttribute("href", "#launch");
   for (const link of screen
@@ -39,6 +40,5 @@ it("shows current locations and qualified maintenance steps without discovering 
 it("keeps recovery guidance available while service information is unavailable", () => {
   render(<HelpWorkspace reachable={false} />);
   expect(screen.getByRole("status")).toHaveTextContent("cannot currently be reached");
-  expect(screen.getByText("Current service information is unavailable.")).toBeVisible();
-  expect(screen.getByText("lab.cmd")).toBeVisible();
+  expect(screen.getByText(/Reopen Scopecat/)).toBeVisible();
 });

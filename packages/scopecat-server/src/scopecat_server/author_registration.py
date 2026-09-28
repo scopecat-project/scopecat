@@ -39,6 +39,7 @@ def register_author_workspace(
     project = load_project(
         project.manifest,
         lab_adapter=laboratory_adapter(owner.root) if project.author_only else None,
+        bound_composition=project.author_only,
     )
     if service_workspace_root(owner.root) != owner.root:
         raise ValueError("Registration requires the deployment service workspace")

@@ -514,3 +514,44 @@ def test_author_modules_reject_custom_application_factory(tmp_path: Path) -> Non
     )
     with pytest.raises(ProjectManifestError, match=r"not lab\.application"):
         load_project(manifest)
+
+
+def test_domain_capabilities_select_exact_context_without_requiring_a_domain(
+    tmp_path: Path,
+) -> None:
+    from scopecat.records.config import DomainTargetBinding
+
+    module = tmp_path / "src" / "systems.py"
+    module.parent.mkdir()
+    module.write_text(
+        'def first(config, catalog): return "first"\n'
+        'def second(config, catalog): return "second"\n'
+    )
+    (tmp_path / "scopecat.toml").write_text(
+        "[lab.capabilities.domain_systems]\n"
+        'first="systems:first"\nsecond="systems:second"\n'
+    )
+    project = open_project(tmp_path)
+    assert "systems" not in sys.modules
+    builder = project.load_application().build_experiment_system
+    assert builder is not None
+    config = Mock(spec=ConfigProfileSnapshot, domain_target=None)
+    catalog = InstrumentContractCatalog(
+        config_content_hash="sha256:" + "0" * 64, provider_id=None
+    )
+    assert isinstance(builder(config, catalog), ExperimentSystem)
+    for kind in ("first", "second"):
+        config.domain_target = DomainTargetBinding(id="target", kind=kind)
+        assert builder(config, catalog) == kind
+    config.domain_target = DomainTargetBinding(id="target", kind="unavailable")
+    with pytest.raises(ValueError, match="No installed experiment system capability"):
+        builder(config, catalog)
+
+
+def test_domain_capabilities_cannot_compete_with_global_builder(tmp_path: Path) -> None:
+    (tmp_path / "scopecat.toml").write_text(
+        '[lab.capabilities]\nexperiment_system="systems:global_builder"\n'
+        '[lab.capabilities.domain_systems]\nfirst="systems:first"\n'
+    )
+    with pytest.raises(ProjectManifestError, match="exclusive"):
+        open_project(tmp_path)

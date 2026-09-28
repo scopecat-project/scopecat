@@ -21,7 +21,6 @@ from scopecat.application.launch import (
     LaunchResult,
     validate_launch_control_edits,
 )
-from scopecat.author_workspaces import author_workspace_id
 from scopecat.daemon.client import DaemonClient
 from scopecat.daemon.endpoint import DAEMON_URL_ENV, resolve_daemon_endpoint
 from scopecat.kernel.content_identity import sha256_json_hash
@@ -77,9 +76,9 @@ def main() -> None:
 
 def run_project_procedure(root: Path, procedure_id: str) -> None:
     record_timing("procedure_identity_start", procedure_id=procedure_id)
-    with DaemonClient(
-        resolve_daemon_endpoint(root), workspace_id=author_workspace_id(root)
-    ) as client:
+    # Procedures belong to the application. Resolve their retained identity before
+    # loading any author revision; the runtime root need not be an author source.
+    with DaemonClient(resolve_daemon_endpoint(root)) as client:
         stored = client.get_procedure(procedure_id)
         plan_code = (
             client.experiment_plan(stored.plan_ref).definition.code_revision

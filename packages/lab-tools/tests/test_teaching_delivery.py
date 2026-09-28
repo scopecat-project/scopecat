@@ -228,7 +228,7 @@ def test_failed_validation_or_publication_keeps_old_selection(
     monkeypatch.setattr(bundle.os, "replace", replace)
     monkeypatch.setattr(bundle.subprocess, "run", lambda *_args, **_kwargs: None)
     bundle.install_home(delivery, home)
-    assert launcher.read_bytes() != old
+    assert launcher.read_bytes() == old  # Stable entry reads installation.json.
     assert len(fake_runtime) == 2
 
 
@@ -289,6 +289,10 @@ def test_installed_launchers_select_notebook_and_quote_shell_paths(
     home = tmp_path / "实验室's application"
     launcher = bundle.install_home(delivery, home)
     calls = []
+    selected = fake_runtime[0] / (
+        "Scripts/python.exe" if sys.platform == "win32" else "bin/python"
+    )
+    (home / "installation.json").write_text(json.dumps({"python": str(selected)}))
     monkeypatch.setattr(
         bundle.subprocess, "call", lambda command: calls.append(command) or 0
     )
@@ -308,8 +312,13 @@ def test_installed_launchers_select_notebook_and_quote_shell_paths(
     assert (home / "Scopecat.command").stat().st_mode & 0o111
     assert (home / "Notebook.command").stat().st_mode & 0o111
     assert 'notebook "$@"' in (home / "Notebook.command").read_text()
-    assert '--manage "$@"' in (home / "Manage.command").read_text()
-    assert (home / "Manage.command").stat().st_mode & 0o111
+    assert not (home / "Manage.command").exists()
+    assert not (home / "Manage.cmd").exists()
+    replacement = home / "another-release/bin/python"
+    (home / "installation.json").write_text(json.dumps({"python": str(replacement)}))
+    with pytest.raises(SystemExit):
+        runpy.run_path(str(launcher), run_name="__main__")
+    assert calls[-1][0] == str(replacement)
 
 
 def test_public_install_bundle_still_refuses_existing_destination(delivery, tmp_path):
@@ -317,6 +326,79 @@ def test_public_install_bundle_still_refuses_existing_destination(delivery, tmp_
     destination.mkdir()
     with pytest.raises(FileExistsError, match="已存在"):
         bundle.install_bundle(delivery, destination)
+
+
+@pytest.mark.parametrize("package_name", ["example", "different-capability"])
+def test_development_snapshot_preserves_selected_delivery_and_qualifies_candidate(
+    delivery, tmp_path, monkeypatch, package_name
+):
+    import zipfile
+    from types import SimpleNamespace
+    from unittest.mock import Mock
+
+    from lab_tools import development
+
+    def wheel(path, name, content):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with zipfile.ZipFile(path, "w") as archive:
+            archive.writestr("package/__init__.py", content)
+            archive.writestr(
+                "package.dist-info/METADATA", f"Name: {name}\nVersion: 1\n"
+            )
+
+    original = delivery / "wheels/example.whl"
+    wheel(original, "example", "original")
+    manifest = json.loads((delivery / bundle.MANIFEST).read_text())
+    manifest["files"]["wheels/example.whl"] = bundle.file_hash(original)
+    (delivery / bundle.MANIFEST).write_text(json.dumps(manifest))
+    before = original.read_bytes()
+    environment = tmp_path / "selected-runtime"
+    environment.mkdir()
+    (environment / bundle.RECEIPT).write_text(
+        json.dumps(
+            {
+                "bundle": str(delivery),
+                "manifest_sha256": bundle.file_hash(delivery / bundle.MANIFEST),
+            }
+        )
+    )
+    runtime = Mock(root=tmp_path / "application")
+    runtime.root.mkdir()
+    (runtime.root / "scopecat.toml").write_text(
+        '[lab.adapter]\ndistribution="example"\nmanifest="package/adapter.toml"\n'
+    )
+    runtime.installation.return_value = SimpleNamespace(
+        python=environment / "bin/python"
+    )
+    source = tmp_path / "source"
+    source.mkdir()
+    (source / "pyproject.toml").write_text('[project]\nname="example"\n')
+
+    def build(command, **_):
+        assert "--offline" in command
+        wheel(
+            Path(command[command.index("--out-dir") + 1]) / "new.whl",
+            package_name,
+            "changed",
+        )
+
+    def qualify(candidate):
+        checked = bundle.verify_bundle(candidate)
+        assert checked["files"]["gui/index.html"] == manifest["files"]["gui/index.html"]
+        assert "wheels/example.whl" not in checked["files"]
+        assert "wheels/new.whl" in checked["files"]
+        return "qualified"
+
+    monkeypatch.setattr(development.subprocess, "run", build)
+    runtime.prepare_update.side_effect = qualify
+    if package_name == "example":
+        assert development.prepare_capability(runtime, source) == "qualified"
+    else:
+        with pytest.raises(ValueError, match="不属于当前选定"):
+            development.prepare_capability(runtime, source)
+        runtime.prepare_update.assert_not_called()
+    assert original.read_bytes() == before
+    runtime.select.assert_not_called()
 
 
 def test_receipt_publication_interruption_is_retryable(delivery, tmp_path, monkeypatch):

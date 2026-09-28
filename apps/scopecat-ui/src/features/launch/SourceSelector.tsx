@@ -48,7 +48,13 @@ export function SourceSelector({
         </p>
       )}
       {catalog.isSuccess && sources.length === 0 && (
-        <p>Open an experiment code folder to add a source. Retained results remain available.</p>
+        <p>
+          Register your experiment folder in{" "}
+          <a className="underline" href="#settings">
+            Application settings
+          </a>
+          , then open it in VS Code. Retained results remain available.
+        </p>
       )}
       {selected && !selected.available && (
         <p role="alert">

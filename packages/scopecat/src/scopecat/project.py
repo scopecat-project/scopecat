@@ -66,6 +66,7 @@ class Project:
     adapter_packages: tuple[tuple[str, str], ...] = ()
     author_only: bool = False
     lab_adapter: AdapterReference | None = None
+    composition_bound: bool = True
 
     @property
     def runtime_binding(self) -> RuntimeBinding:
@@ -192,6 +193,7 @@ def load_project(
     *,
     resolve_adapter: bool = True,
     lab_adapter: AdapterReference | None = None,
+    bound_composition: bool = False,
 ) -> Project:
     """Load the project contract shared by daemon and notebook tooling."""
 
@@ -211,6 +213,7 @@ def load_project(
         selected.parent,
         resolve_adapter=resolve_adapter,
         lab_adapter=lab_adapter,
+        bound_composition=bound_composition,
     )
     if "adapter" in lab:
         from scopecat.installed_adapter import parse_adapter_reference
@@ -327,6 +330,7 @@ def load_project(
         dependencies=dependencies,
         author_only=author_only,
         lab_adapter=lab_adapter,
+        composition_bound=not author_only or resolve_adapter or bound_composition,
     )
 
 
@@ -340,7 +344,7 @@ def load_captured_project(root: Path) -> Project:
     if path.is_file():
         document = tomllib.loads(path.read_text(encoding="utf-8"))
         lab = cast("dict[str, object]", document["lab"])
-        adapter = parse_adapter_reference(lab["adapter"])
+        adapter = parse_adapter_reference(lab["adapter"]) if "adapter" in lab else None
     else:
         # Combined projects carry their own laboratory declaration. An author-only
         # archive must never resolve a live registration when its pin is absent.
@@ -349,7 +353,9 @@ def load_captured_project(root: Path) -> Project:
             raise ValueError(
                 "Author-only revision is missing its laboratory declaration"
             )
-    return load_project(root / "scopecat.toml", lab_adapter=adapter)
+    return load_project(
+        root / "scopecat.toml", lab_adapter=adapter, bound_composition=path.is_file()
+    )
 
 
 def _laboratory_table(
@@ -358,10 +364,11 @@ def _laboratory_table(
     *,
     resolve_adapter: bool,
     lab_adapter: AdapterReference | None,
+    bound_composition: bool,
 ) -> tuple[dict[str, object], bool]:
     author_only = "lab" not in document and "authors" in document
     if author_only:
-        if resolve_adapter and lab_adapter is None:
+        if resolve_adapter and lab_adapter is None and not bound_composition:
             from scopecat.author_workspaces import bound_lab_adapter
 
             lab_adapter = bound_lab_adapter(root)
@@ -430,6 +437,7 @@ def _expand_adapter(
                     *declaration.author_modules,
                     *declaration.procedures,
                     *declaration.procedure_schedules,
+                    *(spec for _, spec in declaration.domain_systems),
                     declaration.experiment_system,
                     declaration.launch_provider,
                     declaration.comparison_provider,
@@ -742,7 +750,7 @@ def _parse_capabilities(value: object) -> LabCapabilities:
         "launch_provider",
         "comparison_provider",
     }
-    unknown = set(table) - sequence_fields - object_fields
+    unknown = set(table) - sequence_fields - object_fields - {"domain_systems"}
     if unknown:
         raise ProjectManifestError(
             f"unknown [lab.capabilities] field(s): {', '.join(sorted(unknown))}"
@@ -759,9 +767,21 @@ def _parse_capabilities(value: object) -> LabCapabilities:
             )
         sequences[name] = tuple(cast("list[str]", items))
     objects = {name: _optional_text(table, name) for name in object_fields}
+    domains = table.get("domain_systems", {})
+    if not isinstance(domains, dict) or any(
+        not kind.strip() or not isinstance(spec, str) or not spec.strip()
+        for kind, spec in cast("dict[str, object]", domains).items()
+    ):
+        raise ProjectManifestError(
+            "domain_systems must map target kinds to import names"
+        )
+    domain_systems = tuple(sorted(cast("dict[str, str]", domains).items()))
+    if domain_systems and objects["experiment_system"] is not None:
+        raise ProjectManifestError("experiment_system and domain_systems are exclusive")
     for name, specs in (
         *((name, values) for name, values in sequences.items()),
         *((name, (spec,)) for name, spec in objects.items() if spec is not None),
+        ("domain_systems", tuple(spec for _, spec in domain_systems)),
     ):
         for spec in specs:
             module, separator, attribute = spec.partition(":")
@@ -781,6 +801,7 @@ def _parse_capabilities(value: object) -> LabCapabilities:
         procedures=sequences["procedures"],
         procedure_schedules=sequences["procedure_schedules"],
         experiment_system=objects["experiment_system"],
+        domain_systems=domain_systems,
         launch_provider=objects["launch_provider"],
         comparison_provider=objects["comparison_provider"],
     )
