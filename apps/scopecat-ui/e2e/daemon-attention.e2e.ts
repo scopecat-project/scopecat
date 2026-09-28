@@ -183,6 +183,7 @@ with sc.open_project(root).connect() as lab:
     binding = bind_scientific_evidence(catalog_id=lab.health().project_id, config=resolved.config, samples=(), sample_revisions={})
     instrument = resolved.config.system.instrument_registry.instruments[0]
     admission = lab.config.client.submit_run(RunSubmission(
+        execution_setup=setup.ref,
         submission_id="e2e-" + sys.argv[2], scientific_binding=binding,
         config=resolved.config, config_source=resolved.config_source, request=RunRequest(),
         plan=RunPlanSummary(experiment_id="scopecat.e2e." + sys.argv[2], experiment_kind="scratch",
