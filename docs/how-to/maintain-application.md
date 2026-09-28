@@ -259,6 +259,7 @@ lock_project = "."
 public_source = "scopecat"
 dependency_group = "lab-delivery"
 include_project = true
+source_builds = ["proxy-tools"] # required when including the desktop extra
 packages = [".", "packages/shared-methods", "scopecat/packages/scopecat",
   "scopecat/packages/scopecat-server", "scopecat/packages/scopecat-instruments",
   "scopecat/packages/lab-teaching", "scopecat/packages/lab-tools"]
@@ -270,6 +271,11 @@ lock project supplies dependencies and build constraints; `include_project = tru
 includes its runtime dependencies as well as the named dependency group. The public
 checkout supplies the installer, GUI and locked download toolchain. The builder
 rejects duplicate distributions and records recipe identity in the delivery.
+Third-party dependencies use published wheels by default. `source_builds` explicitly
+allows named, hash-locked source archives to become wheels during maintainer builds,
+using the public checkout's locked `delivery-build` toolchain without build isolation.
+The final offline installation still uses wheels only. The desktop's `proxy-tools`
+dependency currently requires this declaration.
 
 For a public checkout outside the recipe directory, select it explicitly:
 
