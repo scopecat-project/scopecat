@@ -149,9 +149,9 @@ addresses for one physical instrument must be declared explicitly; registration
 does not perform hardware discovery or infer identity from model names. The
 runtime still obtains its driver catalog from its startup backend. Controlled
 installation replacement and same-service practice scopes remain to be built.
-The remaining combined-configuration authority is documented in
-[configuration ownership](configuration-ownership.md); it must exit before this
-ownership batch is called complete.
+Global setup selection and overlapping combined-configuration editors have been
+removed. Every run supplies an exact setup independently of its configuration
+data and scientific provenance; see [configuration ownership](configuration-ownership.md).
 
 1. Implement device/connection ownership and setup references together with a
    usable device list/editor. Resolve references into existing execution snapshots;

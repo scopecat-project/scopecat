@@ -352,7 +352,7 @@ def test_typed_candidates_retain_cells_and_independent_policy(
             kind="synthetic",
             content=SampleRevisionDraft(display_name="Candidate sample"),
         )
-        author.use(sample=sample.id, parameter_branch="daily")
+        author.use(sample=sample.id, parameter_branch="daily", setup=setup)
         author.refresh()
         run = (
             author.prepare(

@@ -225,7 +225,7 @@ class BranchParameterEditor(ParameterEditor):
     @override
     def __repr__(self) -> str:
         return (
-            f"ParameterWorkspace(branch={self.branch!r}, tables={len(self)}, "
+            f"BranchParameterEditor(branch={self.branch!r}, tables={len(self)}, "
             f"edits={len(self.diff())}, structure_edits={len(self._structure)})"
         )
 
