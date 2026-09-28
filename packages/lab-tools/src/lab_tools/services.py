@@ -13,7 +13,7 @@ from typing import Literal, cast
 from uuid import uuid4
 
 import httpx2
-from filelock import FileLock
+from filelock import FileLock, Timeout
 from pydantic import BaseModel, ConfigDict, Field
 
 from scopecat.author_workspaces import (
@@ -423,11 +423,28 @@ class Services:
 
     @staticmethod
     def _require_stopped(service: Service) -> None:
-        if (
-            inspect_daemon(open_project(service.root, resolve_adapter=False)).state
-            != "stopped"
-        ):
-            raise ValueError("请先确认实验服务已停止，再复检环境；原登记保留")
+        project = open_project(service.root, resolve_adapter=False)
+        status = inspect_daemon(project)
+        if status.state == "stale" and status.record is not None:
+            # Serialize with daemon startup. Never turn a stale observation into
+            # an implicit stop of a process that became live in the meantime.
+            try:
+                with FileLock(
+                    project.runtime_binding.data_root / "daemon.lock", timeout=0
+                ):
+                    status = inspect_daemon(project)
+                    if status.state == "stale" and status.record is not None:
+                        stop_project(project)
+                    status = inspect_daemon(project)
+            except Timeout as error:
+                raise ValueError(
+                    "实验室仍被进程占用；请停止服务后重试，原登记保留"
+                ) from error
+        if status.state != "stopped":
+            raise ValueError(
+                "请先确认实验服务已停止，再复检环境；原登记保留。"
+                f"当前状态：{status.state}；{status.detail or ''}"
+            )
 
     def views(self) -> list[ServiceView]:
         result: list[ServiceView] = []

@@ -3,7 +3,9 @@
 import sys
 from pathlib import Path
 
+import psutil
 import pytest
+from filelock import FileLock
 
 from lab_tools.host_client import ensure_host, process_alive
 from lab_tools.host_models import Command
@@ -14,6 +16,38 @@ from scopecat_server.lifecycle import (
     stop_project,
     write_daemon_endpoint_record,
 )
+
+
+def test_killed_daemon_record_is_reconciled_before_environment_recheck(tmp_path):
+    project = initialize_project(tmp_path / "project")
+    gui = tmp_path / "gui"
+    gui.mkdir()
+    (gui / "index.html").write_text("<html>fixture</html>")
+    store = Services(tmp_path / "home")
+    service = store.register(
+        project.root, Path(sys.executable), name="test", static_dir=gui
+    )
+    evidence = project.runtime_binding.data_root / "keep-scientific-data"
+    try:
+        store.start(service.id)
+        evidence.write_bytes(b"retained")
+        record = inspect_daemon(project).record
+        assert record is not None
+        process = psutil.Process(record.pid)
+        process.kill()
+        process.wait(timeout=10)
+        assert inspect_daemon(project).state == "stale"
+        with FileLock(project.runtime_binding.data_root / "daemon.lock"):
+            with pytest.raises(ValueError, match="仍被进程占用"):
+                store.recheck(service.id, operation_id="recheck-while-locked")
+            assert inspect_daemon(project).state == "stale"
+        store.recheck(service.id, operation_id="recheck-after-kill")
+        assert inspect_daemon(project).state == "stopped"
+        assert evidence.read_bytes() == b"retained"
+        store.start(service.id)
+        assert inspect_daemon(project).state == "running"
+    finally:
+        stop_project(project)
 
 
 def test_environment_conflict_can_be_stopped_and_restarted_in_manager(tmp_path):
