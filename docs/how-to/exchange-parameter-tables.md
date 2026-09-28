@@ -15,7 +15,7 @@ path = Path("drive.json")
 path.write_text(drive.export_json(), encoding="utf-8")
 ```
 
-Edit the `rows` array in the file. Keep `format`, `definition`, `context`, and `base`
+Edit the `rows` array in the file. Keep `format`, `definition`, and `base`
 unchanged: they describe the table schema, units and exact exported draft. Then:
 
 ```python
@@ -30,8 +30,9 @@ version = params.save("drive-import")
 `preview_json()` validates the whole import without changing the workspace.
 `apply()` checks the base again before editing. If this table was edited or the
 workspace was saved since export/preview, export again and review the new base.
-An export is intended for its originating context, not automatic cross-project
-parameter transfer or configuration migration.
+The base identifies the exported table's schema and values. Import checks those
+inputs; it does not bind the table to a sample or setup, transfer scientific
+verification, or migrate project configuration.
 
 Only changed cells are applied. Untouched cells keep their stored unit
 representation and origin. Imported changes are manual edits; copying metadata

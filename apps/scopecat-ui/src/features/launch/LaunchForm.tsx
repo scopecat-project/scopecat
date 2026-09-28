@@ -33,9 +33,6 @@ export function LaunchForm({
     update,
     select,
     isCurrent,
-    configurationReady,
-    configurationError,
-    refreshConfiguration,
     submit,
     attempt,
   } = useLaunchDraft();
@@ -49,7 +46,7 @@ export function LaunchForm({
       mounted.current = false;
     };
   }, []);
-  const result = catalogReady && configurationReady && !pending ? draft.preview : undefined;
+  const result = catalogReady && !pending ? draft.preview : undefined;
   const fence = result?.manual_state;
   const manual = useQuery({
     queryKey: ["launch-manual-validity", projectId, fence],
@@ -152,7 +149,6 @@ export function LaunchForm({
               : undefined,
           notice: "Preview matches these inputs and the checked project configuration.",
         }));
-      if (isCurrent(revision)) refreshConfiguration();
     } catch (caught) {
       if (isCurrent(revision))
         update((current) => ({
@@ -249,10 +245,9 @@ export function LaunchForm({
       />
       {draft.selection.configuration.kind === "saved" && (
         <p>
-          Using exact saved configuration {draft.selection.configuration.ref.entry_id}. It is not
-          replaced by the current lab default.{" "}
+          Using exact saved configuration {draft.selection.configuration.ref.entry_id}.{" "}
           <button type="button" onClick={() => selectContext()}>
-            Use lab default
+            Clear parameter selection
           </button>
         </p>
       )}
@@ -277,20 +272,18 @@ export function LaunchForm({
               selectContext();
             }}
           >
-            Use lab default
+            Clear parameter selection
           </button>
         </div>
-      ) : draft.selection.configuration.kind === "active" ? (
+      ) : draft.selection.configuration.kind === "unselected" ? (
         <p>
-          Using lab default. Select a saved sample working point in Configuration to use its
-          parameters.
+          Select a parameter branch or use a saved version from Configuration, then choose an
+          experiment setup before preview.
         </p>
       ) : null}
       <p className="text-sm">
         {draft.preview && !result && !pending
-          ? configurationError
-            ? "Cannot verify current configuration. Retained inputs and submission keys are unchanged; refresh project data or preview again."
-            : "Checking the retained preview against current project context…"
+          ? "Checking the retained preview against current project context…"
           : draft.notice}
       </p>
       <button

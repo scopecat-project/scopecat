@@ -39,8 +39,8 @@ export function ParameterBranchPicker({
         Parameters:{" "}
         {value.kind === "parameters"
           ? value.ref.revision_id
-          : value.kind === "active"
-            ? "Lab default"
+          : value.kind === "unselected"
+            ? "Not selected"
             : "From selected working point or saved evidence"}
       </p>
       <button
@@ -113,9 +113,13 @@ export function ParameterBranchPicker({
           {heads.isSuccess && items.length === 0 && (
             <p>No parameter branches yet. Create one in your author session.</p>
           )}
-          {value.kind !== "active" && (
-            <button type="button" disabled={disabled} onClick={() => onChange({ kind: "active" })}>
-              Use lab parameter default
+          {value.kind !== "unselected" && (
+            <button
+              type="button"
+              disabled={disabled}
+              onClick={() => onChange({ kind: "unselected" })}
+            >
+              Clear parameter selection
             </button>
           )}
           <p className="text-sm">

@@ -197,7 +197,7 @@ the destination or evidence changes step identity. Analysis-only recovery into a
 different procedure excludes any attempted parameter publication, just as it
 excludes old configuration acceptance.
 
-This durable output uses development schema 88. Existing development stores are
+This durable output uses the current development format. Existing development stores are
 left untouched; use a fresh store rather than rewriting an older one.
 
 For target selection, durable composition, joint verification and worker setup,
@@ -207,7 +207,8 @@ see [Automate parameter calibration](automate-parameter-calibration.md).
 
 Session branch selection and explicit branch-editor preparation preserve the
 subject, batch, operator and record collection. Selecting another sample/target
-drops the checkout unless a branch is also explicitly selected. Choosing a saved
+retains the checkout, unsaved edits and selected setup, and clears the previous
+subject's batch. Choosing a saved
 parameter revision or working point exits branch mode. Branch names currently
 carry no enforced sample/cooldown applicability or calibration acceptance.
 

@@ -17,7 +17,6 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient, apiData, type LaunchRejection } from "../../api-client";
 import { initialControlDrafts, type ControlDrafts } from "./ControlFields";
 import { canRenderField, type FormField } from "./launch-fields";
@@ -73,13 +72,10 @@ interface DraftContext {
   select: (entry: LaunchCatalogEntry, reset?: boolean, workspaceId?: string) => void;
   update: (change: DraftUpdate) => void;
   isCurrent: (revision: number | undefined) => boolean;
-  configurationReady: boolean;
-  configurationError: string;
   retryOriginalAllowed: boolean;
   attempt: SubmissionAttempt | undefined;
   submit: (request: SubmissionRequest, definition: string) => Promise<string | undefined>;
   checkSubmission: () => Promise<void>;
-  refreshConfiguration: () => void;
 }
 const Context = createContext<DraftContext | null>(null);
 export const definitionKey = (entry: LaunchCatalogEntry) => JSON.stringify(entry);
@@ -174,7 +170,6 @@ function ProjectDraft({
     useState<components["schemas"]["ConfigurationChoice-Input"]>();
   const [selectedContext, setSelectedContext] = useState<ConfigContextResolution>();
   const [attempt, setAttempt] = useState<SubmissionAttempt>();
-  const queryClient = useQueryClient();
   const latest = useRef(draft);
   useEffect(() => {
     latest.current = draft;
@@ -186,40 +181,6 @@ function ProjectDraft({
       alive.current = false;
     };
   }, []);
-  const source = draft?.preview?.reviewed.config_source ?? attempt?.request.reviewed?.config_source;
-  const pinnedSetup =
-    source?.kind === "parameter_revision" || source?.kind === "analysis_candidate";
-  const configuration = useQuery({
-    queryKey: ["config", "launch-context", projectId, source],
-    enabled: Boolean(
-      projectId && !pinnedSetup && (draft?.preview || attempt?.request.reviewed?.config_source),
-    ),
-    queryFn: async ({ signal }) =>
-      (
-        await apiData(
-          apiClient.GET("/api/v1/config-registry", {
-            params: { query: { limit: 1 } },
-            signal,
-          }),
-        )
-      ).activation ?? null,
-  });
-  const matchesConfiguration =
-    pinnedSetup || (configuration.isSuccess && matchesActive(source, configuration.data));
-  if (
-    draft?.preview &&
-    source &&
-    configuration.isSuccess &&
-    !configuration.isFetching &&
-    !matchesConfiguration
-  ) {
-    setDraft(
-      invalidateDraft(
-        draft,
-        "Configuration changed. Editable inputs are retained; preview again before starting.",
-      ),
-    );
-  }
   const resetSource = useCallback((owner: string) => {
     currentWorkspace.current = owner;
     latest.current = undefined;
@@ -397,7 +358,7 @@ function ProjectDraft({
                         }
                       : {
                           ...current.selection,
-                          configuration: { kind: "active" },
+                          configuration: { kind: "unselected" },
                         },
                   },
                   "Parameter context changed. Preview again before starting.",
@@ -409,21 +370,12 @@ function ProjectDraft({
         attempt,
         submit,
         checkSubmission,
-        configurationError: pinnedSetup ? "" : (configuration.error?.message ?? ""),
         retryOriginalAllowed:
           attempt?.definition === draft?.definition &&
           attempt?.request.workspace_id === workspaceId &&
           draft?.workspaceId === workspaceId &&
           (!draft?.codeRevision ||
-            attempt?.request.code_revision?.content_hash === draft.codeRevision.content_hash) &&
-          (attempt?.request.reviewed?.config_source.kind === "parameter_revision" ||
-            attempt?.request.reviewed?.config_source.kind === "analysis_candidate" ||
-            (configuration.isSuccess &&
-              !configuration.isFetching &&
-              matchesActive(attempt?.request.reviewed?.config_source, configuration.data))),
-        refreshConfiguration: () => {
-          void queryClient.invalidateQueries({ queryKey: ["config", "launch-context", projectId] });
-        },
+            attempt?.request.code_revision?.content_hash === draft.codeRevision.content_hash),
         openPlan: (plan, entry, context) => {
           if (!alive.current) return;
           const current = latest.current;
@@ -506,9 +458,6 @@ function ProjectDraft({
           alive.current &&
           currentWorkspace.current === workspaceId &&
           latest.current?.revision === revision,
-        // Background event refreshes must not swallow a click on a checked preview.
-        // Admission still validates its configuration; a failed or changed read blocks it.
-        configurationReady: matchesConfiguration && (pinnedSetup || !configuration.isError),
       }}
     >
       {children}
@@ -519,16 +468,4 @@ export function useLaunchDraft() {
   const context = useContext(Context);
   if (!context) throw new Error("Launch workspace requires its project draft provider");
   return context;
-}
-
-function matchesActive(
-  source: LaunchPreview["reviewed"]["config_source"] | null | undefined,
-  activation: { generation: number; entry_id: string } | null | undefined,
-) {
-  if (source == null) return true;
-  if (source.kind !== "config_registry" || source.selector !== "active") return true;
-  return (
-    source.registry_generation === activation?.generation &&
-    source.entry_id === activation?.entry_id
-  );
 }

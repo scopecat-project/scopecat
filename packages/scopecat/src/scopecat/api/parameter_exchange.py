@@ -20,7 +20,6 @@ from scopecat.kernel.quantity import Quantity
 from scopecat.kernel.value_identity import scalar_identity
 from scopecat.kernel.value_types import Quantity as QuantityType
 from scopecat.kernel.value_types import Table
-from scopecat.records.config_context import ConfigContextRef
 from scopecat.records.parameter import (
     ParameterAtomValue,
     ParameterDefinition,
@@ -36,8 +35,6 @@ class ExchangeTable(Protocol):
     def name(self) -> str: ...
     @property
     def schema(self) -> Table: ...
-    @property
-    def context(self) -> ConfigContextRef | None: ...
     def __iter__(self) -> Iterator[RowKey]: ...
     def __getitem__(
         self, key: RowKey
@@ -53,7 +50,6 @@ class _Document(BaseModel):
 
     format: Literal["scopecat.parameter-table.v1"]
     definition: ParameterDefinition
-    context: ConfigContextRef | None
     base: str
     rows: list[dict[str, JsonValue]]
 
@@ -124,7 +120,6 @@ def _document(table: ExchangeTable) -> _Document:
     document = _Document(
         format="scopecat.parameter-table.v1",
         definition=ParameterDefinition(id=table.name, value_type=table.schema),
-        context=table.context,
         base="",
         rows=rows,
     )
@@ -210,9 +205,9 @@ def _preview(
         raise ValueError(
             "table schema or unit metadata differs; use explicit schema edits"
         )
-    if incoming.context != current.context or incoming.base != current.base:
+    if incoming.base != current.base:
         raise ValueError(
-            "exported table base is stale or belongs to another context; "
+            "exported table base is stale or differs from the current table; "
             "export and review again"
         )
     columns = {column.id for column in table.schema.columns}

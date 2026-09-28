@@ -50,8 +50,8 @@ type SubjectChoice = Annotated[
 ]
 
 
-class ActiveConfiguration(_SelectionModel):
-    kind: Literal["active"] = "active"
+class UnselectedConfiguration(_SelectionModel):
+    kind: Literal["unselected"] = "unselected"
 
 
 class SavedConfiguration(_SelectionModel):
@@ -80,7 +80,7 @@ class CandidateConfiguration(_SelectionModel):
 
 
 type ConfigurationChoice = Annotated[
-    ActiveConfiguration
+    UnselectedConfiguration
     | ParameterConfiguration
     | SavedConfiguration
     | WorkingPointConfiguration
@@ -98,7 +98,7 @@ type LaunchConfigSource = (
 
 class ScientificSelection(_SelectionModel):
     subject: SubjectChoice = Field(default_factory=UnboundSubjectChoice)
-    configuration: ConfigurationChoice = Field(default_factory=ActiveConfiguration)
+    configuration: ConfigurationChoice = Field(default_factory=UnselectedConfiguration)
     batch: BatchScope = Field(default_factory=UnscopedBatch)
 
     def intent_content(self) -> dict[str, JsonValue]:

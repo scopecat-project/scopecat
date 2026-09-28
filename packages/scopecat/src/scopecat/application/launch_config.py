@@ -5,12 +5,10 @@ from typing import TYPE_CHECKING, Literal
 
 from scopecat.config.candidates import CandidateConfig
 from scopecat.config.scientific_binding import bind_scientific_evidence
-from scopecat.daemon.client import DaemonNotFoundError
 from scopecat.daemon.wire import ParameterResolveCommand
 from scopecat.records.config import ConfigProfileSnapshot
 from scopecat.records.config_context import ContextRunConfigSource
 from scopecat.records.configuration_fence import (
-    ActiveConfigurationFence,
     ProcedureConfigurationFence,
     SetupContentFence,
     SetupRevisionFence,
@@ -25,7 +23,6 @@ from scopecat.records.sample import SampleBinding, SampleRevision
 from scopecat.records.scientific_binding import ResolvedScientificBinding
 from scopecat.records.scientific_scope import DeclaredBatch
 from scopecat.records.scientific_selection import (
-    ActiveConfiguration,
     CandidateConfiguration,
     ParameterConfiguration,
     RegisteredTargetChoice,
@@ -34,6 +31,7 @@ from scopecat.records.scientific_selection import (
     SavedConfiguration,
     ScientificSelection,
     UnboundSubjectChoice,
+    UnselectedConfiguration,
     WorkingPointConfiguration,
     require_selection_binding,
 )
@@ -63,7 +61,7 @@ def validate_editing_selection(lab: LabClient, selection: ScientificSelection) -
             if setup.ref != choice.setup:
                 raise ValueError("setup reference differs from saved content")
     else:
-        assert isinstance(choice, ActiveConfiguration)
+        assert isinstance(choice, UnselectedConfiguration)
     subject = selection.subject
     if isinstance(subject, RegisteredTargetChoice):
         lab.resolve_target(subject.ref)
@@ -75,14 +73,6 @@ def validate_editing_selection(lab: LabClient, selection: ScientificSelection) -
         if isinstance(subject, UnboundSubjectChoice):
             raise ValueError("batch requires a subject")
         lab.experimental_batch(selection.batch.id)
-
-
-def _without_generation(source: LaunchConfigSource) -> LaunchConfigSource:
-    return (
-        source.model_copy(update={"registry_generation": None})
-        if isinstance(source, ConfigRegistryRunConfigSource)
-        else source
-    )
 
 
 def resolve_launch_config(
@@ -196,7 +186,7 @@ def _resolve_configuration(
             CandidateConfig(proposal)
         )
         assert isinstance(resolved_source, AnalysisCandidateRunConfigSource)
-        if _without_generation(resolved_source) != _without_generation(expected):
+        if resolved_source != expected:
             raise ValueError("candidate no longer matches its exact saved proposal")
         source: LaunchConfigSource = resolved_source
         candidate_binding = lab.config.client.get_run(
@@ -241,47 +231,13 @@ def _resolve_configuration(
             content_hash=selected.entry.content_hash,
         )
     else:
-        assert isinstance(choice, ActiveConfiguration)
-        if reviewed is None:
-            try:
-                config, active_source = lab.config.resolve_with_source("active")
-            except DaemonNotFoundError as error:
-                raise ValueError(
-                    "No parameters selected and this lab has no parameter default. "
-                    "Select a parameter branch with session.use(parameter_branch=...), "
-                    "pass parameters=... to session.prepare(), or choose a parameter "
-                    "branch in the workbench Measurement context."
-                ) from error
-            assert isinstance(active_source, ConfigRegistryRunConfigSource)
-            source = active_source
-        else:
-            old = reviewed.config_source
-            if (
-                not isinstance(old, ConfigRegistryRunConfigSource)
-                or old.selector != "active"
-            ):
-                raise ValueError("active selection has inconsistent reviewed source")
-            selected = lab.config.entry(old.entry_id)
-            config = selected.config
-            active = lab.config.active()
-            if request.action == "preview" and (
-                active.entry.id != old.entry_id
-                or active.entry.content_hash != old.content_hash
-            ):
-                raise ValueError(
-                    "active configuration changed; "
-                    "clear reviewed evidence and preview again"
-                )
-            source = ConfigRegistryRunConfigSource(
-                selector="active",
-                entry_id=selected.entry.id,
-                config_ref=selected.entry.config_ref,
-                content_hash=selected.entry.content_hash,
-                registry_generation=active.activation.generation,
-            )
-    if reviewed is not None and _without_generation(
-        reviewed.config_source
-    ) != _without_generation(source):
+        assert isinstance(choice, UnselectedConfiguration)
+        raise ValueError(
+            "Select parameters and an experiment setup before preview. "
+            "Use session.use(parameter_branch=..., setup=...) or choose "
+            "parameters and a setup in the workbench."
+        )
+    if reviewed is not None and reviewed.config_source != source:
         raise ValueError("configuration changed since preview; preview again")
     if request.action == "submit":
         assert reviewed is not None
@@ -297,12 +253,6 @@ def launch_configuration_fence(
         if source.setup is None:
             raise ValueError("candidate requires its baseline application setup")
         return SetupRevisionFence(revision=source.setup)
-    if (
-        isinstance(source, ConfigRegistryRunConfigSource)
-        and source.selector == "active"
-    ):
-        assert source.registry_generation is not None
-        return ActiveConfigurationFence(generation=source.registry_generation)
     return SetupContentFence(content_hash=reviewed.binding.setup_content_hash)
 
 
@@ -337,4 +287,4 @@ def launch_preflight_meaning(source: LaunchConfigSource) -> str:
             "Uses this run's selected saved working point; selection does not "
             "establish calibration validity or change the lab default."
         )
-    return "Uses the reviewed active configuration; no default changes."
+    return "Uses the reviewed saved configuration; no shared state changes."

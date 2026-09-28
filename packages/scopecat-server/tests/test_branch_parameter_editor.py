@@ -133,6 +133,35 @@ def test_session_edits_before_setup_and_rejects_invalid_selection_atomically(
     assert session.selection.science.subject == selected.science.subject
 
 
+def test_subject_change_preserves_selected_parameters_and_unsaved_branch_edits(
+    session: AuthorProject,
+) -> None:
+    for sample_id in ("chip-a", "chip-b"):
+        session.create_sample(
+            SampleCreateCommand(
+                operation_id=sample_id,
+                sample_id=sample_id,
+                kind="chip",
+                actor="author",
+                content=SampleRevisionDraft(display_name=sample_id),
+            )
+        )
+    session.use(parameter_branch="daily", sample="chip-a")
+    params = session.params
+    params.declare_table("drive", key="id", columns={"id": str, "frequency": float})[
+        "q0"
+    ] = {"frequency": 5.0}
+    selected = session.selection.science.configuration
+
+    session.use(sample="chip-b")
+
+    assert session.selection.science.configuration == selected
+    assert session.selection.parameter_branch == "daily"
+    assert session.params is params
+    assert params["drive"]["q0"]["frequency"] == 5.0
+    assert params.diff()
+
+
 def test_unknown_values_can_be_saved_before_calibration(session: AuthorProject) -> None:
     params = session.parameters.workspace("daily")
     params.declare_table("drive", key="id", columns={"id": str, "frequency": float})[

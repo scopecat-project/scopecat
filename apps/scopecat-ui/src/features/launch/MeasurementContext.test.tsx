@@ -41,7 +41,7 @@ function draft(): LaunchDraft {
           content_hash: "sha256:target",
         },
       },
-      configuration: { kind: "active" },
+      configuration: { kind: "unselected" },
       batch: { kind: "unscoped" },
     },
     actor: "Alice",

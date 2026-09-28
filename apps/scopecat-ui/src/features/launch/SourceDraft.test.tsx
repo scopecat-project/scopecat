@@ -148,7 +148,7 @@ it("selects an exact saved configuration before a draft without changing lab def
   act(() => state.select(entry));
   expect(state.draft?.selection.configuration).toEqual({ kind: "saved", ref });
   act(() => state.selectContext());
-  expect(state.draft?.selection.configuration).toEqual({ kind: "active" });
+  expect(state.draft?.selection.configuration).toEqual({ kind: "unselected" });
 });
 it("selects independent parameters with an exact setup before opening an experiment", () => {
   mount();

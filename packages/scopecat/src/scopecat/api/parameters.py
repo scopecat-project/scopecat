@@ -42,10 +42,7 @@ from scopecat.config.parameter_updates import (
     replace_scalar_parameter,
     update_parameter_rows,
 )
-from scopecat.daemon.views import (
-    ConfigContextResolution,
-    ParameterResolution,
-)
+from scopecat.daemon.views import ParameterResolution
 from scopecat.kernel.entity import EntityRef
 from scopecat.kernel.quantity import Quantity
 from scopecat.kernel.value_identity import scalar_identity
@@ -63,8 +60,6 @@ from scopecat.kernel.value_types import Quantity as QuantityType
 from scopecat.kernel.value_validation import coerce_literal
 from scopecat.program.value_refs import ValueRef
 from scopecat.program.values import ParameterKeyInput, parameter_lookup
-from scopecat.records.config import ConfigProfileSnapshot
-from scopecat.records.config_context import ConfigContextRef
 from scopecat.records.parameter import (
     ParameterAtomValue,
     ParameterDefinition,
@@ -73,6 +68,7 @@ from scopecat.records.parameter import (
     TableParameterValue,
 )
 from scopecat.records.parameter_content import ParameterContent
+from scopecat.records.parameter_revision import ParameterRevision
 from scopecat.records.parameter_structure import (
     AddParameterColumn,
     AddParameterScalar,
@@ -82,6 +78,7 @@ from scopecat.records.parameter_structure import (
     ParameterStructureEdit,
     RenameParameterColumn,
 )
+from scopecat.records.setup import SetupRevision, SetupRevisionRef
 
 type _Identity = tuple[tuple[object, ...], ...]
 
@@ -98,15 +95,11 @@ class ParameterEditor(Mapping[str, "ParameterTable"], ABC):
 
     @property
     @abstractmethod
-    def _baseline(self) -> ConfigProfileSnapshot | ParameterContent: ...
+    def _baseline(self) -> ParameterContent: ...
 
     @property
     @abstractmethod
     def _saved_snapshot(self) -> ParameterSnapshot: ...
-
-    @property
-    def _resolution(self) -> ConfigContextResolution | None:
-        return None
 
     @property
     def _label(self) -> str | None:
@@ -118,8 +111,14 @@ class ParameterEditor(Mapping[str, "ParameterTable"], ABC):
     @abstractmethod
     def _stage_structure(self, edits: Sequence[ParameterStructureEdit]) -> None: ...
 
+    @property
     @abstractmethod
-    def freeze(self) -> ConfigContextResolution | ParameterResolution: ...
+    def version(self) -> ParameterRevision: ...
+
+    @abstractmethod
+    def freeze(
+        self, *, setup: SetupRevision | SetupRevisionRef | None = None
+    ) -> ParameterResolution: ...
 
     def _initialize_buffers(self) -> None:
         self._structure: list[ParameterStructureEdit] = []
@@ -396,11 +395,10 @@ class ParameterEditor(Mapping[str, "ParameterTable"], ABC):
                 continue
             data = self._data.setdefault(
                 definition.id,
-                _TableData(definition.id, definition.value_type, self._resolution),
+                _TableData(definition.id, definition.value_type),
             )
             if data.schema != definition.value_type:
                 data.tokens.clear()
-            data.resolution = self._resolution
             data.saved_snapshot = self._saved_snapshot
             data.label = self._label
             data.schema = definition.value_type
@@ -522,9 +520,7 @@ class _TableData:
         self,
         name: str,
         schema: Table,
-        resolution: ConfigContextResolution | None = None,
     ) -> None:
-        self.resolution = resolution
         self.saved_snapshot: ParameterSnapshot | None = None
         self.label: str | None = None
         self.name = name
@@ -536,15 +532,10 @@ class _TableData:
         value = row.get(field)
         if value is None:
             return "Unknown"
-        snapshot = (
-            self.resolution.config.parameter_snapshot
-            if self.resolution
-            else self.saved_snapshot
-        )
+        snapshot = self.saved_snapshot
         if snapshot is None:
             return "Manual · unsaved"
         baseline = snapshot.get(self.name)
-        key = self.identity(self.key(row))
         previous = (
             next(
                 (
@@ -563,21 +554,7 @@ class _TableData:
         )
         if previous is None or previous.get(field) != value:
             return "Manual · unsaved"
-        if self.resolution is None:
-            return "Saved · parameter revision"
-        for origin in self.resolution.value_origins:
-            if (
-                origin.parameter_id == self.name
-                and origin.field_id == field
-                and all(name in origin.key for name in self.schema.primary_key)
-                and self.identity(self.key(origin.key)) == key
-            ):
-                return (
-                    origin.evidence.origin
-                    if origin.evidence
-                    else f"Saved · {origin.layer}"
-                )
-        return "Saved · origin unspecified"
+        return "Saved · parameter revision"
 
     def key_mapping(self, key: RowKey) -> dict[str, ParameterAtomValue]:
         values = key if isinstance(key, tuple) else (key,)
@@ -637,19 +614,10 @@ class ParameterTable(MutableMapping[RowKey, "ParameterRow"]):
             + "</tr>"
             for row in islice(self._data.rows.values(), 10)
         )
-        context = (
-            self._data.resolution.config_source.sample
-            if self._data.resolution
-            else None
-        )
         caption = (
             f"{self.name} · {len(self)} rows · "
             f"{len(self.schema.columns)} columns · "
-            + (
-                f"{context.sample_id} / {context.context_id}"
-                if context
-                else self._data.label or "Detached table"
-            )
+            f"{self._data.label or 'Detached table'}"
         )
         return (
             f"<table><caption>{escape(caption)}</caption>"
@@ -663,14 +631,6 @@ class ParameterTable(MutableMapping[RowKey, "ParameterRow"]):
     @property
     def schema(self) -> Table:
         return self._data.schema
-
-    @property
-    def context(self) -> ConfigContextRef | None:
-        return (
-            self._data.resolution.config_source.context
-            if self._data.resolution
-            else None
-        )
 
     @overload
     def ref[T](

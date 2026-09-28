@@ -79,12 +79,9 @@ def test_session_selection_is_local_and_preparation_is_frozen(
         assert prepared.request.actor == "alice"
         frozen = prepared.request.model_dump_json()
         # A partial update preserves independent choices and never mutates old work.
-        first.use(
-            sample=samples[1],
-            parameters=refs[1],
-            setup=setup.revision.ref,
-            operator="carol",
-        )
+        first.use(sample=samples[1], operator="carol")
+        assert first.selection.science.configuration == selected.science.configuration
+        first.use(parameters=refs[1])
         assert first.selection.collection == alpha.id
         assert first.selection.science.subject.kind == "sample"
         assert first.selection.science.subject.sample_id == samples[1]
@@ -171,5 +168,5 @@ def test_session_selection_is_local_and_preparation_is_frozen(
         endpoint, workspace_id=source_workspace_id(endpoint)
     ) as reopened:
         assert reopened.selection.collection is None
-        assert reopened.selection.science.configuration.kind == "active"
+        assert reopened.selection.science.configuration.kind == "unselected"
         assert reopened.selection.operator == "operator"

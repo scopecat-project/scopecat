@@ -59,8 +59,14 @@ parameter revision, saving branch edits and preparing with a branch editor retai
 this setup choice. `session.use(setup=None)` clears the pin; choose a setup again
 before the next preview. A failed selection leaves both the session and editor
 unchanged. Setup selection requires independent parameters; working points and
-candidates already own their configuration evidence. Changing the subject still
-starts a fresh scientific selection, so select its parameters/setup together.
+candidates already own their configuration evidence. Changing the subject retains
+independent parameters, the selected setup and unsaved branch edits, and clears
+the previous subject's batch. Preview checks whether those inputs are suitable
+for the new subject.
+
+A new session starts without a parameter selection. Clearing parameters returns
+to that state; neither operation selects a global default. Choose parameters and
+setup before preview.
 
 Standalone branch editors require `params.preview(setup=setup)`.
 Session preparation supplies its selected setup to the editor.

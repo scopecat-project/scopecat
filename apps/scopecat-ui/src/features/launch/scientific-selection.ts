@@ -8,14 +8,14 @@ export function normalizeSelection(
 ): ScientificSelection {
   return {
     subject: selection?.subject ?? { kind: "unbound" },
-    configuration: selection?.configuration ?? { kind: "active" },
+    configuration: selection?.configuration ?? { kind: "unselected" },
     batch: selection?.batch ?? { kind: "unscoped" },
   };
 }
 export type ScientificBinding = LaunchPreview["reviewed"]["binding"];
 export const defaultSelection = (): ScientificSelection => ({
   subject: { kind: "unbound" },
-  configuration: { kind: "active" },
+  configuration: { kind: "unselected" },
   batch: { kind: "unscoped" },
 });
 

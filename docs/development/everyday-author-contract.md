@@ -60,7 +60,10 @@ value origin. A deliberate edit is a separate operation from normalization.
 Manual, estimated, imported and measured values have distinct provenance. A
 manual override of a measured value must not inherit its measurement claim.
 Parameter versions, subjects and setups are selected independently for the next
-run. Verified publication advances a reviewed parameter branch. Saving an estimate or
+run. An empty selection requires parameters and setup before preview; it never
+uses a global default. Changing the session's subject preserves its independent
+parameters, setup and unsaved branch edits, and clears the previous batch.
+Verified publication advances a reviewed parameter branch. Saving an estimate or
 selecting a candidate does not assert that it passed scientific verification.
 
 An ordinary analysis function may return a typed dataclass, but that object alone
@@ -148,9 +151,9 @@ The facade coverage now also includes:
   arguments and restart behavior.
 - `test_typed_candidates.py`: cell proposals tied to analysis receipts and
   independent verification policies.
-- `test_parameter_workspace.py` and `test_dataclass_parameters.py`: durable edits,
+- `test_branch_parameter_editor.py` and `test_dataclass_parameters.py`: durable edits,
   unknown cells, live typed views and bounded, escaped notebook representations.
-- `apps/scopecat-ui/e2e/parameter-context.e2e.ts`: sample/workpoint selection,
+- `apps/scopecat-ui/e2e/parameter-context.e2e.ts`: independent sample/parameter selection,
   structure changes, keyboard edits retained across navigation, and a real
   Python→GUI→Python round-trip preserving units and untouched cell origins.
 

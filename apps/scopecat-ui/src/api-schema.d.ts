@@ -2253,14 +2253,6 @@ export interface components {
             /** Results */
             results: components["schemas"]["AcquisitionResultSpec"][];
         };
-        /** ActiveConfiguration */
-        ActiveConfiguration: {
-            /**
-             * @description discriminator enum property added by openapi-typescript
-             * @enum {string}
-             */
-            kind: "active";
-        };
         /**
          * ActiveConfigView
          * @description The active registry identity and its resolved immutable snapshot.
@@ -4310,8 +4302,8 @@ export interface components {
             /** Title */
             title?: string | null;
         };
-        "ConfigurationChoice-Input": components["schemas"]["ActiveConfiguration"] | components["schemas"]["ParameterConfiguration-Input"] | components["schemas"]["SavedConfiguration"] | components["schemas"]["WorkingPointConfiguration-Input"] | components["schemas"]["CandidateConfiguration"];
-        "ConfigurationChoice-Output": components["schemas"]["ActiveConfiguration"] | components["schemas"]["ParameterConfiguration-Output"] | components["schemas"]["SavedConfiguration"] | components["schemas"]["WorkingPointConfiguration-Output"] | components["schemas"]["CandidateConfiguration"];
+        "ConfigurationChoice-Input": components["schemas"]["UnselectedConfiguration"] | components["schemas"]["ParameterConfiguration-Input"] | components["schemas"]["SavedConfiguration"] | components["schemas"]["WorkingPointConfiguration-Input"] | components["schemas"]["CandidateConfiguration"];
+        "ConfigurationChoice-Output": components["schemas"]["UnselectedConfiguration"] | components["schemas"]["ParameterConfiguration-Output"] | components["schemas"]["SavedConfiguration"] | components["schemas"]["WorkingPointConfiguration-Output"] | components["schemas"]["CandidateConfiguration"];
         /** ConfigurationTemplateImportCommand */
         ConfigurationTemplateImportCommand: {
             actor: components["schemas"]["NonEmptyText"];
@@ -10771,6 +10763,14 @@ export interface components {
              * @enum {string}
              */
             kind: "unscoped";
+        };
+        /** UnselectedConfiguration */
+        UnselectedConfiguration: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "unselected";
         };
         /**
          * UpdateParameterRows

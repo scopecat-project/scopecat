@@ -230,6 +230,7 @@ class BranchParameterEditor(ParameterEditor):
         )
 
     @property
+    @override
     def version(self) -> ParameterRevision:
         return self._revision
 

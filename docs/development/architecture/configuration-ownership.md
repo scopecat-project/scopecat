@@ -33,6 +33,15 @@ consult a global active setup when a choice is missing. The workbench requests
 that choice inline; Python sessions retain it through
 `session.use(parameter_branch=..., setup=...)`.
 
+An empty scientific selection is explicitly unselected. Preview rejects it with
+instructions to select parameters and setup; it never resolves a shared parameter
+default. Clearing the selection does not activate another configuration.
+Changing the subject in a Python session retains independent parameters, setup
+and unsaved branch edits, while clearing the previous subject's batch.
+The launch page does not poll the global configuration registry to decide whether
+a checked draft or an exact submission retry is usable. Admission validates the
+retained references; unrelated global state cannot block the client-side retry.
+
 A resolved setup contains exact device revisions and installed driver identities.
 Preparation checks them; admission checks their current heads again inside the
 same transaction that creates resource reservations. A relevant device change
