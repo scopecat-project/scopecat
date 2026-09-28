@@ -6,6 +6,9 @@ directions to Scopecat contributors:
 - [One application, independent execution contexts](public-application.md) is the
   canonical product target: direct workbench entry, shared resource authority,
   same-service practice scopes and retirement of the manager/legacy source path.
+- [Device and driver management](device-management.md) defines the target device
+  registry, connection revisions, setup references and shared physical access;
+  it distinguishes these from the current setup-copy editor and project backend.
 - [Experiment execution semantics](execution.md) covers authoring ownership,
   specialization, domain lowering, effects, completion, and evidence.
 - [Experiment workbench and session contexts](experiment-contexts.md) defines the
