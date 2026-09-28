@@ -11,8 +11,8 @@ from scopecat_server.lifecycle import start_project, stop_project
 
 from reference_lab.configuration import EXAMPLE_ROOT, initial_parameters
 from reference_lab.parameters import QubitParameters
-from reference_lab.workflows.authored.ordinary_analysis import PeakResult
-from reference_lab.workflows.authored.signal import signal as signal_declaration
+from reference_lab_authors.authored.ordinary_analysis import PeakResult
+from reference_lab_authors.authored.signal import signal as signal_declaration
 
 pytestmark = pytest.mark.usefixtures("reference_lab_author_imports")
 
@@ -26,14 +26,14 @@ def test_grouped_analysis_recovery_and_restart(
     for name in ("src", "config"):
         shutil.copytree(EXAMPLE_ROOT / name, root / name)
     shutil.copy2(EXAMPLE_ROOT / "scopecat.toml", root / "scopecat.toml")
-    signal = root / "src/reference_lab/workflows/authored/signal.py"
+    signal = root / "src/reference_lab_authors/authored/signal.py"
     signal.write_text(
         signal.read_text().replace(
             'sc.ControlSpec(title="Gain")',
             'sc.ControlSpec(title="Gain", scannable=True)',
         )
     )
-    source = root / "src/reference_lab/workflows/authored/ordinary_analysis.py"
+    source = root / "src/reference_lab_authors/authored/ordinary_analysis.py"
     source.write_text(
         source.read_text()
         + """
@@ -47,7 +47,7 @@ def group_peak(data: Dataset) -> sc.AnalysisProducts[PeakResult]:
     )
     project = load_project(root / "scopecat.toml")
     start_project(project)
-    analysis = "reference_lab.workflows.authored.ordinary_analysis:group_peak"
+    analysis = "reference_lab_authors.authored.ordinary_analysis:group_peak"
     try:
         with project.authoring() as author:
             content = initial_parameters()
@@ -59,7 +59,7 @@ def group_peak(data: Dataset) -> sc.AnalysisProducts[PeakResult]:
             author.parameters.create_branch("group-inputs", revision=revision)
             author.use(
                 parameter_branch="group-inputs",
-                setup=author.active_setup().revision.ref,
+                setup=author.resolve_setup("initial").ref,
             )
             author.refresh()
             declaration = signal_declaration

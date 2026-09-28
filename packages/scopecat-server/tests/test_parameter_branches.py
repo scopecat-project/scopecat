@@ -140,8 +140,10 @@ def test_session_checkout_save_and_concurrent_editor(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     config = load_config()
+    from scopecat_testkit.server.instruments import signal_endpoint
+
     with (
-        LocalDaemonRuntime(tmp_path) as runtime,
+        LocalDaemonRuntime(tmp_path, instrument_endpoint=signal_endpoint()) as runtime,
         TestClient(runtime.app()) as transport,
     ):
 
@@ -170,10 +172,9 @@ def test_session_checkout_save_and_concurrent_editor(
             )
             session.parameters.create_branch("daily", revision=original)
             lab = LabClient(session)
-            setup = lab.setup.save(
+            lab.setup.import_recipe(
                 ExecutableSetupSnapshot.from_config(config), name="bench"
             )
-            lab.setup.activate(setup)
             session.use(parameter_branch="daily", operator="alice")
             frozen = session.selection
             assert frozen.parameter_branch == "daily"

@@ -9,6 +9,7 @@ from scopecat.automation import procedure
 from scopecat.kernel.entity import EntityRef
 from scopecat.kernel.frozen import thaw_json_value
 from scopecat.records.config import ConfigProfileSnapshot
+from scopecat.records.setup import SetupRevisionRef
 from scopecat_instruments import TemperatureSampleProducts, temperature_readout
 
 
@@ -32,6 +33,7 @@ class TemperatureDiagnosticIntent(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     initial_config: ConfigProfileSnapshot
+    setup: SetupRevisionRef
 
     @field_validator("initial_config", mode="before")
     @classmethod
@@ -47,4 +49,9 @@ class TemperatureDiagnosticIntent(BaseModel):
 def temperature_diagnostic_procedure(
     context: LabProcedureContext, intent: TemperatureDiagnosticIntent
 ) -> None:
-    context.run("sample", temperature_diagnostic.build(), config=intent.initial_config)
+    context.run(
+        "sample",
+        temperature_diagnostic.build(),
+        config=intent.initial_config,
+        setup=intent.setup,
+    )

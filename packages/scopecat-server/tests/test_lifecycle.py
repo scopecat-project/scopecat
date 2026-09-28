@@ -337,7 +337,9 @@ def test_cli_daemon_first_use_loop_uses_dynamic_port_and_cleans_record(
 
         # Generic request rejection belongs to this starter, not the quantum lab.
         with project.authoring() as author:
-            author.use(parameter_branch="starter")
+            author.use(
+                parameter_branch="starter", setup=author.setup.get("starter-bench")
+            )
             before = author_workers()
             assert before
             source = author.state()

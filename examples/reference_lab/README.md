@@ -159,7 +159,7 @@ tables, and temporary scan axes belong to experiment invocations.
   session guarantees, setup invalidation, and acquisition placement.
 - The AWG/scope experiment uses entityless routes because the cable is temporary
   and no qubit mapping is needed. A completely unregistered diagnostic device
-  uses `temporary_instrument(...)` in a direct session instead.
+  uses `lab.devices.open(device_id)` with a registered diagnostic device instead.
 - Instrument snapshots, requested state, intents, and receipts remain run
   evidence. Experiments record only scientifically meaningful values; output
   enable remains an ordinary state that an experiment may vary.
@@ -227,7 +227,7 @@ for scalar → scan → default edits and the project constraint boundary.
 
 ## Ordinary experiment authors
 
-The application discovers local experiments in `src/reference_lab/workflows/authored/`.
+The application discovers local experiments in `src/reference_lab_authors/authored/`.
 Edit controls, helpers, Ramsey timing or retained-data analysis there; Launch lists
 them automatically without a per-experiment provider or procedure. Follow the
 [author guide](../../docs/how-to/write-an-experiment.md) for Python and GUI execution,

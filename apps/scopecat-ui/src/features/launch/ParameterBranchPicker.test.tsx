@@ -20,7 +20,9 @@ const first = {
 };
 function mount(onChange: (choice: ScientificSelection["configuration"]) => void) {
   function Editor() {
-    const [value, setValue] = useState<ScientificSelection["configuration"]>({ kind: "active" });
+    const [value, setValue] = useState<ScientificSelection["configuration"]>({
+      kind: "unselected",
+    });
     return (
       <ParameterBranchPicker
         projectId="lab"
@@ -68,8 +70,8 @@ it("pins the chosen version until explicit adoption of a newer branch head", asy
     ref: head.revision,
     overrides: [],
   });
-  fireEvent.click(screen.getByRole("button", { name: "Use lab parameter default" }));
-  expect(changed).toHaveBeenLastCalledWith({ kind: "active" });
+  fireEvent.click(screen.getByRole("button", { name: "Clear parameter selection" }));
+  expect(changed).toHaveBeenLastCalledWith({ kind: "unselected" });
 });
 it("pages branch choices and blocks adoption after a failed refresh", async () => {
   let fail = false;

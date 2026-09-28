@@ -17,30 +17,9 @@ export type SoftwareExecutionScenario = components["schemas"]["SoftwareExecution
 
 export type RunControlView = components["schemas"]["RunControlView"];
 export type ConfigActivationRecord = components["schemas"]["ConfigRegistryActivationRecord"];
-export type ConfigDraftCommand = components["schemas"]["ConfigDraftCommand"];
-export type ConfigPublishCommand = components["schemas"]["ConfigPublishCommand"];
-export type ConfigPublishReceipt = Omit<
-  PostResponse<"/api/v1/config-registry/publish-operations">,
-  "deltas"
-> & {
-  deltas: ParameterValueDelta[];
-};
-export type ConfigDraftPreview = Omit<
-  PostResponse<"/api/v1/config-registry/drafts/preview">,
-  "config" | "deltas"
-> & {
-  config?: ConfigProfileSnapshot | null;
-  deltas: ParameterValueDelta[];
-};
 export type ConfigProfileSnapshot = components["schemas"]["ConfigProfileSnapshot"];
 export type ConfigRegistryEntry = components["schemas"]["ConfigRegistryEntry"];
 export type ConfigRegistryPage = GetResponse<"/api/v1/config-registry">;
-export type ConfigActivationPage = GetResponse<"/api/v1/config-registry/activations">;
-export type ConfigRegistryOverview = Omit<ConfigRegistryPage, "next_cursor"> & {
-  activation_history: ConfigActivationRecord[];
-  entries_next_cursor?: number;
-  activation_history_next_cursor?: number;
-};
 export type DriverCatalog = GetResponse<"/api/v1/instrument-drivers">;
 export type DriverConnectionSpec = components["schemas"]["DriverConnectionSpec"];
 export type DriverSpec = components["schemas"]["DriverSpec"];
@@ -113,7 +92,7 @@ export type ComplexComponents = Extract<
   Extract<MeasurementValue, { kind: "scalar" }>["value"],
   { imag: number; real: number }
 >;
-export type ActiveConfig = GetResponse<"/api/v1/config-registry/active">;
+export type ConfigEntryView = components["schemas"]["ConfigEntryView"];
 export type InstrumentList = GetResponse<"/api/v1/instruments">;
 export type ParameterProposalPage = GetResponse<"/api/v1/runs/{run_id}/parameter-proposals">;
 export type RunSummaryPage = GetResponse<"/api/v1/runs">;
@@ -121,7 +100,7 @@ export type EventPage = GetResponse<"/api/v1/events">;
 export type ParameterAtom = components["schemas"]["ParameterAtomValue"];
 export type ParameterDefinition = components["schemas"]["ParameterDefinition"];
 export type ParameterEntity = components["schemas"]["EntityRef"];
-export type ParameterUpdate = components["schemas"]["ConfigDraftCommand"]["updates"][number];
+export type ParameterUpdate = components["schemas"]["ParameterUpdate-Input"];
 export type ParameterQuantity = components["schemas"]["scopecat__kernel__quantity__Quantity"];
 export type ParameterScalarType = components["schemas"]["PersistableScalarWire"];
 export type ParameterValueDelta = Omit<

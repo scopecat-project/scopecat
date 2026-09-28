@@ -23,7 +23,7 @@ READOUT_VNA = network_sweep("readout-vna")
 
 # %%
 with sc.open_project(PROJECT_ROOT).connect(operator="notebook-demo") as lab:
-    setup = lab.setup.save(bootstrap_config(), name="direct-control").ref
+    setup = lab.setup.import_recipe(bootstrap_config(), name="direct-control").ref
     inventory = [
         (item.instrument_id, item.availability)
         for item in lab.instruments.list(setup=setup).items

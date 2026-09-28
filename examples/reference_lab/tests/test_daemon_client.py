@@ -53,6 +53,7 @@ from scopecat_server.runtime import LocalDaemonRuntime
 with LocalDaemonRuntime(
     Path({str(tmp_path)!r}),
     bootstrap_spec="reference_lab.application:create_bootstrap",
+    instrument_backend_spec="reference_lab.backend:create_backend",
 ):
     pass
 forbidden = {{

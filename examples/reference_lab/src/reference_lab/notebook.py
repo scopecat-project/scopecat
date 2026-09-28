@@ -23,7 +23,8 @@ def gallery_inputs(lab: LabClient) -> ParameterResolution:
         catalog=content.catalog,
         parameters=content.parameters,
     )
-    return lab.parameters.resolve(saved, setup=lab.setup.active().revision.ref)
+    setup = lab.setup.get("initial")
+    return lab.parameters.resolve(saved, setup=setup)
 
 
 def show(value: object) -> None:

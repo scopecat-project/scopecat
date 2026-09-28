@@ -88,6 +88,8 @@ def _lab(
             ) as client,
             LabClient(
                 client,
+                config=config,
+                setup=client.resolve_setup("initial").ref,
                 build_experiment_system=lambda _config, catalog: ExperimentSystem(
                     instrument_catalog=catalog, domain_compiler=target
                 ),
@@ -268,6 +270,7 @@ from scopecat.sdk.instruments import (
     DriverRejected, DriverCatalog, InstrumentBackend, DriverFault,
 )
 from scopecat.sdk.problems import ProblemPhase, problem
+from scopecat_testkit.signal_instruments import signal_driver_catalog
 from scopecat_testkit.connection_residency import (
     VolatileProgramDriver, VolatileProgramProvider, ResidencyProbe,
 )
@@ -296,7 +299,7 @@ def create_backend(root):
     provider = Provider(ResidencyProbe(root))
     return InstrumentBackend(
         provider=provider,
-        driver_catalog=DriverCatalog(provider_id=provider.provider_id),
+        driver_catalog=signal_driver_catalog(provider.provider_id),
     )
 """,
         encoding="utf-8",
@@ -360,7 +363,7 @@ def test_measured_costs_compare_cold_warm_and_explicit_reconnect(
                 client.release_instruments(
                     InstrumentReleaseCommand(
                         instrument_ids=(binding.id,),
-                        setup=client.active_setup().revision.ref,
+                        setup=client.resolve_setup("initial").ref,
                     )
                 )
             result = lab.run(residency_experiment(2))

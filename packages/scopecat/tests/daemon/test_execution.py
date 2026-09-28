@@ -83,6 +83,7 @@ from scopecat.records.measurement_recording import (
 )
 from scopecat.records.run import RunSnapshot
 from scopecat.records.run_request import RunRequest
+from scopecat.records.setup import SetupRevisionRef
 from scopecat.runs.repository import TerminalRunCommit
 from scopecat.sdk.instruments.commands import InstrumentStateAssignment
 from scopecat.sdk.instruments.execution import (
@@ -102,6 +103,9 @@ def test_daemon_execution_ports_round_trip_through_fenced_http_commands(
 ) -> None:
     monkeypatch.setattr(daemon_execution, "monotonic", lambda: 1.0)
     submission = RunSubmission(
+        execution_setup=SetupRevisionRef(
+            revision_id="bench", content_hash="sha256:" + "e" * 64
+        ),
         submission_id="submission-1",
         config=load_config(),
         scientific_binding=bind_scientific_evidence(
@@ -579,6 +583,9 @@ def test_daemon_execution_ports_round_trip_through_fenced_http_commands(
 
 def test_daemon_execution_rejects_provision_receipt_for_another_operation() -> None:
     submission = RunSubmission(
+        execution_setup=SetupRevisionRef(
+            revision_id="bench", content_hash="sha256:" + "e" * 64
+        ),
         submission_id="submission-1",
         config=load_config(),
         scientific_binding=bind_scientific_evidence(
@@ -635,6 +642,9 @@ def test_daemon_execution_rejects_provision_receipt_for_another_operation() -> N
 @pytest.mark.parametrize("resuming", [False, True])
 def test_initial_lease_cancellation_skips_remote_provisioning(resuming: bool) -> None:
     submission = RunSubmission(
+        execution_setup=SetupRevisionRef(
+            revision_id="bench", content_hash="sha256:" + "e" * 64
+        ),
         submission_id="submission-1",
         config=load_config(),
         scientific_binding=bind_scientific_evidence(

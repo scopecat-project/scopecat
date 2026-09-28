@@ -14,7 +14,6 @@ from scopecat.daemon.client import DaemonClient
 from scopecat.kernel.errors import RunFinalizationFailed
 from scopecat.measurements.datasets import RAW_MEASUREMENTS_DATASET_ID
 from scopecat.sdk.instruments import (
-    DriverCatalog,
     InstrumentBackend,
     InstrumentConnectionContext,
     InstrumentProviderContext,
@@ -23,6 +22,7 @@ from scopecat.sdk.instruments import (
 from scopecat_testkit.signal_instruments import (
     TestSignalInstrument,
     TestSignalInstrumentProvider,
+    signal_driver_catalog,
 )
 from scopecat_testkit.workflow_fixtures import load_config, load_invocation
 
@@ -103,7 +103,11 @@ def test_static_run_resumes_end_to_end_after_daemon_restart(
                 )
             return translated
 
-        lab = LabClient(_daemon_client(send))
+        lab = LabClient(
+            _daemon_client(send),
+            config=load_config(),
+            setup=first_runtime.application.setup.resolve("initial").ref,
+        )
         with pytest.raises(RunFinalizationFailed) as failed:
             lab.run(load_invocation())
 
@@ -172,7 +176,7 @@ def _runtime(
         instrument_endpoint=LocalInstrumentBackendEndpoint(
             InstrumentBackend(
                 provider=provider,
-                driver_catalog=DriverCatalog(provider_id=provider.provider_id),
+                driver_catalog=signal_driver_catalog(provider.provider_id),
             )
         ),
     )

@@ -278,91 +278,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/config-registry/activation-operations": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Activate Config Entry */
-        post: operations["activate_config_entry_api_v1_config_registry_activation_operations_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/config-registry/activation-operations/{operation_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Config Activation Operation */
-        get: operations["get_config_activation_operation_api_v1_config_registry_activation_operations__operation_id__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/config-registry/activations": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Config Activation History */
-        get: operations["get_config_activation_history_api_v1_config_registry_activations_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/config-registry/active": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Active Config */
-        get: operations["get_active_config_api_v1_config_registry_active_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/config-registry/contexts": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Save Context */
-        post: operations["save_context_api_v1_config_registry_contexts_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/config-registry/contexts/resolve": {
         parameters: {
             query?: never;
@@ -374,40 +289,6 @@ export interface paths {
         put?: never;
         /** Resolve Context */
         post: operations["resolve_context_api_v1_config_registry_contexts_resolve_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/config-registry/contexts/structure/preview": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Preview Structure */
-        post: operations["preview_structure_api_v1_config_registry_contexts_structure_preview_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/config-registry/drafts/preview": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Preview Config Draft */
-        post: operations["preview_config_draft_api_v1_config_registry_drafts_preview_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -431,7 +312,25 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/config-registry/publish-operations": {
+    "/api/v1/devices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Devices */
+        get: operations["list_devices_api_v1_devices_get"];
+        put?: never;
+        /** Save Device */
+        post: operations["save_device_api_v1_devices_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/devices/{device_id}/access": {
         parameters: {
             query?: never;
             header?: never;
@@ -440,59 +339,76 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Publish Config */
-        post: operations["publish_config_api_v1_config_registry_publish_operations_post"];
+        /** Prepare Device Access */
+        post: operations["prepare_device_access_api_v1_devices__device_id__access_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/v1/config-registry/publish-operations/{operation_id}": {
+    "/api/v1/devices/{device_id}/connection-tests": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Get Config Publish Operation */
-        get: operations["get_config_publish_operation_api_v1_config_registry_publish_operations__operation_id__get"];
+        get?: never;
+        put?: never;
+        /** Test Device Connection */
+        post: operations["test_device_connection_api_v1_devices__device_id__connection_tests_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/devices/{device_id}/name": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Rename Device */
+        post: operations["rename_device_api_v1_devices__device_id__name_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/devices/{device_id}/retirement": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Retire Device */
+        post: operations["retire_device_api_v1_devices__device_id__retirement_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/devices/drivers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Device Drivers */
+        get: operations["device_drivers_api_v1_devices_drivers_get"];
         put?: never;
         post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/config-registry/setup-rebindings": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Rebind Setup */
-        post: operations["rebind_setup_api_v1_config_registry_setup_rebindings_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/config-registry/setup-rebindings/preview": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Preview Setup Rebind */
-        post: operations["preview_setup_rebind_api_v1_config_registry_setup_rebindings_preview_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1011,6 +927,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/parameters/branch-commits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Commit Parameter Branch */
+        post: operations["commit_parameter_branch_api_v1_parameters_branch_commits_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/parameters/branches": {
         parameters: {
             query?: never;
@@ -1022,6 +955,41 @@ export interface paths {
         get: operations["list_parameter_branches_api_v1_parameters_branches_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/parameters/branches/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Parameter Branch */
+        get: operations["get_parameter_branch_api_v1_parameters_branches__name__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/parameters/revisions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Parameter Revisions */
+        get: operations["list_parameter_revisions_api_v1_parameters_revisions_get"];
+        put?: never;
+        /** Save Parameter Revision */
+        post: operations["save_parameter_revision_api_v1_parameters_revisions_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1898,7 +1866,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/setup/activation-operations": {
+    "/api/v1/setup/definitions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Setup Definitions */
+        get: operations["list_setup_definitions_api_v1_setup_definitions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/setup/definitions/{definition_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Setup Definition */
+        get: operations["get_setup_definition_api_v1_setup_definitions__definition_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/setup/recipe-imports": {
         parameters: {
             query?: never;
             header?: never;
@@ -1907,25 +1909,25 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Activate Setup */
-        post: operations["activate_setup_api_v1_setup_activation_operations_post"];
+        /** Import Setup Recipe */
+        post: operations["import_setup_recipe_api_v1_setup_recipe_imports_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/v1/setup/active": {
+    "/api/v1/setup/resolutions/{definition_id}": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Active Setup */
-        get: operations["active_setup_api_v1_setup_active_get"];
+        get?: never;
         put?: never;
-        post?: never;
+        /** Resolve Setup Definition */
+        post: operations["resolve_setup_definition_api_v1_setup_resolutions__definition_id__post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2183,28 +2185,6 @@ export interface components {
             /** Results */
             results: components["schemas"]["AcquisitionResultSpec"][];
         };
-        /** ActiveConfiguration */
-        ActiveConfiguration: {
-            /**
-             * @description discriminator enum property added by openapi-typescript
-             * @enum {string}
-             */
-            kind: "active";
-        };
-        /**
-         * ActiveConfigView
-         * @description The active registry identity and its resolved immutable snapshot.
-         */
-        ActiveConfigView: {
-            activation: components["schemas"]["ConfigRegistryActivationRecord"];
-            config: components["schemas"]["ConfigProfileSnapshot"];
-            entry: components["schemas"]["ConfigRegistryEntry"];
-        };
-        /** ActiveSetupView */
-        ActiveSetupView: {
-            activation: components["schemas"]["SetupActivationRecord"];
-            revision: components["schemas"]["SetupRevision"];
-        };
         /**
          * AdaptiveRegionSpec
          * @description One stable outer-domain region admitted for adaptive extension.
@@ -2303,6 +2283,7 @@ export interface components {
             kind: "analysis_candidate";
             /** Proposal Id */
             proposal_id: string;
+            setup?: components["schemas"]["SetupRevisionRef"] | null;
             /** Source Run Id */
             source_run_id: string;
         };
@@ -2752,34 +2733,6 @@ export interface components {
              */
             status: "applied" | "not_applied" | "unknown";
         };
-        /**
-         * Array
-         * @description A typed dense array available at one experiment point.
-         */
-        Array: {
-            /** Dimensions */
-            dimensions: components["schemas"]["ArrayDimension"][];
-            dtype: components["schemas"]["ValueDType"];
-            /** Unit */
-            unit?: string | null;
-        };
-        /**
-         * ArrayDimension
-         * @description One local dimension of an array value.
-         *
-         *     Local dimensions describe the shape available at one experiment point.
-         *     They are intentionally distinct from scan axes, which create points.
-         */
-        ArrayDimension: {
-            /** Id */
-            id: string;
-            /** Kind */
-            kind?: string | null;
-            /** Size */
-            size: number | null;
-            /** Unit */
-            unit?: string | null;
-        };
         AtomType: components["schemas"]["Bool"] | components["schemas"]["Int"] | components["schemas"]["Float"] | components["schemas"]["Complex"] | components["schemas"]["String"] | components["schemas"]["scopecat__kernel__value_types__Quantity"] | components["schemas"]["Entity"] | components["schemas"]["Payload"];
         /**
          * AttentionResolutionCommand
@@ -3053,6 +3006,7 @@ export interface components {
              */
             result_output: string;
             scope: components["schemas"]["CalibrationScope"];
+            setup: components["schemas"]["SetupRevisionRef"];
         };
         /**
          * CalibrationProfile
@@ -3328,18 +3282,6 @@ export interface components {
             proposal_id: string;
             /** Run Id */
             run_id: string;
-        };
-        /** CandidateConfigRevisionSource */
-        CandidateConfigRevisionSource: {
-            /** Acceptance */
-            acceptance: components["schemas"]["ManualCandidateAcceptance"] | components["schemas"]["CrossRunCandidateAcceptance"];
-            /**
-             * @description discriminator enum property added by openapi-typescript
-             * @enum {string}
-             */
-            kind: "candidate_config";
-            proposal_id: components["schemas"]["NonEmptyText"];
-            run_id: components["schemas"]["NonEmptyText"];
         };
         /** CandidateConfiguration */
         CandidateConfiguration: {
@@ -4036,33 +3978,6 @@ export interface components {
             properties?: components["schemas"]["PropertySpec"][];
         };
         /**
-         * ConfigActivationOperation
-         * @description Durable result identity for one idempotent activate-entry command.
-         */
-        ConfigActivationOperation: {
-            /** Activation Generation */
-            activation_generation: number;
-            /** Actor */
-            actor: string;
-            /** Entry Id */
-            entry_id: string;
-            /** Expected Generation */
-            expected_generation: number;
-            intent_hash: components["schemas"]["Sha256ContentHash"];
-            /**
-             * Note
-             * @default
-             */
-            note: string;
-            /** Operation Id */
-            operation_id: string;
-            /**
-             * Recorded At
-             * Format: date-time
-             */
-            recorded_at?: string;
-        };
-        /**
          * ConfigActivationOutputRef
          * @description Exact configuration-registry activation produced by a procedure step.
          */
@@ -4076,24 +3991,6 @@ export interface components {
              * @enum {string}
              */
             kind: "config_activation";
-        };
-        /**
-         * ConfigActivationPage
-         * @description Newest-first page of default configuration changes.
-         */
-        ConfigActivationPage: {
-            /**
-             * Items
-             * @default []
-             */
-            items: components["schemas"]["ConfigRegistryActivationRecord"][];
-            /** Next Cursor */
-            next_cursor?: number | null;
-        };
-        /** ConfigActivationReceipt */
-        ConfigActivationReceipt: {
-            activation: components["schemas"]["ConfigRegistryActivationRecord"];
-            operation: components["schemas"]["ConfigActivationOperation"];
         };
         /**
          * ConfigCellRef
@@ -4170,87 +4067,6 @@ export interface components {
             overrides: components["schemas"]["ParameterUpdate-Input"][];
         };
         /**
-         * ConfigContextSaveCommand
-         * @description entry_id is the durable retry identity; saving never activates.
-         */
-        ConfigContextSaveCommand: {
-            /** Actor */
-            actor: string;
-            /**
-             * Advance
-             * @default false
-             */
-            advance: boolean;
-            base: components["schemas"]["ConfigContextRef"];
-            /** Entry Id */
-            entry_id: string;
-            /** Label */
-            label: string;
-            /**
-             * Note
-             * @default
-             */
-            note: string;
-            parameters?: components["schemas"]["ParameterSnapshot"] | null;
-            sample: components["schemas"]["SampleSelector"];
-            structure_plan?: components["schemas"]["ParameterStructurePlan"] | null;
-            /** Working Point Id */
-            working_point_id: string;
-        };
-        /**
-         * ConfigDraftCommand
-         * @description Typed parameter edits against one observed active registry generation.
-         */
-        ConfigDraftCommand: {
-            base_content_hash: components["schemas"]["ConfigContentHash"];
-            base_entry_id: components["schemas"]["NonEmptyText"];
-            /** Base Generation */
-            base_generation: number;
-            candidate_id: components["schemas"]["NonEmptyText"];
-            /** Updates */
-            updates: components["schemas"]["ParameterUpdate-Input"][];
-        };
-        /**
-         * ConfigDraftPreview
-         * @description Normalized result of transient typed edits against an active config.
-         */
-        ConfigDraftPreview: {
-            base_content_hash: components["schemas"]["ConfigContentHash"];
-            base_entry: components["schemas"]["ConfigRegistryEntry"];
-            /** Base Generation */
-            base_generation: number;
-            config?: components["schemas"]["ConfigProfileSnapshot"] | null;
-            /**
-             * Deltas
-             * @default []
-             */
-            deltas: components["schemas"]["ParameterValueDelta-Output"][];
-            /**
-             * Problems
-             * @default []
-             */
-            problems: components["schemas"]["Problem-Output"][];
-            result_content_hash?: components["schemas"]["ConfigContentHash"] | null;
-            /** Valid */
-            valid: boolean;
-        };
-        /**
-         * ConfigEntryActivationCommand
-         * @description Select a saved revision with generation compare-and-swap.
-         */
-        ConfigEntryActivationCommand: {
-            actor: components["schemas"]["NonEmptyText"];
-            entry_id: components["schemas"]["NonEmptyText"];
-            /** Expected Generation */
-            expected_generation: number;
-            /**
-             * Note
-             * @default
-             */
-            note: string;
-            operation_id: components["schemas"]["NonEmptyText"];
-        };
-        /**
          * ConfigEntryView
          * @description One immutable configuration and its most recent activation, if any.
          */
@@ -4271,51 +4087,6 @@ export interface components {
             system: components["schemas"]["SystemSpec"];
         };
         /**
-         * ConfigPublishCommand
-         * @description Validate, save, and select one revision in a single transaction.
-         */
-        ConfigPublishCommand: {
-            actor: components["schemas"]["NonEmptyText"];
-            entry_id: components["schemas"]["NonEmptyText"];
-            /** Expected Generation */
-            expected_generation: number;
-            /**
-             * Note
-             * @default
-             */
-            note: string;
-            operation_id: components["schemas"]["NonEmptyText"];
-            source: components["schemas"]["ConfigPublishSource"];
-        };
-        /**
-         * ConfigPublishOperation
-         * @description Durable result identity for one idempotent config publication.
-         */
-        ConfigPublishOperation: {
-            /** Activation Generation */
-            activation_generation: number;
-            /** Actor */
-            actor: string;
-            /** Entry Id */
-            entry_id: string;
-            /** Expected Generation */
-            expected_generation: number;
-            intent_hash: components["schemas"]["Sha256ContentHash"];
-            /**
-             * Note
-             * @default
-             */
-            note: string;
-            /** Operation Id */
-            operation_id: string;
-            /**
-             * Recorded At
-             * Format: date-time
-             */
-            recorded_at?: string;
-            source_intent_hash: components["schemas"]["Sha256ContentHash"];
-        };
-        /**
          * ConfigPublishOutputRef
          * @description Exact configuration revision published and activated by a procedure step.
          */
@@ -4330,18 +4101,6 @@ export interface components {
              */
             kind: "config_publish";
         };
-        /** ConfigPublishReceipt */
-        ConfigPublishReceipt: {
-            activation: components["schemas"]["ConfigRegistryActivationRecord"];
-            /**
-             * Deltas
-             * @default []
-             */
-            deltas: components["schemas"]["ParameterValueDelta-Output"][];
-            entry: components["schemas"]["ConfigRegistryEntry"];
-            operation: components["schemas"]["ConfigPublishOperation"];
-        };
-        ConfigPublishSource: components["schemas"]["DirectConfigRevisionSource"] | components["schemas"]["ParameterConfigRevisionSource"] | components["schemas"]["ManualConfigDraftRevisionSource"] | components["schemas"]["CandidateConfigRevisionSource"];
         /** ConfigRegistryActivationRecord */
         ConfigRegistryActivationRecord: {
             /**
@@ -4428,23 +4187,6 @@ export interface components {
             /** Selector */
             selector: string;
         };
-        /** ConfigSetupRebindCommand */
-        ConfigSetupRebindCommand: {
-            actor: components["schemas"]["NonEmptyText"];
-            base: components["schemas"]["ConfigContextRef"];
-            entry_id: components["schemas"]["NonEmptyText"];
-            /**
-             * Note
-             * @default
-             */
-            note: string;
-            setup: components["schemas"]["SetupRevisionRef"];
-        };
-        /** ConfigSetupRebindPreviewCommand */
-        ConfigSetupRebindPreviewCommand: {
-            base: components["schemas"]["ConfigContextRef"];
-            setup: components["schemas"]["SetupRevisionRef"];
-        };
         /**
          * ConfigurationAnalysisRecordInput
          * @description Whole run configuration access; no individual-field coverage claim.
@@ -4465,8 +4207,8 @@ export interface components {
             /** Title */
             title?: string | null;
         };
-        "ConfigurationChoice-Input": components["schemas"]["ActiveConfiguration"] | components["schemas"]["ParameterConfiguration-Input"] | components["schemas"]["SavedConfiguration"] | components["schemas"]["WorkingPointConfiguration-Input"] | components["schemas"]["CandidateConfiguration"];
-        "ConfigurationChoice-Output": components["schemas"]["ActiveConfiguration"] | components["schemas"]["ParameterConfiguration-Output"] | components["schemas"]["SavedConfiguration"] | components["schemas"]["WorkingPointConfiguration-Output"] | components["schemas"]["CandidateConfiguration"];
+        "ConfigurationChoice-Input": components["schemas"]["UnselectedConfiguration"] | components["schemas"]["ParameterConfiguration-Input"] | components["schemas"]["CandidateConfiguration"];
+        "ConfigurationChoice-Output": components["schemas"]["UnselectedConfiguration"] | components["schemas"]["ParameterConfiguration-Output"] | components["schemas"]["CandidateConfiguration"];
         /** ConfigurationTemplateImportCommand */
         ConfigurationTemplateImportCommand: {
             actor: components["schemas"]["NonEmptyText"];
@@ -4581,26 +4323,6 @@ export interface components {
          * ContextRunConfigSource
          * @description A context resolved without changing the lab's active configuration.
          */
-        "ContextRunConfigSource-Input": {
-            content_hash: components["schemas"]["ConfigContentHash"];
-            context: components["schemas"]["ConfigContextRef"];
-            /**
-             * Kind
-             * @default parameter_context
-             * @constant
-             */
-            kind: "parameter_context";
-            /**
-             * Overrides
-             * @default []
-             */
-            overrides: components["schemas"]["ParameterUpdate-Input"][];
-            sample: components["schemas"]["SampleBinding"];
-        };
-        /**
-         * ContextRunConfigSource
-         * @description A context resolved without changing the lab's active configuration.
-         */
         "ContextRunConfigSource-Output": {
             content_hash: components["schemas"]["ConfigContentHash"];
             context: components["schemas"]["ConfigContextRef"];
@@ -4685,7 +4407,6 @@ export interface components {
              */
             status: "ok" | "degraded";
         };
-        DataType: components["schemas"]["Scalar"] | components["schemas"]["Array"];
         /** DeclaredBatch */
         DeclaredBatch: {
             /** Id */
@@ -4728,6 +4449,123 @@ export interface components {
             kind: "delete_parameter_rows";
             parameter_id: components["schemas"]["_ParameterId"];
         };
+        /** DeviceConnection */
+        DeviceConnection: {
+            /**
+             * Access Aliases
+             * @default []
+             */
+            access_aliases: string[];
+            connection: components["schemas"]["InstrumentConnection"];
+            driver: components["schemas"]["DriverImplementationRef"];
+            safety?: components["schemas"]["DeviceSafetyPolicy"];
+        };
+        /** DeviceConnectionRevision */
+        DeviceConnectionRevision: {
+            /** Actor */
+            actor: string;
+            content: components["schemas"]["DeviceConnection"];
+            /** Device Id */
+            device_id: string;
+            /** Id */
+            id: string;
+            /**
+             * Note
+             * @default
+             */
+            note: string;
+            previous?: components["schemas"]["DeviceRevisionRef"] | null;
+            /**
+             * Recorded At
+             * Format: date-time
+             */
+            recorded_at?: string;
+        };
+        /**
+         * DeviceConnectionTest
+         * @description Observed connection result for one exact revision; never a readiness promise.
+         */
+        DeviceConnectionTest: {
+            /** Actor */
+            actor: string;
+            description?: components["schemas"]["InstrumentDescription"] | null;
+            /** Error */
+            error?: string | null;
+            /** Operation Id */
+            operation_id: string;
+            /**
+             * Recorded At
+             * Format: date-time
+             */
+            recorded_at?: string;
+            revision: components["schemas"]["DeviceRevisionRef"];
+        };
+        /** DeviceList */
+        DeviceList: {
+            /** Items */
+            items: components["schemas"]["DeviceView"][];
+        };
+        /** DeviceProbeCommand */
+        DeviceProbeCommand: {
+            actor: components["schemas"]["NonEmptyText"];
+            expected_head: components["schemas"]["DeviceRevisionRef"];
+            operation_id: components["schemas"]["NonEmptyText"];
+        };
+        /** DeviceRenameCommand */
+        DeviceRenameCommand: {
+            label: components["schemas"]["NonEmptyText"];
+        };
+        /** DeviceRetireCommand */
+        DeviceRetireCommand: {
+            expected_head: components["schemas"]["DeviceRevisionRef"];
+        };
+        /** DeviceRevisionRef */
+        DeviceRevisionRef: {
+            content_hash: components["schemas"]["Sha256ContentHash"];
+            /** Device Id */
+            device_id: string;
+            /** Revision Id */
+            revision_id: string;
+        };
+        /** DeviceSafetyPolicy */
+        DeviceSafetyPolicy: {
+            /**
+             * Require Safe Failure
+             * @default false
+             */
+            require_safe_failure: boolean;
+            /**
+             * Require Safe Success
+             * @default false
+             */
+            require_safe_success: boolean;
+            /**
+             * Safe Operations
+             * @default []
+             */
+            safe_operations: components["schemas"]["InstrumentSafeOperation"][];
+            /**
+             * Safe State
+             * @default []
+             */
+            safe_state: components["schemas"]["InstrumentStateSetting"][];
+            /** @default best_effort */
+            safe_state_requirement: components["schemas"]["InstrumentSafeStateRequirement"];
+        };
+        /** DeviceSaveCommand */
+        DeviceSaveCommand: {
+            actor: components["schemas"]["NonEmptyText"];
+            connection: components["schemas"]["DeviceConnection"];
+            device_id: components["schemas"]["NonEmptyText"];
+            expected_head: components["schemas"]["DeviceRevisionRef"] | null;
+            label: components["schemas"]["NonEmptyText"];
+            /**
+             * Note
+             * @default
+             */
+            note: string;
+            revision_id: components["schemas"]["NonEmptyText"];
+        };
         DeviceSchemaId: string;
         /**
          * DeviceStateMemberSpec
@@ -4769,17 +4607,24 @@ export interface components {
             /** Members */
             members?: components["schemas"]["DeviceStateMemberSpec"][];
         };
-        /** DirectConfigRegistrySource */
-        DirectConfigRegistrySource: {
+        /** DeviceView */
+        DeviceView: {
             /**
-             * @description discriminator enum property added by openapi-typescript
+             * Availability
+             * @default idle
              * @enum {string}
              */
-            kind: "direct_config_profile";
+            availability: "idle" | "active" | "quarantined";
+            device: components["schemas"]["RegisteredDevice"];
+            last_connection_test?: components["schemas"]["DeviceConnectionTest"] | null;
+            /** Owner Id */
+            owner_id?: string | null;
+            /** Owner Kind */
+            owner_kind?: ("run" | "instrument_session") | null;
+            revision: components["schemas"]["DeviceConnectionRevision"];
         };
-        /** DirectConfigRevisionSource */
-        DirectConfigRevisionSource: {
-            config: components["schemas"]["ConfigProfileSnapshot"];
+        /** DirectConfigRegistrySource */
+        DirectConfigRegistrySource: {
             /**
              * @description discriminator enum property added by openapi-typescript
              * @enum {string}
@@ -4818,6 +4663,22 @@ export interface components {
             options_schema: {
                 [key: string]: components["schemas"]["pydantic__types__JsonValue"];
             };
+        };
+        /** DriverImplementationList */
+        DriverImplementationList: {
+            /** Items */
+            items: components["schemas"]["DriverImplementationRef"][];
+        };
+        /**
+         * DriverImplementationRef
+         * @description Identity of the loaded artifact, not merely its advertised version.
+         */
+        DriverImplementationRef: {
+            artifact_hash: components["schemas"]["Sha256ContentHash"];
+            /** Driver Id */
+            driver_id: string;
+            /** Provider Id */
+            provider_id: string;
         };
         /**
          * DriverManagedInstrumentConnection
@@ -5510,40 +5371,6 @@ export interface components {
         };
         /** @enum {string} */
         InstrumentFailureAction: "abort_and_release" | "abort_then_safe_state";
-        InstrumentInventoryChange: components["schemas"]["InstrumentInventoryRemoval"] | components["schemas"]["InstrumentInventoryRekey"] | components["schemas"]["InstrumentInventoryRenameRekey"];
-        /** InstrumentInventoryRekey */
-        InstrumentInventoryRekey: {
-            from_exclusivity_key: components["schemas"]["_NonEmptyText"];
-            instrument_id: components["schemas"]["_NonEmptyText"];
-            /**
-             * @description discriminator enum property added by openapi-typescript
-             * @enum {string}
-             */
-            kind: "rekey";
-            to_exclusivity_key: components["schemas"]["_NonEmptyText"];
-        };
-        /** InstrumentInventoryRemoval */
-        InstrumentInventoryRemoval: {
-            exclusivity_key: components["schemas"]["_NonEmptyText"];
-            instrument_id: components["schemas"]["_NonEmptyText"];
-            /**
-             * @description discriminator enum property added by openapi-typescript
-             * @enum {string}
-             */
-            kind: "remove";
-        };
-        /** InstrumentInventoryRenameRekey */
-        InstrumentInventoryRenameRekey: {
-            from_exclusivity_key: components["schemas"]["_NonEmptyText"];
-            from_instrument_id: components["schemas"]["_NonEmptyText"];
-            /**
-             * @description discriminator enum property added by openapi-typescript
-             * @enum {string}
-             */
-            kind: "rename_rekey";
-            to_exclusivity_key: components["schemas"]["_NonEmptyText"];
-            to_instrument_id: components["schemas"]["_NonEmptyText"];
-        };
         /** InstrumentListView */
         InstrumentListView: {
             /**
@@ -5636,7 +5463,7 @@ export interface components {
         };
         /**
          * InstrumentSessionOpenCommand
-         * @description Acquire configured instruments plus optional session-only bindings.
+         * @description Acquire registered devices through an exact resolved setup.
          */
         InstrumentSessionOpenCommand: {
             actor: components["schemas"]["NonEmptyText"];
@@ -5644,11 +5471,6 @@ export interface components {
             instrument_ids: components["schemas"]["NonEmptyText"][];
             operation_id: components["schemas"]["NonEmptyText"];
             setup: components["schemas"]["SetupRevisionRef"];
-            /**
-             * Temporary Bindings
-             * @default []
-             */
-            temporary_bindings: components["schemas"]["InstrumentBindingSpec"][];
         };
         /**
          * InstrumentSessionOpenReceipt
@@ -6101,8 +5923,8 @@ export interface components {
             /** Version */
             version: string;
         };
-        "LaunchConfigSource-Input": components["schemas"]["ConfigRegistryRunConfigSource"] | components["schemas"]["ParameterRunConfigSource-Input"] | components["schemas"]["ContextRunConfigSource-Input"] | components["schemas"]["AnalysisCandidateRunConfigSource"];
-        "LaunchConfigSource-Output": components["schemas"]["ConfigRegistryRunConfigSource"] | components["schemas"]["ParameterRunConfigSource-Output"] | components["schemas"]["ContextRunConfigSource-Output"] | components["schemas"]["AnalysisCandidateRunConfigSource"];
+        "LaunchConfigSource-Input": components["schemas"]["ParameterRunConfigSource-Input"] | components["schemas"]["AnalysisCandidateRunConfigSource"];
+        "LaunchConfigSource-Output": components["schemas"]["ParameterRunConfigSource-Output"] | components["schemas"]["AnalysisCandidateRunConfigSource"];
         /** LaunchControl */
         LaunchControl: {
             /** Default */
@@ -6464,16 +6286,6 @@ export interface components {
              */
             kind: "manual_parameter_updates";
         };
-        /** ManualConfigDraftRevisionSource */
-        ManualConfigDraftRevisionSource: {
-            draft: components["schemas"]["ConfigDraftCommand"];
-            expected_result_content_hash: components["schemas"]["ConfigContentHash"];
-            /**
-             * @description discriminator enum property added by openapi-typescript
-             * @enum {string}
-             */
-            kind: "manual_parameter_updates";
-        };
         /** ManualPreviewBinding */
         ManualPreviewBinding: {
             code_revision?: components["schemas"]["AuthorRevisionRef"] | null;
@@ -6618,7 +6430,7 @@ export interface components {
         };
         /**
          * MeasurementContextResolution
-         * @description Exact inputs; candidates have no branch/setup selection receipt.
+         * @description Exact inputs; candidates retain their baseline setup without a branch.
          */
         MeasurementContextResolution: {
             branch?: components["schemas"]["ParameterBranch"] | null;
@@ -7355,6 +7167,20 @@ export interface components {
             recorded_at?: string;
             revision: components["schemas"]["ParameterRevisionRef"];
         };
+        /** ParameterBranchCommitCommand */
+        ParameterBranchCommitCommand: {
+            actor: components["schemas"]["NonEmptyText"];
+            /** Expected Generation */
+            expected_generation: number;
+            name: components["schemas"]["NonEmptyText"];
+            /**
+             * Note
+             * @default
+             */
+            note: string;
+            /** Source */
+            source: components["schemas"]["ParameterSaveCommand"] | components["schemas"]["ParameterRevisionRef"];
+        };
         /** ParameterBranchPage */
         ParameterBranchPage: {
             /** Items */
@@ -7480,19 +7306,9 @@ export interface components {
             kind: "parameter_revision";
             setup: components["schemas"]["SetupRevisionRef"];
         };
-        /** ParameterConfigRevisionSource */
-        ParameterConfigRevisionSource: {
-            /**
-             * @description discriminator enum property added by openapi-typescript
-             * @enum {string}
-             */
-            kind: "parameter_revision";
-            parameters: components["schemas"]["ParameterRevisionContent"];
-            setup: components["schemas"]["SetupRevisionRef"];
-        };
         /**
          * ParameterConfiguration
-         * @description Independent parameters; omitted setup resolves current authority at preview.
+         * @description Independent parameters; a draft must select setup before preview.
          */
         "ParameterConfiguration-Input": {
             /**
@@ -7510,7 +7326,7 @@ export interface components {
         };
         /**
          * ParameterConfiguration
-         * @description Independent parameters; omitted setup resolves current authority at preview.
+         * @description Independent parameters; a draft must select setup before preview.
          */
         "ParameterConfiguration-Output": {
             /**
@@ -7526,7 +7342,6 @@ export interface components {
             ref: components["schemas"]["ParameterRevisionRef"];
             setup?: components["schemas"]["SetupRevisionRef"] | null;
         };
-        ParameterContract: components["schemas"]["ParameterValueContract"] | components["schemas"]["ParameterLookupUse"];
         /**
          * ParameterDefinition
          * @description Stable type definition for one accepted parameter value.
@@ -7537,24 +7352,6 @@ export interface components {
             /** Id */
             id: string;
             value_type: components["schemas"]["PersistableValueType"];
-        };
-        /**
-         * ParameterLookupUse
-         * @description One selected typed lookup occurrence on a table parameter.
-         */
-        ParameterLookupUse: {
-            /** Column Id */
-            column_id: string;
-            /** Key Input Types */
-            key_input_types: [
-                string,
-                components["schemas"]["Scalar"]
-            ][];
-            /** Literal Key Columns */
-            literal_key_columns: string[];
-            result_type: components["schemas"]["Scalar"];
-            /** Table Id */
-            table_id: string;
         };
         /** ParameterProposalComposition */
         ParameterProposalComposition: {
@@ -7624,20 +7421,10 @@ export interface components {
              */
             recorded_at?: string;
         };
-        /**
-         * ParameterRevisionContent
-         * @description Scientific parameter declarations/values and their snapshot labels.
-         *
-         *     Exact setup association belongs to the owning revision record. This payload
-         *     contains no instrument registry, topology, routing or connection settings.
-         */
-        ParameterRevisionContent: {
-            catalog: components["schemas"]["ParameterCatalog"];
-            /** Id */
-            id: string;
-            parameters: components["schemas"]["ParameterSnapshot"];
-            /** System Id */
-            system_id: string;
+        /** ParameterRevisionList */
+        ParameterRevisionList: {
+            /** Items */
+            items: components["schemas"]["ParameterRevision"][];
         };
         /** ParameterRevisionRef */
         ParameterRevisionRef: {
@@ -7684,6 +7471,18 @@ export interface components {
             parameters: components["schemas"]["ParameterRevisionRef"];
             setup: components["schemas"]["SetupRevisionRef"];
         };
+        /** ParameterSaveCommand */
+        ParameterSaveCommand: {
+            actor: components["schemas"]["NonEmptyText"];
+            catalog: components["schemas"]["ParameterCatalog"];
+            /**
+             * Note
+             * @default
+             */
+            note: string;
+            parameters: components["schemas"]["ParameterSnapshot"];
+            revision_id: components["schemas"]["NonEmptyText"];
+        };
         /**
          * ParameterSnapshot
          * @description Recursively immutable accepted parameters for future runs.
@@ -7704,39 +7503,6 @@ export interface components {
             before_version: components["schemas"]["Sha256ContentHash"];
             /** Edits */
             edits: components["schemas"]["ParameterStructureEdit"][];
-        };
-        /**
-         * ParameterStructurePlan
-         * @description An ordered declaration against an exact saved snapshot and catalog shape.
-         */
-        ParameterStructurePlan: {
-            base: components["schemas"]["ConfigContextRef"];
-            /**
-             * Consumers
-             * @default []
-             */
-            consumers: components["schemas"]["StructureConsumer"][];
-            /** Edits */
-            edits: components["schemas"]["ParameterStructureEdit"][];
-            structure_version: components["schemas"]["Sha256ContentHash"];
-        };
-        /** ParameterStructurePreview */
-        ParameterStructurePreview: {
-            /** Cell Mappings */
-            cell_mappings: components["schemas"]["StructureCellMapping"][];
-            config: components["schemas"]["ConfigProfileSnapshot"];
-            /**
-             * Consumer Scope
-             * @default Affected parameter identities are reported. Arbitrary compiler and analysis code is not enumerated; preview each dependent experiment before use.
-             */
-            consumer_scope: string;
-            /** Consumers */
-            consumers: components["schemas"]["StructureConsumerImpact"][];
-            /** Impacts */
-            impacts: components["schemas"]["StructureColumnImpact"][];
-            /** Missing Values */
-            missing_values: string[];
-            origin: components["schemas"]["ParameterStructureOrigin"];
         };
         /** ParameterSweep */
         "ParameterSweep-Input": {
@@ -7772,15 +7538,6 @@ export interface components {
         };
         "ParameterUpdate-Input": components["schemas"]["ReplaceParameter"] | components["schemas"]["UpdateParameterRows-Input"] | components["schemas"]["InsertParameterRows-Input"] | components["schemas"]["DeleteParameterRows-Input"];
         "ParameterUpdate-Output": components["schemas"]["ReplaceParameter"] | components["schemas"]["UpdateParameterRows-Output"] | components["schemas"]["InsertParameterRows-Output"] | components["schemas"]["DeleteParameterRows-Output"];
-        /**
-         * ParameterValueContract
-         * @description Declared shape and type of one parameter dependency.
-         */
-        ParameterValueContract: {
-            /** Parameter Id */
-            parameter_id: string;
-            value_type: components["schemas"]["ValueType"];
-        };
         /**
          * ParameterValueDelta
          * @description Durable before/after state for one proposed parameter change.
@@ -7821,12 +7578,6 @@ export interface components {
             publication_hash: components["schemas"]["Sha256ContentHash"];
             /** Run Id */
             run_id: string;
-        };
-        /** PlanConfigRef */
-        PlanConfigRef: {
-            content_hash: components["schemas"]["Sha256ContentHash"];
-            /** Entry Id */
-            entry_id: string;
         };
         "PlanControlEdits-Input": {
             [key: string]: components["schemas"]["ControlEdit-Input"];
@@ -8506,6 +8257,20 @@ export interface components {
             items: components["schemas"]["RecordCollection"][];
             /** Next Cursor */
             next_cursor?: number | null;
+        };
+        /** RegisteredDevice */
+        RegisteredDevice: {
+            head: components["schemas"]["DeviceRevisionRef"];
+            /** Id */
+            id: string;
+            /** Label */
+            label: string;
+            /**
+             * State
+             * @default available
+             * @enum {string}
+             */
+            state: "available" | "retired";
         };
         /** RegisteredTargetChoice */
         RegisteredTargetChoice: {
@@ -9768,6 +9533,7 @@ export interface components {
              * Format: date-time
              */
             created_at?: string;
+            execution_setup?: components["schemas"]["SetupRevisionRef"] | null;
             outcome?: components["schemas"]["RunOutcome-Output"] | null;
             /** Run Id */
             run_id: string;
@@ -10140,15 +9906,6 @@ export interface components {
              */
             run_count: number;
         };
-        /** SavedConfiguration */
-        SavedConfiguration: {
-            /**
-             * @description discriminator enum property added by openapi-typescript
-             * @enum {string}
-             */
-            kind: "saved";
-            ref: components["schemas"]["PlanConfigRef"];
-        };
         /**
          * Scalar
          * @description A single atom.
@@ -10306,45 +10063,83 @@ export interface components {
             /** Port */
             port: string;
         };
-        /**
-         * SetupActivateCommand
-         * @description Select executable setup with an independent generation fence.
-         */
-        SetupActivateCommand: {
-            actor: components["schemas"]["NonEmptyText"];
-            /**
-             * Changes
-             * @default []
-             */
-            changes: components["schemas"]["InstrumentInventoryChange"][];
-            /** Expected Generation */
-            expected_generation: number;
-            /**
-             * Note
-             * @default
-             */
-            note: string;
-            operation_id: components["schemas"]["NonEmptyText"];
-            revision: components["schemas"]["SetupRevisionRef"];
+        /** SetupDefinition */
+        SetupDefinition: {
+            domain_target: components["schemas"]["DomainTargetBinding"] | null;
+            /** Instruments */
+            instruments: components["schemas"]["SetupInstrumentBinding"][];
+            routing: components["schemas"]["RoutingGraph"];
+            scenario?: components["schemas"]["SoftwareExecutionScenario"] | null;
+            topology: components["schemas"]["Topology"];
         };
-        /** SetupActivationRecord */
-        SetupActivationRecord: {
+        /** SetupDefinitionList */
+        SetupDefinitionList: {
+            /** Items */
+            items: components["schemas"]["SetupDefinitionRevision"][];
+        };
+        /** SetupDefinitionRevision */
+        SetupDefinitionRevision: {
             /** Actor */
             actor: string;
-            /** Generation */
-            generation: number;
+            definition: components["schemas"]["SetupDefinition"];
+            /** Id */
+            id: string;
             /**
              * Note
              * @default
              */
             note: string;
-            previous_revision?: components["schemas"]["SetupRevisionRef"] | null;
+            /**
+             * Purpose
+             * @default experiment
+             * @enum {string}
+             */
+            purpose: "experiment" | "device_access";
             /**
              * Recorded At
              * Format: date-time
              */
             recorded_at?: string;
-            revision: components["schemas"]["SetupRevisionRef"];
+        };
+        /** SetupDeviceResolution */
+        SetupDeviceResolution: {
+            definition_hash: components["schemas"]["Sha256ContentHash"];
+            /** Definition Id */
+            definition_id: string;
+            /** Devices */
+            devices: components["schemas"]["DeviceRevisionRef"][];
+        };
+        /**
+         * SetupImportCommand
+         * @description Explicit recipe import. Existing device connections are never overwritten.
+         */
+        SetupImportCommand: {
+            actor: components["schemas"]["NonEmptyText"];
+            /**
+             * Note
+             * @default
+             */
+            note: string;
+            revision_id: components["schemas"]["NonEmptyText"];
+            setup: components["schemas"]["ExecutableSetupSnapshot"];
+        };
+        /**
+         * SetupInstrumentBinding
+         * @description Logical experiment identity and policy; connections belong to devices.
+         */
+        SetupInstrumentBinding: {
+            /**
+             * Default State
+             * @default []
+             */
+            default_state: components["schemas"]["InstrumentStateSetting"][];
+            /** Device Id */
+            device_id: string;
+            failure_action: components["schemas"]["InstrumentFailureAction"];
+            /** Id */
+            id: string;
+            run_start: components["schemas"]["InstrumentRunStartPolicy"];
+            success_action: components["schemas"]["InstrumentSuccessAction"];
         };
         /**
          * SetupRebindRegistrySource
@@ -10376,6 +10171,7 @@ export interface components {
              * Format: date-time
              */
             recorded_at?: string;
+            resolution: components["schemas"]["SetupDeviceResolution"];
             setup: components["schemas"]["ExecutableSetupSnapshot"];
         };
         /** SetupRevisionList */
@@ -10401,7 +10197,7 @@ export interface components {
              */
             note: string;
             revision_id: components["schemas"]["NonEmptyText"];
-            setup: components["schemas"]["ExecutableSetupSnapshot"];
+            setup: components["schemas"]["SetupDefinition"];
         };
         Sha256ContentHash: string;
         /**
@@ -10492,59 +10288,6 @@ export interface components {
         String: {
             /** Choices */
             choices?: string[] | null;
-        };
-        /**
-         * StructureCellMapping
-         * @description Current location and immediate pre-edit location are distinct.
-         */
-        StructureCellMapping: {
-            /** Column Id */
-            column_id: string;
-            evidence?: components["schemas"]["StructureValueDecision"] | null;
-            /** Parameter Id */
-            parameter_id: string;
-            /** Row Index */
-            row_index: number;
-            /** Source Column Id */
-            source_column_id: string | null;
-        };
-        /** StructureColumnImpact */
-        StructureColumnImpact: {
-            /** Affected Rows */
-            affected_rows: number;
-            /** Column Id */
-            column_id?: string | null;
-            /** Consumer Action */
-            consumer_action: string;
-            /**
-             * Kind
-             * @enum {string}
-             */
-            kind: "scalar_added" | "table_added" | "added" | "renamed" | "type_changed" | "key_changed";
-            /**
-             * Missing Rows
-             * @default []
-             */
-            missing_rows: number[];
-            /** Parameter Id */
-            parameter_id: string;
-        };
-        /**
-         * StructureConsumer
-         * @description Only explicitly supplied dependencies are assessed, including analysis.
-         */
-        StructureConsumer: {
-            /** Contracts */
-            contracts: components["schemas"]["ParameterContract"][];
-            /** Name */
-            name: string;
-        };
-        /** StructureConsumerImpact */
-        StructureConsumerImpact: {
-            /** Name */
-            name: string;
-            /** Problems */
-            problems: components["schemas"]["Problem-Output"][];
         };
         /**
          * StructureValueDecision
@@ -10817,6 +10560,14 @@ export interface components {
              */
             kind: "unscoped";
         };
+        /** UnselectedConfiguration */
+        UnselectedConfiguration: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "unselected";
+        };
         /**
          * UpdateParameterRows
          * @description Update one row selected by a table primary key.
@@ -10870,9 +10621,6 @@ export interface components {
             /** Error Type */
             type: string;
         };
-        /** @enum {string} */
-        ValueDType: "float64" | "int64" | "complex128" | "bool" | "string";
-        ValueType: components["schemas"]["DataType"] | components["schemas"]["Table"];
         /** VirtualInstrumentConnection */
         VirtualInstrumentConnection: {
             /**
@@ -10910,34 +10658,6 @@ export interface components {
              * @enum {string}
              */
             retention: "retained" | "unavailable_active_quota";
-        };
-        /** WorkingPointConfiguration */
-        "WorkingPointConfiguration-Input": {
-            /**
-             * @description discriminator enum property added by openapi-typescript
-             * @enum {string}
-             */
-            kind: "working_point";
-            /**
-             * Overrides
-             * @default []
-             */
-            overrides: components["schemas"]["ParameterUpdate-Input"][];
-            ref: components["schemas"]["ConfigContextRef"];
-        };
-        /** WorkingPointConfiguration */
-        "WorkingPointConfiguration-Output": {
-            /**
-             * @description discriminator enum property added by openapi-typescript
-             * @enum {string}
-             */
-            kind: "working_point";
-            /**
-             * Overrides
-             * @default []
-             */
-            overrides: components["schemas"]["ParameterUpdate-Output"][];
-            ref: components["schemas"]["ConfigContextRef"];
         };
     };
     responses: never;
@@ -11518,155 +11238,6 @@ export interface operations {
             };
         };
     };
-    activate_config_entry_api_v1_config_registry_activation_operations_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ConfigEntryActivationCommand"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ConfigActivationReceipt"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_config_activation_operation_api_v1_config_registry_activation_operations__operation_id__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                operation_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ConfigActivationReceipt"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_config_activation_history_api_v1_config_registry_activations_get: {
-        parameters: {
-            query?: {
-                before?: number | null;
-                limit?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ConfigActivationPage"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_active_config_api_v1_config_registry_active_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ActiveConfigView"];
-                };
-            };
-        };
-    };
-    save_context_api_v1_config_registry_contexts_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ConfigContextSaveCommand"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ConfigEntryView"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     resolve_context_api_v1_config_registry_contexts_resolve_post: {
         parameters: {
             query?: never;
@@ -11687,72 +11258,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ConfigContextResolution"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    preview_structure_api_v1_config_registry_contexts_structure_preview_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ParameterStructurePlan"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ParameterStructurePreview"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    preview_config_draft_api_v1_config_registry_drafts_preview_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ConfigDraftCommand"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ConfigDraftPreview"];
                 };
             };
             /** @description Validation Error */
@@ -11797,7 +11302,27 @@ export interface operations {
             };
         };
     };
-    publish_config_api_v1_config_registry_publish_operations_post: {
+    list_devices_api_v1_devices_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeviceList"];
+                };
+            };
+        };
+    };
+    save_device_api_v1_devices_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -11806,7 +11331,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["ConfigPublishCommand"];
+                "application/json": components["schemas"]["DeviceSaveCommand"];
             };
         };
         responses: {
@@ -11816,7 +11341,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ConfigPublishReceipt"];
+                    "application/json": components["schemas"]["DeviceView"];
                 };
             };
             /** @description Validation Error */
@@ -11830,12 +11355,12 @@ export interface operations {
             };
         };
     };
-    get_config_publish_operation_api_v1_config_registry_publish_operations__operation_id__get: {
+    prepare_device_access_api_v1_devices__device_id__access_post: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                operation_id: string;
+                device_id: string;
             };
             cookie?: never;
         };
@@ -11847,7 +11372,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ConfigPublishReceipt"];
+                    "application/json": components["schemas"]["SetupRevision"];
                 };
             };
             /** @description Validation Error */
@@ -11861,16 +11386,18 @@ export interface operations {
             };
         };
     };
-    rebind_setup_api_v1_config_registry_setup_rebindings_post: {
+    test_device_connection_api_v1_devices__device_id__connection_tests_post: {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                device_id: string;
+            };
             cookie?: never;
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["ConfigSetupRebindCommand"];
+                "application/json": components["schemas"]["DeviceProbeCommand"];
             };
         };
         responses: {
@@ -11880,7 +11407,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ConfigEntryView"];
+                    "application/json": components["schemas"]["InstrumentDriverProbeReceipt"];
                 };
             };
             /** @description Validation Error */
@@ -11894,16 +11421,18 @@ export interface operations {
             };
         };
     };
-    preview_setup_rebind_api_v1_config_registry_setup_rebindings_preview_post: {
+    rename_device_api_v1_devices__device_id__name_post: {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                device_id: string;
+            };
             cookie?: never;
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["ConfigSetupRebindPreviewCommand"];
+                "application/json": components["schemas"]["DeviceRenameCommand"];
             };
         };
         responses: {
@@ -11913,7 +11442,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ConfigProfileSnapshot"];
+                    "application/json": components["schemas"]["RegisteredDevice"];
                 };
             };
             /** @description Validation Error */
@@ -11923,6 +11452,61 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    retire_device_api_v1_devices__device_id__retirement_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                device_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeviceRetireCommand"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RegisteredDevice"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    device_drivers_api_v1_devices_drivers_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DriverImplementationList"];
                 };
             };
         };
@@ -12963,6 +12547,39 @@ export interface operations {
             };
         };
     };
+    commit_parameter_branch_api_v1_parameters_branch_commits_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ParameterBranchCommitCommand"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ParameterBranch"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_parameter_branches_api_v1_parameters_branches_get: {
         parameters: {
             query?: {
@@ -12982,6 +12599,90 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ParameterBranchPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_parameter_branch_api_v1_parameters_branches__name__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ParameterBranch"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_parameter_revisions_api_v1_parameters_revisions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ParameterRevisionList"];
+                };
+            };
+        };
+    };
+    save_parameter_revision_api_v1_parameters_revisions_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ParameterSaveCommand"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ParameterRevision"];
                 };
             };
             /** @description Validation Error */
@@ -14781,40 +14482,7 @@ export interface operations {
             };
         };
     };
-    activate_setup_api_v1_setup_activation_operations_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SetupActivateCommand"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ActiveSetupView"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    active_setup_api_v1_setup_active_get: {
+    list_setup_definitions_api_v1_setup_definitions_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -14829,7 +14497,102 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ActiveSetupView"];
+                    "application/json": components["schemas"]["SetupDefinitionList"];
+                };
+            };
+        };
+    };
+    get_setup_definition_api_v1_setup_definitions__definition_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                definition_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SetupDefinitionRevision"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    import_setup_recipe_api_v1_setup_recipe_imports_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetupImportCommand"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SetupRevision"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    resolve_setup_definition_api_v1_setup_resolutions__definition_id__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                definition_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SetupRevision"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

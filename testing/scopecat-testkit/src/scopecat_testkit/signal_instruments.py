@@ -18,10 +18,13 @@ from scopecat.records.measurement import (
 from scopecat.sdk.instruments import (
     AcquisitionResultRef,
     DriverAcquisition,
+    DriverCatalog,
+    DriverConnectionSpec,
     DriverOperation,
     DriverOutcome,
     DriverReadback,
     DriverScalar,
+    DriverSpec,
     DriverStatePatch,
     DriverStateReadback,
     DriverStateReadRequest,
@@ -255,4 +258,21 @@ def _problem(code: str, message: str, path: str) -> Problem:
         message,
         phase=ProblemPhase.PROVIDER_PREFLIGHT,
         location=model_location("test_signal_provider", path),
+    )
+
+
+def signal_driver_catalog(provider_id: str) -> DriverCatalog:
+    return DriverCatalog(
+        provider_id=provider_id,
+        drivers=(
+            DriverSpec(
+                driver_id="tests.signal_instrument",
+                implementation_version="v0",
+                label="Test signal instrument",
+                connections=tuple(
+                    DriverConnectionSpec(kind=kind, options_schema={"type": "object"})
+                    for kind in ("virtual", "tcpip_socket", "serial", "driver_managed")
+                ),
+            ),
+        ),
     )

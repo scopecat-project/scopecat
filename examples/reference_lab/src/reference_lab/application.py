@@ -38,7 +38,7 @@ def create_application(_project_root: Path) -> LabApplication:
         recovered_temperature_analysis,
     )
     from reference_lab.workflows.drag_branch_calibration import drag_branch_calibration
-    from reference_lab.workflows.temperature_diagnostic import (
+    from reference_lab_authors.temperature_diagnostic import (
         temperature_diagnostic_procedure,
     )
 
@@ -46,9 +46,9 @@ def create_application(_project_root: Path) -> LabApplication:
         launch_provider=launch_provider,
         comparison_provider=comparison_provider,
         author_modules=(
-            "reference_lab.workflows.authored",
-            "reference_lab.workflows.frequency_amplitude",
-            "reference_lab.workflows.temperature_diagnostic",
+            "reference_lab_authors.authored",
+            "reference_lab_authors.frequency_amplitude",
+            "reference_lab_authors.temperature_diagnostic",
         ),
         build_experiment_system=lambda config, instrument_catalog: reference_lab_system(
             config=config,

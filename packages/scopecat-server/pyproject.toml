@@ -8,6 +8,7 @@ dependencies = [
   "fastapi>=0.116",
   "filelock>=3.18",
   "httpx2>=2",
+  "jsonschema>=4.26",
   "psutil>=7",
   "rich>=15",
   "scopecat",

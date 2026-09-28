@@ -280,6 +280,9 @@ class CalibrationTaskService:
                 analysis_record_id=proposal.analysis_record_id,
                 base_config_content_hash=proposal.base_config_content_hash,
                 content_hash=config_content_hash(config),
+                setup=self._services.runs.read_snapshot(
+                    proposal.source_run_id
+                ).execution_setup,
             )
             resolved = stage.check.model_copy(
                 update={"context": replace(expected, parameters=candidate)}

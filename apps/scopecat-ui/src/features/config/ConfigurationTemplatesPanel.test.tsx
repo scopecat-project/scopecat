@@ -30,6 +30,11 @@ const config = {
 const result: ConfigurationTemplateImportResult = {
   setup: {
     id: "imported-setup",
+    resolution: {
+      definition_id: "imported-setup",
+      definition_hash: "sha256:definition",
+      devices: [],
+    },
     content_hash: "sha256:setup",
     actor: "operator",
     note: "",
@@ -63,7 +68,7 @@ beforeEach(() => {
   });
 });
 afterEach(cleanup);
-it("imports exact template evidence, retries the same entry, and waits for explicit setup activation", async () => {
+it("imports exact template evidence, retries the same entry, and selects exact inputs without global activation", async () => {
   vi.mocked(importConfigurationTemplate)
     .mockRejectedValueOnce(new Error("connection interrupted"))
     .mockResolvedValue(result);
@@ -72,17 +77,16 @@ it("imports exact template evidence, retries the same entry, and waits for expli
   const cache = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
-  const view = (activeSetupHash: string) => (
+  const view = () => (
     <QueryClientProvider client={cache}>
       <ConfigurationTemplatesPanel
         actor="operator"
-        activeSetupHash={activeSetupHash}
         onImported={onImported}
         onSelectConfiguration={onSelectConfiguration}
       />
     </QueryClientProvider>
   );
-  const { rerender } = render(view("sha256:original"));
+  render(view());
   await screen.findByRole("option", { name: "Resonance template" });
   fireEvent.change(screen.getByLabelText("Available template"), {
     target: { value: "resonance" },
@@ -104,9 +108,8 @@ it("imports exact template evidence, retries the same entry, and waits for expli
   const use = screen.getByRole("button", {
     name: "Use imported configuration for next experiment",
   });
-  expect(use).toBeDisabled();
+  expect(use).toBeEnabled();
   expect(onSelectConfiguration).not.toHaveBeenCalled();
-  rerender(view("sha256:setup"));
   fireEvent.click(use);
   await waitFor(() =>
     expect(onSelectConfiguration).toHaveBeenCalledWith({

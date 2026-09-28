@@ -71,7 +71,10 @@ try:
 
                 concurrent = lab.procedures.submit(
                     check_zero,
-                    check_request(initial=lab.parameters.resolve(namespace["accepted"].revision)),
+                    check_request(initial=lab.parameters.resolve(
+                        namespace["accepted"].revision,
+                        setup=lab.setup.get("teaching-bench"),
+                    )),
                     request_key="history-concurrent-progress",
                 )
 
@@ -117,7 +120,9 @@ try:
                 # A queued check in another exact parameter context is visible,
                 # but does not block this context's domain query.
                 other_intent = check_request(
-                    initial=lab.parameters.resolve(namespace["initial"]),
+                    initial=lab.parameters.resolve(
+                        namespace["initial"], setup=lab.setup.get("teaching-bench"),
+                    ),
                 )
                 other = lab.procedures.submit(
                     check_zero, other_intent, request_key="other-context-check",
@@ -154,7 +159,10 @@ try:
                 from scopecat.daemon.client import DaemonConflictError
                 import pytest
 
-                resolved = lab.parameters.resolve(namespace["accepted"].revision)
+                resolved = lab.parameters.resolve(
+                    namespace["accepted"].revision,
+                    setup=lab.setup.get("teaching-bench"),
+                )
                 intents = {
                     "good": check_request(initial=resolved),
                     "bad": check_request(initial=resolved, disturbance=0.25),
@@ -277,12 +285,13 @@ try:
                 assert subject.kind == "unbound"
                 captured = lab.resolve_context(
                     branch=namespace["trial"],
+                    setup=lab.setup.get("teaching-bench"),
                 )
                 assert captured.branch is not None
                 assert captured.branch.name == namespace["trial"]
                 exact = lab.resolve_context(
                     parameters=lab.parameters.get(captured.context.parameters.revision_id),
-                    setup=lab.setup.get(captured.setup.revision_id),
+                    setup=lab.setup.revision(captured.setup.revision_id),
                 )
                 assert exact.context == captured.context
                 assert exact.branch is None

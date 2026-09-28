@@ -12,7 +12,8 @@ from scopecat.api.lab import LabClient
 from scopecat.application.launch_config import resolve_launch_config
 from scopecat.records.config import config_content_hash
 from scopecat.records.launch_request import LaunchRequest
-from scopecat.records.run import ConfigRegistryRunConfigSource
+from scopecat.records.parameter_revision import ParameterRevisionRef
+from scopecat.records.run import ParameterRunConfigSource
 from scopecat.records.sample import (
     SampleRecord,
     SampleRevision,
@@ -21,11 +22,22 @@ from scopecat.records.sample import (
 )
 from scopecat.records.scientific_scope import MeasurementTarget, TargetMember
 from scopecat.records.scientific_selection import (
+    ParameterConfiguration,
     RegisteredTargetChoice,
     SampleSubjectChoice,
     ScientificSelection,
 )
+from scopecat.records.setup import SetupRevisionRef
 from scopecat.records.target_catalog import TargetRevision, TargetRevisionRef
+
+
+def _parameters() -> ParameterConfiguration:
+    return ParameterConfiguration(
+        ref=ParameterRevisionRef(
+            revision_id="values", content_hash="sha256:" + "1" * 64
+        ),
+        setup=SetupRevisionRef(revision_id="bench", content_hash="sha256:" + "2" * 64),
+    )
 
 
 def _lab() -> tuple[LabClient, dict[str, object], TargetRevision]:
@@ -57,12 +69,12 @@ def _lab() -> tuple[LabClient, dict[str, object], TargetRevision]:
         actor="test",
         recorded_at=datetime.now(UTC),
     )
-    source = ConfigRegistryRunConfigSource(
-        selector="active",
-        entry_id="config",
-        config_ref="config",
+    parameters = _parameters()
+    assert parameters.setup is not None
+    source = ParameterRunConfigSource(
+        parameters=parameters.ref,
+        setup=parameters.setup,
         content_hash=config_content_hash(config),
-        registry_generation=1,
     )
     state: dict[str, object] = {"head": sample, "exact_reads": []}
 
@@ -77,6 +89,9 @@ def _lab() -> tuple[LabClient, dict[str, object], TargetRevision]:
             revision=state["head"],
         ),
         sample_revision=sample_revision,
+        resolve_parameters=lambda _: SimpleNamespace(
+            config=config, config_source=source
+        ),
     )
     operations = SimpleNamespace(
         client=client,
@@ -121,7 +136,9 @@ def test_preview_freezes_registered_target_and_hash_rejects_binding_swap() -> No
         action="preview",
         experiment="signal",
         version="1",
-        selection=ScientificSelection(subject=RegisteredTargetChoice(ref=target.ref)),
+        selection=ScientificSelection(
+            subject=RegisteredTargetChoice(ref=target.ref), configuration=_parameters()
+        ),
     )
     resolved = resolve_launch_config(lab, request)
     frozen = request.model_copy(update={"reviewed": resolved.reviewed})
@@ -160,7 +177,9 @@ def test_inline_sample_preview_does_not_advance_when_submitted() -> None:
         action="preview",
         experiment="signal",
         version="1",
-        selection=ScientificSelection(subject=SampleSubjectChoice(sample_id="chip")),
+        selection=ScientificSelection(
+            subject=SampleSubjectChoice(sample_id="chip"), configuration=_parameters()
+        ),
     )
     resolved = resolve_launch_config(lab, request)
     assert resolved.reviewed.binding.samples[0].revision == 1
@@ -211,75 +230,6 @@ def test_session_target_selection_is_atomic_and_pins_head(
         )
 
 
-def test_target_member_a_can_use_matching_working_point_and_batch(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    from scopecat.records.config_context import ConfigContextRef, ContextRunConfigSource
-    from scopecat.records.sample import SampleBinding
-    from scopecat.records.scientific_scope import DeclaredBatch
-    from scopecat.records.scientific_selection import WorkingPointConfiguration
-
-    lab, state, target = _lab()
-    sample = cast("SampleRevision", state["head"])
-    config = load_config()
-    ref = ConfigContextRef(
-        entry_id="working-point", content_hash=config_content_hash(config)
-    )
-    source = ContextRunConfigSource(
-        context=ref,
-        content_hash=config_content_hash(config),
-        sample=SampleBinding(
-            role="subject",
-            sample_id="chip",
-            revision=1,
-            content_hash=sample.content_hash,
-            kind="chip",
-            display_name="chip",
-            context_id="wp",
-            batch_id="cooldown",
-        ),
-    )
-
-    def resolve_context(
-        _ref: ConfigContextRef, *, overrides: object
-    ) -> SimpleNamespace:
-        assert _ref == ref and overrides == ()
-        return SimpleNamespace(config=config, config_source=source)
-
-    def batch(batch_id: str) -> None:
-        assert batch_id == "cooldown"
-
-    monkeypatch.setattr(lab.config, "resolve_context", resolve_context, raising=False)
-    monkeypatch.setattr(lab, "experimental_batch", batch, raising=False)
-    selection = ScientificSelection(
-        subject=RegisteredTargetChoice(ref=target.ref),
-        configuration=WorkingPointConfiguration(ref=ref),
-        batch=DeclaredBatch(id="cooldown"),
-    )
-    request = LaunchRequest(
-        workspace_id="test-source",
-        action="preview",
-        experiment="signal",
-        version="1",
-        selection=selection,
-    )
-    resolved = resolve_launch_config(lab, request)
-    assert resolved.reviewed.binding.samples == (source.sample,)
-    assert resolved.reviewed.binding.subject.kind == "registered_target"
-    assert resolved.reviewed.binding.subject.content.members[0].id == "A"
-    from scopecat.records.scientific_scope import UnscopedBatch
-
-    with pytest.raises(ValueError, match="subject/batch"):
-        resolve_launch_config(
-            lab,
-            request.model_copy(
-                update={
-                    "selection": selection.model_copy(update={"batch": UnscopedBatch()})
-                }
-            ),
-        )
-
-
 def test_saved_target_plan_reopens_retained_binding_with_new_review(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -290,7 +240,6 @@ def test_saved_target_plan_reopens_retained_binding_with_new_review(
     from scopecat.application.launch import LaunchPreview
     from scopecat.records.experiment_plan import ExperimentPlanRevision
     from scopecat.records.plan_ref import ExperimentPlanRef
-    from scopecat.records.scientific_selection import SavedConfiguration
 
     lab, state, target = _lab()
     request = LaunchRequest(
@@ -298,7 +247,9 @@ def test_saved_target_plan_reopens_retained_binding_with_new_review(
         action="preview",
         experiment="signal",
         version="1",
-        selection=ScientificSelection(subject=RegisteredTargetChoice(ref=target.ref)),
+        selection=ScientificSelection(
+            subject=RegisteredTargetChoice(ref=target.ref), configuration=_parameters()
+        ),
     )
     resolved = resolve_launch_config(lab, request)
     frozen = request.model_copy(update={"reviewed": resolved.reviewed})
@@ -312,7 +263,7 @@ def test_saved_target_plan_reopens_retained_binding_with_new_review(
         definition_hash="sha256:" + "a" * 64,
     )
     definition = plan_definition(request, preview)
-    assert isinstance(definition.selection.configuration, SavedConfiguration)
+    assert definition.selection.configuration == _parameters()
     assert definition.scientific_binding == resolved.reviewed.binding
     plan = ExperimentPlanRevision(
         ref=ExperimentPlanRef(
@@ -357,8 +308,7 @@ def test_explicit_clear_in_prepare_does_not_inherit_session_subject(
         science = session._prepare_science(
             selection=INHERIT,
             target=INHERIT,
-            context=None,
-            sample=INHERIT,
+            sample=None,
             batch=INHERIT,
             parameters=None,
             candidate=None,
@@ -378,9 +328,11 @@ def test_candidate_preserves_unbound_or_registered_subject(
 
     lab, _, target = _lab()
     original_selection = (
-        ScientificSelection(subject=RegisteredTargetChoice(ref=target.ref))
+        ScientificSelection(
+            subject=RegisteredTargetChoice(ref=target.ref), configuration=_parameters()
+        )
         if registered_source
-        else ScientificSelection()
+        else ScientificSelection(configuration=_parameters())
     )
     original = resolve_launch_config(
         lab,
@@ -436,34 +388,18 @@ def test_candidate_preserves_unbound_or_registered_subject(
         )
 
 
-def test_repreview_cannot_attach_new_active_generation_to_old_entry(
+def test_empty_selection_never_reads_global_default(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     lab, _, _ = _lab()
+
+    def forbidden(*_args: object) -> None:
+        pytest.fail("empty selection must not resolve a global configuration")
+
+    monkeypatch.setattr(lab.config, "resolve_with_source", forbidden)
+    monkeypatch.setattr(lab.config, "active", forbidden)
     request = LaunchRequest(
         workspace_id="test-source", action="preview", experiment="signal", version="1"
     )
-    reviewed = resolve_launch_config(lab, request).reviewed
-    frozen = request.model_copy(update={"reviewed": reviewed})
-
-    def active() -> SimpleNamespace:
-        return SimpleNamespace(
-            activation=SimpleNamespace(generation=2),
-            entry=SimpleNamespace(
-                id="another-entry", content_hash=reviewed.binding.config_content_hash
-            ),
-        )
-
-    monkeypatch.setattr(lab.config, "active", active)
-    with pytest.raises(ValueError, match="clear reviewed evidence"):
-        resolve_launch_config(lab, frozen)
-    # A submit retains its original fence so the server can replay an exact retry.
-    submitted = LaunchRequest.model_validate(
-        {
-            **frozen.model_dump(),
-            "action": "submit",
-            "request_key": "retry",
-            "expected_request_hash": frozen.request_hash,
-        }
-    )
-    assert resolve_launch_config(lab, submitted).reviewed == reviewed
+    with pytest.raises(ValueError, match="Select parameters and an experiment setup"):
+        resolve_launch_config(lab, request)

@@ -18,7 +18,6 @@ from scopecat.records.measurement import (
 from scopecat.sdk.instruments import (
     AcquisitionResultRef,
     DriverAcquisition,
-    DriverCatalog,
     DriverOperation,
     DriverOutcome,
     DriverPayload,
@@ -44,6 +43,7 @@ from scopecat.sdk.instruments import (
     state_readback,
 )
 from scopecat.sdk.payloads import PayloadCodecRegistry, byte_payload_codec
+from scopecat_testkit.signal_instruments import signal_driver_catalog
 
 
 @dataclass(frozen=True, slots=True)
@@ -217,7 +217,7 @@ def create_backend(project_root: Path) -> InstrumentBackend:
     provider = _Provider(project_root)
     return InstrumentBackend(
         provider=provider,
-        driver_catalog=DriverCatalog(provider_id=provider.provider_id),
+        driver_catalog=signal_driver_catalog(provider.provider_id),
         payload_codecs=PayloadCodecRegistry(
             {
                 "pulse_program": byte_payload_codec(

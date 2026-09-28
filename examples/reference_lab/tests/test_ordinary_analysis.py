@@ -12,7 +12,7 @@ from scopecat_server.lifecycle import start_project, stop_project
 
 from reference_lab.configuration import EXAMPLE_ROOT, initial_parameters
 from reference_lab.everyday_author import acquire_everyday_author_inputs
-from reference_lab.workflows.authored.ordinary_analysis import (
+from reference_lab_authors.authored.ordinary_analysis import (
     PeakResult,
     PeakVerification,
     estimate_peak,
@@ -33,7 +33,7 @@ def test_ordinary_analysis_retained_source_arguments_and_restart(
     shutil.copy2(EXAMPLE_ROOT / "scopecat.toml", root / "scopecat.toml")
     project = load_project(root / "scopecat.toml")
     endpoint = start_project(project)
-    name = "reference_lab.workflows.authored.ordinary_analysis:estimate_peak"
+    name = "reference_lab_authors.authored.ordinary_analysis:estimate_peak"
     try:
         with (
             LabApplication().connect(endpoint.base_url) as lab,
@@ -48,7 +48,7 @@ def test_ordinary_analysis_retained_source_arguments_and_restart(
             authors.parameters.create_branch("analysis-inputs", revision=revision)
             authors.use(
                 parameter_branch="analysis-inputs",
-                setup=lab.setup.active().revision.ref,
+                setup=lab.setup.get("initial").ref,
             )
             acquired = acquire_everyday_author_inputs(lab)
             authors.refresh()
@@ -132,7 +132,7 @@ def test_ordinary_analysis_retained_source_arguments_and_restart(
             original_revision = authors.state().active
             assert original_revision is not None
             source_path = (
-                root / "src/reference_lab/workflows/authored/ordinary_analysis.py"
+                root / "src/reference_lab_authors/authored/ordinary_analysis.py"
             )
             source_path.write_text(
                 source_path.read_text()

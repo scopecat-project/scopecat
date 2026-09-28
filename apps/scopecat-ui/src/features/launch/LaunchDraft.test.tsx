@@ -44,15 +44,13 @@ let catalog: LaunchCatalogEntry[];
 let deferCatalog: boolean;
 let catalogResponse: ((response: Response) => void) | undefined;
 let generation: number;
-let fixedSource: boolean;
+let candidateSource: boolean;
 let manualEventId: number;
 let configFails: boolean;
 let rejectSubmission: boolean;
 let submissions: SubmissionRequest[];
 let previewResponse: ((response: Response) => void) | undefined;
 let deferPreview: boolean;
-let configurationResponse: ((response: Response) => void) | undefined;
-let deferConfiguration: boolean;
 let client: QueryClient;
 let lookupMatch: "none" | "original" | "ambiguous" | "unverified" | "different-config";
 function preview() {
@@ -69,14 +67,25 @@ function preview() {
       },
     },
     point_count: 1,
-    reviewed: reviewedFixture({
-      kind: "config_registry",
-      selector: fixedSource ? "baseline" : "active",
-      entry_id: "baseline",
-      config_ref: "baseline",
-      content_hash: `sha256:${"b".repeat(64)}`,
-      registry_generation: fixedSource ? null : generation,
-    }),
+    reviewed: reviewedFixture(
+      candidateSource
+        ? {
+            kind: "analysis_candidate",
+            source_run_id: "baseline-run",
+            analysis_record_id: "fit-r1",
+            proposal_id: "proposal",
+            base_config_content_hash: `sha256:${"a".repeat(64)}`,
+            content_hash: `sha256:${"b".repeat(64)}`,
+            setup: { revision_id: "bench", content_hash: `sha256:${"c".repeat(64)}` },
+          }
+        : {
+            kind: "parameter_revision",
+            parameters: { revision_id: "baseline", content_hash: `sha256:${"b".repeat(64)}` },
+            setup: { revision_id: "bench", content_hash: `sha256:${"e".repeat(64)}` },
+            content_hash: `sha256:${"b".repeat(64)}`,
+            overrides: [],
+          },
+    ),
     summary: "Checked preparation",
     resources: [],
     resolved_inputs: {},
@@ -107,15 +116,13 @@ beforeEach(() => {
   catalogResponse = undefined;
   lookupMatch = "none";
   generation = 1;
-  fixedSource = false;
+  candidateSource = false;
   manualEventId = 0;
   configFails = false;
   rejectSubmission = false;
   submissions = [];
   previewResponse = undefined;
   deferPreview = false;
-  deferConfiguration = false;
-  configurationResponse = undefined;
   client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   vi.stubGlobal(
     "fetch",
@@ -165,10 +172,6 @@ beforeEach(() => {
             })
           : Response.json({ entries: catalog });
       if (path.endsWith("/config-registry")) {
-        if (deferConfiguration)
-          return new Promise<Response>((resolve) => {
-            configurationResponse = resolve;
-          });
         if (configFails) throw new TypeError("temporarily offline");
         return Response.json({ entries: [], activation: { entry_id: "baseline", generation } });
       }
@@ -255,6 +258,24 @@ it("retains the complete project draft across pages and resets explicitly withou
   expect(screen.getByLabelText("Operator")).toHaveValue("scientist");
   expect(screen.getByLabelText("Frequency")).toHaveValue(4.8);
 });
+it("retries a retained candidate without consulting the global configuration", async () => {
+  candidateSource = true;
+  configFails = true;
+  render(<Harness />);
+  await selectPrepared();
+  await previewReady();
+  fireEvent.click(screen.getByRole("button", { name: "Start acquisition" }));
+  await screen.findByRole("alert");
+  const original = submissions[0];
+  fireEvent.click(screen.getByRole("button", { name: "configuration" }));
+  await returnToLaunch();
+  const retry = screen.getByRole("button", { name: "Retry original submission" });
+  expect(retry).toBeEnabled();
+  fireEvent.click(retry);
+  await waitFor(() => expect(submissions).toHaveLength(2));
+  expect(submissions[1]).toEqual(original);
+});
+
 it("keeps an unknown submission key across navigation and temporary configuration read failure", async () => {
   render(<Harness />);
   await selectPrepared();
@@ -265,9 +286,7 @@ it("keeps an unknown submission key across navigation and temporary configuratio
   fireEvent.click(screen.getByRole("button", { name: "configuration" }));
   configFails = true;
   await returnToLaunch();
-  await waitFor(() =>
-    expect(screen.getByRole("button", { name: "Start acquisition" })).toBeDisabled(),
-  );
+  expect(screen.getByRole("button", { name: "Retry original submission" })).toBeEnabled();
   configFails = false;
   await act(async () => {
     await client.invalidateQueries({ queryKey: ["config"] });
@@ -289,7 +308,7 @@ it("keeps an unknown submission key across navigation and temporary configuratio
   await waitFor(() => expect(submissions).toHaveLength(3));
   expect(submissions[2]?.request_key).not.toBe(originalKey);
 });
-it("invalidates previews after configuration or definition changes while retaining editable inputs", async () => {
+it("retains previews across global changes and invalidates changed experiment definitions", async () => {
   render(<Harness />);
   await selectPrepared();
   fireEvent.change(screen.getByLabelText("Note"), { target: { value: "keep me" } });
@@ -301,9 +320,7 @@ it("invalidates previews after configuration or definition changes while retaini
   });
   await returnToLaunch();
   expect(screen.getByLabelText("Note")).toHaveValue("keep me");
-  expect(screen.queryByText("Preview ready")).toBeNull();
-  expect(screen.getByText(/Configuration changed/)).toBeVisible();
-  await previewReady();
+  expect(screen.getByText("Preview ready", { exact: true })).toBeVisible();
   catalog = [catalog[0]!, { ...prepared, description: "Updated definition at same version" }];
   await act(async () => {
     await client.invalidateQueries({ queryKey: ["experiment-launcher"] });
@@ -313,7 +330,6 @@ it("invalidates previews after configuration or definition changes while retaini
   expect(screen.queryByText("Preview ready")).toBeNull();
 });
 it("retains fixed-source previews across unrelated active parameter publication", async () => {
-  fixedSource = true;
   render(<Harness />);
   await selectPrepared();
   await previewReady();
@@ -492,54 +508,6 @@ it("uses a new key after a fresh manual-state preview while preserving the origi
   expect(submissions[1]?.manual_state).not.toEqual(original?.manual_state);
 });
 
-async function refreshCheckedPreview() {
-  render(<Harness />);
-  await selectPrepared();
-  await previewReady();
-  const start = screen.getByRole("button", { name: "Start acquisition" });
-  await waitFor(() => expect(start).toBeEnabled());
-  deferConfiguration = true;
-  act(() => {
-    void client.invalidateQueries({ queryKey: ["config", "launch-context"] });
-  });
-  await waitFor(() => expect(configurationResponse).toBeDefined());
-  expect(screen.getByText("Preview ready", { exact: true })).toBeVisible();
-  expect(start).toBeEnabled();
-  return start;
-}
-
-it("submits a checked preview while configuration refresh is in flight", async () => {
-  const start = await refreshCheckedPreview();
-  fireEvent.click(start);
-  await waitFor(() => expect(submissions).toHaveLength(1));
-  expect(submissions[0]).toMatchObject({
-    experiment: "prepared",
-    reviewed: { config_source: { entry_id: "baseline", registry_generation: 1 } },
-  });
-  await act(async () => {
-    configurationResponse!(
-      Response.json({ entries: [], activation: { entry_id: "baseline", generation: 1 } }),
-    );
-  });
-});
-
-it.each(["changed", "failed"])(
-  "blocks a checked preview when background configuration refresh resolves %s",
-  async (outcome) => {
-    const start = await refreshCheckedPreview();
-    await act(async () => {
-      configurationResponse!(
-        outcome === "failed"
-          ? Response.json({ detail: "offline" }, { status: 503 })
-          : Response.json({ entries: [], activation: { entry_id: "baseline", generation: 2 } }),
-      );
-    });
-    await waitFor(() => expect(start).toBeDisabled());
-    expect(screen.queryByText("Preview ready", { exact: true })).toBeNull();
-    expect(submissions).toHaveLength(0);
-  },
-);
-
 it("keeps preview clickable during a background catalog read and blocks a failed read", async () => {
   render(<Harness />);
   await selectPrepared();
@@ -580,7 +548,7 @@ it("keeps context across experiments and preserves the original submission after
   expect(submissions[0]).toMatchObject({
     selection: {
       subject: { kind: "sample", sample_id: "chip-a" },
-      configuration: { kind: "active" },
+      configuration: { kind: "unselected" },
       batch: { kind: "declared", id: "batch-a" },
     },
     actor: "Alice",

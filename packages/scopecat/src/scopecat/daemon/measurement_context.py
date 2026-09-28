@@ -33,7 +33,7 @@ class MeasurementContextResolve(BaseModel):
 
 
 class MeasurementContextResolution(BaseModel):
-    """Exact inputs; candidates have no branch/setup selection receipt."""
+    """Exact inputs; candidates retain their baseline setup without a branch."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
     context: MeasurementContext

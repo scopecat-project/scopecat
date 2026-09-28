@@ -161,8 +161,8 @@ receipts. Publishing verified cells does not assert that every parameter on the
 branch is calibrated or applicable to another sample. No automatic merge of
 verified candidates or cohort publication is provided by this operation.
 
-The older `publish_to(working_point=...)` and `publish_default()` still serve
-legacy consumers; new branch workflows use `publish_to_branch()`.
+The former working-point and global-default publication APIs are retired.
+Verified publication uses `publish_to_branch()`.
 
 ## Publish inside a durable procedure
 
@@ -197,7 +197,7 @@ the destination or evidence changes step identity. Analysis-only recovery into a
 different procedure excludes any attempted parameter publication, just as it
 excludes old configuration acceptance.
 
-This durable output uses development schema 88. Existing development stores are
+This durable output uses the current development format. Existing development stores are
 left untouched; use a fresh store rather than rewriting an older one.
 
 For target selection, durable composition, joint verification and worker setup,
@@ -207,15 +207,16 @@ see [Automate parameter calibration](automate-parameter-calibration.md).
 
 Session branch selection and explicit branch-editor preparation preserve the
 subject, batch, operator and record collection. Selecting another sample/target
-drops the checkout unless a branch is also explicitly selected. Choosing a saved
+retains the checkout, unsaved edits and selected setup, and clears the previous
+subject's batch. Choosing a saved
 parameter revision or working point exits branch mode. Branch names currently
 carry no enforced sample/cooldown applicability or calibration acceptance.
 
 The low-level `checkout(...).save(catalog=..., parameters=...)` remains available
 for programmatic full-snapshot producers; ordinary authors use `params.save()`.
-The [legacy combined configuration API](manage-configuration.md) remains for its
-maintained working-point consumers. New author workflows use independent branches
-without fabricating samples or working points.
+The [workbench parameter editor](manage-configuration.md) uses these same
+independent branches without fabricating samples or working points.
 
-Automatic default-branch selection and graphical branch editing remain follow-up work.
+The workbench can edit a copy of a parameter version and save it to an explicit
+branch. Branch selection remains explicit.
 No prebaseline data migration or historical-file rewriting is introduced.

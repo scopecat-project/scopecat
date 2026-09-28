@@ -48,7 +48,7 @@ from scopecat.records.scientific_binding import (
     RegisteredTargetSubject,
     ResolvedScientificBinding,
 )
-from scopecat.records.setup import ActiveSetupView, ExecutableSetupSnapshot
+from scopecat.records.setup import ExecutableSetupSnapshot
 from scopecat.runs.admission import build_run_admission
 from scopecat.runs.repository import (
     TerminalRunCommit,
@@ -64,6 +64,7 @@ from scopecat_server.storage.sqlite.control_plane import (
     ControlPlaneNotFound,
     SQLiteControlPlane,
 )
+from scopecat_server.storage.sqlite.devices import DeviceRepository
 from scopecat_server.storage.sqlite.record_collections import allocate_address
 from scopecat_server.storage.sqlite.run_repository import SQLiteRunRepository
 from scopecat_server.storage.sqlite.samples import SQLiteSampleStore
@@ -75,6 +76,7 @@ from .parameter_resolution import resolve_parameters
 from .point_plans import RunPointPlanService
 from .samples import SampleService
 from .scientific_binding import validate_scientific_binding
+from .setup import SetupService
 
 
 class AdmissionService:
@@ -90,6 +92,7 @@ class AdmissionService:
         samples: SampleService,
         sample_store: SQLiteSampleStore,
         targets: TargetCatalogStore,
+        setup: SetupService,
         deployment_id: str | None = None,
     ) -> None:
         self._control = control
@@ -99,6 +102,7 @@ class AdmissionService:
         self._samples = samples
         self._sample_store = sample_store
         self._targets = targets
+        self._setup = setup
         self._deployment_id = deployment_id
 
     def submit_run(self, submission: RunSubmission) -> RunAdmission:
@@ -115,29 +119,33 @@ class AdmissionService:
                 raise BackendConflict(
                     "submitted run config does not match its source content hash"
                 )
-            provenance = self._resolve_provenance_config(submission.config_source)
-            if isinstance(submission.config_source, ParameterRunConfigSource):
-                # Resolution above checks the immutable maintained setup reference.
-                # Another page changing its default must not invalidate this request.
-                assert provenance is not None
-                active_config = ExecutableSetupSnapshot.from_config(provenance)
-                setup_generation = None
-            else:
-                active = self._resolve_active_setup()
-                active_config = active.revision.setup
-                setup_generation = active.activation.generation
+            self._resolve_provenance_config(submission.config_source)
+            execution_setup = submission.execution_setup
+            source = submission.config_source
+            if (
+                isinstance(
+                    source, ParameterRunConfigSource | AnalysisCandidateRunConfigSource
+                )
+                and source.setup != execution_setup
+            ):
+                raise BackendConflict(
+                    "execution setup differs from the configuration's retained setup"
+                )
+            resolved_setup = self._setup.require_available(execution_setup)
+            resolved_devices = resolved_setup.resolution.devices
+            exact_setup = resolved_setup.setup
             _require_authoritative_instrument_inventory(
                 submitted=submission.config,
-                authoritative=active_config,
+                authoritative=exact_setup,
             )
             if submission.plan.domain_target_requirement is not None:
                 _require_authoritative_domain_target(
                     submitted=submission.config,
-                    authoritative=active_config,
+                    authoritative=exact_setup,
                 )
             if (
                 submission.scientific_binding.setup_content_hash
-                != active_config.execution_content_hash
+                != exact_setup.execution_content_hash
             ):
                 raise BackendConflict(
                     "run executable setup differs from its resolved authority"
@@ -160,6 +168,7 @@ class AdmissionService:
                 config_source=submission.config_source,
                 samples=sample_bindings,
                 scientific_binding=submission.scientific_binding,
+                execution_setup=execution_setup,
             )
             admission = RunAdmissionRecord(
                 submission_id=submission.submission_id,
@@ -173,9 +182,9 @@ class AdmissionService:
                     submission.plan,
                     instrument_keys={
                         instrument.id: instrument.exclusivity_key
-                        for instrument in active_config.instrument_registry.instruments
+                        for instrument in exact_setup.instrument_registry.instruments
                     },
-                    domain_target=active_config.domain_target,
+                    domain_target=exact_setup.domain_target,
                 ),
                 admitted_at=skeleton.snapshot.created_at,
             )
@@ -188,10 +197,18 @@ class AdmissionService:
         prepared = self._runs.prepare_run_skeleton(skeleton)
         try:
             with self._control.write_transaction() as connection:
+                if isinstance(submission.config_source, ParameterRunConfigSource):
+                    source = submission.config_source
+                    resolve_parameters(
+                        connection,
+                        parameters=source.parameters,
+                        setup=source.setup,
+                        overrides=source.overrides,
+                    )
+                DeviceRepository(connection).require_current(resolved_devices)
                 run = self._control.admit_run_in_transaction(
                     connection,
                     admission,
-                    expected_setup_generation=setup_generation,
                 )
                 self._point_plans.initialize_admitted_in_transaction(connection, run)
                 if run.run_id == admission.run_id:
@@ -216,7 +233,7 @@ class AdmissionService:
                         connection,
                         skeleton.snapshot,
                     )
-        except ControlPlaneConflict as error:
+        except (ControlPlaneConflict, ValueError) as error:
             raise BackendConflict(str(error)) from error
         record_timing(
             "run_admitted",
@@ -296,15 +313,6 @@ class AdmissionService:
             )
         return self._wire_admission(run)
 
-    def _resolve_active_setup(self) -> ActiveSetupView:
-        with self._services.config_registry() as work:
-            active = work.setups.read_current()
-        if active is None:
-            raise BackendConflict(
-                "run instrument inventory requires an executable setup"
-            )
-        return active
-
     def _resolve_provenance_config(
         self,
         source: RunConfigSource | None,
@@ -316,6 +324,7 @@ class AdmissionService:
         if isinstance(source, ContextRunConfigSource):
             return self._resolve_context_source(source)
         if isinstance(source, ParameterRunConfigSource):
+            self._setup.require_available(source.setup)
             with self._control.sqlite.read_transaction() as connection:
                 resolved = resolve_parameters(
                     connection,

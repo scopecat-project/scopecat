@@ -138,16 +138,17 @@ class LabParameterOperations:
     ) -> ParameterResolution:
         """Resolve exact run inputs without saving a combined registry entry.
 
-        If setup is omitted, capture the current setup once. The result retains
-        exact references and can be passed as `config` to the low-level runner.
+        Select a setup explicitly. The result retains exact references and can
+        be passed as `config` to the low-level runner.
         """
-        selected = setup or self.client.active_setup().revision
+        if setup is None:
+            raise ValueError("Select an experiment setup before resolving parameters")
         return self.client.resolve_parameters(
             ParameterResolveCommand(
                 parameters=revision.ref
                 if isinstance(revision, ParameterRevision)
                 else revision,
-                setup=selected.ref if isinstance(selected, SetupRevision) else selected,
+                setup=setup.ref if isinstance(setup, SetupRevision) else setup,
                 overrides=overrides,
             )
         )
@@ -224,11 +225,12 @@ class BranchParameterEditor(ParameterEditor):
     @override
     def __repr__(self) -> str:
         return (
-            f"ParameterWorkspace(branch={self.branch!r}, tables={len(self)}, "
+            f"BranchParameterEditor(branch={self.branch!r}, tables={len(self)}, "
             f"edits={len(self.diff())}, structure_edits={len(self._structure)})"
         )
 
     @property
+    @override
     def version(self) -> ParameterRevision:
         return self._revision
 

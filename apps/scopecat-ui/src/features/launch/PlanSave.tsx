@@ -54,13 +54,7 @@ export function PlanSave({
                   selection.subject.kind === "sample" && sample
                     ? { kind: "sample", sample_id: sample.sample_id, revision: sample.revision }
                     : selection.subject,
-                configuration:
-                  source.kind === "config_registry"
-                    ? {
-                        kind: "saved",
-                        ref: { entry_id: source.entry_id, content_hash: source.content_hash },
-                      }
-                    : selection.configuration,
+                configuration: selection.configuration,
               },
               scientific_binding: reviewedForRequest(preview.reviewed).binding,
               source: draft.handoff

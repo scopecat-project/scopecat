@@ -7,7 +7,7 @@ import { apiClient, apiData, ApiError } from "../../api-client";
 import type { LaunchCatalogEntry, LaunchPreview } from "./launch-api";
 import { ControlFields, ControlSummary, controlEdits } from "./ControlFields";
 import { invalidateDraft, useLaunchDraft, type LaunchDraft } from "./LaunchDraft";
-import { MeasurementContext } from "./MeasurementContext";
+import { MeasurementContext, type MeasurementContextChange } from "./MeasurementContext";
 import { PlanSave } from "./PlanSave";
 import { PreflightSummary } from "./PreflightSummary";
 import { canRenderField, type FormField } from "./launch-fields";
@@ -27,15 +27,10 @@ export function LaunchForm({
   const supported = fields.length === allFields.length;
   const {
     projectId,
-    selectedContext,
-    selectContext,
     draft: retained,
     update,
     select,
     isCurrent,
-    configurationReady,
-    configurationError,
-    refreshConfiguration,
     submit,
     attempt,
   } = useLaunchDraft();
@@ -49,7 +44,7 @@ export function LaunchForm({
       mounted.current = false;
     };
   }, []);
-  const result = catalogReady && configurationReady && !pending ? draft.preview : undefined;
+  const result = catalogReady && !pending ? draft.preview : undefined;
   const fence = result?.manual_state;
   const manual = useQuery({
     queryKey: ["launch-manual-validity", projectId, fence],
@@ -78,15 +73,14 @@ export function LaunchForm({
     );
   }, [fence, manual.data, update]);
   function changeInput(
-    changes: Partial<
-      Pick<LaunchDraft, "values" | "controls" | "selection" | "actor" | "collection">
-    >,
+    changes: Partial<Pick<LaunchDraft, "values" | "controls">> & MeasurementContextChange,
   ) {
     update((current) =>
       invalidateDraft(
         {
           ...current,
           ...changes,
+          selection: { ...current.selection, ...changes.selection },
           planDirty:
             current.planDirty ||
             (Boolean(current.plan) &&
@@ -153,7 +147,6 @@ export function LaunchForm({
               : undefined,
           notice: "Preview matches these inputs and the checked project configuration.",
         }));
-      if (isCurrent(revision)) refreshConfiguration();
     } catch (caught) {
       if (isCurrent(revision))
         update((current) => ({
@@ -224,12 +217,7 @@ export function LaunchForm({
       className="space-y-4 max-w-3xl"
     >
       <p>{entry.description}</p>
-      <MeasurementContext
-        draft={draft}
-        selectedContext={selectedContext}
-        projectId={projectId}
-        onChange={changeInput}
-      />
+      <MeasurementContext draft={draft} projectId={projectId} onChange={changeInput} />
       <PlanSave
         key={`${draft.plan?.ref.plan_id ?? "new"}:${draft.plan?.ref.revision ?? 0}`}
         preview={result}
@@ -248,50 +236,21 @@ export function LaunchForm({
           actor,
         })}
       />
-      {draft.selection.configuration.kind === "saved" && (
-        <p>
-          Using exact saved configuration {draft.selection.configuration.ref.entry_id}. It is not
-          replaced by the current lab default.{" "}
-          <button type="button" onClick={() => selectContext()}>
-            Use lab default
-          </button>
-        </p>
-      )}
       {draft.selection.configuration.kind === "parameters" && (
         <p>
           Using parameter revision {draft.selection.configuration.ref.revision_id}. The checked
           preview retains the exact setup used. This does not accept calibration or change defaults.
         </p>
       )}
-      {selectedContext ? (
-        <div>
-          <p>
-            Parameter context: {selectedContext.config_source.context.entry_id} ·{" "}
-            {selectedContext.config_source.sample.display_name} (
-            {selectedContext.config_source.sample.sample_id}, r
-            {selectedContext.config_source.sample.revision}) ·{" "}
-            {selectedContext.config_source.sample.context_id}
-          </p>
-          <button
-            type="button"
-            onClick={() => {
-              selectContext();
-            }}
-          >
-            Use lab default
-          </button>
-        </div>
-      ) : draft.selection.configuration.kind === "active" ? (
+      {draft.selection.configuration.kind === "unselected" ? (
         <p>
-          Using lab default. Select a saved sample working point in Configuration to use its
-          parameters.
+          Select a parameter branch or use a saved version from Configuration, then choose an
+          experiment setup before preview.
         </p>
       ) : null}
       <p className="text-sm">
         {draft.preview && !result && !pending
-          ? configurationError
-            ? "Cannot verify current configuration. Retained inputs and submission keys are unchanged; refresh project data or preview again."
-            : "Checking the retained preview against current project context…"
+          ? "Checking the retained preview against current project context…"
           : draft.notice}
       </p>
       <button

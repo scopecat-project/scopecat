@@ -485,6 +485,9 @@ def test_check_request_decodes_without_author_code_after_intent_freezing(
 ) -> None:
     _, context = observation
     request = CalibrationCheckRequest(
+        setup=SetupRevisionRef(
+            revision_id="bench", content_hash=sha256_json_hash("bench")
+        ),
         scope=SCOPE,
         context=context,
         measurement_step="probe",

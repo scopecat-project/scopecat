@@ -70,6 +70,7 @@ from scopecat_server.storage.sqlite.automation import (
 )
 from scopecat_server.storage.sqlite.calibration_checks import CalibrationCheckStore
 from scopecat_server.storage.sqlite.connection import SQLiteDatabase
+from scopecat_server.storage.sqlite.devices import DeviceRepository
 from scopecat_server.storage.sqlite.run_repository import SQLiteRunRepository
 from scopecat_server.storage.sqlite.setups import SQLiteSetupRepository
 from scopecat_server.storage.sqlite.target_catalog import TargetCatalogStore
@@ -112,15 +113,23 @@ class CalibrationCheckAdmission:
         Parameter/setup authority is read in that transaction. Subject validation
         resolves exact immutable sample/target revisions using existing services.
         """
-        current = SQLiteSetupRepository(connection).read_current()
-        if (
-            current is None
-            or current.revision.setup.execution_content_hash
-            != request.context.setup_content_hash
-        ):
-            raise BackendConflict("check setup differs from current authority")
+        try:
+            setup = SQLiteSetupRepository(connection).read_revision(
+                request.setup.revision_id
+            )
+            if setup.ref != request.setup:
+                raise BackendConflict(
+                    "check setup reference differs from saved content"
+                )
+            DeviceRepository(connection).require_current(setup.resolution.devices)
+        except (KeyError, ValueError) as error:
+            raise BackendConflict(str(error)) from error
+        if setup.setup.execution_content_hash != request.context.setup_content_hash:
+            raise BackendConflict("check setup differs from declared context")
         parameters = request.context.parameters
         if isinstance(parameters, AnalysisCandidateRunConfigSource):
+            if parameters.setup != request.setup:
+                raise BackendConflict("candidate check must retain its baseline setup")
             config = resolve_candidate_input(parameters, self._services)
             original = self._services.runs.read_snapshot(parameters.source_run_id)
             if (
@@ -134,7 +143,7 @@ class CalibrationCheckAdmission:
             config = resolve_parameters(
                 connection,
                 parameters=parameters,
-                setup=current.revision.ref,
+                setup=request.setup,
             ).config
         expected = ResolvedScientificBinding(
             subject=request.context.subject,
@@ -186,7 +195,10 @@ def _require_context(
         observed = MeasurementContext.from_binding(source.parameters, binding)
     else:
         observed = None
-    if observed != request.context:
+    if observed != request.context or (
+        isinstance(source, (AnalysisCandidateRunConfigSource, ParameterRunConfigSource))
+        and source.setup != request.setup
+    ):
         raise BackendConflict("check measurement differs from admitted declaration")
 
 

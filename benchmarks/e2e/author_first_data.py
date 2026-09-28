@@ -80,7 +80,7 @@ def measure(root: Path, *, repetitions: int) -> dict[str, object]:
                     "after_refresh",
                 ]:
                     if operation == "after_refresh":
-                        path = root / "src/reference_lab/workflows/authored/signal.py"
+                        path = root / "src/reference_lab_authors/authored/signal.py"
                         path.write_text(
                             path.read_text(encoding="utf-8")
                             + "\n# benchmark refresh\n",

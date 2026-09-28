@@ -34,7 +34,7 @@ scientific acceptance and whether coupled effects need additional measurements.
 
 ```python
 destination = lab.parameters.checkout("chip-a/daily").head
-initial = lab.parameters.resolve(destination.revision)
+initial = lab.parameters.resolve(destination.revision, setup=lab.setup.get("bench-v1"))
 
 # CalibrationIntent and calibrate are registered laboratory definitions.
 intent = CalibrationIntent(

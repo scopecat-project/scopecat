@@ -14,12 +14,14 @@ from fastapi.testclient import TestClient
 from scopecat.application.launch import LaunchPreview
 from scopecat.records.author_revision import AuthorRevisionRef, AuthorRevisionState
 from scopecat.records.launch_request import LaunchRequest
-from scopecat.records.run import ConfigRegistryRunConfigSource
+from scopecat.records.parameter_revision import ParameterRevisionRef
+from scopecat.records.run import ParameterRunConfigSource
 from scopecat.records.scientific_binding import (
     ResolvedScientificBinding,
     UnboundSubject,
 )
 from scopecat.records.scientific_selection import ReviewedScientificSelection
+from scopecat.records.setup import SetupRevisionRef
 
 from scopecat_server.http.transport import create_app
 from scopecat_server.services.revision_workers import (
@@ -40,12 +42,14 @@ def _submission_request() -> dict[str, object]:
                 config_content_hash="sha256:" + "a" * 64,
                 setup_content_hash="sha256:" + "b" * 64,
             ),
-            config_source=ConfigRegistryRunConfigSource(
-                selector="active",
-                entry_id="baseline",
-                config_ref="baseline",
+            config_source=ParameterRunConfigSource(
+                parameters=ParameterRevisionRef(
+                    revision_id="baseline", content_hash="sha256:" + "a" * 64
+                ),
+                setup=SetupRevisionRef(
+                    revision_id="bench", content_hash="sha256:" + "e" * 64
+                ),
                 content_hash="sha256:" + "a" * 64,
-                registry_generation=1,
             ),
         ),
     )

@@ -14,7 +14,6 @@ from scopecat.api.instruments import (
     InstrumentRef,
     InstrumentSessionHandle,
     instrument,
-    temporary_instrument,
 )
 from scopecat.api.lab import LabClient
 from scopecat.config.scientific_binding import bind_scientific_evidence
@@ -28,8 +27,7 @@ from scopecat.daemon.wire import (
     InstrumentDriverProbeCommand,
     InstrumentSessionOpenCommand,
     RunSubmission,
-    SetupActivateCommand,
-    SetupSaveCommand,
+    SetupImportCommand,
 )
 from scopecat.kernel.problems import ProblemPhase, model_location, problem
 from scopecat.kernel.quantity import Quantity
@@ -55,9 +53,9 @@ from scopecat.records.measurement import (
 )
 from scopecat.records.run_request import RunRequest
 from scopecat.records.setup import (
-    ActiveSetupView,
     ExecutableSetupSnapshot,
     SetupRevision,
+    SetupRevisionRef,
 )
 from scopecat.sdk.instruments import (
     AcquisitionResultRef,
@@ -104,6 +102,7 @@ from scopecat.sdk.instruments.commands import (
 )
 from scopecat_testkit.instrument_drivers import SignalInstrumentDriver, load_config
 from scopecat_testkit.payload_codecs import json_payload_codecs
+from scopecat_testkit.server.instruments import signal_driver_catalog
 
 import scopecat_server.instruments.runtime as instrument_service_module
 from scopecat_server import LocalDaemonRuntime
@@ -647,7 +646,7 @@ def test_instrument_views_expose_only_safe_configuration_summaries(
         _runtime(tmp_path, _TrackingProvider(), config=config) as runtime,
         TestClient(runtime.app()) as transport,
     ):
-        setup = runtime.application.setup.current().revision.ref
+        setup = runtime.application.setup.resolve("initial").ref
         params = {
             "setup_revision_id": setup.revision_id,
             "setup_content_hash": setup.content_hash,
@@ -714,7 +713,7 @@ def test_driver_probe_releases_ownership_and_reuses_the_managed_connection(
         TestClient(runtime.app()) as transport,
     ):
         daemon = _daemon_client(transport)
-        setup = runtime.application.setup.current().revision.ref
+        setup = runtime.application.setup.resolve("initial").ref
         command = InstrumentDriverProbeCommand(
             setup=setup,
             operation_id="connection-test",
@@ -764,7 +763,7 @@ def test_driver_probe_cannot_bypass_an_owner_by_renaming_the_candidate(
         TestClient(runtime.app()) as transport,
     ):
         daemon = _daemon_client(transport)
-        setup = runtime.application.setup.current().revision.ref
+        setup = runtime.application.setup.resolve("initial").ref
         if owner == "session":
             daemon.open_instrument_session(
                 InstrumentSessionOpenCommand(
@@ -775,7 +774,7 @@ def test_driver_probe_cannot_bypass_an_owner_by_renaming_the_candidate(
                 )
             )
         else:
-            admission = daemon.submit_run(_submission(config))
+            admission = daemon.submit_run(_submission(runtime, config))
             daemon.start_executor(
                 admission.run_id, ExecutorStartRequest(executor_id="worker")
             )
@@ -802,7 +801,7 @@ def test_driver_probe_failure_leaves_no_owner(tmp_path: Path) -> None:
         with pytest.raises(DaemonConflictError):
             _daemon_client(transport).probe_driver(
                 InstrumentDriverProbeCommand(
-                    setup=runtime.application.setup.current().revision.ref,
+                    setup=runtime.application.setup.resolve("initial").ref,
                     operation_id="rejected-test",
                     actor="alice",
                     binding=binding,
@@ -834,7 +833,7 @@ def test_candidate_virtual_probe_does_not_borrow_a_configured_virtual_device(
         TestClient(runtime.app()) as transport,
     ):
         daemon = _daemon_client(transport)
-        setup = runtime.application.setup.current().revision.ref
+        setup = runtime.application.setup.resolve("initial").ref
         owner = daemon.open_instrument_session(
             InstrumentSessionOpenCommand(
                 setup=setup,
@@ -843,19 +842,22 @@ def test_candidate_virtual_probe_does_not_borrow_a_configured_virtual_device(
                 instrument_ids=(binding.id,),
             )
         )
-        result = daemon.probe_driver(
-            InstrumentDriverProbeCommand(
-                setup=setup,
-                operation_id="new-virtual-test",
-                actor="bob",
-                binding=binding.model_copy(update={"id": "new-simulator"}),
-            )
+        from scopecat.records.device import DeviceConnection
+
+        lab = LabClient(daemon, operator="bob")
+        device = lab.devices.register(
+            device_id="new-simulator",
+            label="New simulator",
+            connection=DeviceConnection(
+                driver=lab.devices.drivers()[0], connection=binding.connection
+            ),
         )
+        result = lab.devices.test_connection(device)
         assert result.description is not None
         assert result.description.instrument_id == "new-simulator"
         assert len(provider.drivers) == 2
         assert not provider.drivers[0].disconnected
-        assert provider.drivers[1].disconnect_count == 1
+        assert provider.drivers[1].disconnect_count == 0
         records = runtime.application.executor._control.list_instrument_sessions()
         assert {record.state for record in records} == {"active", "closed"}
         daemon.close_instrument_session(owner.session_id)
@@ -885,7 +887,7 @@ def test_driver_probe_cleanup_failure_retains_recoverable_attention(
             ) as failure:
                 daemon.probe_driver(
                     InstrumentDriverProbeCommand(
-                        setup=runtime.application.setup.current().revision.ref,
+                        setup=runtime.application.setup.resolve("initial").ref,
                         operation_id="test-cleanup-failure",
                         actor="alice",
                         binding=binding,
@@ -909,13 +911,13 @@ def test_notebook_direct_interaction_releases_ownership_but_keeps_connection(
             lab = LabClient(daemon, operator="default-operator")
 
             [available] = lab.instruments.list(
-                setup=runtime.application.setup.current().revision.ref
+                setup=runtime.application.setup.resolve("initial").ref
             ).items
             assert available.availability == "available"
 
             with lab.instruments.open(
                 _raw_instrument("source-0"),
-                setup=runtime.application.setup.current().revision.ref,
+                setup=runtime.application.setup.resolve("initial").ref,
             ) as session:
                 description = session._describe()
                 state_receipt = session._apply(
@@ -938,7 +940,7 @@ def test_notebook_direct_interaction_releases_ownership_but_keeps_connection(
                     _SAMPLE_SIGNAL.result("signal"),
                 )
                 [owned] = lab.instruments.list(
-                    setup=runtime.application.setup.current().revision.ref
+                    setup=runtime.application.setup.resolve("initial").ref
                 ).items
 
                 assert description.instrument_id == "source-0"
@@ -951,7 +953,7 @@ def test_notebook_direct_interaction_releases_ownership_but_keeps_connection(
                 assert owned.owner_actor == "default-operator"
 
             [released] = lab.instruments.list(
-                setup=runtime.application.setup.current().revision.ref
+                setup=runtime.application.setup.resolve("initial").ref
             ).items
             [driver] = provider.drivers
             assert released.availability == "available"
@@ -982,7 +984,7 @@ def test_exact_observed_member_reads_the_current_actor_cache_without_hardware_io
                     operation_id="open-exact-observed-member",
                     actor="alice",
                     instrument_ids=("source-0",),
-                    setup=runtime.application.setup.current().revision.ref,
+                    setup=runtime.application.setup.resolve("initial").ref,
                 )
             )
             command = InstrumentStateReadCommand(
@@ -1041,7 +1043,9 @@ def test_exact_observed_member_reads_the_current_actor_cache_without_hardware_io
             daemon.close_instrument_session(session.session_id)
 
 
-def test_notebook_can_attach_a_session_only_instrument(tmp_path: Path) -> None:
+def test_notebook_can_open_registered_device_without_experiment_setup(
+    tmp_path: Path,
+) -> None:
     provider = _TrackingProvider()
     config = load_config()
     [configured] = config.instrument_registry.instruments
@@ -1065,13 +1069,7 @@ def test_notebook_can_attach_a_session_only_instrument(tmp_path: Path) -> None:
             ),
         ),
     )
-    monitor = temporary_instrument(
-        _raw_instrument("monitor-scope"),
-        driver_id=configured.driver_id,
-        connection=VirtualInstrumentConnection(
-            options={"purpose": "inspect-awg-output"}
-        ),
-    )
+    monitor = _raw_instrument("monitor-scope")
 
     with (
         _runtime(tmp_path, provider, config=config, driver_catalog=catalog) as runtime,
@@ -1079,16 +1077,26 @@ def test_notebook_can_attach_a_session_only_instrument(tmp_path: Path) -> None:
     ):
         lab = LabClient(_daemon_client(transport), operator="debugger")
 
-        with lab.instruments.open(
-            monitor, setup=runtime.application.setup.current().revision.ref
-        ) as session:
+        from scopecat.records.device import DeviceConnection
+
+        lab.devices.register(
+            device_id="monitor-scope",
+            label="Monitor scope",
+            connection=DeviceConnection(
+                driver=lab.devices.drivers()[0],
+                connection=VirtualInstrumentConnection(
+                    options={"purpose": "inspect-awg-output"}
+                ),
+            ),
+        )
+        with lab.devices.open("monitor-scope") as session:
             assert session[monitor] is session
             assert session._describe().instrument_id == "monitor-scope"
             assert session._observed_state().instrument_id == "monitor-scope"
             assert {
                 item.instrument_id
                 for item in lab.instruments.list(
-                    setup=runtime.application.setup.current().revision.ref
+                    setup=runtime.application.setup.resolve("initial").ref
                 ).items
             } == {"source-0"}
 
@@ -1105,7 +1113,7 @@ def test_invoke_without_invalidations_does_not_force_state_readback(
         with TestClient(runtime.app()) as transport:
             handle = LabClient(_daemon_client(transport)).instruments.open(
                 _raw_instrument("source-0"),
-                setup=runtime.application.setup.current().revision.ref,
+                setup=runtime.application.setup.resolve("initial").ref,
             )
             handle._observed_state()
             [driver] = provider.drivers
@@ -1139,7 +1147,7 @@ def test_apply_without_reported_state_reads_back_before_returning(
         with TestClient(runtime.app()) as transport:
             handle = LabClient(_daemon_client(transport)).instruments.open(
                 _raw_instrument("source-0"),
-                setup=runtime.application.setup.current().revision.ref,
+                setup=runtime.application.setup.resolve("initial").ref,
             )
             handle._observed_state()
             [driver] = provider.drivers
@@ -1166,7 +1174,7 @@ def test_apply_readback_must_confirm_the_requested_state(tmp_path: Path) -> None
                     operation_id="open-non-converging",
                     actor="alice",
                     instrument_ids=("source-0",),
-                    setup=runtime.application.setup.current().revision.ref,
+                    setup=runtime.application.setup.resolve("initial").ref,
                 )
             )
 
@@ -1183,7 +1191,7 @@ def test_apply_readback_must_confirm_the_requested_state(tmp_path: Path) -> None
             [driver] = provider.drivers
             assert isinstance(driver, _NonConvergingApplyDriver)
             [instrument] = daemon.list_instruments(
-                setup=runtime.application.setup.current().revision.ref
+                setup=runtime.application.setup.resolve("initial").ref
             ).items
             assert len(driver.applied) == 1
             assert driver.read_count == 3
@@ -1199,7 +1207,7 @@ def test_interactive_apply_validates_against_fresh_device_state(
         with TestClient(runtime.app()) as transport:
             handle = LabClient(_daemon_client(transport)).instruments.open(
                 _raw_instrument("source-0"),
-                setup=runtime.application.setup.current().revision.ref,
+                setup=runtime.application.setup.resolve("initial").ref,
             )
             handle._observed_state()
             [driver] = provider.drivers
@@ -1227,7 +1235,7 @@ def test_collect_replay_precedes_fresh_state_validation(
                     operation_id="open-collect-replay-after-state-change",
                     actor="alice",
                     instrument_ids=("source-0",),
-                    setup=runtime.application.setup.current().revision.ref,
+                    setup=runtime.application.setup.resolve("initial").ref,
                 )
             )
             intent = _variant_collect_intent(
@@ -1281,7 +1289,7 @@ def test_collect_driver_rejection_is_replayed_without_hardware_io(
                     operation_id="open-collect-rejection-replay",
                     actor="alice",
                     instrument_ids=("source-0",),
-                    setup=runtime.application.setup.current().revision.ref,
+                    setup=runtime.application.setup.resolve("initial").ref,
                 )
             )
             [driver] = provider.drivers
@@ -1333,7 +1341,7 @@ def test_operation_retry_is_deduplicated_and_conflicting_content_is_rejected(
                     operation_id="open-1",
                     actor="alice",
                     instrument_ids=("source-0",),
-                    setup=runtime.application.setup.current().revision.ref,
+                    setup=runtime.application.setup.resolve("initial").ref,
                 )
             )
             command = _apply_command(value=5.0)
@@ -1373,7 +1381,7 @@ def test_apply_rejects_logical_assignments_for_one_physical_property(
                     operation_id="open-duplicate-physical-property",
                     actor="alice",
                     instrument_ids=("source-0",),
-                    setup=runtime.application.setup.current().revision.ref,
+                    setup=runtime.application.setup.resolve("initial").ref,
                 )
             )
             payload = _apply_command(value=5.1).model_dump(mode="json")
@@ -1403,7 +1411,7 @@ def test_open_retry_reuses_session_without_reprovisioning(tmp_path: Path) -> Non
                 operation_id="open-retry",
                 actor="alice",
                 instrument_ids=("source-0",),
-                setup=runtime.application.setup.current().revision.ref,
+                setup=runtime.application.setup.resolve("initial").ref,
             )
 
             first = daemon.open_instrument_session(command)
@@ -1427,12 +1435,12 @@ def test_open_retry_recovers_before_resolving_replacement_config(
     provider = _ToggleDescriptionProvider()
     with _runtime(tmp_path, provider) as runtime:  # noqa: SIM117
         with TestClient(runtime.app()) as transport:
-            original = runtime.application.setup.current()
+            original = runtime.application.setup.resolve("initial")
             command = InstrumentSessionOpenCommand(
                 operation_id="open-retry-after-config-activation",
                 actor="alice",
                 instrument_ids=("source-0",),
-                setup=runtime.application.setup.current().revision.ref,
+                setup=runtime.application.setup.resolve("initial").ref,
             )
 
             def replace_active_config() -> None:
@@ -1443,7 +1451,7 @@ def test_open_retry_recovers_before_resolving_replacement_config(
                         source=DirectConfigRevisionSource(config=updated),
                         entry_id="updated-config",
                         actor="operator",
-                        expected_generation=1,
+                        expected_generation=0,
                     )
                 )
                 provider.description_available = False
@@ -1457,7 +1465,7 @@ def test_open_retry_recovers_before_resolving_replacement_config(
 
             [durable] = runtime.application.executor._control.list_instrument_sessions()
             assert session.session_id == durable.session_id
-            assert session.setup == original.revision.ref
+            assert session.setup == original.ref
             assert len(provider.drivers) == 1
             daemon.close_instrument_session(session.session_id)
 
@@ -1474,7 +1482,7 @@ def test_sequential_sessions_reuse_connection_but_not_state_or_replay_scope(
                     operation_id="open-owner-1",
                     actor="alice",
                     instrument_ids=("source-0",),
-                    setup=runtime.application.setup.current().revision.ref,
+                    setup=runtime.application.setup.resolve("initial").ref,
                 )
             )
             daemon.apply_instrument_state(
@@ -1494,7 +1502,7 @@ def test_sequential_sessions_reuse_connection_but_not_state_or_replay_scope(
                     operation_id="open-owner-2",
                     actor="bob",
                     instrument_ids=("source-0",),
-                    setup=runtime.application.setup.current().revision.ref,
+                    setup=runtime.application.setup.resolve("initial").ref,
                 )
             )
             assert provider.drivers == [driver]
@@ -1536,7 +1544,7 @@ def test_expired_session_releases_owner_and_reuses_fresh_connection(
                 operation_id="open-expiring-owner",
                 actor="alice",
                 instrument_ids=("source-0",),
-                setup=runtime.application.setup.current().revision.ref,
+                setup=runtime.application.setup.resolve("initial").ref,
             )
         )
         renewed = daemon.renew_instrument_session(first.session_id)
@@ -1569,7 +1577,7 @@ def test_expired_session_releases_owner_and_reuses_fresh_connection(
                 operation_id="open-after-owner-expiry",
                 actor="bob",
                 instrument_ids=("source-0",),
-                setup=runtime.application.setup.current().revision.ref,
+                setup=runtime.application.setup.resolve("initial").ref,
             )
         )
 
@@ -1596,7 +1604,7 @@ def test_session_expiry_during_recorded_operation_quarantines_owner(
                     operation_id="open-expiring-operation",
                     actor="alice",
                     instrument_ids=("source-0",),
-                    setup=runtime.application.setup.current().revision.ref,
+                    setup=runtime.application.setup.resolve("initial").ref,
                 )
             )
             control = runtime.application.executor._control
@@ -1635,7 +1643,7 @@ def test_config_activation_reuses_matching_connection_with_fresh_state(
                     operation_id="open-before-config-activation",
                     actor="alice",
                     instrument_ids=("source-0",),
-                    setup=runtime.application.setup.current().revision.ref,
+                    setup=runtime.application.setup.resolve("initial").ref,
                 )
             )
             [driver] = provider.drivers
@@ -1649,11 +1657,9 @@ def test_config_activation_reuses_matching_connection_with_fresh_state(
                 )
             ).model_copy(update={"id": "updated-config"})
 
-            receipt = _select_setup(
-                runtime, updated, revision_id="updated-config", expected_generation=1
-            )
+            receipt = _select_setup(runtime, updated, revision_id="updated-config")
 
-            assert receipt.activation.generation == 2
+            assert receipt.resolution.definition_id == "updated-config"
             assert driver.disconnect_count == 0
             daemon.close_instrument_session(session.session_id)
             driver.change_from_front_panel(5.1)
@@ -1662,7 +1668,7 @@ def test_config_activation_reuses_matching_connection_with_fresh_state(
                     operation_id="open-after-config-activation",
                     actor="bob",
                     instrument_ids=("source-0",),
-                    setup=runtime.application.setup.current().revision.ref,
+                    setup=runtime.application.setup.resolve("initial").ref,
                 )
             )
             assert provider.drivers == [driver]
@@ -1671,7 +1677,7 @@ def test_config_activation_reuses_matching_connection_with_fresh_state(
             daemon.close_instrument_session(reopened.session_id)
 
 
-def test_session_open_retains_selected_setup_across_global_activation(
+def test_session_open_retains_selected_setup_when_another_is_saved(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1679,23 +1685,24 @@ def test_session_open_retains_selected_setup_across_global_activation(
     config = load_config()
     with _runtime(tmp_path, provider) as runtime:  # noqa: SIM117
         with TestClient(runtime.app()) as transport:
-            original = runtime.application.setup.current()
-            get_setup = runtime.application.setup.get
+            original = runtime.application.setup.resolve("initial")
+            get_setup = runtime.application.setup.require_available
 
-            def resolve_then_activate(revision_id: str) -> SetupRevision:
-                resolved = get_setup(revision_id)
-                monkeypatch.setattr(runtime.application.setup, "get", get_setup)
+            def resolve_then_activate(reference: SetupRevisionRef) -> SetupRevision:
+                resolved = get_setup(reference)
+                monkeypatch.setattr(
+                    runtime.application.setup, "require_available", get_setup
+                )
                 _select_setup(
                     runtime,
                     config.model_copy(update={"id": "activated-during-open"}),
                     revision_id="activated-during-open",
-                    expected_generation=original.activation.generation,
                 )
                 return resolved
 
             monkeypatch.setattr(
                 runtime.application.setup,
-                "get",
+                "require_available",
                 resolve_then_activate,
             )
             daemon = _daemon_client(transport)
@@ -1705,13 +1712,13 @@ def test_session_open_retains_selected_setup_across_global_activation(
                     operation_id="open-during-config-activation",
                     actor="alice",
                     instrument_ids=("source-0",),
-                    setup=original.revision.ref,
+                    setup=original.ref,
                 )
             )
-            assert opened.setup == original.revision.ref
+            assert opened.setup == original.ref
             assert (
-                runtime.application.setup.current().revision.id
-                == "activated-during-open"
+                runtime.application.setup.resolve("initial").resolution.definition_id
+                == "initial"
             )
             assert len(provider.drivers) == 1
             daemon.close_instrument_session(opened.session_id)
@@ -1723,7 +1730,7 @@ def test_saved_device_contexts_work_without_activation_and_share_claims(
     provider = _TrackingProvider()
     backend = InstrumentBackend(
         provider=provider,
-        driver_catalog=DriverCatalog(provider_id=provider.provider_id),
+        driver_catalog=signal_driver_catalog(provider.provider_id),
     )
     with (
         LocalDaemonRuntime(
@@ -1752,8 +1759,8 @@ def test_saved_device_contexts_work_without_activation_and_share_claims(
                 ),
             }
         )
-        first = lab.setup.save(original, name="bench-a").ref
-        second = lab.setup.save(alias, name="bench-b").ref
+        first = lab.setup.import_recipe(original, name="bench-a").ref
+        second = lab.setup.import_recipe(alias, name="bench-b").ref
         assert transport.get("/api/v1/setup/active").status_code == 404
         assert transport.get("/api/v1/instruments").status_code == 422
         assert lab.instruments.list(setup=first).items[0].instrument_id == "source-0"
@@ -1810,7 +1817,7 @@ def test_exclusivity_key_survives_logical_instrument_rename(tmp_path: Path) -> N
                     operation_id="open-before-instrument-rename",
                     actor="alice",
                     instrument_ids=("source-0",),
-                    setup=runtime.application.setup.current().revision.ref,
+                    setup=runtime.application.setup.resolve("initial").ref,
                 )
             )
             original_config = load_config()
@@ -1838,13 +1845,9 @@ def test_exclusivity_key_survives_logical_instrument_rename(tmp_path: Path) -> N
                     ),
                 }
             )
-            _select_setup(
-                runtime, renamed, revision_id="renamed-config", expected_generation=1
-            )
+            selected = _select_setup(runtime, renamed, revision_id="renamed-config")
 
-            [current] = daemon.list_instruments(
-                setup=runtime.application.setup.current().revision.ref
-            ).items
+            [current] = daemon.list_instruments(setup=selected.ref).items
             assert current.instrument_id == renamed_id
             assert current.availability == "active"
             assert current.owner_actor == "alice"
@@ -1854,7 +1857,7 @@ def test_exclusivity_key_survives_logical_instrument_rename(tmp_path: Path) -> N
                         operation_id="open-renamed-while-owned",
                         actor="bob",
                         instrument_ids=(renamed_id,),
-                        setup=runtime.application.setup.current().revision.ref,
+                        setup=selected.ref,
                     )
                 )
             assert len(provider.drivers) == 1
@@ -1865,12 +1868,12 @@ def test_exclusivity_key_survives_logical_instrument_rename(tmp_path: Path) -> N
                     operation_id="open-after-instrument-rename",
                     actor="bob",
                     instrument_ids=(renamed_id,),
-                    setup=runtime.application.setup.current().revision.ref,
+                    setup=selected.ref,
                 )
             )
 
-            assert len(provider.drivers) == 2
-            assert provider.drivers[0].disconnect_count == 1
+            assert len(provider.drivers) == 1
+            assert provider.drivers[0].disconnect_count == 0
             daemon.close_instrument_session(second.session_id)
 
 
@@ -1886,8 +1889,21 @@ def test_binding_identity_change_reconnects_idle_instrument(
     tmp_path: Path,
     instrument_update: dict[str, object],
 ) -> None:
+    from scopecat.records.device import DeviceConnection
+
     provider = _TrackingProvider()
-    with _runtime(tmp_path, provider) as runtime:  # noqa: SIM117
+    catalog = signal_driver_catalog(provider.provider_id)
+    catalog = catalog.model_copy(
+        update={
+            "drivers": (
+                *catalog.drivers,
+                catalog.drivers[0].model_copy(
+                    update={"driver_id": "tests.alternate_signal_instrument"}
+                ),
+            )
+        }
+    )
+    with _runtime(tmp_path, provider, driver_catalog=catalog) as runtime:  # noqa: SIM117
         with TestClient(runtime.app()) as transport:
             daemon = _daemon_client(transport)
             first = daemon.open_instrument_session(
@@ -1895,7 +1911,7 @@ def test_binding_identity_change_reconnects_idle_instrument(
                     operation_id="open-before-binding-change",
                     actor="alice",
                     instrument_ids=("source-0",),
-                    setup=runtime.application.setup.current().revision.ref,
+                    setup=runtime.application.setup.resolve("initial").ref,
                 )
             )
             daemon.close_instrument_session(first.session_id)
@@ -1904,27 +1920,30 @@ def test_binding_identity_change_reconnects_idle_instrument(
             config = load_config()
             [instrument] = config.instrument_registry.instruments
             updated_instrument = instrument.model_copy(update=instrument_update)
-            registry = config.instrument_registry.model_copy(
-                update={"instruments": [updated_instrument]}
-            )
-            updated = config.model_copy(
-                update={
-                    "id": "updated-binding",
-                    "system": config.system.model_copy(
-                        update={"instrument_registry": registry}
+            lab = LabClient(daemon, operator="operator")
+            [device] = lab.devices.list()
+            lab.devices.update(
+                device,
+                connection=DeviceConnection(
+                    driver=runtime.application.devices.driver_ref(
+                        updated_instrument.driver_id
                     ),
-                }
+                    connection=updated_instrument.connection,
+                    safety=device.revision.content.safety,
+                    access_aliases=device.revision.content.access_aliases,
+                ),
             )
-            _select_setup(
-                runtime, updated, revision_id="updated-binding", expected_generation=1
-            )
+            definition_id = runtime.application.setup.resolve(
+                "initial"
+            ).resolution.definition_id
+            resolved = lab.setup.get(definition_id)
 
             second = daemon.open_instrument_session(
                 InstrumentSessionOpenCommand(
                     operation_id="open-after-binding-change",
                     actor="bob",
                     instrument_ids=("source-0",),
-                    setup=runtime.application.setup.current().revision.ref,
+                    setup=resolved.ref,
                 )
             )
             assert len(provider.drivers) == 2
@@ -1942,7 +1961,7 @@ def test_contract_identity_change_reconnects_idle_instrument(tmp_path: Path) -> 
                     operation_id="open-before-contract-change",
                     actor="alice",
                     instrument_ids=("source-0",),
-                    setup=runtime.application.setup.current().revision.ref,
+                    setup=runtime.application.setup.resolve("initial").ref,
                 )
             )
             daemon.close_instrument_session(first.session_id)
@@ -1954,7 +1973,7 @@ def test_contract_identity_change_reconnects_idle_instrument(tmp_path: Path) -> 
                     operation_id="open-after-contract-change",
                     actor="bob",
                     instrument_ids=("source-0",),
-                    setup=runtime.application.setup.current().revision.ref,
+                    setup=runtime.application.setup.resolve("initial").ref,
                 )
             )
 
@@ -1976,7 +1995,7 @@ def test_stale_idle_connection_is_replaced_after_resynchronization_failure(
                     operation_id="open-before-stale",
                     actor="alice",
                     instrument_ids=("source-0",),
-                    setup=runtime.application.setup.current().revision.ref,
+                    setup=runtime.application.setup.resolve("initial").ref,
                 )
             )
             daemon.close_instrument_session(first.session_id)
@@ -1990,7 +2009,7 @@ def test_stale_idle_connection_is_replaced_after_resynchronization_failure(
                     operation_id="open-after-stale",
                     actor="bob",
                     instrument_ids=("source-0",),
-                    setup=runtime.application.setup.current().revision.ref,
+                    setup=runtime.application.setup.resolve("initial").ref,
                 )
             )
             assert len(provider.drivers) == 2
@@ -2000,7 +2019,7 @@ def test_stale_idle_connection_is_replaced_after_resynchronization_failure(
             assert replacement.read_count == 1
             assert (
                 daemon.list_instruments(
-                    setup=runtime.application.setup.current().revision.ref
+                    setup=runtime.application.setup.resolve("initial").ref
                 )
                 .items[0]
                 .availability
@@ -2020,7 +2039,7 @@ def test_shutdown_fences_an_owner_that_finishes_opening_after_the_drain_starts(
                 operation_id="open-before-shutdown",
                 actor="alice",
                 instrument_ids=("source-0",),
-                setup=runtime.application.setup.current().revision.ref,
+                setup=runtime.application.setup.resolve("initial").ref,
             )
         )
         control = runtime.application.executor._control
@@ -2041,7 +2060,7 @@ def test_shutdown_fences_an_owner_that_finishes_opening_after_the_drain_starts(
                         operation_id="open-racing-shutdown",
                         actor="bob",
                         instrument_ids=("source-1",),
-                        setup=runtime.application.setup.current().revision.ref,
+                        setup=runtime.application.setup.resolve("initial").ref,
                     )
                 )
             except BaseException as error:
@@ -2096,7 +2115,7 @@ def test_shutdown_owns_a_session_already_selected_for_lease_expiry(
                 operation_id="open-expiry-shutdown-race",
                 actor="alice",
                 instrument_ids=("source-0",),
-                setup=runtime.application.setup.current().revision.ref,
+                setup=runtime.application.setup.resolve("initial").ref,
             )
         )
         release_started = Event()
@@ -2158,7 +2177,7 @@ def test_session_heartbeat_is_independent_of_another_slow_open(
                 operation_id="open-heartbeat-owner",
                 actor="alice",
                 instrument_ids=("source-0",),
-                setup=runtime.application.setup.current().revision.ref,
+                setup=runtime.application.setup.resolve("initial").ref,
             )
         )
         opened: list[str] = []
@@ -2171,7 +2190,7 @@ def test_session_heartbeat_is_independent_of_another_slow_open(
                         operation_id="open-slow-owner",
                         actor="bob",
                         instrument_ids=("source-1",),
-                        setup=runtime.application.setup.current().revision.ref,
+                        setup=runtime.application.setup.resolve("initial").ref,
                     )
                 )
                 opened.append(session.session_id)
@@ -2208,7 +2227,7 @@ def test_provider_rejection_closes_the_daemon_session(tmp_path: Path) -> None:
                     operation_id="open-rejected",
                     actor="alice",
                     instrument_ids=("source-0",),
-                    setup=runtime.application.setup.current().revision.ref,
+                    setup=runtime.application.setup.resolve("initial").ref,
                 )
             )
 
@@ -2216,7 +2235,7 @@ def test_provider_rejection_closes_the_daemon_session(tmp_path: Path) -> None:
         assert session.state == "closed"
         assert session.end_status == "aborted"
         [instrument] = daemon.list_instruments(
-            setup=runtime.application.setup.current().revision.ref
+            setup=runtime.application.setup.resolve("initial").ref
         ).items
         assert instrument.availability == "available"
         assert provider.drivers == []
@@ -2234,7 +2253,7 @@ def test_notebook_open_retry_reuses_operation_after_response_loss(
             )
             handle = LabClient(daemon).instruments.open(
                 _raw_instrument("source-0"),
-                setup=runtime.application.setup.current().revision.ref,
+                setup=runtime.application.setup.resolve("initial").ref,
             )
 
             state = handle._read_state()
@@ -2256,7 +2275,7 @@ def test_abort_retry_replays_receipt_without_repeating_driver_calls(
                     operation_id="open-abort-retry",
                     actor="alice",
                     instrument_ids=("source-0",),
-                    setup=runtime.application.setup.current().revision.ref,
+                    setup=runtime.application.setup.resolve("initial").ref,
                 )
             )
             first = daemon.abort_instrument_session(session.session_id)
@@ -2281,7 +2300,7 @@ def test_abort_failure_faults_connection_without_repeating_abort(
                     operation_id="open-abort-failure",
                     actor="alice",
                     instrument_ids=("source-0",),
-                    setup=runtime.application.setup.current().revision.ref,
+                    setup=runtime.application.setup.resolve("initial").ref,
                 )
             )
 
@@ -2301,7 +2320,7 @@ def test_abort_failure_faults_connection_without_repeating_abort(
                     operation_id="open-after-abort-failure",
                     actor="bob",
                     instrument_ids=("source-0",),
-                    setup=runtime.application.setup.current().revision.ref,
+                    setup=runtime.application.setup.resolve("initial").ref,
                 )
             )
             assert len(provider.drivers) == 2
@@ -2321,7 +2340,7 @@ def test_notebook_close_remains_retryable_after_both_transport_attempts_fail(
             )
             handle = LabClient(daemon).instruments.open(
                 _raw_instrument("source-0"),
-                setup=runtime.application.setup.current().revision.ref,
+                setup=runtime.application.setup.resolve("initial").ref,
             )
             handle._read_state()
 
@@ -2347,7 +2366,7 @@ def test_notebook_default_apply_retries_with_same_operation_after_response_loss(
             )
             handle = LabClient(daemon).instruments.open(
                 _raw_instrument("source-0"),
-                setup=runtime.application.setup.current().revision.ref,
+                setup=runtime.application.setup.resolve("initial").ref,
             )
 
             receipt = handle._apply(
@@ -2380,7 +2399,7 @@ def test_configured_defaults_replay_after_response_loss_avoids_hardware_io(
                 )
             ).instruments.open(
                 _raw_instrument("source-0"),
-                setup=runtime.application.setup.current().revision.ref,
+                setup=runtime.application.setup.resolve("initial").ref,
             )
             handle._observed_state()
             [driver] = provider.drivers
@@ -2406,7 +2425,7 @@ def test_notebook_default_collect_retries_with_same_operation_after_response_los
             )
             handle = LabClient(daemon).instruments.open(
                 _raw_instrument("source-0"),
-                setup=runtime.application.setup.current().revision.ref,
+                setup=runtime.application.setup.resolve("initial").ref,
             )
 
             receipt = handle._collect(
@@ -2436,12 +2455,12 @@ def test_observation_failure_aborts_session_without_quarantining(
                         operation_id="open-read-failure",
                         actor="alice",
                         instrument_ids=("source-0",),
-                        setup=runtime.application.setup.current().revision.ref,
+                        setup=runtime.application.setup.resolve("initial").ref,
                     )
                 )
 
             [instrument] = daemon.list_instruments(
-                setup=runtime.application.setup.current().revision.ref
+                setup=runtime.application.setup.resolve("initial").ref
             ).items
             [driver] = provider.drivers
             assert instrument.availability == "available"
@@ -2464,7 +2483,7 @@ def test_explicit_observation_failure_ends_the_entire_session(
                     operation_id=f"open-explicit-read-failure-{invalid_snapshot}",
                     actor="alice",
                     instrument_ids=("source-0", "source-1"),
-                    setup=runtime.application.setup.current().revision.ref,
+                    setup=runtime.application.setup.resolve("initial").ref,
                 )
             )
             drivers = {driver.instrument_id: driver for driver in provider.drivers}
@@ -2486,7 +2505,7 @@ def test_explicit_observation_failure_ends_the_entire_session(
             assert {
                 item.availability
                 for item in daemon.list_instruments(
-                    setup=runtime.application.setup.current().revision.ref
+                    setup=runtime.application.setup.resolve("initial").ref
                 ).items
             } == {"available"}
             assert all(driver.abort_count == 0 for driver in drivers.values())
@@ -2498,7 +2517,7 @@ def test_explicit_observation_failure_ends_the_entire_session(
                     operation_id=f"reopen-after-read-failure-{invalid_snapshot}",
                     actor="bob",
                     instrument_ids=("source-0", "source-1"),
-                    setup=runtime.application.setup.current().revision.ref,
+                    setup=runtime.application.setup.resolve("initial").ref,
                 )
             )
             assert len(provider.drivers) == 4
@@ -2518,7 +2537,7 @@ def test_explicit_observation_cleanup_failure_requires_attention(
                     operation_id="open-explicit-read-cleanup-failure",
                     actor="alice",
                     instrument_ids=("source-0",),
-                    setup=runtime.application.setup.current().revision.ref,
+                    setup=runtime.application.setup.resolve("initial").ref,
                 )
             )
             control = runtime.application.executor._control
@@ -2546,7 +2565,7 @@ def test_explicit_observation_cleanup_failure_requires_attention(
             assert driver.abort_count == 0
             assert driver.disconnect_count == 1
             [instrument] = daemon.list_instruments(
-                setup=runtime.application.setup.current().revision.ref
+                setup=runtime.application.setup.resolve("initial").ref
             ).items
             assert instrument.availability == "quarantined"
 
@@ -2572,7 +2591,7 @@ def test_acquisition_cleanup_failure_quarantines_the_durable_owner(
                     operation_id="open-cleanup-failure",
                     actor="alice",
                     instrument_ids=("source-0",),
-                    setup=runtime.application.setup.current().revision.ref,
+                    setup=runtime.application.setup.resolve("initial").ref,
                 )
             )
 
@@ -2580,7 +2599,7 @@ def test_acquisition_cleanup_failure_quarantines_the_durable_owner(
         assert session.state == "attention_required"
         assert session.attention_reason == "instrument_session_open_cleanup_failed"
         [instrument] = runtime.application.instruments.list_instruments(
-            setup=runtime.application.setup.current().revision.ref
+            setup=runtime.application.setup.resolve("initial").ref
         ).items
         assert instrument.availability == "quarantined"
 
@@ -2600,7 +2619,7 @@ def test_direct_session_observes_without_applying_default_state(
         with TestClient(runtime.app()) as transport:
             handle = LabClient(_daemon_client(transport)).instruments.open(
                 _raw_instrument("source-0"),
-                setup=runtime.application.setup.current().revision.ref,
+                setup=runtime.application.setup.resolve("initial").ref,
             )
             handle._observed_state()
 
@@ -2621,7 +2640,7 @@ def test_missing_configured_defaults_reject_without_hardware_io(
                     operation_id="open-without-configured-defaults",
                     actor="alice",
                     instrument_ids=("source-0",),
-                    setup=runtime.application.setup.current().revision.ref,
+                    setup=runtime.application.setup.resolve("initial").ref,
                 )
             )
             assert session.configured_default_instrument_ids == ()
@@ -2676,7 +2695,7 @@ def test_configured_defaults_read_fresh_state_and_write_only_pending_values(
         with TestClient(runtime.app()) as transport:
             handle = LabClient(_daemon_client(transport)).instruments.open(
                 _raw_instrument("source-0"),
-                setup=runtime.application.setup.current().revision.ref,
+                setup=runtime.application.setup.resolve("initial").ref,
             )
             handle._observed_state()
             [driver] = provider.drivers
@@ -2716,7 +2735,7 @@ def test_configured_defaults_skip_write_when_fresh_state_already_matches(
         with TestClient(runtime.app()) as transport:
             handle = LabClient(_daemon_client(transport)).instruments.open(
                 _raw_instrument("source-0"),
-                setup=runtime.application.setup.current().revision.ref,
+                setup=runtime.application.setup.resolve("initial").ref,
             )
             handle._observed_state()
             [driver] = provider.drivers
@@ -2745,10 +2764,10 @@ def test_explicit_defaults_use_session_pinned_preserve_config(
     )
     with _runtime(tmp_path, provider, config=pinned_config) as runtime:  # noqa: SIM117
         with TestClient(runtime.app()) as transport:
-            active = runtime.application.setup.current()
+            active = runtime.application.setup.resolve("initial")
             handle = LabClient(_daemon_client(transport)).instruments.open(
                 _raw_instrument("source-0"),
-                setup=runtime.application.setup.current().revision.ref,
+                setup=runtime.application.setup.resolve("initial").ref,
             )
             handle._observed_state()
             later_config = _config_with_default_state(
@@ -2762,13 +2781,12 @@ def test_explicit_defaults_use_session_pinned_preserve_config(
                 runtime,
                 later_config,
                 revision_id="later-defaults",
-                expected_generation=active.activation.generation,
             )
 
             receipt = handle._apply_configured_defaults()
 
             assert receipt.status == "applied"
-            assert receipt.setup == active.revision.ref
+            assert receipt.setup == active.ref
             [driver] = provider.drivers
             [request] = driver.applied
             assert next(iter(request.values.values())) == Quantity(
@@ -2797,7 +2815,7 @@ def test_rejected_configured_defaults_remain_active_and_replayable(
                     operation_id="open-rejected-configured-defaults",
                     actor="alice",
                     instrument_ids=("source-0",),
-                    setup=runtime.application.setup.current().revision.ref,
+                    setup=runtime.application.setup.resolve("initial").ref,
                 )
             )
             command = InstrumentConfiguredDefaultsApplyCommand(
@@ -2826,7 +2844,7 @@ def test_rejected_configured_defaults_remain_active_and_replayable(
             )
             assert durable.state == "active"
             [instrument] = daemon.list_instruments(
-                setup=runtime.application.setup.current().revision.ref
+                setup=runtime.application.setup.resolve("initial").ref
             ).items
             assert instrument.availability == "active"
             daemon.close_instrument_session(session.session_id)
@@ -2867,11 +2885,11 @@ def test_indeterminate_configured_defaults_quarantine_the_session(
             daemon = _daemon_client(transport)
             handle = LabClient(daemon).instruments.open(
                 _raw_instrument("source-0"),
-                setup=runtime.application.setup.current().revision.ref,
+                setup=runtime.application.setup.resolve("initial").ref,
             )
             handle._observed_state()
             [owned] = daemon.list_instruments(
-                setup=runtime.application.setup.current().revision.ref
+                setup=runtime.application.setup.resolve("initial").ref
             ).items
             assert owned.owner_id is not None
             session_id = owned.owner_id
@@ -2891,7 +2909,7 @@ def test_indeterminate_configured_defaults_quarantine_the_session(
             assert driver.abort_count == 1
             assert driver.disconnect_count == 1
             [instrument] = daemon.list_instruments(
-                setup=runtime.application.setup.current().revision.ref
+                setup=runtime.application.setup.resolve("initial").ref
             ).items
             assert instrument.availability == "quarantined"
 
@@ -2912,11 +2930,11 @@ def test_configured_defaults_read_failure_cleanly_closes_the_session(
             daemon = _daemon_client(transport)
             handle = LabClient(daemon).instruments.open(
                 _raw_instrument("source-0"),
-                setup=runtime.application.setup.current().revision.ref,
+                setup=runtime.application.setup.resolve("initial").ref,
             )
             handle._observed_state()
             [owned] = daemon.list_instruments(
-                setup=runtime.application.setup.current().revision.ref
+                setup=runtime.application.setup.resolve("initial").ref
             ).items
             assert owned.owner_id is not None
             session_id = owned.owner_id
@@ -2939,7 +2957,7 @@ def test_configured_defaults_read_failure_cleanly_closes_the_session(
             assert driver.abort_count == 0
             assert driver.disconnect_count == 1
             [instrument] = daemon.list_instruments(
-                setup=runtime.application.setup.current().revision.ref
+                setup=runtime.application.setup.resolve("initial").ref
             ).items
             assert instrument.availability == "available"
             end_receipt = handle.close()
@@ -2959,7 +2977,7 @@ def test_invalid_collect_receipt_is_deduplicated_without_quarantining(
                     operation_id="open-invalid-collect",
                     actor="alice",
                     instrument_ids=("source-0",),
-                    setup=runtime.application.setup.current().revision.ref,
+                    setup=runtime.application.setup.resolve("initial").ref,
                 )
             )
             intent = InteractiveCollectIntent(
@@ -2992,7 +3010,7 @@ def test_invalid_collect_receipt_is_deduplicated_without_quarantining(
 
             [driver] = provider.drivers
             [instrument] = daemon.list_instruments(
-                setup=runtime.application.setup.current().revision.ref
+                setup=runtime.application.setup.resolve("initial").ref
             ).items
             assert len(driver.collect_requests) == 1
             assert instrument.availability == "active"
@@ -3010,7 +3028,7 @@ def test_provider_instance_and_virtual_state_survive_across_sessions(
             instrument_endpoint=LocalInstrumentBackendEndpoint(
                 InstrumentBackend(
                     provider=provider,
-                    driver_catalog=DriverCatalog(provider_id=provider.provider_id),
+                    driver_catalog=signal_driver_catalog(provider.provider_id),
                 )
             ),
         ) as runtime,
@@ -3022,7 +3040,7 @@ def test_provider_instance_and_virtual_state_survive_across_sessions(
                 operation_id="open-stateful-1",
                 actor="alice",
                 instrument_ids=("source-0",),
-                setup=runtime.application.setup.current().revision.ref,
+                setup=runtime.application.setup.resolve("initial").ref,
             )
         )
         daemon.apply_instrument_state(
@@ -3037,7 +3055,7 @@ def test_provider_instance_and_virtual_state_survive_across_sessions(
                 operation_id="open-stateful-2",
                 actor="alice",
                 instrument_ids=("source-0",),
-                setup=runtime.application.setup.current().revision.ref,
+                setup=runtime.application.setup.resolve("initial").ref,
             )
         )
         [state] = second.observed_state
@@ -3076,7 +3094,7 @@ def test_contract_catalog_is_empty_without_an_instrument_backend(
 ) -> None:
     config = load_config()
     with (
-        LocalDaemonRuntime(tmp_path, bootstrap_config=config) as runtime,
+        LocalDaemonRuntime(tmp_path) as runtime,
         TestClient(runtime.app()) as transport,
     ):
         catalog = _daemon_client(transport).resolve_instrument_contracts(config)
@@ -3095,7 +3113,7 @@ def test_provider_problems_are_scoped_without_polluting_healthy_views(
     with _runtime(tmp_path, provider, config=config) as runtime:  # noqa: SIM117
         with TestClient(runtime.app()) as transport:
             instruments = _daemon_client(transport).list_instruments(
-                setup=runtime.application.setup.current().revision.ref
+                setup=runtime.application.setup.resolve("initial").ref
             )
 
     by_id = {item.instrument_id: item for item in instruments.items}
@@ -3118,7 +3136,7 @@ def test_direct_session_ignores_unrelated_instrument_description_problem(
                 operation_id="open-healthy-source",
                 actor="alice",
                 instrument_ids=("source-1",),
-                setup=runtime.application.setup.current().revision.ref,
+                setup=runtime.application.setup.resolve("initial").ref,
             )
         )
 
@@ -3139,10 +3157,10 @@ def test_run_and_interactive_session_compete_for_the_same_resource(
                     operation_id="open-exclusive",
                     actor="alice",
                     instrument_ids=("source-0",),
-                    setup=runtime.application.setup.current().revision.ref,
+                    setup=runtime.application.setup.resolve("initial").ref,
                 )
             )
-            admission = daemon.submit_run(_submission(config))
+            admission = daemon.submit_run(_submission(runtime, config))
 
             with pytest.raises(DaemonConflictError, match="resources are busy"):
                 daemon.start_executor(
@@ -3163,7 +3181,7 @@ def test_run_and_interactive_session_compete_for_the_same_resource(
                         operation_id="open-while-run",
                         actor="bob",
                         instrument_ids=("source-0",),
-                        setup=runtime.application.setup.current().revision.ref,
+                        setup=runtime.application.setup.resolve("initial").ref,
                     )
                 )
 
@@ -3196,7 +3214,7 @@ def test_run_admission_rejects_alternate_key_for_active_connection(
                     operation_id="open-authoritative-key",
                     actor="alice",
                     instrument_ids=("source-0",),
-                    setup=runtime.application.setup.current().revision.ref,
+                    setup=runtime.application.setup.resolve("initial").ref,
                 )
             )
 
@@ -3204,9 +3222,9 @@ def test_run_admission_rejects_alternate_key_for_active_connection(
                 DaemonConflictError,
                 match="instrument inventory differs",
             ):
-                daemon.submit_run(_submission(changed))
+                daemon.submit_run(_submission(runtime, changed))
 
-            admission = daemon.submit_run(_submission(config))
+            admission = daemon.submit_run(_submission(runtime, config))
             with pytest.raises(DaemonConflictError, match="resources are busy"):
                 daemon.start_executor(
                     admission.run_id,
@@ -3231,7 +3249,7 @@ def _runtime(
             InstrumentBackend(
                 provider=provider,
                 driver_catalog=(
-                    DriverCatalog(provider_id=provider.provider_id)
+                    signal_driver_catalog(provider.provider_id)
                     if driver_catalog is None
                     else driver_catalog
                 ),
@@ -3392,9 +3410,12 @@ def _config_with_private_instrument_settings() -> ConfigProfileSnapshot:
     )
 
 
-def _submission(config: ConfigProfileSnapshot) -> RunSubmission:
+def _submission(
+    runtime: LocalDaemonRuntime, config: ConfigProfileSnapshot
+) -> RunSubmission:
     [instrument] = config.instrument_registry.instruments
     return RunSubmission(
+        execution_setup=runtime.application.setup.resolve("initial").ref,
         scientific_binding=bind_scientific_evidence(
             catalog_id="test", config=config, samples=(), sample_revisions={}
         ),
@@ -3447,26 +3468,26 @@ def test_explicit_release_disconnects_idle_connection_and_next_session_reconnect
         lab = LabClient(_daemon_client(transport), operator="alice")
         target = _raw_instrument("source-0")
         with lab.instruments.open(
-            target, setup=runtime.application.setup.current().revision.ref
+            target, setup=runtime.application.setup.resolve("initial").ref
         ):
             with pytest.raises(DaemonConflictError, match="idle devices"):
                 lab.instruments.release(
-                    target, setup=runtime.application.setup.current().revision.ref
+                    target, setup=runtime.application.setup.resolve("initial").ref
                 )
             [first] = provider.drivers
             assert first.disconnect_count == 0
         receipt = lab.instruments.release(
-            target, setup=runtime.application.setup.current().revision.ref
+            target, setup=runtime.application.setup.resolve("initial").ref
         )
         assert receipt.instrument_ids == ("source-0",)
         assert first.disconnect_count == 1
         # An already released device remains released without creating a connection.
         lab.instruments.release(
-            "source-0", setup=runtime.application.setup.current().revision.ref
+            "source-0", setup=runtime.application.setup.resolve("initial").ref
         )
         assert provider.drivers == [first]
         with lab.instruments.open(
-            target, setup=runtime.application.setup.current().revision.ref
+            target, setup=runtime.application.setup.resolve("initial").ref
         ):
             assert len(provider.drivers) == 2
             assert provider.drivers[1] is not first
@@ -3570,7 +3591,7 @@ def test_write_only_apply_accepts_explicit_command_confirmation(tmp_path: Path) 
         lab = LabClient(_daemon_client(transport))
         with lab.instruments.open(
             _raw_instrument("source-0"),
-            setup=runtime.application.setup.current().revision.ref,
+            setup=runtime.application.setup.resolve("initial").ref,
         ) as handle:
             receipt = handle._apply({_SET_FREQUENCY: Quantity(5.1, "GHz")})
             assert receipt.status == "applied"
@@ -3613,7 +3634,7 @@ def test_write_only_unconfirmed_apply_is_quarantined_without_retry(
                 operation_id="open-write-only",
                 actor="alice",
                 instrument_ids=("source-0",),
-                setup=runtime.application.setup.current().revision.ref,
+                setup=runtime.application.setup.resolve("initial").ref,
             )
         )
         [driver] = provider.drivers
@@ -3637,7 +3658,7 @@ def test_write_only_unconfirmed_apply_is_quarantined_without_retry(
         assert len(driver.applied) == 1
         assert driver.disconnect_count == 1
         [instrument_view] = daemon.list_instruments(
-            setup=runtime.application.setup.current().revision.ref
+            setup=runtime.application.setup.resolve("initial").ref
         ).items
         assert instrument_view.availability == "quarantined"
 
@@ -3651,7 +3672,7 @@ def test_write_only_rejected_write_has_no_confirmation_or_retry(tmp_path: Path) 
         lab = LabClient(_daemon_client(transport))
         with lab.instruments.open(
             _raw_instrument("source-0"),
-            setup=runtime.application.setup.current().revision.ref,
+            setup=runtime.application.setup.resolve("initial").ref,
         ) as handle:
             [driver] = provider.drivers
             assert isinstance(driver, _WriteOnlyConfirmationDriver)
@@ -3668,20 +3689,12 @@ def _select_setup(
     config: ConfigProfileSnapshot,
     *,
     revision_id: str,
-    expected_generation: int,
-) -> ActiveSetupView:
-    revision = runtime.application.setup.save(
-        SetupSaveCommand(
+) -> SetupRevision:
+    revision = runtime.application.setup.import_recipe(
+        SetupImportCommand(
             revision_id=revision_id,
             setup=ExecutableSetupSnapshot.from_config(config),
             actor="operator",
         )
     )
-    return runtime.application.setup.activate(
-        SetupActivateCommand(
-            operation_id=f"select:{revision_id}",
-            revision=revision.ref,
-            expected_generation=expected_generation,
-            actor="operator",
-        )
-    )
+    return revision

@@ -13,7 +13,7 @@ from scopecat.records.control_edit import ControlEdit
 from scopecat.records.run_request import AxisRangeSourceRecord
 
 from reference_lab.configuration import bootstrap_config
-from reference_lab.workflows.frequency_amplitude import (
+from reference_lab_authors.frequency_amplitude import (
     AMPLITUDE,
     CONTROLS,
     FREQUENCY,

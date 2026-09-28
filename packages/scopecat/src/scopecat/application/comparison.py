@@ -16,12 +16,9 @@ from scopecat.records.comparison import (
     ComparisonPublication,
     ComparisonRequest,
 )
-from scopecat.records.config_context import ContextRunConfigSource
 from scopecat.records.launch_request import LaunchRequest
-from scopecat.records.plan_ref import PlanConfigRef
 from scopecat.records.run import (
     AnalysisCandidateRunConfigSource,
-    ConfigRegistryRunConfigSource,
     ParameterRunConfigSource,
     RunSnapshot,
 )
@@ -32,10 +29,8 @@ from scopecat.records.scientific_selection import (
     ParameterConfiguration,
     RegisteredTargetChoice,
     SampleSubjectChoice,
-    SavedConfiguration,
     ScientificSelection,
     UnboundSubjectChoice,
-    WorkingPointConfiguration,
 )
 
 if TYPE_CHECKING:
@@ -53,20 +48,13 @@ def comparison_selection(run: RunSnapshot) -> ScientificSelection:
         configuration = ParameterConfiguration(
             ref=source.parameters, setup=source.setup, overrides=source.overrides
         )
-    elif isinstance(source, ConfigRegistryRunConfigSource):
-        configuration = SavedConfiguration(
-            ref=PlanConfigRef(
-                entry_id=source.entry_id, content_hash=source.content_hash
-            )
-        )
-    elif isinstance(source, ContextRunConfigSource):
-        configuration = WorkingPointConfiguration(
-            ref=source.context, overrides=source.overrides
-        )
     elif isinstance(source, AnalysisCandidateRunConfigSource):
         configuration = CandidateConfiguration(source=source)
     else:
-        raise ValueError("follow-up requires retained configuration provenance")
+        raise ValueError(
+            "follow-up requires independent parameter or candidate inputs; "
+            "select parameters before launching"
+        )
     binding = run.scientific_binding
     if isinstance(binding.subject, RegisteredTargetSubject):
         subject = RegisteredTargetChoice(ref=binding.subject.ref)

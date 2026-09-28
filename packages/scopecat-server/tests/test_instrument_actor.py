@@ -175,6 +175,11 @@ class _BlockingReadDriver(_TrackingDriver):
 
 
 class _DriverEndpoint(InstrumentBackendEndpoint):
+    @property
+    @override
+    def artifact_hash(self) -> str:
+        return "sha256:" + "a" * 64
+
     def __init__(
         self,
         drivers: list[_TrackingDriver],

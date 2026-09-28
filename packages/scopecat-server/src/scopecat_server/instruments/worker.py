@@ -216,6 +216,7 @@ class _StartupResponse(_WireModel):
     status: Literal["ready", "error"]
     worker_pid: int = Field(gt=0)
     provider_id: str | None = None
+    artifact_hash: str | None = None
     driver_catalog: dict[str, JsonValue] | None = None
     payload_catalog: dict[str, JsonValue] | None = None
     error: _RpcError | None = None
@@ -226,6 +227,7 @@ class _StartupResponse(_WireModel):
         if self.status == "ready":
             if (
                 self.provider_id is None
+                or self.artifact_hash is None
                 or self.driver_catalog is None
                 or self.payload_catalog is None
             ):
@@ -339,9 +341,11 @@ class SubprocessInstrumentBackendEndpoint:
                     startup.error.message, diagnostic=startup.error.diagnostic
                 )
             assert startup.provider_id is not None
+            assert startup.artifact_hash is not None
             assert startup.driver_catalog is not None
             assert startup.payload_catalog is not None
             self._provider_id = startup.provider_id
+            self._artifact_hash = startup.artifact_hash
             startup_stage("materializing driver catalog")
             self._driver_catalog = _model_from_body(
                 DriverCatalog,
@@ -381,6 +385,10 @@ class SubprocessInstrumentBackendEndpoint:
     @property
     def provider_id(self) -> str:
         return self._provider_id
+
+    @property
+    def artifact_hash(self) -> str:
+        return self._artifact_hash
 
     @property
     def driver_catalog(self) -> DriverCatalog:
@@ -864,7 +872,9 @@ def _instrument_worker_main(
             startup_stage("backend factory loaded; constructing backend")
             backend = create_backend(Path(project_root))
             startup_stage("backend constructed; describing catalogs")
-            endpoint = LocalInstrumentBackendEndpoint(backend)
+            endpoint = LocalInstrumentBackendEndpoint(
+                backend, installed_packages=installed_packages
+            )
             startup_stage("catalogs ready; encoding and sending readiness")
             _send_model(
                 connection,
@@ -873,6 +883,7 @@ def _instrument_worker_main(
                     worker_pid=os.getpid(),
                     diagnostic=diagnostic_reference({"operation": "startup"}),
                     provider_id=endpoint.provider_id,
+                    artifact_hash=endpoint.artifact_hash,
                     driver_catalog=_model_to_body(endpoint.driver_catalog),
                     payload_catalog=_model_to_body(endpoint.payload_catalog),
                 ),

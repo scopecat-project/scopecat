@@ -1,23 +1,21 @@
 """Explicit notebook operations for the daemon's executable setup authority."""
 
 from dataclasses import dataclass
-from uuid import uuid4
 
-from scopecat.config.inventory import InstrumentInventoryChange
-from scopecat.daemon.client import DaemonClient, DaemonNotFoundError
+from scopecat.daemon.client import DaemonClient
 from scopecat.daemon.wire import (
     ConfigurationTemplateImportCommand,
     ConfigurationTemplateImportResult,
     ConfigurationTemplateView,
-    SetupActivateCommand,
+    SetupImportCommand,
     SetupSaveCommand,
 )
 from scopecat.records.config import ConfigProfileSnapshot
 from scopecat.records.setup import (
-    ActiveSetupView,
     ExecutableSetupSnapshot,
+    SetupDefinition,
+    SetupDefinitionRevision,
     SetupRevision,
-    SetupRevisionRef,
 )
 
 
@@ -49,67 +47,50 @@ class LabSetupOperations:
             )
         )
 
-    def active(self) -> ActiveSetupView:
-        """Read the daemon's independently selected executable setup."""
-        return self.client.active_setup()
-
     def get(self, name: str) -> SetupRevision:
-        return self.client.setup_revision(name)
+        """Resolve a named definition against the current registered devices."""
+        return self.client.resolve_setup(name)
 
-    def list(self) -> tuple[SetupRevision, ...]:
-        return self.client.setup_revisions().items
+    def revision(self, revision_id: str) -> SetupRevision:
+        """Read an exact retained resolution without following device heads."""
+        return self.client.setup_revision(revision_id)
+
+    def definition(self, name: str) -> SetupDefinitionRevision:
+        return self.client.setup_definition(name)
+
+    def list(self) -> tuple[SetupDefinitionRevision, ...]:
+        return self.client.setup_definitions().items
 
     def save(
+        self,
+        setup: SetupDefinition,
+        *,
+        name: str,
+        note: str = "",
+    ) -> SetupRevision:
+        """Save a named immutable revision; saving does not select it."""
+        return self.client.save_setup(
+            SetupSaveCommand(
+                revision_id=name, setup=setup, actor=self.operator, note=note
+            )
+        )
+
+    def import_recipe(
         self,
         setup: ExecutableSetupSnapshot | ConfigProfileSnapshot,
         *,
         name: str,
         note: str = "",
     ) -> SetupRevision:
-        """Save a named immutable revision; saving does not select it."""
+        """Register a recipe's devices and save references; never update connections."""
         snapshot = (
             ExecutableSetupSnapshot.from_config(setup)
             if isinstance(setup, ConfigProfileSnapshot)
             else setup
         )
-        return self.client.save_setup(
-            SetupSaveCommand(
+        return self.client.import_setup(
+            SetupImportCommand(
                 revision_id=name, setup=snapshot, actor=self.operator, note=note
-            )
-        )
-
-    def activate(
-        self,
-        revision: SetupRevision | SetupRevisionRef | str,
-        *,
-        expected_generation: int | None = None,
-        operation_id: str | None = None,
-        changes: tuple[InstrumentInventoryChange, ...] = (),
-        note: str = "",
-    ) -> ActiveSetupView:
-        """Select setup explicitly; declared destructive changes require drained owners.
-
-        Pass a previously reviewed generation to retain that review's freshness.
-        Otherwise the current generation is read immediately before submission.
-        """
-        if isinstance(revision, str):
-            revision = self.get(revision)
-        ref = revision.ref if isinstance(revision, SetupRevision) else revision
-        if expected_generation is None:
-            try:
-                generation = self.active().activation.generation
-            except DaemonNotFoundError:
-                generation = 0
-        else:
-            generation = expected_generation
-        return self.client.activate_setup(
-            SetupActivateCommand(
-                operation_id=operation_id or f"setup-activation:{uuid4().hex}",
-                revision=ref,
-                expected_generation=generation,
-                actor=self.operator,
-                note=note,
-                changes=changes,
             )
         )
 

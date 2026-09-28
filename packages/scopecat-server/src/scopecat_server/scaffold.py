@@ -175,6 +175,7 @@ from scopecat.api.parameter_revisions import BranchParameterEditor
 from scopecat.application.author_project import AuthorProject
 from scopecat.daemon.client import DaemonNotFoundError
 from scopecat.records.parameter_content import ParameterContent
+from scopecat_lab.configuration import initial_setup
 
 
 class ResponseParameters(sc.ParameterModel, table="response"):
@@ -193,8 +194,9 @@ def initial_parameters() -> ParameterContent:
 
 
 def open_parameters(session: AuthorProject) -> BranchParameterEditor:
+    setup = session.setup.import_recipe(initial_setup(), name="starter-bench")
     try:
-        session.use(parameter_branch="starter")
+        session.use(parameter_branch="starter", setup=setup)
     except DaemonNotFoundError:
         content = initial_parameters()
         initial = session.parameters.save(
@@ -203,7 +205,7 @@ def open_parameters(session: AuthorProject) -> BranchParameterEditor:
             parameters=content.parameter_snapshot,
         )
         session.parameters.create_branch("starter", revision=initial)
-        session.use(parameter_branch="starter")
+        session.use(parameter_branch="starter", setup=setup)
     return session.params
 ''',
     "notebooks/01_first_run.py": '''\

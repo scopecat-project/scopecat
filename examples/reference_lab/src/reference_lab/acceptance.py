@@ -32,9 +32,9 @@ from reference_lab.configuration import initial_parameters
 from reference_lab.launch import launch_provider
 from reference_lab.parameters import ChannelCalibration
 from reference_lab.workflows.coherent_ramsey import coherent_ramsey
-from reference_lab.workflows.frequency_amplitude import CONTROLS, frequency_amplitude
 from reference_lab.workflows.ramsey_experiments import parallel_raw_ramsey
-from reference_lab.workflows.temperature_diagnostic import (
+from reference_lab_authors.frequency_amplitude import CONTROLS, frequency_amplitude
+from reference_lab_authors.temperature_diagnostic import (
     TemperatureDiagnosticIntent,
     temperature_diagnostic,
     temperature_diagnostic_procedure,
@@ -130,18 +130,16 @@ def capture_acceptance_fixtures(
         ),
     )
     registry = lab.config.registry()
-    setup = lab.setup.active()
+    setup = lab.setup.get("initial")
     content = initial_parameters()
     parameters = lab.parameters.save(
         name="acceptance-parameters",
         catalog=content.catalog,
         parameters=content.parameters,
     )
-    resolved = lab.parameters.resolve(parameters, setup=setup.revision)
+    resolved = lab.parameters.resolve(parameters, setup=setup)
     selection = ScientificSelection(
-        configuration=ParameterConfiguration(
-            ref=parameters.ref, setup=setup.revision.ref
-        )
+        configuration=ParameterConfiguration(ref=parameters.ref, setup=setup.ref)
     )
     setting_preview = launch_provider(
         lab,
@@ -334,11 +332,11 @@ def capture_acceptance_fixtures(
     schema = source.measurements().schema
 
     with lab.instruments.open(
-        temperature_readout("mixing-chamber"), setup=lab.setup.active().revision.ref
+        temperature_readout("mixing-chamber"), setup=lab.setup.get("initial").ref
     ):
         procedure = lab.procedures.start(
             temperature_diagnostic_procedure,
-            TemperatureDiagnosticIntent(initial_config=config),
+            TemperatureDiagnosticIntent(initial_config=config, setup=setup.ref),
             request_key="acceptance-resource-wait",
         )
         wait = procedure.snapshot.resource_wait
@@ -353,7 +351,7 @@ def capture_acceptance_fixtures(
         assert client.measurement_preview(wait.run_id).items == ()
 
     assert lab.config.registry() == registry
-    assert lab.setup.active() == setup
+    assert lab.setup.get("initial") == setup
     assert lab.parameters.get(parameters.id) == parameters
 
     # Normalize only capture metadata at explicit production-model fields. Do not

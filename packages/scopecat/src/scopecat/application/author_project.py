@@ -18,6 +18,7 @@ from scopecat.analysis.facts import ordinary_result_schema
 from scopecat.api._config import LabConfigOperations
 from scopecat.api._remote import RemoteRunOperations
 from scopecat.api.apparatus_history import LabApparatusOperations
+from scopecat.api.devices import LabDeviceOperations
 from scopecat.api.lab import LabClient
 from scopecat.api.parameter_candidates import ParameterCandidate
 from scopecat.api.parameter_revisions import (
@@ -32,6 +33,7 @@ from scopecat.api.published_analysis import (
     GroupedAnalysisResult,
 )
 from scopecat.api.run import RunHandle
+from scopecat.api.setup import LabSetupOperations
 from scopecat.application.authoring import AuthorExperiment
 from scopecat.application.experiment_plans import plan_definition, plan_launch_request
 from scopecat.application.inspection import LaunchInspection
@@ -79,7 +81,6 @@ from scopecat.records.author_revision import (
     AuthorRevisionRef,
     AuthorRevisionState,
 )
-from scopecat.records.config_context import ConfigContextRef
 from scopecat.records.control_edit import ControlEdit
 from scopecat.records.experiment_plan import ExperimentPlanRevision, ExperimentPlanSave
 from scopecat.records.experimental_batch import require_batch_match
@@ -91,19 +92,17 @@ from scopecat.records.parameter_update import ParameterUpdate
 from scopecat.records.plan_ref import ExperimentPlanRef, PlanAnalysisSource
 from scopecat.records.run import (
     AnalysisCandidateRunConfigSource,
-    ParameterRunConfigSource,
 )
 from scopecat.records.run_request import AxisValuesSourceRecord
 from scopecat.records.scientific_scope import DeclaredBatch, UnscopedBatch
 from scopecat.records.scientific_selection import (
-    ActiveConfiguration,
     CandidateConfiguration,
     ParameterConfiguration,
     RegisteredTargetChoice,
     SampleSubjectChoice,
     ScientificSelection,
     UnboundSubjectChoice,
-    WorkingPointConfiguration,
+    UnselectedConfiguration,
 )
 from scopecat.records.setup import SetupRevision, SetupRevisionRef
 from scopecat.records.target_catalog import TargetRevisionRef
@@ -193,12 +192,11 @@ class AuthorProject(DaemonClient):
         """Validate and atomically update this client's defaults for future work.
 
         Collection/operator updates preserve scientific defaults. Choosing a new
-        sample or target starts a fresh scope; a working point supplies its exact
-        sample and batch unless an explicit subject is supplied alongside it.
-        Independent parameters preserve subject/batch but replace working-point
-        ownership. Preview pins their exact inputs without saving a combined entry.
-        Setup may be pinned alongside independent parameters; setup=None resolves
-        active authority at the next preview. Branch edits retain this choice.
+        sample or target clears its batch but retains independent parameters,
+        setup and branch edits. Independent parameters preserve subject/batch.
+        Preview pins their exact inputs without saving a combined entry.
+        Select setup alongside independent parameters before preview;
+        setup=None clears that choice. Branch edits retain a selected setup.
         Independent parameter/subject selection requires no executable setup;
         preview checks compatibility and execution support.
         Selection never activates configuration or submits hardware operations.
@@ -211,15 +209,10 @@ class AuthorProject(DaemonClient):
             if key not in ("collection", "operator", "parameter_branch")
         }
         branch = self._parameter_branch
-        if any(
-            key in changes
-            for key in ("selection", "sample", "target", "parameters", "working_point")
-        ):
+        if any(key in changes for key in ("selection", "parameters")):
             branch = None
         if "parameter_branch" in changes:
-            if any(
-                key in changes for key in ("selection", "parameters", "working_point")
-            ):
+            if any(key in changes for key in ("selection", "parameters")):
                 raise ValueError(
                     "choose parameter_branch or another parameter selection"
                 )
@@ -255,12 +248,18 @@ class AuthorProject(DaemonClient):
                 )
             selected = ScientificSelection.model_validate(changes["selection"])
         else:
-            if "parameters" in changes and "working_point" in changes:
-                raise ValueError("choose parameters or working_point, not both")
             if "target" in changes and "sample" in changes:
                 raise ValueError("choose target or sample")
             subject_changed = "target" in changes or "sample" in changes
-            selected = ScientificSelection() if subject_changed else base
+            selected = (
+                ScientificSelection(
+                    configuration=base.configuration
+                    if isinstance(base.configuration, ParameterConfiguration)
+                    else UnselectedConfiguration()
+                )
+                if subject_changed
+                else base
+            )
             subject = selected.subject
             configuration = selected.configuration
             batch = selected.batch
@@ -285,7 +284,7 @@ class AuthorProject(DaemonClient):
             if "parameters" in changes:
                 parameters = changes["parameters"]
                 if parameters is None:
-                    configuration = ActiveConfiguration()
+                    configuration = UnselectedConfiguration()
                 else:
                     ref = (
                         self.parameters.get(parameters).ref
@@ -299,24 +298,6 @@ class AuthorProject(DaemonClient):
                         setup=configuration.setup
                         if isinstance(configuration, ParameterConfiguration)
                         else None,
-                    )
-            if "working_point" in changes:
-                point = changes["working_point"]
-                if point is None:
-                    configuration = ActiveConfiguration()
-                else:
-                    ref = ConfigContextRef.model_validate(point)
-                    source = self.config.resolve_context(ref).config_source
-                    configuration = WorkingPointConfiguration(ref=ref)
-                    if not subject_changed:
-                        subject = SampleSubjectChoice(
-                            sample_id=source.sample.sample_id,
-                            revision=source.sample.revision,
-                        )
-                    batch = (
-                        UnscopedBatch()
-                        if source.sample.batch_id is None
-                        else DeclaredBatch(id=source.sample.batch_id)
                     )
             if "setup" in changes:
                 if not isinstance(configuration, ParameterConfiguration):
@@ -343,7 +324,7 @@ class AuthorProject(DaemonClient):
             )
         # Editing checks identities, not whether equipment can execute yet.
         if isinstance(
-            selected.configuration, ActiveConfiguration | ParameterConfiguration
+            selected.configuration, UnselectedConfiguration | ParameterConfiguration
         ):
             validate_editing_selection(LabClient(self), selected)
         else:
@@ -377,6 +358,14 @@ class AuthorProject(DaemonClient):
     @property
     def parameters(self) -> LabParameterOperations:
         return LabParameterOperations(self, operator=self.selection.operator)
+
+    @property
+    def setup(self) -> LabSetupOperations:
+        return LabSetupOperations(self, operator=self.selection.operator)
+
+    @property
+    def devices(self) -> LabDeviceOperations:
+        return LabDeviceOperations(self, operator=self.selection.operator)
 
     def live[**P, ResultT](
         self, experiment: Experiment[P, ResultT]
@@ -519,7 +508,6 @@ class AuthorProject(DaemonClient):
         *,
         selection: ScientificSelection | SessionDefault,
         target: str | TargetRevisionRef | SessionDefault | None,
-        context: ConfigContextRef | SessionDefault | None,
         sample: str | SessionDefault | None,
         batch: str | SessionDefault | None,
         parameters: ParameterEditor | None,
@@ -531,33 +519,30 @@ class AuthorProject(DaemonClient):
         for key, value in (
             ("selection", selection),
             ("target", target),
-            ("working_point", context),
             ("sample", sample),
             ("batch", batch),
         ):
             if not isinstance(value, SessionDefault):
                 changes[key] = value
-        if isinstance(parameters, BranchParameterEditor) and candidate is None:
-            if "selection" in changes or "working_point" in changes or overrides:
+        if parameters is not None and candidate is None:
+            if "selection" in changes or overrides:
                 raise ValueError(
-                    "parameter editor cannot be combined with "
-                    "selection, working_point or overrides"
+                    "parameter editor cannot be combined with selection or overrides"
                 )
             science = self._select_science(
                 defaults.science, {**changes, "parameters": parameters.version.ref}
             )
-        elif parameters is not None or candidate is not None:
+        elif candidate is not None:
             if changes or overrides:
                 raise ValueError(
                     "parameters/candidate already selects scientific context"
                 )
             science = defaults.science
         else:
-            base = ScientificSelection() if context is None else defaults.science
-            science = self._select_science(base, changes)
+            science = self._select_science(defaults.science, changes)
         if overrides:
-            if not isinstance(science.configuration, WorkingPointConfiguration):
-                raise ValueError("parameter overrides require a working point")
+            if not isinstance(science.configuration, ParameterConfiguration):
+                raise ValueError("parameter overrides require independent parameters")
             science = science.model_copy(
                 update={
                     "configuration": science.configuration.model_copy(
@@ -606,33 +591,17 @@ class AuthorProject(DaemonClient):
                 batch=batch_scope,
             )
         if parameters is not None:
-            frozen = (
-                parameters.freeze(setup=science.configuration.setup)
-                if isinstance(parameters, BranchParameterEditor)
-                and isinstance(science.configuration, ParameterConfiguration)
-                else parameters.freeze()
-            )
+            assert isinstance(science.configuration, ParameterConfiguration)
+            frozen = parameters.freeze(setup=science.configuration.setup)
             source = frozen.config_source
-            if isinstance(source, ParameterRunConfigSource):
-                return science.model_copy(
-                    update={
-                        "configuration": ParameterConfiguration(
-                            ref=source.parameters,
-                            setup=source.setup,
-                            overrides=source.overrides,
-                        ),
-                    }
-                )
-            science = ScientificSelection(
-                subject=SampleSubjectChoice(
-                    sample_id=source.sample.sample_id, revision=source.sample.revision
-                ),
-                configuration=WorkingPointConfiguration(
-                    ref=source.context, overrides=source.overrides
-                ),
-                batch=UnscopedBatch()
-                if source.sample.batch_id is None
-                else DeclaredBatch(id=source.sample.batch_id),
+            science = science.model_copy(
+                update={
+                    "configuration": ParameterConfiguration(
+                        ref=source.parameters,
+                        setup=source.setup,
+                        overrides=source.overrides,
+                    ),
+                }
             )
         return science
 
@@ -649,7 +618,6 @@ class AuthorProject(DaemonClient):
         inputs: dict[str, JsonValue] | None = None,
         selection: ScientificSelection | SessionDefault = INHERIT,
         target: str | TargetRevisionRef | SessionDefault | None = INHERIT,
-        context: ConfigContextRef | SessionDefault | None = INHERIT,
         overrides: tuple[ParameterUpdate, ...] = (),
         sample: str | SessionDefault | None = INHERIT,
         actor: str | SessionDefault = INHERIT,
@@ -661,7 +629,6 @@ class AuthorProject(DaemonClient):
         science = self._prepare_science(
             selection=selection,
             target=target,
-            context=context,
             sample=sample,
             batch=batch,
             parameters=parameters,

@@ -14,22 +14,14 @@ it("matches an exact context admission without treating the active entry as its 
     actor: "operator",
     expected_request_hash: `sha256:${"a".repeat(64)}`,
     reviewed: reviewedFixture({
-      kind: "parameter_context",
-      context: { entry_id: "sample-a-parked", content_hash: `sha256:${"b".repeat(64)}` },
+      kind: "parameter_revision",
+      parameters: { revision_id: "sample-a-parked", content_hash: `sha256:${"b".repeat(64)}` },
+      setup: { revision_id: "bench", content_hash: `sha256:${"e".repeat(64)}` },
       content_hash: `sha256:${"c".repeat(64)}`,
-      sample: {
-        sample_id: "a",
-        revision: 2,
-        content_hash: `sha256:${"d".repeat(64)}`,
-        role: "subject",
-        kind: "synthetic",
-        display_name: "A",
-        context_id: "parked",
-      },
       overrides: [],
     }),
   };
-  if (request.reviewed?.config_source?.kind !== "parameter_context")
+  if (request.reviewed?.config_source?.kind !== "parameter_revision")
     throw new Error("Expected context");
   const intent = {
     request_hash: request.expected_request_hash,
@@ -62,7 +54,7 @@ it("matches an exact context admission without treating the active entry as its 
         ...intent,
         config_source: {
           ...request.reviewed?.config_source,
-          sample: { ...request.reviewed.config_source.sample, revision: 3 },
+          setup: { ...request.reviewed.config_source.setup, revision_id: "other" },
         },
       },
       request,

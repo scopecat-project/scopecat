@@ -14,19 +14,6 @@ interface ProjectDaemon {
   baseUrl: string;
 }
 
-interface ActiveConfigView {
-  activation: {
-    generation: number;
-  };
-  config: Record<string, unknown>;
-}
-
-interface RunAdmission {
-  snapshot: {
-    run_id: string;
-  };
-}
-
 interface RunDetail {
   control: {
     state: string;
@@ -122,11 +109,7 @@ test("handles naturally expired executors from the GUI", async ({ daemon, page }
   test.setTimeout(30_000);
   await page.goto(daemon.baseUrl);
 
-  const active = await checkedJson<ActiveConfigView>(
-    await page.request.get(`${daemon.baseUrl}/api/v1/config-registry/active`),
-    "GET",
-  );
-  const run = await startAbandonedRun(page, daemon.baseUrl, active, "expired");
+  const run = await startAbandonedRun(page, daemon, "expired");
 
   await expect(page.getByTitle(`Inspect run ${run.runId}`)).toContainText("Running");
   await assertResourceStatus(page, run, "Active");
@@ -169,126 +152,54 @@ test("handles naturally expired executors from the GUI", async ({ daemon, page }
 
 async function startAbandonedRun(
   page: Page,
-  baseUrl: string,
-  active: ActiveConfigView,
+  daemon: ProjectDaemon,
   suffix: string,
 ): Promise<AbandonedRun> {
   const experimentId = `scopecat.e2e.${suffix}`;
-  const resourceId = `scope-${suffix}`;
+  const { baseUrl, projectRoot } = daemon;
   const executorId = `e2e-${suffix}`;
-  const config = active.config;
-  const system = config.system as Record<string, unknown>;
-  const registry = system.instrument_registry as Record<string, unknown>;
-  const runConfig = {
-    ...config,
-    system: {
-      ...system,
-      instrument_registry: {
-        ...registry,
-        instruments: [
-          ...(registry.instruments as unknown[]),
-          {
-            id: resourceId,
-            exclusivity_key: `rack-a/${resourceId}`,
-            driver_id: "tests.e2e.instrument",
-            connection: { kind: "virtual" },
-            run_start: "preserve",
-            success_action: "release",
-            failure_action: "abort_and_release",
-          },
-        ],
-      },
-    },
-  };
-  // Instrument ownership belongs to the executable setup. Publish the explicit
-  // setup change before selecting parameters for this resource-bearing run.
-  const setup = await checkedJson<{
-    activation: { generation: number };
-    revision: { setup: Record<string, unknown> };
-  }>(await page.request.get(`${baseUrl}/api/v1/setup/active`), "GET");
-  const revision = await checkedJson<{ id: string; content_hash: string }>(
-    await page.request.post(`${baseUrl}/api/v1/setup/revisions`, {
-      data: {
-        revision_id: `e2e-setup-${suffix}`,
-        setup: {
-          ...setup.revision.setup,
-          instrument_registry: runConfig.system.instrument_registry,
-        },
-        actor: "e2e",
-      },
-    }),
-    "POST",
-  );
-  await expectResponseOk(
-    await page.request.post(`${baseUrl}/api/v1/setup/activation-operations`, {
-      data: {
-        operation_id: `e2e-setup-${suffix}`,
-        revision: { revision_id: revision.id, content_hash: revision.content_hash },
-        expected_generation: setup.activation.generation,
-        actor: "e2e",
-      },
-    }),
-    "POST",
-  );
-  await expectResponseOk(
-    await page.request.post(`${baseUrl}/api/v1/config-registry/publish-operations`, {
-      data: {
-        operation_id: `e2e-config-${suffix}`,
-        source: {
-          kind: "direct_config_profile",
-          config: runConfig,
-        },
-        actor: "e2e",
-        expected_generation: active.activation.generation,
-        entry_id: `e2e-${suffix}`,
-      },
-    }),
-    "POST",
-  );
-  const scientificBinding = JSON.parse(
+  const admitted = JSON.parse(
     runUv(
       [
         "python",
         "-c",
-        [
-          "import sys",
-          "from scopecat.config.scientific_binding import bind_scientific_evidence",
-          "from scopecat.records.config import ConfigProfileSnapshot",
-          "config = ConfigProfileSnapshot.model_validate_json(sys.argv[1])",
-          "print(bind_scientific_evidence(catalog_id='e2e', config=config, samples=(), sample_revisions={}).model_dump_json())",
-        ].join("\n"),
-        JSON.stringify(runConfig),
+        `
+import json, sys
+from pathlib import Path
+import scopecat as sc
+from scopecat.config.scientific_binding import bind_scientific_evidence
+from scopecat.daemon.wire import RunSubmission
+from scopecat.control.models import RunPlanSummary, RunResourceRequirement
+from scopecat.records.run_request import RunRequest
+root = Path(sys.argv[1])
+sys.path.insert(0, str(root / "src"))
+from scopecat_lab.configuration import initial_setup
+from scopecat_lab.authored.parameters import initial_parameters
+with sc.open_project(root).connect() as lab:
+    setup = lab.setup.import_recipe(initial_setup(), name="recovery-bench")
+    values = initial_parameters()
+    parameters = lab.parameters.save(name="recovery-values", catalog=values.parameter_catalog, parameters=values.parameter_snapshot)
+    resolved = lab.parameters.resolve(parameters, setup=setup)
+    binding = bind_scientific_evidence(catalog_id=lab.health().project_id, config=resolved.config, samples=(), sample_revisions={})
+    instrument = resolved.config.system.instrument_registry.instruments[0]
+    admission = lab.config.client.submit_run(RunSubmission(
+        execution_setup=setup.ref,
+        submission_id="e2e-" + sys.argv[2], scientific_binding=binding,
+        config=resolved.config, config_source=resolved.config_source, request=RunRequest(),
+        plan=RunPlanSummary(experiment_id="scopecat.e2e." + sys.argv[2], experiment_kind="scratch",
+            point_count=1, initial_point_count=1, point_limit=1,
+            point_plan_fingerprint="a" * 64, measurement_contract_fingerprint="b" * 64,
+            run_resource_requirements=(RunResourceRequirement(id=instrument.id, kind="instrument"),)),
+    ))
+    print(json.dumps({"runId": admission.run_id, "resourceId": instrument.exclusivity_key}))
+`,
+        projectRoot,
+        suffix,
       ],
       REPOSITORY_ROOT,
     ).stdout,
-  ) as Record<string, unknown>;
-  const admission = await checkedJson<RunAdmission>(
-    await page.request.post(`${baseUrl}/api/v1/runs`, {
-      data: {
-        submission_id: `e2e-${suffix}`,
-        scientific_binding: scientificBinding,
-        config: runConfig,
-        request: {},
-        plan: {
-          experiment_id: experimentId,
-          experiment_kind: "scratch",
-          point_count: 1,
-          initial_point_count: 1,
-          point_limit: 1,
-          point_plan_fingerprint: "a".repeat(64),
-          measurement_contract_fingerprint: "b".repeat(64),
-          run_resource_requirements: [
-            {
-              id: resourceId,
-              kind: "instrument",
-            },
-          ],
-        },
-      },
-    }),
-    "POST",
-  );
-  const runId = admission.snapshot.run_id;
+  ) as { runId: string; resourceId: string };
+  const { runId, resourceId } = admitted;
   await expectResponseOk(
     await page.request.post(`${baseUrl}/api/v1/runs/${encodeURIComponent(runId)}/executor/start`, {
       data: {

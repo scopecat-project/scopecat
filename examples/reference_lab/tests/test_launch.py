@@ -74,7 +74,7 @@ def reference_lab_daemon(
                 )
                 selection = ScientificSelection(
                     configuration=ParameterConfiguration(
-                        ref=parameters.ref, setup=lab.setup.active().revision.ref
+                        ref=parameters.ref, setup=lab.setup.get("initial").ref
                     )
                 )
                 assert lab.config.registry().entries == ()
@@ -178,7 +178,7 @@ def test_real_http_preview_shares_catalog_and_never_admits_acquisition(
             (item.id, item.title, item.controls) for item in expected.entries
         ]
         before = client.list_runs()
-        setup = lab.setup.active()
+        setup = lab.setup.get("initial")
         selected_entry = next(item for item in catalog.entries if item.id == experiment)
         request = LaunchRequest(
             workspace_id=source_workspace_id(reference_lab_daemon.url),
@@ -264,9 +264,9 @@ def test_real_http_preview_shares_catalog_and_never_admits_acquisition(
         choice = reference_lab_daemon.selection.configuration
         assert isinstance(choice, ParameterConfiguration)
         assert preview.reviewed.config_source.parameters == choice.ref
-        assert preview.reviewed.config_source.setup == setup.revision.ref
+        assert preview.reviewed.config_source.setup == setup.ref
         assert client.list_runs() == before
-        assert lab.setup.active() == setup
+        assert lab.setup.get("initial") == setup
         assert lab.config.registry().entries == ()
 
 
@@ -302,11 +302,13 @@ def test_exact_context_survives_default_changes_and_replays_exact_admission(
         command = submit_request(request, preview, "launch-retry")
         admitted = provider(lab, command)
         assert isinstance(admitted, LaunchSubmission)
-        original_setup = lab.setup.active().revision
+        original_setup = lab.setup.get("initial")
         target = original_setup.setup.domain_target
         assert target is not None
-        changed_setup = lab.setup.save(
-            original_setup.setup.model_copy(
+        lab.setup.save(
+            lab.setup.definition(
+                original_setup.resolution.definition_id
+            ).definition.model_copy(
                 update={
                     "domain_target": target.model_copy(
                         update={"id": "changed-launch-target"}
@@ -315,23 +317,19 @@ def test_exact_context_survives_default_changes_and_replays_exact_admission(
             ),
             name="changed-launch-setup",
         )
-        lab.setup.activate(changed_setup)
-        try:
-            assert provider(lab, command) == admitted
-            independent = provider(
-                lab, submit_request(request, preview, "new-exact-context-request")
-            )
-            assert isinstance(independent, LaunchSubmission)
-            assert independent.procedure_id != admitted.procedure_id
-            independent_handle = lab.procedures.get(independent.procedure_id).resume()
-            independent_output = independent_handle.output("experiment")
-            assert independent_output.kind == "run"
-            assert (
-                lab.get_run(independent_output.run_id).snapshot.config_source
-                == preview.reviewed.config_source
-            )
-        finally:
-            lab.setup.activate(original_setup)
+        assert provider(lab, command) == admitted
+        independent = provider(
+            lab, submit_request(request, preview, "new-exact-context-request")
+        )
+        assert isinstance(independent, LaunchSubmission)
+        assert independent.procedure_id != admitted.procedure_id
+        independent_handle = lab.procedures.get(independent.procedure_id).resume()
+        independent_output = independent_handle.output("experiment")
+        assert independent_output.kind == "run"
+        assert (
+            lab.get_run(independent_output.run_id).snapshot.config_source
+            == preview.reviewed.config_source
+        )
         changed = request.model_copy(update={"actor": "another-operator"})
         with pytest.raises(ValidationError, match="request changed"):
             submit_request(changed, preview, "launch-retry")
@@ -373,7 +371,7 @@ def test_candidate_uses_existing_review_state_and_retains_result_references(
         )
         preview = provider(lab, request)
         assert isinstance(preview, LaunchPreview)
-        before = lab.setup.active()
+        before = lab.setup.get("initial")
         admitted = provider(
             lab, submit_request(request, preview, "launch-reviewed-candidate")
         )
@@ -408,7 +406,7 @@ def test_candidate_uses_existing_review_state_and_retains_result_references(
         )
         handle.resume()
         assert handle.state == "closed"
-        assert lab.setup.active() == before
+        assert lab.setup.get("initial") == before
         assert lab.config.registry().entries == ()
 
 
@@ -542,7 +540,7 @@ def test_http_controls_persist_one_source_and_match_notebook_edits(
     from scopecat.records.control_edit import ControlEdit
 
     from reference_lab.configuration import bootstrap_config
-    from reference_lab.workflows.frequency_amplitude import (
+    from reference_lab_authors.frequency_amplitude import (
         CONTROLS,
         frequency_amplitude,
     )

@@ -49,15 +49,18 @@ def acquire_everyday_author_inputs(lab: LabClient) -> EverydayAuthorRuns:
     acquisition status distinct from scientific usefulness. No default is set.
     """
     config = everyday_author_inputs().known
+    setup = lab.setup.get("initial")
     return EverydayAuthorRuns(
         peaked=lab.run(
             exploratory_signal.build(gain=1.0),
             config=config,
+            setup=setup,
             name="Author fixture: peak",
         ).id,
         flat=lab.run(
             exploratory_signal.build(gain=0.0),
             config=config,
+            setup=setup,
             name="Author fixture: flat",
         ).id,
     )

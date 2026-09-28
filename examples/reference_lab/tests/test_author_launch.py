@@ -57,7 +57,7 @@ def reference_lab_daemon(
     for name in ("src", "config"):
         shutil.copytree(EXAMPLE_ROOT / name, root / name)
     shutil.copy2(EXAMPLE_ROOT / "scopecat.toml", root / "scopecat.toml")
-    source_path = root / "src/reference_lab/workflows/authored/signal.py"
+    source_path = root / "src/reference_lab_authors/authored/signal.py"
     source = source_path.read_text(encoding="utf-8")
     # Only ordinary author code changes, with no Git repository or project edits.
     source = (
@@ -124,7 +124,7 @@ def preview_signal(
                 analysis = cast(
                     "AnalysisDefinition[...]",
                     import_module(
-                        "reference_lab.workflows.authored.signal"
+                        "reference_lab_authors.authored.signal"
                     ).selected_mean,
                 )()
             # Keep the loaded objects, not snapshot import paths, across the
@@ -137,7 +137,7 @@ def preview_signal(
                     parameters=config.parameter_snapshot,
                 )
                 configuration = ParameterConfiguration(
-                    ref=parameters.ref, setup=lab.setup.active().revision.ref
+                    ref=parameters.ref, setup=lab.setup.get("initial").ref
                 )
                 assert lab.config.registry().entries == ()
             yield AuthorDaemon(
@@ -145,7 +145,7 @@ def preview_signal(
             )
             with application.connect(endpoint.base_url) as lab:
                 assert lab.config.registry().entries == ()
-                assert lab.setup.active().revision.ref == configuration.setup
+                assert lab.setup.get("initial").ref == configuration.setup
         finally:
             stop_project(project)
 
@@ -217,7 +217,9 @@ def test_copied_author_uses_shared_control_plan_and_real_retained_run(
             )
             assert (
                 preview.point_count
-                == lab.preview(direct, config=before.config).initial_point_count
+                == lab.preview(
+                    direct, config=before.config, setup=fixture.configuration.setup
+                ).initial_point_count
                 == 1
             )
             command = LaunchRequest.model_validate(
@@ -334,9 +336,11 @@ def test_author_changes_supported_timing_without_application_edits(
         ).config
         entry = authors.get("ramsey")
         invocation = entry.edit(config=config)
-        preview = lab.preview(invocation, config=config)
+        preview = lab.preview(
+            invocation, config=config, setup=fixture.configuration.setup
+        )
         assert preview.initial_point_count == 1
-        run = lab.run(invocation, config=config)
+        run = lab.run(invocation, config=config, setup=fixture.configuration.setup)
         assert run.status == "completed"
         domain = run.request.point_plan.domain
         assert domain.kind == "grid"
@@ -354,7 +358,7 @@ def test_revision_aware_notebook_prepare_preserves_parameter_context(
 
     fixture = reference_lab_daemon
     with fixture.application.connect(fixture.url) as lab:
-        setup = lab.setup.active()
+        setup = lab.setup.get("initial")
         sample = lab.samples.create(
             "notebook-context",
             kind="synthetic",
@@ -412,7 +416,7 @@ def test_revision_aware_notebook_prepare_preserves_parameter_context(
         assert run.snapshot.config_source == source
         assert run.request.metadata["author_code_revision"] == revision.content_hash
         assert run.samples[0].sample_id == "notebook-context"
-        assert lab.setup.active() == setup
+        assert lab.setup.get("initial") == setup
         assert lab.config.registry().entries == ()
 
 
@@ -524,7 +528,7 @@ def test_imported_request_rejects_changed_declaration_but_can_select_old_revisio
     assert fixture.application.authors is not None
     declaration = fixture.application.authors.get("copied_signal").declaration
     request = declaration(gain=1.0)
-    path = fixture.root / "src/reference_lab/workflows/authored/signal.py"
+    path = fixture.root / "src/reference_lab_authors/authored/signal.py"
     with AuthorProject(
         fixture.url, workspace_id=source_workspace_id(fixture.url)
     ) as author:

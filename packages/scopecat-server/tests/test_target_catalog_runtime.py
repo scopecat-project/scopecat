@@ -23,6 +23,7 @@ from scopecat.records.target_catalog import (
     TargetRevisionDraft,
 )
 from scopecat_testkit.config_registry import load_config
+from scopecat_testkit.server.instruments import signal_endpoint
 
 from scopecat_server import BackendConflict, BackendNotFound, LocalDaemonRuntime
 
@@ -71,7 +72,11 @@ def _members(runtime: LocalDaemonRuntime) -> tuple[TargetMember, ...]:
 
 def test_target_python_http_revision_cas_and_restart(tmp_path: Path) -> None:
     with (
-        LocalDaemonRuntime(tmp_path, bootstrap_config=load_config()) as runtime,
+        LocalDaemonRuntime(
+            tmp_path,
+            bootstrap_config=load_config(),
+            instrument_endpoint=signal_endpoint(),
+        ) as runtime,
         TestClient(runtime.app()) as transport,
     ):
         lab = LabClient(_client(transport))
@@ -150,7 +155,9 @@ def test_target_python_http_revision_cas_and_restart(tmp_path: Path) -> None:
 def test_target_rejects_missing_foreign_or_inconsistent_members_atomically(
     tmp_path: Path,
 ) -> None:
-    with LocalDaemonRuntime(tmp_path, bootstrap_config=load_config()) as runtime:
+    with LocalDaemonRuntime(
+        tmp_path, bootstrap_config=load_config(), instrument_endpoint=signal_endpoint()
+    ) as runtime:
         store = runtime.application.targets
         a, b = _members(runtime)
         draft = TargetRevisionDraft(

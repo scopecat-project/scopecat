@@ -127,8 +127,9 @@ fit = fit_dataset(dataset)
 published = context.result().fact("fit-score", fit.score).save()
 ```
 
-`lab.config.accept(...)` can accept a proposal from that saved publication,
-while `lab.config.set_default(...)` records an explicit default change.
+Verified proposals publish through `candidate.publish_to_branch(...)`, retaining
+the independent verification and checking the reviewed branch generation.
+Ordinary parameter saves remain distinct from scientific acceptance.
 
 A candidate may be used for one run without changing the default. That run
 retains its producing run, analysis, proposal, base configuration hash, and

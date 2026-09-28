@@ -43,7 +43,6 @@ from scopecat.sdk.domain import (
 )
 from scopecat.sdk.instruments import (
     DriverAcquisition,
-    DriverCatalog,
     DriverOperation,
     DriverOutcome,
     DriverReadback,
@@ -81,6 +80,7 @@ from scopecat.sdk.problems import ProblemPhase, problem
 
 from scopecat_testkit.domain import domain_call
 from scopecat_testkit.instrument_drivers import load_config
+from scopecat_testkit.signal_instruments import signal_driver_catalog
 
 _INTERFACE = "testkit.volatile_program/v1"
 _INSTRUMENT = "source-0"
@@ -326,7 +326,7 @@ def volatile_backend(root: Path) -> InstrumentBackend:
     provider = VolatileProgramProvider(ResidencyProbe(root))
     return InstrumentBackend(
         provider=provider,
-        driver_catalog=DriverCatalog(provider_id=provider.provider_id),
+        driver_catalog=signal_driver_catalog(provider.provider_id),
     )
 
 

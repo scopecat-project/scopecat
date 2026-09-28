@@ -1,15 +1,8 @@
-import { ApiError, apiClient, apiData } from "../../api-client";
+import { apiClient, apiData } from "../../api-client";
 import type {
-  ConfigDraftCommand,
-  ConfigDraftPreview,
-  ConfigActivationPage,
   ConfigActivationRecord,
   ConfigProfileSnapshot,
   ConfigRegistryEntry,
-  ConfigRegistryOverview,
-  ConfigRegistryPage,
-  ConfigPublishCommand,
-  ConfigPublishReceipt,
 } from "../../api-contract";
 import type { components } from "../../api-schema";
 
@@ -25,58 +18,6 @@ export interface ConfigRegistryEntryDetail {
   summary: ConfigSnapshotSummary;
   latestActivation?: ConfigActivationRecord | null;
   structureVersion?: string | null;
-}
-
-export async function getConfigRegistry(signal?: AbortSignal): Promise<ConfigRegistryOverview> {
-  const [registry, activations] = await Promise.all([
-    apiData(
-      apiClient.GET("/api/v1/config-registry", {
-        params: { query: { limit: 100 } },
-        signal,
-      }),
-    ),
-    apiData(
-      apiClient.GET("/api/v1/config-registry/activations", {
-        params: { query: { limit: 100 } },
-        signal,
-      }),
-    ),
-  ]);
-  return {
-    entries: registry.entries,
-    activation: registry.activation,
-    activation_history: activations.items,
-    ...(registry.next_cursor === undefined || registry.next_cursor === null
-      ? {}
-      : { entries_next_cursor: registry.next_cursor }),
-    ...(activations.next_cursor === undefined || activations.next_cursor === null
-      ? {}
-      : { activation_history_next_cursor: activations.next_cursor }),
-  };
-}
-
-export async function getOlderConfigRegistryEntries(
-  before: number,
-  signal?: AbortSignal,
-): Promise<ConfigRegistryPage> {
-  return apiData(
-    apiClient.GET("/api/v1/config-registry", {
-      params: { query: { limit: 100, before } },
-      signal,
-    }),
-  );
-}
-
-export async function getOlderConfigActivationHistory(
-  before: number,
-  signal?: AbortSignal,
-): Promise<ConfigActivationPage> {
-  return apiData(
-    apiClient.GET("/api/v1/config-registry/activations", {
-      params: { query: { limit: 100, before } },
-      signal,
-    }),
-  );
 }
 
 export async function getConfigRegistryEntry(
@@ -99,49 +40,12 @@ export async function getConfigRegistryEntry(
   };
 }
 
-export async function activateConfigEntry(
-  command: components["schemas"]["ConfigEntryActivationCommand"],
-): Promise<void> {
-  await retryOneTransportFailure(() =>
-    apiData(apiClient.POST("/api/v1/config-registry/activation-operations", { body: command })),
-  );
-}
-
-export async function previewConfigDraft(command: ConfigDraftCommand): Promise<ConfigDraftPreview> {
-  const response = await apiData(
-    apiClient.POST("/api/v1/config-registry/drafts/preview", {
-      body: command,
-    }),
-  );
-  return response as ConfigDraftPreview;
-}
-
-export async function publishConfig(command: ConfigPublishCommand): Promise<ConfigPublishReceipt> {
-  const response = await retryOneTransportFailure(() =>
-    apiData(
-      apiClient.POST("/api/v1/config-registry/publish-operations", {
-        body: command,
-      }),
-    ),
-  );
-  return response;
-}
-
 export function createConfigOperationId(purpose: string): string {
   const random =
     typeof globalThis.crypto?.randomUUID === "function"
       ? globalThis.crypto.randomUUID()
       : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
   return `ui-config-${purpose}-${random}`;
-}
-
-async function retryOneTransportFailure<Result>(send: () => Promise<Result>): Promise<Result> {
-  try {
-    return await send();
-  } catch (error) {
-    if (!(error instanceof ApiError) || error.status !== undefined) throw error;
-    return send();
-  }
 }
 
 function summarizeConfigSnapshot(config: ConfigProfileSnapshot): ConfigSnapshotSummary {
@@ -200,13 +104,6 @@ function optionalText(value: unknown): string | undefined {
 
 export type ConfigContextRef = components["schemas"]["ConfigContextRef"];
 export type ConfigContextResolution = Awaited<ReturnType<typeof resolveConfigContext>>;
-export type ConfigContextSaveCommand = components["schemas"]["ConfigContextSaveCommand"];
-
-export async function saveConfigContext(command: ConfigContextSaveCommand) {
-  return retryOneTransportFailure(() =>
-    apiData(apiClient.POST("/api/v1/config-registry/contexts", { body: command })),
-  );
-}
 
 export async function resolveConfigContext(
   context: ConfigContextRef,
@@ -214,13 +111,5 @@ export async function resolveConfigContext(
 ) {
   return apiData(
     apiClient.POST("/api/v1/config-registry/contexts/resolve", { body: { context, overrides } }),
-  );
-}
-
-export type ParameterStructurePlan = components["schemas"]["ParameterStructurePlan"];
-export type ParameterStructurePreview = components["schemas"]["ParameterStructurePreview"];
-export function previewConfigStructure(plan: ParameterStructurePlan) {
-  return apiData(
-    apiClient.POST("/api/v1/config-registry/contexts/structure/preview", { body: plan }),
   );
 }

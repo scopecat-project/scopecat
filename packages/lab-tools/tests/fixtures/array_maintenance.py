@@ -233,6 +233,7 @@ def create_task(
             "health-or-bounded-linear-fit-v1",
         )
         declaration = CalibrationCheckRequest(
+            setup=initial.config_source.setup,
             scope=scope,
             context=context,
             measurement_step="measure",

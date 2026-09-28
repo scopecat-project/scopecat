@@ -10,6 +10,7 @@ from scopecat.records.run import RunConfigSource, RunSnapshot
 from scopecat.records.run_request import RunRequest
 from scopecat.records.sample import SampleBinding
 from scopecat.records.scientific_binding import ResolvedScientificBinding
+from scopecat.records.setup import SetupRevisionRef
 
 
 @dataclass(frozen=True, slots=True)
@@ -28,6 +29,7 @@ def build_run_admission(
     scientific_binding: ResolvedScientificBinding,
     config_source: RunConfigSource | None = None,
     samples: tuple[SampleBinding, ...] = (),
+    execution_setup: SetupRevisionRef | None = None,
 ) -> RunSkeleton:
     """Create the complete durable state required before execution."""
 
@@ -37,6 +39,7 @@ def build_run_admission(
             scientific_binding=scientific_binding,
             config_content_hash=config_content_hash(config),
             config_source=config_source,
+            execution_setup=execution_setup,
             samples=samples,
         ),
         request=request,

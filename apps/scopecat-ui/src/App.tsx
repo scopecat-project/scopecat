@@ -442,7 +442,6 @@ export default function App() {
               <ContextConfigWorkspace
                 onSelected={() => selectView("launch")}
                 daemonUnavailable={daemonUnavailable}
-                onOpenRun={openConfigSourceRun}
               />
             </Suspense>
           </div>
@@ -713,24 +712,17 @@ function formatClock(value: string): string {
 
 function ContextConfigWorkspace({
   daemonUnavailable,
-  onOpenRun,
   onSelected,
 }: {
   daemonUnavailable: boolean;
-  onOpenRun: (id: string) => void;
   onSelected: () => void;
 }) {
-  const { selectContext, selectConfiguration } = useLaunchDraft();
+  const { selectConfiguration } = useLaunchDraft();
   return (
     <ConfigWorkspace
       daemonUnavailable={daemonUnavailable}
-      onOpenRun={onOpenRun}
       onSelectConfiguration={(ref) => {
         selectConfiguration(ref);
-        onSelected();
-      }}
-      onSelectContext={(resolved) => {
-        selectContext(resolved);
         onSelected();
       }}
     />

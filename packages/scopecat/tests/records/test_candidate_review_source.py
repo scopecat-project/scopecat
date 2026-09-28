@@ -14,17 +14,18 @@ from scopecat.records.scientific_selection import (
 
 
 def test_candidate_source_round_trips_exact_identity() -> None:
-    old = {
+    payload = {
         "kind": "analysis_candidate",
         "source_run_id": "baseline",
         "analysis_record_id": "analysis-fit-r1",
         "proposal_id": "carrier",
         "base_config_content_hash": "sha256:" + "a" * 64,
         "content_hash": config_content_hash(load_config()),
+        "setup": {"revision_id": "bench", "content_hash": "sha256:" + "c" * 64},
     }
-    source = AnalysisCandidateRunConfigSource.model_validate(old)
-    assert source.model_dump(mode="json") == old
-    assert sha256_json_hash(source.model_dump(mode="json")) == sha256_json_hash(old)
+    source = AnalysisCandidateRunConfigSource.model_validate(payload)
+    assert source.model_dump(mode="json") == payload
+    assert sha256_json_hash(source.model_dump(mode="json")) == sha256_json_hash(payload)
     run = RunSnapshot(
         run_id="candidate",
         config_content_hash=source.content_hash,
@@ -35,8 +36,9 @@ def test_candidate_source_round_trips_exact_identity() -> None:
             sample_revisions={},
         ),
         config_source=source,
+        execution_setup=source.setup,
     )
-    assert run.model_dump(mode="json")["config_source"] == old
+    assert run.model_dump(mode="json")["config_source"] == payload
     assert RunSnapshot.model_validate_json(run.model_dump_json()) == run
 
 

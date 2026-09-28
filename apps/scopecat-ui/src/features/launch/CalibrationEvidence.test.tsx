@@ -9,6 +9,7 @@ const stage: components["schemas"]["CalibrationTaskStage"] = {
   id: "readout",
   depends_on: [],
   check: {
+    setup: { revision_id: "bench", content_hash: "sha256:setup" },
     codec: "scopecat.calibration-check.v1",
     result_output: "check",
     measurement_step: "measure",

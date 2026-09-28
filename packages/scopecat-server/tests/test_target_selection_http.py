@@ -10,15 +10,15 @@ from scopecat.application.launch_config import resolve_launch_config
 from scopecat.control.models import RunPlanSummary
 from scopecat.daemon.client import DaemonClient, DaemonConflictError
 from scopecat.daemon.wire import (
-    ConfigContextSaveCommand,
+    ParameterBranchCommitCommand,
+    ParameterSaveCommand,
     RunSubmission,
     SampleCreateCommand,
     SampleReviseCommand,
 )
-from scopecat.records.config_context import ConfigContextRef
 from scopecat.records.launch_request import LaunchRequest
 from scopecat.records.run_request import RunRequest
-from scopecat.records.sample import SampleRevisionDraft, SampleSelector
+from scopecat.records.sample import SampleRevisionDraft
 from scopecat.records.scientific_binding import RegisteredTargetSubject
 from scopecat.records.scientific_scope import (
     DeclaredBatch,
@@ -27,9 +27,9 @@ from scopecat.records.scientific_scope import (
     UnscopedBatch,
 )
 from scopecat.records.scientific_selection import (
+    ParameterConfiguration,
     RegisteredTargetChoice,
     ScientificSelection,
-    WorkingPointConfiguration,
 )
 from scopecat.records.target_catalog import (
     TargetCreateCommand,
@@ -37,6 +37,7 @@ from scopecat.records.target_catalog import (
     TargetRevisionDraft,
 )
 from scopecat_testkit.config_registry import load_config
+from scopecat_testkit.server.instruments import signal_endpoint
 
 from scopecat_server import LocalDaemonRuntime
 
@@ -59,16 +60,14 @@ def _client(transport: TestClient) -> DaemonClient:
 
 
 def _selection(client: DaemonClient) -> ScientificSelection:
-    active = client.active_config()
+    config = load_config()
     sample = client.create_sample(
         SampleCreateCommand(
             operation_id="create:chip",
             sample_id="chip",
             kind="chip",
             actor="operator",
-            content=SampleRevisionDraft(
-                display_name="Chip", topology=active.config.topology
-            ),
+            content=SampleRevisionDraft(display_name="Chip", topology=config.topology),
         )
     ).revision
     target = client.create_target(
@@ -92,36 +91,41 @@ def _selection(client: DaemonClient) -> ScientificSelection:
         )
     )
     batch = client.create_experimental_batch("Cooldown")
-    context = client.save_context(
-        ConfigContextSaveCommand(
-            entry_id="parked-v1",
-            base=ConfigContextRef(
-                entry_id=active.entry.id, content_hash=active.entry.content_hash
-            ),
-            sample=SampleSelector(
-                sample_id=sample.sample_id, revision=sample.revision, batch_id=batch.id
-            ),
-            working_point_id="parked",
-            label="Parked",
+    parameters = client.save_parameters(
+        ParameterSaveCommand(
+            revision_id="parked-v1",
+            catalog=config.parameter_catalog,
+            parameters=config.parameter_snapshot,
+            actor="operator",
+        )
+    )
+    client.commit_parameter_branch(
+        ParameterBranchCommitCommand(
+            name="daily",
+            expected_generation=0,
+            source=parameters.ref,
             actor="operator",
         )
     )
     return ScientificSelection(
         subject=RegisteredTargetChoice(ref=target.ref),
-        configuration=WorkingPointConfiguration(
-            ref=ConfigContextRef(
-                entry_id=context.entry.id, content_hash=context.entry.content_hash
-            )
+        configuration=ParameterConfiguration(
+            ref=parameters.ref,
+            setup=client.resolve_setup("initial").ref,
         ),
         batch=DeclaredBatch(id=batch.id),
     )
 
 
-def test_target_working_point_preview_and_http_submit_keep_exact_heads(
+def test_target_parameter_preview_and_http_submit_keep_exact_heads(
     tmp_path: Path,
 ) -> None:
     with (
-        LocalDaemonRuntime(tmp_path, bootstrap_config=load_config()) as runtime,
+        LocalDaemonRuntime(
+            tmp_path,
+            bootstrap_config=load_config(),
+            instrument_endpoint=signal_endpoint(),
+        ) as runtime,
         TestClient(runtime.app()) as transport,
     ):
         client = _client(transport)
@@ -139,7 +143,7 @@ def test_target_working_point_preview_and_http_submit_keep_exact_heads(
         assert isinstance(subject, RegisteredTargetSubject)
         assert subject.content.members[0].id == "A"
         sample = checked.reviewed.binding.samples[0]
-        assert sample.context_id == "parked"
+        assert sample.context_id is None
         assert isinstance(selection.batch, DeclaredBatch)
         assert sample.batch_id == selection.batch.id
         target = client.resolve_target(subject.ref)
@@ -175,18 +179,23 @@ def test_target_working_point_preview_and_http_submit_keep_exact_heads(
         )
         assert advanced.ref.revision == 2
         assert advanced.ref.content_hash != target.ref.content_hash
-        assert isinstance(selection.configuration, WorkingPointConfiguration)
-        client.save_context(
-            ConfigContextSaveCommand(
-                entry_id="parked-v2",
-                base=selection.configuration.ref,
-                sample=SampleSelector(
-                    sample_id="chip", revision=1, batch_id=sample.batch_id
+        assert isinstance(selection.configuration, ParameterConfiguration)
+        next_values = client.save_parameters(
+            ParameterSaveCommand(
+                revision_id="parked-v2",
+                catalog=checked.config.parameter_catalog,
+                parameters=checked.config.parameter_snapshot.model_copy(
+                    update={"id": "next-values"}
                 ),
-                working_point_id="parked",
-                label="Parked next",
                 actor="operator",
-                advance=True,
+            )
+        )
+        client.commit_parameter_branch(
+            ParameterBranchCommitCommand(
+                name="daily",
+                expected_generation=1,
+                source=next_values.ref,
+                actor="operator",
             )
         )
         # Refreshing source or preview cannot reinterpret these exact references.
@@ -202,6 +211,7 @@ def test_target_working_point_preview_and_http_submit_keep_exact_heads(
         )
         assert resolve_launch_config(lab, submit) == checked
         submission = RunSubmission(
+            execution_setup=runtime.application.setup.resolve("initial").ref,
             submission_id="exact-target",
             config=checked.config,
             config_source=checked.reviewed.config_source,
@@ -243,11 +253,15 @@ def test_target_working_point_preview_and_http_submit_keep_exact_heads(
         assert client.submit_run(submission).run_id == admitted.run_id
 
 
-def test_target_http_selection_rejects_foreign_assembly_and_wrong_batch(
+def test_target_http_selection_rejects_foreign_assembly_and_keeps_batch_independent(
     tmp_path: Path,
 ) -> None:
     with (
-        LocalDaemonRuntime(tmp_path, bootstrap_config=load_config()) as runtime,
+        LocalDaemonRuntime(
+            tmp_path,
+            bootstrap_config=load_config(),
+            instrument_endpoint=signal_endpoint(),
+        ) as runtime,
         TestClient(runtime.app()) as transport,
     ):
         client = _client(transport)
@@ -300,15 +314,13 @@ def test_target_http_selection_rejects_foreign_assembly_and_wrong_batch(
                     }
                 ),
             )
-        with pytest.raises(ValueError, match="subject/batch"):
-            resolve_launch_config(
-                lab,
-                request.model_copy(
-                    update={
-                        "selection": selection.model_copy(
-                            update={"batch": UnscopedBatch()}
-                        )
-                    }
-                ),
-            )
+        unscoped = resolve_launch_config(
+            lab,
+            request.model_copy(
+                update={
+                    "selection": selection.model_copy(update={"batch": UnscopedBatch()})
+                }
+            ),
+        )
+        assert unscoped.reviewed.binding.samples[0].batch_id is None
         assert client.list_runs().items == ()

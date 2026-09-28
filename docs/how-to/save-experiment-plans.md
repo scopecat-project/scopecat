@@ -49,7 +49,7 @@ device context (replace `daily` and `bench-a` with your names):
 import scopecat as sc
 
 with sc.open_project().authoring() as author:
-    author.use(parameter_branch="daily", setup=author.setup_revision("bench-a").ref)
+    author.use(parameter_branch="daily", setup=author.setup.get("bench-a"))
     prepared = author.prepare("reference_lab.frequency_amplitude", actor="alice")
     saved = prepared.save_plan("Frequency check", saved_by="alice")
 

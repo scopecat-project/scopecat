@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from scopecat.daemon.wire import ConfigContextResolveCommand, ParameterResolveCommand
+from scopecat.daemon.wire import ParameterResolveCommand
 from scopecat.records.experiment_plan import (
     ExperimentPlanDefinition,
     ExperimentPlanRevision,
@@ -12,8 +12,6 @@ from scopecat.records.experiment_plan import (
 )
 from scopecat.records.scientific_selection import (
     ParameterConfiguration,
-    SavedConfiguration,
-    WorkingPointConfiguration,
     require_selection_binding,
 )
 
@@ -51,36 +49,15 @@ class ExperimentPlanService:
 
     def validate_definition(self, definition: ExperimentPlanDefinition) -> None:
         choice = definition.selection.configuration
-        if isinstance(choice, SavedConfiguration):
-            entry = self.config.get_config_entry(choice.ref.entry_id)
-            if entry.entry.content_hash != choice.ref.content_hash:
-                raise BackendConflict("plan configuration content hash does not match")
-            config = entry.config
-        elif isinstance(choice, ParameterConfiguration):
-            assert choice.setup is not None
-            config = self.config.resolve_parameters(
-                ParameterResolveCommand(
-                    parameters=choice.ref,
-                    setup=choice.setup,
-                    overrides=choice.overrides,
-                )
-            ).config
-        elif isinstance(choice, WorkingPointConfiguration):
-            context = self.config.resolve_context(
-                ConfigContextResolveCommand(
-                    context=choice.ref, overrides=choice.overrides
-                )
+        assert isinstance(choice, ParameterConfiguration)
+        assert choice.setup is not None
+        config = self.config.resolve_parameters(
+            ParameterResolveCommand(
+                parameters=choice.ref,
+                setup=choice.setup,
+                overrides=choice.overrides,
             )
-            config = context.config
-            if (
-                context.config_source.sample
-                not in definition.scientific_binding.samples
-            ):
-                raise BackendConflict("plan sample must match its exact saved context")
-        else:
-            raise BackendConflict(
-                "saved plan requires exact saved configuration or working point"
-            )
+        ).config
         try:
             require_selection_binding(
                 definition.selection, definition.scientific_binding

@@ -4,13 +4,10 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue
 
-from scopecat.records.config_context import ConfigContextRef, ContextRunConfigSource
 from scopecat.records.parameter_revision import ParameterRevisionRef
 from scopecat.records.parameter_update import ParameterUpdate
-from scopecat.records.plan_ref import PlanConfigRef
 from scopecat.records.run import (
     AnalysisCandidateRunConfigSource,
-    ConfigRegistryRunConfigSource,
     ParameterRunConfigSource,
 )
 from scopecat.records.sample import SampleId
@@ -50,27 +47,16 @@ type SubjectChoice = Annotated[
 ]
 
 
-class ActiveConfiguration(_SelectionModel):
-    kind: Literal["active"] = "active"
-
-
-class SavedConfiguration(_SelectionModel):
-    kind: Literal["saved"] = "saved"
-    ref: PlanConfigRef
+class UnselectedConfiguration(_SelectionModel):
+    kind: Literal["unselected"] = "unselected"
 
 
 class ParameterConfiguration(_SelectionModel):
-    """Independent parameters; omitted setup resolves current authority at preview."""
+    """Independent parameters; a draft must select setup before preview."""
 
     kind: Literal["parameters"] = "parameters"
     ref: ParameterRevisionRef
     setup: SetupRevisionRef | None = None
-    overrides: tuple[ParameterUpdate, ...] = Field(default=(), max_length=256)
-
-
-class WorkingPointConfiguration(_SelectionModel):
-    kind: Literal["working_point"] = "working_point"
-    ref: ConfigContextRef
     overrides: tuple[ParameterUpdate, ...] = Field(default=(), max_length=256)
 
 
@@ -80,25 +66,16 @@ class CandidateConfiguration(_SelectionModel):
 
 
 type ConfigurationChoice = Annotated[
-    ActiveConfiguration
-    | ParameterConfiguration
-    | SavedConfiguration
-    | WorkingPointConfiguration
-    | CandidateConfiguration,
+    UnselectedConfiguration | ParameterConfiguration | CandidateConfiguration,
     Field(discriminator="kind"),
 ]
 
-type LaunchConfigSource = (
-    ConfigRegistryRunConfigSource
-    | ParameterRunConfigSource
-    | ContextRunConfigSource
-    | AnalysisCandidateRunConfigSource
-)
+type LaunchConfigSource = ParameterRunConfigSource | AnalysisCandidateRunConfigSource
 
 
 class ScientificSelection(_SelectionModel):
     subject: SubjectChoice = Field(default_factory=UnboundSubjectChoice)
-    configuration: ConfigurationChoice = Field(default_factory=ActiveConfiguration)
+    configuration: ConfigurationChoice = Field(default_factory=UnselectedConfiguration)
     batch: BatchScope = Field(default_factory=UnscopedBatch)
 
     def intent_content(self) -> dict[str, JsonValue]:

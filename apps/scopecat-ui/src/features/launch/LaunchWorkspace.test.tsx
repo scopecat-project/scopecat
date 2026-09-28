@@ -105,12 +105,11 @@ const previewResult = {
   request_hash: "sha256:" + "a".repeat(64),
   point_count: 2,
   reviewed: reviewedFixture({
-    kind: "config_registry",
-    selector: "active",
-    entry_id: "baseline",
-    config_ref: "baseline",
+    kind: "parameter_revision",
+    parameters: { revision_id: "baseline", content_hash: "sha256:" + "b".repeat(64) },
+    setup: { revision_id: "bench", content_hash: `sha256:${"e".repeat(64)}` },
     content_hash: "sha256:" + "b".repeat(64),
-    registry_generation: 1,
+    overrides: [],
   }),
   summary: "Configured pulse",
   resolved_inputs: {},
@@ -184,6 +183,10 @@ it("shows a project without registered experiments", async () => {
 
 it("previews a chosen branch version and invalidates only when another version is adopted", async () => {
   let generation = 1;
+  let resolveSetup!: () => void;
+  const resolvingSetup = new Promise<void>((resolve) => {
+    resolveSetup = resolve;
+  });
   const requests: Array<{
     selection: { configuration: { ref: { revision_id: string } }; subject: unknown };
   }> = [];
@@ -207,8 +210,15 @@ it("previews a chosen branch version and invalidates only when another version i
           ],
           next_cursor: null,
         });
-      if (path.endsWith("/setup/revisions"))
+      if (path.endsWith("/setup/definitions"))
         return Response.json({ items: [{ id: "bench", content_hash: "sha256:bench" }] });
+      if (path.endsWith("/setup/resolutions/bench")) await resolvingSetup;
+      if (path.endsWith("/setup/resolutions/bench") || path.endsWith("/setup/revisions/bench"))
+        return Response.json({
+          id: "bench",
+          content_hash: "sha256:bench",
+          resolution: { definition_id: "bench", definition_hash: "sha256:definition", devices: [] },
+        });
       if (path.endsWith("/preview")) {
         requests.push(await request.json());
         return Response.json({
@@ -241,11 +251,14 @@ it("previews a chosen branch version and invalidates only when another version i
   fireEvent.click(screen.getByRole("button", { name: "Use this parameter version" }));
   expect(screen.getByRole("button", { name: "Preview" })).toBeDisabled();
   await screen.findByRole("option", { name: "bench" });
-  fireEvent.change(screen.getByLabelText("Device context"), { target: { value: "bench" } });
+  fireEvent.change(screen.getByLabelText("Experiment setup"), { target: { value: "bench" } });
+  fireEvent.change(screen.getByLabelText("Sample ID"), { target: { value: "chip-b" } });
+  resolveSetup();
+  await waitFor(() => expect(screen.getByRole("button", { name: "Preview" })).toBeEnabled());
   fireEvent.click(screen.getByRole("button", { name: "Preview" }));
   await screen.findByText("Preview ready");
   expect(requests[0]?.selection).toEqual({
-    subject: { kind: "sample", sample_id: "chip-a" },
+    subject: { kind: "sample", sample_id: "chip-b" },
     batch: { kind: "unscoped" },
     configuration: {
       kind: "parameters",

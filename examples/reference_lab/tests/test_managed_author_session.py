@@ -33,7 +33,7 @@ def test_workspace_run_reopens_in_fresh_python(
         ) as author,
         LabClient(DaemonClient(endpoint)) as setup,
     ):
-        equipment = setup.setup.active()
+        equipment = setup.setup.get("initial")
         sample = setup.samples.create(
             "managed-notebook",
             kind="synthetic",
@@ -42,9 +42,7 @@ def test_workspace_run_reopens_in_fresh_python(
         branch = author.parameters.create_branch(
             "managed-start", revision=independent_parameters
         )
-        author.use(
-            sample=sample.id, parameter_branch=branch.name, setup=equipment.revision.ref
-        )
+        author.use(sample=sample.id, parameter_branch=branch.name, setup=equipment.ref)
         parameters = author.parameters.workspace(branch.name)
         stale = parameters.copy()
         parameters["qubits"]["q0"]["drive_carrier_frequency"] = sc.Quantity(5.1, "GHz")
@@ -77,7 +75,7 @@ def test_workspace_run_reopens_in_fresh_python(
         snapshot = run.snapshot
         receipt = job.receipt
         assert run.snapshot.config_source == prepared.preview.reviewed.config_source
-        assert setup.setup.active() == equipment
+        assert setup.setup.get("initial") == equipment
         assert setup.config.registry().entries == ()
     assert max(values) == 1.0
     assert snapshot.status == "completed"
@@ -148,7 +146,7 @@ def test_lost_response_recovers_admitted_job_once(
         ) as author:
             author.use(
                 parameters=independent_parameters.ref,
-                setup=lab.setup.active().revision.ref,
+                setup=lab.setup.get("initial").ref,
             )
             prepared = author.prepare("signal")
             with pytest.raises(AuthorSubmissionUncertain) as caught:

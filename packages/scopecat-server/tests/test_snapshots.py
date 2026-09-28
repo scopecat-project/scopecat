@@ -188,7 +188,10 @@ def test_snapshot_includes_committed_retained_wal(tmp_path: Path) -> None:
     database = project.root / ".scopecat/control.sqlite3"
     with closing(sqlite3.connect(database, isolation_level=None)) as connection:
         connection.setconfig(sqlite3.SQLITE_DBCONFIG_NO_CKPT_ON_CLOSE, True)
-        connection.execute("INSERT INTO runs VALUES ('wal-run', 'now', 'config', NULL)")
+        connection.execute(
+            "INSERT INTO runs(run_id, created_at, config_content_hash) "
+            "VALUES ('wal-run', 'now', 'config')"
+        )
     before = database.read_bytes()
     wal = database.with_name(database.name + "-wal")
     wal_before = wal.read_bytes()

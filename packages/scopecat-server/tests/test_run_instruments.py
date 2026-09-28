@@ -60,7 +60,6 @@ from scopecat.records.measurement import (
 )
 from scopecat.records.run import (
     AnalysisCandidateRunConfigSource,
-    ConfigRegistryRunConfigSource,
     RunConfigSource,
 )
 from scopecat.records.run_request import RunRequest
@@ -68,7 +67,6 @@ from scopecat.sdk.instruments import (
     AcquisitionResultRef,
     DriverAcquisition,
     DriverAcquisitionPlan,
-    DriverCatalog,
     DriverOperation,
     DriverOutcome,
     DriverPayload,
@@ -114,6 +112,7 @@ from scopecat.sdk.instruments.execution import (
 )
 from scopecat_testkit.instrument_drivers import SignalInstrumentDriver, load_config
 from scopecat_testkit.payload_codecs import json_payload_codecs
+from scopecat_testkit.signal_instruments import signal_driver_catalog
 
 from scopecat_server import LocalDaemonRuntime
 from scopecat_server.errors import BackendConflict
@@ -2482,27 +2481,26 @@ def test_unknown_failure_safe_state_quarantines_the_run(tmp_path: Path) -> None:
         _assert_run_state_discarded(instruments, run_id)
 
 
+@pytest.mark.parametrize("switch_setup", [False, True])
 def test_analysis_candidate_run_keeps_connection_until_shutdown(
     tmp_path: Path,
+    switch_setup: bool,
 ) -> None:
+    from scopecat.daemon.wire import SetupImportCommand
+    from scopecat.records.execution_scenario import SoftwareExecutionScenario
+    from scopecat.records.setup import ExecutableSetupSnapshot
+
     provider = _Provider(fail_action="disconnect")
     config = load_config()
     with _runtime(tmp_path, provider) as runtime:
-        active = runtime.application.config.get_active_config()
         source_admission = runtime.application.submit_run(
             RunSubmission(
+                execution_setup=runtime.application.setup.resolve("initial").ref,
                 scientific_binding=bind_scientific_evidence(
                     catalog_id="test", config=config, samples=(), sample_revisions={}
                 ),
                 submission_id="candidate-source",
                 config=config,
-                config_source=ConfigRegistryRunConfigSource(
-                    selector="active",
-                    entry_id=active.entry.id,
-                    config_ref=active.entry.config_ref,
-                    content_hash=active.entry.content_hash,
-                    registry_generation=active.activation.generation,
-                ),
                 request=RunRequest(experiment_id="candidate-source"),
                 plan=RunPlanSummary(
                     experiment_id="candidate-source",
@@ -2551,16 +2549,42 @@ def test_analysis_candidate_run_keeps_connection_until_shutdown(
         )
         source = AnalysisCandidateRunConfigSource(
             source_run_id=source_admission.run_id,
+            setup=runtime.application.runs.get_run(
+                source_admission.run_id
+            ).snapshot.execution_setup,
             analysis_record_id=proposal.analysis_record_id,
             proposal_id=proposal.id,
             base_config_content_hash=proposal.base_config_content_hash,
             content_hash=config_content_hash(candidate),
         )
+        if switch_setup:
+            runtime.application.setup.resolve("initial")
+            runtime.application.setup.import_recipe(
+                SetupImportCommand(
+                    revision_id="unrelated-context",
+                    actor="test",
+                    setup=ExecutableSetupSnapshot.from_config(config).model_copy(
+                        update={
+                            "scenario": SoftwareExecutionScenario(
+                                id="other",
+                                label="Other",
+                                model_id="other",
+                                model_version="1",
+                                capabilities=("simulation",),
+                            )
+                        }
+                    ),
+                )
+            )
         run_id, lease_id = _start_run(
             runtime,
             candidate,
             config_source=source,
             submission_id="analysis-candidate",
+        )
+        assert (
+            runtime.application.runs.get_run(run_id).snapshot.execution_setup
+            == source.setup
         )
         instruments = runtime.application.instruments
         instruments.provision_run(run_id, _provision(lease_id))
@@ -2894,7 +2918,7 @@ def _runtime(
         instrument_endpoint=LocalInstrumentBackendEndpoint(
             InstrumentBackend(
                 provider=provider,
-                driver_catalog=DriverCatalog(provider_id=provider.provider_id),
+                driver_catalog=signal_driver_catalog(provider.provider_id),
                 payload_codecs=json_payload_codecs("pulse_program"),
             )
         ),
@@ -2910,25 +2934,8 @@ def _start_run(
     submission_id: str = "run-instruments",
     contract_fingerprint: str | None = None,
     driver_type: type[_Driver] = _Driver,
-    config_source: RunConfigSource | Literal["matching_active"] | None = (
-        "matching_active"
-    ),
+    config_source: RunConfigSource | None = None,
 ) -> tuple[str, str]:
-    if config_source == "matching_active":
-        active = runtime.application.config.get_active_config()
-        selected_config_source = (
-            ConfigRegistryRunConfigSource(
-                selector="active",
-                entry_id=active.entry.id,
-                config_ref=active.entry.config_ref,
-                content_hash=active.entry.content_hash,
-                registry_generation=active.activation.generation,
-            )
-            if active.entry.content_hash == config_content_hash(config)
-            else None
-        )
-    else:
-        selected_config_source = config_source
     admitted_fingerprint = (
         instrument_contract_fingerprint(
             _Provider.provider_id,
@@ -2942,12 +2949,13 @@ def _start_run(
     )
     admission = runtime.application.submit_run(
         RunSubmission(
+            execution_setup=runtime.application.setup.resolve("initial").ref,
             scientific_binding=bind_scientific_evidence(
                 catalog_id="test", config=config, samples=(), sample_revisions={}
             ),
             submission_id=submission_id,
             config=config,
-            config_source=selected_config_source,
+            config_source=config_source,
             request=RunRequest(experiment_id="scratch"),
             plan=RunPlanSummary(
                 experiment_id="scratch",
@@ -3225,7 +3233,7 @@ def test_release_rejects_admitted_run_before_and_after_provision(
         instruments = runtime.application.instruments
         command = InstrumentReleaseCommand(
             instrument_ids=("source-0",),
-            setup=runtime.application.setup.current().revision.ref,
+            setup=runtime.application.setup.resolve("initial").ref,
         )
         with pytest.raises(BackendConflict, match="idle devices"):
             instruments.release_idle_instruments(command)

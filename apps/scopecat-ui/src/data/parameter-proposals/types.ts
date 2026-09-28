@@ -36,11 +36,3 @@ export interface RunParameterProposalPage {
   items: ParameterProposal[];
   nextCursor?: number;
 }
-
-export interface AcceptProposalCommand {
-  runId: string;
-  proposalId: string;
-  actor: string;
-  expectedGeneration: number;
-  note?: string;
-}

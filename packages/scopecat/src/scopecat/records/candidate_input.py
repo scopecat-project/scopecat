@@ -5,6 +5,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, model_validator
 
 from scopecat.records.config import ConfigContentHash
+from scopecat.records.setup import SetupRevisionRef
 
 
 class AnalysisCandidateRunConfigSource(BaseModel):
@@ -18,6 +19,9 @@ class AnalysisCandidateRunConfigSource(BaseModel):
     proposal_id: str
     base_config_content_hash: ConfigContentHash
     content_hash: ConfigContentHash
+    # Offline analysis has no application device authority. A daemon candidate
+    # must retain the exact setup captured by its baseline run.
+    setup: SetupRevisionRef | None = None
 
     @model_validator(mode="after")
     def validate_identity(self) -> AnalysisCandidateRunConfigSource:

@@ -107,5 +107,5 @@ annotations continue to select their explicitly annotated columns.
 `sc.AnalysisPlot(dataset="curve", x="frequency", y="response")` creates a retained
 line view; `kind="scatter"` is also supported. These are views of published data,
 not arbitrary serialized plotting objects. See the executable
-[quadratic peak fit](../../examples/reference_lab/src/reference_lab/workflows/authored/ordinary_analysis.py)
+[quadratic peak fit](../../examples/reference_lab/src/reference_lab_authors/authored/ordinary_analysis.py)
 for a dataclass conclusion, table, plot and flat/no-response rejection.

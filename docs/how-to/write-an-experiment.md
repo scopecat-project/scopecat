@@ -77,7 +77,7 @@ import scopecat as sc
 
 project = sc.open_project("/path/to/author-workspace")
 with project.authoring() as authors:
-    authors.use(parameter_branch="experiment")
+    authors.use(parameter_branch="experiment", setup=authors.setup.get("bench-a"))
     observed = authors.state()
     authors.refresh(expected_generation=observed.generation)
     launch = authors.prepare("signal", actor="alice")

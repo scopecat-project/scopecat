@@ -4,15 +4,15 @@ from typing import Protocol
 
 from scopecat.records.config import ConfigProfileSnapshot, SystemSpec
 from scopecat.records.parameter import ParameterCatalog, ParameterSnapshot
-from scopecat.records.setup import ActiveSetupView, SetupRevision
+from scopecat.records.setup import SetupRevision, SetupRevisionRef
 
 
 class SetupReader(Protocol):
-    """Resolve current authority or the immutable revision pinned by a session."""
-
-    def current(self) -> ActiveSetupView: ...
+    """Resolve the immutable revision pinned by an operation."""
 
     def get(self, revision_id: str) -> SetupRevision: ...
+
+    def require_available(self, ref: SetupRevisionRef) -> SetupRevision: ...
 
 
 def setup_config(revision: SetupRevision) -> ConfigProfileSnapshot:

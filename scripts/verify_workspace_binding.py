@@ -115,7 +115,9 @@ def check() -> None:
                 timeout=60,
             )
             with first.authoring() as author:
-                author.use(parameter_branch="starter")
+                author.use(
+                    parameter_branch="starter", setup=author.setup.get("starter-bench")
+                )
                 job = (
                     author.prepare(
                         "signal",

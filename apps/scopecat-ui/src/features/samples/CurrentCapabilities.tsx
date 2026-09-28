@@ -4,6 +4,7 @@ import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import type { MethodResponse } from "openapi-fetch";
 import { apiClient, apiData } from "../../api-client";
 import { CalibrationProfiles } from "../launch/CalibrationProfiles";
+import { getSetupDefinitions, resolveSetupDefinition } from "../config/setup-api";
 
 type Resolution = MethodResponse<typeof apiClient, "post", "/api/v1/measurement-context/resolve">;
 
@@ -27,7 +28,7 @@ export function CurrentCapabilities({
   const setups = useQuery({
     queryKey: ["capability-setup-choices"],
     enabled: expanded,
-    queryFn: ({ signal }) => apiData(apiClient.GET("/api/v1/setup/revisions", { signal })),
+    queryFn: ({ signal }) => getSetupDefinitions(signal),
   });
   const selectedSetup = setups.data?.items.find((item) => item.id === setupId);
   const targets = useInfiniteQuery({
@@ -62,6 +63,8 @@ export function CurrentCapabilities({
     setError("");
     setResolution(undefined);
     try {
+      if (!selectedSetup) throw new Error("Choose an experiment setup.");
+      const setup = await resolveSetupDefinition(selectedSetup.id);
       const parameters =
         source === "revision"
           ? await apiData(
@@ -82,9 +85,7 @@ export function CurrentCapabilities({
                     },
                   }
                 : { branch: branch.trim() }),
-              setup: selectedSetup
-                ? { revision_id: selectedSetup.id, content_hash: selectedSetup.content_hash }
-                : null,
+              setup: { revision_id: setup.id, content_hash: setup.content_hash },
               samples: selectedTarget ? [] : [{ sample_id: sampleId, revision, role: "subject" }],
               target: selectedTarget?.ref ?? null,
             },
@@ -185,7 +186,7 @@ export function CurrentCapabilities({
                 setError("");
               }}
             >
-              <option value="">Current active setup at resolution</option>
+              <option value="">Choose experiment roles and devices</option>
               {setups.data?.items.map((item) => (
                 <option key={item.id} value={item.id}>
                   {item.id}
@@ -198,7 +199,7 @@ export function CurrentCapabilities({
             disabled={
               !(source === "branch" ? branch.trim() : parameterId.trim()) ||
               pending ||
-              Boolean(setupId && !selectedSetup) ||
+              !selectedSetup ||
               Boolean(targetId && !selectedTarget)
             }
           >
@@ -206,12 +207,7 @@ export function CurrentCapabilities({
           </button>
         </fieldset>
       </form>
-      {setups.error && (
-        <p role="alert">
-          Could not load saved setups: {setups.error.message}. The current active setup can still be
-          resolved.
-        </p>
-      )}
+      {setups.error && <p role="alert">Could not load saved setups: {setups.error.message}.</p>}
       {targets.error && (
         <p role="alert">Could not load registered targets: {targets.error.message}.</p>
       )}
@@ -228,7 +224,7 @@ export function CurrentCapabilities({
           </p>
           <p>
             These versions are now frozen for this report. Resolve again to capture changes to a
-            selected branch or the active setup.
+            selected branch or its device connections.
           </p>
           <p>Scenario: {resolution.context.scenario?.id ?? "physical"}</p>
           <details>

@@ -54,6 +54,8 @@ from scopecat.sdk.instruments.provider import (
 )
 from scopecat.sdk.payloads import PayloadCodecCatalog
 
+from scopecat_server.instruments.identity import backend_artifact_hash
+
 
 class InstrumentBackendError(RuntimeError):
     """Base error for backend endpoint failures."""
@@ -103,6 +105,9 @@ class ConnectedInstrument:
 
 
 class InstrumentBackendEndpoint(Protocol):
+    @property
+    def artifact_hash(self) -> str: ...
+
     @property
     def healthy(self) -> bool: ...
 
@@ -173,7 +178,15 @@ class _LocalConnection:
 class LocalInstrumentBackendEndpoint:
     """Own raw drivers behind handles and serialize provider entry points."""
 
-    def __init__(self, backend: InstrumentBackend) -> None:
+    def __init__(
+        self,
+        backend: InstrumentBackend,
+        *,
+        installed_packages: tuple[tuple[str, str], ...] = (),
+    ) -> None:
+        self._artifact_hash = backend_artifact_hash(
+            backend.provider, installed_packages
+        )
         self._provider = backend.provider
         self._driver_catalog = backend.driver_catalog
         self._payload_codecs = backend.payload_codecs
@@ -182,6 +195,10 @@ class LocalInstrumentBackendEndpoint:
         self._lock = RLock()
         self._provider_lock = RLock()
         self._closed = False
+
+    @property
+    def artifact_hash(self) -> str:
+        return self._artifact_hash
 
     @property
     def healthy(self) -> bool:

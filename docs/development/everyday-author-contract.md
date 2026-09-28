@@ -12,11 +12,11 @@ This document explains their contract rather than replacing those user guides.
 
 ## One parameter workspace
 
-An editable workspace starts from an existing immutable configuration/context
+An editable workspace starts from an existing immutable parameter
 version and holds local changes. A saved version has stable identity and content.
 Opening another workspace from that version must reproduce its values without
 changing the first workspace. Saving creates a version; it does not mutate a
-previous version or publish the laboratory's shared default.
+previous version or change another session's selection.
 
 Dictionary rows and a standard dataclass view must address the same cells. An edit
 through either view is visible through the other; there is no second cache of
@@ -32,16 +32,17 @@ The saving implementation must state whether a successful save advances the
 workspace baseline and keep diff/discard consistent with that choice.
 
 Saved versions form explicit branches rather than a mutable “latest” pointer.
-Rebase takes an explicitly chosen current version; it rejects mismatched sample,
-working point or schema. Same-cell conflicts expose base, local and current
+Rebase takes an explicitly chosen current branch version and checks its schema.
+Same-cell conflicts expose base, local and current
 values so an author can choose deliberately. Saving one workspace must not
 silently overwrite another workspace's branch.
 
 Preparing a reviewed run freezes the workspace's current values, including
 unsaved edits. Submission uses that frozen configuration. Later edits cannot
-change the reviewed request or an admitted run. A changed laboratory generation
-still requires the existing conflict/review path; freezing is not permission to
-bypass it. Recorded run configuration and provenance must survive reopening.
+change the reviewed request or an admitted run. Preparation also requires an
+explicit setup reference. Changed device connections require re-resolution and
+preview; unrelated global selections do not invalidate these inputs. Recorded
+run configuration and provenance must survive reopening.
 
 ## Types, unknowns and origins
 
@@ -58,8 +59,11 @@ value origin. A deliberate edit is a separate operation from normalization.
 
 Manual, estimated, imported and measured values have distinct provenance. A
 manual override of a measured value must not inherit its measurement claim.
-Selecting a sample/working-point version chooses the inputs to the next run;
-publishing a shared default is a separate explicit action. Saving an estimate or
+Parameter versions, subjects and setups are selected independently for the next
+run. An empty selection requires parameters and setup before preview; it never
+uses a global default. Changing the session's subject preserves its independent
+parameters, setup and unsaved branch edits, and clears the previous batch.
+Verified publication advances a reviewed parameter branch. Saving an estimate or
 selecting a candidate does not assert that it passed scientific verification.
 
 An ordinary analysis function may return a typed dataclass, but that object alone
@@ -71,9 +75,10 @@ verified calibration.
 
 ## Interface ownership and implementation order
 
-The workspace entry point is `lab.config.workspace(context=...)`. It exposes
-keyed dictionary editing, diff, discard, save, freeze and explicit rebase. Saving
-advances the workspace baseline without activating the shared default. Plain IDs
+The workspace entry point is `lab.parameters.workspace(branch_name)`, or
+`session.params` after `session.use(parameter_branch=...)`. It exposes keyed
+dictionary editing, diff, discard, save, freeze and explicit rebase. Saving
+advances the selected branch with a checked generation. Plain IDs
 can select entity-keyed rows; the declared key type supplies their identity.
 Bind standard dataclass rows with `params.table(name, row_type=Drive)`; both views
 share edits, and constructors supply defaults only when explicitly adding rows.
@@ -84,7 +89,7 @@ retains typed conclusions and their input/source publication.
 
 | Producer | Contract consumed by other slices |
 | --- | --- |
-| [#468 workspace](https://github.com/scopecat-project/scopecat/issues/468) | Existing config/context storage, coherent cells, immutable freeze and save semantics |
+| [#468 workspace](https://github.com/scopecat-project/scopecat/issues/468) | Independent parameter storage, coherent cells, immutable freeze and branch save semantics |
 | [#469 typed rows](https://github.com/scopecat-project/scopecat/issues/469) | Standard dataclass binding to an existing table; explicit unit conversion |
 | [#470 unknowns and schema](https://github.com/scopecat-project/scopecat/issues/470) | Complete unknown tables and explicit creation/structure changes |
 | [#471 author session](https://github.com/scopecat-project/scopecat/issues/471) | Scan/preview/submit/wait/reopen consuming the frozen workspace |
@@ -146,9 +151,9 @@ The facade coverage now also includes:
   arguments and restart behavior.
 - `test_typed_candidates.py`: cell proposals tied to analysis receipts and
   independent verification policies.
-- `test_parameter_workspace.py` and `test_dataclass_parameters.py`: durable edits,
+- `test_branch_parameter_editor.py` and `test_dataclass_parameters.py`: durable edits,
   unknown cells, live typed views and bounded, escaped notebook representations.
-- `apps/scopecat-ui/e2e/parameter-context.e2e.ts`: sample/workpoint selection,
+- `apps/scopecat-ui/e2e/parameter-context.e2e.ts`: independent sample/parameter selection,
   structure changes, keyboard edits retained across navigation, and a real
   Python→GUI→Python round-trip preserving units and untouched cell origins.
 

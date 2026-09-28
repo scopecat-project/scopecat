@@ -34,6 +34,7 @@ interface DefaultGroup {
 }
 
 export function InstrumentDefaultsEditor({
+  mode = "startup",
   description,
   defaultState,
   runStart,
@@ -41,6 +42,7 @@ export function InstrumentDefaultsEditor({
   onRunStartChange,
   onValidityChange,
 }: {
+  mode?: "startup" | "safety";
   description?: InstrumentDescription;
   defaultState: InstrumentStateSetting[];
   runStart: RunStartPolicy;
@@ -83,24 +85,30 @@ export function InstrumentDefaultsEditor({
     <section className="grid gap-2.5 border-y border-line py-3">
       <header className="flex items-end justify-between gap-3.5 max-[460px]:flex-col max-[460px]:items-stretch">
         <div className="grid gap-[3px]">
-          <strong className="text-[0.66rem] text-text-soft">Experiment start</strong>
+          <strong className="text-[0.66rem] text-text-soft">
+            {mode === "safety" ? "Safe state" : "Experiment start"}
+          </strong>
           <small className="text-[0.56rem] leading-normal text-text-dim">
-            Synchronize first, then optionally apply this sparse member state.
+            {mode === "safety"
+              ? "These device constraints apply to every experiment that uses this device."
+              : "Synchronize first, then optionally apply this sparse member state."}
           </small>
         </div>
-        <label className="grid min-w-[210px] gap-[5px] max-[460px]:min-w-0">
-          <span className="text-[0.53rem] font-extrabold tracking-[0.07em] text-text-dim uppercase">
-            Start policy
-          </span>
-          <select
-            className="min-h-[34px] w-full min-w-0 rounded-sm border border-line bg-bg px-[9px] text-[0.64rem] text-text outline-0 focus:border-accent"
-            value={runStart}
-            onChange={(event) => onRunStartChange(event.target.value as RunStartPolicy)}
-          >
-            <option value="preserve">Preserve observed state</option>
-            <option value="apply_default_state">Apply configured defaults</option>
-          </select>
-        </label>
+        {mode === "startup" && (
+          <label className="grid min-w-[210px] gap-[5px] max-[460px]:min-w-0">
+            <span className="text-[0.53rem] font-extrabold tracking-[0.07em] text-text-dim uppercase">
+              Start policy
+            </span>
+            <select
+              className="min-h-[34px] w-full min-w-0 rounded-sm border border-line bg-bg px-[9px] text-[0.64rem] text-text outline-0 focus:border-accent"
+              value={runStart}
+              onChange={(event) => onRunStartChange(event.target.value as RunStartPolicy)}
+            >
+              <option value="preserve">Preserve observed state</option>
+              <option value="apply_default_state">Apply configured defaults</option>
+            </select>
+          </label>
+        )}
       </header>
 
       {description ? (

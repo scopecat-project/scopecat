@@ -17,10 +17,6 @@ from scopecat.authoring.experiments import Experiment
 from scopecat.daemon.endpoint import resolve_daemon_endpoint
 from scopecat.project import Project, open_project
 from scopecat.records.author_revision import AuthorRevisionRef
-from scopecat.records.scientific_selection import (
-    SavedConfiguration,
-    WorkingPointConfiguration,
-)
 
 
 class ShellEvents(Protocol):
@@ -263,9 +259,7 @@ class NotebookSession(AuthorProject):
         )
         configuration = science.configuration
         configuration_label = (
-            configuration.ref.entry_id
-            if isinstance(configuration, WorkingPointConfiguration | SavedConfiguration)
-            else configuration.ref.revision_id
+            configuration.ref.revision_id
             if configuration.kind == "parameters"
             else configuration.kind
         )

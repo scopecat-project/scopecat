@@ -30,13 +30,13 @@ def test_target_plan_keeps_exact_reviewed_binding_after_catalog_and_session_chan
         ) as session,
         LabClient(DaemonClient(endpoint)) as lab,
     ):
-        setup = lab.setup.active()
+        setup = lab.setup.get("initial")
         sample = lab.samples.create(
             f"target-{key}",
             kind="synthetic",
             content=SampleRevisionDraft(
                 display_name="Target chip",
-                topology=setup.revision.setup.topology,
+                topology=setup.setup.topology,
             ),
         )
         revision = lab.samples.revision(sample.id, 1)
@@ -63,7 +63,7 @@ def test_target_plan_keeps_exact_reviewed_binding_after_catalog_and_session_chan
         session.use(
             target=target.ref.target_id,
             parameters=independent_parameters.ref,
-            setup=setup.revision.ref,
+            setup=setup.ref,
         )
         prepared = session.prepare("signal")
         binding = prepared.preview.reviewed.binding
@@ -93,5 +93,5 @@ def test_target_plan_keeps_exact_reviewed_binding_after_catalog_and_session_chan
         assert parent is not None
         assert parent.scientific_binding == binding
         assert run.samples == binding.samples
-        assert lab.setup.active() == setup
+        assert lab.setup.get("initial") == setup
         assert lab.config.registry().entries == ()

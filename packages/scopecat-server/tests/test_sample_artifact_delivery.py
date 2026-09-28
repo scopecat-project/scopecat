@@ -10,6 +10,7 @@ from scopecat.api.lab import LabClient
 from scopecat.daemon.client import DaemonClient
 from scopecat.project import load_project
 from scopecat.records.sample import SampleArtifactRef, SampleRevisionDraft
+from scopecat_testkit.server.instruments import signal_endpoint
 from scopecat_testkit.workflow_fixtures import load_config
 
 from scopecat_server import LocalDaemonRuntime
@@ -47,7 +48,9 @@ def test_import_owned_delivery_and_snapshot_restore(tmp_path: Path) -> None:
     image = (_FIXTURE / "diagram.png").read_bytes()
     expected = "sha256:" + hashlib.sha256(image).hexdigest()
     with (
-        LocalDaemonRuntime(root, bootstrap_config=load_config()) as runtime,
+        LocalDaemonRuntime(
+            root, bootstrap_config=load_config(), instrument_endpoint=signal_endpoint()
+        ) as runtime,
         TestClient(runtime.app()) as http,
         LabClient(_daemon_client(http), operator="attachment-test") as lab,
     ):
@@ -138,7 +141,11 @@ def test_import_owned_delivery_and_snapshot_restore(tmp_path: Path) -> None:
 
 def test_reference_and_content_boundaries_are_visible_over_http(tmp_path: Path) -> None:
     with (
-        LocalDaemonRuntime(tmp_path, bootstrap_config=load_config()) as runtime,
+        LocalDaemonRuntime(
+            tmp_path,
+            bootstrap_config=load_config(),
+            instrument_endpoint=signal_endpoint(),
+        ) as runtime,
         TestClient(runtime.app()) as http,
         LabClient(_daemon_client(http)) as lab,
     ):
@@ -195,7 +202,9 @@ def test_snapshot_checks_owned_objects_but_preserves_unsupported_old_references(
     root.mkdir()
     (root / "scopecat.toml").write_text("[lab]\n")
     with (
-        LocalDaemonRuntime(root, bootstrap_config=load_config()) as runtime,
+        LocalDaemonRuntime(
+            root, bootstrap_config=load_config(), instrument_endpoint=signal_endpoint()
+        ) as runtime,
         TestClient(runtime.app()) as http,
         LabClient(_daemon_client(http)) as lab,
     ):

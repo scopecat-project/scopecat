@@ -20,8 +20,17 @@ it("resolves one saved revision by name without a branch and clears stale result
     "fetch",
     vi.fn(async (request: Request) => {
       const path = new URL(request.url).pathname;
-      expect(request.method).toBe(path === "/api/v1/measurement-context/resolve" ? "POST" : "GET");
-      if (path === "/api/v1/setup/revisions" || path === "/api/v1/measurement-targets")
+      expect(request.method).toBe(
+        path === "/api/v1/measurement-context/resolve" ||
+          path.startsWith("/api/v1/setup/resolutions/")
+          ? "POST"
+          : "GET",
+      );
+      if (path === "/api/v1/setup/definitions") return Response.json({ items: [{ id: "bench" }] });
+      if (path === "/api/v1/setup/resolutions/bench") {
+        return Response.json({ id: "resolved-bench", content_hash: "sha256:s" });
+      }
+      if (path === "/api/v1/measurement-targets")
         return Response.json({ items: [], next_cursor: null });
       if (path === "/api/v1/parameters/revisions/p1") {
         if (fail) return Response.json({ detail: "revision unavailable" }, { status: 404 });
@@ -33,7 +42,7 @@ it("resolves one saved revision by name without a branch and clears stale result
       return Response.json({
         context: { parameters: { revision_id: "p1" }, scenario: null },
         branch: null,
-        setup: { revision_id: "active" },
+        setup: { revision_id: "resolved-bench" },
       });
     }),
   );
@@ -49,13 +58,18 @@ it("resolves one saved revision by name without a branch and clears stale result
   fireEvent.change(screen.getByLabelText("Saved parameter revision"), {
     target: { value: " p1 " },
   });
+  expect(screen.getByText("Resolve capability context")).toBeDisabled();
+  await screen.findByRole("option", { name: "bench" });
+  fireEvent.change(screen.getByLabelText("Setup for capability context"), {
+    target: { value: "bench" },
+  });
   fireEvent.click(screen.getByText("Resolve capability context"));
   await screen.findByText("Profile inspector");
   expect(screen.getByText(/Exact saved parameters p1/)).toBeInTheDocument();
   expect(bodies).toEqual([
     {
       parameters: { revision_id: "p1", content_hash: "sha256:p" },
-      setup: null,
+      setup: { revision_id: "resolved-bench", content_hash: "sha256:s" },
       samples: [{ sample_id: "chip", revision: 2, role: "subject" }],
       target: null,
     },
@@ -84,6 +98,8 @@ it("resolves explicit choices and clears the captured context before a failed re
   vi.stubGlobal(
     "fetch",
     vi.fn(async (request: Request) => {
+      if (new URL(request.url).pathname === "/api/v1/setup/resolutions/saved-setup")
+        return Response.json({ id: "resolved-setup", content_hash: "sha256:s" });
       if (new URL(request.url).pathname.endsWith("measurement-targets"))
         return Response.json({
           items: [
@@ -124,7 +140,7 @@ it("resolves explicit choices and clears the captured context before a failed re
   expect(bodies).toEqual([
     {
       branch: "daily",
-      setup: { revision_id: "saved-setup", content_hash: "sha256:s" },
+      setup: { revision_id: "resolved-setup", content_hash: "sha256:s" },
       samples: [{ sample_id: "chip", revision: 2, role: "subject" }],
       target: null,
     },
@@ -137,7 +153,7 @@ it("resolves explicit choices and clears the captured context before a failed re
   await screen.findByText("Profile inspector");
   expect(bodies[1]).toEqual({
     branch: "daily",
-    setup: { revision_id: "saved-setup", content_hash: "sha256:s" },
+    setup: { revision_id: "resolved-setup", content_hash: "sha256:s" },
     samples: [],
     target: targetRef,
   });
@@ -146,11 +162,15 @@ it("resolves explicit choices and clears the captured context before a failed re
   });
   expect(screen.queryByText("Profile inspector")).not.toBeInTheDocument();
   fail = true;
+  expect(screen.getByText("Resolve capability context")).toBeDisabled();
+  fireEvent.change(screen.getByLabelText("Setup for capability context"), {
+    target: { value: "saved-setup" },
+  });
   fireEvent.click(screen.getByText("Resolve capability context"));
   await screen.findByRole("alert");
   expect(bodies[2]).toEqual({
     branch: "daily",
-    setup: null,
+    setup: { revision_id: "resolved-setup", content_hash: "sha256:s" },
     samples: [],
     target: targetRef,
   });

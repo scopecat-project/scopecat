@@ -18,10 +18,12 @@ from scopecat.records.parameter_revision import (
 from scopecat.records.scientific_selection import ParameterConfiguration
 from scopecat.records.setup import ExecutableSetupSnapshot
 from scopecat_testkit.config_registry import load_config
+from scopecat_testkit.server.instruments import signal_endpoint
 from scopecat_testkit.server.runtime import SQLiteTestRunRepository
 
-from scopecat_server.errors import BackendConflict, BackendNotFound
+from scopecat_server.errors import BackendConflict
 from scopecat_server.instruments.actors import InstrumentActorRegistry
+from scopecat_server.services.devices import DeviceService
 from scopecat_server.services.setup import SetupService
 from scopecat_server.storage.sqlite.config_registry import SQLiteConfigRegistryStore
 from scopecat_server.storage.sqlite.connection import SQLiteDatabase
@@ -47,10 +49,14 @@ def services(root: Path) -> tuple[SetupService, SQLiteConfigRegistryStore]:
         catalog=config.parameter_catalog,
         parameters=config.parameter_snapshot,
     )
+    control = SQLiteControlPlane(database)
+    actors = InstrumentActorRegistry()
     service = SetupService(
-        control=SQLiteControlPlane(database),
+        control=control,
         config_registry=registry,
-        actors=InstrumentActorRegistry(),
+        devices=DeviceService(
+            control=control, actors=actors, endpoint=signal_endpoint()
+        ),
         templates=(template,),
     )
     return service, registry
@@ -70,7 +76,7 @@ def test_import_retries_and_reopens_without_changing_authority(tmp_path: Path) -
         expected_generation=0,
         unit_of_work=registry.write_unit_of_work,
     )
-    current = service.current()
+    current = service.list()
     template = service.templates()[0]
     command = ConfigurationTemplateImportCommand(
         template_id=template.id,
@@ -85,7 +91,7 @@ def test_import_retries_and_reopens_without_changing_authority(tmp_path: Path) -
     assert first.selection.configuration.ref == first.parameters.ref
     assert first.selection.configuration.setup == first.setup.ref
     assert service.import_template(command) == first
-    assert service.current() == current
+    assert current[0] in service.list()
     assert (
         load_active_config_registry_snapshot(
             unit_of_work=registry.write_unit_of_work
@@ -153,5 +159,4 @@ def test_empty_lab_import_saves_only_independent_revisions(tmp_path: Path) -> No
             ).fetchone()[0]
             == 0
         )
-    with pytest.raises(BackendNotFound, match="no executable setup"):
-        service.current()
+    assert service.definitions()[0].id == "template-setup:first"

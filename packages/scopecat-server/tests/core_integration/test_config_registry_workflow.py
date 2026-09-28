@@ -677,51 +677,7 @@ def test_publish_runs_full_config_semantic_validation(tmp_path: Path) -> None:
     )
 
 
-def test_publish_rejects_rekeying_an_existing_logical_instrument(
-    tmp_path: Path,
-) -> None:
-    unit_of_work = sqlite_config_registry_unit_of_work(tmp_path)
-    config = load_config()
-    initialize_setup(config, unit_of_work=unit_of_work)
-    _publish_direct_revision(
-        config=config,
-        unit_of_work=unit_of_work,
-        entry_id="seed",
-        actor="operator",
-    )
-    [instrument] = config.instrument_registry.instruments
-    changed_registry = config.instrument_registry.model_copy(
-        update={
-            "instruments": [
-                instrument.model_copy(update={"exclusivity_key": "replacement-key"})
-            ]
-        }
-    )
-    changed = config.model_copy(
-        update={
-            "id": "rekeyed",
-            "system": config.system.model_copy(
-                update={"instrument_registry": changed_registry}
-            ),
-        }
-    )
-
-    with pytest.raises(Conflict) as error:
-        _publish_direct_revision(
-            config=changed,
-            unit_of_work=unit_of_work,
-            entry_id="rekeyed",
-            actor="operator",
-        )
-
-    assert error.value.problems[0].code == ("config_registry.setup_mismatch")
-    assert current_config_registry_generation(unit_of_work=unit_of_work) == 1
-    assert [
-        entry.id for entry in list_config_registry_entries(unit_of_work=unit_of_work)
-    ] == ["seed"]
-
-
-def test_publish_domain_target_rename_requires_selected_setup(
+def test_retained_config_can_record_another_domain_target(
     tmp_path: Path,
 ) -> None:
     unit_of_work = sqlite_config_registry_unit_of_work(tmp_path)
@@ -748,8 +704,6 @@ def test_publish_domain_target_rename_requires_selected_setup(
         }
     )
 
-    _select_setup(unit_of_work, renamed, name="renamed-setup")
-
     _publish_direct_revision(
         config=renamed,
         unit_of_work=unit_of_work,
@@ -762,7 +716,7 @@ def test_publish_domain_target_rename_requires_selected_setup(
     assert activated.domain_target.id == "tests.renamed-domain-target"
 
 
-def test_publish_logical_rename_requires_selected_setup(
+def test_retained_config_can_record_logical_aliases(
     tmp_path: Path,
 ) -> None:
     unit_of_work = sqlite_config_registry_unit_of_work(tmp_path)
@@ -799,8 +753,6 @@ def test_publish_logical_rename_requires_selected_setup(
         }
     )
 
-    _select_setup(unit_of_work, renamed, name="renamed-setup")
-
     result = _publish_direct_revision(
         config=renamed,
         unit_of_work=unit_of_work,
@@ -810,62 +762,6 @@ def test_publish_logical_rename_requires_selected_setup(
 
     assert result.activation is not None
     assert result.activation.generation == 2
-
-
-def test_publish_rejects_logical_rename_that_also_rekeys(
-    tmp_path: Path,
-) -> None:
-    unit_of_work = sqlite_config_registry_unit_of_work(tmp_path)
-    config = load_config()
-    initialize_setup(config, unit_of_work=unit_of_work)
-    _publish_direct_revision(
-        config=config,
-        unit_of_work=unit_of_work,
-        entry_id="seed",
-        actor="operator",
-    )
-    [instrument] = config.instrument_registry.instruments
-    renamed_id = "renamed-source"
-    renamed = config.model_copy(
-        update={
-            "id": "renamed-and-rekeyed",
-            "system": config.system.model_copy(
-                update={
-                    "instrument_registry": config.instrument_registry.model_copy(
-                        update={
-                            "instruments": [
-                                instrument.model_copy(
-                                    update={
-                                        "id": renamed_id,
-                                        "exclusivity_key": "replacement-key",
-                                    }
-                                )
-                            ]
-                        }
-                    ),
-                    "routing": config.routing.model_copy(
-                        update={
-                            "routes": [
-                                route.model_copy(update={"instrument_id": renamed_id})
-                                for route in config.routing.routes
-                            ]
-                        }
-                    ),
-                }
-            ),
-        }
-    )
-
-    with pytest.raises(Conflict) as error:
-        _publish_direct_revision(
-            config=renamed,
-            unit_of_work=unit_of_work,
-            entry_id="renamed-and-rekeyed",
-            actor="operator",
-        )
-
-    assert error.value.problems[0].code == ("config_registry.setup_mismatch")
-    assert current_config_registry_generation(unit_of_work=unit_of_work) == 1
 
 
 @pytest.mark.parametrize("kind", ("remove", "rekey", "rename_rekey"))
@@ -956,51 +852,6 @@ def test_inventory_migration_plan_validates_target_before_returning_keys() -> No
     assert error.value.problems[0].code == (
         "configuration.unknown_resource_route_instrument"
     )
-
-
-def test_default_activation_cannot_reverse_selected_setup(tmp_path: Path) -> None:
-    work = sqlite_config_registry_unit_of_work(tmp_path)
-    config = load_config()
-    initialize_setup(config, unit_of_work=work)
-    seed = _publish_direct_revision(
-        config=config, unit_of_work=work, entry_id="seed", actor="operator"
-    )
-    target, _, _ = _inventory_migration_case(config, "rekey")
-    _select_setup(work, target, name="replacement-setup")
-    with pytest.raises(Conflict, match="setup_mismatch"):
-        activate_config_registry_entry(
-            entry_id=seed.entry.id,
-            unit_of_work=work,
-            actor="operator",
-            expected_generation=1,
-        )
-    assert current_config_registry_generation(unit_of_work=work) == 1
-
-
-def _select_setup(
-    work: ConfigRegistryUnitOfWorkFactory, config: ConfigProfileSnapshot, *, name: str
-) -> None:
-    from scopecat.kernel.content_identity import sha256_json_hash
-    from scopecat.records.setup import ExecutableSetupSnapshot, SetupRevision
-
-    # Registry ownership fixture; service tests cover device drain.
-    with work() as transaction:
-        setup = ExecutableSetupSnapshot.from_config(config)
-        revision = transaction.setups.save_revision(
-            SetupRevision(
-                id=name, content_hash=setup.content_hash, setup=setup, actor="operator"
-            )
-        )
-        current = transaction.setups.read_current()
-        assert current is not None
-        transaction.setups.activate(
-            revision=revision.ref,
-            expected_generation=current.activation.generation,
-            operation_id=name,
-            intent_hash=sha256_json_hash({"fixture": name}),
-            actor="operator",
-            note="",
-        )
 
 
 def test_concurrent_publishes_apply_one_generation(

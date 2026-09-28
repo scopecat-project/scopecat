@@ -5,7 +5,6 @@ from typing import TypedDict
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from scopecat.records.config_context import ConfigContextRef
 from scopecat.records.parameter_revision import ParameterRevision, ParameterRevisionRef
 from scopecat.records.record_collection import RecordCollectionId
 from scopecat.records.scientific_selection import ScientificSelection
@@ -33,7 +32,6 @@ class SessionContextUpdate(TypedDict, total=False):
     target: str | TargetRevisionRef | None
     sample: str | None
     batch: str | None
-    working_point: ConfigContextRef | None
     parameters: str | ParameterRevision | ParameterRevisionRef | None
     parameter_branch: str | None
     setup: SetupRevision | SetupRevisionRef | None

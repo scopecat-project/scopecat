@@ -7,22 +7,18 @@ from pydantic import JsonValue
 from scopecat.application.launch import LaunchCatalogEntry, LaunchPreview
 from scopecat.kernel.content_identity import sha256_json_hash
 from scopecat.kernel.frozen import thaw_json_value
-from scopecat.records.config_context import ContextRunConfigSource
 from scopecat.records.experiment_plan import (
     ExperimentPlanDefinition,
     ExperimentPlanRevision,
 )
 from scopecat.records.launch_request import LaunchRequest
-from scopecat.records.plan_ref import PlanAnalysisSource, PlanConfigRef
+from scopecat.records.plan_ref import PlanAnalysisSource
 from scopecat.records.run import (
     AnalysisCandidateRunConfigSource,
-    ParameterRunConfigSource,
 )
 from scopecat.records.scientific_selection import (
     ParameterConfiguration,
     SampleSubjectChoice,
-    SavedConfiguration,
-    WorkingPointConfiguration,
 )
 
 
@@ -85,20 +81,12 @@ def plan_definition(
         raise ValueError("plan requires the matching checked declaration preview")
     config = preview.reviewed.config_source
     if isinstance(config, AnalysisCandidateRunConfigSource):
-        raise ValueError("Save plans from a named context, not an unaccepted candidate")
+        raise ValueError(
+            "Save plans from independent parameters, not an unaccepted candidate"
+        )
     selection = request.selection
-    configuration = (
-        WorkingPointConfiguration(ref=config.context, overrides=config.overrides)
-        if isinstance(config, ContextRunConfigSource)
-        else ParameterConfiguration(
-            ref=config.parameters, setup=config.setup, overrides=config.overrides
-        )
-        if isinstance(config, ParameterRunConfigSource)
-        else SavedConfiguration(
-            ref=PlanConfigRef(
-                entry_id=config.entry_id, content_hash=config.content_hash
-            )
-        )
+    configuration = ParameterConfiguration(
+        ref=config.parameters, setup=config.setup, overrides=config.overrides
     )
     subject = selection.subject
     if isinstance(subject, SampleSubjectChoice):

@@ -1,6 +1,6 @@
 # Device and driver ownership in one application
 
-This is the target contract, not an implemented feature inventory. It refines
+This document separates the application contract from the implementation boundary below. It refines
 [the application model](public-application.md) and
 [configuration ownership](configuration-ownership.md). A single application needs
 independent device, driver, source and task abstractions; collecting project
@@ -131,18 +131,27 @@ a public extension marketplace and hot-swapping active devices are not prerequis
 
 ## Existing implementation and replacement sequence
 
-Delivered #806/#808 behavior is retained: explicit sources, per-request setup
-selection, setup-sensitive session retries, shared maintained-key claims and no
-global activation during device edits. It does not yet provide a device registry.
-Currently `ExecutableSetupSnapshot.instrument_registry` embeds connections and
-driver choices; editing a device copies a setup. The runtime obtains its driver
-catalog from the backend selected at startup. Connection tests now acquire and
-close normal leased sessions; the worker's raw probe operation has been removed.
-They reuse exact known physical bindings in the selected setup and distinguish
-named virtual instances. This closes the direct probe bypass, but does not supply
-application-wide registration or identify different addresses/drivers as one
-physical device. These remain replacement boundaries, not contracts to extend
-with additional service registrations.
+The device registry owns connection heads and declared access aliases. Experiment
+setup definitions reference those devices; resolution retains exact connection
+and driver artifact identities. The device page lists, edits, tests and retires
+registered devices without a setup selector. Python exposes the same operations
+through `lab.devices` and author-session `devices`.
+
+Runs, direct sessions and connection tests use the same maintained keys and
+resident actors. Unregistered temporary bindings are rejected. Connection tests
+retain their result for the exact tested revision; editing a connection returns
+its visible status to untested. Maintenance uses ordinary session leases and
+requires queued/live owners to drain. Failed retirement preserves the original
+head and quarantined session, including across restart.
+
+Address normalization covers declared TCP endpoints and serial ports. Additional
+addresses for one physical instrument must be declared explicitly; registration
+does not perform hardware discovery or infer identity from model names. The
+runtime still obtains its driver catalog from its startup backend. Controlled
+installation replacement and same-service practice scopes remain to be built.
+Global setup selection and overlapping combined-configuration editors have been
+removed. Every run supplies an exact setup independently of its configuration
+data and scientific provenance; see [configuration ownership](configuration-ownership.md).
 
 1. Implement device/connection ownership and setup references together with a
    usable device list/editor. Resolve references into existing execution snapshots;

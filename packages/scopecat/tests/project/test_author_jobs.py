@@ -14,6 +14,9 @@ from scopecat.application.author_project import (
     AuthorSubmissionUncertain,
 )
 from scopecat.records.launch_request import LaunchRequest
+from scopecat.records.parameter_revision import ParameterRevisionRef
+from scopecat.records.run import ParameterRunConfigSource
+from scopecat.records.setup import SetupRevisionRef
 
 
 def test_reopen_missing_admission_never_posts(tmp_path: Path) -> None:
@@ -174,7 +177,6 @@ def test_submission_rejection_is_distinct_from_unknown(
 ) -> None:
     from scopecat.application.author_project import AuthorPreparedLaunch
     from scopecat.application.launch import LaunchPreview
-    from scopecat.records.run import ConfigRegistryRunConfigSource
     from scopecat.records.scientific_binding import (
         ResolvedScientificBinding,
         UnboundSubject,
@@ -198,12 +200,14 @@ def test_submission_rejection_is_distinct_from_unknown(
             experiment="signal",
             version="1",
         )
-        source = ConfigRegistryRunConfigSource(
-            selector="active",
-            entry_id="config",
-            config_ref="config",
+        source = ParameterRunConfigSource(
+            parameters=ParameterRevisionRef(
+                revision_id="config", content_hash="sha256:" + "a" * 64
+            ),
+            setup=SetupRevisionRef(
+                revision_id="bench", content_hash="sha256:" + "e" * 64
+            ),
             content_hash="sha256:" + "a" * 64,
-            registry_generation=1,
         )
         reviewed = ReviewedScientificSelection(
             binding=ResolvedScientificBinding(

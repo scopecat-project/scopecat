@@ -23,11 +23,14 @@ from scopecat.kernel.content_identity import sha256_json_hash
 from scopecat.records.author_revision import AuthorRevisionState
 from scopecat.records.launch_request import LaunchRequest
 from scopecat.records.manual_preview import ManualPreviewBinding, ManualPreviewFence
+from scopecat.records.parameter_revision import ParameterRevisionRef
+from scopecat.records.run import ParameterRunConfigSource
 from scopecat.records.scientific_binding import (
     ResolvedScientificBinding,
     UnboundSubject,
 )
 from scopecat.records.scientific_selection import ReviewedScientificSelection
+from scopecat.records.setup import SetupRevisionRef
 
 from scopecat_server.http.procedure_operator import read_procedure_operator
 from scopecat_server.http.transport import create_app
@@ -178,7 +181,6 @@ def test_unknown_child_never_dispatches_including_exact_submission_retry(
 ) -> None:
     application, _ = _application(tmp_path)
     from scopecat.records.launch_request import LaunchRequest
-    from scopecat.records.run import ConfigRegistryRunConfigSource
 
     request = LaunchRequest(
         workspace_id="test-source",
@@ -191,12 +193,14 @@ def test_unknown_child_never_dispatches_including_exact_submission_retry(
                 config_content_hash="sha256:" + "a" * 64,
                 setup_content_hash="sha256:" + "b" * 64,
             ),
-            config_source=ConfigRegistryRunConfigSource(
-                selector="active",
-                entry_id="baseline",
-                config_ref="baseline",
+            config_source=ParameterRunConfigSource(
+                parameters=ParameterRevisionRef(
+                    revision_id="baseline", content_hash="sha256:" + "a" * 64
+                ),
+                setup=SetupRevisionRef(
+                    revision_id="bench", content_hash="sha256:" + "e" * 64
+                ),
                 content_hash="sha256:" + "a" * 64,
-                registry_generation=1,
             ),
         ),
     )

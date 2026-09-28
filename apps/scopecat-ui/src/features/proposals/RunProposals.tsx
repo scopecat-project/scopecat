@@ -1,41 +1,24 @@
-import { useMemo, useState, type ReactNode } from "react";
-import {
-  useInfiniteQuery,
-  useMutation,
-  useQuery,
-  useQueryClient,
-  type QueryClient,
-} from "@tanstack/react-query";
+import { useMemo, type ReactNode } from "react";
+import { useInfiniteQuery } from "@tanstack/react-query";
 import {
   ArrowRight,
-  CheckCircle2,
   ChevronDown,
   CircleDot,
   GitCompareArrows,
   History,
   LoaderCircle,
-  Settings2,
   XCircle,
 } from "lucide-react";
-import { getConfigRegistry } from "../config/config-api";
 import {
-  acceptProposal,
   getOlderRunParameterProposals,
   getRunParameterProposals,
 } from "../../data/parameter-proposals/api";
 import type { ParameterProposal } from "../../data/parameter-proposals/types";
 import { parameterProposalKeys } from "../../data/parameter-proposals/query-keys";
 import { errorMessage, formatDateTime, shorten } from "../../lib/presentation";
-import { useConfirmationDialog } from "../../ui/ConfirmationDialog";
 import { classes, countBadge, detailCard } from "../../ui/styles";
 
 export function RunProposals({ runId }: { runId: string }) {
-  const queryClient = useQueryClient();
-  const [actor, setActor] = useState("local-operator");
-  const [notes, setNotes] = useState<Record<string, string>>({});
-  const [defaultedProposalId, setDefaultedProposalId] = useState<string>();
-  const { requestConfirmation, confirmationDialog } = useConfirmationDialog();
-
   const proposalsQuery = useInfiniteQuery({
     queryKey: parameterProposalKeys.infinite(runId),
     queryFn: ({ pageParam, signal }) =>
@@ -52,45 +35,6 @@ export function RunProposals({ runId }: { runId: string }) {
     }
     return [...items.values()];
   }, [proposalsQuery.data]);
-  const configQuery = useQuery({
-    queryKey: ["config", "registry"],
-    queryFn: ({ signal }) => getConfigRegistry(signal),
-    enabled: proposals.length > 0,
-  });
-  const generation = configQuery.data?.activation?.generation ?? 0;
-
-  const acceptMutation = useMutation({
-    mutationFn: ({ proposal, note }: { proposal: ParameterProposal; note: string }) =>
-      acceptProposal({
-        runId,
-        proposalId: proposal.id,
-        actor: actor.trim(),
-        expectedGeneration: generation,
-        note,
-      }),
-    onSuccess: async (_, input) => {
-      setDefaultedProposalId(input.proposal.id);
-      setNotes((current) => ({ ...current, [input.proposal.id]: "" }));
-      await Promise.all([
-        invalidateProposalConsumers(queryClient, runId),
-        queryClient.invalidateQueries({ queryKey: ["config"] }),
-      ]);
-    },
-  });
-
-  const setDefault = (proposal: ParameterProposal) => {
-    requestConfirmation({
-      title: "Accept this proposal as the default?",
-      description: `Accept proposal ${proposal.id} and set its configuration as the default.`,
-      confirmLabel: "Accept as default",
-      onConfirm: () =>
-        acceptMutation.mutate({
-          proposal,
-          note: notes[proposal.id]?.trim() ?? "",
-        }),
-    });
-  };
-
   return (
     <article
       className={classes(
@@ -109,18 +53,9 @@ export function RunProposals({ runId }: { runId: string }) {
         <div>
           <h3 className="m-0 text-[0.78rem]">Parameter proposals</h3>
           <p className="mt-[3px] mb-0 text-[0.59rem] text-text-dim">
-            Review run-scoped changes and keep an approved result as the default when ready.
+            Review proposed changes and test a candidate before publishing it to a parameter branch.
           </p>
         </div>
-        <label className="flex min-h-8 items-center gap-[7px] rounded-[8px] border border-line bg-bg px-[9px] text-[0.56rem] font-extrabold tracking-[0.06em] text-text-dim uppercase focus-within:border-[rgb(128_163_207_/_45%)] max-[680px]:col-span-full">
-          <span>Actor</span>
-          <input
-            className="w-[115px] min-w-0 border-0 bg-transparent p-0 text-[0.66rem] text-text normal-case outline-0 max-[680px]:w-full"
-            value={actor}
-            onChange={(event) => setActor(event.target.value)}
-            autoComplete="name"
-          />
-        </label>
         <span className={countBadge}>
           {proposals.length}
           {proposalsQuery.hasNextPage ? "+" : ""}
@@ -149,14 +84,6 @@ export function RunProposals({ runId }: { runId: string }) {
       ) : (
         <div className="grid gap-2.5 p-3">
           {proposals.map((proposal) => {
-            const note = notes[proposal.id] ?? "";
-            const activating =
-              acceptMutation.isPending && acceptMutation.variables?.proposal.id === proposal.id;
-            const canSetDefault = !configQuery.isPending && !configQuery.isError;
-            const proposalError =
-              acceptMutation.error && acceptMutation.variables?.proposal.id === proposal.id
-                ? acceptMutation.error
-                : undefined;
             return (
               <section
                 className="overflow-hidden rounded-[10px] border border-line bg-[rgb(6_10_14_/_32%)]"
@@ -173,7 +100,7 @@ export function RunProposals({ runId }: { runId: string }) {
                           : "border-line bg-yellow-soft text-yellow",
                       )}
                     >
-                      {proposal.approval ? "Approved" : "Awaiting approval"}
+                      {proposal.approval ? "Approval recorded" : "Candidate"}
                     </span>
                     <h4 className="m-0 overflow-hidden font-mono text-[0.72rem] text-ellipsis whitespace-nowrap">
                       {proposal.id}
@@ -211,52 +138,23 @@ export function RunProposals({ runId }: { runId: string }) {
                 <ProposalDiff proposal={proposal} />
                 <ProposalApproval proposal={proposal} />
 
-                <div className="grid grid-cols-[minmax(190px,1fr)_auto] items-end gap-[7px] px-3.5 pt-3 pb-3.5 max-[680px]:grid-cols-[minmax(0,1fr)]">
-                  <label className="grid gap-[5px]">
-                    <span className="text-[0.54rem] font-extrabold tracking-[0.06em] text-text-dim uppercase">
-                      Review note
-                    </span>
-                    <input
-                      className="min-h-8 w-full rounded-[7px] border border-line bg-bg px-[9px] text-[0.65rem] text-text outline-0 focus:border-[rgb(128_163_207_/_45%)]"
-                      value={note}
-                      onChange={(event) =>
-                        setNotes((current) => ({
-                          ...current,
-                          [proposal.id]: event.target.value,
-                        }))
-                      }
-                      placeholder="Evidence or rationale"
-                    />
-                  </label>
-                  <button
-                    className={proposalActionButton}
-                    type="button"
-                    disabled={
-                      !canSetDefault ||
-                      activating ||
-                      !actor.trim() ||
-                      defaultedProposalId === proposal.id
-                    }
-                    title={
-                      configQuery.isError ? "The default configuration is unavailable." : undefined
-                    }
-                    onClick={() => setDefault(proposal)}
-                  >
-                    {activating ? (
-                      <LoaderCircle className="animate-spin" size={14} />
-                    ) : defaultedProposalId === proposal.id ? (
-                      <CheckCircle2 size={14} />
-                    ) : (
-                      <Settings2 size={14} />
-                    )}
-                    {defaultedProposalId === proposal.id ? "Default set" : "Accept as default"}
-                  </button>
-                </div>
-                {proposalError ? (
-                  <p className="mx-3.5 mt-[-4px] mb-3.5 text-[0.62rem] text-red" role="status">
-                    {errorMessage(proposalError)}
+                <details className="px-3.5 py-3 text-[0.65rem]">
+                  <summary className="cursor-pointer text-accent">
+                    Try this candidate in VS Code
+                  </summary>
+                  <p>
+                    Use your connected session and experiment. This selects the candidate for one
+                    run; it does not change a parameter branch.
                   </p>
-                ) : null}
+                  <pre className="overflow-x-auto rounded border border-line bg-bg p-3">
+                    <code>{`candidate = session.config.candidate(${JSON.stringify(proposal.sourceRunId)}, ${JSON.stringify(proposal.id)})
+prepared = session.prepare(experiment, candidate=candidate)`}</code>
+                  </pre>
+                  <p>
+                    Collect independent measurements, verify the result, then publish to the
+                    parameter branch you intend to update.
+                  </p>
+                </details>
               </section>
             );
           })}
@@ -286,7 +184,6 @@ export function RunProposals({ runId }: { runId: string }) {
           ) : null}
         </div>
       )}
-      {confirmationDialog}
     </article>
   );
 }
@@ -393,20 +290,6 @@ function ProposalMessage({
       </div>
     </div>
   );
-}
-
-const proposalActionButton =
-  "inline-flex min-h-8 cursor-pointer items-center justify-center gap-1.5 rounded-[7px] border border-accent bg-accent px-2.5 text-[0.62rem] font-[750] text-bg hover:not-disabled:bg-[#9ff4ec] disabled:cursor-not-allowed disabled:opacity-42";
-
-async function invalidateProposalConsumers(queryClient: QueryClient, runId: string) {
-  await Promise.all([
-    queryClient.invalidateQueries({
-      queryKey: parameterProposalKeys.run(runId),
-    }),
-    queryClient.invalidateQueries({ queryKey: ["events"] }),
-    queryClient.invalidateQueries({ queryKey: ["run", runId] }),
-    queryClient.invalidateQueries({ queryKey: ["runs"] }),
-  ]);
 }
 
 function formatParameterValue(value: unknown): string {

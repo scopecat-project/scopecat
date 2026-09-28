@@ -42,7 +42,7 @@ Saved experiment plans pin both references and reuse the same resolver.
 The low-level runner can use the same read-only resolution:
 
 ```python
-inputs = lab.parameters.resolve(parameters)
+inputs = lab.parameters.resolve(parameters, setup=lab.setup.get("bench-v1"))
 result = lab.run(experiment(), config=inputs)
 ```
 
@@ -56,28 +56,35 @@ prepared = session.prepare(experiment, parameters=session.params)
 
 Use a saved setup revision or exact reference. Selecting another independent
 parameter revision, saving branch edits and preparing with a branch editor retain
-this setup choice. `session.use(setup=None)` clears the pin; the next preview
-captures the active setup. A failed selection leaves both the session and editor
+this setup choice. `session.use(setup=None)` clears the pin; choose a setup again
+before the next preview. A failed selection leaves both the session and editor
 unchanged. Setup selection requires independent parameters; working points and
-candidates already own their configuration evidence. Changing the subject still
-starts a fresh scientific selection, so select its parameters/setup together.
+candidates already own their configuration evidence. Changing the subject retains
+independent parameters, the selected setup and unsaved branch edits, and clears
+the previous subject's batch. Preview checks whether those inputs are suitable
+for the new subject.
 
-Standalone branch editors can use `params.preview(setup=setup)`; omission uses the
-active setup. Session preparation supplies its selected setup to the editor.
+A new session starts without a parameter selection. Clearing parameters returns
+to that state; neither operation selects a global default. Choose parameters and
+setup before preview.
+
+Standalone branch editors require `params.preview(setup=setup)`.
+Session preparation supplies its selected setup to the editor.
 Neither operation activates equipment. Explicit setup references do not require
 a global active setup and are not invalidated when another client selects one.
 
 In the workbench, choose a parameter branch and adopt its version, then use
-the **Device context** field to select a saved setup for this page. Preview becomes
+the **Experiment setup** field to resolve a saved setup for this page. Preview becomes
 available after this selection. Another browser page may use a different context
 on the same service. Refreshing either list or adopting a new parameter version
-preserves the selected setup; only an explicit change replaces it.
+preserves the selected setup; only an explicit change or **Recheck device connections**
+replaces the captured connection revisions.
 
 Low-level callers can supply an exact `setup=` to `resolve`, or choose
 `ParameterConfiguration(ref=..., setup=...)` inside a scientific selection.
-`parameters.bind(...)` remains a
-bridge for callers needing a named combined entry as an old working-point base;
-normal independent-parameter launches do not need it.
+`parameters.bind(...)` can retain a named combined execution snapshot;
+normal independent-parameter launches do not need it. The combination is evidence,
+not a second parameter editor.
 
 These are distinct responsibilities:
 
@@ -91,13 +98,10 @@ These are distinct responsibilities:
 Compilation still consumes a combined snapshot, while run provenance retains
 the independent input references. Adapter templates also save independent
 parameter revisions and setup revisions atomically, without selecting defaults.
-Working points and old bootstrap
-consumers still need ownership cleanup, tracked in
-[#754](https://github.com/scopecat-project/scopecat/issues/754). The older
-`lab.config.set_parameter_default(...)` specifically publishes a global default;
-ordinary parameter authoring should not use it just to save a revision.
+Parameter edits and verified publications update explicit parameter branches.
+The former working-point editor and global-default publication API are retired.
 
-Current storage is development schema 99. No prebaseline migration or persistent
+Current storage is development schema 101. No prebaseline migration or persistent
 compatibility promise is introduced. Current-format backup/restore includes
 standalone revisions even when no setup has ever been saved.
 

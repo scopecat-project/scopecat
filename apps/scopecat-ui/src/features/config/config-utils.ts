@@ -1,31 +1,10 @@
-import type { ConfigRegistryEntry, ConfigRegistryOverview } from "../../api-contract";
+import type { ConfigRegistryEntry } from "../../api-contract";
 
 export type ConfigProvenanceSource =
   | ConfigRegistryEntry["source"]
   | NonNullable<
       Extract<ConfigRegistryEntry["source"], { kind: "parameter_context" }>["publication"]
     >;
-
-export interface ConfigUndoTarget {
-  entryId: string;
-  expectedGeneration: number;
-}
-
-export function configUndoTarget(overview: ConfigRegistryOverview): ConfigUndoTarget | undefined {
-  const active = overview.activation;
-  if (active == null) return undefined;
-  const previous = overview.activation_history.reduce<
-    ConfigRegistryOverview["activation_history"][number] | undefined
-  >((selected, record) => {
-    if (record.generation >= active.generation || record.entry_id === active.entry_id) {
-      return selected;
-    }
-    return selected === undefined || record.generation > selected.generation ? record : selected;
-  }, undefined);
-  return previous === undefined
-    ? undefined
-    : { entryId: previous.entry_id, expectedGeneration: active.generation };
-}
 
 export function filterConfigEntries(
   entries: ConfigRegistryEntry[],

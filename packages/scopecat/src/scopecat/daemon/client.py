@@ -66,10 +66,6 @@ from scopecat.automation.wire import (
     ProcedureStepResourceWaitCommand,
     ProcedureStepResourceWaitReceipt,
 )
-from scopecat.config.structure import (
-    ParameterStructurePlan,
-    ParameterStructurePreview,
-)
 from scopecat.control.models import (
     ControlRunState,
     EventPage,
@@ -94,6 +90,7 @@ from scopecat.daemon.calibration_tasks import (
     CalibrationTaskPage,
     CalibrationTaskView,
 )
+from scopecat.daemon.device_views import DeviceView
 from scopecat.daemon.hardware_receipt_wire import (
     decode_collect_receipt,
     decode_run_hardware_receipt,
@@ -129,11 +126,8 @@ from scopecat.daemon.reviews import (
     ReviewWorkItem,
 )
 from scopecat.daemon.views import (
-    ActiveConfigView,
     AnalysisContentBytesView,
-    ConfigActivationPage,
     ConfigContextResolution,
-    ConfigDraftPreview,
     ConfigEntryView,
     ConfigRegistryPage,
     DaemonHealth,
@@ -171,20 +165,16 @@ from scopecat.daemon.wire import (
     AnalysisSaveReceipt,
     AttentionResolutionCommand,
     AttentionResolutionReceipt,
-    ConfigActivationReceipt,
-    ConfigContextPublishCommand,
-    ConfigContextPublishReceipt,
     ConfigContextResolveCommand,
-    ConfigContextSaveCommand,
-    ConfigDraftCommand,
-    ConfigEntryActivationCommand,
-    ConfigPublishCommand,
-    ConfigPublishReceipt,
-    ConfigSetupRebindCommand,
-    ConfigSetupRebindPreviewCommand,
     ConfigurationTemplateImportCommand,
     ConfigurationTemplateImportResult,
     ConfigurationTemplateList,
+    DeviceList,
+    DeviceProbeCommand,
+    DeviceRenameCommand,
+    DeviceRetireCommand,
+    DeviceSaveCommand,
+    DriverImplementationList,
     ExecutorHeartbeat,
     ExecutorLease,
     ExecutorStartRequest,
@@ -235,7 +225,8 @@ from scopecat.daemon.wire import (
     SampleCreateCommand,
     SampleMutationReceipt,
     SampleReviseCommand,
-    SetupActivateCommand,
+    SetupDefinitionList,
+    SetupImportCommand,
     SetupRevisionList,
     SetupSaveCommand,
     TerminalRunCommitCommand,
@@ -272,7 +263,6 @@ from scopecat.records.calibration_policy import (
     CalibrationProfileRecord,
 )
 from scopecat.records.config import ConfigProfileSnapshot
-from scopecat.records.config_context import ConfigContextRef
 from scopecat.records.content import (
     BlobPayloadBody,
     CommandPayload,
@@ -280,6 +270,7 @@ from scopecat.records.content import (
     InlinePayloadBody,
 )
 from scopecat.records.costs import RunMeasuredCosts
+from scopecat.records.device import RegisteredDevice
 from scopecat.records.experiment_plan import (
     ExperimentPlanList,
     ExperimentPlanRevision,
@@ -320,7 +311,11 @@ from scopecat.records.research_project import (
 from scopecat.records.run import RunSnapshot
 from scopecat.records.sample import SampleArtifactRef, SampleRevision
 from scopecat.records.sample_artifact import SampleArtifactPage
-from scopecat.records.setup import ActiveSetupView, SetupRevision, SetupRevisionRef
+from scopecat.records.setup import (
+    SetupDefinitionRevision,
+    SetupRevision,
+    SetupRevisionRef,
+)
 from scopecat.records.target_catalog import (
     TargetCatalogPage,
     TargetCreateCommand,
@@ -1017,9 +1012,6 @@ class DaemonClient:
             ConfigurationTemplateImportResult,
         )
 
-    def active_setup(self) -> ActiveSetupView:
-        return self._get_model(f"{_API_PREFIX}/setup/active", ActiveSetupView)
-
     def parameter_branches(
         self, *, limit: int = 100, after: str | None = None
     ) -> ParameterBranchPage:
@@ -1082,6 +1074,70 @@ class DaemonClient:
             f"{_API_PREFIX}/parameters/resolve", command, ParameterResolution
         )
 
+    def setup_definition(self, definition_id: str) -> SetupDefinitionRevision:
+        return self._get_model(
+            f"{_API_PREFIX}/setup/definitions/{quote(definition_id, safe='')}",
+            SetupDefinitionRevision,
+        )
+
+    def setup_definitions(self) -> SetupDefinitionList:
+        return self._get_model(f"{_API_PREFIX}/setup/definitions", SetupDefinitionList)
+
+    def resolve_setup(self, definition_id: str) -> SetupRevision:
+        response = self._request(
+            "POST", f"{_API_PREFIX}/setup/resolutions/{quote(definition_id, safe='')}"
+        )
+        return SetupRevision.model_validate_json(response.content)
+
+    def import_setup(self, command: SetupImportCommand) -> SetupRevision:
+        return self._post_idempotent_model(
+            f"{_API_PREFIX}/setup/recipe-imports", command, SetupRevision
+        )
+
+    def list_devices(self) -> DeviceList:
+        return self._get_model(f"{_API_PREFIX}/devices", DeviceList)
+
+    def prepare_device_access(self, device_id: str) -> SetupRevision:
+        response = self._request(
+            "POST", f"{_API_PREFIX}/devices/{quote(device_id, safe='')}/access"
+        )
+        return SetupRevision.model_validate_json(response.content)
+
+    def test_device_connection(
+        self, device_id: str, command: DeviceProbeCommand
+    ) -> InstrumentDriverProbeReceipt:
+        return self._post_model(
+            f"{_API_PREFIX}/devices/{quote(device_id, safe='')}/connection-tests",
+            command,
+            InstrumentDriverProbeReceipt,
+        )
+
+    def device_drivers(self) -> DriverImplementationList:
+        return self._get_model(
+            f"{_API_PREFIX}/devices/drivers", DriverImplementationList
+        )
+
+    def save_device(self, command: DeviceSaveCommand) -> DeviceView:
+        return self._post_model(f"{_API_PREFIX}/devices", command, DeviceView)
+
+    def rename_device(
+        self, device_id: str, command: DeviceRenameCommand
+    ) -> RegisteredDevice:
+        return self._post_model(
+            f"{_API_PREFIX}/devices/{quote(device_id, safe='')}/name",
+            command,
+            RegisteredDevice,
+        )
+
+    def retire_device(
+        self, device_id: str, command: DeviceRetireCommand
+    ) -> RegisteredDevice:
+        return self._post_model(
+            f"{_API_PREFIX}/devices/{quote(device_id, safe='')}/retirement",
+            command,
+            RegisteredDevice,
+        )
+
     def setup_revision(self, revision_id: str) -> SetupRevision:
         return self._get_model(
             f"{_API_PREFIX}/setup/revisions/{quote(revision_id, safe='')}",
@@ -1094,25 +1150,6 @@ class DaemonClient:
     def save_setup(self, command: SetupSaveCommand) -> SetupRevision:
         return self._post_idempotent_model(
             f"{_API_PREFIX}/setup/revisions", command, SetupRevision
-        )
-
-    def activate_setup(self, command: SetupActivateCommand) -> ActiveSetupView:
-        return self._post_idempotent_model(
-            f"{_API_PREFIX}/setup/activation-operations", command, ActiveSetupView
-        )
-
-    def rebind_setup(self, command: ConfigSetupRebindCommand) -> ConfigEntryView:
-        return self._post_idempotent_model(
-            f"{_API_PREFIX}/config-registry/setup-rebindings", command, ConfigEntryView
-        )
-
-    def preview_setup_rebind(
-        self, command: ConfigSetupRebindPreviewCommand
-    ) -> ConfigProfileSnapshot:
-        return self._post_model(
-            f"{_API_PREFIX}/config-registry/setup-rebindings/preview",
-            command,
-            ConfigProfileSnapshot,
         )
 
     def config_registry(
@@ -1130,52 +1167,10 @@ class DaemonClient:
             params=params,
         )
 
-    def config_activation_history(
-        self,
-        *,
-        limit: int = 100,
-        before: int | None = None,
-    ) -> ConfigActivationPage:
-        params: dict[str, str | int] = {"limit": limit}
-        if before is not None:
-            params["before"] = before
-        return self._get_model(
-            f"{_API_PREFIX}/config-registry/activations",
-            ConfigActivationPage,
-            params=params,
-        )
-
-    def active_config(self) -> ActiveConfigView:
-        return self._get_model(
-            f"{_API_PREFIX}/config-registry/active",
-            ActiveConfigView,
-        )
-
     def config_entry(self, entry_id: str) -> ConfigEntryView:
         return self._get_model(
             f"{_API_PREFIX}/config-registry/entries/{quote(entry_id, safe='')}",
             ConfigEntryView,
-        )
-
-    def latest_context(self, context: ConfigContextRef) -> ConfigEntryView:
-        return self._post_model(
-            f"{_API_PREFIX}/config-registry/contexts/latest", context, ConfigEntryView
-        )
-
-    def save_context(self, command: ConfigContextSaveCommand) -> ConfigEntryView:
-        return self._post_idempotent_model(
-            f"{_API_PREFIX}/config-registry/contexts",
-            command,
-            ConfigEntryView,
-        )
-
-    def preview_structure(
-        self, plan: ParameterStructurePlan
-    ) -> ParameterStructurePreview:
-        return self._post_model(
-            f"{_API_PREFIX}/config-registry/contexts/structure/preview",
-            plan,
-            ParameterStructurePreview,
         )
 
     def resolve_context(
@@ -1185,74 +1180,6 @@ class DaemonClient:
             f"{_API_PREFIX}/config-registry/contexts/resolve",
             command,
             ConfigContextResolution,
-        )
-
-    def publish_context(
-        self, command: ConfigContextPublishCommand
-    ) -> ConfigContextPublishReceipt:
-        return self._post_idempotent_model(
-            f"{_API_PREFIX}/config-registry/contexts/publish-operations",
-            command,
-            ConfigContextPublishReceipt,
-        )
-
-    def context_publish_operation(
-        self, operation_id: str
-    ) -> ConfigContextPublishReceipt:
-        return self._get_model(
-            f"{_API_PREFIX}/config-registry/contexts/publish-operations/"
-            f"{quote(operation_id, safe='')}",
-            ConfigContextPublishReceipt,
-        )
-
-    def publish_config(
-        self,
-        command: ConfigPublishCommand,
-    ) -> ConfigPublishReceipt:
-        return self._post_idempotent_model(
-            f"{_API_PREFIX}/config-registry/publish-operations",
-            command,
-            ConfigPublishReceipt,
-        )
-
-    def config_publish_operation(
-        self,
-        operation_id: str,
-    ) -> ConfigPublishReceipt:
-        return self._get_model(
-            f"{_API_PREFIX}/config-registry/publish-operations/"
-            f"{quote(operation_id, safe='')}",
-            ConfigPublishReceipt,
-        )
-
-    def preview_config_draft(
-        self,
-        command: ConfigDraftCommand,
-    ) -> ConfigDraftPreview:
-        return self._post_model(
-            f"{_API_PREFIX}/config-registry/drafts/preview",
-            command,
-            ConfigDraftPreview,
-        )
-
-    def activate_config_entry(
-        self,
-        command: ConfigEntryActivationCommand,
-    ) -> ConfigActivationReceipt:
-        return self._post_idempotent_model(
-            f"{_API_PREFIX}/config-registry/activation-operations",
-            command,
-            ConfigActivationReceipt,
-        )
-
-    def config_activation_operation(
-        self,
-        operation_id: str,
-    ) -> ConfigActivationReceipt:
-        return self._get_model(
-            f"{_API_PREFIX}/config-registry/activation-operations/"
-            f"{quote(operation_id, safe='')}",
-            ConfigActivationReceipt,
         )
 
     def release_instruments(

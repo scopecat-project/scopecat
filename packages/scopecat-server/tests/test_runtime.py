@@ -12,7 +12,6 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from threading import Barrier, Event, Thread
 from typing import Literal, Never, cast
-from urllib.parse import quote
 
 import pyarrow as pa
 import pytest
@@ -22,8 +21,7 @@ from scopecat.analysis.datasets import DerivedDataset
 from scopecat.application import LabBootstrap
 from scopecat.config.changes import parameter_change_proposal_from_updates
 from scopecat.config.documents import load_config_snapshot_document
-from scopecat.config.inventory import InstrumentInventoryRekey
-from scopecat.config.parameters import ReplaceParameter, replace_scalar_parameter
+from scopecat.config.parameters import replace_scalar_parameter
 from scopecat.config.registry import (
     ManualCandidateAcceptance,
 )
@@ -51,20 +49,12 @@ from scopecat.daemon.points import (
     RunPointPlanCloseCommand,
 )
 from scopecat.daemon.views import (
-    ActiveConfigView,
-    ConfigActivationPage,
-    ConfigDraftPreview,
-    ConfigEntryView,
     ConfigRegistryPage,
     MeasurementArrowColumn,
     MeasurementArrowQuery,
-    ParameterProposalPage,
-    ParameterProposalView,
     RunAnalysisPage,
     RunAnalysisView,
-    RunConfigView,
     RunControlView,
-    RunDatasetBytesView,
     RunDetail,
 )
 from scopecat.daemon.wire import (
@@ -77,22 +67,17 @@ from scopecat.daemon.wire import (
     AnalysisTableOutputPayload,
     AttentionResolutionCommand,
     CandidateConfigRevisionSource,
-    ConfigActivationReceipt,
-    ConfigDraftCommand,
     ConfigEntryActivationCommand,
     ConfigPublishCommand,
-    ConfigPublishReceipt,
     DirectConfigRevisionSource,
     ExecutorHeartbeat,
     ExecutorLease,
     ExecutorStartRequest,
-    ManualConfigDraftRevisionSource,
     MeasurementAnalysisInputPayload,
     MeasurementFlushCommand,
     MeasurementHeaderCommand,
     MeasurementSealCommand,
     RunAdmission,
-    RunAttachmentCommand,
     RunCancellationReceipt,
     RunCoverageAdvanceCommand,
     RunDomainJobTransitionBatchCommand,
@@ -100,8 +85,7 @@ from scopecat.daemon.wire import (
     RunHostParameterEvidenceCommand,
     RunRecoveryGroupCommitCommand,
     RunSubmission,
-    SetupActivateCommand,
-    SetupSaveCommand,
+    SetupImportCommand,
     TerminalRunCommitCommand,
 )
 from scopecat.kernel.entity import EntityRef
@@ -126,7 +110,6 @@ from scopecat.records.analysis import (
 from scopecat.records.config import (
     ConfigProfileSnapshot,
     TcpipSocketInstrumentConnection,
-    config_content_hash,
 )
 from scopecat.records.content import ContentEntry
 from scopecat.records.execution import (
@@ -167,7 +150,6 @@ from scopecat.records.measurement_recording import (
     measurement_fragment_content_hash,
     measurement_record_content_hash,
 )
-from scopecat.records.parameter import ScalarParameterValue
 from scopecat.records.parameter_change import (
     ParameterChangeProposal,
 )
@@ -176,12 +158,10 @@ from scopecat.records.parameter_read import (
     HostPointParameterRead,
     ScalarExpressionReadEvidence,
 )
-from scopecat.records.run import ConfigRegistryRunConfigSource, RunSnapshot
+from scopecat.records.run import RunConfigSource, RunSnapshot
 from scopecat.records.run_request import RunRequest
 from scopecat.records.setup import (
-    ActiveSetupView,
     ExecutableSetupSnapshot,
-    SetupRevisionRef,
 )
 from scopecat.runs.parameter_evidence import (
     HOST_PARAMETER_EVIDENCE_KIND,
@@ -189,11 +169,11 @@ from scopecat.runs.parameter_evidence import (
 )
 from scopecat.runs.refs import dataset_content_ref, record_content_ref
 from scopecat_testkit.domain import domain_execution_identity
+from scopecat_testkit.server.instruments import signal_endpoint
 from scopecat_testkit.server.runtime import list_test_runs
 
 import scopecat_server.services.leases as lease_supervisor_services
 from scopecat_server import BackendConflict, BackendNotFound, LocalDaemonRuntime
-from scopecat_server.instruments.actors import InstrumentActorRetirement
 from scopecat_server.services.admission import AdmissionService
 from scopecat_server.services.leases import OwnershipLeaseSupervisor
 from scopecat_server.services.point_plans import RunPointPlanService
@@ -291,11 +271,13 @@ def _run_repository(project_root: Path) -> SQLiteRunRepository:
 
 
 def _submission(
+    runtime: LocalDaemonRuntime,
     submission_id: str = "submission-1",
     *,
     point_count: int = 1,
 ) -> RunSubmission:
     return RunSubmission(
+        execution_setup=runtime.application.setup.resolve("initial").ref,
         scientific_binding=bind_scientific_evidence(
             catalog_id="test", config=_config(), samples=(), sample_revisions={}
         ),
@@ -340,55 +322,8 @@ def _domain_only_config() -> ConfigProfileSnapshot:
     )
 
 
-def _rekeyed_config(
-    config: ConfigProfileSnapshot,
-    *,
-    exclusivity_key: str = "rack-a/source",
-) -> ConfigProfileSnapshot:
-    [instrument] = config.instrument_registry.instruments
-    registry = config.instrument_registry.model_copy(
-        update={
-            "instruments": [
-                instrument.model_copy(update={"exclusivity_key": exclusivity_key})
-            ]
-        }
-    )
-    return config.model_copy(
-        update={
-            "id": "inventory-v2",
-            "system": config.system.model_copy(
-                update={"instrument_registry": registry}
-            ),
-        }
-    )
-
-
-def _inventory_migration_command(
-    config: ConfigProfileSnapshot,
-    *,
-    expected_generation: int = 1,
-) -> SetupActivateCommand:
-    [target] = config.instrument_registry.instruments
-    return SetupActivateCommand(
-        revision=SetupRevisionRef(
-            revision_id="inventory-v2",
-            content_hash=ExecutableSetupSnapshot.from_config(config).content_hash,
-        ),
-        operation_id="activate-inventory-v2",
-        changes=(
-            InstrumentInventoryRekey(
-                instrument_id=target.id,
-                from_exclusivity_key="source-0",
-                to_exclusivity_key=target.exclusivity_key,
-            ),
-        ),
-        actor="operator",
-        expected_generation=expected_generation,
-        note="moved to rack-a",
-    )
-
-
 def _domain_only_submission(
+    runtime: LocalDaemonRuntime,
     config: ConfigProfileSnapshot,
     *,
     submission_id: str,
@@ -397,6 +332,7 @@ def _domain_only_submission(
     target = config.domain_target
     assert target is not None
     return RunSubmission(
+        execution_setup=runtime.application.setup.resolve("initial").ref,
         scientific_binding=bind_scientific_evidence(
             catalog_id="test", config=config, samples=(), sample_revisions={}
         ),
@@ -585,8 +521,11 @@ def test_lease_supervisor_releases_unflushed_live_measurements(
         tmp_path,
         bootstrap_config=_config(),
         lease_ttl=timedelta(seconds=1),
+        instrument_endpoint=signal_endpoint(),
     ) as runtime:
-        admission = runtime.application.submit_run(_submission("lost-live-data"))
+        admission = runtime.application.submit_run(
+            _submission(runtime, "lost-live-data")
+        )
         lease = runtime.application.executor.start_executor(
             admission.run_id,
             ExecutorStartRequest(executor_id="notebook-1"),
@@ -789,98 +728,73 @@ def test_runtime_exclusively_owns_one_project(
         assert reopened.application.health().status == "ok"
 
 
-def test_bootstrap_config_is_active_and_idempotent_across_restarts(
+def test_bootstrap_seeds_independent_inputs_once_across_restarts(
     tmp_path: Path,
 ) -> None:
-    bootstrap_calls = 0
+    calls = 0
 
-    def bootstrap_config() -> ConfigProfileSnapshot:
-        nonlocal bootstrap_calls
-        bootstrap_calls += 1
-        if bootstrap_calls > 1:
-            raise AssertionError("an initialized registry must not resolve its seed")
+    def seed() -> ConfigProfileSnapshot:
+        nonlocal calls
+        calls += 1
+        if calls > 1:
+            raise AssertionError("restart must not evaluate the seed")
         return _config()
 
-    with LocalDaemonRuntime(tmp_path, bootstrap_config=bootstrap_config) as runtime:
-        first = runtime.application.config.get_active_config().activation
-        first_events = _events(runtime).items
+    with LocalDaemonRuntime(
+        tmp_path, bootstrap_config=seed, instrument_endpoint=signal_endpoint()
+    ) as runtime:
+        setup = runtime.application.setup.resolve("initial")
+        parameters = runtime.application.config.parameter_revision(_config().id)
+        assert not runtime.application.config.get_config_registry().entries
+        assert not _events(runtime).items
+        runtime.application.setup.import_recipe(
+            SetupImportCommand(
+                revision_id="another-bench", setup=setup.setup, actor="operator"
+            )
+        )
+    with LocalDaemonRuntime(
+        tmp_path, bootstrap_config=seed, instrument_endpoint=signal_endpoint()
+    ) as reopened:
+        assert reopened.application.setup.resolve("initial") == setup
+        assert (
+            reopened.application.config.parameter_revision(parameters.id) == parameters
+        )
+        assert len(reopened.application.setup.definitions()) == 2
+        assert not reopened.application.config.get_config_registry().entries
+    assert calls == 1
 
-    with LocalDaemonRuntime(tmp_path, bootstrap_config=bootstrap_config) as reopened:
-        second = reopened.application.config.get_active_config().activation
-        second_events = _events(reopened).items
 
-    assert first.entry_id.startswith("daemon-")
-    assert second == first
-    assert [event.kind for event in first_events] == [
-        "setup_activated",
-        "config_saved",
-        "config_activated",
-    ]
-    assert second_events == first_events
-    assert bootstrap_calls == 1
-
-
-def test_interrupted_bootstrap_preserves_setup_and_requires_explicit_completion(
+def test_interrupted_bootstrap_rolls_back_all_inputs_and_retries(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from scopecat_server.errors import BackendConflict
-    from scopecat_server.services.config import ConfigService
+    from scopecat.records.parameter_revision import ParameterRevision
 
-    def fail_publish(self: ConfigService, command: ConfigPublishCommand) -> None:
-        raise RuntimeError("parameter publication interrupted")
+    from scopecat_server.storage.sqlite.parameter_revisions import (
+        ParameterRevisionRepository,
+    )
+
+    def fail_save(
+        self: ParameterRevisionRepository, revision: ParameterRevision
+    ) -> ParameterRevision:
+        raise RuntimeError("parameter seed interrupted")
 
     with monkeypatch.context() as patch:
-        patch.setattr(ConfigService, "publish_config", fail_publish)
-        with pytest.raises(RuntimeError, match="publication interrupted"):
-            LocalDaemonRuntime(tmp_path, bootstrap_config=_config())
-
-    def must_not_rebuild() -> ConfigProfileSnapshot:
-        raise AssertionError(
-            "partial initialization must not re-evaluate adapter input"
-        )
-
-    with pytest.raises(BackendConflict, match="explicitly complete initialization"):
-        LocalDaemonRuntime(tmp_path, bootstrap_config=must_not_rebuild)
-    with LocalDaemonRuntime(tmp_path) as runtime:
-        original = runtime.application.setup.current()
-        assert not runtime.application.config.get_config_registry().entries
-        runtime.application.config.publish_config(
-            _direct_publish_command(
-                config=_config(),
-                entry_id="reviewed-completion",
-                actor="maintainer",
-                expected_generation=0,
+        patch.setattr(ParameterRevisionRepository, "save", fail_save)
+        with pytest.raises(RuntimeError, match="seed interrupted"):
+            LocalDaemonRuntime(
+                tmp_path,
+                bootstrap_config=_config(),
+                instrument_endpoint=signal_endpoint(),
             )
-        )
-        assert runtime.application.setup.current() == original
-    with LocalDaemonRuntime(tmp_path, bootstrap_config=must_not_rebuild) as runtime:
-        assert (
-            runtime.application.config.get_active_config().entry.id
-            == "reviewed-completion"
-        )
-
-
-def test_bootstrap_config_does_not_replace_later_activation(
-    tmp_path: Path,
-) -> None:
-    bootstrap = _config()
-    selected = bootstrap.model_copy(update={"id": "operator-selected"})
-
-    with LocalDaemonRuntime(tmp_path, bootstrap_config=lambda: bootstrap) as runtime:
-        activation = runtime.application.config.publish_config(
-            _direct_publish_command(
-                config=selected,
-                entry_id="operator-selected",
-                actor="operator",
-                expected_generation=1,
-            )
-        )
-
-    with LocalDaemonRuntime(tmp_path, bootstrap_config=lambda: bootstrap) as reopened:
-        state = reopened.application.config.get_active_config().activation
-
-    assert state.entry_id == "operator-selected"
-    assert state == activation.activation
+    with LocalDaemonRuntime(tmp_path, instrument_endpoint=signal_endpoint()) as runtime:
+        assert not runtime.application.setup.definitions()
+        assert not runtime.application.config.parameter_revisions()
+        assert not runtime.application.devices.list()
+    with LocalDaemonRuntime(
+        tmp_path, bootstrap_config=_config(), instrument_endpoint=signal_endpoint()
+    ) as runtime:
+        assert runtime.application.setup.resolve("initial")
+        assert runtime.application.config.parameter_revision(_config().id)
 
 
 def test_explicit_runtime_bootstrap_overrides_project_seed(
@@ -909,561 +823,11 @@ def test_explicit_runtime_bootstrap_overrides_project_seed(
         tmp_path,
         bootstrap_spec="tests.bootstrap:create",
         bootstrap_config=explicit,
+        instrument_endpoint=signal_endpoint(),
     ) as runtime:
-        state = runtime.application.config.get_active_config().activation
+        state = runtime.application.config.parameter_revision(explicit.id)
 
-    assert state.entry_content_hash == config_content_hash(explicit)
-
-
-def test_config_registry_http_workflow_persists_and_publishes_events(
-    tmp_path: Path,
-) -> None:
-    baseline = _config().model_copy(update={"id": "baseline"})
-    updated = baseline.model_copy(update={"id": "updated"})
-    operation_id = "activation/baseline?attempt=1"
-    with LocalDaemonRuntime(tmp_path) as runtime:
-        client = TestClient(runtime.app())
-
-        empty = ConfigRegistryPage.model_validate(
-            client.get("/api/v1/config-registry").json()
-        )
-        missing = client.get("/api/v1/config-registry/active")
-        rejected = client.post(
-            "/api/v1/config-registry/publish-operations",
-            json=_direct_publish_command(
-                entry_id="baseline",
-                config=baseline,
-                actor="notebook",
-            ).model_dump(mode="json"),
-        )
-        assert rejected.status_code == 409
-        assert not runtime.application.setup.list()
-        assert not runtime.application.config.get_config_registry().entries
-        _select_setup(runtime, baseline, revision_id="bench", expected_generation=0)
-        baseline_publish = client.post(
-            "/api/v1/config-registry/publish-operations",
-            json=_direct_publish_command(
-                entry_id="baseline",
-                config=baseline,
-                actor="notebook",
-            ).model_dump(mode="json"),
-        )
-        updated_publish = client.post(
-            "/api/v1/config-registry/publish-operations",
-            json=_direct_publish_command(
-                entry_id="updated",
-                config=updated,
-                actor="notebook",
-                expected_generation=1,
-            ).model_dump(mode="json"),
-        )
-        activation_command = ConfigEntryActivationCommand(
-            operation_id=operation_id,
-            entry_id="baseline",
-            actor="operator",
-            expected_generation=2,
-            note="restore baseline",
-        )
-        current_activation = client.post(
-            "/api/v1/config-registry/activation-operations",
-            json=activation_command.model_dump(mode="json"),
-        )
-        repeated_activation = client.post(
-            "/api/v1/config-registry/activation-operations",
-            json=activation_command.model_dump(mode="json"),
-        )
-        operation_lookup = client.get(
-            "/api/v1/config-registry/activation-operations/"
-            f"{quote(operation_id, safe='')}"
-        )
-        operation_conflict = client.post(
-            "/api/v1/config-registry/activation-operations",
-            json=activation_command.model_copy(
-                update={"note": "different intent"}
-            ).model_dump(mode="json"),
-        )
-        noop_activation = client.post(
-            "/api/v1/config-registry/activation-operations",
-            json=ConfigEntryActivationCommand(
-                operation_id="activation:baseline-noop",
-                entry_id="baseline",
-                actor="operator",
-                expected_generation=3,
-            ).model_dump(mode="json"),
-        )
-        stale_activation = client.post(
-            "/api/v1/config-registry/activation-operations",
-            json=ConfigEntryActivationCommand(
-                operation_id="activation:stale",
-                entry_id="baseline",
-                actor="stale-notebook",
-                expected_generation=1,
-            ).model_dump(mode="json"),
-        )
-        stale_operation_lookup = client.get(
-            "/api/v1/config-registry/activation-operations/activation%3Astale"
-        )
-        restore_updated_command = ConfigEntryActivationCommand(
-            operation_id="activation:restore-updated",
-            entry_id="updated",
-            actor="operator",
-            expected_generation=3,
-        )
-        restore_updated_response = client.post(
-            "/api/v1/config-registry/activation-operations",
-            json=restore_updated_command.model_dump(mode="json"),
-        )
-        late_replay = client.post(
-            "/api/v1/config-registry/activation-operations",
-            json=activation_command.model_dump(mode="json"),
-        )
-        noop_operation_lookup = client.get(
-            "/api/v1/config-registry/activation-operations/activation%3Abaseline-noop"
-        )
-        missing_operation = client.get(
-            "/api/v1/config-registry/activation-operations/missing"
-        )
-
-        registry = ConfigRegistryPage.model_validate(
-            client.get("/api/v1/config-registry").json()
-        )
-        activation_history = ConfigActivationPage.model_validate(
-            client.get("/api/v1/config-registry/activations").json()
-        )
-        active = ActiveConfigView.model_validate(
-            client.get("/api/v1/config-registry/active").json()
-        )
-        events = _events(runtime).items
-
-        assert empty == ConfigRegistryPage()
-        assert missing.status_code == 404
-        assert baseline_publish.status_code == 200
-        assert updated_publish.status_code == 200
-        first_receipt = ConfigPublishReceipt.model_validate(baseline_publish.json())
-        second_receipt = ConfigPublishReceipt.model_validate(updated_publish.json())
-        assert first_receipt.entry.id == "baseline"
-        assert first_receipt.activation.generation == 1
-        assert second_receipt.activation.generation == 2
-        activation_receipt = ConfigActivationReceipt.model_validate(
-            current_activation.json()
-        )
-        assert activation_receipt.operation.operation_id == operation_id
-        assert activation_receipt.activation.generation == 3
-        assert activation_receipt.activation.entry_id == "baseline"
-        assert (
-            ConfigActivationReceipt.model_validate(repeated_activation.json())
-            == activation_receipt
-        )
-        assert (
-            ConfigActivationReceipt.model_validate(operation_lookup.json())
-            == activation_receipt
-        )
-        noop_receipt = ConfigActivationReceipt.model_validate(noop_activation.json())
-        assert noop_receipt.operation.activation_generation == 3
-        assert noop_receipt.activation == activation_receipt.activation
-        assert (
-            ConfigActivationReceipt.model_validate(noop_operation_lookup.json())
-            == noop_receipt
-        )
-        assert operation_conflict.status_code == 409
-        assert stale_activation.status_code == 409
-        assert stale_operation_lookup.status_code == 404
-        assert missing_operation.status_code == 404
-        assert (
-            ConfigActivationReceipt.model_validate(late_replay.json())
-            == activation_receipt
-        )
-        restored_updated = ConfigActivationReceipt.model_validate(
-            restore_updated_response.json()
-        )
-        assert restored_updated.activation.action == "activation"
-        assert restored_updated.activation.generation == 4
-        assert restored_updated.activation.entry_id == "updated"
-        assert [entry.id for entry in registry.entries] == ["updated", "baseline"]
-        assert registry.activation is not None
-        assert [record.action for record in activation_history.items] == [
-            "activation",
-            "activation",
-            "activation",
-            "activation",
-        ]
-        assert active.entry.id == "updated"
-        assert active.config == updated
-        assert [(event.kind, event.payload, event.run_id) for event in events] == [
-            ("setup_activated", {"generation": 1, "revision_id": "bench"}, None),
-            ("config_saved", {"entry_id": "baseline"}, None),
-            (
-                "config_activated",
-                {"entry_id": "baseline", "generation": 1},
-                None,
-            ),
-            ("config_saved", {"entry_id": "updated"}, None),
-            (
-                "config_activated",
-                {"entry_id": "updated", "generation": 2},
-                None,
-            ),
-            (
-                "config_activated",
-                {"entry_id": "baseline", "generation": 3},
-                None,
-            ),
-            (
-                "config_activated",
-                {"entry_id": "updated", "generation": 4},
-                None,
-            ),
-        ]
-
-    with LocalDaemonRuntime(tmp_path) as reopened:
-        active = reopened.application.config.get_active_config()
-        operation = reopened.application.config.get_config_activation_operation(
-            operation_id
-        )
-        events = _events(reopened).items
-
-        assert active.entry.id == "updated"
-        assert active.config == updated
-        assert operation == activation_receipt
-        assert events[-1].kind == "config_activated"
-
-
-def test_config_publish_operation_replays_exact_receipt_across_head_changes(
-    tmp_path: Path,
-) -> None:
-    baseline = _config().model_copy(update={"id": "publish-baseline"})
-    updated = baseline.model_copy(update={"id": "publish-updated"})
-    later = baseline.model_copy(update={"id": "publish-later"})
-    operation_id = "publish/updated?attempt=1"
-    with LocalDaemonRuntime(tmp_path, bootstrap_config=baseline) as runtime:
-        client = TestClient(runtime.app())
-        initial = runtime.application.config.get_active_config()
-        command = ConfigPublishCommand(
-            operation_id=operation_id,
-            source=DirectConfigRevisionSource(config=updated),
-            entry_id=updated.id,
-            actor="operator",
-            expected_generation=initial.activation.generation,
-        )
-
-        first = client.post(
-            "/api/v1/config-registry/publish-operations",
-            json=command.model_dump(mode="json"),
-        )
-        replay = client.post(
-            "/api/v1/config-registry/publish-operations",
-            json=command.model_dump(mode="json"),
-        )
-        lookup = client.get(
-            f"/api/v1/config-registry/publish-operations/{quote(operation_id, safe='')}"
-        )
-        changed_intent = client.post(
-            "/api/v1/config-registry/publish-operations",
-            json=command.model_copy(update={"note": "different"}).model_dump(
-                mode="json"
-            ),
-        )
-        cross_kind = client.post(
-            "/api/v1/config-registry/activation-operations",
-            json=ConfigEntryActivationCommand(
-                operation_id=operation_id,
-                entry_id=initial.entry.id,
-                actor="operator",
-                expected_generation=2,
-            ).model_dump(mode="json"),
-        )
-        later_receipt = runtime.application.config.publish_config(
-            _direct_publish_command(
-                operation_id="publish:later",
-                entry_id=later.id,
-                config=later,
-                actor="operator",
-                expected_generation=2,
-            )
-        )
-        late_replay = client.post(
-            "/api/v1/config-registry/publish-operations",
-            json=command.model_dump(mode="json"),
-        )
-        noop_command = _direct_publish_command(
-            operation_id="publish:later-noop",
-            entry_id=later.id,
-            config=later,
-            actor="operator",
-            expected_generation=3,
-        )
-        noop_response = client.post(
-            "/api/v1/config-registry/publish-operations",
-            json=noop_command.model_dump(mode="json"),
-        )
-        noop_lookup = client.get(
-            "/api/v1/config-registry/publish-operations/publish%3Alater-noop"
-        )
-        stale_command = _direct_publish_command(
-            operation_id="publish:stale",
-            entry_id="publish-stale",
-            config=baseline.model_copy(update={"id": "publish-stale"}),
-            actor="operator",
-            expected_generation=1,
-        )
-        stale = client.post(
-            "/api/v1/config-registry/publish-operations",
-            json=stale_command.model_dump(mode="json"),
-        )
-        stale_lookup = client.get(
-            "/api/v1/config-registry/publish-operations/publish%3Astale"
-        )
-
-        assert first.status_code == 200
-        original_receipt = ConfigPublishReceipt.model_validate(first.json())
-        assert original_receipt.operation.operation_id == operation_id
-        assert original_receipt.activation.generation == 2
-        assert ConfigPublishReceipt.model_validate(replay.json()) == original_receipt
-        assert ConfigPublishReceipt.model_validate(lookup.json()) == original_receipt
-        assert changed_intent.status_code == 409
-        assert cross_kind.status_code == 409
-        assert later_receipt.activation.generation == 3
-        assert (
-            ConfigPublishReceipt.model_validate(late_replay.json()) == original_receipt
-        )
-        noop_receipt = ConfigPublishReceipt.model_validate(noop_response.json())
-        assert noop_receipt.operation.activation_generation == 3
-        assert noop_receipt.activation == later_receipt.activation
-        assert ConfigPublishReceipt.model_validate(noop_lookup.json()) == noop_receipt
-        assert stale.status_code == 409
-        assert stale_lookup.status_code == 404
-        assert [
-            item.generation
-            for item in runtime.application.config.get_config_activation_history().items
-        ] == [3, 2, 1]
-        assert "publish-stale" not in {
-            item.id for item in runtime.application.config.get_config_registry().entries
-        }
-        assert [event.kind for event in _events(runtime).items] == [
-            "setup_activated",
-            "config_saved",
-            "config_activated",
-            "config_saved",
-            "config_activated",
-            "config_saved",
-            "config_activated",
-        ]
-
-    with LocalDaemonRuntime(tmp_path) as reopened:
-        assert (
-            reopened.application.config.get_config_publish_operation(operation_id)
-            == original_receipt
-        )
-
-
-def _save_setup(runtime: LocalDaemonRuntime, config: ConfigProfileSnapshot) -> None:
-    runtime.application.setup.save(
-        SetupSaveCommand(
-            revision_id="inventory-v2",
-            setup=ExecutableSetupSnapshot.from_config(config),
-            actor="operator",
-        )
-    )
-
-
-def test_setup_activation_changes_only_setup_and_replays_exactly(
-    tmp_path: Path,
-) -> None:
-    baseline = _config()
-    target = _rekeyed_config(baseline)
-    command = _inventory_migration_command(target)
-    with LocalDaemonRuntime(tmp_path, bootstrap_config=baseline) as runtime:
-        _save_setup(runtime, target)
-        initial = runtime.application.config.get_active_config()
-        client = TestClient(runtime.app())
-        response = client.post(
-            "/api/v1/setup/activation-operations", json=command.model_dump(mode="json")
-        )
-        assert response.status_code == 200
-        receipt = ActiveSetupView.model_validate(response.json())
-        assert receipt.revision.ref == command.revision
-        assert receipt.activation.generation == 2
-        assert runtime.application.config.get_active_config() == initial
-        assert runtime.application.setup.activate(command) == receipt
-        with pytest.raises(BackendConflict, match="different intent"):
-            runtime.application.setup.activate(
-                command.model_copy(update={"changes": ()})
-            )
-        with pytest.raises(BackendConflict, match="setup_mismatch"):
-            runtime.application.config.activate_config_entry(
-                ConfigEntryActivationCommand(
-                    operation_id="old-parameter-default",
-                    entry_id=initial.entry.id,
-                    actor="operator",
-                    expected_generation=1,
-                )
-            )
-
-
-def test_setup_activation_reports_queued_run_as_a_blocker(tmp_path: Path) -> None:
-    baseline = _config()
-    target = _rekeyed_config(baseline)
-    with LocalDaemonRuntime(tmp_path, bootstrap_config=baseline) as runtime:
-        _save_setup(runtime, target)
-        original = runtime.application.setup.current()
-        queued = runtime.application.submit_run(_submission("queued-blocker"))
-        with pytest.raises(BackendConflict, match=queued.run_id):
-            runtime.application.setup.activate(_inventory_migration_command(target))
-        assert runtime.application.setup.current() == original
-        assert runtime.application.config.get_active_config().config == baseline
-
-
-def test_setup_activation_final_check_catches_post_preflight_admission(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    baseline = _config()
-    target = _rekeyed_config(baseline)
-    with LocalDaemonRuntime(tmp_path, bootstrap_config=baseline) as runtime:
-        _save_setup(runtime, target)
-        service = runtime.application.setup
-        original = service.current()
-        require_drained = service._require_drained
-        queued_run_ids: list[str] = []
-
-        def admit_after_preflight(keys: tuple[str, ...]) -> None:
-            require_drained(keys)
-            queued_run_ids.append(
-                runtime.application.submit_run(
-                    _submission("post-preflight-blocker")
-                ).run_id
-            )
-
-        monkeypatch.setattr(service, "_require_drained", admit_after_preflight)
-        with pytest.raises(BackendConflict) as caught:
-            service.activate(_inventory_migration_command(target))
-        assert len(queued_run_ids) == 1
-        assert queued_run_ids[0] in str(caught.value)
-        assert service.current() == original
-
-
-def test_setup_activation_stale_generation_does_not_retire(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    baseline = _config()
-    target = _rekeyed_config(baseline)
-    with LocalDaemonRuntime(tmp_path, bootstrap_config=baseline) as runtime:
-        _save_setup(runtime, target)
-        service = runtime.application.setup
-
-        def unexpected_retirement(_keys: tuple[str, ...]) -> Never:
-            pytest.fail("stale selection must not retire actors")
-
-        monkeypatch.setattr(service._actors, "begin_retirement", unexpected_retirement)
-        with pytest.raises(BackendConflict, match="active setup changed"):
-            service.activate(
-                _inventory_migration_command(target, expected_generation=0)
-            )
-
-
-def test_parameter_default_publish_does_not_invalidate_setup_selection(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    baseline = _config()
-    target = _rekeyed_config(baseline)
-    with LocalDaemonRuntime(tmp_path, bootstrap_config=baseline) as runtime:
-        _save_setup(runtime, target)
-        setup = runtime.application.setup
-        require_drained = setup._require_drained
-
-        def publish_after_preflight(keys: tuple[str, ...]) -> None:
-            require_drained(keys)
-            runtime.application.config.publish_config(
-                _direct_publish_command(
-                    entry_id="parameters-v2",
-                    config=baseline.model_copy(update={"id": "parameters-v2"}),
-                    actor="operator",
-                    expected_generation=1,
-                )
-            )
-
-        monkeypatch.setattr(setup, "_require_drained", publish_after_preflight)
-        result = setup.activate(_inventory_migration_command(target))
-        assert result.activation.generation == 2
-        assert (
-            runtime.application.config.get_active_config().entry.id == "parameters-v2"
-        )
-
-
-def test_setup_activation_does_not_invalidate_explicit_session_selection(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    baseline = _config()
-    target = _rekeyed_config(baseline)
-    release_seen = Event()
-    claim_started = Event()
-    release_gate = InstrumentActorRetirement.release_gate
-
-    def release_then_allow_claim(self: InstrumentActorRetirement) -> None:
-        release_gate(self)
-        if release_seen.is_set():
-            return
-        release_seen.set()
-        assert claim_started.wait(timeout=2)
-
-    with LocalDaemonRuntime(tmp_path, bootstrap_config=baseline) as runtime:
-        _save_setup(runtime, target)
-        control = runtime.application.executor._control
-        active = runtime.application.setup.current()
-
-        def claim_from_old_snapshot() -> None:
-            assert release_seen.wait(timeout=2)
-            claim_started.set()
-            control.open_instrument_session(
-                operation_id="old-snapshot-open",
-                actor="operator",
-                setup=active.revision.ref,
-                instrument_ids=("source-0",),
-                exclusivity_keys=("source-0",),
-                ttl=timedelta(seconds=30),
-            )
-
-        monkeypatch.setattr(
-            InstrumentActorRetirement, "release_gate", release_then_allow_claim
-        )
-        with ThreadPoolExecutor(max_workers=1) as pool:
-            claim = pool.submit(claim_from_old_snapshot)
-            runtime.application.setup.activate(_inventory_migration_command(target))
-            claim.result(timeout=2)
-        [session] = control.list_instrument_sessions()
-        assert session.setup == active.revision.ref
-        assert session.exclusivity_keys == ("source-0",)
-        [held] = _resource_claims(tmp_path)
-        assert held.resource == ResourceKey.instrument("source-0")
-        assert held.owner_id == session.session_id
-
-
-def test_setup_activation_rolls_back_and_releases_gate_on_event_failure(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    baseline = _config()
-    target = _rekeyed_config(baseline)
-    command = _inventory_migration_command(target)
-    append_event = SQLiteControlPlane.append_event_in_transaction
-
-    def fail_event(
-        control: SQLiteControlPlane,
-        connection: sqlite3.Connection,
-        event: DurableEventInput,
-    ) -> DurableEvent:
-        if event.kind == "setup_activated":
-            raise RuntimeError("setup event publication failed")
-        return append_event(control, connection, event)
-
-    with LocalDaemonRuntime(tmp_path, bootstrap_config=baseline) as runtime:
-        _save_setup(runtime, target)
-        original = runtime.application.setup.current()
-        with monkeypatch.context() as patch:
-            patch.setattr(SQLiteControlPlane, "append_event_in_transaction", fail_event)
-            with pytest.raises(RuntimeError, match="setup event publication failed"):
-                runtime.application.setup.activate(command)
-        assert runtime.application.setup.current() == original
-        receipt = runtime.application.setup.activate(command)
-        assert receipt.activation.generation == 2
+    assert state.parameters == explicit.parameter_snapshot
 
 
 def test_config_publish_rolls_back_registry_and_event_when_event_fails(
@@ -1486,9 +850,13 @@ def test_config_publish_rolls_back_registry_and_event_when_event_fails(
             raise RuntimeError("event publication failed")
         return append_event(control, connection, event)
 
-    with LocalDaemonRuntime(tmp_path) as runtime:
-        setup = _select_setup(
-            runtime, _config(), revision_id="bench", expected_generation=0
+    with LocalDaemonRuntime(tmp_path, instrument_endpoint=signal_endpoint()) as runtime:
+        setup = runtime.application.setup.import_recipe(
+            SetupImportCommand(
+                revision_id="initial",
+                setup=ExecutableSetupSnapshot.from_config(_config()),
+                actor="test",
+            )
         )
         initial_events = _events(runtime).items
         with monkeypatch.context() as patch:
@@ -1502,7 +870,7 @@ def test_config_publish_rolls_back_registry_and_event_when_event_fails(
 
         assert runtime.application.config.get_config_registry() == ConfigRegistryPage()
         assert _events(runtime).items == initial_events
-        assert runtime.application.setup.current() == setup
+        assert runtime.application.setup.resolve("initial") == setup
 
         receipt = runtime.application.config.publish_config(command)
 
@@ -1512,7 +880,6 @@ def test_config_publish_rolls_back_registry_and_event_when_event_fails(
             for entry in runtime.application.config.get_config_registry().entries
         ] == ["baseline"]
         assert [event.kind for event in _events(runtime).items] == [
-            "setup_activated",
             "config_saved",
             "config_activated",
         ]
@@ -1524,9 +891,18 @@ def test_config_activation_rolls_back_when_operation_commit_fails(
     baseline = _config().model_copy(update={"id": "operation-baseline"})
     current = baseline.model_copy(update={"id": "operation-current"})
     operation_id = "activation:rollback"
-    with LocalDaemonRuntime(tmp_path, bootstrap_config=baseline) as runtime:
+    with LocalDaemonRuntime(
+        tmp_path, bootstrap_config=baseline, instrument_endpoint=signal_endpoint()
+    ) as runtime:
         service = runtime.application.config
-        baseline_entry = service.get_active_config().entry
+        baseline_entry = service.publish_config(
+            _direct_publish_command(
+                config=baseline,
+                entry_id=baseline.id,
+                actor="test",
+                expected_generation=0,
+            )
+        ).entry
         service.publish_config(
             _direct_publish_command(
                 entry_id=current.id,
@@ -1577,133 +953,13 @@ def test_config_activation_rolls_back_when_operation_commit_fails(
         assert len(_events(runtime).items) == len(events_before) + 1
 
 
-def test_config_draft_http_workflow_previews_and_atomically_sets_default(
-    tmp_path: Path,
-) -> None:
-    with LocalDaemonRuntime(tmp_path, bootstrap_config=_config()) as runtime:
-        client = TestClient(runtime.app())
-        active = ActiveConfigView.model_validate(
-            client.get("/api/v1/config-registry/active").json()
-        )
-        draft = ConfigDraftCommand(
-            base_entry_id=active.entry.id,
-            base_content_hash=active.entry.content_hash,
-            base_generation=active.activation.generation,
-            candidate_id="manual-tuning",
-            updates=(
-                ReplaceParameter(
-                    value=ScalarParameterValue(
-                        id="drive_frequency",
-                        value=Quantity(value=5.1, unit="GHz"),
-                    )
-                ),
-            ),
-        )
-
-        preview_response = client.post(
-            "/api/v1/config-registry/drafts/preview",
-            json=draft.model_dump(mode="json"),
-        )
-        preview = ConfigDraftPreview.model_validate(preview_response.json())
-        assert preview.result_content_hash is not None
-        default_response = client.post(
-            "/api/v1/config-registry/publish-operations",
-            json=ConfigPublishCommand(
-                operation_id="publish:manual-tuning",
-                source=ManualConfigDraftRevisionSource(
-                    draft=draft,
-                    expected_result_content_hash=preview.result_content_hash,
-                ),
-                entry_id="manual-tuning",
-                actor="operator",
-                expected_generation=active.activation.generation,
-            ).model_dump(mode="json"),
-        )
-        default = ConfigPublishReceipt.model_validate(default_response.json())
-
-        assert preview_response.status_code == 200
-        assert preview.valid
-        assert default_response.status_code == 200
-        assert default.entry.content_hash == preview.result_content_hash
-        assert default.activation.entry_id == "manual-tuning"
-        assert default.activation.generation == active.activation.generation + 1
-        # A later revision makes the original draft base stale. Restoration must
-        # select the already accepted immutable entry, not republish the draft.
-        later = runtime.application.config.publish_config(
-            _direct_publish_command(
-                config=_config().model_copy(update={"id": "later"}),
-                entry_id="later",
-                actor="operator",
-                expected_generation=2,
-            )
-        )
-        detail = ConfigEntryView.model_validate(
-            client.get("/api/v1/config-registry/entries/manual-tuning").json()
-        )
-        assert detail.latest_activation == default.activation
-        command = ConfigEntryActivationCommand(
-            operation_id="restore-manual-tuning",
-            entry_id=default.entry.id,
-            actor="operator",
-            expected_generation=later.activation.generation,
-            note="return to reviewed parameters",
-        )
-        restored_response = client.post(
-            "/api/v1/config-registry/activation-operations",
-            json=command.model_dump(mode="json"),
-        )
-        assert restored_response.status_code == 200
-        restored = ConfigActivationReceipt.model_validate(restored_response.json())
-        assert restored.activation.generation == 4
-        assert restored.activation.restored_from_generation == 2
-        assert restored.activation.entry_content_hash == default.entry.content_hash
-        assert (
-            runtime.application.config.get_config_entry(default.entry.id).entry
-            == default.entry
-        )
-        replay = client.post(
-            "/api/v1/config-registry/activation-operations",
-            json=command.model_dump(mode="json"),
-        )
-        assert ConfigActivationReceipt.model_validate(replay.json()) == restored
-        stale = client.post(
-            "/api/v1/config-registry/activation-operations",
-            json=command.model_copy(
-                update={"operation_id": "stale-restore"}
-            ).model_dump(mode="json"),
-        )
-        assert stale.status_code == 409
-        assert [
-            item.generation
-            for item in runtime.application.config.get_config_activation_history().items
-        ] == [4, 3, 2, 1]
-
-    with LocalDaemonRuntime(tmp_path) as reopened:
-        assert (
-            reopened.application.config.get_config_activation_operation(
-                "restore-manual-tuning"
-            )
-            == restored
-        )
-        assert (
-            reopened.application.config.get_config_entry(
-                "manual-tuning"
-            ).latest_activation
-            == restored.activation
-        )
-        active = reopened.application.config.get_active_config()
-        parameter = active.config.parameter_snapshot.get("drive_frequency")
-
-        assert active.entry.id == "manual-tuning"
-        assert isinstance(parameter, ScalarParameterValue)
-        assert parameter.value == Quantity(value=5.1, unit="GHz")
-
-
 def test_admission_is_durably_idempotent(tmp_path: Path) -> None:
-    submission = _submission()
     state = tmp_path / ".scopecat"
     database = state / "control.sqlite3"
-    with LocalDaemonRuntime(tmp_path, bootstrap_config=_config()) as runtime:
+    with LocalDaemonRuntime(
+        tmp_path, bootstrap_config=_config(), instrument_endpoint=signal_endpoint()
+    ) as runtime:
+        submission = _submission(runtime)
         client = TestClient(runtime.app())
         admission_services: list[AdmissionService] = []
         for _ in range(2):
@@ -1726,6 +982,7 @@ def test_admission_is_durably_idempotent(tmp_path: Path) -> None:
                     ),
                     sample_store=sample_store,
                     targets=runtime.application.targets,
+                    setup=runtime.application.setup,
                 )
             )
         services = tuple(admission_services)
@@ -1816,14 +1073,13 @@ def test_client_planned_admission_rejects_instrument_inventory_changes(
             )
         }
     )
-    submission = _submission("changed-inventory").model_copy(
-        update={"config": submitted}
-    )
 
     with LocalDaemonRuntime(
-        tmp_path,
-        bootstrap_config=authoritative,
+        tmp_path, bootstrap_config=authoritative, instrument_endpoint=signal_endpoint()
     ) as runtime:
+        submission = _submission(runtime, "changed-inventory").model_copy(
+            update={"config": submitted}
+        )
         with pytest.raises(BackendConflict, match="instrument inventory differs"):
             runtime.application.submit_run(submission)
 
@@ -1837,179 +1093,17 @@ def test_client_planned_admission_rejects_instrument_inventory_changes(
         )
 
 
-def test_config_publish_rejects_rekey_with_a_queued_run(tmp_path: Path) -> None:
-    config = _config()
-    with LocalDaemonRuntime(tmp_path, bootstrap_config=config) as runtime:
-        queued = runtime.application.submit_run(_submission("queued-before-rekey"))
-        active = runtime.application.config.get_active_config()
-        [instrument] = config.instrument_registry.instruments
-        rekeyed_registry = config.instrument_registry.model_copy(
-            update={
-                "instruments": [
-                    instrument.model_copy(
-                        update={"exclusivity_key": "alternate-source"}
-                    )
-                ]
-            }
-        )
-        rekeyed = config.model_copy(
-            update={
-                "id": "rekeyed",
-                "system": config.system.model_copy(
-                    update={"instrument_registry": rekeyed_registry}
-                ),
-            }
-        )
-
-        with pytest.raises(
-            BackendConflict,
-            match="setup_mismatch",
-        ):
-            runtime.application.config.publish_config(
-                ConfigPublishCommand(
-                    operation_id="publish:rekeyed",
-                    source=DirectConfigRevisionSource(config=rekeyed),
-                    entry_id="rekeyed",
-                    actor="operator",
-                    expected_generation=active.activation.generation,
-                )
-            )
-
-        current = runtime.application.config.get_active_config()
-        assert current.activation == active.activation
-        assert (
-            runtime.application.executor._control.get_run(queued.run_id).state
-            == "queued"
-        )
-
-
-def test_admission_fences_an_activation_after_active_resolution(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    config = _config()
-    with LocalDaemonRuntime(tmp_path, bootstrap_config=config) as runtime:
-        admission = runtime.application._admission
-        resolve_active = admission._resolve_active_setup
-
-        def resolve_then_activate() -> ActiveSetupView:
-            resolved = resolve_active()
-            _select_setup(
-                runtime,
-                config.model_copy(update={"id": "activated-during-submit"}),
-                revision_id="activated-during-submit",
-                expected_generation=resolved.activation.generation,
-            )
-            return resolved
-
-        monkeypatch.setattr(
-            admission,
-            "_resolve_active_setup",
-            resolve_then_activate,
-        )
-
-        with pytest.raises(BackendConflict, match="active setup changed"):
-            runtime.application.submit_run(_submission("activation-race"))
-
-        assert (
-            runtime.application.runs.list_runs(
-                limit=10,
-                before=None,
-                state=None,
-            ).items
-            == ()
-        )
-        assert list_test_runs(_run_repository(tmp_path)) == []
-
-
-def test_registry_admission_replays_but_uses_current_inventory_for_new_runs(
-    tmp_path: Path,
-) -> None:
-    config = _config()
-    with LocalDaemonRuntime(tmp_path, bootstrap_config=config) as runtime:
-        active = runtime.application.config.get_active_config()
-        source = ConfigRegistryRunConfigSource(
-            selector="active",
-            entry_id=active.entry.id,
-            config_ref=active.entry.config_ref,
-            content_hash=active.entry.content_hash,
-            registry_generation=active.activation.generation,
-        )
-        submission = _submission("registry-source").model_copy(
-            update={"config_source": source}
-        )
-        admitted = runtime.application.submit_run(submission)
-
-        [instrument] = config.instrument_registry.instruments
-        changed_registry = config.instrument_registry.model_copy(
-            update={
-                "instruments": [
-                    instrument.model_copy(update={"driver_id": "alternate.driver"})
-                ]
-            }
-        )
-        changed = config.model_copy(
-            update={
-                "id": "changed-inventory",
-                "system": config.system.model_copy(
-                    update={"instrument_registry": changed_registry}
-                ),
-            }
-        )
-        _select_setup(
-            runtime,
-            changed,
-            revision_id="changed-inventory",
-            expected_generation=active.activation.generation,
-        )
-
-        assert runtime.application.submit_run(submission) == admitted
-        with pytest.raises(BackendConflict, match="instrument inventory differs"):
-            runtime.application.submit_run(
-                submission.model_copy(
-                    update={"submission_id": "historical-registry-source"}
-                )
-            )
-        current = runtime.application.submit_run(
-            _submission("current-active-inventory").model_copy(
-                update={
-                    "config": changed,
-                    "scientific_binding": bind_scientific_evidence(
-                        catalog_id=runtime.application.project_id,
-                        config=changed,
-                        samples=(),
-                        sample_revisions={},
-                    ),
-                }
-            )
-        )
-        control = runtime.application.executor._control.get_run(current.run_id)
-        assert control.admission.resource_claims == (
-            ResourceKey(kind="instrument", id="source-0"),
-        )
-
-        with pytest.raises(BackendConflict, match="does not match its registry entry"):
-            runtime.application.submit_run(
-                submission.model_copy(
-                    update={
-                        "submission_id": "forged-registry-source",
-                        "config_source": source.model_copy(
-                            update={"config_ref": "forged-config-ref"}
-                        ),
-                    }
-                )
-            )
-
-
 def test_authority_failure_replays_a_concurrently_admitted_submission(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     config = _config()
-    submission = _submission("concurrent-authority-change")
     state = tmp_path / ".scopecat"
     database = state / "control.sqlite3"
-    with LocalDaemonRuntime(tmp_path, bootstrap_config=config) as runtime:
+    with LocalDaemonRuntime(
+        tmp_path, bootstrap_config=config, instrument_endpoint=signal_endpoint()
+    ) as runtime:
+        submission = _submission(runtime, "concurrent-authority-change")
         sqlite = SQLiteDatabase(database)
         runs = SQLiteRunRepository(sqlite, state / "objects")
         registry = SQLiteConfigRegistryStore(sqlite, runs=runs)
@@ -2028,40 +1122,20 @@ def test_authority_failure_replays_a_concurrently_admitted_submission(
             ),
             sample_store=sample_store,
             targets=runtime.application.targets,
+            setup=runtime.application.setup,
         )
-        resolve_active = racing._resolve_active_setup
         admitted: RunAdmission | None = None
 
-        def resolve_after_competing_admission() -> ActiveSetupView:
+        def resolve_after_competing_admission(
+            _source: RunConfigSource | None,
+        ) -> ConfigProfileSnapshot:
             nonlocal admitted
             admitted = runtime.application.submit_run(submission)
-            active = runtime.application.config.get_active_config()
-            [instrument] = config.instrument_registry.instruments
-            changed_registry = config.instrument_registry.model_copy(
-                update={
-                    "instruments": [
-                        instrument.model_copy(update={"driver_id": "alternate.driver"})
-                    ]
-                }
-            )
-            _select_setup(
-                runtime,
-                config.model_copy(
-                    update={
-                        "id": "concurrent-inventory-change",
-                        "system": config.system.model_copy(
-                            update={"instrument_registry": changed_registry}
-                        ),
-                    }
-                ),
-                revision_id="concurrent-inventory-change",
-                expected_generation=active.activation.generation,
-            )
-            return resolve_active()
+            raise BackendConflict("setup changed after the competing admission")
 
         monkeypatch.setattr(
             racing,
-            "_resolve_active_setup",
+            "_resolve_provenance_config",
             resolve_after_competing_admission,
         )
 
@@ -2078,9 +1152,12 @@ def test_admission_canonicalizes_domain_only_instrument_claims(
     target = config.domain_target
     assert target is not None
     logical_requirements = (RunResourceRequirement(id="source-0", kind="instrument"),)
-    with LocalDaemonRuntime(tmp_path, bootstrap_config=config) as runtime:
+    with LocalDaemonRuntime(
+        tmp_path, bootstrap_config=config, instrument_endpoint=signal_endpoint()
+    ) as runtime:
         admitted = runtime.application.submit_run(
             _domain_only_submission(
+                runtime,
                 config,
                 submission_id="domain-canonical",
                 requirements=logical_requirements,
@@ -2137,10 +1214,13 @@ def test_admission_rejects_invalid_domain_only_requirements(
         RunResourceRequirement(id="source-0", kind="instrument"),
         RunResourceRequirement(id="rack-a/source", kind="instrument"),
     )
-    with LocalDaemonRuntime(tmp_path, bootstrap_config=config) as runtime:
+    with LocalDaemonRuntime(
+        tmp_path, bootstrap_config=config, instrument_endpoint=signal_endpoint()
+    ) as runtime:
         with pytest.raises(BackendConflict, match="unknown instruments"):
             runtime.application.submit_run(
                 _domain_only_submission(
+                    runtime,
                     config,
                     submission_id="domain-invalid-instrument",
                     requirements=requirements,
@@ -2183,7 +1263,9 @@ def test_admission_rejects_domain_requirement_outside_active_authority(
     assert submitted_target is not None
     requirements = (RunResourceRequirement(id="source-0", kind="instrument"),)
     with (
-        LocalDaemonRuntime(tmp_path, bootstrap_config=config) as runtime,
+        LocalDaemonRuntime(
+            tmp_path, bootstrap_config=config, instrument_endpoint=signal_endpoint()
+        ) as runtime,
         pytest.raises(
             BackendConflict,
             match="differs from the active setup",
@@ -2191,6 +1273,7 @@ def test_admission_rejects_domain_requirement_outside_active_authority(
     ):
         runtime.application.submit_run(
             _domain_only_submission(
+                runtime,
                 submitted,
                 submission_id="domain-invalid-authority",
                 requirements=requirements,
@@ -2198,164 +1281,16 @@ def test_admission_rejects_domain_requirement_outside_active_authority(
         )
 
 
-def test_post_run_analysis_policy_acceptance_and_candidate_activation_closed_loop(
-    tmp_path: Path,
-) -> None:
-    with LocalDaemonRuntime(tmp_path, bootstrap_config=_config()) as runtime:
-        client = TestClient(runtime.app())
-        admission = runtime.application.submit_run(_submission("post-run-loop"))
-        proposal = _analysis_proposal(admission.run_id)
-        analysis_command = _analysis_command(proposal)
-        analysis_url = f"/api/v1/runs/{admission.run_id}/analyses"
-        first_save = client.post(
-            analysis_url,
-            json=analysis_command.model_dump(mode="json"),
-        )
-        retry_save = client.post(
-            analysis_url,
-            json=analysis_command.model_dump(mode="json"),
-        )
-        analyses = client.get(analysis_url)
-        analysis_detail = client.get(f"{analysis_url}/{analysis_command.analysis_key}")
-        analysis_record = client.get(
-            f"/api/v1/runs/{admission.run_id}/records/"
-            f"analysis-{analysis_command.analysis_key}-r1/json",
-            params={"expected_kind": "analysis"},
-        )
-        dataset_bytes = RunDatasetBytesView.model_validate(
-            client.get(
-                f"/api/v1/runs/{admission.run_id}/datasets/analysis-fit-r1-fits/bytes",
-                params={"expected_kind": "analysis_dataset"},
-            ).json()
-        )
-        analysis_artifact = client.get(
-            f"/api/v1/runs/{admission.run_id}/artifacts/"
-            "analysis-fit-r1-fit-report/text",
-            params={"expected_kind": "analysis_artifact"},
-        )
-        attachment_command = RunAttachmentCommand(
-            key="notebook-notes",
-            text="operator notes",
-            filename="notes.md",
-            media_type="text/markdown",
-        )
-        attachment = client.post(
-            f"/api/v1/runs/{admission.run_id}/attachments",
-            json=attachment_command.model_dump(mode="json"),
-        )
-        attachment_text = client.get(
-            f"/api/v1/runs/{admission.run_id}/artifacts/notebook-notes/text",
-            params={"expected_kind": "attachment"},
-        )
-        config = RunConfigView.model_validate(
-            client.get(f"/api/v1/runs/{admission.run_id}/config").json()
-        )
-        proposals = ParameterProposalPage.model_validate(
-            client.get(f"/api/v1/runs/{admission.run_id}/parameter-proposals").json()
-        )
-        exact_proposal = ParameterProposalView.model_validate(
-            client.get(
-                f"/api/v1/runs/{admission.run_id}/parameter-proposals/{proposal.id}"
-            ).json()
-        )
-        activated = client.post(
-            "/api/v1/config-registry/publish-operations",
-            json=ConfigPublishCommand(
-                operation_id="publish:candidate-fit",
-                source=CandidateConfigRevisionSource(
-                    run_id=admission.run_id,
-                    proposal_id=proposal.id,
-                    acceptance=ManualCandidateAcceptance(),
-                ),
-                entry_id="candidate-fit",
-                actor="nightly-calibration",
-                expected_generation=1,
-                note="fit evidence reviewed",
-            ).model_dump(mode="json"),
-        )
-        approved_proposals = ParameterProposalPage.model_validate(
-            client.get(f"/api/v1/runs/{admission.run_id}/parameter-proposals").json()
-        )
-
-        saved = AnalysisSaveReceipt.model_validate(first_save.json())
-        retry = AnalysisSaveReceipt.model_validate(retry_save.json())
-        activation = ConfigPublishReceipt.model_validate(activated.json())
-        approval = approved_proposals.items[0].approval
-        assert approval is not None
-        events = _events(runtime, run_id=admission.run_id).items
-
-        assert first_save.status_code == 201
-        assert retry == saved
-        assert exact_proposal.proposal == proposal
-        assert analyses.json()["items"][0]["key"] == "fit"
-        assert analysis_detail.json()["entry"]["id"] == "analysis-fit-r1"
-        assert analysis_record.json()["content"]["title"] == "fit"
-        persisted_outputs = analysis_record.json()["content"]["outputs"]
-        assert persisted_outputs[0]["content"]["preview"] == {
-            "columns": [{"id": "bias", "label": None, "unit": None}],
-            "rows": [{"cells": [1.0]}, {"cells": [2.0]}],
-        }
-        assert persisted_outputs[0]["content"]["total_rows"] == 2
-        assert not persisted_outputs[0]["content"]["truncated"]
-        assert persisted_outputs[1]["content"]["dataset_id"] == "analysis-fit-r1-fits"
-        restored_dataset = DerivedDataset.from_arrow_ipc(
-            dataset_bytes.content_bytes(),
-            schema=DerivedDataset.from_payload(
-                cast(
-                    "AnalysisDatasetOutputPayload", analysis_command.outputs[1]
-                ).content
-            ).schema,
-        )
-        assert restored_dataset.table.to_pylist() == [
-            {"bias": 1.0, "signal": 3.0},
-            {"bias": 2.0, "signal": 4.0},
-        ]
-        assert persisted_outputs[2]["content"]["layers"][0]["preview"]["series"][0] == {
-            "id": "signal",
-            "label": "signal",
-            "x": [1.0, 2.0],
-            "y": [3.0, 4.0],
-            "y_lower": None,
-            "y_upper": None,
-        }
-        assert persisted_outputs[2]["content"]["total_points"] == 2
-        assert not persisted_outputs[2]["content"]["truncated"]
-        assert persisted_outputs[3]["content"]["proposal_id"] == proposal.id
-        assert persisted_outputs[4]["content"]["artifact_id"] == (
-            "analysis-fit-r1-fit-report"
-        )
-        assert analysis_artifact.json()["content"] == "# Fit report\n"
-        assert attachment.json()["filename"] == "notes.md"
-        assert attachment_text.json()["content"] == "operator notes\n"
-        assert config.config == _config()
-        assert proposals.items[0].proposal == proposal
-        assert proposals.items[0].approval is None
-        assert approval.actor == "nightly-calibration"
-        assert approved_proposals.items[0].approval == approval
-        assert activation.entry.id == "candidate-fit"
-        assert activation.activation.generation == 2
-        assert [
-            event.kind
-            for event in events
-            if event.kind
-            in {
-                "analysis_saved",
-                "parameter_proposal_approved",
-                "config_activated",
-            }
-        ] == [
-            "analysis_saved",
-            "parameter_proposal_approved",
-            "config_activated",
-        ]
-
-
 def test_run_analysis_history_is_paged_and_logical_keys_resolve_latest(
     tmp_path: Path,
 ) -> None:
-    with LocalDaemonRuntime(tmp_path, bootstrap_config=_config()) as runtime:
+    with LocalDaemonRuntime(
+        tmp_path, bootstrap_config=_config(), instrument_endpoint=signal_endpoint()
+    ) as runtime:
         client = TestClient(runtime.app())
-        admission = runtime.application.submit_run(_submission("analysis-history"))
+        admission = runtime.application.submit_run(
+            _submission(runtime, "analysis-history")
+        )
         analysis_url = f"/api/v1/runs/{admission.run_id}/analyses"
         for revision in range(1, 4):
             command = AnalysisSaveCommand(
@@ -2411,10 +1346,12 @@ def test_run_analysis_history_is_paged_and_logical_keys_resolve_latest(
 def test_run_analysis_rejects_missing_measurement_input_content(
     tmp_path: Path,
 ) -> None:
-    with LocalDaemonRuntime(tmp_path, bootstrap_config=_config()) as runtime:
+    with LocalDaemonRuntime(
+        tmp_path, bootstrap_config=_config(), instrument_endpoint=signal_endpoint()
+    ) as runtime:
         client = TestClient(runtime.app())
         admission = runtime.application.submit_run(
-            _submission("analysis-missing-measurement-input")
+            _submission(runtime, "analysis-missing-measurement-input")
         )
         command = AnalysisSaveCommand(
             title="Forged input",
@@ -2443,10 +1380,12 @@ def test_run_analysis_rejects_missing_measurement_input_content(
 def test_run_analysis_allocates_distinct_revisions_for_concurrent_saves(
     tmp_path: Path,
 ) -> None:
-    with LocalDaemonRuntime(tmp_path, bootstrap_config=_config()) as runtime:
+    with LocalDaemonRuntime(
+        tmp_path, bootstrap_config=_config(), instrument_endpoint=signal_endpoint()
+    ) as runtime:
         client = TestClient(runtime.app())
         admission = runtime.application.submit_run(
-            _submission("concurrent-run-analysis")
+            _submission(runtime, "concurrent-run-analysis")
         )
         commands = tuple(
             AnalysisSaveCommand(
@@ -2481,8 +1420,12 @@ def test_analysis_publication_rolls_back_refs_index_and_event_together(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    with LocalDaemonRuntime(tmp_path, bootstrap_config=_config()) as runtime:
-        admission = runtime.application.submit_run(_submission("analysis-atomic"))
+    with LocalDaemonRuntime(
+        tmp_path, bootstrap_config=_config(), instrument_endpoint=signal_endpoint()
+    ) as runtime:
+        admission = runtime.application.submit_run(
+            _submission(runtime, "analysis-atomic")
+        )
         proposal = _analysis_proposal(admission.run_id)
         command = _analysis_command(proposal)
         before = _run_state(runtime, admission.run_id)
@@ -2556,8 +1499,20 @@ def test_candidate_publish_rolls_back_approval_with_event(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    with LocalDaemonRuntime(tmp_path, bootstrap_config=_config()) as runtime:
-        admission = runtime.application.submit_run(_submission("decision-atomic"))
+    with LocalDaemonRuntime(
+        tmp_path, bootstrap_config=_config(), instrument_endpoint=signal_endpoint()
+    ) as runtime:
+        runtime.application.config.publish_config(
+            _direct_publish_command(
+                config=_config(),
+                entry_id="baseline",
+                actor="test",
+                expected_generation=0,
+            )
+        )
+        admission = runtime.application.submit_run(
+            _submission(runtime, "decision-atomic")
+        )
         proposal = _analysis_proposal(admission.run_id)
         runtime.application.runs.save_run_analysis(
             admission.run_id,
@@ -2671,8 +1626,10 @@ def test_candidate_publish_rolls_back_approval_with_event(
 def test_executor_start_is_atomic_idempotent_and_quiet_when_resources_busy(
     tmp_path: Path,
 ) -> None:
-    with LocalDaemonRuntime(tmp_path, bootstrap_config=_config()) as runtime:
-        first = runtime.application.submit_run(_submission("executor-first"))
+    with LocalDaemonRuntime(
+        tmp_path, bootstrap_config=_config(), instrument_endpoint=signal_endpoint()
+    ) as runtime:
+        first = runtime.application.submit_run(_submission(runtime, "executor-first"))
         request = ExecutorStartRequest(
             executor_id="notebook-1",
         )
@@ -2706,7 +1663,9 @@ def test_executor_start_is_atomic_idempotent_and_quiet_when_resources_busy(
             == 1
         )
 
-        waiting = runtime.application.submit_run(_submission("executor-waiting"))
+        waiting = runtime.application.submit_run(
+            _submission(runtime, "executor-waiting")
+        )
         with pytest.raises(BackendConflict, match="resources are busy"):
             runtime.application.executor.start_executor(
                 waiting.run_id,
@@ -2725,13 +1684,15 @@ def test_executor_start_is_atomic_idempotent_and_quiet_when_resources_busy(
 def test_queued_run_reports_owner_and_cancellation_does_not_touch_it(
     tmp_path: Path,
 ) -> None:
-    with LocalDaemonRuntime(tmp_path, bootstrap_config=_config()) as runtime:
+    with LocalDaemonRuntime(
+        tmp_path, bootstrap_config=_config(), instrument_endpoint=signal_endpoint()
+    ) as runtime:
         executor = runtime.application.executor
-        owner = runtime.application.submit_run(_submission("visible-owner"))
+        owner = runtime.application.submit_run(_submission(runtime, "visible-owner"))
         lease = executor.start_executor(
             owner.run_id, ExecutorStartRequest(executor_id="owner")
         )
-        waiting = runtime.application.submit_run(_submission("visible-waiter"))
+        waiting = runtime.application.submit_run(_submission(runtime, "visible-waiter"))
         resource = runtime.application.runs.get_run(waiting.run_id).resources[0]
         assert resource.status == "blocked"
         assert resource.blocked_by is not None
@@ -2750,7 +1711,9 @@ def test_queued_run_reports_owner_and_cancellation_does_not_touch_it(
         )
         assert _control_run(runtime, owner.run_id).cancellation_requested_at is None
 
-        next_waiter = runtime.application.submit_run(_submission("next-waiter"))
+        next_waiter = runtime.application.submit_run(
+            _submission(runtime, "next-waiter")
+        )
         executor.commit_terminal(
             owner.run_id,
             TerminalRunCommitCommand(
@@ -2780,12 +1743,14 @@ def test_queued_run_reports_owner_and_cancellation_does_not_touch_it(
 
 
 def test_queued_run_reports_quarantined_owner_after_restart(tmp_path: Path) -> None:
-    with LocalDaemonRuntime(tmp_path, bootstrap_config=_config()) as runtime:
-        owner = runtime.application.submit_run(_submission("restart-owner"))
+    with LocalDaemonRuntime(
+        tmp_path, bootstrap_config=_config(), instrument_endpoint=signal_endpoint()
+    ) as runtime:
+        owner = runtime.application.submit_run(_submission(runtime, "restart-owner"))
         runtime.application.executor.start_executor(
             owner.run_id, ExecutorStartRequest(executor_id="owner")
         )
-        waiting = runtime.application.submit_run(_submission("restart-waiter"))
+        waiting = runtime.application.submit_run(_submission(runtime, "restart-waiter"))
     with LocalDaemonRuntime(tmp_path) as reopened:
         detail = reopened.application.runs.get_run(waiting.run_id)
         assert detail.control.state == "queued"
@@ -2797,16 +1762,18 @@ def test_queued_run_reports_quarantined_owner_after_restart(tmp_path: Path) -> N
 
 
 def test_queued_run_reports_interactive_session_blocker(tmp_path: Path) -> None:
-    with LocalDaemonRuntime(tmp_path, bootstrap_config=_config()) as runtime:
+    with LocalDaemonRuntime(
+        tmp_path, bootstrap_config=_config(), instrument_endpoint=signal_endpoint()
+    ) as runtime:
         session = runtime.application.executor._control.open_instrument_session(
             operation_id="visible-session",
             actor="operator",
-            setup=runtime.application.setup.current().revision.ref,
+            setup=runtime.application.setup.resolve("initial").ref,
             instrument_ids=("source-0",),
             exclusivity_keys=("source-0",),
             ttl=timedelta(seconds=30),
         )
-        waiting = runtime.application.submit_run(_submission("session-waiter"))
+        waiting = runtime.application.submit_run(_submission(runtime, "session-waiter"))
         resource = runtime.application.runs.get_run(waiting.run_id).resources[0]
         assert resource.status == "blocked"
         assert resource.blocked_by is not None
@@ -2815,14 +1782,18 @@ def test_queued_run_reports_interactive_session_blocker(tmp_path: Path) -> None:
 
 
 def test_resource_rejection_closes_only_the_unstarted_contender(tmp_path: Path) -> None:
-    with LocalDaemonRuntime(tmp_path, bootstrap_config=_config()) as runtime:
+    with LocalDaemonRuntime(
+        tmp_path, bootstrap_config=_config(), instrument_endpoint=signal_endpoint()
+    ) as runtime:
         executor = runtime.application.executor
-        owner = runtime.application.submit_run(_submission("busy-owner"))
+        owner = runtime.application.submit_run(_submission(runtime, "busy-owner"))
         owner_request = ExecutorStartRequest(
             executor_id="owner", on_resource_busy="fail"
         )
         lease = executor.start_executor(owner.run_id, owner_request)
-        contender = runtime.application.submit_run(_submission("busy-contender"))
+        contender = runtime.application.submit_run(
+            _submission(runtime, "busy-contender")
+        )
 
         with pytest.raises(BackendConflict, match="resources are busy"):
             executor.start_executor(
@@ -2856,7 +1827,7 @@ def test_resource_rejection_closes_only_the_unstarted_contender(tmp_path: Path) 
         assert executor.start_executor(owner.run_id, owner_request) == lease
 
         # Retrying admission preserves the exact rejected run and its outcome.
-        retry = runtime.application.submit_run(_submission("busy-contender"))
+        retry = runtime.application.submit_run(_submission(runtime, "busy-contender"))
         assert retry.run_id == contender.run_id
         assert retry.snapshot.outcome == outcome
 
@@ -2873,11 +1844,15 @@ def test_resource_rejection_rolls_back_terminal_state_if_close_fails(
     ) -> Never:
         raise RuntimeError("injected close failure")
 
-    with LocalDaemonRuntime(tmp_path, bootstrap_config=_config()) as runtime:
+    with LocalDaemonRuntime(
+        tmp_path, bootstrap_config=_config(), instrument_endpoint=signal_endpoint()
+    ) as runtime:
         executor = runtime.application.executor
-        owner = runtime.application.submit_run(_submission("rollback-owner"))
+        owner = runtime.application.submit_run(_submission(runtime, "rollback-owner"))
         executor.start_executor(owner.run_id, ExecutorStartRequest(executor_id="owner"))
-        contender = runtime.application.submit_run(_submission("rollback-contender"))
+        contender = runtime.application.submit_run(
+            _submission(runtime, "rollback-contender")
+        )
         request = ExecutorStartRequest(executor_id="contender", on_resource_busy="fail")
         events_before = _events(runtime, run_id=contender.run_id).items
         with monkeypatch.context() as patch:
@@ -2895,9 +1870,11 @@ def test_resource_rejection_rolls_back_terminal_state_if_close_fails(
 
 
 def test_run_coverage_is_contiguous_durable_and_retryable(tmp_path: Path) -> None:
-    with LocalDaemonRuntime(tmp_path, bootstrap_config=_config()) as runtime:
+    with LocalDaemonRuntime(
+        tmp_path, bootstrap_config=_config(), instrument_endpoint=signal_endpoint()
+    ) as runtime:
         admission = runtime.application.submit_run(
-            _submission("coverage-prefix", point_count=3)
+            _submission(runtime, "coverage-prefix", point_count=3)
         )
         lease = runtime.application.executor.start_executor(
             admission.run_id,
@@ -2974,9 +1951,11 @@ def test_recovery_groups_are_sparse_idempotent_and_survive_restart(
         point_indices=(1, 3),
         output_kind="unrecorded",
     )
-    with LocalDaemonRuntime(tmp_path, bootstrap_config=_config()) as runtime:
+    with LocalDaemonRuntime(
+        tmp_path, bootstrap_config=_config(), instrument_endpoint=signal_endpoint()
+    ) as runtime:
         admission = runtime.application.submit_run(
-            _submission("sparse-recovery-groups", point_count=4)
+            _submission(runtime, "sparse-recovery-groups", point_count=4)
         )
         run_id = admission.run_id
         lease = runtime.application.executor.start_executor(
@@ -3054,9 +2033,11 @@ def test_recovery_groups_are_sparse_idempotent_and_survive_restart(
 def test_measurement_recovery_group_requires_published_matching_records(
     tmp_path: Path,
 ) -> None:
-    with LocalDaemonRuntime(tmp_path, bootstrap_config=_config()) as runtime:
+    with LocalDaemonRuntime(
+        tmp_path, bootstrap_config=_config(), instrument_endpoint=signal_endpoint()
+    ) as runtime:
         admission = runtime.application.submit_run(
-            _submission("measurement-recovery-group", point_count=2)
+            _submission(runtime, "measurement-recovery-group", point_count=2)
         )
         run_id = admission.run_id
         lease = runtime.application.executor.start_executor(
@@ -3186,9 +2167,11 @@ def test_domain_job_transitions_are_fenced_retryable_and_survive_restart(
     tmp_path: Path,
 ) -> None:
     run_id: str
-    with LocalDaemonRuntime(tmp_path, bootstrap_config=_config()) as runtime:
+    with LocalDaemonRuntime(
+        tmp_path, bootstrap_config=_config(), instrument_endpoint=signal_endpoint()
+    ) as runtime:
         admission = runtime.application.submit_run(
-            _submission("domain-job-transitions", point_count=3)
+            _submission(runtime, "domain-job-transitions", point_count=3)
         )
         run_id = admission.run_id
         lease = runtime.application.executor.start_executor(
@@ -3348,9 +2331,11 @@ def test_domain_job_invocation_without_outcome_survives_restart(
 ) -> None:
     run_id: str
     execution_id: DomainExecutionId
-    with LocalDaemonRuntime(tmp_path, bootstrap_config=_config()) as runtime:
+    with LocalDaemonRuntime(
+        tmp_path, bootstrap_config=_config(), instrument_endpoint=signal_endpoint()
+    ) as runtime:
         admission = runtime.application.submit_run(
-            _submission("domain-job-invocation", point_count=1)
+            _submission(runtime, "domain-job-invocation", point_count=1)
         )
         run_id = admission.run_id
         lease = runtime.application.executor.start_executor(
@@ -3395,40 +2380,42 @@ def test_domain_job_invocation_without_outcome_survives_restart(
 def test_open_point_plan_can_succeed_below_its_limit_and_exposes_coverage(
     tmp_path: Path,
 ) -> None:
-    submission = _submission("adaptive-coverage").model_copy(
-        update={
-            "plan": RunPlanSummary(
-                experiment_id="scratch",
-                experiment_kind="scratch",
-                point_plan_fingerprint="a" * 64,
-                measurement_contract_fingerprint="b" * 64,
-                point_count=None,
-                initial_point_count=1,
-                point_limit=3,
-                adaptive_coordinate_ids=("frequency",),
-                adaptive_scope="per_region",
-                adaptive_region_count=1,
-                adaptive_regions=(
-                    AdaptiveRegionSpec(
-                        id="region-0", coordinates={}, initial_point_count=1
+    with LocalDaemonRuntime(
+        tmp_path, bootstrap_config=_config(), instrument_endpoint=signal_endpoint()
+    ) as runtime:
+        submission = _submission(runtime, "adaptive-coverage").model_copy(
+            update={
+                "plan": RunPlanSummary(
+                    experiment_id="scratch",
+                    experiment_kind="scratch",
+                    point_plan_fingerprint="a" * 64,
+                    measurement_contract_fingerprint="b" * 64,
+                    point_count=None,
+                    initial_point_count=1,
+                    point_limit=3,
+                    adaptive_coordinate_ids=("frequency",),
+                    adaptive_scope="per_region",
+                    adaptive_region_count=1,
+                    adaptive_regions=(
+                        AdaptiveRegionSpec(
+                            id="region-0", coordinates={}, initial_point_count=1
+                        ),
                     ),
-                ),
-                coordinates=(
-                    PointCoordinateSpec(
-                        id="frequency",
-                        kind="quantity",
-                        unit="GHz",
-                        sampled_values=(Quantity(5.0, "GHz"),),
+                    coordinates=(
+                        PointCoordinateSpec(
+                            id="frequency",
+                            kind="quantity",
+                            unit="GHz",
+                            sampled_values=(Quantity(5.0, "GHz"),),
+                        ),
                     ),
-                ),
-                sampled_points=({"frequency": Quantity(5.0, "GHz")},),
-                run_resource_requirements=(
-                    RunResourceRequirement(id="source-0", kind="instrument"),
-                ),
-            )
-        }
-    )
-    with LocalDaemonRuntime(tmp_path, bootstrap_config=_config()) as runtime:
+                    sampled_points=({"frequency": Quantity(5.0, "GHz")},),
+                    run_resource_requirements=(
+                        RunResourceRequirement(id="source-0", kind="instrument"),
+                    ),
+                )
+            }
+        )
         admission = runtime.application.submit_run(submission)
         initialized = runtime.application.point_plans.read(admission.run_id)
         lease = runtime.application.executor.start_executor(
@@ -3485,50 +2472,52 @@ def test_open_point_plan_can_succeed_below_its_limit_and_exposes_coverage(
 def test_run_point_resolution_preserves_raw_input_and_makes_snap_explicit(
     tmp_path: Path,
 ) -> None:
-    submission = _submission("adaptive-resolution").model_copy(
-        update={
-            "plan": RunPlanSummary(
-                experiment_id="scratch",
-                experiment_kind="scratch",
-                point_plan_fingerprint="a" * 64,
-                measurement_contract_fingerprint="b" * 64,
-                point_count=None,
-                initial_point_count=2,
-                point_limit=4,
-                adaptive_coordinate_ids=("frequency",),
-                adaptive_scope="per_region",
-                adaptive_region_count=1,
-                adaptive_regions=(
-                    AdaptiveRegionSpec(
-                        id="region-0",
-                        coordinates={},
-                        initial_point_count=2,
-                    ),
-                ),
-                coordinates=(
-                    PointCoordinateSpec(
-                        id="frequency",
-                        kind="quantity",
-                        unit="GHz",
-                        minimum=4.0,
-                        maximum=6.0,
-                        sampled_values=(
-                            Quantity(5.0, "GHz"),
-                            Quantity(5.2, "GHz"),
+    with LocalDaemonRuntime(
+        tmp_path, bootstrap_config=_config(), instrument_endpoint=signal_endpoint()
+    ) as runtime:
+        submission = _submission(runtime, "adaptive-resolution").model_copy(
+            update={
+                "plan": RunPlanSummary(
+                    experiment_id="scratch",
+                    experiment_kind="scratch",
+                    point_plan_fingerprint="a" * 64,
+                    measurement_contract_fingerprint="b" * 64,
+                    point_count=None,
+                    initial_point_count=2,
+                    point_limit=4,
+                    adaptive_coordinate_ids=("frequency",),
+                    adaptive_scope="per_region",
+                    adaptive_region_count=1,
+                    adaptive_regions=(
+                        AdaptiveRegionSpec(
+                            id="region-0",
+                            coordinates={},
+                            initial_point_count=2,
                         ),
                     ),
-                ),
-                sampled_points=(
-                    {"frequency": Quantity(5.0, "GHz")},
-                    {"frequency": Quantity(5.2, "GHz")},
-                ),
-                run_resource_requirements=(
-                    RunResourceRequirement(id="source-0", kind="instrument"),
-                ),
-            )
-        }
-    )
-    with LocalDaemonRuntime(tmp_path, bootstrap_config=_config()) as runtime:
+                    coordinates=(
+                        PointCoordinateSpec(
+                            id="frequency",
+                            kind="quantity",
+                            unit="GHz",
+                            minimum=4.0,
+                            maximum=6.0,
+                            sampled_values=(
+                                Quantity(5.0, "GHz"),
+                                Quantity(5.2, "GHz"),
+                            ),
+                        ),
+                    ),
+                    sampled_points=(
+                        {"frequency": Quantity(5.0, "GHz")},
+                        {"frequency": Quantity(5.2, "GHz")},
+                    ),
+                    run_resource_requirements=(
+                        RunResourceRequirement(id="source-0", kind="instrument"),
+                    ),
+                )
+            }
+        )
         admission = runtime.application.submit_run(submission)
         runtime.application.executor.start_executor(
             admission.run_id,
@@ -3603,42 +2592,44 @@ def test_run_point_resolution_preserves_raw_input_and_makes_snap_explicit(
 def test_selected_region_resolution_defers_to_executor_when_region_sample_is_truncated(
     tmp_path: Path,
 ) -> None:
-    submission = _submission("truncated-adaptive-regions").model_copy(
-        update={
-            "plan": RunPlanSummary(
-                experiment_id="scratch",
-                experiment_kind="scratch",
-                point_plan_fingerprint="a" * 64,
-                measurement_contract_fingerprint="b" * 64,
-                point_count=None,
-                initial_point_count=0,
-                point_limit=4,
-                adaptive_coordinate_ids=("frequency",),
-                adaptive_scope="per_region",
-                adaptive_region_count=300,
-                adaptive_regions=(
-                    AdaptiveRegionSpec(
-                        id="region-0",
-                        coordinates={},
-                        initial_point_count=0,
+    with LocalDaemonRuntime(
+        tmp_path, bootstrap_config=_config(), instrument_endpoint=signal_endpoint()
+    ) as runtime:
+        submission = _submission(runtime, "truncated-adaptive-regions").model_copy(
+            update={
+                "plan": RunPlanSummary(
+                    experiment_id="scratch",
+                    experiment_kind="scratch",
+                    point_plan_fingerprint="a" * 64,
+                    measurement_contract_fingerprint="b" * 64,
+                    point_count=None,
+                    initial_point_count=0,
+                    point_limit=4,
+                    adaptive_coordinate_ids=("frequency",),
+                    adaptive_scope="per_region",
+                    adaptive_region_count=300,
+                    adaptive_regions=(
+                        AdaptiveRegionSpec(
+                            id="region-0",
+                            coordinates={},
+                            initial_point_count=0,
+                        ),
                     ),
-                ),
-                adaptive_regions_truncated=True,
-                coordinates=(
-                    PointCoordinateSpec(
-                        id="frequency",
-                        kind="quantity",
-                        unit="GHz",
-                        sampled_values=(Quantity(5.0, "GHz"),),
+                    adaptive_regions_truncated=True,
+                    coordinates=(
+                        PointCoordinateSpec(
+                            id="frequency",
+                            kind="quantity",
+                            unit="GHz",
+                            sampled_values=(Quantity(5.0, "GHz"),),
+                        ),
                     ),
-                ),
-                run_resource_requirements=(
-                    RunResourceRequirement(id="source-0", kind="instrument"),
-                ),
-            )
-        }
-    )
-    with LocalDaemonRuntime(tmp_path, bootstrap_config=_config()) as runtime:
+                    run_resource_requirements=(
+                        RunResourceRequirement(id="source-0", kind="instrument"),
+                    ),
+                )
+            }
+        )
         admission = runtime.application.submit_run(submission)
         resolved = runtime.application.point_plans.resolve(
             admission.run_id,
@@ -3659,42 +2650,44 @@ def test_selected_region_resolution_defers_to_executor_when_region_sample_is_tru
 
 
 def test_adaptive_domain_ledger_survives_runtime_restart(tmp_path: Path) -> None:
-    submission = _submission("adaptive-ledger").model_copy(
-        update={
-            "plan": RunPlanSummary(
-                experiment_id="scratch",
-                experiment_kind="scratch",
-                point_plan_fingerprint="a" * 64,
-                measurement_contract_fingerprint="b" * 64,
-                point_count=None,
-                initial_point_count=1,
-                point_limit=3,
-                adaptive_coordinate_ids=("frequency",),
-                adaptive_scope="per_region",
-                adaptive_region_count=1,
-                adaptive_regions=(
-                    AdaptiveRegionSpec(
-                        id="region-0",
-                        coordinates={},
-                        initial_point_count=1,
+    with LocalDaemonRuntime(
+        tmp_path, bootstrap_config=_config(), instrument_endpoint=signal_endpoint()
+    ) as runtime:
+        submission = _submission(runtime, "adaptive-ledger").model_copy(
+            update={
+                "plan": RunPlanSummary(
+                    experiment_id="scratch",
+                    experiment_kind="scratch",
+                    point_plan_fingerprint="a" * 64,
+                    measurement_contract_fingerprint="b" * 64,
+                    point_count=None,
+                    initial_point_count=1,
+                    point_limit=3,
+                    adaptive_coordinate_ids=("frequency",),
+                    adaptive_scope="per_region",
+                    adaptive_region_count=1,
+                    adaptive_regions=(
+                        AdaptiveRegionSpec(
+                            id="region-0",
+                            coordinates={},
+                            initial_point_count=1,
+                        ),
                     ),
-                ),
-                coordinates=(
-                    PointCoordinateSpec(
-                        id="frequency",
-                        kind="quantity",
-                        unit="GHz",
-                        sampled_values=(Quantity(5.0, "GHz"),),
+                    coordinates=(
+                        PointCoordinateSpec(
+                            id="frequency",
+                            kind="quantity",
+                            unit="GHz",
+                            sampled_values=(Quantity(5.0, "GHz"),),
+                        ),
                     ),
-                ),
-                sampled_points=({"frequency": Quantity(5.0, "GHz")},),
-                run_resource_requirements=(
-                    RunResourceRequirement(id="source-0", kind="instrument"),
-                ),
-            )
-        }
-    )
-    with LocalDaemonRuntime(tmp_path, bootstrap_config=_config()) as runtime:
+                    sampled_points=({"frequency": Quantity(5.0, "GHz")},),
+                    run_resource_requirements=(
+                        RunResourceRequirement(id="source-0", kind="instrument"),
+                    ),
+                )
+            }
+        )
         admission = runtime.application.submit_run(submission)
         initialized = runtime.application.point_plans.read(admission.run_id)
         lease = runtime.application.executor.start_executor(
@@ -3814,9 +2807,11 @@ def test_adaptive_domain_ledger_survives_runtime_restart(tmp_path: Path) -> None
 
 
 def test_closed_point_plan_cannot_succeed_before_full_coverage(tmp_path: Path) -> None:
-    with LocalDaemonRuntime(tmp_path, bootstrap_config=_config()) as runtime:
+    with LocalDaemonRuntime(
+        tmp_path, bootstrap_config=_config(), instrument_endpoint=signal_endpoint()
+    ) as runtime:
         admission = runtime.application.submit_run(
-            _submission("incomplete-success", point_count=2)
+            _submission(runtime, "incomplete-success", point_count=2)
         )
         lease = runtime.application.executor.start_executor(
             admission.run_id,
@@ -3838,40 +2833,42 @@ def test_closed_point_plan_cannot_succeed_before_full_coverage(tmp_path: Path) -
 
 
 def test_failed_adaptive_run_abandons_pending_operator_domains(tmp_path: Path) -> None:
-    submission = _submission("failed-adaptive-queue").model_copy(
-        update={
-            "plan": RunPlanSummary(
-                experiment_id="scratch",
-                experiment_kind="scratch",
-                point_plan_fingerprint="a" * 64,
-                measurement_contract_fingerprint="b" * 64,
-                point_count=None,
-                initial_point_count=1,
-                point_limit=3,
-                adaptive_coordinate_ids=("frequency",),
-                adaptive_scope="per_region",
-                adaptive_region_count=1,
-                adaptive_regions=(
-                    AdaptiveRegionSpec(
-                        id="region-0", coordinates={}, initial_point_count=1
+    with LocalDaemonRuntime(
+        tmp_path, bootstrap_config=_config(), instrument_endpoint=signal_endpoint()
+    ) as runtime:
+        submission = _submission(runtime, "failed-adaptive-queue").model_copy(
+            update={
+                "plan": RunPlanSummary(
+                    experiment_id="scratch",
+                    experiment_kind="scratch",
+                    point_plan_fingerprint="a" * 64,
+                    measurement_contract_fingerprint="b" * 64,
+                    point_count=None,
+                    initial_point_count=1,
+                    point_limit=3,
+                    adaptive_coordinate_ids=("frequency",),
+                    adaptive_scope="per_region",
+                    adaptive_region_count=1,
+                    adaptive_regions=(
+                        AdaptiveRegionSpec(
+                            id="region-0", coordinates={}, initial_point_count=1
+                        ),
                     ),
-                ),
-                coordinates=(
-                    PointCoordinateSpec(
-                        id="frequency",
-                        kind="quantity",
-                        unit="GHz",
-                        sampled_values=(Quantity(5.0, "GHz"),),
+                    coordinates=(
+                        PointCoordinateSpec(
+                            id="frequency",
+                            kind="quantity",
+                            unit="GHz",
+                            sampled_values=(Quantity(5.0, "GHz"),),
+                        ),
                     ),
-                ),
-                sampled_points=({"frequency": Quantity(5.0, "GHz")},),
-                run_resource_requirements=(
-                    RunResourceRequirement(id="source-0", kind="instrument"),
-                ),
-            )
-        }
-    )
-    with LocalDaemonRuntime(tmp_path, bootstrap_config=_config()) as runtime:
+                    sampled_points=({"frequency": Quantity(5.0, "GHz")},),
+                    run_resource_requirements=(
+                        RunResourceRequirement(id="source-0", kind="instrument"),
+                    ),
+                )
+            }
+        )
         admission = runtime.application.submit_run(submission)
         lease = runtime.application.executor.start_executor(
             admission.run_id,
@@ -3922,9 +2919,13 @@ def test_failed_adaptive_run_abandons_pending_operator_domains(tmp_path: Path) -
 def test_queued_run_cancellation_is_immediate_durable_and_idempotent(
     tmp_path: Path,
 ) -> None:
-    with LocalDaemonRuntime(tmp_path, bootstrap_config=_config()) as runtime:
+    with LocalDaemonRuntime(
+        tmp_path, bootstrap_config=_config(), instrument_endpoint=signal_endpoint()
+    ) as runtime:
         client = TestClient(runtime.app())
-        admission = runtime.application.submit_run(_submission("cancel-queued"))
+        admission = runtime.application.submit_run(
+            _submission(runtime, "cancel-queued")
+        )
 
         response = client.post(f"/api/v1/runs/{admission.run_id}/cancel")
         retry = client.post(f"/api/v1/runs/{admission.run_id}/cancel")
@@ -3959,8 +2960,12 @@ def test_queued_run_cancellation_is_immediate_durable_and_idempotent(
 def test_leased_run_cancellation_reaches_heartbeat_and_preserves_terminal_history(
     tmp_path: Path,
 ) -> None:
-    with LocalDaemonRuntime(tmp_path, bootstrap_config=_config()) as runtime:
-        admission = runtime.application.submit_run(_submission("cancel-leased"))
+    with LocalDaemonRuntime(
+        tmp_path, bootstrap_config=_config(), instrument_endpoint=signal_endpoint()
+    ) as runtime:
+        admission = runtime.application.submit_run(
+            _submission(runtime, "cancel-leased")
+        )
         assert not runtime.application.executor.run_cancellation(
             admission.run_id
         ).requested
@@ -4025,7 +3030,9 @@ def test_leased_run_cancellation_reaches_heartbeat_and_preserves_terminal_histor
         assert segment.certainty == "known"
         assert segment.end_point_count == 0
 
-        racing = runtime.application.submit_run(_submission("cancel-terminal-race"))
+        racing = runtime.application.submit_run(
+            _submission(runtime, "cancel-terminal-race")
+        )
         racing_lease = runtime.application.executor.start_executor(
             racing.run_id,
             ExecutorStartRequest(executor_id="notebook-race"),
@@ -4056,7 +3063,9 @@ def test_leased_run_cancellation_reaches_heartbeat_and_preserves_terminal_histor
         assert raced_terminal.outcome.certainty == "known"
         assert raced_terminal.outcome.problems[0].code == ("run_cancellation_requested")
 
-        failing = runtime.application.submit_run(_submission("cancel-after-failure"))
+        failing = runtime.application.submit_run(
+            _submission(runtime, "cancel-after-failure")
+        )
         failing_lease = runtime.application.executor.start_executor(
             failing.run_id,
             ExecutorStartRequest(executor_id="notebook-failure"),
@@ -4085,7 +3094,9 @@ def test_leased_run_cancellation_reaches_heartbeat_and_preserves_terminal_histor
 
         assert failed_terminal.outcome == failed_outcome
 
-        succeeded = runtime.application.submit_run(_submission("already-succeeded"))
+        succeeded = runtime.application.submit_run(
+            _submission(runtime, "already-succeeded")
+        )
         succeeded_lease = runtime.application.executor.start_executor(
             succeeded.run_id,
             ExecutorStartRequest(executor_id="notebook-2"),
@@ -4121,11 +3132,13 @@ def test_leased_run_cancellation_reaches_heartbeat_and_preserves_terminal_histor
 def test_effect_is_fenced_and_terminal_updates_control(
     tmp_path: Path,
 ) -> None:
-    with LocalDaemonRuntime(tmp_path, bootstrap_config=_config()) as runtime:
+    with LocalDaemonRuntime(
+        tmp_path, bootstrap_config=_config(), instrument_endpoint=signal_endpoint()
+    ) as runtime:
         client = TestClient(runtime.app())
         admission_response = client.post(
             "/api/v1/runs",
-            json=_submission(point_count=4).model_dump(mode="json"),
+            json=_submission(runtime, point_count=4).model_dump(mode="json"),
         )
         run_id = RunAdmission.model_validate(admission_response.json()).run_id
         accepted = _snapshot(runtime, run_id)
@@ -4559,8 +3572,12 @@ def test_effect_and_terminal_publication_roll_back_with_control(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    with LocalDaemonRuntime(tmp_path, bootstrap_config=_config()) as runtime:
-        submission = _submission()
+    with LocalDaemonRuntime(
+        tmp_path, bootstrap_config=_config(), instrument_endpoint=signal_endpoint()
+    ) as runtime:
+        submission = _submission(
+            runtime,
+        )
         admission = runtime.application.submit_run(submission)
         lease = runtime.application.executor.start_executor(
             admission.run_id,
@@ -4696,7 +3713,6 @@ def test_effect_and_terminal_publication_roll_back_with_control(
 def test_host_parameter_evidence_is_fenced_idempotent_and_survives_restart(
     tmp_path: Path,
 ) -> None:
-    submission = _submission("host-evidence")
     evidence = HostParameterEvidence(
         entries=(
             HostPointParameterRead(
@@ -4708,7 +3724,10 @@ def test_host_parameter_evidence_is_fenced_idempotent_and_survives_restart(
         ),
         binding=(),
     )
-    with LocalDaemonRuntime(tmp_path, bootstrap_config=_config()) as runtime:
+    with LocalDaemonRuntime(
+        tmp_path, bootstrap_config=_config(), instrument_endpoint=signal_endpoint()
+    ) as runtime:
+        submission = _submission(runtime, "host-evidence")
         admission = runtime.application.submit_run(submission)
         run_id = admission.run_id
         lease = runtime.application.executor.start_executor(
@@ -4798,8 +3817,10 @@ def test_host_parameter_evidence_is_fenced_idempotent_and_survives_restart(
 def test_restart_quarantines_executor_until_operator_reconciles(
     tmp_path: Path,
 ) -> None:
-    with LocalDaemonRuntime(tmp_path, bootstrap_config=_config()) as runtime:
-        submission = _submission("operator-recovery").model_copy(
+    with LocalDaemonRuntime(
+        tmp_path, bootstrap_config=_config(), instrument_endpoint=signal_endpoint()
+    ) as runtime:
+        submission = _submission(runtime, "operator-recovery").model_copy(
             update={
                 "plan": RunPlanSummary(
                     experiment_id="scratch",
@@ -4952,9 +3973,13 @@ def test_continuation_appends_measurements_in_a_new_segment_fragment(
 ) -> None:
     with ExitStack() as stack:
         runtime = stack.enter_context(
-            LocalDaemonRuntime(tmp_path, bootstrap_config=_config())
+            LocalDaemonRuntime(
+                tmp_path,
+                bootstrap_config=_config(),
+                instrument_endpoint=signal_endpoint(),
+            )
         )
-        submission = _submission("measurement-fragments", point_count=2)
+        submission = _submission(runtime, "measurement-fragments", point_count=2)
         admission = runtime.application.submit_run(submission)
         run_id = admission.run_id
         first_lease = runtime.application.executor.start_executor(
@@ -5265,9 +4290,13 @@ def test_measurement_acknowledgment_loss_and_replay_boundaries(
 ) -> None:
     with ExitStack() as stack:
         runtime = stack.enter_context(
-            LocalDaemonRuntime(tmp_path, bootstrap_config=_config())
+            LocalDaemonRuntime(
+                tmp_path,
+                bootstrap_config=_config(),
+                instrument_endpoint=signal_endpoint(),
+            )
         )
-        submission = _submission("ack-boundary", point_count=2)
+        submission = _submission(runtime, "ack-boundary", point_count=2)
         run_id = runtime.application.submit_run(submission).run_id
         executor = runtime.application.executor
         lease = executor.start_executor(
@@ -5444,11 +4473,13 @@ def test_entity_selected_arrow_http_preserves_run_identity_and_page_watermark(
     from scopecat_testkit.entity_reads import wide_entity_measurements
 
     with LocalDaemonRuntime(
-        tmp_path / str(order[0]), bootstrap_config=_config()
+        tmp_path / str(order[0]),
+        bootstrap_config=_config(),
+        instrument_endpoint=signal_endpoint(),
     ) as runtime:
         client = TestClient(runtime.app())
         admission = runtime.application.submit_run(
-            _submission("selected", point_count=2)
+            _submission(runtime, "selected", point_count=2)
         )
         run_id = admission.run_id
         lease = runtime.application.executor.start_executor(
@@ -5605,9 +4636,11 @@ def test_plan_origin_rejects_direct_run_and_transaction_replay_skips_new_child_g
 ) -> None:
     from scopecat.records.plan_ref import ExperimentPlanRef
 
-    with LocalDaemonRuntime(tmp_path, bootstrap_config=_config()) as runtime:
+    with LocalDaemonRuntime(
+        tmp_path, bootstrap_config=_config(), instrument_endpoint=signal_endpoint()
+    ) as runtime:
         client = TestClient(runtime.app())
-        plain = _submission("plain-origin-check")
+        plain = _submission(runtime, "plain-origin-check")
         forged = plain.model_copy(
             update={
                 "submission_id": "forged-plan-child",
@@ -5645,78 +4678,22 @@ def test_plan_origin_rejects_direct_run_and_transaction_replay_skips_new_child_g
         assert len(client.get("/api/v1/runs").json()["items"]) == 1
 
 
-def _select_setup(
-    runtime: LocalDaemonRuntime,
-    config: ConfigProfileSnapshot,
-    *,
-    revision_id: str,
-    expected_generation: int,
-) -> ActiveSetupView:
-    revision = runtime.application.setup.save(
-        SetupSaveCommand(
-            revision_id=revision_id,
-            setup=ExecutableSetupSnapshot.from_config(config),
-            actor="operator",
-        )
-    )
-    return runtime.application.setup.activate(
-        SetupActivateCommand(
-            operation_id=f"select:{revision_id}",
-            revision=revision.ref,
-            expected_generation=expected_generation,
-            actor="operator",
-        )
-    )
-
-
-def test_admission_does_not_fence_parameter_default_publication(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    config = _config()
-    with LocalDaemonRuntime(tmp_path, bootstrap_config=config) as runtime:
-        admission = runtime.application._admission
-        resolve = admission._resolve_active_setup
-
-        def resolve_then_publish_parameters() -> ActiveSetupView:
-            original = resolve()
-            runtime.application.config.publish_config(
-                _direct_publish_command(
-                    entry_id="parameter-only",
-                    config=config.model_copy(update={"id": "parameter-only"}),
-                    actor="operator",
-                    expected_generation=1,
-                )
-            )
-            return original
-
-        monkeypatch.setattr(
-            admission, "_resolve_active_setup", resolve_then_publish_parameters
-        )
-        result = runtime.application.submit_run(_submission("parameter-race"))
-        assert (
-            runtime.application.executor._control.get_run(result.run_id).state
-            == "queued"
-        )
-        assert runtime.application.setup.current().activation.generation == 1
-
-
 def test_setup_save_rejects_unknown_route_instrument(tmp_path: Path) -> None:
-    with LocalDaemonRuntime(tmp_path, bootstrap_config=_config()) as runtime:
-        current = runtime.application.setup.current()
+    with LocalDaemonRuntime(
+        tmp_path, bootstrap_config=_config(), instrument_endpoint=signal_endpoint()
+    ) as runtime:
+        current = runtime.application.setup.resolve("initial")
         with pytest.raises(BackendConflict):
-            runtime.application.setup.save(
-                SetupSaveCommand(
+            runtime.application.setup.import_recipe(
+                SetupImportCommand(
                     revision_id="invalid-setup",
                     actor="operator",
-                    setup=current.revision.setup.model_copy(
+                    setup=current.setup.model_copy(
                         update={
-                            "routing": current.revision.setup.routing.model_copy(
+                            "routing": current.setup.routing.model_copy(
                                 update={
                                     "routes": [
-                                        current.revision.setup.routing.routes[
-                                            0
-                                        ].model_copy(
+                                        current.setup.routing.routes[0].model_copy(
                                             update={"instrument_id": "missing"}
                                         )
                                     ]
@@ -5726,6 +4703,4 @@ def test_setup_save_rejects_unknown_route_instrument(tmp_path: Path) -> None:
                     ),
                 )
             )
-        assert [item.id for item in runtime.application.setup.list()] == [
-            current.revision.id
-        ]
+        assert [item.id for item in runtime.application.setup.list()] == [current.id]

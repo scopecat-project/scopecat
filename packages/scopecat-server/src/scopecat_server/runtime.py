@@ -14,24 +14,17 @@ from fastapi import FastAPI
 from filelock import FileLock, Timeout
 from scopecat.application.bootstrap import LabBootstrap
 from scopecat.author_workspaces import service_workspace_root
-from scopecat.config.resolution import compose_configuration, validate_config_profile
-from scopecat.daemon.wire import (
-    ConfigPublishCommand,
-    ParameterConfigRevisionSource,
-    SetupActivateCommand,
-    SetupSaveCommand,
-)
+from scopecat.config.resolution import validate_config_profile
 from scopecat.project import load_bootstrap_factory
 from scopecat.project_state import ProjectStateServices
-from scopecat.records.config import ConfigProfileSnapshot, config_content_hash
+from scopecat.records.config import ConfigProfileSnapshot
 from scopecat.records.configuration_template import ConfigurationTemplate
 from scopecat.records.parameter_revision import ParameterRevisionContent
-from scopecat.records.setup import ExecutableSetupSnapshot, SetupRevision
+from scopecat.records.setup import ExecutableSetupSnapshot
 from scopecat.runtime_binding import load_runtime_binding
 
 from scopecat_server._startup_diagnostics import stage as startup_stage
 from scopecat_server.command_payloads import CommandPayloadService
-from scopecat_server.errors import BackendConflict, BackendNotFound
 from scopecat_server.services.active_measurements import ActiveMeasurementStore
 from scopecat_server.services.admission import AdmissionService
 from scopecat_server.services.analyses import AnalysisService
@@ -39,6 +32,7 @@ from scopecat_server.services.application import DaemonApplication
 from scopecat_server.services.automation import AutomationService
 from scopecat_server.services.calibration_checks import CalibrationCheckAdmission
 from scopecat_server.services.config import ConfigService
+from scopecat_server.services.devices import DeviceService
 from scopecat_server.services.executor import ExecutorService
 from scopecat_server.services.leases import OwnershipLeaseSupervisor
 from scopecat_server.services.point_plans import RunPointPlanService
@@ -219,10 +213,13 @@ class LocalDaemonRuntime:
                 services=services,
                 analyses=analysis_service,
             )
+            devices = DeviceService(
+                control=control, actors=instrument_actors, endpoint=instrument_endpoint
+            )
             setup_service = SetupService(
                 control=control,
                 config_registry=config_registry,
-                actors=instrument_actors,
+                devices=devices,
             )
             run_service = RunService(
                 control=control,
@@ -232,6 +229,7 @@ class LocalDaemonRuntime:
                 point_plans=point_plans,
             )
             admission = AdmissionService(
+                setup=setup_service,
                 control=control,
                 runs=runs,
                 services=services,
@@ -280,6 +278,7 @@ class LocalDaemonRuntime:
                 config=config_service,
                 setup=setup_service,
                 analyses=analysis_service,
+                devices=devices,
                 runs=run_service,
                 admission=admission,
                 executor=executor,
@@ -300,8 +299,7 @@ class LocalDaemonRuntime:
                     else project_bootstrap
                 )
                 if bootstrap_source is not None:
-                    _bootstrap_config_registry(
-                        config_service,
+                    _bootstrap_inputs(
                         bootstrap_source,
                         setup_service,
                     )
@@ -364,104 +362,33 @@ class LocalDaemonRuntime:
         self.close()
 
 
-def _bootstrap_config_registry(
-    config_service: ConfigService,
+def _bootstrap_inputs(
     config: ConfigProfileSnapshot | Callable[[], ConfigProfileSnapshot] | LabBootstrap,
     setup_service: SetupService,
 ) -> None:
-    if isinstance(config, LabBootstrap) and config.parameter_defaults is None:
-        if config.setup is not None:
-            if setup_service.list():
-                try:
-                    setup_service.current()
-                except BackendNotFound as error:
-                    raise BackendConflict(
-                        "existing setup has not been activated; "
-                        "review and explicitly complete initialization"
-                    ) from error
-            else:
-                _initialize_setup(setup_service, config.setup())
-        return
-    if config_service.get_config_registry().entries:
-        try:
-            setup_service.current()
-            config_service.get_active_config()
-        except BackendNotFound as error:
-            raise BackendConflict(
-                "existing registry has incomplete setup/default initialization"
-            ) from error
-        return
-    if setup_service.list():
-        raise BackendConflict(
-            "existing setup has no parameter default; "
-            "review and explicitly complete initialization"
-        )
-    # Resolve application-owned inputs only for a genuinely empty registry.
-    if isinstance(config, LabBootstrap):
-        if config.setup is None:
-            raise BackendConflict(
-                "parameter_defaults require an initial setup declaration"
+    def inputs() -> tuple[
+        ExecutableSetupSnapshot | None, ParameterRevisionContent | None
+    ]:
+        if isinstance(config, LabBootstrap):
+            return (
+                config.setup() if config.setup is not None else None,
+                config.parameter_defaults()
+                if config.parameter_defaults is not None
+                else None,
             )
-        assert config.parameter_defaults is not None
-        equipment = config.setup()
-        parameters = config.parameter_defaults()
-        validated = compose_configuration(
-            equipment,
-            id=parameters.id,
-            system_id=parameters.system_id,
-            catalog=parameters.catalog,
-            parameters=parameters.parameters,
-        )
-    else:
         selected = config() if callable(config) else config
         validated = validate_config_profile(selected)
-        equipment = ExecutableSetupSnapshot.from_config(validated)
-        parameters = ParameterRevisionContent(
-            id=validated.id,
-            system_id=validated.system.id,
-            catalog=validated.parameter_catalog,
-            parameters=validated.parameter_snapshot,
-        )
-    digest = config_content_hash(validated).removeprefix("sha256:")
-    entry_id = f"daemon-{digest}"
-    note = "imported while bootstrapping a new lab instance"
-    setup = _initialize_setup(setup_service, equipment)
-    config_service.publish_config(
-        ConfigPublishCommand(
-            operation_id=f"bootstrap-config:{entry_id}",
-            source=ParameterConfigRevisionSource(
-                setup=setup.ref, parameters=parameters
+        return (
+            ExecutableSetupSnapshot.from_config(validated),
+            ParameterRevisionContent(
+                id=validated.id,
+                system_id=validated.system.id,
+                catalog=validated.parameter_catalog,
+                parameters=validated.parameter_snapshot,
             ),
-            entry_id=entry_id,
-            actor="scopecat",
-            expected_generation=0,
-            note=note,
         )
-    )
 
-
-def _initialize_setup(
-    setup_service: SetupService, equipment: ExecutableSetupSnapshot
-) -> SetupRevision:
-    note = "imported while bootstrapping a new lab instance"
-    setup = setup_service.save(
-        SetupSaveCommand(
-            revision_id=f"setup-{equipment.content_hash.removeprefix('sha256:')}",
-            setup=equipment,
-            actor="scopecat",
-            note=note,
-        )
-    )
-    setup_service.activate(
-        SetupActivateCommand(
-            operation_id=f"bootstrap-setup:{setup.id}",
-            revision=setup.ref,
-            expected_generation=0,
-            actor="scopecat",
-            note=note,
-        )
-    )
-    return setup
+    setup_service.initialize(inputs)
 
 
 __all__ = ["LocalDaemonRuntime"]

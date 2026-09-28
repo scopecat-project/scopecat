@@ -37,7 +37,7 @@ def reference_collection_modules() -> dict[str, ModuleType]:
     return {
         name: module
         for name, module in tuple(sys.modules.items())
-        if name == "reference_lab" or name.startswith("reference_lab.")
+        if name.partition(".")[0] in {"reference_lab", "reference_lab_authors"}
     }
 
 
@@ -47,7 +47,7 @@ def isolate_project_loader(
 ) -> Generator[None]:
     def restore() -> None:
         for name in tuple(sys.modules):
-            if name == "reference_lab" or name.startswith("reference_lab."):
+            if name.partition(".")[0] in {"reference_lab", "reference_lab_authors"}:
                 del sys.modules[name]
         sys.modules.update(reference_collection_modules)
         for name, module in reference_collection_modules.items():
@@ -89,12 +89,12 @@ def reference_lab_daemon(
     os.environ[DAEMON_URL_ENV] = record.base_url
     try:
         with LabClient(DaemonClient(record.base_url)) as lab:
-            setup = lab.setup.active()
+            setup = lab.setup.get("initial")
             assert lab.config.registry().entries == ()
         yield ReferenceLabDaemon(url=record.base_url, root=project_root)
         with LabClient(DaemonClient(record.base_url)) as lab:
             assert lab.config.registry().entries == ()
-            assert lab.setup.active() == setup
+            assert lab.setup.get("initial") == setup
     finally:
         if previous_url is None:
             os.environ.pop(DAEMON_URL_ENV, None)
@@ -112,7 +112,7 @@ def reference_lab_notebooks(
     retained = {
         name: module
         for name, module in tuple(sys.modules.items())
-        if name == "reference_lab" or name.startswith("reference_lab.")
+        if name.partition(".")[0] in {"reference_lab", "reference_lab_authors"}
     }
     for name in retained:
         del sys.modules[name]
@@ -123,7 +123,7 @@ def reference_lab_notebooks(
         yield reference_lab_daemon.root / "notebooks"
     finally:
         for name in tuple(sys.modules):
-            if name == "reference_lab" or name.startswith("reference_lab."):
+            if name.partition(".")[0] in {"reference_lab", "reference_lab_authors"}:
                 del sys.modules[name]
         sys.modules.update(retained)
 
@@ -131,8 +131,8 @@ def reference_lab_notebooks(
 @pytest.fixture
 def reference_lab_author_imports() -> Generator[None]:
     """Cloned author workspaces must not reuse collection-time repository imports."""
-    prefix = "reference_lab.workflows.authored"
-    parent = sys.modules.get("reference_lab.workflows")
+    prefix = "reference_lab_authors.authored"
+    parent = sys.modules.get("reference_lab_authors")
     missing = object()
     original_attribute = getattr(parent, "authored", missing)
     original_modules = {

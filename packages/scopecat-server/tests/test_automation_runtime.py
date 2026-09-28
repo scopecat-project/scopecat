@@ -6,19 +6,13 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from threading import Event
-from typing import cast
 
 import httpx2
 import pytest
 from fastapi.testclient import TestClient
 from pydantic import BaseModel, ConfigDict
 from scopecat.analysis.facts import AnalysisFactSchema
-from scopecat.api._config import LabConfigOperations
-from scopecat.api._remote import RemoteRunOperations
-from scopecat.api._runner import _DaemonRunner
-from scopecat.api.procedures import LabProcedureContext, ProcedureLabSession
 from scopecat.automation import (
-    ConfigActivationOutputRef,
     InterpretationRequest,
     ProcedureCancelCommand,
     ProcedureCloseCommand,
@@ -53,14 +47,13 @@ from scopecat.config.scientific_binding import bind_scientific_evidence
 from scopecat.control.models import RunPlanSummary, RunResourceRequirement
 from scopecat.daemon.client import DaemonClient, DaemonConflictError
 from scopecat.daemon.wire import (
-    ConfigPublishCommand,
-    DirectConfigRevisionSource,
     ExecutorStartRequest,
     RunSubmission,
     TerminalRunCommitCommand,
 )
 from scopecat.kernel.run_outcome import RunOutcome
 from scopecat.records.run_request import RunRequest
+from scopecat_testkit.server.instruments import signal_endpoint
 from scopecat_testkit.workflow_fixtures import load_config
 
 from scopecat_server import LocalDaemonRuntime
@@ -75,13 +68,6 @@ class _WorkerIntent(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     child_run_id: str
-
-
-class _ActivationWorkerIntent(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    entry_id: str
-    expected_generation: int
 
 
 class _TwoStepWorkerIntent(BaseModel):
@@ -144,6 +130,7 @@ def test_resource_wait_releases_worker_and_reuses_or_cancels_exact_child(
 
     def submission(key: str) -> RunSubmission:
         return RunSubmission(
+            execution_setup=runtime.application.setup.resolve("initial").ref,
             scientific_binding=bind_scientific_evidence(
                 catalog_id="test", config=config, samples=(), sample_revisions={}
             ),
@@ -167,7 +154,9 @@ def test_resource_wait_releases_worker_and_reuses_or_cancels_exact_child(
     starts: list[str] = []
     admissions: list[str] = []
     with (
-        LocalDaemonRuntime(tmp_path, bootstrap_config=config) as runtime,
+        LocalDaemonRuntime(
+            tmp_path, bootstrap_config=config, instrument_endpoint=signal_endpoint()
+        ) as runtime,
         TestClient(runtime.app()) as transport,
         _daemon_client(transport) as client,
     ):
@@ -452,24 +441,6 @@ _TWO_STEP_PROCEDURE = procedure(
     version="1",
     intent=_TwoStepWorkerIntent,
 )(_run_two_durable_steps)
-
-
-@procedure(
-    id="tests.http-config-activation",
-    version="1",
-    intent=_ActivationWorkerIntent,
-)
-def _activate_saved_config(
-    context: LabProcedureContext,
-    intent: _ActivationWorkerIntent,
-) -> None:
-    context.activate_config_entry(
-        "activate",
-        intent.entry_id,
-        expected_generation=intent.expected_generation,
-        actor="procedure-worker",
-        note="activate through a durable procedure",
-    )
 
 
 def _definition() -> ProcedureDefinitionRef:
@@ -1143,96 +1114,6 @@ def test_core_worker_recovers_after_two_lost_release_responses(
         assert all(item.state == "succeeded" for item in attempts)
 
 
-def test_procedure_config_activation_recovers_two_lost_http_responses(
-    tmp_path: Path,
-) -> None:
-    config = load_config()
-    requests: list[tuple[str, str]] = []
-    with (
-        LocalDaemonRuntime(tmp_path, bootstrap_config=config) as runtime,
-        TestClient(runtime.app()) as transport,
-        _daemon_client(
-            transport,
-            lose_config_activation_responses=2,
-            request_log=requests,
-        ) as client,
-    ):
-        initial = client.active_config()
-        target_config = config.model_copy(update={"id": "procedure-target-config"})
-        target = client.publish_config(
-            ConfigPublishCommand(
-                operation_id="publish:procedure-target-entry",
-                source=DirectConfigRevisionSource(config=target_config),
-                entry_id="procedure-target-entry",
-                actor="test-setup",
-                expected_generation=initial.activation.generation,
-            )
-        )
-        current_config = config.model_copy(update={"id": "procedure-current-config"})
-        current = client.publish_config(
-            ConfigPublishCommand(
-                operation_id="publish:procedure-current-entry",
-                source=DirectConfigRevisionSource(config=current_config),
-                entry_id="procedure-current-entry",
-                actor="test-setup",
-                expected_generation=target.activation.generation,
-            )
-        )
-        lab_config = LabConfigOperations(
-            client=client,
-            runs=cast("RemoteRunOperations", object()),
-            default_config=None,
-            operator="procedure-worker",
-        )
-        worker = ProcedureWorker(
-            client,
-            ProcedureRegistry((_activate_saved_config,)),
-            context_factory=lambda durable: LabProcedureContext(
-                durable,
-                runner=cast("_DaemonRunner", object()),
-                config=lab_config,
-                session=cast("ProcedureLabSession", object()),
-            ),
-        )
-
-        completed = worker.execute(
-            _activate_saved_config,
-            _ActivationWorkerIntent(
-                entry_id=target.entry.id,
-                expected_generation=current.activation.generation,
-            ),
-            "config-activation-response-loss",
-            "http-worker-config-activation",
-        )
-        [step] = client.list_procedure_step_attempts(
-            completed.procedure_run_id,
-            ProcedureStepAttemptListQuery(),
-        ).items
-        operation_id = procedure_step_operation_id(
-            step.procedure_run_id,
-            step.step_key,
-        )
-        activation_path = "/api/v1/config-registry/activation-operations"
-        assert requests.count(("POST", activation_path)) == 2
-        assert requests.count(("GET", f"{activation_path}/{operation_id}")) == 1
-        receipt = client.config_activation_operation(operation_id)
-        active = client.active_config()
-
-        assert completed.state == "closed"
-        assert completed.closure is not None
-        assert completed.closure.status == "succeeded"
-        assert step.state == "succeeded"
-        assert step.output == ConfigActivationOutputRef(
-            generation=current.activation.generation + 1,
-            entry_id=target.entry.id,
-            entry_content_hash=target.entry.content_hash,
-        )
-        assert receipt.operation.operation_id == operation_id
-        assert receipt.activation.generation == current.activation.generation + 1
-        assert active.activation == receipt.activation
-        assert active.entry == target.entry
-
-
 def _two_step_context_factory(
     *,
     stop: Event,
@@ -1260,16 +1141,13 @@ def _two_step_context_factory(
 def _daemon_client(
     transport: TestClient,
     *,
-    lose_config_activation_responses: int = 0,
     lose_procedure_release_responses: int = 0,
     release_commands: list[ProcedureWorkerLeaseReleaseCommand] | None = None,
     request_log: list[tuple[str, str]] | None = None,
 ) -> DaemonClient:
-    remaining_lost_config_responses = lose_config_activation_responses
     remaining_lost_release_responses = lose_procedure_release_responses
 
     def send(request: httpx2.Request) -> httpx2.Response:
-        nonlocal remaining_lost_config_responses
         nonlocal remaining_lost_release_responses
         if request_log is not None:
             request_log.append((request.method, request.url.path))
@@ -1286,16 +1164,6 @@ def _daemon_client(
             content=request.content,
             headers=dict(request.headers),
         )
-        if (
-            request.method == "POST"
-            and request.url.path == "/api/v1/config-registry/activation-operations"
-            and remaining_lost_config_responses > 0
-        ):
-            remaining_lost_config_responses -= 1
-            raise httpx2.ReadError(
-                "config activation response was lost",
-                request=request,
-            )
         if is_procedure_release and remaining_lost_release_responses > 0:
             remaining_lost_release_responses -= 1
             raise httpx2.ReadError(

@@ -70,6 +70,9 @@ class RunSnapshot(BaseModel):
     outcome: RunOutcome | None = None
     config_content_hash: ConfigContentHash
     config_source: RunConfigSource | None = None
+    # Application admissions always capture this; offline core runs have no
+    # application-owned device registry and cannot authorize daemon candidates.
+    execution_setup: SetupRevisionRef | None = None
     samples: tuple[SampleBinding, ...] = ()
 
     @model_validator(mode="after")

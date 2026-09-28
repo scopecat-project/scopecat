@@ -8,14 +8,6 @@ from pydantic import BaseModel
 from scopecat_testkit.workflow_fixtures import load_config
 
 from scopecat.automation.wire import ProcedureRunListQuery
-from scopecat.config.inventory import InstrumentInventoryRekey
-from scopecat.config.registry.records import (
-    ConfigActivationOperation,
-    ConfigPublishOperation,
-    ConfigRegistryActivationRecord,
-    ConfigRegistryEntry,
-    DirectConfigRegistrySource,
-)
 from scopecat.config.scientific_binding import bind_scientific_evidence
 from scopecat.control.models import (
     RunExecutionSegment,
@@ -43,11 +35,6 @@ from scopecat.daemon.wire import (
     AnalysisSaveReceipt,
     AttentionResolutionCommand,
     AttentionResolutionReceipt,
-    ConfigActivationReceipt,
-    ConfigEntryActivationCommand,
-    ConfigPublishCommand,
-    ConfigPublishReceipt,
-    DirectConfigRevisionSource,
     ExecutorLease,
     ExecutorStartRequest,
     InstrumentConfiguredDefaultsApplyCommand,
@@ -61,7 +48,6 @@ from scopecat.daemon.wire import (
     RunInstrumentProvisionCommand,
     RunInstrumentProvisionReceipt,
     RunSubmission,
-    SetupActivateCommand,
 )
 from scopecat.kernel.content_identity import sha256_content_hash_segments
 from scopecat.kernel.state import PayloadRef, StateValue
@@ -83,10 +69,6 @@ from scopecat.records.instrument import InstrumentStateSnapshot
 from scopecat.records.run import RunSnapshot
 from scopecat.records.run_request import RunRequest
 from scopecat.records.setup import (
-    ActiveSetupView,
-    ExecutableSetupSnapshot,
-    SetupActivationRecord,
-    SetupRevision,
     SetupRevisionRef,
 )
 from scopecat.sdk.instruments.catalog import DriverCatalog
@@ -508,167 +490,6 @@ def test_renew_instrument_session_posts_an_empty_heartbeat() -> None:
     assert request.content == b""
 
 
-def test_setup_activation_retries_the_exact_reviewed_command() -> None:
-    requests: list[httpx2.Request] = []
-    setup = ExecutableSetupSnapshot.from_config(load_config())
-    revision = SetupRevision(
-        id="inventory-v2",
-        content_hash=setup.content_hash,
-        setup=setup,
-        actor="operator",
-    )
-    command = SetupActivateCommand(
-        operation_id="activate-setup-2",
-        revision=revision.ref,
-        changes=(
-            InstrumentInventoryRekey(
-                instrument_id="source-0",
-                from_exclusivity_key="source-0",
-                to_exclusivity_key="rack-a/source",
-            ),
-        ),
-        actor="operator",
-        expected_generation=1,
-        note="move source",
-    )
-    receipt = ActiveSetupView(
-        revision=revision,
-        activation=SetupActivationRecord(
-            generation=2, revision=revision.ref, actor="operator"
-        ),
-    )
-
-    def handler(request: httpx2.Request) -> httpx2.Response:
-        requests.append(request)
-        if len(requests) == 1:
-            raise httpx2.ReadError("receipt lost", request=request)
-        return _model(receipt)
-
-    client = DaemonClient(
-        "http://daemon.local/", transport=httpx2.MockTransport(handler)
-    )
-    assert client.activate_setup(command) == receipt
-    assert len(requests) == 2
-    assert requests[0].content == requests[1].content
-    assert requests[1].url.path == "/api/v1/setup/activation-operations"
-    assert SetupActivateCommand.model_validate_json(requests[1].content) == command
-
-
-def test_config_activation_retries_exact_command_and_supports_lookup() -> None:
-    config = load_config()
-    entry = ConfigRegistryEntry(
-        id="baseline",
-        config_ref="config-registry/entries/baseline/config.json",
-        content_hash=config_content_hash(config),
-        source=DirectConfigRegistrySource(),
-        actor="notebook",
-    )
-    command = ConfigEntryActivationCommand(
-        operation_id="activate-baseline",
-        entry_id=entry.id,
-        actor="operator",
-        expected_generation=0,
-    )
-    activation = ConfigRegistryActivationRecord(
-        generation=1,
-        action="activation",
-        entry_id=entry.id,
-        entry_content_hash=entry.content_hash,
-        actor=command.actor,
-    )
-    receipt = ConfigActivationReceipt(
-        operation=ConfigActivationOperation(
-            operation_id=command.operation_id,
-            intent_hash=command.intent_hash,
-            entry_id=command.entry_id,
-            expected_generation=command.expected_generation,
-            actor=command.actor,
-            activation_generation=activation.generation,
-        ),
-        activation=activation,
-    )
-    requests: list[httpx2.Request] = []
-
-    def handler(request: httpx2.Request) -> httpx2.Response:
-        requests.append(request)
-        if request.method == "POST" and len(requests) == 1:
-            raise httpx2.ReadError("activation response was lost", request=request)
-        return _model(receipt)
-
-    client = DaemonClient(
-        "http://daemon.local/",
-        transport=httpx2.MockTransport(handler),
-    )
-
-    assert client.activate_config_entry(command) == receipt
-    assert client.config_activation_operation(command.operation_id) == receipt
-    assert [request.method for request in requests] == ["POST", "POST", "GET"]
-    assert requests[0].content == requests[1].content
-    assert requests[0].url.path == ("/api/v1/config-registry/activation-operations")
-    assert requests[2].url.path == (
-        "/api/v1/config-registry/activation-operations/activate-baseline"
-    )
-
-
-def test_config_publish_retries_exact_command_and_supports_lookup() -> None:
-    config = load_config()
-    command = ConfigPublishCommand(
-        operation_id="publish-baseline",
-        source=DirectConfigRevisionSource(config=config),
-        entry_id="baseline",
-        actor="operator",
-        expected_generation=0,
-    )
-    entry = ConfigRegistryEntry(
-        id=command.entry_id,
-        config_ref="config-registry/entries/baseline/config.json",
-        content_hash=config_content_hash(config),
-        source=DirectConfigRegistrySource(),
-        actor=command.actor,
-    )
-    activation = ConfigRegistryActivationRecord(
-        generation=1,
-        action="activation",
-        entry_id=entry.id,
-        entry_content_hash=entry.content_hash,
-        actor=command.actor,
-    )
-    receipt = ConfigPublishReceipt(
-        operation=ConfigPublishOperation(
-            operation_id=command.operation_id,
-            intent_hash=command.intent_hash,
-            source_intent_hash=command.source_intent_hash,
-            entry_id=command.entry_id,
-            expected_generation=command.expected_generation,
-            actor=command.actor,
-            activation_generation=activation.generation,
-        ),
-        entry=entry,
-        activation=activation,
-    )
-    requests: list[httpx2.Request] = []
-
-    def handler(request: httpx2.Request) -> httpx2.Response:
-        requests.append(request)
-        if request.method == "POST" and len(requests) == 1:
-            raise httpx2.ReadError("publish response was lost", request=request)
-        return _model(receipt)
-
-    client = DaemonClient(
-        "http://daemon.local/",
-        transport=httpx2.MockTransport(handler),
-    )
-
-    assert client.publish_config(command) == receipt
-    assert client.config_publish_operation(command.operation_id) == receipt
-    assert [request.method for request in requests] == ["POST", "POST", "GET"]
-    assert requests[0].content == requests[1].content
-    assert requests[0].url.path == "/api/v1/config-registry/publish-operations"
-    assert requests[2].url.path == (
-        "/api/v1/config-registry/publish-operations/publish-baseline"
-    )
-
-
 def test_invoke_externalizes_inline_payload_before_command_post() -> None:
     requests: list[httpx2.Request] = []
     content = b"opaque-program"
@@ -949,6 +770,9 @@ def _admission(submission_id: str) -> RunAdmission:
 
 def _submission(submission_id: str = "submission-1") -> RunSubmission:
     return RunSubmission(
+        execution_setup=SetupRevisionRef(
+            revision_id="bench", content_hash="sha256:" + "e" * 64
+        ),
         submission_id=submission_id,
         config=load_config(),
         scientific_binding=bind_scientific_evidence(

@@ -71,9 +71,7 @@ from scopecat.automation.wire import (
     ProcedureStepResourceWaitReceipt,
 )
 from scopecat.records.configuration_fence import (
-    ActiveConfigurationFence,
     ProcedureConfigurationFence,
-    SetupContentFence,
     SetupRevisionFence,
 )
 from scopecat.records.content import Sha256ContentHash
@@ -99,10 +97,8 @@ from scopecat_server.storage.sqlite.automation import (
 from scopecat_server.storage.sqlite.automation import (
     ProcedureStepAttemptPage as StoredProcedureStepAttemptPage,
 )
-from scopecat_server.storage.sqlite.config_registry import (
-    SQLiteConfigRegistryRepository,
-)
 from scopecat_server.storage.sqlite.control_plane import SQLiteControlPlane
+from scopecat_server.storage.sqlite.devices import DeviceRepository
 from scopecat_server.storage.sqlite.experiment_plan_repository import (
     ExperimentPlanRepository,
 )
@@ -1816,6 +1812,10 @@ def _require_configuration_authority(
             ) from error
         if revision.ref != expected_configuration.revision:
             raise AutomationConflict("selected executable setup reference changed")
+        try:
+            DeviceRepository(connection).require_current(revision.resolution.devices)
+        except ValueError as error:
+            raise AutomationConflict(str(error)) from error
         if scientific_binding is not None and (
             scientific_binding.setup_content_hash
             != revision.setup.execution_content_hash
@@ -1824,30 +1824,7 @@ def _require_configuration_authority(
                 "procedure executable setup differs from selected context"
             )
         return
-    if expected_configuration is not None or scientific_binding is not None:
-        registry = SQLiteConfigRegistryRepository(connection)
-        active_setup = SQLiteSetupRepository(connection).read_current()
-        if active_setup is None:
-            raise AutomationConflict("executable setup has no current authority")
-        activation = registry.read_latest_activation()
-        if isinstance(expected_configuration, ActiveConfigurationFence) and (
-            activation is None
-            or activation.generation != expected_configuration.generation
-        ):
-            raise AutomationConflict("active configuration changed since preview")
-        if scientific_binding is not None or isinstance(
-            expected_configuration, SetupContentFence
-        ):
-            current_setup = active_setup.revision.setup.execution_content_hash
-            if (
-                scientific_binding is not None
-                and scientific_binding.setup_content_hash != current_setup
-            ):
-                raise AutomationConflict(
-                    "procedure executable setup differs from current authority"
-                )
-            if (
-                isinstance(expected_configuration, SetupContentFence)
-                and expected_configuration.content_hash != current_setup
-            ):
-                raise AutomationConflict("executable setup changed since preview")
+    if scientific_binding is not None:
+        raise AutomationConflict(
+            "scientific procedures require an exact execution setup"
+        )

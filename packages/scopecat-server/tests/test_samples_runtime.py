@@ -23,6 +23,7 @@ from scopecat.records.sample import (
     SampleSelector,
 )
 from scopecat.records.setup import ExecutableSetupSnapshot
+from scopecat_testkit.server.instruments import signal_endpoint
 
 from scopecat_server import BackendNotFound, LocalDaemonRuntime
 from scopecat_server.storage.sqlite.control_plane import SQLiteControlPlane
@@ -65,6 +66,7 @@ def _submission(
         sample_revisions={},
     )
     return RunSubmission(
+        execution_setup=runtime.application.setup.resolve("initial").ref,
         scientific_binding=binding,
         submission_id="sample-run-submission",
         config=_config(),
@@ -109,15 +111,14 @@ def _daemon_client(transport: TestClient) -> DaemonClient:
 
 def test_sample_revision_and_run_binding_survive_restart(tmp_path: Path) -> None:
     with (
-        LocalDaemonRuntime(tmp_path) as runtime,
+        LocalDaemonRuntime(tmp_path, instrument_endpoint=signal_endpoint()) as runtime,
         TestClient(runtime.app()) as transport,
     ):
         with _daemon_client(transport) as client:
             lab = LabClient(client)
-            setup = lab.setup.save(
-                ExecutableSetupSnapshot.from_config(_config()), name="sample-bench"
+            lab.setup.import_recipe(
+                ExecutableSetupSnapshot.from_config(_config()), name="initial"
             )
-            lab.setup.activate(setup)
             assert lab.config.registry().entries == ()
         parent_response = transport.post(
             "/api/v1/samples",
@@ -268,7 +269,9 @@ def test_sample_revision_and_run_binding_survive_restart(tmp_path: Path) -> None
 
 def test_sample_ids_are_url_safe_stable_identifiers(tmp_path: Path) -> None:
     with (
-        LocalDaemonRuntime(tmp_path, bootstrap_config=_config()) as runtime,
+        LocalDaemonRuntime(
+            tmp_path, bootstrap_config=_config(), instrument_endpoint=signal_endpoint()
+        ) as runtime,
         TestClient(runtime.app()) as transport,
     ):
         response = transport.post(
@@ -287,7 +290,9 @@ def test_sample_ids_are_url_safe_stable_identifiers(tmp_path: Path) -> None:
 
 def test_lab_sample_facade_and_run_filter_use_stable_handles(tmp_path: Path) -> None:
     with (
-        LocalDaemonRuntime(tmp_path, bootstrap_config=_config()) as runtime,
+        LocalDaemonRuntime(
+            tmp_path, bootstrap_config=_config(), instrument_endpoint=signal_endpoint()
+        ) as runtime,
         TestClient(runtime.app()) as transport,
     ):
         lab = LabClient(_daemon_client(transport), operator="notebook-operator")
@@ -314,7 +319,9 @@ def test_sample_mutation_rolls_back_when_its_event_cannot_commit(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    with LocalDaemonRuntime(tmp_path, bootstrap_config=_config()) as runtime:
+    with LocalDaemonRuntime(
+        tmp_path, bootstrap_config=_config(), instrument_endpoint=signal_endpoint()
+    ) as runtime:
 
         def reject_event(*_args: object) -> None:
             raise RuntimeError("event append failed")
@@ -346,7 +353,9 @@ def test_research_history_associations_and_bench_survive_restart(
     from scopecat.records.research_project import ResearchProjectEdit, RunHistoryFilter
 
     with (
-        LocalDaemonRuntime(tmp_path, bootstrap_config=_config()) as runtime,
+        LocalDaemonRuntime(
+            tmp_path, bootstrap_config=_config(), instrument_endpoint=signal_endpoint()
+        ) as runtime,
         TestClient(runtime.app()) as transport,
         _daemon_client(transport) as client,
     ):
@@ -477,7 +486,9 @@ def test_collection_addresses_are_atomic_scoped_and_retained(tmp_path: Path) -> 
         )
 
     with (
-        LocalDaemonRuntime(tmp_path, bootstrap_config=_config()) as runtime,
+        LocalDaemonRuntime(
+            tmp_path, bootstrap_config=_config(), instrument_endpoint=signal_endpoint()
+        ) as runtime,
         TestClient(runtime.app()) as transport,
         _daemon_client(transport) as client,
     ):
@@ -546,7 +557,7 @@ def test_collection_addresses_are_atomic_scoped_and_retained(tmp_path: Path) -> 
             == 422
         )
     with (
-        LocalDaemonRuntime(tmp_path) as runtime,
+        LocalDaemonRuntime(tmp_path, instrument_endpoint=signal_endpoint()) as runtime,
         TestClient(runtime.app()) as transport,
         _daemon_client(transport) as client,
     ):
@@ -563,7 +574,9 @@ def test_batch_catalog_and_bound_runs_survive_restart(tmp_path: Path) -> None:
     from scopecat.records.research_project import RunHistoryFilter
 
     with (
-        LocalDaemonRuntime(tmp_path, bootstrap_config=_config()) as runtime,
+        LocalDaemonRuntime(
+            tmp_path, bootstrap_config=_config(), instrument_endpoint=signal_endpoint()
+        ) as runtime,
         TestClient(runtime.app()) as transport,
         _daemon_client(transport) as client,
     ):

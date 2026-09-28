@@ -1,15 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type {
-  ActiveConfig,
-  ConfigProfileSnapshot,
   InstrumentAcquisition,
-  InstrumentConnection,
   InstrumentOperation,
   InstrumentSession,
 } from "../../api-contract";
 import { requestHeaders, requestJson, requestMethod, requestPath } from "../../test/http";
-import type { SavedSetupRevision as SetupRevision } from "../config/setup-api";
-import type { components } from "../../api-schema";
 import {
   applyInstrumentConfiguredDefaults,
   applyInstrumentState,
@@ -20,7 +15,6 @@ import {
   invokeInstrumentOperation,
   openInstrumentSession,
   probeInstrumentDriver,
-  publishInstrumentSpec,
   readInstrumentStateMembers,
   readObservedInstrumentStateMembers,
   renewInstrumentSession,
@@ -31,140 +25,42 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe("instrument configuration publishing", () => {
-  it("saves a cloned device context without changing global activation", async () => {
-    const randomUUID = vi.fn(() => "123e4567-e89b-12d3-a456-426614174000");
-    vi.stubGlobal("crypto", { randomUUID });
-    const active = activeConfig();
-    const connection: InstrumentConnection = {
-      kind: "tcpip_socket",
-      host: "192.0.2.24",
-      port: 5025,
-      timeout_seconds: 8,
-      options: { termination: "lf" },
-    };
+function session(): InstrumentSession {
+  return {
+    session_id: "session-1",
+    actor: "Ada",
+    setup: { revision_id: "lab-default", content_hash: "sha256:active" },
+    instrument_ids: ["vna-1"],
+    configured_default_instrument_ids: [],
+    descriptions: [],
+    observed_state: [],
+    opened_at: "2026-07-27T08:00:00Z",
+    renewed_at: "2026-07-27T08:00:00Z",
+    expires_at: "2026-07-27T08:01:00Z",
+  };
+}
 
-    const fetch = vi.fn().mockResolvedValue(Response.json(setupRevision(active)));
-    vi.stubGlobal("fetch", fetch);
-    await publishInstrumentSpec({
-      revision: setupRevision(active),
-      name: "Bench VLAN",
-      spec: {
-        ...active.config.system.instrument_registry.instruments[0]!,
-        connection,
-      },
-      originalInstrumentId: "vna-1",
-      actor: "Ada",
-      note: "Move to the instrument VLAN",
-    });
-
-    expect(fetch).toHaveBeenCalledOnce();
-    expect(requestPath(fetch.mock.calls[0]![0])).toBe("/api/v1/setup/revisions");
-    const command = await requestJson<components["schemas"]["SetupSaveCommand"]>(
-      fetch.mock.calls[0]![0],
-    );
-    expect(command).toMatchObject({
-      actor: "Ada",
-      note: "Move to the instrument VLAN",
-    });
-    expect(command.revision_id).toBe("Bench VLAN");
-    expect(randomUUID).not.toHaveBeenCalled();
-    expect(command.setup.instrument_registry.instruments).toEqual([
-      {
-        id: "vna-1",
-        exclusivity_key: "vna-1",
-        driver_id: "keysight.pna",
-        connection,
-        default_state: [
-          {
-            target: {
-              kind: "interface",
-              interface_id: "scopecat.network_sweep/v1",
-              component_path: [],
-              property_id: "center_frequency",
-            },
-            value: { value: 6.2, unit: "GHz" },
-          },
-        ],
-        run_start: "apply_default_state",
-        success_action: "release",
-        failure_action: "abort_and_release",
-      },
-      {
-        id: "fridge",
-        exclusivity_key: "fridge",
-        driver_id: "virtual.temperature",
-        connection: { kind: "virtual" },
-        default_state: [],
-        run_start: "preserve",
-        success_action: "release",
-        failure_action: "abort_and_release",
-      },
-    ]);
-    expect(command).not.toHaveProperty("expected_generation");
-    expect(command.setup).not.toHaveProperty("parameter_snapshot");
-    expect(active.config.system.instrument_registry.instruments[0]?.connection).toEqual({
-      kind: "tcpip_socket",
-      host: "192.0.2.20",
-      port: 5025,
-      timeout_seconds: 5,
-    });
-    expect(active.config.system.instrument_registry.instruments[0]?.default_state).toEqual([
-      {
-        target: {
-          kind: "interface",
-          interface_id: "scopecat.network_sweep/v1",
-          component_path: [],
-          property_id: "center_frequency",
-        },
-        value: { value: 6.2, unit: "GHz" },
-      },
-    ]);
-    expect(active.config.system.instrument_registry.instruments[0]?.run_start).toBe(
-      "apply_default_state",
-    );
+function hardwareReceiptResponse(): Response {
+  const header = new TextEncoder().encode(
+    JSON.stringify({
+      format_id: "scopecat.collect_receipt.v1",
+      status: "collected",
+      problems: [],
+      readback: { values: {}, metadata: {} },
+      metadata: {},
+    }),
+  );
+  const content = new Uint8Array(16 + header.byteLength);
+  content.set(new TextEncoder().encode("SCRCPT01"));
+  new DataView(content.buffer).setBigUint64(8, BigInt(header.byteLength), true);
+  content.set(header, 16);
+  return new Response(content, {
+    status: 200,
+    headers: { "Content-Type": "application/vnd.scopecat.hardware-receipt.v1" },
   });
+}
 
-  it("adds a complete instrument spec without mutating the active snapshot", async () => {
-    const randomUUID = vi.fn(() => "123e4567-e89b-12d3-a456-426614174000");
-    vi.stubGlobal("crypto", { randomUUID });
-    const active = activeConfig();
-
-    const fetch = vi.fn().mockResolvedValue(Response.json(setupRevision(active)));
-    vi.stubGlobal("fetch", fetch);
-    await publishInstrumentSpec({
-      revision: setupRevision(active),
-      name: "Bench with source",
-      spec: {
-        id: "source-1",
-        exclusivity_key: "source-1",
-        driver_id: "virtual.rf_source",
-        connection: { kind: "virtual", options: {} },
-        default_state: [],
-        run_start: "preserve",
-        success_action: "release",
-        failure_action: "abort_and_release",
-      },
-      actor: "Ada",
-      note: "",
-    });
-
-    const command = await requestJson<components["schemas"]["SetupSaveCommand"]>(
-      fetch.mock.calls[0]![0],
-    );
-    expect(command.setup.instrument_registry.instruments.at(-1)).toEqual({
-      id: "source-1",
-      exclusivity_key: "source-1",
-      driver_id: "virtual.rf_source",
-      connection: { kind: "virtual", options: {} },
-      default_state: [],
-      run_start: "preserve",
-      success_action: "release",
-      failure_action: "abort_and_release",
-    });
-    expect(active.config.system.instrument_registry.instruments).toHaveLength(2);
-  });
-
+describe("instrument connection summary", () => {
   it("summarizes a TCP endpoint", () => {
     expect(
       connectionSummary({
@@ -464,6 +360,13 @@ describe("interactive collection request shaping", () => {
 
     await openInstrumentSession("vna-1", "Ada", session().setup, "open-retry");
     await openInstrumentSession("vna-1", "Ada", session().setup, "open-retry");
+    const [openInput, openInit] = fetchMock.mock.calls[0]!;
+    await expect(requestJson(openInput, openInit)).resolves.toEqual({
+      setup: session().setup,
+      operation_id: "open-retry",
+      actor: "Ada",
+      instrument_ids: ["vna-1"],
+    });
     const properties = [
       {
         target: {
@@ -517,138 +420,3 @@ describe("interactive collection request shaping", () => {
     ]);
   });
 });
-
-function activeConfig(): ActiveConfig {
-  const config: ConfigProfileSnapshot = {
-    id: "lab",
-    system: {
-      id: "system",
-      topology: { entities: [] },
-      instrument_registry: {
-        instruments: [
-          {
-            id: "vna-1",
-            exclusivity_key: "vna-1",
-            driver_id: "keysight.pna",
-            connection: {
-              kind: "tcpip_socket",
-              host: "192.0.2.20",
-              port: 5025,
-              timeout_seconds: 5,
-            },
-            default_state: [
-              {
-                target: {
-                  kind: "interface",
-                  interface_id: "scopecat.network_sweep/v1",
-                  component_path: [],
-                  property_id: "center_frequency",
-                },
-                value: { value: 6.2, unit: "GHz" },
-              },
-            ],
-            run_start: "apply_default_state",
-            success_action: "release",
-            failure_action: "abort_and_release",
-          },
-          {
-            id: "fridge",
-            exclusivity_key: "fridge",
-            driver_id: "virtual.temperature",
-            connection: { kind: "virtual" },
-            default_state: [],
-            run_start: "preserve",
-            success_action: "release",
-            failure_action: "abort_and_release",
-          },
-        ],
-      },
-      routing: { roles: [], routes: [] },
-      domain_target: null,
-      parameter_catalog: { id: "parameters", definitions: [] },
-    },
-    parameter_snapshot: {
-      id: "parameters",
-      values: [
-        {
-          id: "readout.frequency",
-          shape: "scalar",
-          value: { value: 6.2, unit: "GHz" },
-        },
-      ],
-    },
-  };
-  return {
-    activation: {
-      generation: 7,
-      action: "activation",
-      entry_id: "lab-default",
-      entry_content_hash: "sha256:active",
-      actor: "Grace",
-      note: "",
-      recorded_at: "2026-07-27T08:00:00Z",
-    },
-    entry: {
-      id: "lab-default",
-      content_hash: "sha256:active",
-      config_ref: "entries/lab-default.json",
-      source: { kind: "direct_config_profile" },
-      actor: "Grace",
-      note: "",
-      recorded_at: "2026-07-27T08:00:00Z",
-    },
-    config,
-  };
-}
-
-function session(): InstrumentSession {
-  return {
-    session_id: "session-1",
-    actor: "Ada",
-    setup: { revision_id: "lab-default", content_hash: "sha256:active" },
-    instrument_ids: ["vna-1"],
-    configured_default_instrument_ids: [],
-    descriptions: [],
-    observed_state: [],
-    opened_at: "2026-07-27T08:00:00Z",
-    renewed_at: "2026-07-27T08:00:00Z",
-    expires_at: "2026-07-27T08:01:00Z",
-  };
-}
-
-function hardwareReceiptResponse(): Response {
-  const header = new TextEncoder().encode(
-    JSON.stringify({
-      format_id: "scopecat.collect_receipt.v1",
-      status: "collected",
-      problems: [],
-      readback: { values: {}, metadata: {} },
-      metadata: {},
-    }),
-  );
-  const content = new Uint8Array(16 + header.byteLength);
-  content.set(new TextEncoder().encode("SCRCPT01"));
-  new DataView(content.buffer).setBigUint64(8, BigInt(header.byteLength), true);
-  content.set(header, 16);
-  return new Response(content, {
-    status: 200,
-    headers: { "Content-Type": "application/vnd.scopecat.hardware-receipt.v1" },
-  });
-}
-
-function setupRevision(active = activeConfig()): SetupRevision {
-  const { topology, instrument_registry, routing, domain_target, scenario } = active.config.system;
-  return {
-    id: "lab",
-    content_hash: "sha256:active",
-    actor: "Ada",
-    note: "",
-    setup: {
-      topology,
-      instrument_registry,
-      routing: routing ?? { roles: [], routes: [] },
-      domain_target: domain_target ?? null,
-      scenario,
-    },
-  };
-}

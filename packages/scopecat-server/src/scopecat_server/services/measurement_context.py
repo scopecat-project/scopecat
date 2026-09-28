@@ -16,7 +16,6 @@ from scopecat_server.services.parameter_resolution import resolve_parameters
 from scopecat_server.services.samples import SampleService
 from scopecat_server.storage.sqlite.connection import SQLiteDatabase
 from scopecat_server.storage.sqlite.parameter_branches import ParameterBranchRepository
-from scopecat_server.storage.sqlite.setups import SQLiteSetupRepository
 from scopecat_server.storage.sqlite.target_catalog import TargetCatalogStore
 
 
@@ -83,16 +82,13 @@ class MeasurementContextService:
                         parameters, original.scientific_binding
                     ),
                     branch=None,
-                    setup=None,
+                    setup=parameters.setup,
                 )
             setup = query.setup
             if setup is None:
-                active = SQLiteSetupRepository(connection).read_current()
-                if active is None:
-                    raise BackendConflict(
-                        "select a setup or activate one before resolving context"
-                    )
-                setup = active.revision.ref
+                raise BackendConflict(
+                    "select an explicit setup before resolving context"
+                )
             resolved = resolve_parameters(
                 connection, parameters=parameters, setup=setup
             )

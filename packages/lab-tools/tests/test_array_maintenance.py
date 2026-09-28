@@ -80,14 +80,14 @@ def wait_stage(lab, name):
 start_project(project)
 try:
     with project.connect() as lab:
-        setup = lab.setup.active()
+        setup = lab.setup.get("initial")
         original = lab.parameters.save(
             name="array-initial", catalog=sc.parameter_catalog("array", Channel),
             parameters=sc.parameter_snapshot("array", tables={
                 Channel: [Channel(id=t, offset=0.1) for t in TARGETS]}),
         )
         destination = lab.parameters.create_branch("daily", revision=original)
-        initial = lab.parameters.resolve(original, setup=setup.revision.ref)
+        initial = lab.parameters.resolve(original, setup=setup.ref)
         task = create_task(lab, initial, destination,
             failed_group="readout-b" if case == "readout-failure" else None,
             drift_target="q4" if case == "drift" else None)
@@ -166,7 +166,7 @@ try:
             # Coupling is actually present in the aggregate remeasurement.
             assert published.fact("residual-q0").value > 0
         assert lab.config.registry().entries == ()
-        assert lab.setup.active() == setup
+        assert lab.setup.get("initial") == setup
         print(case, states)
 finally:
     stop_project(project)

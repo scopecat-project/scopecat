@@ -26,7 +26,7 @@ def test_contexts_select_parameters_and_preserve_sample_and_run_history(
     independent_lab_daemon: str,
 ) -> None:
     with create_application(EXAMPLE_ROOT).connect(independent_lab_daemon) as lab:
-        setup = lab.setup.active()
+        setup = lab.setup.get("initial")
         key = uuid4().hex
         for sample in ("a", "b"):
             lab.samples.create(
@@ -47,7 +47,7 @@ def test_contexts_select_parameters_and_preserve_sample_and_run_history(
             )
             ref = saved.ref
             refs.append(ref)
-            resolved = lab.parameters.resolve(ref, setup=setup.revision.ref)
+            resolved = lab.parameters.resolve(ref, setup=setup.ref)
             prepared = lab.prepare(
                 exploratory_signal.build(),
                 config=resolved,
@@ -58,7 +58,7 @@ def test_contexts_select_parameters_and_preserve_sample_and_run_history(
             assert run.status == "completed"
             assert isinstance(run.snapshot.config_source, ParameterRunConfigSource)
             assert run.snapshot.config_source.parameters == ref
-            assert run.snapshot.config_source.setup == setup.revision.ref
+            assert run.snapshot.config_source.setup == setup.ref
             assert run.samples[0].sample_id == sample_id
             assert run.samples[0].revision == 1
             assert (
@@ -72,7 +72,7 @@ def test_contexts_select_parameters_and_preserve_sample_and_run_history(
                 ).copy()
         trial = lab.parameters.resolve(
             refs[0],
-            setup=setup.revision.ref,
+            setup=setup.ref,
             overrides=(
                 sc.parameter_update(
                     QubitParameters.drive_carrier_frequency,
@@ -98,7 +98,7 @@ def test_contexts_select_parameters_and_preserve_sample_and_run_history(
             with pytest.raises(DaemonConflictError, match="exact resolved inputs"):
                 lab.run(
                     exploratory_signal.build(),
-                    config=lab.parameters.resolve(refs[0], setup=setup.revision.ref),
+                    config=lab.parameters.resolve(refs[0], setup=setup.ref),
                     sample=lab.samples.handle(f"context-{key}-a"),
                 )
 
@@ -114,14 +114,14 @@ def test_contexts_select_parameters_and_preserve_sample_and_run_history(
         )
         restored = lab.run(
             exploratory_signal.build(),
-            config=lab.parameters.resolve(refs[0], setup=setup.revision.ref),
+            config=lab.parameters.resolve(refs[0], setup=setup.ref),
             sample=lab.samples.handle(f"context-{key}-a"),
         )
         assert (
             np.argmax(np.asarray(restored.measurements()["result"].require_values()))
             == 1
         )
-        assert lab.setup.active() == setup
+        assert lab.setup.get("initial") == setup
         assert lab.config.registry().entries == ()
         assert original_id is not None
         assert original_snapshot is not None
@@ -147,7 +147,7 @@ def test_context_launch_survives_unrelated_parameter_publication(
     application = create_application(EXAMPLE_ROOT)
     assert application.launch_provider is not None
     with application.connect(independent_lab_daemon) as lab:
-        setup = lab.setup.active()
+        setup = lab.setup.get("initial")
         key = uuid4().hex
         sample_id = f"context-replay-{key}"
         lab.samples.create(
@@ -159,7 +159,7 @@ def test_context_launch_survives_unrelated_parameter_publication(
             f"replay-{key}", revision=independent_parameters
         )
         ref = independent_parameters.ref
-        resolved = lab.parameters.resolve(ref, setup=setup.revision.ref)
+        resolved = lab.parameters.resolve(ref, setup=setup.ref)
         lab.samples.revise(sample_id, SampleRevisionDraft(display_name="Replay r2"))
         assert application.authors is not None
         request = LaunchRequest(
@@ -171,7 +171,7 @@ def test_context_launch_survives_unrelated_parameter_publication(
             ).entry.version,
             selection=ScientificSelection(
                 subject=SampleSubjectChoice(sample_id=sample_id, revision=1),
-                configuration=ParameterConfiguration(ref=ref, setup=setup.revision.ref),
+                configuration=ParameterConfiguration(ref=ref, setup=setup.ref),
             ),
         )
         preview = application.launch_provider(lab, request)
@@ -222,5 +222,5 @@ def test_context_launch_survives_unrelated_parameter_publication(
         retained = lab.get_run(output.run_id)
         assert retained.snapshot.scientific_binding == preview.reviewed.binding
         assert retained.config == resolved.config
-        assert lab.setup.active() == setup
+        assert lab.setup.get("initial") == setup
         assert lab.config.registry().entries == ()

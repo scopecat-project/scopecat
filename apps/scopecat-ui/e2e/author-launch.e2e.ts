@@ -61,7 +61,7 @@ test("discovers an ordinary author experiment and edits controls before submitti
       ]),
     });
     await expect(page.getByText("Preview ready", { exact: true })).toBeVisible();
-    const sourcePath = join(project, "src/reference_lab/workflows/authored/signal.py");
+    const sourcePath = join(project, "src/reference_lab_authors/authored/signal.py");
     const originalSource = await readFile(sourcePath, "utf8");
     await writeFile(sourcePath, originalSource + "\ndef broken(:\n");
     await page.getByRole("button", { name: "Refresh author code", exact: true }).click();

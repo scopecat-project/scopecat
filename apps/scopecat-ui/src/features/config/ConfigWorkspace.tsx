@@ -1,478 +1,343 @@
+import { useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { components } from "../../api-schema";
-import { useRef, useState } from "react";
-import { Menu } from "@base-ui/react/menu";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import {
-  AlertTriangle,
-  CircleDot,
-  Database,
-  FileUp,
-  LoaderCircle,
-  RefreshCw,
-  SlidersHorizontal,
-  UserRound,
-  X,
-  XCircle,
-} from "lucide-react";
+import type { StoredParameterValue, ParameterEntity } from "../../api-contract";
+import { apiClient, apiData, ApiError } from "../../api-client";
 import { errorMessage } from "../../lib/presentation";
-import { classes, secondaryButton } from "../../ui/styles";
 import { SetupPanel } from "./SetupPanel";
-import { ConfigStructureEditor } from "./ConfigStructureEditor";
-import { ConfigContextEditor } from "./ConfigContextEditor";
+import { ParameterValueField } from "./ParameterValueField";
+import { getSetupDefinitions } from "./setup-api";
 import {
-  getConfigRegistryEntry,
-  resolveConfigContext,
-  type ConfigContextRef,
-  type ConfigContextResolution,
-} from "./config-api";
-import { ConfigDraftEditor, type ConfigDraftSeed } from "./ConfigDraftEditor";
-import { ConfigEntryInspector } from "./ConfigEntryInspector";
-import { ConfigImportDialog } from "./ConfigImportDialog";
-import { ActivationHistory, ConfigSummary } from "./ConfigOverview";
-import { ConfigRegistryPanel } from "./ConfigRegistryPanel";
-import { ConfigBoundaryMessage } from "./ConfigUi";
-import { useConfigMutationWorkflow } from "./useConfigMutationWorkflow";
-import { configUndoTarget } from "./config-utils";
-import { useConfigRegistry } from "./useConfigRegistry";
+  commitParameterBranch,
+  getParameterRevisions,
+  saveParameterRevision,
+  type ParameterRevision,
+} from "./parameter-api";
 
 export function ConfigWorkspace({
   daemonUnavailable,
-  onOpenRun,
-  onSelectContext,
   onSelectConfiguration,
 }: {
   daemonUnavailable: boolean;
-  onOpenRun?: (runId: string) => void;
-  onSelectContext?: (context: ConfigContextResolution) => void;
   onSelectConfiguration?: (choice: components["schemas"]["ConfigurationChoice-Input"]) => void;
 }) {
-  const queryClient = useQueryClient();
-  const fileInput = useRef<HTMLInputElement>(null);
-  const [configDraft, setConfigDraft] = useState<ConfigDraftSeed>();
-  const [contextDraft, setContextDraft] = useState<{
-    entry: NonNullable<ReturnType<typeof useConfigRegistry>["selectedEntry"]>;
-    config: NonNullable<ReturnType<typeof useConfigRegistry>["entryDetailQuery"]["data"]>["config"];
-  }>();
-  const [structureDraft, setStructureDraft] =
-    useState<NonNullable<ReturnType<typeof useConfigRegistry>["entryDetailQuery"]["data"]>>();
-  const [comparisonId, setComparisonId] = useState("");
-  const comparison = useQuery({
-    queryKey: ["config", "comparison", comparisonId],
-    queryFn: ({ signal }) => getConfigRegistryEntry(comparisonId, signal),
-    enabled: !!comparisonId,
+  const cache = useQueryClient();
+  const [operator, setOperator] = useState("local-operator");
+  const [selected, setSelected] = useState("");
+  const [editing, setEditing] = useState<ParameterRevision>();
+  const versions = useQuery({
+    queryKey: ["parameter-revisions"],
+    queryFn: ({ signal }) => getParameterRevisions(signal),
+    enabled: !daemonUnavailable,
   });
-  const contextSelection = useMutation({
-    mutationFn: (ref: ConfigContextRef) => resolveConfigContext(ref),
-    onSuccess: (resolution) => onSelectContext?.(resolution),
+  const setups = useQuery({
+    queryKey: ["setup-definitions"],
+    queryFn: ({ signal }) => getSetupDefinitions(signal),
+    enabled: !daemonUnavailable,
   });
-  const registry = useConfigRegistry(daemonUnavailable);
-  const workflow = useConfigMutationWorkflow(registry.overview);
-  const undoTarget = registry.overview ? configUndoTarget(registry.overview) : undefined;
-
-  const selectEntry = (entryId: string) => {
-    registry.selectEntry(entryId);
-    contextSelection.reset();
-    workflow.mutation.reset();
-  };
-
-  if (daemonUnavailable) {
-    return (
-      <ConfigBoundaryMessage
-        icon={<Database />}
-        title="Connect to the local daemon"
-        detail="Configuration is owned by the daemon. This console does not keep an editable browser copy."
-      />
-    );
-  }
-  if (registry.registryQuery.isPending) {
-    return (
-      <ConfigBoundaryMessage
-        icon={<LoaderCircle className="animate-spin" />}
-        title="Reading saved configurations"
-        detail="Loading the default snapshot, saved versions, and change history."
-      />
-    );
-  }
-  if (registry.registryQuery.isError) {
-    return (
-      <ConfigBoundaryMessage
-        icon={<XCircle />}
-        title="Configuration registry unavailable"
-        detail={errorMessage(registry.registryQuery.error)}
-        warning
-        action={
-          <button
-            className={secondaryButton}
-            type="button"
-            onClick={() => void registry.registryQuery.refetch()}
-          >
-            <RefreshCw size={15} aria-hidden="true" />
-            Retry
-          </button>
-        }
-      />
-    );
-  }
-  const overview = registry.overview;
-  if (!overview) {
-    return (
-      <ConfigBoundaryMessage
-        icon={<XCircle />}
-        title="Configuration registry unavailable"
-        detail="The daemon returned no registry projection."
-        warning
-      />
-    );
-  }
-
-  const selectedEntry = registry.selectedEntry;
-  const commandDisabled = workflow.commandDisabled;
-  const latestActivation = registry.entryDetailQuery.data?.latestActivation;
-  const restoring = latestActivation != null;
-  const accepting = selectedEntry?.source.kind !== "direct_config_profile";
-  const editableDraftSeed =
-    selectedEntry &&
-    overview.activation &&
-    registry.entryDetailQuery.data?.config &&
-    overview.activation.entry_id === selectedEntry.id
-      ? {
-          entry: selectedEntry,
-          active: overview.activation,
-          config: registry.entryDetailQuery.data.config,
-        }
-      : undefined;
+  const current = versions.data?.items.find((item) => item.id === selected);
+  const entities = [
+    ...new Map(
+      (setups.data?.items.flatMap((item) => item.definition.topology.entities ?? []) ?? []).map(
+        (item) => [`${item.kind}:${item.id}`, item],
+      ),
+    ).values(),
+  ];
+  if (daemonUnavailable)
+    return <p>Reconnect to the application to manage setups and parameters.</p>;
   return (
-    <section className="grid gap-3.5" aria-labelledby="config-heading">
-      <header className="flex min-h-[50px] items-center justify-between gap-5 rounded-lg border border-line bg-panel py-1.5 pr-2.5 pl-3.5 max-[880px]:items-start max-[680px]:grid max-[680px]:gap-[17px]">
-        <div>
-          <h2 className="m-0 text-base font-[650] tracking-[-0.025em]" id="config-heading">
-            Parameter workspace
-          </h2>
-        </div>
-        <div className="flex items-center gap-2 max-[680px]:flex-wrap">
-          <label className="flex min-h-9 items-center gap-2 rounded-[8px] border border-line bg-bg px-2.5 text-text-dim focus-within:border-[rgb(128_163_207_/_45%)] max-[680px]:flex-1">
-            <UserRound size={15} aria-hidden="true" />
-            <span className="sr-only">Operator name</span>
-            <input
-              className="w-[145px] min-w-0 border-0 bg-transparent p-0 text-[0.72rem] text-text outline-0 max-[680px]:w-full"
-              value={workflow.operator}
-              onChange={(event) => workflow.setOperator(event.target.value)}
-              placeholder="Operator"
-              autoComplete="name"
-            />
-          </label>
-          <input
-            ref={fileInput}
-            className="sr-only"
-            type="file"
-            accept=".json,application/json"
-            onChange={(event) => void workflow.readImport(event)}
-          />
-          <Menu.Root>
-            <Menu.Trigger
-              className={classes(
-                secondaryButton,
-                "data-[popup-open]:bg-panel-strong data-[popup-open]:text-text",
-              )}
-            >
-              <SlidersHorizontal size={15} aria-hidden="true" />
-              Advanced
-            </Menu.Trigger>
-            <Menu.Portal>
-              <Menu.Positioner className="z-60 outline-0" sideOffset={6} align="end">
-                <Menu.Popup className="grid w-[270px] rounded-md border border-line-strong bg-panel-strong p-1.5 shadow-panel outline-0">
-                  <Menu.Item
-                    className="grid w-full cursor-pointer grid-cols-[18px_minmax(0,1fr)] items-start gap-[9px] rounded-sm p-[9px] text-[0.67rem] text-text-soft outline-0 data-[disabled]:cursor-not-allowed data-[disabled]:opacity-45 data-[highlighted]:bg-accent-soft data-[highlighted]:text-text"
-                    onClick={() => fileInput.current?.click()}
-                  >
-                    <FileUp size={15} aria-hidden="true" />
-                    <span className="grid gap-[3px]">
-                      <strong className="text-[0.68rem]">Import raw snapshot</strong>
-                      <small className="text-[0.59rem] leading-[1.45] text-text-dim">
-                        Bypass the typed parameter editor.
-                      </small>
-                    </span>
-                  </Menu.Item>
-                </Menu.Popup>
-              </Menu.Positioner>
-            </Menu.Portal>
-          </Menu.Root>
-        </div>
+    <section className="grid gap-4">
+      <header>
+        <h2>Experiment configuration</h2>
+        <p>
+          Setups bind registered devices. Parameter versions hold scientific inputs; neither changes
+          another page's selection.
+        </p>
+        <label>
+          Operator
+          <input value={operator} onChange={(event) => setOperator(event.target.value)} />
+        </label>
       </header>
-
-      {(workflow.importError || workflow.mutation.error) && (
-        <div
-          className="flex min-h-[42px] items-center gap-[9px] rounded-[9px] border border-[rgb(255_140_136_/_25%)] bg-red-soft px-3 text-[0.7rem] text-[#edb5b2]"
-          role="status"
-        >
-          <AlertTriangle className="flex-none text-red" size={17} aria-hidden="true" />
-          <span className="flex-1">
-            {workflow.importError ?? errorMessage(workflow.mutation.error)}
-          </span>
-          <button
-            className="grid size-[27px] cursor-pointer place-items-center rounded-md border-0 bg-transparent p-0 text-text-dim"
-            type="button"
-            aria-label="Dismiss error"
-            onClick={workflow.dismissError}
+      <SetupPanel operator={operator} onSelectConfiguration={onSelectConfiguration} />
+      <section
+        className="grid gap-3 rounded-lg border border-line bg-panel p-4"
+        aria-label="Parameter versions"
+      >
+        <h3>Parameter versions</h3>
+        <p>
+          Start from an imported template or a saved version. Unknown values remain unknown; saving
+          a draft does not validate a calibration.
+        </p>
+        <label>
+          Saved parameter version
+          <select
+            value={selected}
+            onChange={(event) => {
+              setSelected(event.target.value);
+              setEditing(undefined);
+            }}
           >
-            <X size={15} />
-          </button>
-        </div>
-      )}
-
-      <p>
-        Save a working point copy to keep a candidate. Use for next experiment selects that saved
-        version for launch. Set as default publishes it for the laboratory. Code refresh changes
-        experiment code, not saved parameters.
-      </p>
-
-      <SetupPanel
-        config={registry.entryDetailQuery.data?.config}
-        operator={workflow.operator}
-        onSelectConfiguration={onSelectConfiguration}
-      />
-
-      <ConfigSummary
-        overview={overview}
-        activeEntry={registry.activeDetailQuery.data?.entry}
-        undoEntryId={undoTarget?.entryId}
-        undoDisabled={commandDisabled || undoTarget === undefined}
-        undoPending={workflow.mutation.isPending && workflow.mutation.variables?.kind === "undo"}
-        onUndo={() => {
-          if (undoTarget === undefined) return;
-          workflow.runAction(
-            {
-              kind: "undo",
-              entryId: undoTarget.entryId,
-              expectedGeneration: undoTarget.expectedGeneration,
-            },
-            `Restore ${undoTarget.entryId} as the default configuration? Calibration validity is not renewed and no devices are run.`,
-          );
-        }}
-      />
-
-      <div className="grid min-h-[630px] grid-cols-[minmax(290px,340px)_minmax(0,1fr)] overflow-hidden rounded-lg border border-line bg-panel max-[1100px]:grid-cols-[minmax(260px,300px)_minmax(0,1fr)] max-[880px]:block max-[880px]:min-h-0 max-[880px]:overflow-visible max-[880px]:border-0 max-[880px]:bg-transparent">
-        <ConfigRegistryPanel
-          overview={overview}
-          entries={registry.filteredEntries}
-          selectedId={registry.selectedId}
-          search={registry.registrySearch}
-          refreshing={registry.registryQuery.isFetching}
-          hasOlder={overview.entries_next_cursor !== undefined}
-          loadingOlder={registry.olderEntriesMutation.isPending}
-          olderError={registry.olderEntriesMutation.error}
-          onSearchChange={registry.setRegistrySearch}
-          onSelectEntry={selectEntry}
-          onLoadOlder={registry.loadOlderEntries}
-        />
-
-        <section
-          className="min-w-0 bg-panel p-[clamp(18px,2vw,26px)] max-[880px]:rounded-lg max-[880px]:border max-[880px]:border-line max-[680px]:min-h-[520px] max-[680px]:px-3.5 max-[680px]:py-5"
-          aria-live="polite"
-        >
-          {selectedEntry ? (
-            <>
-              <div className="mb-4 flex flex-wrap items-center gap-2">
-                <button
-                  className={secondaryButton}
-                  disabled={!!contextDraft || !registry.entryDetailQuery.data}
-                  onClick={() => {
-                    if (registry.entryDetailQuery.data)
-                      setContextDraft({
-                        entry: selectedEntry,
-                        config: registry.entryDetailQuery.data.config,
-                      });
-                  }}
-                >
-                  Save working point copy
-                </button>
-                {selectedEntry.source.kind !== "parameter_context" && onSelectConfiguration && (
-                  <button
-                    className={secondaryButton}
-                    onClick={() =>
-                      onSelectConfiguration({
-                        kind: "saved",
-                        ref: {
-                          entry_id: selectedEntry.id,
-                          content_hash: selectedEntry.content_hash,
-                        },
-                      })
-                    }
-                  >
-                    Use for next experiment
-                  </button>
-                )}
-                {selectedEntry.source.kind === "parameter_context" && (
-                  <button
-                    className={secondaryButton}
-                    disabled={!!structureDraft || !registry.entryDetailQuery.data?.structureVersion}
-                    onClick={() => setStructureDraft(registry.entryDetailQuery.data)}
-                  >
-                    Change table structure
-                  </button>
-                )}
-                {selectedEntry.source.kind === "parameter_context" && (
-                  <button
-                    className={secondaryButton}
-                    disabled={contextSelection.isPending}
-                    onClick={() =>
-                      contextSelection.mutate({
-                        entry_id: selectedEntry.id,
-                        content_hash: selectedEntry.content_hash,
-                      })
-                    }
-                  >
-                    Use for next experiment
-                  </button>
-                )}
-                <label>
-                  Compare with
-                  <select
-                    aria-label="Compare configuration with"
-                    value={comparisonId}
-                    onChange={(event) => setComparisonId(event.target.value)}
-                  >
-                    <option value="">Lab default</option>
-                    {overview.entries.map((entry) => (
-                      <option key={entry.id} value={entry.id}>
-                        {entry.source.kind === "parameter_context"
-                          ? entry.source.context.label
-                          : entry.id}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </div>
-              {comparison.error && <p role="alert">{errorMessage(comparison.error)}</p>}
-              {contextSelection.error && <p role="alert">{errorMessage(contextSelection.error)}</p>}
-              {contextSelection.data && (
-                <p>
-                  Selected {contextSelection.data.config_source.sample.sample_id} /{" "}
-                  {contextSelection.data.config_source.sample.context_id}. Unknown:{" "}
-                  {contextSelection.data.missing_values?.join(", ") || "none"}. Lab default
-                  unchanged.
-                </p>
-              )}
-              <ConfigEntryInspector
-                entry={selectedEntry}
-                active={overview.activation?.entry_id === selectedEntry.id}
-                latestActivation={latestActivation?.generation}
-                snapshot={registry.entryDetailQuery.data?.summary}
-                config={registry.entryDetailQuery.data?.config}
-                activeConfig={
-                  comparisonId ? comparison.data?.config : registry.activeDetailQuery.data?.config
+            <option value="">Choose a version</option>
+            {versions.data?.items.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.id}
+              </option>
+            ))}
+          </select>
+        </label>
+        {versions.error && <p role="alert">{errorMessage(versions.error)}</p>}
+        {current && (
+          <>
+            <p>
+              {current.actor}
+              {current.note ? ` · ${current.note}` : ""}
+            </p>
+            <div className="flex gap-3">
+              <button onClick={() => setEditing(structuredClone(current))}>Edit a copy</button>
+              <button
+                onClick={() =>
+                  onSelectConfiguration?.({
+                    kind: "parameters",
+                    ref: { revision_id: current.id, content_hash: current.content_hash },
+                    overrides: [],
+                  })
                 }
-                snapshotPending={registry.entryDetailQuery.isPending}
-                snapshotError={registry.entryDetailQuery.error}
-                note={workflow.note}
-                pending={
-                  workflow.mutation.isPending &&
-                  workflow.mutation.variables?.kind === "activate-entry"
-                }
-                actionDisabled={commandDisabled || !registry.entryDetailQuery.isSuccess}
-                onNoteChange={workflow.setNote}
-                onSelectEntry={selectEntry}
-                onOpenRun={onOpenRun}
-                onActivate={() =>
-                  workflow.runAction(
-                    {
-                      kind: "activate-entry",
-                      entryId: selectedEntry.id,
-                      expectedGeneration: overview.activation?.generation ?? 0,
-                    },
-                    restoring
-                      ? `Restore ${selectedEntry.id} as the default configuration? This selects the exact saved parameters from G${latestActivation.generation}; calibration validity is not renewed.`
-                      : `${accepting ? "Accept" : "Set"} ${selectedEntry.id} as the default configuration?`,
-                    restoring
-                      ? "Restore default"
-                      : accepting
-                        ? "Accept as default"
-                        : "Set as default",
-                  )
-                }
-                onEdit={editableDraftSeed ? () => setConfigDraft(editableDraftSeed) : undefined}
-              />
-            </>
-          ) : (
-            <ConfigBoundaryMessage
-              icon={<CircleDot />}
-              title="Nothing selected"
-              detail="Choose a saved version to inspect its immutable snapshot."
-              compact
+              >
+                Use for next experiment
+              </button>
+            </div>
+          </>
+        )}
+        {editing && (
+          <ParameterVersionEditor
+            key={editing.id}
+            base={editing}
+            entities={entities}
+            operator={operator}
+            onCancel={() => setEditing(undefined)}
+            onSaved={async (saved) => {
+              setSelected(saved.id);
+              setEditing(undefined);
+              await cache.invalidateQueries({ queryKey: ["parameter-revisions"] });
+              await cache.invalidateQueries({ queryKey: ["parameter-branches"] });
+            }}
+          />
+        )}
+      </section>
+    </section>
+  );
+}
+
+function ParameterVersionEditor({
+  base,
+  entities,
+  operator,
+  onCancel,
+  onSaved,
+}: {
+  base: ParameterRevision;
+  entities: ParameterEntity[];
+  operator: string;
+  onCancel: () => void;
+  onSaved: (saved: ParameterRevision) => Promise<void>;
+}) {
+  const [name, setName] = useState(`${base.id} (revised)`);
+  const [note, setNote] = useState("");
+  const [branch, setBranch] = useState("");
+  const [values, setValues] = useState<StoredParameterValue[]>(base.parameters.values ?? []);
+  const heads = useQuery({
+    queryKey: ["parameter-branches", "editing"],
+    queryFn: ({ signal }) =>
+      apiData(
+        apiClient.GET("/api/v1/parameters/branches", { params: { query: { limit: 100 } }, signal }),
+      ),
+  });
+  const reviewedHead = useQuery({
+    queryKey: ["parameter-branch-review", branch.trim()],
+    queryFn: ({ signal }) =>
+      apiData(
+        apiClient.GET("/api/v1/parameters/branches/{name}", {
+          params: { path: { name: branch.trim() } },
+          signal,
+        }),
+      ),
+    enabled: !!branch.trim(),
+    retry: false,
+    staleTime: Infinity,
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
+  });
+  const newBranch = reviewedHead.error instanceof ApiError && reviewedHead.error.status === 404;
+  const head = reviewedHead.data;
+  const setValue = (id: string, value?: StoredParameterValue) =>
+    setValues((current) =>
+      value === undefined
+        ? current.filter((item) => item.id !== id)
+        : [...current.filter((item) => item.id !== id), value],
+    );
+  const save = useMutation({
+    mutationFn: async () => {
+      const command = {
+        revision_id: name.trim(),
+        actor: operator,
+        note,
+        catalog: base.catalog,
+        parameters: { ...base.parameters, values },
+      };
+      if (branch.trim()) {
+        if (!head && !newBranch) throw new Error("Review the branch head before saving.");
+        const result = await commitParameterBranch({
+          name: branch.trim(),
+          expected_generation: head?.generation ?? 0,
+          source: command,
+          actor: operator,
+          note,
+        });
+        return result.revision;
+      }
+      const result = await saveParameterRevision(command);
+      return { revision_id: result.id, content_hash: result.content_hash };
+    },
+    onSuccess: async (ref) => {
+      const saved = await apiData(
+        apiClient.GET("/api/v1/parameters/revisions/{revision_id}", {
+          params: { path: { revision_id: ref.revision_id } },
+        }),
+      );
+      await onSaved(saved);
+    },
+  });
+  return (
+    <section aria-label="Edit parameter version" className="grid gap-3 border-t border-line pt-3">
+      <label>
+        New version name
+        <input value={name} onChange={(event) => setName(event.target.value)} />
+      </label>
+      {(base.catalog.definitions ?? []).map((definition) => {
+        const value = values.find((item) => item.id === definition.id);
+        if (definition.value_type.shape === "scalar")
+          return (
+            <ParameterValueField
+              key={definition.id}
+              label={definition.id}
+              type={definition.value_type.atom}
+              value={value?.shape === "scalar" ? value.value : undefined}
+              entities={entities}
+              onChange={(atom) =>
+                setValue(
+                  definition.id,
+                  atom === undefined
+                    ? undefined
+                    : { id: definition.id, shape: "scalar", value: atom },
+                )
+              }
             />
-          )}
-        </section>
-      </div>
-
-      {structureDraft && (
-        <ConfigStructureEditor
-          detail={structureDraft}
-          operator={workflow.operator}
-          onCancel={() => setStructureDraft(undefined)}
-          onSaved={(entryId) => {
-            setStructureDraft(undefined);
-            void queryClient.invalidateQueries({ queryKey: ["config"] });
-            registry.selectEntry(entryId);
-          }}
+          );
+        if (definition.value_type.shape !== "table")
+          return (
+            <p key={definition.id}>{definition.id}: edit this parameter shape through Python.</p>
+          );
+        const table = definition.value_type;
+        const rows = value?.shape === "table" ? (value.rows ?? []) : [];
+        return (
+          <fieldset key={definition.id} className="grid gap-2 rounded border border-line p-3">
+            <legend>{definition.id}</legend>
+            {value === undefined && <p>Unknown table</p>}
+            {rows.map((row, index) => (
+              <div key={index} className="grid gap-2 border-t border-line py-2">
+                {table.columns.map((column) => (
+                  <ParameterValueField
+                    key={column.id}
+                    label={`${definition.id}[${index + 1}].${column.id}`}
+                    type={column.value_type}
+                    value={row[column.id]}
+                    entities={entities}
+                    onChange={(atom) => {
+                      const next = { ...row };
+                      if (atom === undefined) delete next[column.id];
+                      else next[column.id] = atom;
+                      setValue(definition.id, {
+                        id: definition.id,
+                        shape: "table",
+                        rows: rows.map((item, position) => (position === index ? next : item)),
+                      });
+                    }}
+                  />
+                ))}
+                <button
+                  onClick={() =>
+                    setValue(definition.id, {
+                      id: definition.id,
+                      shape: "table",
+                      rows: rows.filter((_, position) => position !== index),
+                    })
+                  }
+                >
+                  Remove row {index + 1}
+                </button>
+              </div>
+            ))}
+            <div className="flex gap-3">
+              <button
+                onClick={() =>
+                  setValue(definition.id, {
+                    id: definition.id,
+                    shape: "table",
+                    rows: [...rows, {}],
+                  })
+                }
+              >
+                Add row
+              </button>
+              <button onClick={() => setValue(definition.id)}>Mark table unknown</button>
+            </div>
+          </fieldset>
+        );
+      })}
+      <label>
+        Source or reason for changes
+        <input value={note} onChange={(event) => setNote(event.target.value)} />
+      </label>
+      <label>
+        Named branch (optional)
+        <input
+          list="parameter-branch-names"
+          value={branch}
+          onChange={(event) => setBranch(event.target.value)}
         />
+      </label>
+      <datalist id="parameter-branch-names">
+        {heads.data?.items.map((item) => (
+          <option key={item.name} value={item.name}>
+            {item.name}
+          </option>
+        ))}
+      </datalist>
+      {branch && (
+        <p>
+          {head
+            ? `Update ${branch} from generation ${head.generation}.`
+            : newBranch
+              ? `Create branch ${branch}.`
+              : "Reading branch head…"}{" "}
+          A concurrent update requires review before retrying.{" "}
+          <button onClick={() => void reviewedHead.refetch()}>Review latest branch head</button>
+        </p>
       )}
-      {contextDraft && (
-        <ConfigContextEditor
-          entry={contextDraft.entry}
-          config={contextDraft.config}
-          operator={workflow.operator}
-          onCancel={() => setContextDraft(undefined)}
-          onSaved={(entryId) => {
-            setContextDraft(undefined);
-            void queryClient.invalidateQueries({ queryKey: ["config"] });
-            registry.selectEntry(entryId);
-          }}
-        />
+      {(save.error || heads.error || (reviewedHead.error && !newBranch)) && (
+        <p role="alert">{errorMessage(save.error ?? heads.error ?? reviewedHead.error)}</p>
       )}
-
-      {configDraft && (
-        <ConfigDraftEditor
-          seed={configDraft}
-          currentActive={overview.activation ?? undefined}
-          operator={workflow.operator}
-          onCancel={() => setConfigDraft(undefined)}
-          onPublished={async (receipt) => {
-            setConfigDraft(undefined);
-            await Promise.all([
-              queryClient.invalidateQueries({ queryKey: ["config"] }),
-              queryClient.invalidateQueries({ queryKey: ["events"] }),
-            ]);
-            registry.selectEntry(receipt.entry.id);
-          }}
-        />
-      )}
-
-      <ActivationHistory
-        history={overview.activation_history}
-        hasOlder={overview.activation_history_next_cursor !== undefined}
-        loadingOlder={registry.olderActivationsMutation.isPending}
-        olderError={registry.olderActivationsMutation.error}
-        onLoadOlder={registry.loadOlderActivations}
-      />
-
-      {workflow.importDraft && (
-        <ConfigImportDialog
-          draft={workflow.importDraft}
-          note={workflow.note}
-          pending={workflow.mutation.isPending && workflow.mutation.variables?.kind === "import"}
-          disabled={workflow.mutation.isPending || !workflow.operator.trim()}
-          onChange={workflow.setImportDraft}
-          onNoteChange={workflow.setNote}
-          onCancel={() => workflow.setImportDraft(undefined)}
-          onSubmit={() =>
-            workflow.mutation.mutate({
-              kind: "import",
-              draft: workflow.importDraft!,
-            })
+      <div className="flex gap-3">
+        <button onClick={onCancel}>Cancel</button>
+        <button
+          disabled={
+            !name.trim() || !operator.trim() || save.isPending || (!!branch && !head && !newBranch)
           }
-        />
-      )}
-      {workflow.confirmationDialog}
+          onClick={() => save.mutate()}
+        >
+          Save parameter version
+        </button>
+      </div>
     </section>
   );
 }

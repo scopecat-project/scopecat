@@ -6,7 +6,6 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, expect, it, vi } from "vitest";
 import { LaunchDraftProvider, useLaunchDraft } from "./LaunchDraft";
 import type { LaunchCatalogEntry } from "./launch-api";
-import { resolveConfigContext } from "../config/config-api";
 import type { ComparisonHandoff } from "../analyses/RunComparison";
 
 const entry: LaunchCatalogEntry = {
@@ -72,15 +71,22 @@ function Probe() {
               subject: { kind: "sample", sample_id: "old-sample" },
             },
           }));
-          state.selectContext(
-            await resolveConfigContext({ entry_id: "old-context", content_hash: "old-hash" }),
-          );
+          state.selectConfiguration({
+            kind: "parameters",
+            ref: { revision_id: "old-context", content_hash: "old-hash" },
+            setup: { revision_id: "bench", content_hash: "setup-hash" },
+            overrides: [],
+          });
         }}
       >
         Select old configuration
       </button>
       <button onClick={() => state.importHandoff(entry, suggestion)}>Import</button>
-      <output aria-label="Context">{state.selectedContext?.config_source.context.entry_id}</output>
+      <output aria-label="Context">
+        {state.draft?.selection.configuration.kind === "parameters"
+          ? state.draft.selection.configuration.ref.revision_id
+          : ""}
+      </output>
       <output aria-label="Sample">
         {state.draft?.selection.subject.kind === "sample"
           ? state.draft.selection.subject.sample_id

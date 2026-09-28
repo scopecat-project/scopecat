@@ -3,7 +3,7 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { expect, test as base, type Page } from "@playwright/test";
+import { expect, test as base } from "@playwright/test";
 
 interface DaemonEndpointRecord {
   base_url: string;
@@ -12,17 +12,6 @@ interface DaemonEndpointRecord {
 interface ProjectDaemon {
   baseUrl: string;
   projectRoot: string;
-}
-
-interface ConfigRegistryPage {
-  activation: {
-    entry_id: string;
-    generation: number;
-  };
-}
-
-interface ConfigActivationPage {
-  items: unknown[];
 }
 
 interface ProcessCompletion {
@@ -106,6 +95,9 @@ with project.connect() as lab:
     original_ingest = client.ingest_measurements
     prepared = lab.prepare(
         live_scan.build(),
+        config=lab.parameters.resolve(
+            lab.parameters.get("starter-initial"), setup=lab.setup.get("starter-bench"),
+        ),
     )
 
     def gated_submit(submission):
@@ -212,7 +204,12 @@ with project.connect() as lab:
 
     client.start_executor = observed_start
     try:
-        prepared = lab.prepare(adaptive_scan.build().adaptive(GatedOptimizer(), max_points=5))
+        prepared = lab.prepare(
+            adaptive_scan.build().adaptive(GatedOptimizer(), max_points=5),
+            config=lab.parameters.resolve(
+                lab.parameters.get("starter-initial"), setup=lab.setup.get("starter-bench"),
+            ),
+        )
         run = prepared.run(name="Adaptive operator queue E2E")
         summary = {"run_id": run.id, "status": run.status}
     finally:
@@ -289,7 +286,7 @@ with sc.open_project(project_root).connect() as lab:
         )
         .propose(
             "repetitions-fit",
-            sc.replace_scalar_parameter("repetitions", 384),
+            sc.replace_table_parameter("response", [{"id": "signal", "scale": 2.0}]),
             reason="stable high-confidence notebook fit",
             confidence=0.98,
         )
@@ -349,7 +346,7 @@ test("starter project closes the notebook, run, and config loop", async ({ daemo
 
   await expect(
     page.getByRole("heading", {
-      name: "First run",
+      name: "first_run",
       exact: true,
     }),
   ).toBeVisible();
@@ -363,67 +360,49 @@ test("starter project closes the notebook, run, and config loop", async ({ daemo
   const selectedRun = new URL(page.url()).searchParams.get("run");
   expect(selectedRun).toBeTruthy();
   await page.goto(`${daemon.baseUrl}/?run=${selectedRun}`);
-  await expect(page.getByRole("heading", { name: "First run", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "first_run", exact: true })).toBeVisible();
 
   await page.getByRole("button", { name: "Configuration" }).click();
   await expect(
-    page.getByRole("heading", { name: "Parameter workspace", exact: true }),
+    page.getByRole("heading", { name: "Experiment configuration", exact: true }),
   ).toBeVisible();
-
-  const initialRegistry = await readRegistry(page, daemon.baseUrl);
-  const initialHistory = await readActivationHistory(page, daemon.baseUrl);
-  const initialEntryId = initialRegistry.activation.entry_id;
-  await expect(page.getByTestId("active-config-entry")).toHaveText(initialEntryId);
-  await expect(page.getByRole("button", { name: "Undo" })).toBeDisabled();
-
-  await page.getByRole("button", { name: "Edit parameters" }).click();
-  const repetitions = page.getByRole("spinbutton", { name: "repetitions" });
-  await expect(repetitions).toHaveValue("128");
-  await repetitions.fill("256");
-
-  const setDefaultResponse = page.waitForResponse(
-    (response) =>
-      response.request().method() === "POST" &&
-      response.url().endsWith("/api/v1/config-registry/publish-operations"),
-  );
-  await page.getByRole("button", { name: "Set as default" }).click();
-  await expectResponseOk(await setDefaultResponse, "POST");
-
-  await expect(page.getByText("Runtime-derived default")).toBeVisible();
-  await expect(page.getByTestId("parameter-atom")).toHaveText("256");
-  const editedRegistry = await readRegistry(page, daemon.baseUrl);
-  const editedHistory = await readActivationHistory(page, daemon.baseUrl);
-  expect(editedRegistry.activation.entry_id).not.toBe(initialEntryId);
-  expect(editedRegistry.activation.generation).toBe(initialRegistry.activation.generation + 1);
-  expect(editedHistory.items).toHaveLength(initialHistory.items.length + 1);
-
-  const undoResponse = page.waitForResponse(
-    (response) =>
-      response.request().method() === "POST" &&
-      response.url().endsWith("/api/v1/config-registry/activation-operations"),
-  );
-  await page.getByRole("button", { name: "Undo" }).click();
   await page
-    .getByRole("alertdialog")
-    .getByRole("button", { name: "Restore default", exact: true })
-    .click();
-  await expectResponseOk(await undoResponse, "POST");
-
-  await expect(page.getByTestId("active-config-entry")).toHaveText(initialEntryId);
-  await expect(page.getByText("Runtime-derived default")).toHaveCount(0);
-  const rolledBackRegistry = await readRegistry(page, daemon.baseUrl);
-  const rolledBackHistory = await readActivationHistory(page, daemon.baseUrl);
-  expect(rolledBackRegistry.activation.entry_id).toBe(initialEntryId);
-  expect(rolledBackRegistry.activation.generation).toBe(editedRegistry.activation.generation + 1);
-  expect(rolledBackHistory.items).toHaveLength(editedHistory.items.length + 1);
+    .getByRole("combobox", { name: "Saved parameter version", exact: true })
+    .selectOption("starter-initial");
+  await page.getByRole("button", { name: "Edit a copy", exact: true }).click();
+  await page.getByRole("spinbutton", { name: "response[1].scale", exact: true }).fill("2");
+  await page.getByLabel("New version name", { exact: true }).fill("browser-adjusted");
+  await page.getByLabel("Named branch (optional)", { exact: true }).fill("starter");
+  await expect(page.getByText(/Update starter from generation 1/)).toBeVisible();
+  const committed = page.waitForResponse((response) =>
+    response.url().endsWith("/api/v1/parameters/branch-commits"),
+  );
+  await page.getByRole("button", { name: "Save parameter version", exact: true }).click();
+  await expectResponseOk(await committed, "POST");
+  const branch = await (
+    await page.request.get(`${daemon.baseUrl}/api/v1/parameters/branches/starter`)
+  ).json();
+  expect(branch.generation).toBe(2);
+  expect(branch.revision.revision_id).toBe("browser-adjusted");
+  const original = await (
+    await page.request.get(`${daemon.baseUrl}/api/v1/parameters/revisions/starter-initial`)
+  ).json();
+  expect(original.parameters.values[0].rows[0].scale).toBe(1);
+  await page.reload();
+  await page
+    .getByRole("combobox", { name: "Saved parameter version", exact: true })
+    .selectOption("browser-adjusted");
+  await page.getByRole("button", { name: "Edit a copy", exact: true }).click();
+  await expect(
+    page.getByRole("spinbutton", { name: "response[1].scale", exact: true }),
+  ).toHaveValue("2");
 });
 
-test("accepts a notebook candidate in the GUI and preserves its provenance", async ({
+test("reviews notebook candidate evidence without changing parameter branches", async ({
   daemon,
   page,
 }) => {
   const candidate = await createCandidateAnalysis(daemon.projectRoot);
-  const initialRegistry = await readRegistry(page, daemon.baseUrl);
 
   await page.goto(`${daemon.baseUrl}/?run=${encodeURIComponent(candidate.runId)}`);
   const analyses = page.getByTestId("resource-card").filter({ hasText: "Analyses" });
@@ -449,50 +428,17 @@ test("accepts a notebook candidate in the GUI and preserves its provenance", asy
   const proposals = page.getByTestId("run-proposals-card");
   await expect(proposals.getByText(candidate.proposalId, { exact: true })).toBeVisible();
   await expect(proposals.getByText("98% confidence", { exact: true })).toBeVisible();
-  await proposals.getByPlaceholder("Evidence or rationale").fill("fit accepted from the GUI");
-
-  const acceptResponse = page.waitForResponse(
-    (response) =>
-      response.request().method() === "POST" &&
-      response.url().endsWith("/api/v1/config-registry/publish-operations"),
+  await expect(proposals.getByRole("button", { name: "Accept as default" })).toHaveCount(0);
+  await proposals.getByText("Try this candidate in VS Code", { exact: true }).click();
+  await expect(proposals.locator("pre")).toContainText(candidate.runId);
+  await expect(proposals.locator("pre")).toContainText(candidate.proposalId);
+  await expect(proposals.locator("pre")).toContainText(
+    "session.prepare(experiment, candidate=candidate)",
   );
-  await proposals.getByRole("button", { name: "Accept as default" }).click();
-  await page.getByRole("alertdialog").getByRole("button", { name: "Accept as default" }).click();
-  await expectResponseOk(await acceptResponse, "POST");
-  await expect(proposals.getByRole("button", { name: "Default set" })).toBeVisible();
-
-  const acceptedRegistry = await readRegistry(page, daemon.baseUrl);
-  expect(acceptedRegistry.activation.entry_id).not.toBe(initialRegistry.activation.entry_id);
-  expect(acceptedRegistry.activation.generation).toBe(initialRegistry.activation.generation + 1);
-
-  await page.getByRole("button", { name: "Configuration" }).click();
-  await expect(page.getByText("Runtime-derived default")).toBeVisible();
-  await expect(page.getByText("Analysis candidate", { exact: true })).toBeVisible();
-  await expect(page.getByText(candidate.analysisId, { exact: true })).toBeVisible();
-  await expect(page.getByText("Approved · local-operator", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Open producing run" }).click();
-
-  await expect(page.getByRole("button", { name: "Runs" })).toHaveAttribute("aria-current", "page");
+  await page.reload();
   await expect(
-    page.getByTestId("run-detail-header").getByText(candidate.runId, { exact: true }),
+    page.getByTestId("run-proposals-card").getByText(candidate.proposalId, { exact: true }),
   ).toBeVisible();
-  expect(new URL(page.url()).searchParams.get("run")).toBe(candidate.runId);
-
-  await page.getByRole("button", { name: "Configuration" }).click();
-  const undoResponse = page.waitForResponse(
-    (response) =>
-      response.request().method() === "POST" &&
-      response.url().endsWith("/api/v1/config-registry/activation-operations"),
-  );
-  await page.getByRole("button", { name: "Undo" }).click();
-  await page
-    .getByRole("alertdialog")
-    .getByRole("button", { name: "Restore default", exact: true })
-    .click();
-  await expectResponseOk(await undoResponse, "POST");
-  await expect(page.getByTestId("active-config-entry")).toHaveText(
-    initialRegistry.activation.entry_id,
-  );
 });
 
 test("open console reconnects SSE and follows a live notebook run", async ({ daemon, page }) => {
@@ -607,20 +553,6 @@ test("queues a free off-grid scan domain into a running adaptive compiler", asyn
     await finishAdaptiveExperiment(experiment);
   }
 });
-
-async function readRegistry(page: Page, baseUrl: string): Promise<ConfigRegistryPage> {
-  const response = await page.request.get(`${baseUrl}/api/v1/config-registry?limit=100`);
-  await expectResponseOk(response, "GET");
-  return (await response.json()) as ConfigRegistryPage;
-}
-
-async function readActivationHistory(page: Page, baseUrl: string): Promise<ConfigActivationPage> {
-  const response = await page.request.get(
-    `${baseUrl}/api/v1/config-registry/activations?limit=100`,
-  );
-  await expectResponseOk(response, "GET");
-  return (await response.json()) as ConfigActivationPage;
-}
 
 async function createCandidateAnalysis(projectRoot: string): Promise<CandidateAnalysis> {
   const script = join(projectRoot, "e2e_candidate_analysis.py");

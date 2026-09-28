@@ -19,27 +19,24 @@ from scopecat.daemon.wire import (
     ParameterBindCommand,
     ParameterSaveCommand,
     SampleCreateCommand,
-    SetupSaveCommand,
+    SetupImportCommand,
 )
 from scopecat.kernel.quantity import Quantity
-from scopecat.records.config_context import ConfigContextRef
 from scopecat.records.experiment_plan import ExperimentPlanSave
 from scopecat.records.experimental_batch import ExperimentalBatchEdit
 from scopecat.records.launch_request import LaunchRequest
 from scopecat.records.parameter import ParameterSnapshot, ScalarParameterValue
 from scopecat.records.parameter_revision import ParameterRevision
-from scopecat.records.plan_ref import PlanConfigRef
 from scopecat.records.run import ParameterRunConfigSource
-from scopecat.records.sample import SampleRevisionDraft, SampleSelector
+from scopecat.records.sample import SampleRevisionDraft
 from scopecat.records.scientific_scope import DeclaredBatch
 from scopecat.records.scientific_selection import (
     ParameterConfiguration,
     SampleSubjectChoice,
-    SavedConfiguration,
     ScientificSelection,
-    WorkingPointConfiguration,
 )
 from scopecat.records.setup import ExecutableSetupSnapshot
+from scopecat_testkit.server.instruments import signal_endpoint
 from scopecat_testkit.workflow_fixtures import load_config
 
 from scopecat_server.runtime import LocalDaemonRuntime
@@ -57,7 +54,9 @@ def test_independent_parameters_bind_without_selecting_and_reopen(
     )
     for first in (True, False):
         with (
-            LocalDaemonRuntime(tmp_path) as runtime,
+            LocalDaemonRuntime(
+                tmp_path, instrument_endpoint=signal_endpoint()
+            ) as runtime,
             TestClient(runtime.app()) as client,
         ):
             response = client.post(
@@ -85,8 +84,8 @@ def test_independent_parameters_bind_without_selecting_and_reopen(
                     ).status_code
                     == 409
                 )
-                setup = runtime.application.setup.save(
-                    SetupSaveCommand(
+                setup = runtime.application.setup.import_recipe(
+                    SetupImportCommand(
                         revision_id="bench",
                         setup=ExecutableSetupSnapshot.from_config(config),
                         actor="maintainer",
@@ -158,12 +157,12 @@ def test_independent_parameter_validation_does_not_need_setup(tmp_path: Path) ->
         assert not runtime.application.setup.list()
 
 
-def test_prepared_inputs_share_subject_batch_and_working_point_resolution(
+def test_prepared_inputs_retain_subject_batch_and_explicit_setup(
     tmp_path: Path,
 ) -> None:
     config = load_config()
     with (
-        LocalDaemonRuntime(tmp_path) as runtime,
+        LocalDaemonRuntime(tmp_path, instrument_endpoint=signal_endpoint()) as runtime,
         TestClient(runtime.app()) as transport,
     ):
 
@@ -189,7 +188,7 @@ def test_prepared_inputs_share_subject_batch_and_working_point_resolution(
                 catalog=config.parameter_catalog,
                 parameters=config.parameter_snapshot,
             )
-            setup = lab.setup.save(
+            setup = lab.setup.import_recipe(
                 ExecutableSetupSnapshot.from_config(config), name="bench"
             )
             prepared = lab.parameters.bind(
@@ -212,11 +211,8 @@ def test_prepared_inputs_share_subject_batch_and_working_point_resolution(
             selection = ScientificSelection(
                 subject=SampleSubjectChoice(sample_id="chip"),
                 batch=DeclaredBatch(id="cooldown"),
-                configuration=SavedConfiguration(
-                    ref=PlanConfigRef(
-                        entry_id=prepared.entry.id,
-                        content_hash=prepared.entry.content_hash,
-                    )
+                configuration=ParameterConfiguration(
+                    ref=parameters.ref, setup=setup.ref
                 ),
             )
             request = LaunchRequest(
@@ -227,38 +223,13 @@ def test_prepared_inputs_share_subject_batch_and_working_point_resolution(
                 selection=selection,
             )
             resolved = resolve_launch_config(lab, request)
-            assert resolved.config == prepared.config
+            assert (
+                resolved.config.parameter_snapshot == prepared.config.parameter_snapshot
+            )
             sample = resolved.reviewed.binding.samples[0]
             assert (sample.sample_id, sample.batch_id) == ("chip", "cooldown")
-            point = lab.config.save_context(
-                entry_id="parked",
-                base=ConfigContextRef(
-                    entry_id=prepared.entry.id, content_hash=prepared.entry.content_hash
-                ),
-                sample=SampleSelector(
-                    sample_id="chip", revision=1, batch_id="cooldown"
-                ),
-                working_point_id="parked",
-                label="Parked",
-            )
-            context_selection = selection.model_copy(
-                update={
-                    "configuration": WorkingPointConfiguration(
-                        ref=ConfigContextRef(
-                            entry_id=point.entry.id,
-                            content_hash=point.entry.content_hash,
-                        ),
-                    )
-                }
-            )
-            context = resolve_launch_config(
-                lab, request.model_copy(update={"selection": context_selection})
-            )
-            assert context.reviewed.binding.samples[0].sample_id == sample.sample_id
-            assert context.reviewed.binding.samples[0].batch_id == sample.batch_id
             assert lab.config.registry().activation is None
             assert lab.parameters.get(parameters.id) == parameters
-            lab.setup.activate(setup)
             collection = client.create_record_collection("Trial")
             registry_before = lab.config.registry()
             with (
@@ -274,7 +245,7 @@ def test_prepared_inputs_share_subject_batch_and_working_point_resolution(
                 ) as other,
             ):
                 before = session.use(
-                    selection=context_selection,
+                    selection=selection,
                     collection=collection.id,
                     operator="alice",
                 )
@@ -293,11 +264,6 @@ def test_prepared_inputs_share_subject_batch_and_working_point_resolution(
                     other.use(setup=setup)
                 assert other.use(parameters="initial").science.subject.kind == "unbound"
                 assert session.selection == selected
-                with pytest.raises(
-                    ValueError, match="choose parameters or working_point"
-                ):
-                    session.use(parameters=parameters, working_point=None)
-                assert session.selection == selected
                 request = LaunchRequest(
                     workspace_id="test-source",
                     action="preview",
@@ -307,6 +273,7 @@ def test_prepared_inputs_share_subject_batch_and_working_point_resolution(
                         update={
                             "configuration": ParameterConfiguration(
                                 ref=parameters.ref,
+                                setup=setup.ref,
                                 overrides=(
                                     replace_scalar_parameter(
                                         "drive_frequency", Quantity(5.2, "GHz")
@@ -316,6 +283,19 @@ def test_prepared_inputs_share_subject_batch_and_working_point_resolution(
                         }
                     ),
                 )
+                missing_setup = request.model_copy(
+                    update={
+                        "selection": request.selection.model_copy(
+                            update={
+                                "configuration": ParameterConfiguration(
+                                    ref=parameters.ref
+                                )
+                            }
+                        )
+                    }
+                )
+                with pytest.raises(ValueError, match="Select an experiment setup"):
+                    resolve_launch_config(lab, missing_setup)
                 original = resolve_launch_config(lab, request)
                 source = original.reviewed.config_source
                 assert isinstance(source, ParameterRunConfigSource)
@@ -342,7 +322,7 @@ def test_prepared_inputs_share_subject_batch_and_working_point_resolution(
                 )
                 target = setup.setup.domain_target
                 assert target is not None
-                changed = lab.setup.save(
+                changed = lab.setup.import_recipe(
                     setup.setup.model_copy(
                         update={
                             "domain_target": target.model_copy(
@@ -352,14 +332,12 @@ def test_prepared_inputs_share_subject_batch_and_working_point_resolution(
                     ),
                     name="changed-setup",
                 )
-                lab.setup.activate(changed)
                 # The branch editor and the session use the same explicit setup,
-                # even after another client changes the daemon's active authority.
+                # even after another client saves a different setup.
                 editor = session.params
                 science = session._prepare_science(
                     selection=INHERIT,
                     target=INHERIT,
-                    context=INHERIT,
                     sample=INHERIT,
                     batch=INHERIT,
                     parameters=editor,
@@ -369,7 +347,8 @@ def test_prepared_inputs_share_subject_batch_and_working_point_resolution(
                 assert isinstance(science.configuration, ParameterConfiguration)
                 assert science.configuration.setup == setup.ref
                 assert editor.preview(setup=setup).config_source.setup == setup.ref
-                assert editor.preview().config_source.setup == changed.ref
+                with pytest.raises(ValueError, match="Select an experiment setup"):
+                    editor.preview()
                 pinned = resolve_launch_config(
                     lab, request.model_copy(update={"selection": science})
                 )
@@ -397,11 +376,11 @@ def test_prepared_inputs_share_subject_batch_and_working_point_resolution(
                     session.selection.science.configuration
                     == ParameterConfiguration(ref=saved_branch.revision)
                 )
-                assert lab.setup.active().revision.ref == changed.ref
+                assert lab.setup.get("changed-setup").ref == changed.ref
                 frozen = request.model_copy(update={"reviewed": original.reviewed})
                 assert resolve_launch_config(lab, frozen) == original
                 assert (
-                    resolve_launch_config(lab, request).reviewed.config_source != source
+                    resolve_launch_config(lab, request).reviewed.config_source == source
                 )
                 preview = LaunchPreview(
                     workspace_id="test-source",

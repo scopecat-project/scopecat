@@ -5,7 +5,8 @@ CREATE TABLE IF NOT EXISTS runs (
     run_id TEXT PRIMARY KEY,
     created_at TEXT NOT NULL,
     config_content_hash TEXT NOT NULL,
-    config_source_json TEXT
+    config_source_json TEXT,
+    execution_setup_json TEXT
 );
 
 CREATE TABLE IF NOT EXISTS run_outcomes (

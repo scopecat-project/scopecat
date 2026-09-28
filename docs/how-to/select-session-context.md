@@ -7,11 +7,13 @@ changing equipment authority or another client's selection.
 
 ```python
 session = sc.notebook()
+setup = session.setup.get("my-bench")
 collection = session.create_record_collection("Chip A · cooldown 3")
 session.use(
     sample="chip-a",
     batch="cooldown-3",
     parameter_branch="chip-a/daily",
+    setup=setup,
     collection=collection.id,
     operator="Li",
 )
@@ -42,8 +44,8 @@ selected = session.selection
 
 Omitted fields remain selected. Changing the parameter branch retains the subject
 and batch. Selecting a sample or
-target on its own starts a new scientific scope and clears the previous parameter
-branch, working point and batch:
+target clears the previous batch. Parameter values, setup and unsaved branch edits
+remain available for the new subject:
 
 ```python
 session.use(sample="chip-b")
@@ -80,7 +82,7 @@ An independent branch editor supplies parameter values while inheriting the
 session's subject and batch. Explicit `sample` or `target` arguments replace that
 subject for this preparation and reset its batch unless also supplied. Unsaved
 values are frozen for the run without advancing the branch. The editor cannot be
-combined with `selection`, `context` or separate `overrides`.
+combined with `selection` or separate `overrides`.
 
 A `candidate` carries its own scientific scope. Its sample and batch must match
 that evidence. Selecting just a `sample`
@@ -129,13 +131,9 @@ Reloading the browser or connecting to a different project starts a new selectio
 separate tabs do not share mutable defaults. This is still one connected code
 workspace, not a multi-workspace application selector.
 
-For remaining legacy consumers, select a saved working point through
-**Configuration → Use for next experiment**.
-Its exact sample revision and batch become the selected scope. Those fields are
-read-only while bound; **Use lab default** releases the working point while keeping
-sample/batch selection. When saving a working-point copy, **Choose experimental
-batch** can explicitly bind the copy to a new event. Its parameter values remain
-starting estimates, not new calibration evidence.
+Use **Configuration → Use for next experiment** to select a parameter version,
+then choose the setup in the launch page. The subject and batch remain independent.
+Parameter values are starting estimates until supported by calibration evidence.
 
 Opening a saved plan retains its sample revision and batch, while collection and
 operator remain the destination page's choices. Opening a plan restores its frozen scientific scope independently of the page's
@@ -158,7 +156,7 @@ using this scope.
 `session.selection.science` contains the subject, configuration choice and explicit
 batch scope. `prepared.preview.reviewed` contains the exact binding and checked
 configuration source. Ordinary users can keep using the short `sample`, `target`,
-`working_point` and `batch` arguments. Clients constructing requests directly use
+`parameters`, `setup` and `batch` arguments. Clients constructing requests directly use
 `ScientificSelection`; do not combine it with those convenience arguments.
 A preview's reviewed evidence must be carried into submit or save requests.
 
@@ -179,12 +177,10 @@ rejects any non-virtual connection anywhere in the configured instrument registr
 It is a contract for trusted providers, not an operating-system sandbox for arbitrary
 Python drivers, and it does not automatically emulate unsupported hardware.
 
-This first slice uses the existing service-wide setup selection and provider.
-It does not introduce a per-tab backend switch or hot-swap a laboratory adapter.
-Select a supported setup explicitly using normal setup activation; saved working
-points remain separate. Rebind a working point to the selected setup as a new copy
-before experimenting, leaving its original branch intact. Setup identity checks
-also prevent publishing a software result into a different executable setup.
+Choose a supported setup for this page or notebook. The installed provider supplies
+its execution capabilities; selecting a software scenario does not replace that
+provider. Parameter branches remain independent. Evidence checks prevent applying
+a software result to an incompatible physical setup.
 
 Model declarations describe the adapter's actual behavior. A seed or setting is
 not applied to an arbitrary driver merely by adding it to the declaration. Do not
@@ -200,11 +196,9 @@ an independent parameter revision in one transaction; it creates no combined
 configuration entry and does not select either as a global
 default. A template is an initial recipe, not evidence of calibration validity.
 
-Review and activate the imported setup, then use its parameters for a launch.
-Setup activation changes the entire service, including other pages' and notebooks'
-future preparations. Existing previews retain their original setup and cannot be
-submitted against a different setup. The application still enforces device ownership
-and requires explicit inventory changes where applicable.
+Use the imported parameters and setup for this page or notebook. There is no global
+setup activation. Other pages keep their own selections. If a shared device's
+connection changes, preview again against the new connection before starting.
 
 Notebook clients use the same operations. With `lab` connected to the current
 service and `session` its author session:
@@ -216,15 +210,13 @@ for template in templates:
 
 chosen = templates[0]  # Choose after inspecting the available recipes.
 imported = lab.setup.import_template(chosen, name="software-trial")
-current = lab.setup.active()
-lab.setup.activate(imported.setup, expected_generation=current.activation.generation)
 session.use(selection=imported.selection)
 prepared = session.prepare(experiment())
 ```
 
 `imported.selection` contains the exact parameter and setup references. It does not
-invent a sample or working point. To apply parameters from an existing working
-point to another setup, use the explicit setup rebind workflow instead. Source
+invent a sample or calibration claim. To use these parameters with another setup,
+select it explicitly with `session.use(setup=other_setup)`. Source
 refresh preserves this selection. Importing again with the same name and intent
 returns the same records; changing the template or import intent requires a new
 name. Imported parameters are available through `lab.parameters.get(name)` and

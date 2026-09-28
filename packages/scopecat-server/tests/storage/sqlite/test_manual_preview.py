@@ -7,7 +7,7 @@ import pytest
 from scopecat.control.models import DurableEventInput
 from scopecat.records.author_revision import AuthorRevisionRef
 from scopecat.records.manual_preview import ManualPreviewBinding, PreviewInstrument
-from scopecat.records.setup import SetupRevisionRef
+from scopecat_testkit.server.instruments import seed_device_setup
 
 from scopecat_server.storage.sqlite.connection import SQLiteDatabase
 from scopecat_server.storage.sqlite.control_plane import SQLiteControlPlane
@@ -28,6 +28,11 @@ def test_manual_mutations_invalidate_only_the_compiled_physical_footprint(
     try:
         repository = ManualPreviewRepository(store.sqlite)
         control = SQLiteControlPlane(store.sqlite)
+        setup = seed_device_setup(
+            control,
+            name="setup",
+            bindings={"other": "physical-b", "manual-alias": "physical-a"},
+        )
         cursor = repository.cursor()
         binding = ManualPreviewBinding(
             request_hash="sha256:" + "1" * 64, config_source_hash="sha256:" + "2" * 64
@@ -39,9 +44,7 @@ def test_manual_mutations_invalidate_only_the_compiled_physical_footprint(
         unrelated = control.open_instrument_session(
             operation_id="unrelated",
             actor="operator",
-            setup=SetupRevisionRef(
-                revision_id="setup", content_hash="sha256:" + "a" * 64
-            ),
+            setup=setup,
             instrument_ids=("other",),
             exclusivity_keys=("physical-b",),
             ttl=timedelta(minutes=1),
@@ -57,9 +60,7 @@ def test_manual_mutations_invalidate_only_the_compiled_physical_footprint(
         alias = control.open_instrument_session(
             operation_id="alias",
             actor="operator",
-            setup=SetupRevisionRef(
-                revision_id="setup", content_hash="sha256:" + "a" * 64
-            ),
+            setup=setup,
             instrument_ids=("manual-alias",),
             exclusivity_keys=("physical-a",),
             ttl=timedelta(minutes=1),

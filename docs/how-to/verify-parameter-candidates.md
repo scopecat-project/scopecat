@@ -48,21 +48,20 @@ completed run with this exact proposal and the same sample revision and workpoin
 The project decision retains both data inputs and the verification publication.
 A rejected decision is saved for inspection and raises an actionable error.
 
-For independent sample or operating-point histories,
-[publish to the exact working point](publish-working-point-calibration.md) used by
-the baseline with `verified.publish_to(working_point=version, name="rabi-verified")`.
-This advances only that working point and retains the accepted proposal evidence.
-
-Select the candidate for another experiment, or explicitly change the shared
-default. These are separate actions:
+Publish to the exact parameter branch captured before the baseline, following
+[verified branch publication](publish-working-point-calibration.md):
 
 ```python
+published = verified.publish_to_branch(
+    baseline_branch,
+    name="rabi-verified",
+    note="Independent policy passed",
+)
 next_run = author.prepare("next_experiment", candidate=verified.select()).run()
-# Only when you intend to change the shared lab default:
-verified.publish_default(name="rabi-verified", note="Independent policy passed")
-# Restore the previous exact default if needed:
-author.config.undo()
 ```
+
+Publication advances only the reviewed branch. A later branch edit requires a new
+review; there is no global default publication or undo action.
 
 Selection is local to `prepare`; it creates no mutable global selection. The
 candidate can also be used before verification for exploratory runs, with its
@@ -80,7 +79,7 @@ exact revision for that baseline. Keep this captured head until final publicatio
 
 ```python
 daily = author.parameters.checkout("daily").head
-author.use(parameters=daily.revision)
+author.use(parameters=daily.revision, setup=author.setup.get("bench-v1"))
 ```
 
 After staging `first` from the baseline analysis, prepare the next calibration
