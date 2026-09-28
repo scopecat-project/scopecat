@@ -301,7 +301,8 @@ async function refresh() {
     row.append(element("strong", `${target} · ${actions[operation.command.action]} · ${states[operation.status]}`));
     row.append(element("p", operation.detail));
     const failedService = state.services.find(item => item.service.id === (operation.service || operation.command.service));
-    if (operation.status === "failed" && operation.command.action === "service_start" && failedService && ["running", "degraded"].includes(failedService.state)) {
+    const latestStart = state.operations.find(item => item.command.action === "service_start" && item.command.service === operation.command.service);
+    if (operation === latestStart && operation.status === "failed" && failedService && ["running", "degraded"].includes(failedService.state)) {
       row.append(element("p", "打开工作台失败，但后台服务仍在运行。可以在这里停止，停止完成后重新启动；已有记录保留。"));
       row.append(button("停止仍在运行的服务", () => {
         if (confirm("停止该实验室的后台服务？这可能中断当前任务及 Notebook 连接，已有记录保留。"))

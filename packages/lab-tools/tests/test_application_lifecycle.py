@@ -35,6 +35,10 @@ def test_environment_conflict_can_be_stopped_and_restarted_in_manager(tmp_path):
         with pytest.raises(ValueError, match="停止服务"):
             store.start(service.id)
         assert inspect_daemon(project).state == "running"
+        view = store.views()[0]
+        assert view.state == "degraded"
+        assert view.url is None
+        assert "后台服务仍在运行" in view.detail
         store.stop(service.id)
         assert inspect_daemon(project).state == "stopped"
         store.start(service.id)

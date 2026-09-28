@@ -436,14 +436,26 @@ class Services:
                 status = inspect_daemon(
                     open_project(service.root, resolve_adapter=False)
                 )
+                state = status.state
+                detail = status.detail or ""
+                if state == "running" and status.record is not None:
+                    python = status.record.python
+                    if python is None or os.path.normcase(
+                        str(python.absolute())
+                    ) != os.path.normcase(str(Path(service.python).absolute())):
+                        state = "degraded"
+                        detail = (
+                            "后台服务仍在运行，但环境与当前登记不一致或尚未确认。"
+                            "请停止服务后重新启动；已有记录保留。"
+                        )
                 result.append(
                     ServiceView(
                         service=service,
-                        state=status.state,
+                        state=state,
                         url=status.record.base_url
-                        if status.state == "running" and status.record
+                        if state == "running" and status.record
                         else None,
-                        detail=status.detail or "",
+                        detail=detail,
                     )
                 )
             except (OSError, ValueError) as error:
