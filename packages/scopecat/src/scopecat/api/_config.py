@@ -1,4 +1,4 @@
-"""Notebook configuration intents over one daemon-owned registry."""
+"""Resolve explicit configuration data and retained scientific provenance."""
 
 from __future__ import annotations
 
@@ -45,7 +45,7 @@ from scopecat.runs.selectors import RunSelector
 
 @dataclass(frozen=True, slots=True)
 class LabConfigOperations:
-    """Configuration editing, provenance, and default-selection intents."""
+    """Read configuration evidence and stage independent parameter candidates."""
 
     client: DaemonClient
     runs: RemoteRunOperations

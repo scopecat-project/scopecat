@@ -233,7 +233,7 @@ def launch_configuration_fence(
 
 def launch_preflight_configuration(
     _source: LaunchConfigSource,
-) -> Literal["accepted", "selected_context"]:
+) -> Literal["selected_context"]:
     return "selected_context"
 
 

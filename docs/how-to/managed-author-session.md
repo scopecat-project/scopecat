@@ -2,7 +2,7 @@
 
 Use the laboratory's installed environment and start its daemon as described by
 its setup guide. The lab maintainer supplies a parameter branch and registered
-experiment. This example assumes a laboratory `qubits` table and `signal`
+experiment. This example assumes a `bench-a` setup, a laboratory `qubits` table and `signal`
 experiment; substitute your laboratory's names. Sample/target selection is a
 separate choice, not a prerequisite for editing parameters.
 
@@ -11,7 +11,7 @@ import scopecat as sc
 
 project = sc.open_project("/path/to/lab")
 with project.authoring() as author:
-    author.use(parameter_branch="experiment")
+    author.use(parameter_branch="experiment", setup=author.setup.get("bench-a"))
     parameters = author.params
     parameters["qubits"]["q0"]["drive_carrier_frequency"] = sc.Quantity(5.1, "GHz")
     checked = author.prepare(
@@ -54,7 +54,7 @@ from my_lab.authored.signal import signal
 request = signal(gain=1.0, polarity="positive")
 request.values["frequency"] = sc.Scan(sc.Quantity(f, "GHz") for f in (5.0, 5.1, 5.2))
 with project.authoring() as author:
-    author.use(parameter_branch="experiment")
+    author.use(parameter_branch="experiment", setup=author.setup.get("bench-a"))
     parameters = author.params
     checked = author.prepare(request, parameters=parameters)
     alternative = request.copy()

@@ -1,5 +1,9 @@
 # Refresh experiments, helpers and analysis
 
+The reference project keeps refreshable experiments in `reference_lab_authors`,
+separate from its driver package `reference_lab`. Keep this boundary in your own
+project: refreshing experiments should not change the installed driver's identity.
+
 For Notebook/IPython work, use `session = sc.notebook()` once. Saved edits are
 selected for new experiment requests, both normal import styles work, and new
 modules become available at the next cell. See the

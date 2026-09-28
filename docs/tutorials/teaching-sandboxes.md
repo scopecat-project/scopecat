@@ -107,7 +107,8 @@ reopening a result does not require selecting today's branch again.
 
 Before the setup cell has selected parameters, a preview reports how to select a
 branch or pass `parameters=...`. Run the setup cell, or use
-`session.use(parameter_branch="teaching-table")` when reopening a saved branch.
+`session.use(parameter_branch="teaching-table", setup=session.setup.get("teaching-bench"))`
+when reopening a saved branch for an experiment.
 In the workbench, select the saved branch in **Measurement context**. The tutorial
 does not need **Use lab parameter default**.
 Existing exercise data is retained; upgrading does not delete defaults saved by

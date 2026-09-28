@@ -133,19 +133,19 @@ class AdmissionService:
                 )
             resolved_setup = self._setup.require_available(execution_setup)
             resolved_devices = resolved_setup.resolution.devices
-            active_config = resolved_setup.setup
+            exact_setup = resolved_setup.setup
             _require_authoritative_instrument_inventory(
                 submitted=submission.config,
-                authoritative=active_config,
+                authoritative=exact_setup,
             )
             if submission.plan.domain_target_requirement is not None:
                 _require_authoritative_domain_target(
                     submitted=submission.config,
-                    authoritative=active_config,
+                    authoritative=exact_setup,
                 )
             if (
                 submission.scientific_binding.setup_content_hash
-                != active_config.execution_content_hash
+                != exact_setup.execution_content_hash
             ):
                 raise BackendConflict(
                     "run executable setup differs from its resolved authority"
@@ -182,9 +182,9 @@ class AdmissionService:
                     submission.plan,
                     instrument_keys={
                         instrument.id: instrument.exclusivity_key
-                        for instrument in active_config.instrument_registry.instruments
+                        for instrument in exact_setup.instrument_registry.instruments
                     },
-                    domain_target=active_config.domain_target,
+                    domain_target=exact_setup.domain_target,
                 ),
                 admitted_at=skeleton.snapshot.created_at,
             )
