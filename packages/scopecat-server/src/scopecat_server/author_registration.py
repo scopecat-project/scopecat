@@ -14,9 +14,9 @@ from scopecat.author_workspaces import (
     LocalAuthorWorkspace,
     LocalAuthorWorkspaces,
     author_bindings_path,
-    author_workspace_id,
     laboratory_adapter,
     local_author_workspaces,
+    service_workspace_root,
 )
 from scopecat.project import load_project, open_project
 from scopecat.project_sources import (
@@ -40,12 +40,8 @@ def register_author_workspace(
         project.manifest,
         lab_adapter=laboratory_adapter(owner.root) if project.author_only else None,
     )
-    if author_workspace_id(owner.root) != "legacy":
+    if service_workspace_root(owner.root) != owner.root:
         raise ValueError("Registration requires the deployment service workspace")
-    if owner.root == project.root:
-        raise ValueError(
-            "The service workspace already owns the legacy author identity"
-        )
     binding = owner.runtime_binding
     binding.deployment_root.mkdir(parents=True, exist_ok=True)
     binding.data_root.mkdir(parents=True, exist_ok=True)
@@ -73,7 +69,8 @@ def register_author_workspace(
                     "Workspace already has a different explicit runtime binding"
                 )
             if (
-                not location.exists()
+                owner.root != project.root
+                and not location.exists()
                 and (project.runtime_binding.data_root / "control.sqlite3").exists()
             ):
                 raise ValueError(
@@ -81,11 +78,6 @@ def register_author_workspace(
                     "do not rebind it implicitly"
                 )
             if identity is not None:
-                if identity == "legacy":
-                    raise ValueError(
-                        "The legacy source owner cannot be rebound as an "
-                        "author workspace"
-                    )
                 with closing(
                     sqlite3.connect(
                         (binding.data_root / "control.sqlite3").resolve().as_uri()
@@ -122,12 +114,13 @@ def register_author_workspace(
                 python=Path(sys.executable).absolute(),
             )
             # Location binding is local configuration, excluded from captured source.
-            location.write_text(
-                "[runtime]\n"
-                f"data_root = {json.dumps(str(binding.data_root))}\n"
-                f"deployment_root = {json.dumps(str(binding.deployment_root))}\n",
-                encoding="utf-8",
-            )
+            if not location.exists() and project.root != owner.root:
+                location.write_text(
+                    "[runtime]\n"
+                    f"data_root = {json.dumps(str(binding.data_root))}\n"
+                    f"deployment_root = {json.dumps(str(binding.deployment_root))}\n",
+                    encoding="utf-8",
+                )
             entries = [item for item in entries if item.id != selected.id]
             entries.append(selected)
             path = author_bindings_path(owner.root)

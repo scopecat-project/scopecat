@@ -422,8 +422,6 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
     """Create transport routes around an already-composed daemon application."""
 
     def authors(identity: str):
-        if identity == "legacy":
-            return application.author_revisions
         try:
             return application.author_workspaces.get(identity)
         except ValueError as error:
@@ -432,9 +430,9 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
     def procedure_root(procedure_id: str) -> Path:
         # Non-author procedures run in the service composition. Author intents
         # always serialize their explicit workspace owner.
-        owner = application.automation.get(procedure_id).intent.get(
-            "workspace_id", "legacy"
-        )
+        owner = application.automation.get(procedure_id).intent.get("workspace_id")
+        if owner is None:
+            return application.project_root
         return authors(cast("str", owner)).root
 
     project_workers = ProjectProcedureWorkers(
@@ -457,7 +455,7 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
         finally:
             task_runner.stop()
             project_workers.stop()
-            application.author_revisions.close()
+            application.author_workspaces.close()
             retained_workers.close()
 
     app = FastAPI(title="Scopecat daemon", version="1", lifespan=lifespan)
@@ -497,7 +495,7 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
 
     @app.get(f"{_API_PREFIX}/author-revisions")
     def author_revision_state(
-        workspace: Annotated[str, Header(alias="X-Scopecat-Workspace")] = "legacy",
+        workspace: Annotated[str, Header(alias="X-Scopecat-Workspace")],
     ) -> AuthorRevisionState:
         try:
             return authors(workspace).state(initialize=False)
@@ -507,7 +505,7 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
     @app.get(f"{_API_PREFIX}/author-revisions/{{content_hash}}")
     def author_revision(
         content_hash: str,
-        workspace: Annotated[str, Header(alias="X-Scopecat-Workspace")] = "legacy",
+        workspace: Annotated[str, Header(alias="X-Scopecat-Workspace")],
     ) -> AuthorRevisionBundle:
         try:
             return application.author_workspaces.repository(workspace).get(
@@ -521,7 +519,7 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
     @app.post(f"{_API_PREFIX}/author-preparations")
     def start_author_preparation(
         command: AuthorPreparationRequest,
-        workspace: Annotated[str, Header(alias="X-Scopecat-Workspace")] = "legacy",
+        workspace: Annotated[str, Header(alias="X-Scopecat-Workspace")],
     ) -> AuthorPreparation:
         try:
             return authors(workspace).start(command)
@@ -532,14 +530,14 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
 
     @app.get(f"{_API_PREFIX}/author-preparations")
     def author_preparations(
-        workspace: Annotated[str, Header(alias="X-Scopecat-Workspace")] = "legacy",
+        workspace: Annotated[str, Header(alias="X-Scopecat-Workspace")],
     ) -> tuple[AuthorPreparation, ...]:
         return authors(workspace).repository.preparations()
 
     @app.get(f"{_API_PREFIX}/author-preparations/{{operation_id}}")
     def author_preparation(
         operation_id: str,
-        workspace: Annotated[str, Header(alias="X-Scopecat-Workspace")] = "legacy",
+        workspace: Annotated[str, Header(alias="X-Scopecat-Workspace")],
     ) -> AuthorPreparation:
         try:
             return authors(workspace).repository.preparation(operation_id)
@@ -549,7 +547,7 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
     @app.post(f"{_API_PREFIX}/author-preparations/{{operation_id}}/cancel")
     def cancel_author_preparation(
         operation_id: str,
-        workspace: Annotated[str, Header(alias="X-Scopecat-Workspace")] = "legacy",
+        workspace: Annotated[str, Header(alias="X-Scopecat-Workspace")],
     ) -> AuthorPreparation:
         try:
             return authors(workspace).cancel(operation_id)
@@ -767,8 +765,8 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
     @app.get(f"{_API_PREFIX}/experiment-launcher")
     def experiment_launch_catalog(
         response: Response,
+        workspace: Annotated[str, Header(alias="X-Scopecat-Workspace")],
         code_revision: str | None = None,
-        workspace: Annotated[str, Header(alias="X-Scopecat-Workspace")] = "legacy",
     ) -> LaunchCatalog:
         return LaunchCatalog.model_validate_json(
             launch_call(

@@ -13,6 +13,8 @@ import {
   getRunArtifactDownload,
 } from "../runs/run-api";
 import { AuthorRefresh } from "../launch/AuthorRefresh";
+import { useAuthorWorkspaces } from "../launch/source-api";
+import { SourceSelector } from "../launch/SourceSelector";
 import { AnalysisPublicationView } from "./AnalysisPublicationView";
 import { AnalysisOutputView } from "../runs/AnalysisOutputView";
 import { errorMessage, formatDateTime } from "../../lib/presentation";
@@ -23,9 +25,8 @@ export type ComparisonHandoff = Extract<
   MethodResponse<typeof apiClient, "post", "/api/v1/run-comparison">,
   { kind: "handoff" }
 >;
-async function call(request: Partial<Request> & Pick<Request, "action">) {
+async function call(request: Partial<Request> & Pick<Request, "action" | "workspace_id">) {
   const body: Request = {
-    workspace_id: "legacy",
     actor: "operator",
     reason: "",
     model_id: "",
@@ -59,6 +60,13 @@ export function RunComparison({
   onHandoff: (handoff: ComparisonHandoff) => void;
 }) {
   const client = useQueryClient();
+  const sources = useAuthorWorkspaces(projectId);
+  const [workspaceId, setWorkspaceId] = useState(
+    () => new URLSearchParams(location.search).get("workspace") ?? "",
+  );
+  const availableSources = sources.data?.items.filter((source) => source.available) ?? [];
+  if (!workspaceId && availableSources.length === 1 && availableSources[0])
+    setWorkspaceId(availableSources[0].id);
   const alive = useRef(true);
   useEffect(() => {
     alive.current = true;
@@ -83,10 +91,13 @@ export function RunComparison({
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
   const catalog = useQuery({
-    queryKey: ["comparison", projectId, "models"],
-    enabled: Boolean(projectId),
+    queryKey: ["comparison", projectId, "models", workspaceId],
+    enabled: Boolean(
+      projectId &&
+      sources.data?.items.some((source) => source.id === workspaceId && source.available),
+    ),
     queryFn: async () => {
-      const result = await call({ action: "list" });
+      const result = await call({ action: "list", workspace_id: workspaceId });
       if (result.kind !== "catalog") throw new Error("Unexpected comparison catalog");
       return result;
     },
@@ -171,7 +182,7 @@ export function RunComparison({
       const result = await call({
         action,
         workspace_id:
-          (action === "fit" ? inspection?.workspace_id : catalog.data?.workspace_id) ?? "legacy",
+          (action === "fit" ? inspection?.workspace_id : catalog.data?.workspace_id) ?? workspaceId,
         code_revision: action === "fit" ? inspection?.code_revision : catalog.data?.code_revision,
         model_id: model?.id ?? "",
         model_version: model?.version ?? "",
@@ -222,7 +233,18 @@ export function RunComparison({
       aria-label="Retained run comparison"
     >
       <h2 className="text-lg font-semibold">Compare and reanalyze retained runs</h2>
+      <SourceSelector
+        catalog={sources}
+        workspaceId={workspaceId}
+        onSelect={(id) => {
+          setWorkspaceId(id);
+          setInspection(undefined);
+          setModelId("");
+        }}
+      />
       <AuthorRefresh
+        workspaceId={workspaceId}
+        disabled={!workspaceId}
         projectId={projectId}
         onRefreshed={async () => {
           setInspection(undefined);

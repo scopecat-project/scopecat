@@ -109,7 +109,11 @@ def test_attachment_http_bound_and_safe_download_filename(tmp_path: Path) -> Non
     ):
         client = _client(transport)
         lab = LabClient(client)
-        session = AuthorProject("http://testserver", transport=_transport(transport))
+        session = AuthorProject(
+            "http://testserver",
+            workspace_id="test-source",
+            transport=_transport(transport),
+        )
         session.use(operator="Notebook author")
         line = session.apparatus.create("line", name="Line", kind="line")
         assert line.actor == "Notebook author"

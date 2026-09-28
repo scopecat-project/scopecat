@@ -137,6 +137,18 @@ def inspect_daemon(project: Project, *, health_timeout: float = 0.5) -> DaemonSt
     return DaemonStatus(state="running", record=record)
 
 
+def _register_project_source(project: Project) -> None:
+    """Explicit standalone source launch uses the ordinary registration contract."""
+    if not project.source_roots:
+        return
+    from scopecat.author_workspaces import author_bindings_path
+
+    from .author_registration import register_author_workspace
+
+    if not author_bindings_path(project.root).exists():
+        register_author_workspace(project.root, project.root)
+
+
 def serve_project(
     project: Project,
     *,
@@ -161,6 +173,7 @@ def serve_project(
     if status.state == "stale":
         _remove_record_if_stale(project)
 
+    _register_project_source(project)
     listener = _bind_listener(host, port)
     actual_port = cast("tuple[str, int]", listener.getsockname())[1]
     runtime: LocalDaemonRuntime | None = None
@@ -196,7 +209,7 @@ def serve_project(
             server.should_exit = True
             return True
 
-        preparations = runtime.application.author_revisions
+        preparations = runtime.application.author_workspaces
 
         class PreparationServer(uvicorn.Server):
             @override
@@ -260,6 +273,7 @@ def start_project(
         _remove_record_if_stale(project)
 
     state_dir = project.runtime_binding.data_root
+    _register_project_source(project)
     state_dir.mkdir(parents=True, exist_ok=True)
     state_dir.chmod(0o700)
     log_path = state_dir / "daemon.log"

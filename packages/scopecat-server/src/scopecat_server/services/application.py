@@ -86,7 +86,6 @@ class DaemonApplication:
         self.author_workspaces = AuthorWorkspaceServices(
             self.project_root, project_store
         )
-        self.author_revisions = self.author_workspaces.get("legacy")
         self.targets = TargetCatalogStore(
             project_store.sqlite, catalog_id=project_store.identity()
         )

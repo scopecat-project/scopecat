@@ -46,7 +46,7 @@ class AuthorRevisionService:
         root: Path,
         store: SQLiteProjectStore,
         *,
-        workspace_id: str = "legacy",
+        workspace_id: str,
         workers: RevisionWorkers | None = None,
     ) -> None:
         self.worker_binding = AuthorWorkerBinding(

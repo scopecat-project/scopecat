@@ -13,6 +13,7 @@ from scopecat.records.parameter_revision import ParameterRevision
 from scopecat.records.research_project import RunHistoryFilter
 from scopecat.records.run import ParameterRunConfigSource
 from scopecat.records.sample import SampleRevisionDraft
+from scopecat_testkit.authoring import source_workspace_id
 
 from reference_lab.parameters import QubitParameters
 from reference_lab.workflows.authored.signal import signal
@@ -26,7 +27,11 @@ def test_batch_selection_preserves_frozen_evidence(
     endpoint = independent_lab_daemon
     key = uuid4().hex
     with (
-        AuthorProject(endpoint, receipts=tmp_path / "receipts") as session,
+        AuthorProject(
+            endpoint,
+            workspace_id=source_workspace_id(endpoint),
+            receipts=tmp_path / "receipts",
+        ) as session,
         LabClient(DaemonClient(endpoint)) as lab,
     ):
         setup = lab.setup.active()
@@ -133,6 +138,8 @@ def test_batch_selection_preserves_frozen_evidence(
             assert run.snapshot.config_source.setup == setup.revision.ref
         assert lab.setup.active() == setup
         assert lab.config.registry().entries == ()
-    with AuthorProject(endpoint) as reopened:
+    with AuthorProject(
+        endpoint, workspace_id=source_workspace_id(endpoint)
+    ) as reopened:
         assert reopened.experimental_batch(first.id).name == "Renamed cooldown"
         assert reopened.run(original.id).samples[0].batch_id == first.id

@@ -34,8 +34,10 @@ def test_settings_edit_requires_stopped_recheck_and_missing_file_allows_stop(
     service = store.register(root, Path(sys.executable), name="lab", static_dir=gui)
     assert service.settings_identity == lab_settings_identity(root)
     project = open_project(root)
+    original_binding = (root / "scopecat.runtime.toml").read_bytes()
     try:
         store.start(service.id)
+        assert (root / "scopecat.runtime.toml").read_bytes() == original_binding
         settings.write_text('{"initial_configuration":"physical"}')
         with pytest.raises(ValueError, match="已停止"):
             store.recheck(service.id, operation_id="test")

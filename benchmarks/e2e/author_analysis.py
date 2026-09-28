@@ -53,6 +53,7 @@ def measure(root: Path, *, repetitions: int) -> dict[str, object]:
         with (
             AuthorProject(
                 daemon.base_url,
+                project_root=root,
                 receipts=root / ".scopecat/benchmark-receipts",
                 transport=transport,
             ) as author,
@@ -98,6 +99,7 @@ def measure(root: Path, *, repetitions: int) -> dict[str, object]:
                 ),
             )
             base = ComparisonRequest(
+                workspace_id=author.workspace_id,
                 action="inspect",
                 model_id="signal-quadratic",
                 model_version="1",

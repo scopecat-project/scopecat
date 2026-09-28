@@ -9,9 +9,6 @@ AuthorWorkspaceId = Annotated[
 ]
 
 
-SERVICE_AUTHOR_WORKSPACE = "legacy"
-
-
 class AuthorWorkspaceSummary(BaseModel):
     """Retained source identity and its current local execution availability."""
 

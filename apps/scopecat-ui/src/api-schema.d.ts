@@ -3503,10 +3503,7 @@ export interface components {
              * @default []
              */
             models: components["schemas"]["ComparisonModel"][];
-            /**
-             * Workspace Id
-             * @default legacy
-             */
+            /** Workspace Id */
             workspace_id: string;
         };
         /** ComparisonCurve */
@@ -3555,10 +3552,7 @@ export interface components {
             kind: "inspection";
             primary: components["schemas"]["ComparisonCurve"];
             secondary: components["schemas"]["ComparisonCurve"];
-            /**
-             * Workspace Id
-             * @default legacy
-             */
+            /** Workspace Id */
             workspace_id: string;
         };
         /** ComparisonModel */
@@ -3663,10 +3657,7 @@ export interface components {
              * @default
              */
             secondary_run: string;
-            /**
-             * Workspace Id
-             * @default legacy
-             */
+            /** Workspace Id */
             workspace_id: string;
         };
         ComparisonResult: components["schemas"]["ComparisonCatalog"] | components["schemas"]["ComparisonInspection"] | components["schemas"]["ComparisonPublication"] | components["schemas"]["ComparisonHandoff"];
@@ -5023,10 +5014,7 @@ export interface components {
             source?: components["schemas"]["PlanAnalysisSource"] | null;
             /** Version */
             version: string;
-            /**
-             * Workspace Id
-             * @default legacy
-             */
+            /** Workspace Id */
             workspace_id: string;
         };
         /** ExperimentPlanDefinition */
@@ -5053,10 +5041,7 @@ export interface components {
             source?: components["schemas"]["PlanAnalysisSource"] | null;
             /** Version */
             version: string;
-            /**
-             * Workspace Id
-             * @default legacy
-             */
+            /** Workspace Id */
             workspace_id: string;
         };
         /** ExperimentPlanList */
@@ -6079,10 +6064,7 @@ export interface components {
              * @default []
              */
             entries: components["schemas"]["LaunchCatalogEntry"][];
-            /**
-             * Workspace Id
-             * @default legacy
-             */
+            /** Workspace Id */
             workspace_id: string;
         };
         /** LaunchCatalogEntry */
@@ -6277,10 +6259,7 @@ export interface components {
             reviewed: components["schemas"]["ReviewedScientificSelection-Output"];
             /** Summary */
             summary: string;
-            /**
-             * Workspace Id
-             * @default legacy
-             */
+            /** Workspace Id */
             workspace_id: string;
         };
         /** LaunchRejection */
@@ -6364,10 +6343,7 @@ export interface components {
              * @default
              */
             version: string;
-            /**
-             * Workspace Id
-             * @default legacy
-             */
+            /** Workspace Id */
             workspace_id: string;
         };
         /** LaunchRequest */
@@ -6424,10 +6400,7 @@ export interface components {
              * @default
              */
             version: string;
-            /**
-             * Workspace Id
-             * @default legacy
-             */
+            /** Workspace Id */
             workspace_id: string;
         };
         /**
@@ -11069,8 +11042,8 @@ export interface operations {
     author_preparations_api_v1_author_preparations_get: {
         parameters: {
             query?: never;
-            header?: {
-                "X-Scopecat-Workspace"?: string;
+            header: {
+                "X-Scopecat-Workspace": string;
             };
             path?: never;
             cookie?: never;
@@ -11100,8 +11073,8 @@ export interface operations {
     start_author_preparation_api_v1_author_preparations_post: {
         parameters: {
             query?: never;
-            header?: {
-                "X-Scopecat-Workspace"?: string;
+            header: {
+                "X-Scopecat-Workspace": string;
             };
             path?: never;
             cookie?: never;
@@ -11135,8 +11108,8 @@ export interface operations {
     author_preparation_api_v1_author_preparations__operation_id__get: {
         parameters: {
             query?: never;
-            header?: {
-                "X-Scopecat-Workspace"?: string;
+            header: {
+                "X-Scopecat-Workspace": string;
             };
             path: {
                 operation_id: string;
@@ -11168,8 +11141,8 @@ export interface operations {
     cancel_author_preparation_api_v1_author_preparations__operation_id__cancel_post: {
         parameters: {
             query?: never;
-            header?: {
-                "X-Scopecat-Workspace"?: string;
+            header: {
+                "X-Scopecat-Workspace": string;
             };
             path: {
                 operation_id: string;
@@ -11201,8 +11174,8 @@ export interface operations {
     author_revision_state_api_v1_author_revisions_get: {
         parameters: {
             query?: never;
-            header?: {
-                "X-Scopecat-Workspace"?: string;
+            header: {
+                "X-Scopecat-Workspace": string;
             };
             path?: never;
             cookie?: never;
@@ -11989,8 +11962,8 @@ export interface operations {
             query?: {
                 code_revision?: string | null;
             };
-            header?: {
-                "X-Scopecat-Workspace"?: string;
+            header: {
+                "X-Scopecat-Workspace": string;
             };
             path?: never;
             cookie?: never;

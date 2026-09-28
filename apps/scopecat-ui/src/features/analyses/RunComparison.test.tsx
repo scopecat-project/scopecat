@@ -77,6 +77,10 @@ it("retains ordered selections and exact publication through explicit candidate,
   vi.stubGlobal(
     "fetch",
     vi.fn(async (request: Request) => {
+      if (new URL(request.url).pathname.endsWith("/author-workspaces"))
+        return Response.json({
+          items: [{ id: "test-source", name: "Test code", available: true }],
+        });
       expect(new URL(request.url).pathname).toBe("/api/v1/run-comparison");
       const body = (await request.json()) as Record<string, unknown>;
       requests.push(body);

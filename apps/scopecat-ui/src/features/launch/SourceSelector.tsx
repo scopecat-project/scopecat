@@ -24,7 +24,9 @@ export function SourceSelector({
         >
           {!selected && (
             <option value={workspaceId}>
-              {workspaceId} {catalog.isPending ? "(loading)" : "(unavailable)"}
+              {workspaceId
+                ? `${workspaceId} ${catalog.isPending ? "(loading)" : "(unavailable)"}`
+                : "Choose code"}
             </option>
           )}
           {sources.map((source) => (
@@ -39,11 +41,14 @@ export function SourceSelector({
         Refresh workspace list
       </button>
       {catalog.error && <p role="alert">Cannot read code workspaces: {catalog.error.message}</p>}
-      {catalog.isSuccess && !selected && (
+      {catalog.isSuccess && workspaceId && !selected && (
         <p role="alert">
           The selected code workspace {workspaceId} is not registered on this application. Select an
           available workspace explicitly.
         </p>
+      )}
+      {catalog.isSuccess && sources.length === 0 && (
+        <p>Open an experiment code folder to add a source. Retained results remain available.</p>
       )}
       {selected && !selected.available && (
         <p role="alert">

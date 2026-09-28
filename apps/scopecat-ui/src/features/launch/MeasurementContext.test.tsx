@@ -30,6 +30,7 @@ vi.mock("../context/ScopeCatalog", () => ({
 afterEach(cleanup);
 function draft(): LaunchDraft {
   return {
+    workspaceId: "test-source",
     selection: {
       subject: {
         kind: "registered_target",

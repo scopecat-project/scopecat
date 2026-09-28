@@ -74,7 +74,7 @@ class SQLiteControlPlane:
         connection: sqlite3.Connection,
         admission: RunAdmissionRecord,
         *,
-        expected_setup_generation: int,
+        expected_setup_generation: int | None,
     ) -> ControlRun:
         """Publish control admission through an existing daemon transaction."""
 
@@ -94,7 +94,8 @@ class SQLiteControlPlane:
             raise ControlPlaneConflict(
                 "submission id is already admitted with different content"
             )
-        self._require_setup_generation(connection, expected_setup_generation)
+        if expected_setup_generation is not None:
+            self._require_setup_generation(connection, expected_setup_generation)
         admitted_at = _timestamp(admission.admitted_at)
         try:
             cursor = connection.execute(

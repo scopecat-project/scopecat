@@ -57,6 +57,7 @@ let client: QueryClient;
 let lookupMatch: "none" | "original" | "ambiguous" | "unverified" | "different-config";
 function preview() {
   return {
+    workspace_id: "legacy",
     experiment_id: "prepared",
     request_hash: `sha256:${"a".repeat(64)}`,
     manual_state: {
@@ -704,6 +705,9 @@ it("pins a picked target across head refresh and pages, then clears it on catalo
 });
 
 function mockWorkspaceCatalog() {
+  if (!new URLSearchParams(window.location.search).has("workspace")) {
+    window.history.replaceState(null, "", "/?workspace=legacy");
+  }
   const fallback = globalThis.fetch;
   const catalogOwners: string[] = [];
   const previewOwners: string[] = [];

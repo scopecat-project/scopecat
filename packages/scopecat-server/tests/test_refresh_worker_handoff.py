@@ -10,6 +10,7 @@ import pytest
 from scopecat.application.launch import LaunchCatalog
 from scopecat.records.launch_request import LaunchRequest
 
+from scopecat_server.author_registration import register_author_workspace
 from scopecat_server.services.author_revisions import AuthorRevisionService
 from scopecat_server.storage.sqlite.author_revision_repository import (
     AuthorRevisionConflict,
@@ -40,7 +41,12 @@ def test_refresh_hands_off_exact_application_and_closes_rejected_candidates(
         SQLiteDatabase(tmp_path / "control.sqlite3"), tmp_path / "objects"
     )
     store.bootstrap()
-    service = AuthorRevisionService(tmp_path, store)
+    identity = register_author_workspace(tmp_path, tmp_path).id
+    with store.sqlite.write_transaction() as connection:
+        connection.execute(
+            "INSERT INTO author_workspaces VALUES (?, ?)", (identity, "Authors")
+        )
+    service = AuthorRevisionService(tmp_path, store, workspace_id=identity)
     owners: list[psutil.Process] = []
 
     def loads() -> list[dict[str, object]]:
@@ -53,7 +59,9 @@ def test_refresh_hands_off_exact_application_and_closes_rejected_candidates(
         first = service.refresh(expected_generation=0)
         assert first.active is not None
         owners.append(psutil.Process(int(str(loads()[-1]["pid"]))))
-        command = LaunchRequest(action="list", code_revision=first.active)
+        command = LaunchRequest(
+            action="list", code_revision=first.active, workspace_id=identity
+        )
         # No daemon is running: a discarded validation process would require
         # revision_project's HTTP restore and this call would fail.
         result = service.workers.call(service.worker_binding, command)

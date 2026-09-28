@@ -37,7 +37,9 @@ def session(tmp_path: Path) -> Iterator[AuthorProject]:
             )
 
         with AuthorProject(
-            "http://testserver", transport=httpx2.MockTransport(send)
+            "http://testserver",
+            workspace_id="test-source",
+            transport=httpx2.MockTransport(send),
         ) as author:
             seed = author.parameters.save(
                 name="empty",

@@ -6,7 +6,11 @@ This contract supersedes the first-run laboratory chooser and per-project/per-le
 service topology. It is not a claim that the target is implemented. Native desktop
 entry, explicit launch actions, recovery from interpreter mismatch and valid stale
 process records are delivered foundations (#801–#804); shared execution authority,
-independent device contexts and same-service practice cleanup remain to be built.
+full device-context interaction and same-service practice cleanup remain to be built.
+The first implementation slice removes the implicit service-source identity and
+admits exact parameter/setup requests independently of global setup selection.
+Workbench drafts can choose their own saved setup. These changes do not yet
+replace the host's service registry or provide practice-scope cleanup.
 
 ## Installation and everyday use
 

@@ -42,6 +42,7 @@ def test_two_workspace_publication_and_execution(tmp_path: Path) -> None:
     (source.parent / "alternate.py").write_text(
         source.read_text().replace('id="signal"', 'id="alternate"')
     )
+    register_author_workspace(first.root, first.root)
     registered = register_author_workspace(first.root, second.root)
     with pytest.raises(ValueError, match="service workspace"):
         LocalDaemonRuntime(second.root)
@@ -67,7 +68,8 @@ def test_two_workspace_publication_and_execution(tmp_path: Path) -> None:
             b.use(collection=collection.id)
             prepared_a = a.prepare("signal")
             prepared_b = b.prepare("signal")
-            assert prepared_a.request.workspace_id == "legacy"
+            assert prepared_a.request.workspace_id == author_workspace_id(first.root)
+            assert prepared_a.request.workspace_id != registered.id
             assert prepared_b.request.workspace_id == registered.id
             saved = prepared_b.save_plan("B source", saved_by="test")
             assert saved.definition.workspace_id == registered.id
@@ -77,7 +79,9 @@ def test_two_workspace_publication_and_execution(tmp_path: Path) -> None:
             assert tuple(two.measurements()["result"].require_values()) == (2.0,)
             assert a.run_number(one) == 1 and a.run_number(two.id) == 2
             assert two.request.metadata["author_workspace"] == registered.id
-            assert one.request.metadata["author_workspace"] == "legacy"
+            assert one.request.metadata["author_workspace"] == author_workspace_id(
+                first.root
+            )
             source.write_text(
                 source.read_text().replace(
                     "return 2.0 * scale /", "return 3.0 * scale /"
@@ -164,9 +168,9 @@ def test_registration_locks_candidate_and_rebinding_revokes_old_location(
     shutil.copytree(old.root, moved)
     rebound = register_author_workspace(owner.root, moved, identity=entry.id)
     assert rebound.id == entry.id and author_workspace_id(moved) == entry.id
-    with pytest.raises(ValueError, match="not registered"):
+    with pytest.raises(ValueError, match="service workspace"):
         LocalDaemonRuntime(old.root)
-    with pytest.raises(ValueError, match="not registered"):
+    with pytest.raises(SnapshotError, match="service workspace"):
         create_snapshot(old, tmp_path / "old-snapshot")
-    with pytest.raises(ValueError, match="legacy source"):
-        register_author_workspace(owner.root, moved, identity="legacy")
+    with pytest.raises(ValueError, match="not in this scientific store"):
+        register_author_workspace(owner.root, moved, identity="unknown-source")

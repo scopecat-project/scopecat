@@ -137,7 +137,7 @@ export function LaunchForm({
             actor,
             request_key: "",
             code_revision: draft.codeRevision,
-            workspace_id: draft.workspaceId ?? "legacy",
+            workspace_id: draft.workspaceId,
           },
         }),
       );
@@ -234,7 +234,7 @@ export function LaunchForm({
         key={`${draft.plan?.ref.plan_id ?? "new"}:${draft.plan?.ref.revision ?? 0}`}
         preview={result}
         request={() => ({
-          workspace_id: draft.workspaceId ?? "legacy",
+          workspace_id: draft.workspaceId,
           scan_mode: "cartesian",
           parameter_sweeps: [],
           action: "preview",
@@ -374,7 +374,14 @@ export function LaunchForm({
       {entry.actions.includes("preview") && (
         <button
           type="submit"
-          disabled={pending || !supported || !actor.trim() || !catalogReady}
+          disabled={
+            pending ||
+            !supported ||
+            !actor.trim() ||
+            !catalogReady ||
+            (draft.selection.configuration.kind === "parameters" &&
+              !draft.selection.configuration.setup)
+          }
           className="border rounded px-4 py-2"
         >
           {pending ? "Compiling…" : "Preview"}

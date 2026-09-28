@@ -28,6 +28,7 @@ from scopecat.records.scientific_selection import (
     ScientificSelection,
 )
 from scopecat_server.lifecycle import start_project, stop_project
+from scopecat_testkit.authoring import source_workspace_id
 from scopecat_testkit.project_loading import isolated_project_imports
 
 from reference_lab.configuration import EXAMPLE_ROOT, bootstrap_config
@@ -153,10 +154,21 @@ def test_real_http_preview_shares_catalog_and_never_admits_acquisition(
             base_url=reference_lab_daemon.url, trust_env=False, timeout=30
         ) as http,
     ):
-        response = http.get("/api/v1/experiment-launcher")
+        response = http.get(
+            "/api/v1/experiment-launcher",
+            headers={
+                "X-Scopecat-Workspace": source_workspace_id(reference_lab_daemon.url)
+            },
+        )
         assert response.is_success, response.text
         catalog = LaunchCatalog.model_validate(response.json())
-        expected = provider(lab, LaunchRequest(action="list"))
+        expected = provider(
+            lab,
+            LaunchRequest(
+                workspace_id=source_workspace_id(reference_lab_daemon.url),
+                action="list",
+            ),
+        )
         assert isinstance(expected, LaunchCatalog)
         assert catalog.code_revision is not None
         assert {"temperature", "frequency-amplitude"}.isdisjoint(
@@ -169,6 +181,7 @@ def test_real_http_preview_shares_catalog_and_never_admits_acquisition(
         setup = lab.setup.active()
         selected_entry = next(item for item in catalog.entries if item.id == experiment)
         request = LaunchRequest(
+            workspace_id=source_workspace_id(reference_lab_daemon.url),
             action="preview",
             selection=reference_lab_daemon.selection,
             experiment=experiment,
@@ -264,7 +277,13 @@ def test_submission_fences_new_stale_work_but_replays_exact_admission(
     provider = launch_application.launch_provider
     assert provider is not None
     with launch_application.connect(reference_lab_daemon.url) as lab:
-        catalog = provider(lab, LaunchRequest(action="list"))
+        catalog = provider(
+            lab,
+            LaunchRequest(
+                workspace_id=source_workspace_id(reference_lab_daemon.url),
+                action="list",
+            ),
+        )
         assert isinstance(catalog, LaunchCatalog)
         entry = next(
             item
@@ -272,6 +291,7 @@ def test_submission_fences_new_stale_work_but_replays_exact_admission(
             if item.id == "reference_lab.temperature_diagnostic"
         )
         request = LaunchRequest(
+            workspace_id=source_workspace_id(reference_lab_daemon.url),
             action="preview",
             selection=reference_lab_daemon.selection,
             experiment=entry.id,
@@ -337,6 +357,7 @@ def test_candidate_uses_existing_review_state_and_retains_result_references(
     assert provider is not None
     with launch_application.connect(reference_lab_daemon.url) as lab:
         request = LaunchRequest(
+            workspace_id=source_workspace_id(reference_lab_daemon.url),
             action="preview",
             selection=reference_lab_daemon.selection,
             experiment="channel-timing",
@@ -394,7 +415,14 @@ def test_http_submission_dispatches_the_same_durable_diagnostic(
         ) as http,
     ):
         catalog = LaunchCatalog.model_validate(
-            http.get("/api/v1/experiment-launcher").json()
+            http.get(
+                "/api/v1/experiment-launcher",
+                headers={
+                    "X-Scopecat-Workspace": source_workspace_id(
+                        reference_lab_daemon.url
+                    )
+                },
+            ).json()
         )
         entry = next(
             item
@@ -402,6 +430,7 @@ def test_http_submission_dispatches_the_same_durable_diagnostic(
             if item.id == "reference_lab.temperature_diagnostic"
         )
         request = LaunchRequest(
+            workspace_id=source_workspace_id(reference_lab_daemon.url),
             action="preview",
             selection=reference_lab_daemon.selection,
             experiment=entry.id,
@@ -481,6 +510,7 @@ def test_noop_candidate_preview_reports_reason_without_admitting_work(
         response = http.post(
             "/api/v1/experiment-launcher/preview",
             json={
+                "workspace_id": source_workspace_id(reference_lab_daemon.url),
                 "action": "preview",
                 "experiment": "channel-timing",
                 "version": "1",
@@ -517,7 +547,14 @@ def test_http_controls_persist_one_source_and_match_notebook_edits(
         ) as http,
     ):
         catalog = LaunchCatalog.model_validate(
-            http.get("/api/v1/experiment-launcher").json()
+            http.get(
+                "/api/v1/experiment-launcher",
+                headers={
+                    "X-Scopecat-Workspace": source_workspace_id(
+                        reference_lab_daemon.url
+                    )
+                },
+            ).json()
         )
         entry = next(
             item
@@ -532,6 +569,7 @@ def test_http_controls_persist_one_source_and_match_notebook_edits(
                 else {"mode": "scan", "axis": {"kind": "values", "values": [frequency]}}
             )
             request = LaunchRequest(
+                workspace_id=source_workspace_id(reference_lab_daemon.url),
                 action="preview",
                 selection=reference_lab_daemon.selection,
                 experiment=entry.id,

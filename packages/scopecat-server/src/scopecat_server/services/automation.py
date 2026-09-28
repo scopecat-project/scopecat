@@ -74,6 +74,7 @@ from scopecat.records.configuration_fence import (
     ActiveConfigurationFence,
     ProcedureConfigurationFence,
     SetupContentFence,
+    SetupRevisionFence,
 )
 from scopecat.records.content import Sha256ContentHash
 from scopecat.records.launch_request import LaunchRequest
@@ -1804,6 +1805,25 @@ def _require_configuration_authority(
     scientific_binding: ResolvedScientificBinding | None,
 ) -> None:
     """Check exact science and selector freshness within parent admission."""
+    if isinstance(expected_configuration, SetupRevisionFence):
+        try:
+            revision = SQLiteSetupRepository(connection).read_revision(
+                expected_configuration.revision.revision_id
+            )
+        except KeyError as error:
+            raise AutomationConflict(
+                "selected executable setup was not found"
+            ) from error
+        if revision.ref != expected_configuration.revision:
+            raise AutomationConflict("selected executable setup reference changed")
+        if scientific_binding is not None and (
+            scientific_binding.setup_content_hash
+            != revision.setup.execution_content_hash
+        ):
+            raise AutomationConflict(
+                "procedure executable setup differs from selected context"
+            )
+        return
     if expected_configuration is not None or scientific_binding is not None:
         registry = SQLiteConfigRegistryRepository(connection)
         active_setup = SQLiteSetupRepository(connection).read_current()

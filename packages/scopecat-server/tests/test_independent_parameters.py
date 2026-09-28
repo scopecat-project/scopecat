@@ -220,7 +220,11 @@ def test_prepared_inputs_share_subject_batch_and_working_point_resolution(
                 ),
             )
             request = LaunchRequest(
-                action="preview", experiment="test", version="1", selection=selection
+                workspace_id="test-source",
+                action="preview",
+                experiment="test",
+                version="1",
+                selection=selection,
             )
             resolved = resolve_launch_config(lab, request)
             assert resolved.config == prepared.config
@@ -259,10 +263,14 @@ def test_prepared_inputs_share_subject_batch_and_working_point_resolution(
             registry_before = lab.config.registry()
             with (
                 AuthorProject(
-                    "http://testserver", transport=httpx2.MockTransport(send)
+                    "http://testserver",
+                    workspace_id="test-source",
+                    transport=httpx2.MockTransport(send),
                 ) as session,
                 AuthorProject(
-                    "http://testserver", transport=httpx2.MockTransport(send)
+                    "http://testserver",
+                    workspace_id="test-source",
+                    transport=httpx2.MockTransport(send),
                 ) as other,
             ):
                 before = session.use(
@@ -291,6 +299,7 @@ def test_prepared_inputs_share_subject_batch_and_working_point_resolution(
                     session.use(parameters=parameters, working_point=None)
                 assert session.selection == selected
                 request = LaunchRequest(
+                    workspace_id="test-source",
                     action="preview",
                     experiment="test",
                     version="1",
@@ -395,6 +404,7 @@ def test_prepared_inputs_share_subject_batch_and_working_point_resolution(
                     resolve_launch_config(lab, request).reviewed.config_source != source
                 )
                 preview = LaunchPreview(
+                    workspace_id="test-source",
                     experiment_id="test",
                     request_hash=frozen.request_hash,
                     reviewed=original.reviewed,

@@ -387,6 +387,7 @@ def test_saved_plan_reuses_authoritative_target_validation(tmp_path: Path) -> No
         original = _submission(runtime, config, target)
         active = runtime.application.config.get_active_config()
         definition = ExperimentPlanDefinition(
+            workspace_id="test-source",
             experiment="author",
             version="1",
             definition_hash="sha256:" + "a" * 64,
@@ -478,6 +479,7 @@ def test_generic_saved_plan_allows_distinct_stage_configurations(
                 name="Multiple stages",
                 saved_by="test",
                 definition=ExperimentPlanDefinition(
+                    workspace_id="test-source",
                     experiment="stages",
                     version="1",
                     definition_hash="sha256:" + "a" * 64,
@@ -633,6 +635,136 @@ def test_generic_saved_plan_allows_distinct_stage_configurations(
         else:
             admitted = application.submit_run(child)
             assert admitted.snapshot.scientific_binding == changed_binding
+
+
+def test_independent_setup_contexts_admit_without_global_selection(
+    tmp_path: Path,
+) -> None:
+    from datetime import timedelta
+
+    from scopecat.automation import ProcedureDefinitionRef, ProcedureSubmitCommand
+    from scopecat.control.models import RunResourceRequirement
+    from scopecat.daemon.wire import (
+        ParameterResolveCommand,
+        ParameterSaveCommand,
+        SetupSaveCommand,
+    )
+    from scopecat.records.configuration_fence import SetupRevisionFence
+    from scopecat.records.setup import ExecutableSetupSnapshot
+
+    from scopecat_server.errors import BackendNotFound
+    from scopecat_server.storage.sqlite.control_plane import RunResourcesBusy
+
+    config = load_config()
+    with LocalDaemonRuntime(tmp_path) as runtime:
+        application = runtime.application
+        target = _target(runtime, config)
+        parameters = application.config.save_parameters(
+            ParameterSaveCommand(
+                revision_id="shared-parameters",
+                catalog=config.parameter_catalog,
+                parameters=config.parameter_snapshot,
+                actor="author",
+            )
+        )
+        setup = ExecutableSetupSnapshot.from_config(config)
+        assert setup.domain_target is not None
+        alternate = setup.model_copy(
+            update={
+                "domain_target": setup.domain_target.model_copy(
+                    update={"id": "alternate-context"}
+                ),
+                "instrument_registry": setup.instrument_registry.model_copy(
+                    update={
+                        "instruments": [
+                            setup.instrument_registry.instruments[0].model_copy(
+                                update={"id": "second-name"}
+                            )
+                        ],
+                    }
+                ),
+                "routing": setup.routing.model_copy(
+                    update={
+                        "routes": [
+                            route.model_copy(update={"instrument_id": "second-name"})
+                            for route in setup.routing.routes
+                        ],
+                    }
+                ),
+            }
+        )
+        claims = []
+        run_ids: list[str] = []
+        for name, selected in (("first", setup), ("second", alternate)):
+            revision = application.setup.save(
+                SetupSaveCommand(
+                    revision_id=name,
+                    setup=selected,
+                    actor="maintainer",
+                )
+            )
+            resolved = application.config.resolve_parameters(
+                ParameterResolveCommand(
+                    parameters=parameters.ref,
+                    setup=revision.ref,
+                )
+            )
+            child = _submission(runtime, resolved.config, target, key=name)
+            instrument = selected.instrument_registry.instruments[0]
+            child = child.model_copy(
+                update={
+                    "config_source": resolved.config_source,
+                    "plan": child.plan.model_copy(
+                        update={
+                            "run_resource_requirements": (
+                                RunResourceRequirement(
+                                    kind="instrument", id=instrument.id
+                                ),
+                            )
+                        }
+                    ),
+                }
+            )
+            parent = ProcedureSubmitCommand(
+                request_key=name,
+                definition=ProcedureDefinitionRef(
+                    id="author", version="1", fingerprint="sha256:" + "a" * 64
+                ),
+                intent={},
+                samples=child.scientific_binding.sample_selectors(),
+                scientific_binding=child.scientific_binding,
+                expected_configuration=SetupRevisionFence(revision=revision.ref),
+            )
+            application.automation.submit(parent)
+            admitted = application.submit_run(child)
+            run_ids.append(admitted.run_id)
+            retained = application._admission._control.get_run(admitted.run_id)
+            claims.append(retained.admission.resource_claims)
+            assert application.submit_run(child).run_id == admitted.run_id
+            wrong = parent.model_copy(
+                update={
+                    "request_key": name + "-wrong",
+                    "expected_configuration": SetupRevisionFence(
+                        revision=revision.ref.model_copy(
+                            update={"content_hash": "sha256:" + "0" * 64}
+                        )
+                    ),
+                }
+            )
+            with pytest.raises(BackendConflict, match="reference changed"):
+                application.automation.submit(wrong)
+        assert claims[0] == claims[1]
+        control = application._admission._control
+        with control.write_transaction() as connection:
+            control.start_execution_in_transaction(
+                connection, run_ids[0], executor_id="first", ttl=timedelta(minutes=1)
+            )
+        with pytest.raises(RunResourcesBusy), control.write_transaction() as connection:
+            control.start_execution_in_transaction(
+                connection, run_ids[1], executor_id="second", ttl=timedelta(minutes=1)
+            )
+        with pytest.raises(BackendNotFound, match="no executable setup"):
+            application.setup.current()
 
 
 def test_fixed_setup_fence_survives_parameters_but_rejects_structure(

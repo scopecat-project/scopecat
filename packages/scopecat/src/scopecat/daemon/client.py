@@ -390,18 +390,24 @@ class DaemonClient:
         self,
         base_url: str,
         *,
-        workspace_id: str = "legacy",
+        workspace_id: str | None = None,
         timeout: float | httpx2.Timeout | None = _DEFAULT_TIMEOUT,
         transport: httpx2.BaseTransport | None = None,
     ) -> None:
-        self.workspace_id = workspace_id
+        self._workspace_id = workspace_id
         self.base_url = base_url.rstrip("/")
         self._http = httpx2.Client(
             base_url=self.base_url,
-            headers={"X-Scopecat-Workspace": workspace_id},
+            headers={"X-Scopecat-Workspace": workspace_id} if workspace_id else {},
             timeout=timeout,
             transport=transport,
         )
+
+    @property
+    def workspace_id(self) -> str:
+        if self._workspace_id is None:
+            raise ValueError("Select an explicit author workspace for this operation")
+        return self._workspace_id
 
     def __enter__(self) -> Self:
         return self

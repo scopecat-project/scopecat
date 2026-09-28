@@ -397,7 +397,6 @@ def test_capability_manifest_rejects_ambiguous_or_invalid_declarations(
 def test_declared_capabilities_compose_only_when_execution_is_loaded(
     tmp_path: Path,
 ) -> None:
-    from scopecat.author_workspaces import author_workspace_id
     from scopecat.project_sources import loading_workspace
 
     package = tmp_path / "src" / "declared_lab"
@@ -427,7 +426,7 @@ def test_declared_capabilities_compose_only_when_execution_is_loaded(
     module = sys.modules["declared_lab.execution"]
     assert application.build_experiment_system is module.build
     assert tuple(application.procedures.values()) == (module.run,)
-    assert author_workspace_id(tmp_path) == module.WORKSPACE
+    assert module.WORKSPACE is None
     assert loading_workspace.get() == prior_workspace
 
 

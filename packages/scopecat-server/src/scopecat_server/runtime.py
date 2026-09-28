@@ -13,7 +13,7 @@ from uuid import UUID, uuid4
 from fastapi import FastAPI
 from filelock import FileLock, Timeout
 from scopecat.application.bootstrap import LabBootstrap
-from scopecat.author_workspaces import author_workspace_id
+from scopecat.author_workspaces import service_workspace_root
 from scopecat.config.resolution import compose_configuration, validate_config_profile
 from scopecat.daemon.wire import (
     ConfigPublishCommand,
@@ -101,7 +101,7 @@ class LocalDaemonRuntime:
                 "instrument_backend_spec and instrument_endpoint cannot be combined"
             )
         self.project_root = Path(project_root).resolve()
-        if author_workspace_id(self.project_root) != "legacy":
+        if service_workspace_root(self.project_root) != self.project_root:
             raise ValueError(
                 "Start the deployment from its service workspace, not "
                 "a registered author workspace"

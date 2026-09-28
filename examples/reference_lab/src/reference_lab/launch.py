@@ -113,44 +113,43 @@ def launch_channel_timing(context: LabProcedureContext, intent: LaunchIntent) ->
     )
 
 
-CATALOG = LaunchCatalog(
-    entries=(
-        LaunchCatalogEntry(
-            id="channel-timing",
-            version="1",
-            title="Q1 channel timing candidate",
-            description=(
-                "Measure, propose a timing change, run its candidate and request "
-                "review. Accepting it as default remains a separate operator action."
-            ),
-            actions=("preview", "submit"),
-            kind="calibration",
-            configuration_effect="candidate",
-            request=LaunchInputSchema.model_validate(TimingRequest.model_json_schema()),
-            review=InterpretationRequest(
-                title="Review q1 channel timing",
-                schema_id=TIMING_REVIEW.id,
-                schema_codec=TIMING_REVIEW.schema_codec,
-                schema_hash=TIMING_REVIEW.schema_hash,
-                structure=TIMING_REVIEW.structure,
-                instructions=REVIEW_INSTRUCTIONS,
-            ),
+CATALOG_ENTRIES = (
+    LaunchCatalogEntry(
+        id="channel-timing",
+        version="1",
+        title="Q1 channel timing candidate",
+        description=(
+            "Measure, propose a timing change, run its candidate and request "
+            "review. Accepting it as default remains a separate operator action."
         ),
-    )
+        actions=("preview", "submit"),
+        kind="calibration",
+        configuration_effect="candidate",
+        request=LaunchInputSchema.model_validate(TimingRequest.model_json_schema()),
+        review=InterpretationRequest(
+            title="Review q1 channel timing",
+            schema_id=TIMING_REVIEW.id,
+            schema_codec=TIMING_REVIEW.schema_codec,
+            schema_hash=TIMING_REVIEW.schema_hash,
+            structure=TIMING_REVIEW.structure,
+            instructions=REVIEW_INSTRUCTIONS,
+        ),
+    ),
 )
 
 
 def launch_provider(lab: LabClient, request: LaunchRequest) -> LaunchResult:
+    catalog = LaunchCatalog(entries=CATALOG_ENTRIES, workspace_id=request.workspace_id)
     if request.action == "list":
-        return CATALOG
+        return catalog
     entry = next(
-        (entry for entry in CATALOG.entries if entry.id == request.experiment), None
+        (entry for entry in catalog.entries if entry.id == request.experiment), None
     )
     if entry is None or entry.version != request.version:
         raise ValueError("unknown experiment or changed catalog version")
     if request.action not in entry.actions:
         raise ValueError(f"{request.action} is not supported for {entry.id}")
-    validate_launch_control_edits(CATALOG, request)
+    validate_launch_control_edits(catalog, request)
     inputs = TimingRequest.model_validate(request.inputs)
     invocation = parallel_raw_ramsey.build()
     resolved = launch_config(lab, request)
@@ -236,6 +235,7 @@ def launch_provider(lab: LabClient, request: LaunchRequest) -> LaunchResult:
             )
         )
         return LaunchPreview(
+            workspace_id=request.workspace_id,
             experiment_id=entry.id,
             manual_state=request.manual_state,
             request_hash=request.model_copy(

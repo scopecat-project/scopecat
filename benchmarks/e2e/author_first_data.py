@@ -22,9 +22,11 @@ from scopecat.project import load_project
 from scopecat_server.lifecycle import start_project, stop_project  # noqa: TID251
 
 
-def observe_result(url: str, receipt: Path, stop: Event) -> dict[str, object]:
+def observe_result(
+    url: str, receipt: Path, stop: Event, workspace_id: str
+) -> dict[str, object]:
     # Independent normal client: never use trace files to discover a run early.
-    with AuthorProject(url) as author:
+    with AuthorProject(url, workspace_id=workspace_id) as author:
         job = author.reopen(receipt)
         deadline = time.monotonic() + 60
         polls = 0
@@ -64,7 +66,10 @@ def measure(root: Path, *, repetitions: int) -> dict[str, object]:
         try:
             with (
                 AuthorProject(
-                    daemon.base_url, receipts=root / "receipts", transport=transport
+                    daemon.base_url,
+                    project_root=root,
+                    receipts=root / "receipts",
+                    transport=transport,
                 ) as author,
                 ThreadPoolExecutor(max_workers=1) as observer,
             ):
@@ -93,7 +98,11 @@ def measure(root: Path, *, repetitions: int) -> dict[str, object]:
                     acknowledged = time.monotonic_ns()
                     stop = Event()
                     future = observer.submit(
-                        observe_result, daemon.base_url, job.receipt, stop
+                        observe_result,
+                        daemon.base_url,
+                        job.receipt,
+                        stop,
+                        author.workspace_id,
                     )
                     try:
                         job.wait()

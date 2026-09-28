@@ -115,7 +115,7 @@ def launch(
 ) -> LaunchResult:
     result: LaunchResult
     if application.launch_provider is None:
-        result = LaunchCatalog()
+        result = LaunchCatalog(workspace_id=request.workspace_id)
         if request.action != "list":
             raise ValueError("project has no experiment preview provider")
     else:
@@ -125,10 +125,12 @@ def launch(
         ) as lab:
             provider = application.launch_provider
             if isinstance(provider, AuthorLaunchProvider):
-                provider = provider.resolve(lab)
-            catalog = LaunchCatalog()
+                provider = provider.resolve(lab, workspace_id=request.workspace_id)
+            catalog = LaunchCatalog(workspace_id=request.workspace_id)
             if request.action != "list":
-                catalog = provider(lab, LaunchRequest(action="list"))
+                catalog = provider(
+                    lab, LaunchRequest(action="list", workspace_id=request.workspace_id)
+                )
                 if not isinstance(catalog, LaunchCatalog):
                     raise TypeError("project list callback must return LaunchCatalog")
                 validate_launch_control_edits(catalog, request)

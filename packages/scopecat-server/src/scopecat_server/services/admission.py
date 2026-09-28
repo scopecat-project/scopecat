@@ -115,9 +115,17 @@ class AdmissionService:
                 raise BackendConflict(
                     "submitted run config does not match its source content hash"
                 )
-            self._resolve_provenance_config(submission.config_source)
-            active = self._resolve_active_setup()
-            active_config = active.revision.setup
+            provenance = self._resolve_provenance_config(submission.config_source)
+            if isinstance(submission.config_source, ParameterRunConfigSource):
+                # Resolution above checks the immutable maintained setup reference.
+                # Another page changing its default must not invalidate this request.
+                assert provenance is not None
+                active_config = ExecutableSetupSnapshot.from_config(provenance)
+                setup_generation = None
+            else:
+                active = self._resolve_active_setup()
+                active_config = active.revision.setup
+                setup_generation = active.activation.generation
             _require_authoritative_instrument_inventory(
                 submitted=submission.config,
                 authoritative=active_config,
@@ -129,10 +137,10 @@ class AdmissionService:
                 )
             if (
                 submission.scientific_binding.setup_content_hash
-                != active.revision.setup.execution_content_hash
+                != active_config.execution_content_hash
             ):
                 raise BackendConflict(
-                    "run executable setup differs from current authority"
+                    "run executable setup differs from its resolved authority"
                 )
             sample_bindings = self._validate_scientific_binding(submission)
             self._require_candidate_subject(
@@ -183,7 +191,7 @@ class AdmissionService:
                 run = self._control.admit_run_in_transaction(
                     connection,
                     admission,
-                    expected_setup_generation=active.activation.generation,
+                    expected_setup_generation=setup_generation,
                 )
                 self._point_plans.initialize_admitted_in_transaction(connection, run)
                 if run.run_id == admission.run_id:

@@ -20,30 +20,39 @@ from scopecat_server.services.application import DaemonApplication
 from scopecat_server.services.revision_workers import AuthorWorkerBinding
 
 
-@pytest.mark.parametrize("operation", ["analysis", "comparison"])
-def test_timeout_reports_unknown_publication_and_never_retries(operation: str) -> None:
-    application = cast(
+def application_for(service: object) -> DaemonApplication:
+    return cast(
         "DaemonApplication",
         cast(
             "object",
             SimpleNamespace(
                 project_root=Path.cwd(),
-                author_revisions=SimpleNamespace(
-                    get=Mock(),
-                    worker_binding=AuthorWorkerBinding(
-                        Path.cwd(), Path(sys.executable)
-                    ),
-                ),
+                author_workspaces=SimpleNamespace(get=Mock(return_value=service)),
             ),
         ),
+    )
+
+
+@pytest.mark.parametrize("operation", ["analysis", "comparison"])
+def test_timeout_reports_unknown_publication_and_never_retries(operation: str) -> None:
+    application = application_for(
+        SimpleNamespace(
+            get=Mock(),
+            worker_binding=AuthorWorkerBinding(Path.cwd(), Path(sys.executable)),
+        )
     )
     ref = AuthorRevisionRef(content_hash="sha256:" + "a" * 64)
     command = (
         AuthorAnalysisRequest(
-            code_revision=ref, run_id="retained", analysis="lab.analysis:fit"
+            workspace_id="test-source",
+            code_revision=ref,
+            run_id="retained",
+            analysis="lab.analysis:fit",
         )
         if operation == "analysis"
-        else ComparisonRequest(action="fit", code_revision=ref)
+        else ComparisonRequest(
+            workspace_id="test-source", action="fit", code_revision=ref
+        )
     )
     path = (
         "/api/v1/author-revisions/analyze"
@@ -63,7 +72,10 @@ def test_timeout_reports_unknown_publication_and_never_retries(operation: str) -
     assert "Publication outcome may be unknown" in response.json()["detail"]
     assert f"retained {operation}" in response.json()["detail"]
     assert call.call_count == 1
-    assert call.call_args.args[0] == application.author_revisions.worker_binding
+    assert (
+        call.call_args.args[0]
+        == application.author_workspaces.get("test-source").worker_binding
+    )
     payload = call.call_args.args[1]
     assert isinstance(
         payload, AnalysisCall if operation == "analysis" else ComparisonCall
@@ -75,22 +87,14 @@ def test_timeout_reports_unknown_publication_and_never_retries(operation: str) -
 def test_analysis_failure_keeps_stack_in_daemon_log(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    application = cast(
-        "DaemonApplication",
-        cast(
-            "object",
-            SimpleNamespace(
-                project_root=Path.cwd(),
-                author_revisions=SimpleNamespace(
-                    get=Mock(),
-                    worker_binding=AuthorWorkerBinding(
-                        Path.cwd(), Path(sys.executable)
-                    ),
-                ),
-            ),
-        ),
+    application = application_for(
+        SimpleNamespace(
+            get=Mock(),
+            worker_binding=AuthorWorkerBinding(Path.cwd(), Path(sys.executable)),
+        )
     )
     command = AuthorAnalysisRequest(
+        workspace_id="test-source",
         code_revision=AuthorRevisionRef(content_hash="sha256:" + "a" * 64),
         run_id="retained",
         analysis="lab.analysis:fit",
@@ -117,14 +121,19 @@ def test_revision_outside_owner_membership_never_dispatches(operation: str) -> N
             )
         )
     )
-    application = cast(
-        "DaemonApplication", cast("object", SimpleNamespace(author_revisions=service))
-    )
+    application = application_for(service)
     ref = AuthorRevisionRef(content_hash="sha256:" + "a" * 64)
     command = (
-        AuthorAnalysisRequest(code_revision=ref, run_id="retained", analysis="lab:fit")
+        AuthorAnalysisRequest(
+            workspace_id="test-source",
+            code_revision=ref,
+            run_id="retained",
+            analysis="lab:fit",
+        )
         if operation == "analysis"
-        else ComparisonRequest(action="fit", code_revision=ref)
+        else ComparisonRequest(
+            workspace_id="test-source", action="fit", code_revision=ref
+        )
     )
     path = (
         "/api/v1/author-revisions/analyze"

@@ -6,7 +6,6 @@ from typing import TYPE_CHECKING, cast
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from scopecat.records.author_workspace import SERVICE_AUTHOR_WORKSPACE
 from scopecat.runtime_binding import load_runtime_binding
 
 if TYPE_CHECKING:
@@ -44,18 +43,20 @@ def local_author_workspaces(root: Path) -> tuple[LocalAuthorWorkspace, ...]:
 def author_workspace_id(root: Path) -> str:
     """Resolve an already registered local identity, never register on connection."""
     root = root.resolve()
-    path = author_bindings_path(root)
-    if not path.is_file():
-        return SERVICE_AUTHOR_WORKSPACE
-    registry = LocalAuthorWorkspaces.model_validate_json(path.read_bytes())
-    if root == registry.service_root:
-        return SERVICE_AUTHOR_WORKSPACE
-    for item in registry.items:
+    for item in local_author_workspaces(root):
         if item.root == root:
             return item.id
     raise ValueError(
         "This location is not registered with the deployment service workspace"
     )
+
+
+def service_workspace_root(root: Path) -> Path:
+    """Resolve process ownership independently of the registered source catalog."""
+    path = author_bindings_path(root)
+    if not path.is_file():
+        return root.resolve()
+    return LocalAuthorWorkspaces.model_validate_json(path.read_bytes()).service_root
 
 
 def laboratory_adapter(root: Path) -> AdapterReference:

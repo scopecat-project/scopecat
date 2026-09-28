@@ -38,6 +38,7 @@ for line in sys.stdin:
 
 def request(revision: str = "a", *, experiment: str = "") -> LaunchRequest:
     return LaunchRequest(
+        workspace_id="test-source",
         action="list",
         experiment=experiment,
         code_revision=AuthorRevisionRef(content_hash="sha256:" + revision * 64),
@@ -129,7 +130,9 @@ def test_serve_rejects_request_without_reloading_application() -> None:
             "scopecat_server.launch_worker.launch",
             side_effect=[
                 LaunchRequestRejected("unknown control 'amplitudes'"),
-                LaunchCatalog(),
+                LaunchCatalog(
+                    workspace_id="test-source",
+                ),
             ],
         ) as launch,
     ):
@@ -202,7 +205,9 @@ def test_serve_preserves_structured_check_and_keeps_worker_ready() -> None:
                 LaunchRequestRejected(
                     "Preparation failed", problems=(finding,), scenario=scenario
                 ),
-                LaunchCatalog(),
+                LaunchCatalog(
+                    workspace_id="test-source",
+                ),
             ],
         ),
     ):

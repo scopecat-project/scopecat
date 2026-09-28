@@ -84,7 +84,7 @@ class _Observation(TypedDict):
 
 def comparison_provider(lab: LabClient, request: ComparisonRequest) -> ComparisonResult:
     if request.action == "list":
-        return ComparisonCatalog(models=(MODEL,))
+        return ComparisonCatalog(models=(MODEL,), workspace_id=request.workspace_id)
     if request.model_id != MODEL.id or request.model_version != MODEL.version:
         raise ValueError("Comparison model changed; choose its current declaration")
     if request.action in ("inspect", "fit"):
@@ -220,6 +220,7 @@ def comparison_provider(lab: LabClient, request: ComparisonRequest) -> Compariso
         suggestion = source.fact_as("next-input", NEXT_INPUT_SCHEMA)
         return ComparisonHandoff(
             request=LaunchRequest(
+                workspace_id=request.workspace_id,
                 action="preview",
                 experiment=suggestion.experiment,
                 version=suggestion.version,

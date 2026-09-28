@@ -3,6 +3,7 @@ import { cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { expect, test } from "@playwright/test";
+import { chooseReferenceContext, prepareReferenceContexts } from "./reference-context";
 
 const ROOT = resolve(process.cwd(), "../..");
 function uv(args: string[]): void {
@@ -28,11 +29,13 @@ test("discovers an ordinary author experiment and edits controls before submitti
         recursive: true,
       });
     uv(["scopecat", "start", project, "--port", "0", "--static-dir", resolve("dist")]);
+    prepareReferenceContexts(uv, project);
     const endpoint = JSON.parse(await readFile(join(project, ".scopecat/daemon.json"), "utf8")) as {
       base_url: string;
     };
     await page.goto(`${endpoint.base_url}/#launch`);
     await page.getByLabel("Experiment", { exact: true }).selectOption("signal");
+    await chooseReferenceContext(page);
     await expect(page.getByLabel("Frequency", { exact: true })).toHaveValue("4.8");
     await page.getByLabel("Gain", { exact: true }).fill("2");
     await page.getByLabel("Polarity", { exact: true }).selectOption("negative");

@@ -28,7 +28,10 @@ def preview_request(project_root: Path) -> tuple[LaunchRequest, LaunchPreview]:
         catalog = authors.catalog()
         entry = next(item for item in catalog.entries if item.id == "signal")
         request = LaunchRequest(
-            action="preview", experiment=entry.id, version=entry.version
+            workspace_id=authors.workspace_id,
+            action="preview",
+            experiment=entry.id,
+            version=entry.version,
         )
         preview = authors.preview(request)
         assert preview.code_revision == catalog.code_revision

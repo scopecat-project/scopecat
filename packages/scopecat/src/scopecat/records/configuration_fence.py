@@ -5,6 +5,7 @@ from typing import Annotated, Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from scopecat.records.content import Sha256ContentHash
+from scopecat.records.setup import SetupRevisionRef
 
 
 class ActiveConfigurationFence(BaseModel):
@@ -19,6 +20,15 @@ class SetupContentFence(BaseModel):
     content_hash: Sha256ContentHash
 
 
+class SetupRevisionFence(BaseModel):
+    """An immutable maintained context, independent of any client's defaults."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    kind: Literal["setup_revision"] = "setup_revision"
+    revision: SetupRevisionRef
+
+
 type ProcedureConfigurationFence = Annotated[
-    ActiveConfigurationFence | SetupContentFence, Field(discriminator="kind")
+    ActiveConfigurationFence | SetupContentFence | SetupRevisionFence,
+    Field(discriminator="kind"),
 ]

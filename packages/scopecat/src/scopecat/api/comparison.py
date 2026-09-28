@@ -133,7 +133,12 @@ def comparison_inputs(
         normalize=True,
     )
     return SelectedComparison(
-        context, primary, secondary, ComparisonInspection(primary=left, secondary=right)
+        context,
+        primary,
+        secondary,
+        ComparisonInspection(
+            primary=left, secondary=right, workspace_id=request.workspace_id
+        ),
     )
 
 

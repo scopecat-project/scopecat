@@ -24,14 +24,13 @@ from scopecat.records.author_revision import (
     AuthorRevisionManifest,
     AuthorRevisionRef,
 )
-from scopecat.records.author_workspace import SERVICE_AUTHOR_WORKSPACE
 
 if TYPE_CHECKING:
     from scopecat.installed_adapter import AdapterReference
 
 
-loading_workspace: ContextVar[str] = ContextVar(
-    "loading_author_workspace", default=SERVICE_AUTHOR_WORKSPACE
+loading_workspace: ContextVar[str | None] = ContextVar(
+    "loading_author_workspace", default=None
 )
 
 loading_revision: ContextVar[AuthorRevisionRef | None] = ContextVar(

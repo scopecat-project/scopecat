@@ -26,6 +26,7 @@ from scopecat.records.parameter_revision import ParameterRevision
 from scopecat.records.plan_ref import PlanAnalysisSource
 from scopecat.records.run import ParameterRunConfigSource
 from scopecat.records.run_request import AxisValuesSourceRecord
+from scopecat_testkit.authoring import source_workspace_id
 
 
 def test_retained_analysis_plan_copy_revalidate_and_child_origin(
@@ -34,7 +35,7 @@ def test_retained_analysis_plan_copy_revalidate_and_child_origin(
     endpoint = independent_lab_daemon
     key = uuid4().hex
     with (
-        AuthorProject(endpoint) as author,
+        AuthorProject(endpoint, workspace_id=source_workspace_id(endpoint)) as author,
         LabClient(DaemonClient(endpoint)) as lab,
         httpx2.Client(
             base_url=endpoint, timeout=60, headers={"content-type": "application/json"}
@@ -99,6 +100,7 @@ def test_retained_analysis_plan_copy_revalidate_and_child_origin(
         old_request = author.run_request(primary.id)
         original_count = run_count()
         request = ComparisonRequest(
+            workspace_id=author.workspace_id,
             action="inspect",
             primary_run=primary.id,
             secondary_run=secondary.id,
@@ -162,7 +164,9 @@ def test_retained_analysis_plan_copy_revalidate_and_child_origin(
         assert run_count() == original_count
 
         # A new client proves the plan survives the original author session.
-        with AuthorProject(endpoint) as reopened:
+        with AuthorProject(
+            endpoint, workspace_id=source_workspace_id(endpoint)
+        ) as reopened:
             assert reopened.experiment_plan(saved.ref).model_dump_json() == frozen
             copied = reopened.save_experiment_plan(
                 ExperimentPlanSave(
@@ -262,7 +266,10 @@ def test_plan_freezes_sample_parameters_and_setup_without_activation(
 
     key = uuid4().hex
     with (
-        AuthorProject(independent_lab_daemon) as author,
+        AuthorProject(
+            independent_lab_daemon,
+            workspace_id=source_workspace_id(independent_lab_daemon),
+        ) as author,
         LabClient(DaemonClient(independent_lab_daemon)) as lab,
     ):
         setup = lab.setup.active()
@@ -308,7 +315,10 @@ def test_authored_plan_freezes_default_structural_input_and_explicit_copy(
 ) -> None:
     endpoint = independent_lab_daemon
     key = uuid4().hex
-    with AuthorProject(endpoint) as author, LabClient(DaemonClient(endpoint)) as lab:
+    with (
+        AuthorProject(endpoint, workspace_id=source_workspace_id(endpoint)) as author,
+        LabClient(DaemonClient(endpoint)) as lab,
+    ):
         author.use(
             parameters=independent_parameters.ref, setup=lab.setup.active().revision.ref
         )
@@ -362,7 +372,7 @@ def test_multi_stage_plan_retains_scope_while_candidate_changes_configuration(
 
     endpoint = independent_lab_daemon
     with (
-        AuthorProject(endpoint) as author,
+        AuthorProject(endpoint, workspace_id=source_workspace_id(endpoint)) as author,
         create_application(EXAMPLE_ROOT).connect(endpoint) as lab,
     ):
         sample = lab.samples.create(

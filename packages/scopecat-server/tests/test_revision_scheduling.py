@@ -22,6 +22,7 @@ from scopecat_server.services.revision_workers import (
 
 def request(key: str, *, slow: bool = False) -> LaunchRequest:
     return LaunchRequest(
+        workspace_id="test-source",
         action="list",
         experiment="slow" if slow else "",
         code_revision=AuthorRevisionRef(content_hash="sha256:" + key * 64),

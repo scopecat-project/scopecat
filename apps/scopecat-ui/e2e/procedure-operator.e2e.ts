@@ -23,12 +23,13 @@ const ADMIT = `
 import sys
 import scopecat as sc
 from scopecat.records.launch_request import LaunchRequest
+from scopecat.author_workspaces import author_workspace_id
 project = sc.open_project(sys.argv[1])
 application = project.load_application()
 with project.connect() as lab:
     provider = application.launch_provider
     entry = application.authors.get("reference_lab.temperature_diagnostic").entry
-    request = LaunchRequest(action="preview", experiment=entry.id, version=entry.version)
+    request = LaunchRequest(workspace_id=author_workspace_id(project.root), action="preview", experiment=entry.id, version=entry.version)
     preview = provider(lab, request)
     admitted = provider(lab, LaunchRequest.model_validate({
         **request.model_dump(), "action": "submit", "request_key": "browser-retained",

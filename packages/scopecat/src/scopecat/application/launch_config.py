@@ -13,6 +13,7 @@ from scopecat.records.configuration_fence import (
     ActiveConfigurationFence,
     ProcedureConfigurationFence,
     SetupContentFence,
+    SetupRevisionFence,
 )
 from scopecat.records.launch_request import LaunchConfigSource, LaunchRequest
 from scopecat.records.run import (
@@ -290,6 +291,8 @@ def launch_configuration_fence(
     reviewed: ReviewedScientificSelection,
 ) -> ProcedureConfigurationFence:
     source = reviewed.config_source
+    if isinstance(source, ParameterRunConfigSource):
+        return SetupRevisionFence(revision=source.setup)
     if (
         isinstance(source, ConfigRegistryRunConfigSource)
         and source.selector == "active"

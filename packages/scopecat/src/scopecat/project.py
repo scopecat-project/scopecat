@@ -92,10 +92,17 @@ class Project:
             from scopecat.application.lab import LabApplication
 
             return LabApplication()
-        from scopecat.author_workspaces import author_workspace_id
+        from scopecat.author_workspaces import local_author_workspaces
         from scopecat.project_sources import loading_revision, loading_workspace
 
-        workspace = author_workspace_id(self.root)
+        workspace = next(
+            (
+                item.id
+                for item in local_author_workspaces(self.root)
+                if item.root == self.root
+            ),
+            None,
+        )
         token = loading_revision.set(self.code_revision)
         workspace_token = loading_workspace.set(workspace)
         try:

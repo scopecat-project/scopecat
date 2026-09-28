@@ -55,9 +55,10 @@ def composed(monkeypatch: pytest.MonkeyPatch) -> tuple[LabApplication, Mock, Moc
         _lab: LabClient, request: LaunchRequest
     ) -> LaunchCatalog | LaunchPreview:
         return (
-            LaunchCatalog(entries=(entry,))
+            LaunchCatalog(workspace_id="test-source", entries=(entry,))
             if request.action == "list"
             else LaunchPreview(
+                workspace_id="test-source",
                 experiment_id=request.experiment,
                 request_hash=request.request_hash,
                 point_count=1,
@@ -93,12 +94,22 @@ def test_composition_lists_once_per_request_and_preserves_maintained_dispatch(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     application, maintained, _lab = composed(monkeypatch)
-    catalog = launch(application, Path.cwd(), None, LaunchRequest(action="list"))
+    catalog = launch(
+        application,
+        Path.cwd(),
+        None,
+        LaunchRequest(workspace_id="test-source", action="list"),
+    )
     assert isinstance(catalog, LaunchCatalog)
     assert {entry.id for entry in catalog.entries} == {"maintained", "catalog_author"}
     assert maintained.call_count == 1
     maintained.reset_mock()
-    request = LaunchRequest(action="preview", experiment="maintained", version="1")
+    request = LaunchRequest(
+        workspace_id="test-source",
+        action="preview",
+        experiment="maintained",
+        version="1",
+    )
     preview = launch(application, Path.cwd(), None, request)
     assert isinstance(preview, LaunchPreview)
     assert preview.summary == "maintained preview"
@@ -129,6 +140,7 @@ def test_authored_dispatch_uses_the_checked_catalog(
             Path.cwd(),
             None,
             LaunchRequest(
+                workspace_id="test-source",
                 action="preview",
                 experiment=author.entry.id,
                 version=author.entry.version,
@@ -141,7 +153,12 @@ def test_unknown_controls_and_changed_plans_never_dispatch(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     application, maintained, lab = composed(monkeypatch)
-    request = LaunchRequest(action="preview", experiment="maintained", version="1")
+    request = LaunchRequest(
+        workspace_id="test-source",
+        action="preview",
+        experiment="maintained",
+        version="1",
+    )
     with pytest.raises(LaunchRequestRejected, match="unknown control"):
         launch(
             application,

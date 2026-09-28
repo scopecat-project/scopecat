@@ -34,6 +34,7 @@ def test_plan_revision_copy_hide_and_exact_reopen(tmp_path: Path) -> None:
     )
     store.bootstrap()
     definition = ExperimentPlanDefinition(
+        workspace_id="test-source",
         experiment="signal",
         version="1",
         definition_hash="sha256:" + "1" * 64,
@@ -132,7 +133,7 @@ def test_schema_64_source_bytes_remain_unchanged(tmp_path: Path) -> None:
         connection.execute("INSERT INTO retained VALUES ('original')")
     before = {path.name: path.read_bytes() for path in tmp_path.iterdir()}
     store = SQLiteProjectStore(SQLiteDatabase(database), tmp_path / "objects")
-    with pytest.raises(SchemaVersionError, match="version: 64; expected 98"):
+    with pytest.raises(SchemaVersionError, match="version: 64; expected 99"):
         store.bootstrap()
     assert {path.name: path.read_bytes() for path in tmp_path.iterdir()} == before
 
@@ -156,6 +157,7 @@ def test_snapshot_retains_hidden_plan_object_and_hash(tmp_path: Path) -> None:
             name="Retained plan",
             saved_by="alice",
             definition=ExperimentPlanDefinition(
+                workspace_id="test-source",
                 experiment="signal",
                 version="1",
                 definition_hash="sha256:" + "1" * 64,

@@ -31,6 +31,7 @@ const entry: LaunchCatalogEntry = {
   ],
 };
 const current: LaunchDraft = {
+  workspaceId: "test-source",
   controlDefinition: "old-controls",
   experiment: "signal",
   definition: "old",

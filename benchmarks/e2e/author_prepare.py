@@ -56,7 +56,9 @@ def measure(root: Path, *, repetitions: int) -> dict[str, object]:
     samples: list[dict[str, object]] = []
     try:
         transport = TimingTransport()
-        with AuthorProject(daemon.base_url, transport=transport) as author:
+        with AuthorProject(
+            daemon.base_url, project_root=root, transport=transport
+        ) as author:
             for index in range(repetitions + 1):
                 started = time.perf_counter()
                 prepared = author.prepare("signal")

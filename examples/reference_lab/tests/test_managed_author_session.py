@@ -16,6 +16,7 @@ from scopecat.application.author_project import AuthorProject
 from scopecat.daemon.client import DaemonClient, DaemonConflictError
 from scopecat.records.parameter_revision import ParameterRevision
 from scopecat.records.sample import SampleRevisionDraft
+from scopecat_testkit.authoring import source_workspace_id
 
 
 def test_workspace_run_reopens_in_fresh_python(
@@ -25,7 +26,11 @@ def test_workspace_run_reopens_in_fresh_python(
 ) -> None:
     endpoint = independent_lab_daemon
     with (
-        AuthorProject(endpoint, receipts=tmp_path / "receipts") as author,
+        AuthorProject(
+            endpoint,
+            workspace_id=source_workspace_id(endpoint),
+            receipts=tmp_path / "receipts",
+        ) as author,
         LabClient(DaemonClient(endpoint)) as setup,
     ):
         equipment = setup.setup.active()
@@ -78,7 +83,7 @@ def test_workspace_run_reopens_in_fresh_python(
     assert snapshot.status == "completed"
     source = """import json, sys
 from scopecat.application.author_project import AuthorProject
-with AuthorProject(sys.argv[1]) as author:
+with AuthorProject(sys.argv[1], workspace_id=sys.argv[5]) as author:
     job = author.reopen(sys.argv[2])
     run = job.wait(timeout=5).result()
     values = list(run.measurements()["result"].require_values())
@@ -99,6 +104,7 @@ with AuthorProject(sys.argv[1]) as author:
             str(receipt),
             saved.id,
             independent_parameters.id,
+            source_workspace_id(endpoint),
         ],
         check=True,
         capture_output=True,
@@ -136,6 +142,7 @@ def test_lost_response_recovers_admitted_job_once(
 
         with AuthorProject(
             independent_lab_daemon,
+            workspace_id=source_workspace_id(independent_lab_daemon),
             receipts=tmp_path / "receipts",
             transport=httpx2.MockTransport(lose_submission_response),
         ) as author:

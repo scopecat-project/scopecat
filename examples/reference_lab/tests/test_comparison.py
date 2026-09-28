@@ -30,6 +30,7 @@ from scopecat.records.scientific_selection import (
     ParameterConfiguration,
     ScientificSelection,
 )
+from scopecat_testkit.authoring import source_workspace_id
 
 from reference_lab.comparison import FIT_SCHEMA, NEXT_INPUT_SCHEMA, REVIEW_SCHEMA
 from reference_lab.workflows.authored.comparison import MODEL
@@ -48,7 +49,10 @@ def test_two_retained_runs_fit_candidate_rejection_and_handoff(
         setup = lab.setup.active()
         frequencies = [sc.Quantity(value, "GHz") for value in (4.6, 4.7, 4.8, 4.9, 5.0)]
         catalog = LaunchCatalog.model_validate(
-            http.get("/api/v1/experiment-launcher").json()
+            http.get(
+                "/api/v1/experiment-launcher",
+                headers={"X-Scopecat-Workspace": source_workspace_id(url)},
+            ).json()
         )
         entry = next(
             item
@@ -56,6 +60,7 @@ def test_two_retained_runs_fit_candidate_rejection_and_handoff(
             if item.id == "reference_lab.frequency_amplitude"
         )
         launch = LaunchRequest(
+            workspace_id=source_workspace_id(url),
             action="preview",
             experiment=entry.id,
             version=entry.version,
@@ -133,6 +138,7 @@ def test_two_retained_runs_fit_candidate_rejection_and_handoff(
         run_ids = {run.id for run in lab.runs().items}
         procedure_ids = {item.id for item in lab.procedures.list().items}
         base = ComparisonRequest(
+            workspace_id=source_workspace_id(url),
             action="inspect",
             model_id=MODEL.id,
             model_version=MODEL.version,

@@ -89,7 +89,9 @@ def measure(root: Path, *, revisions: int) -> dict[str, object]:
 
     try:
         snapshot("started")
-        with AuthorProject(daemon.base_url, receipts=root / "receipts") as author:
+        with AuthorProject(
+            daemon.base_url, project_root=root, receipts=root / "receipts"
+        ) as author:
             prepared = timed(
                 "prepare_first",
                 lambda: author.prepare("signal", scans={"frequency": [4.7, 4.8, 4.9]}),

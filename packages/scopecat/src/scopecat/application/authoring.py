@@ -59,7 +59,6 @@ from scopecat.program.values import MetadataValue
 from scopecat.project_sources import loading_revision, loading_workspace
 from scopecat.records.author_revision import AuthorRevisionRef
 from scopecat.records.author_workspace import (
-    SERVICE_AUTHOR_WORKSPACE,
     AuthorWorkspaceId,
 )
 from scopecat.records.config import ConfigProfileSnapshot
@@ -94,7 +93,7 @@ class AuthorLaunchIntent(BaseModel):
         default=None, exclude_if=_absent_collection
     )
     request_hash: Sha256ContentHash
-    workspace_id: AuthorWorkspaceId = SERVICE_AUTHOR_WORKSPACE
+    workspace_id: AuthorWorkspaceId
     code_revision: AuthorRevisionRef | None = None
 
 
@@ -111,7 +110,7 @@ class AuthorExperiment:
     code_revision: AuthorRevisionRef | None = field(
         default_factory=loading_revision.get
     )
-    workspace_id: str = field(default_factory=loading_workspace.get)
+    workspace_id: str | None = field(default_factory=loading_workspace.get)
     fingerprint: Sha256ContentHash = field(init=False)
 
     @classmethod
@@ -120,7 +119,7 @@ class AuthorExperiment:
         declaration: Experiment[..., object],
         *,
         code_revision: AuthorRevisionRef | None = None,
-        workspace_id: str = SERVICE_AUTHOR_WORKSPACE,
+        workspace_id: str | None = None,
     ) -> AuthorExperiment:
         """Use the same contract for discovery and imported Python requests."""
         return cls(
@@ -135,7 +134,9 @@ class AuthorExperiment:
             ),
             description=inspect.getdoc(declaration.__wrapped__) or declaration.id,
             code_revision=code_revision,
-            workspace_id=workspace_id,
+            workspace_id=workspace_id
+            if workspace_id is not None
+            else loading_workspace.get(),
         )
 
     def __post_init__(self) -> None:
@@ -522,14 +523,16 @@ class AuthorLaunchProvider:
     maintained: LaunchProvider | None
 
     def __call__(self, lab: LabClient, request: LaunchRequest) -> LaunchResult:
-        return self.resolve(lab)(lab, request)
+        return self.resolve(lab, workspace_id=request.workspace_id)(lab, request)
 
-    def resolve(self, lab: LabClient) -> LaunchProvider:
+    def resolve(self, lab: LabClient, *, workspace_id: str) -> LaunchProvider:
         """Resolve composition once for one worker request, never across requests."""
         existing = (
-            self.maintained(lab, LaunchRequest(action="list"))
+            self.maintained(
+                lab, LaunchRequest(action="list", workspace_id=workspace_id)
+            )
             if self.maintained is not None
-            else LaunchCatalog()
+            else LaunchCatalog(workspace_id=workspace_id)
         )
         if not isinstance(existing, LaunchCatalog):
             raise TypeError("maintained list callback must return LaunchCatalog")
@@ -539,7 +542,7 @@ class AuthorLaunchProvider:
         )
         if len({entry.id for entry in entries}) != len(entries):
             raise ValueError("author and maintained launch IDs overlap")
-        catalog = LaunchCatalog(entries=entries)
+        catalog = LaunchCatalog(entries=entries, workspace_id=workspace_id)
 
         def resolved(lab: LabClient, request: LaunchRequest) -> LaunchResult:
             if request.action == "list":

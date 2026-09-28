@@ -22,7 +22,7 @@ class AuthorRevisionConflict(ValueError):
 
 
 class AuthorRevisionRepository:
-    def __init__(self, store: SQLiteProjectStore, workspace_id: str = "legacy") -> None:
+    def __init__(self, store: SQLiteProjectStore, workspace_id: str) -> None:
         self.store = store
         self.workspace_id = workspace_id
 

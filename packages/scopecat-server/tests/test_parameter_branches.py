@@ -159,7 +159,9 @@ def test_session_checkout_save_and_concurrent_editor(
             )
 
         with AuthorProject(
-            "http://testserver", transport=httpx2.MockTransport(send)
+            "http://testserver",
+            workspace_id="test-source",
+            transport=httpx2.MockTransport(send),
         ) as session:
             original = session.parameters.save(
                 name="initial",
