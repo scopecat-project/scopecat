@@ -12,18 +12,19 @@ concepts. Registered author folders share the application's device/data authorit
 
 `ApplicationRuntime` owns a fixed `HOME/runtime` composition and an
 `installation.json` selection. Candidate deliveries live at content-addressed,
-retained release paths. A candidate probe runs in its interpreter, checks source
-dependencies and obtains driver metadata in an isolated worker without connecting
+retained release paths. A candidate probe checks registered sources in their selected
+execution interpreters and obtains driver metadata in an isolated worker without connecting
 devices. Optional SDK imports belong to connection, not catalog discovery.
 
 Selection requires the application/deployment/data locks and a stopped owner.
-The candidate is requalified, a pending marker is persisted, the composition and
-author interpreter bindings are updated, and then selection commits. An interrupted
+The candidate is requalified, a pending marker is persisted, the composition is
+updated, and then selection commits. Author interpreters remain selected independently. An interrupted
 switch blocks startup and is completed by retrying the same candidate. It does
 not create a new data identity or rewrite scientific data.
 
 The stable launcher reads the same selection, including after an in-window update.
-Native shell and Python clients must reopen to adopt changed installed software.
+The native shell reopens to adopt changed installed software. User-owned `.venv`
+clients are updated separately and are never synchronized by application updates.
 There is no fallback to a previous driver identity after a qualification failure.
 
 ## Runtime and window lifecycle
@@ -56,10 +57,14 @@ exclusive.
 
 ## Remaining boundary
 
-Teaching CLI commands execute directly with a file lock and retain their existing
-isolated exercise environments. Same-service practice ownership and cleanup belong
-to the following batch. This transitional teaching path does not restore the
-removed management service.
+Author folders own mutable client environments. Managed execution environments
+retain dependencies for prepared work and plans; source refresh selects a revision
+without introducing another service. Adding dependencies creates a qualified
+environment instead of mutating the application. Version checks do not establish
+compatibility across arbitrary framework protocol changes. Driver dependencies
+still belong to the fixed application delivery.
+
+Help practice runs in the same service and uses ordinary data cleanup.
 
 Separate application homes remain independent physical-device authorities.
 LAN authorization, unattended OS services and cross-home hardware exclusion are

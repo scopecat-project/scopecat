@@ -272,22 +272,10 @@ class ApplicationRuntime:
                 raise ValueError("请先重试上次尚未完成的环境切换")
             _write(self.pending, candidate.model_dump_json(indent=2))
             _write(self.root / "scopecat.toml", candidate.composition)
-            path = author_bindings_path(self.root)
-            if path.is_file():
-                registry = LocalAuthorWorkspaces.model_validate_json(path.read_bytes())
-                updated = registry.model_copy(
-                    update={
-                        "items": tuple(
-                            item.model_copy(update={"python": candidate.python})
-                            for item in registry.items
-                        )
-                    }
-                )
-                _write(path, updated.model_dump_json(indent=2))
             _write(self.selection, candidate.model_dump_json(indent=2))
             self.pending.unlink()
 
-    def register_source(self, workspace: Path) -> str:
+    def register_source(self, workspace: Path, *, python: Path | None = None) -> str:
         with self.lock:
             self.require_ready()
             selected = self.installation()
@@ -297,12 +285,41 @@ class ApplicationRuntime:
                     "action": "register_source",
                     "root": str(self.root),
                     "workspace": str(workspace.resolve()),
+                    "author_python": str(python.absolute()) if python else None,
                     **selected.model_dump(
                         mode="json", exclude={"python", "drivers", "composition"}
                     ),
                 },
             )
             return cast("str", result["source_id"])
+
+    def select_source_environment(self, workspace: Path, python: Path) -> None:
+        """Publish an explicitly prepared execution environment without restarting."""
+        from scopecat_server.author_environment import capture
+
+        with self.lock:
+            self.require_ready()
+            identity = self.source(workspace)
+            capture(workspace, python, owner=self.root)
+            path = author_bindings_path(self.root)
+            registry = LocalAuthorWorkspaces.model_validate_json(path.read_bytes())
+            items = tuple(
+                item.model_copy(
+                    update={
+                        "python": python,
+                        "retained_pythons": tuple(
+                            dict.fromkeys((item.python, *item.retained_pythons))
+                        ),
+                    }
+                )
+                if item.id == identity and item.python != python
+                else item
+                for item in registry.items
+            )
+            _write(
+                path,
+                registry.model_copy(update={"items": items}).model_dump_json(indent=2),
+            )
 
     def source(self, workspace: Path) -> str:
         """Opening registered code joins this home; it cannot create another owner."""

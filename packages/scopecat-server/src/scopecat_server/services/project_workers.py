@@ -54,9 +54,11 @@ class ProjectProcedureWorkers:
         *,
         max_workers: int = 2,
         resolve_root: Callable[[str], Path] | None = None,
+        resolve_python: Callable[[str], Path] | None = None,
     ) -> None:
         self.root = root
         self.resolve_root = resolve_root
+        self.resolve_python = resolve_python
         self.state = state
         self.max_workers = max_workers
         self._lock = Lock()
@@ -315,7 +317,9 @@ class ProjectProcedureWorkers:
         with log_path.open("ab") as log:
             self._children[procedure_id] = subprocess.Popen(  # noqa: S603 - fixed interpreter and module; no shell
                 [
-                    sys.executable,
+                    str(self.resolve_python(procedure_id))
+                    if self.resolve_python
+                    else sys.executable,
                     "-m",
                     "scopecat_server.procedure_worker",
                     str(root),

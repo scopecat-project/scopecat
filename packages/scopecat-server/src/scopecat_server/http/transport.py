@@ -248,6 +248,7 @@ from scopecat.daemon.wire import (
     SetupSaveCommand,
     TerminalRunCommitCommand,
 )
+from scopecat.kernel.frozen import thaw_json_value
 from scopecat.planning.catalog import InstrumentContractCatalog
 from scopecat.records.apparatus_history import (
     MAX_APPARATUS_ATTACHMENT_BYTES,
@@ -447,10 +448,34 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
             return application.project_root
         return authors(cast("str", owner)).root
 
+    def procedure_python(procedure_id: str) -> Path:
+        stored = application.automation.get(procedure_id)
+        owner = stored.intent.get("workspace_id")
+        revision = stored.intent.get("code_revision")
+        if stored.plan_ref is not None:
+            definition = application.plans.repository.get(stored.plan_ref).definition
+            owner = definition.workspace_id
+            revision = (
+                definition.code_revision.model_dump(mode="json")
+                if definition.code_revision
+                else None
+            )
+        if owner is None:
+            return Path(sys.executable).absolute()
+        service = authors(cast("str", owner))
+        return (
+            service.binding_for(
+                AuthorRevisionRef.model_validate(thaw_json_value(revision))
+            ).python
+            if revision is not None
+            else service.worker_binding.python
+        )
+
     project_workers = ProjectProcedureWorkers(
         lambda: application.project_root,
         lambda procedure_id: application.automation.worker_state(procedure_id),
         resolve_root=procedure_root,
+        resolve_python=procedure_python,
     )
 
     retained_workers = RevisionWorkers("scopecat_server.retained_worker")
@@ -653,7 +678,11 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
                 raise HTTPException(422, str(error)) from error
         try:
             completed = retained_workers.call(
-                service.worker_binding, command, timeout=60
+                service.binding_for(command.code_revision)
+                if command.code_revision
+                else service.worker_binding,
+                command,
+                timeout=60,
             )
         except subprocess.TimeoutExpired as error:
             stage, evidence = diagnostic_excerpt(error.stderr)
@@ -717,7 +746,7 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
                 raise subprocess.TimeoutExpired("author revision initialization", 60)
             completed = (
                 service.workers.call(
-                    service.worker_binding,
+                    service.binding_for(ref),
                     command,
                     timeout=remaining,
                 )

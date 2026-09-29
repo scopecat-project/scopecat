@@ -175,7 +175,9 @@ def _run_install(command: list[str]) -> None:
     )
 
 
-def install_bundle(root: Path, destination: Path) -> Path:
+def install_bundle(
+    root: Path, destination: Path, *, copy_packages: bool = False
+) -> Path:
     root = resolve_delivery(root)
     destination = destination.resolve()
     if destination.exists():
@@ -202,6 +204,7 @@ def install_bundle(root: Path, destination: Path) -> Path:
             uv,
             "pip",
             "install",
+            *(["--link-mode", "copy"] if copy_packages else []),
             "--offline",
             "--no-index",
             "--require-hashes",

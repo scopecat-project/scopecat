@@ -28,13 +28,28 @@ export function ApplicationSettings({ health }: { health?: ProjectHealth }) {
     enabled: !!native,
   });
   const operation = useMutation({
-    mutationFn: async (action: "prepare" | "apply" | "source" | "restart" | "recheck") => {
-      if (!native) return;
+    mutationFn: async (
+      action:
+        | "prepare"
+        | "apply"
+        | "source"
+        | "restart"
+        | "recheck"
+        | "dependencies"
+        | "client"
+        | "rebuild-client",
+    ) => {
+      if (!native) return undefined;
       if (action === "prepare") await native.prepare_update(directory.trim());
       else if (action === "apply") await native.apply_update();
       else if (action === "source") await native.register_source(source.trim());
+      else if (action === "dependencies") return native.prepare_author_environment(source.trim());
+      else if (action === "client") return native.create_author_environment(source.trim());
+      else if (action === "rebuild-client")
+        return native.create_author_environment(source.trim(), true);
       else if (action === "recheck") await native.requalify();
       else await native.restart();
+      return undefined;
     },
     onSuccess: () => {
       void status.refetch();
@@ -49,6 +64,7 @@ export function ApplicationSettings({ health }: { health?: ProjectHealth }) {
         Application settings
       </h2>
       {operation.error && <p role="alert">{errorMessage(operation.error)}</p>}
+      {operation.data && <p role="status">{operation.data}</p>}
       {status.error && <p role="alert">{errorMessage(status.error)}</p>}
       <section className={section}>
         <h3 className="font-semibold">Software and data</h3>
@@ -103,9 +119,9 @@ export function ApplicationSettings({ health }: { health?: ProjectHealth }) {
                 <h4 className="font-semibold">Prepared candidate</h4>
                 <InstallationDetails installation={candidate} />
                 <p>
-                  Applying restarts this application and interrupts active work. Finish
-                  measurements, release devices and close Python sessions first. Reopen Python
-                  kernels using the new interpreter afterwards.
+                  Applying restarts this application and interrupts active work. Finish measurements
+                  and release devices first. Your source folder's Python environment is kept
+                  unchanged.
                 </p>
                 {devices.data?.items.map((item) => (
                   <p key={item.device.id}>
@@ -127,8 +143,8 @@ export function ApplicationSettings({ health }: { health?: ProjectHealth }) {
             <h3 className="font-semibold">Author code</h3>
             <p>
               Register an existing source folder, then open it normally in VS Code. All registered
-              folders use this application. Registration restarts the application; finish active
-              work first.
+              folders use this application. Registration prepares declared dependencies and restarts
+              the application; finish active work first.
             </p>
             <label className="grid gap-1">
               Author directory
@@ -145,6 +161,37 @@ export function ApplicationSettings({ health }: { health?: ProjectHealth }) {
               onClick={() => operation.mutate("source")}
             >
               Stop, register source and reopen
+            </button>
+            <p>
+              Use the source folder's .venv for Python and notebooks. Installing packages there does
+              not change this application. Declare packages needed by background experiments in
+              pyproject.toml, then prepare their execution environment. Existing tasks keep their
+              original environment.
+            </p>
+            <button
+              className={secondaryButton}
+              disabled={busy || !source.trim()}
+              onClick={() => operation.mutate("client")}
+            >
+              Create local Python environment
+            </button>
+            <button
+              className={secondaryButton}
+              disabled={busy || !source.trim()}
+              onClick={() => operation.mutate("dependencies")}
+            >
+              Prepare background dependencies
+            </button>
+            <p>
+              To repair local Python, close its terminals and notebook kernels first. Rebuilding
+              preserves the previous environment separately and keeps your source files.
+            </p>
+            <button
+              className={secondaryButton}
+              disabled={busy || !source.trim()}
+              onClick={() => operation.mutate("rebuild-client")}
+            >
+              Rebuild local Python environment
             </button>
           </section>
           <section className={section}>
@@ -183,7 +230,7 @@ function InstallationDetails({ installation }: { installation: InstallationStatu
   return (
     <dl className="grid gap-2 break-all">
       <div>
-        <dt>Python interpreter</dt>
+        <dt>Application Python (managed; not a notebook kernel)</dt>
         <dd>
           <code>{installation.python}</code>
         </dd>

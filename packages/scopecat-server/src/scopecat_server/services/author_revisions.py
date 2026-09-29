@@ -11,11 +11,10 @@ from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
 
+from scopecat.author_workspaces import local_author_workspaces
 from scopecat.project import load_project
 from scopecat.project_sources import (
-    capture_sources,
     materialize_sources,
-    require_environment,
 )
 from scopecat.records.author_revision import (
     AuthorPreparation,
@@ -26,6 +25,7 @@ from scopecat.records.author_revision import (
 )
 from scopecat.runtime_binding import load_runtime_binding
 
+from scopecat_server.author_environment import capture, check
 from scopecat_server.services.revision_workers import (
     AuthorValidationCancelled,
     AuthorWorkerBinding,
@@ -48,10 +48,11 @@ class AuthorRevisionService:
         *,
         workspace_id: str,
         workers: RevisionWorkers | None = None,
+        python: Path | None = None,
     ) -> None:
-        self.worker_binding = AuthorWorkerBinding(
-            root.resolve(), Path(sys.executable).absolute()
-        )
+        self.python = python or Path(sys.executable).absolute()
+        self.workspace_id = workspace_id
+        self._bindings: dict[str, AuthorWorkerBinding] = {}
         self._owns_workers = workers is None
         self.workers = workers or RevisionWorkers()
         self.root = root
@@ -80,10 +81,47 @@ class AuthorRevisionService:
         manifest = root / "scopecat.toml"
         self.project = load_project(manifest) if manifest.is_file() else None
         self.baseline = (
-            capture_sources(self.project)
+            self._capture()
             if self.project is not None
             and (self.project.source_roots or self.project.adapter_packages)
             else None
+        )
+
+    def _interpreters(self) -> tuple[Path, ...]:
+        for item in local_author_workspaces(self.root):
+            if item.id == self.workspace_id:
+                return (item.python, *item.retained_pythons)
+        return (self.python,)
+
+    def _capture(self) -> AuthorRevisionBundle:
+        python = self._interpreters()[0]
+        bundle = capture(self.root, python)
+        self._bindings.setdefault(
+            bundle.manifest.ref.content_hash, AuthorWorkerBinding(self.root, python)
+        )
+        return bundle
+
+    @property
+    def worker_binding(self) -> AuthorWorkerBinding:
+        return AuthorWorkerBinding(self.root, self._interpreters()[0])
+
+    def binding_for(self, ref: AuthorRevisionRef) -> AuthorWorkerBinding:
+        if ref.content_hash in self._bindings:
+            binding = self._bindings[ref.content_hash]
+            return binding
+        bundle = self.repository.get(ref)
+        failures: list[str] = []
+        for python in self._interpreters():
+            try:
+                check(bundle.manifest, python)
+            except (OSError, ValueError) as error:
+                failures.append(str(error))
+                continue
+            binding = AuthorWorkerBinding(self.root, python)
+            self._bindings[ref.content_hash] = binding
+            return binding
+        raise ValueError(
+            "Retained execution environment is unavailable: " + "\n".join(failures)
         )
 
     def state(self, *, initialize: bool = True) -> AuthorRevisionState:
@@ -98,7 +136,7 @@ class AuthorRevisionService:
             if state.preparation_id is not None:
                 return self.wait(state.preparation_id)
             assert self.project is not None
-            bundle = capture_sources(load_project(self.root / "scopecat.toml"))
+            bundle = self._capture()
             operation = self._start(
                 bundle,
                 AuthorPreparationRequest(
@@ -130,9 +168,7 @@ class AuthorRevisionService:
                 return operation
             if self.project is None or self.baseline is None:
                 raise ValueError("project has no configured author source roots")
-            return self._start(
-                capture_sources(load_project(self.root / "scopecat.toml")), request
-            )
+            return self._start(self._capture(), request)
 
     def _start(
         self, bundle: AuthorRevisionBundle, request: AuthorPreparationRequest
@@ -146,7 +182,6 @@ class AuthorRevisionService:
                 pass
             # All declared source is task-local and validated in a fresh worker.
             # Driver activation has its own device ownership boundary.
-            require_environment(bundle.manifest)
             now = datetime.now(UTC)
             operation = AuthorPreparation(
                 operation_id=request.operation_id,
@@ -205,7 +240,7 @@ class AuthorRevisionService:
                 bundle, load_runtime_binding(self.root).data_root / "code"
             )
             self.workers.publish_validated(
-                self.worker_binding,
+                self.binding_for(bundle.manifest.ref),
                 code_root,
                 bundle.manifest.ref,
                 publish,
@@ -304,5 +339,5 @@ class AuthorRevisionService:
             raise ValueError(
                 "Source revision does not belong to the selected author workspace"
             ) from error
-        require_environment(bundle.manifest)
+        self.binding_for(ref)
         return bundle

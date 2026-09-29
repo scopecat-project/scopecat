@@ -1,11 +1,10 @@
 """Resolve registered publication owners without changing deployment ownership."""
 
-import sys
 from pathlib import Path
+from threading import RLock
 from typing import cast
 
-from scopecat.author_workspaces import local_author_workspaces
-from scopecat.project_sources import require_environment
+from scopecat.author_workspaces import LocalAuthorWorkspace, local_author_workspaces
 from scopecat.records.author_workspace import (
     AuthorWorkspaceCatalog,
     AuthorWorkspaceSummary,
@@ -23,10 +22,13 @@ from scopecat_server.storage.sqlite.project_store import SQLiteProjectStore
 class AuthorWorkspaceServices:
     def __init__(self, root: Path, store: SQLiteProjectStore) -> None:
         self.store = store
+        self.root = root
         self.workers = RevisionWorkers()
         self.services: dict[str, AuthorRevisionService] = {}
         self.unavailable: dict[str, str] = {}
-        binding = load_runtime_binding(root)
+        self.binding = load_runtime_binding(root)
+        self._roots: dict[str, str] = {}
+        self._load_lock = RLock()
         try:
             for item in local_author_workspaces(root):
                 with store.sqlite.write_transaction() as connection:
@@ -35,33 +37,37 @@ class AuthorWorkspaceServices:
                         "ON CONFLICT(workspace_id) DO UPDATE SET name=excluded.name",
                         (item.id, item.name),
                     )
-                service = None
                 try:
-                    other_binding = load_runtime_binding(item.root)
-                    if item.python != Path(sys.executable).absolute() or (
-                        other_binding.data_root,
-                        other_binding.deployment_root,
-                    ) != (binding.data_root, binding.deployment_root):
-                        raise ValueError(
-                            "Registered author workspace has a different runtime "
-                            "binding"
-                        )
-                    service = AuthorRevisionService(
-                        item.root, store, workspace_id=item.id, workers=self.workers
-                    )
-                    if service.baseline is None:
-                        raise ValueError(
-                            "Registered author workspace has no source roots"
-                        )
-                    require_environment(service.baseline.manifest)
-                    self.services[item.id] = service
+                    self._load(item)
                 except (OSError, ValueError) as error:
-                    if service is not None:
-                        service.close()
                     self.unavailable[item.id] = str(error)
         except BaseException:
             self.close()
             raise
+
+    def _load(self, item: LocalAuthorWorkspace) -> AuthorRevisionService:
+        binding = load_runtime_binding(item.root)
+        if (binding.data_root, binding.deployment_root) != (
+            self.binding.data_root,
+            self.binding.deployment_root,
+        ):
+            raise ValueError(
+                "Registered author workspace has a different runtime binding"
+            )
+        self._roots.setdefault(str(item.root), item.id)
+        service = AuthorRevisionService(
+            item.root,
+            self.store,
+            workspace_id=item.id,
+            workers=self.workers,
+            python=item.python,
+        )
+        if service.baseline is None:
+            service.close()
+            raise ValueError("Registered author workspace has no source roots")
+        self.services[item.id] = service
+        self.unavailable.pop(item.id, None)
+        return service
 
     def catalog(self) -> AuthorWorkspaceCatalog:
         """List retained owners without reading, importing or publishing source."""
@@ -93,8 +99,12 @@ class AuthorWorkspaceServices:
         )
 
     def get(self, identity: str) -> AuthorRevisionService:
-        if identity in self.unavailable:
-            raise ValueError(self.unavailable[identity])
+        with self._load_lock:
+            if identity in self.unavailable:
+                for item in local_author_workspaces(self.root):
+                    if item.id == identity:
+                        return self._load(item)
+                raise ValueError(self.unavailable[identity])
         try:
             return self.services[identity]
         except KeyError:
@@ -115,9 +125,7 @@ class AuthorWorkspaceServices:
 
     @property
     def roots(self) -> dict[str, str]:
-        return {
-            str(service.root): identity for identity, service in self.services.items()
-        }
+        return dict(self._roots)
 
     def close(self) -> None:
         self.request_stop()

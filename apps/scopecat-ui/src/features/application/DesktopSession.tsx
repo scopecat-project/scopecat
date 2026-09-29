@@ -33,6 +33,8 @@ interface DesktopAPI {
   prepare_update(directory: string): Promise<InstallationStatus>;
   apply_update(): Promise<void>;
   register_source(directory: string): Promise<string>;
+  prepare_author_environment(directory: string): Promise<string>;
+  create_author_environment(directory: string, rebuild?: boolean): Promise<string>;
 }
 
 declare global {

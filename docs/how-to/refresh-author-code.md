@@ -348,13 +348,16 @@ ownership; listing a dependency alone does not authorize importing its analyses.
 
 The retained manifest records exact selected versions. Upgrading an unrelated
 notebook-only package does not change the revision or block historical analysis.
-Changing a selected package requires restarting the matching deployment, not
-refreshing local author code. Root `pyproject.toml`, `uv.lock` and `requirements.txt`
-are not automatically copied into scoped source revisions: they may describe
-unrelated tooling. Keep deployment installation files and wheel artifacts
-separately. Files explicitly inside source roots are still captured.
+For managed author folders, declare additions in `pyproject.toml` under
+`project.dependencies` and use **Prepare background dependencies** in Settings.
+Refresh afterwards to use the prepared environment; existing prepared work and plans
+retain their dependency versions, including after application restart. Local pip
+installs affect only the user kernel. See [application maintenance](maintain-application.md).
+The root `pyproject.toml` is captured and its project dependencies extend
+`authors.dependencies`. Root `uv.lock` and `requirements.txt` are captured only for
+unscoped environments; files inside source roots are still captured.
 
-Omitting `dependencies` keeps the conservative full-environment inventory and
+Omitting both dependency declarations keeps the conservative full-environment inventory and
 root installation files for exploratory projects whose dependency boundary is
 not yet declared. An empty list explicitly selects just the framework, declared
 author packages and their dependencies. New CLI starter projects select their

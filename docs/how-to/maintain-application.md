@@ -7,8 +7,8 @@ source folders and data locations. **Devices and drivers** maintains shared devi
 ## Daily use
 
 1. Open Scopecat, then open your experiment code folder in VS Code.
-2. Select the Python interpreter shown in Application settings for Python and
-   Notebook kernels. Choose your code, setup and parameters in the current task.
+2. Select your code folder's `.venv` interpreter for Python and Notebook kernels.
+   Choose your code, setup and parameters in the current task.
 3. Save edits and refresh author code. This captures source without rebuilding
    the application or installing dependencies.
 4. Finish measurements and close Python sessions before stopping. Closing the
@@ -40,7 +40,8 @@ work, close Python sessions, then choose **Stop and apply prepared update**.
 Preparation failure leaves the selected installation usable. An interrupted
 selection fences startup until the same candidate completes. Retained releases
 and source/data paths survive; this is not a scientific-data migration.
-After switching, restart VS Code kernels with the selected interpreter.
+Application updates preserve user Python environments and retained task environments.
+Updating client packages is a separate operation; close kernels before rebuilding them.
 
 ## Author folders
 
@@ -48,6 +49,40 @@ Author folders contain editable source and an author-only `scopecat.toml`.
 Register a folder in Application settings. Registration currently restarts the
 application, so finish active work first. Multiple folders share one service,
 device registry and data authority; their source identities remain independent.
+
+In the native application's Settings, enter the registered folder's full path and
+choose **Create local Python environment**. Select `.venv/bin/python` on macOS or
+`.venv/Scripts/python.exe` on Windows in VS Code. This is your environment: installing
+plotting or analysis packages there does not modify the application. Do not use an
+interpreter from `releases` as a Notebook kernel.
+
+If a package is also needed by background experiments, declare it in the folder's
+`pyproject.toml`, for example:
+
+```toml
+[project]
+name = "my-experiments"
+version = "0.1.0"
+dependencies = ["humanize==4.13.0"]
+```
+
+Choose **Prepare background dependencies**, then refresh and preview your experiment.
+Preparation resolves against the fixed delivery's dependencies in a separate managed
+environment. Conflicting requirements fail without changing the running application
+or the selected source environment. Existing prepared work and plans retain their
+recorded dependency versions; the application remains running. Local pip installs
+alone do not change background execution.
+
+For a broken local environment, close its terminals and kernels, then choose
+**Rebuild local Python environment**. The old directory is retained as
+`.venv-retained-…`; a failed rebuild restores it. The replacement starts from the
+selected delivery, so reinstall your local additions afterwards. This operation
+does not alter source files, measurements or managed execution environments.
+
+The initial execution environment can share the immutable delivery with the app.
+Additional environments live under `HOME/environments`; retained environments and
+releases are not disposable caches. Driver-process dependencies still belong to the
+application delivery; this operation changes experiment workers, not connected drivers.
 
 Maintainers can use the same operations without opening a browser:
 
@@ -118,5 +153,4 @@ Supported persistent-data compatibility begins only at a designated baseline;
 none is designated yet. See [data compatibility](../development/data-compatibility.md)
 and [backup/restore](backup-and-restore.md).
 
-Tutorial commands still use isolated exercise environments until same-service
-practice scopes are delivered. They no longer start a management service.
+Help practice uses the same application and its ordinary data-cleanup controls.

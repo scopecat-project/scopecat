@@ -92,7 +92,7 @@ def capture_sources(project: SourceProject) -> AuthorRevisionBundle:
             else "[lab]\n"
         ).encode()
     for name in (
-        ()
+        ("pyproject.toml",)
         if project.dependencies is not None
         else ("pyproject.toml", "uv.lock", "requirements.txt")
     ):
@@ -105,7 +105,10 @@ def capture_sources(project: SourceProject) -> AuthorRevisionBundle:
             raise ValueError(f"source root must be a local directory: {name}")
         for directory, directories, names in source.walk():
             directories[:] = sorted(
-                item for item in directories if item not in _EXCLUDED
+                item
+                for item in directories
+                if item not in _EXCLUDED
+                and not item.startswith((".venv-retained-", ".venv-failed-"))
             )
             if any((directory / item).is_symlink() for item in directories):
                 raise ValueError(
