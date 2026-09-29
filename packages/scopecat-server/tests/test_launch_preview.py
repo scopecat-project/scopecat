@@ -324,7 +324,7 @@ def test_worker_failure_isolated_and_not_attributed_to_another_dispatch(
     child.poll.return_value = None
 
     def spawn(args: list[str], **_kwargs: object) -> Mock:
-        if args[-1] == "broken" and failure == "spawn":
+        if args[-2] == "broken" and failure == "spawn":
             raise OSError("cannot spawn")
         return child
 
@@ -503,7 +503,7 @@ def test_manager_recovers_waiting_members_and_bounds_processes(
         first.poll.return_value = 0
         restored.tick()
         assert spawn.call_count == 2
-        assert spawn.call_args.args[0][-1] == "p2"
+        assert spawn.call_args.args[0][-2] == "p2"
 
 
 def test_failed_process_requires_explicit_dispatch_even_after_restart(

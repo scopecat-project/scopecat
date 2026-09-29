@@ -12,6 +12,7 @@ import shutil
 import subprocess
 import sys
 from collections.abc import Callable
+from contextlib import suppress
 from datetime import UTC, datetime
 from hashlib import sha256
 from pathlib import Path
@@ -231,18 +232,26 @@ class ProjectProcedureWorkers:
                 try:
                     process = psutil.Process(identity.pid)
                     if process.create_time() == identity.created:
+                        # Windows venv redirectors may own the actual interpreter
+                        # as a child. Capture that family before stopping its root.
+                        family = [*process.children(recursive=True), process]
                         if terminate:
-                            process.terminate()
-                        try:
-                            process.wait(timeout=3)
-                        except psutil.TimeoutExpired:
-                            if not terminate:
-                                raise RuntimeError(
-                                    "The closed task's worker is still exiting; "
-                                    "retry cleanup"
-                                ) from None
-                            process.kill()
-                            process.wait(timeout=3)
+                            for member in family:
+                                with suppress(psutil.NoSuchProcess):
+                                    member.terminate()
+                        for member in family:
+                            try:
+                                member.wait(timeout=3)
+                            except psutil.TimeoutExpired:
+                                if not terminate:
+                                    raise RuntimeError(
+                                        "The closed task's worker is still exiting; "
+                                        "retry cleanup"
+                                    ) from None
+                                member.kill()
+                                member.wait(timeout=3)
+                            except psutil.NoSuchProcess:
+                                pass
                 except psutil.NoSuchProcess:
                     pass
             child = self._children.pop(procedure_id, None)
@@ -311,6 +320,7 @@ class ProjectProcedureWorkers:
                     "scopecat_server.procedure_worker",
                     str(root),
                     procedure_id,
+                    str(log_path.parent / "process.json"),
                 ],
                 stdin=subprocess.PIPE,
                 stdout=log,

@@ -35,7 +35,7 @@ def test_failed_stop_keeps_window_available():
     assert closing.is_set()
 
 
-def test_close_during_candidate_preparation_does_not_abandon_installer():
+def test_close_during_candidate_preparation_does_not_abandon_installer(tmp_path):
     runtime = Mock()
     window = Mock()
     closing = threading.Event()
@@ -48,7 +48,7 @@ def test_close_during_candidate_preparation_does_not_abandon_installer():
         return SimpleNamespace(model_dump=lambda **_: {})
 
     runtime.prepare_update.side_effect = prepare
-    api.prepare_update("/delivery")
+    api.prepare_update(str(tmp_path / "delivery"))
     api.exit(True)
     window.destroy.assert_called_once()
 
