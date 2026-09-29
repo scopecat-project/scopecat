@@ -117,6 +117,31 @@ manual sessions share its ownership, even when experiments give it different
 logical names. Retire a device from the device page when it is no longer used;
 its execution records remain available.
 
+## Update driver source while the application is running
+
+Save your driver changes, finish device sessions and wait for affected experiments
+to finish. From your existing notebook connection:
+
+```python
+selected = lab.devices.update_driver_source("/path/to/driver-project")
+lab.devices.driver_source()  # inspect the active snapshot without connecting
+```
+
+The directory must contain `scopecat.toml` with `lab.instrument_backend` and author
+source roots. Its factory must retain the current provider identity and support
+the registered connection options. Dependencies must already be available in the
+application environment. No wheel build or application restart is required.
+
+The update replaces the whole driver worker, so all devices it serves must be
+idle. It releases old connections; the next explicit operation reconnects. Prepare
+experiments again against the updated device revisions. Syntax or publication
+errors preserve the previous selection; failed disconnection requires resolving
+device attention before retrying. Application restart and backup/restore retain
+the selected source even if the development directory has moved.
+
+This command updates drivers. It does not refresh experiment/compiler source or
+install dependencies, and there is not yet a workbench source-update button.
+
 ## Return from manual work to an experiment
 
 In the console, connect a device, query the scientific values you need, apply

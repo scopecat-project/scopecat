@@ -33,6 +33,7 @@ from scopecat_server.services.automation import AutomationService
 from scopecat_server.services.calibration_checks import CalibrationCheckAdmission
 from scopecat_server.services.config import ConfigService
 from scopecat_server.services.devices import DeviceService
+from scopecat_server.services.driver_sources import restore_driver_source
 from scopecat_server.services.executor import ExecutorService
 from scopecat_server.services.leases import OwnershipLeaseSupervisor
 from scopecat_server.services.point_plans import RunPointPlanService
@@ -151,7 +152,15 @@ class LocalDaemonRuntime:
                 )(self.project_root)
                 project_bootstrap = bootstrap
                 configuration_templates = bootstrap.configuration_templates
-            if instrument_backend_spec is not None:
+            restored_endpoint = restore_driver_source(self.project_root, project_store)
+            if restored_endpoint is not None:
+                if instrument_endpoint is not None:
+                    restored_endpoint.shutdown()
+                    raise ValueError(
+                        "an explicit endpoint conflicts with the retained driver source"
+                    )
+                instrument_endpoint = restored_endpoint
+            elif instrument_backend_spec is not None:
                 instrument_endpoint = SubprocessInstrumentBackendEndpoint(
                     self.project_root,
                     instrument_backend_spec,

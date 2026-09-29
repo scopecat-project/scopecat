@@ -23,8 +23,10 @@ from pydantic import (
     TypeAdapter,
     model_validator,
 )
+from scopecat.kernel.content_identity import sha256_json_hash
 from scopecat.kernel.problems import Problem
 from scopecat.project import load_instrument_backend_factory
+from scopecat.records.author_revision import AuthorRevisionRef
 from scopecat.records.config import InstrumentBindingSpec
 from scopecat.records.instrument import InstrumentStateReadback
 from scopecat.sdk.instruments.backend import (
@@ -274,6 +276,7 @@ class SubprocessInstrumentBackendEndpoint:
         *,
         installed_packages: tuple[tuple[str, str], ...] = (),
         code_root: str | Path | None = None,
+        source_revision: AuthorRevisionRef | None = None,
         startup_timeout: float | None = None,
         operation_timeout: float = 30.0,
         shutdown_timeout: float = 2.0,
@@ -347,7 +350,16 @@ class SubprocessInstrumentBackendEndpoint:
             assert startup.driver_catalog is not None
             assert startup.payload_catalog is not None
             self._provider_id = startup.provider_id
-            self._artifact_hash = startup.artifact_hash
+            self._artifact_hash = (
+                startup.artifact_hash
+                if source_revision is None
+                else sha256_json_hash(
+                    {
+                        "provider": startup.artifact_hash,
+                        "source": source_revision.content_hash,
+                    }
+                )
+            )
             startup_stage("materializing driver catalog")
             self._driver_catalog = _model_from_body(
                 DriverCatalog,

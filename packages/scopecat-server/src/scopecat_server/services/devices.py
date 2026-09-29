@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import sqlite3
-from collections.abc import Generator
+from collections.abc import Callable, Generator
 from contextlib import ExitStack, contextmanager
 from datetime import timedelta
 from threading import Lock
@@ -157,12 +157,13 @@ class DeviceService:
         instruments: InstrumentRuntime,
         *,
         actor: str,
+        publish_source: Callable[[sqlite3.Connection], None] | None = None,
     ) -> tuple[DeviceView, ...]:
         """Install an already validated worker and retain new device revisions.
 
         Ownership of the replacement transfers here, including cleanup on failure.
-        A source activation coordinator must also persist the selected source before
-        exposing this operation to clients.
+        The source coordinator publishes its selection in the same transaction
+        as device revisions via publish_source.
         """
         published = False
         try:
@@ -256,6 +257,8 @@ class DeviceService:
                                 revision=revision,
                                 expected_head=view.device.head,
                             )
+                        if publish_source is not None:
+                            publish_source(connection)
                     self.endpoint = replacement
                     published = True
                 return self.list()

@@ -155,11 +155,15 @@ device rejects the update without disconnecting idle peers; failed connection
 retirement retains the old revisions and durable attention. A subprocess test
 switches source versions and reconnects without restarting the application.
 
-This is not yet a user-facing source update capability. Source snapshot selection
-must be persisted with activation so restart loads the same implementation; author
-revision coordination and the ordinary client/UI entry remain pending. Do not expose
-the internal replacement operation as a complete refresh command before those
-pieces are connected. Controlled installation replacement remains separate work.
+`lab.devices.update_driver_source(path)` now captures a project source snapshot
+and publishes its selection in the same transaction as the device revisions.
+`lab.devices.driver_source()` inspects that selection. Restart and current-format
+backup/restore use the retained bytes even when the development directory moves.
+An invalid candidate leaves the previous worker and selection in place. Replaying
+the same request returns its retained result without recapturing today's files.
+This updates the driver worker only: author/compiler revision coordination and a
+workbench source-update UI remain pending. Controlled installation replacement is
+separate from source selection and still requires its own qualification.
 Global setup selection and overlapping combined-configuration editors have been
 removed. Every run supplies an exact setup independently of its configuration
 data and scientific provenance; see [configuration ownership](configuration-ownership.md).
