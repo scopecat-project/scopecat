@@ -557,7 +557,7 @@ def test_invalid_units_and_durations_are_aggregated() -> None:
         id=PulseEventId("play"),
         signal=DRIVE_Q0,
         envelope=Constant(
-            duration=Quantity(0, "ns"),
+            duration=Quantity(-1, "ns"),
             amplitude=Quantity(1, "Hz"),
             phase=Quantity(1, "V"),
         ),

@@ -69,7 +69,7 @@ def _zero_phase() -> Quantity:
 
 @dataclass(frozen=True, slots=True)
 class Constant:
-    """A constant complex envelope over a finite duration."""
+    """A constant complex envelope; zero duration is an empty play."""
 
     duration: Quantity
     amplitude: Quantity
@@ -427,6 +427,7 @@ def _time_value(
     instruction_id: PulseEventId,
     path: tuple[int, ...],
     positive: bool,
+    allow_zero: bool = False,
 ) -> Decimal | None:
     factor = _TIME_FACTORS.get(quantity.unit)
     if factor is None:
@@ -448,11 +449,13 @@ def _time_value(
         )
         return None
     result = Decimal(str(quantity.value)) * factor
-    if positive and result <= 0:
+    if positive and (result < 0 or (result == 0 and not allow_zero)):
         _issue(
             issues,
             "pulse_duration_nonpositive",
-            f"{name} must be positive",
+            f"{name} must be non-negative"
+            if allow_zero
+            else f"{name} must be positive",
             instruction_id=instruction_id,
             path=path,
         )
@@ -688,6 +691,7 @@ def _normalized_envelope(
         instruction_id=instruction_id,
         path=path,
         positive=True,
+        allow_zero=isinstance(envelope, Constant),
     )
     amplitude = _normalized_amplitude(
         envelope.amplitude,
