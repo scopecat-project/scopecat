@@ -8,6 +8,7 @@ import os
 import shutil
 import signal
 import subprocess
+import sys
 import time
 from collections.abc import Generator
 from contextlib import contextmanager
@@ -66,7 +67,7 @@ def development_session(
             write_author_scaffold(source)
         binding = source / RUNTIME_BINDING_NAME
         existing_binding = binding.exists()
-        register_author_workspace(root, source)
+        register_author_workspace(root, source, python=Path(sys.executable))
         selected_binding = binding.read_bytes()
         project = open_project(root)
         try:
@@ -128,7 +129,7 @@ def main() -> None:
                         [pnpm, "install", "--frozen-lockfile"], cwd=ui, check=True
                     )
                     child = subprocess.Popen(  # noqa: S603 - fixed developer command
-                        [pnpm, "run", "dev"],
+                        [pnpm, "exec", "vite", "--clearScreen", "false"],
                         cwd=ui,
                         env=dict(os.environ, SCOPECAT_DEV_ENDPOINT=record.base_url),
                         text=True,
@@ -138,7 +139,10 @@ def main() -> None:
                     time.sleep(0.2)
             finally:
                 if child is not None:
-                    terminate_validation_process_tree(child, owner=owner)
+                    try:
+                        child.wait(timeout=0.5)
+                    except subprocess.TimeoutExpired:
+                        terminate_validation_process_tree(child, owner=owner)
     except KeyboardInterrupt:
         pass
 
