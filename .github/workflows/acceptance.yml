@@ -229,7 +229,7 @@ jobs:
         run: uv run --locked ruff format --check .
 
   ui:
-    if: inputs.profile != 'service-lifecycle'
+    if: inputs.profile == 'full' || inputs.profile == 'local-application'
     name: UI
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -456,6 +456,7 @@ jobs:
     name: Acceptance gate (${{ inputs.profile }})
     if: ${{ always() }}
     needs:
+      - native-distribution
       - service-lifecycle
       - python-tests
       - browser-tests
@@ -470,6 +471,7 @@ jobs:
       - name: Require successful jobs
         env:
           PROFILE: ${{ inputs.profile }}
+          NATIVE_DISTRIBUTION_RESULT: ${{ needs['native-distribution'].result }}
           SERVICE_LIFECYCLE_RESULT: ${{ needs['service-lifecycle'].result }}
           INSTALLED_PILOT_RESULT: ${{ needs['installed-pilot'].result }}
           BROWSER_TESTS_RESULT: ${{ needs['browser-tests'].result }}
@@ -479,6 +481,16 @@ jobs:
           UI_RESULT: ${{ needs.ui.result }}
           DOCS_RESULT: ${{ needs.docs.result }}
         run: |
+          if [ "$PROFILE" = native-distribution ]; then
+            test "$NATIVE_DISTRIBUTION_RESULT" = success
+            for result in "$SERVICE_LIFECYCLE_RESULT" "$INSTALLED_PILOT_RESULT" \
+              "$BROWSER_TESTS_RESULT" "$UI_RESULT" "$PYTHON_TESTS_RESULT" \
+              "$BENCHMARK_SMOKE_RESULT" "$PYTHON_QUALITY_RESULT" "$DOCS_RESULT"; do
+              test "$result" = skipped
+            done
+            exit 0
+          fi
+          test "$NATIVE_DISTRIBUTION_RESULT" = skipped
           if [ "$PROFILE" = service-lifecycle ]; then
             test "$SERVICE_LIFECYCLE_RESULT" = success
             for result in "$INSTALLED_PILOT_RESULT" "$BROWSER_TESTS_RESULT" "$UI_RESULT" \
