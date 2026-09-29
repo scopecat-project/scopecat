@@ -93,7 +93,7 @@ def test_prepare_does_not_overwrite_existing_environment(tmp_path, monkeypatch):
     monkeypatch.setattr(environment, "check_project", lambda path: path)
     monkeypatch.setattr(environment, "environment_identity", dict)
     monkeypatch.setattr(environment, "gui_directory", lambda *_args: tmp_path / "gui")
-    monkeypatch.setattr(environment.shutil, "which", lambda _name: "uv")
+    monkeypatch.setattr(environment, "find_uv_bin", lambda: "uv")
     existing = tmp_path / ".venv"
     existing.mkdir()
     marker = existing / "keep"

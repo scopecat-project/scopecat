@@ -8,14 +8,16 @@ does not create an installed application.
 
 | Purpose | macOS | Windows |
 | --- | --- | --- |
-| Entry | `~/Applications/Scopecat.app` | User Start Menu `Scopecat.lnk` |
-| Software versions | App `Contents/Resources/software` | User Programs `Scopecat` |
+| Native app | User-selected Applications folder | User Programs `Scopecat` |
+| Entry | `Scopecat.app` | User Start Menu `Scopecat.lnk` |
+| Retained software versions | Application data `software` | Application data `software` |
 | Data and settings | `~/Library/Application Support/Scopecat` | Local AppData `Scopecat` |
 | Build cache | `~/Library/Caches/Scopecat` | Local AppData `Scopecat/Cache` |
 | Initial author folder | `~/Scopecat/experiments` | `~/Scopecat/experiments` |
 
-Windows program and Start Menu locations use Known Folder APIs, including folder
-redirection. Data/cache locations use platformdirs. These follow the separation in
+Windows setup uses Inno Setup's per-user program and Start Menu locations; the
+maintainer entry helper uses Known Folder APIs. Data/cache locations use
+platformdirs. These follow the separation in
 [Apple's file system guidance](https://developer.apple.com/library/archive/documentation/FileManagement/Conceptual/FileSystemProgrammingGuide/FileSystemOverview/FileSystemOverview.html)
 and [Windows Known Folders](https://learn.microsoft.com/en-us/windows/win32/shell/knownfolderid).
 
@@ -25,8 +27,9 @@ Applications entry. The installer is headless in either mode.
 
 `ApplicationRuntime.home` is the **data** home. `installation.json` records the
 selected interpreter, GUI and software home. Releases and their retained delivery
-files live in the software home; updates reuse that location. The launcher lives
-beside the software and passes the data home explicitly. Scientific records remain
+files live in the software home; updates reuse that location. Native launchers
+resolve resources relative to their executable and pass the data home explicitly.
+Scientific records remain
 under `data-home/runtime`; retained background dependency environments remain under
 `data-home/environments`. Neither is cache. User `.venv` files remain in the author
 folder, with independent package copies.
@@ -38,12 +41,49 @@ virtual environments contain absolute paths and cannot be relocated as a folder.
 
 ## Distribution boundary
 
-This is the installed layout, not yet a standalone native distribution. The current
-maintainer installer still needs uv and a managed Python. The generated Mac app
-must not be advertised as a relocatable drag-and-drop artifact. A complete native
-release still needs bundled interpreter/maintenance tooling, native setup/removal,
-platform CI and signature/notarization policy. Signing must cover immutable payloads;
-it cannot be bolted onto an app whose contents are then edited by the old updater.
+`python -m lab_tools.toolchain DELIVERY OUTPUT` builds a new platform delivery
+containing Python and uv. Run it on the target OS/architecture after the ordinary
+locked delivery build. It downloads the builder's exact Python patch version into
+a temporary managed directory, checks relocation, and records the Python archive,
+uv executable and uv licenses in the delivery checksum inventory. It does not
+modify the input delivery or register Python with the operating system.
+
+`prepare_home` extracts this Python beside the retained release's runtime before
+creating the virtual environment. Both the extracted base interpreter and runtime
+must stay at their installation paths. The immutable archive stays inside the
+verified bundle; generated Python bytecode stays outside its checksum inventory.
+Author environments and background execution environments can consequently share
+the retained base interpreter while keeping their own package directories. Runtime
+maintenance uses the installed `uv` dependency, without consulting the user's PATH.
+Toolchain construction needs network access; installing its locked wheels is offline.
+
+`python -m lab_tools.native_package DELIVERY APP --installer INSTALLER` packages
+the delivery into a relocatable native application, adding the toolchain if needed.
+Build on the target platform: macOS requires the command-line developer tools and
+produces an `.app` and `.dmg`; Windows requires the MSVC developer command prompt
+and Inno Setup 6 and produces `Scopecat.exe` with an optional Setup executable.
+These are maintainer prerequisites, not end-user prerequisites. The old
+`install.py`/`desktop_install` entry helper remains a source-maintainer path; it
+does not produce the relocatable application.
+
+The native executable starts an embedded minimal Python, prepares the complete
+runtime outside the app, then enters the existing desktop workbench. It never opens
+a browser. A trusted `--initializer SCRIPT` may scaffold laboratory starter code;
+it is checksummed with the delivery, runs on first setup and retries if interrupted.
+Later unseen app payloads prepare an update candidate without changing the selected
+runtime or stopping work. Reopening a previously seen app does not replace that
+candidate. Applying it uses the workbench's existing explicit stop/update flow.
+
+Native startup failures are written to `data-home/native-start.log` and presented
+through a native error dialog. `--home ROOT --check-result FILE` instead performs
+headless setup for acceptance. `scripts/verify_native_application.py APP HOME`
+checks relocation, empty PATH, repeat startup, unchanged app contents, retained
+author Python and service start/stop after the app is moved away. The
+`native-distribution` acceptance profile builds and runs this on macOS and Windows.
+
+These are unsigned prerelease artifacts; signing and macOS notarization are not
+configured. The native private installer/preview consumer must be switched and
+qualified before this replaces its existing maintainer installation command.
 
 Do not add a second application manager to solve packaging. Native setup and updates
 must use the same application/data ownership, independent author environments and

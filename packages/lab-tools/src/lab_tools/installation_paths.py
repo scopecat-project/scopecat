@@ -47,18 +47,13 @@ class InstallationPaths:
         workspace = Path.home() / "Scopecat" / "experiments"
         if sys.platform == "darwin":
             entry = Path.home() / "Applications" / "Scopecat.app"
-            software = entry / "Contents" / "Resources" / "software"
         elif sys.platform == "win32":
-            software = (
-                _windows_folder("5CD7AEE2-2219-4A67-B85D-6C9CE15660CB") / "Scopecat"
-            )
             entry = (
                 _windows_folder("A77F5D77-2E2B-44C3-A6A2-ABA601054A51") / "Scopecat.lnk"
             )
         else:
-            software = state / "software"
             entry = None
-        return cls(state, software, cache, workspace, entry)
+        return cls(state, state / "software", cache, workspace, entry)
 
 
 def _windows_folder(identity: str) -> Path:

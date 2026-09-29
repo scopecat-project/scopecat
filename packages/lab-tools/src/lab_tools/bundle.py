@@ -18,6 +18,7 @@ import shutil
 import subprocess
 import sys
 import sysconfig
+import tarfile
 import tempfile
 import time
 import uuid
@@ -122,13 +123,14 @@ def read_bundle(root: Path) -> Bundle:
             or "\\" in name
             or len(digest) != 64
             or not (
-                name.startswith(("gui/", "wheels/"))
+                name.startswith(("gui/", "wheels/", "toolchain/"))
                 or name
                 in {
                     "requirements.lock",
                     "dependencies.lock",
                     "build.lock",
                     "install.py",
+                    "initialize.py",
                 }
             )
         ):
@@ -143,7 +145,7 @@ def verify_bundle(root: Path, *, gui_only: bool = False) -> Bundle:
     bundle = read_bundle(root)
     if bundle["target"] != target_identity():
         raise ValueError("交付包的操作系统、CPU 或 Python ABI 与当前环境不同")
-    folders = ("gui",) if gui_only else ("gui", "wheels")
+    folders = ("gui",) if gui_only else ("gui", "wheels", "toolchain")
     actual = inventory(root, folders)
     expected = {
         name: value
@@ -162,6 +164,12 @@ def verify_bundle(root: Path, *, gui_only: bool = False) -> Bundle:
                 raise ValueError(f"交付文件不能是符号链接: {name}")
             actual[name] = file_hash(path)
             expected[name] = bundle["files"].get(name, "")
+        initializer = root / "initialize.py"
+        if initializer.exists() or "initialize.py" in bundle["files"]:
+            if initializer.is_symlink():
+                raise ValueError("交付文件不能是符号链接: initialize.py")
+            actual["initialize.py"] = file_hash(initializer)
+            expected["initialize.py"] = bundle["files"].get("initialize.py", "")
     if "gui/index.html" not in actual or actual != expected:
         raise ValueError("交付文件缺失、被修改或包含旧产物; 请恢复匹配的交付目录")
     return bundle
@@ -172,18 +180,35 @@ def _run_install(command: list[str]) -> None:
         command,
         check=True,
         creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
+        stdout=sys.stdout,
+        stderr=sys.stderr,
     )
 
 
 def install_bundle(
-    root: Path, destination: Path, *, copy_packages: bool = False
+    root: Path,
+    destination: Path,
+    *,
+    copy_packages: bool = False,
+    base_python: Path | None = None,
 ) -> Path:
     root = resolve_delivery(root)
     destination = destination.resolve()
     if destination.exists():
         raise FileExistsError(f"环境目录已存在: {destination}; 请使用新目录")
     _ = verify_bundle(root)
-    uv = shutil.which("uv")
+    toolchain = root / "toolchain"
+    uv_name = "uv.exe" if os.name == "nt" else "uv"
+    installed_uv = (
+        Path(sys.prefix) / ("Scripts" if os.name == "nt" else "bin") / uv_name
+    )
+    uv = (
+        str(toolchain / uv_name)
+        if toolchain.is_dir()
+        else str(installed_uv)
+        if installed_uv.is_file()
+        else shutil.which("uv")
+    )
     if uv is None:
         raise ValueError("离线安装前请准备 uv 和匹配的 Python 解释器")
     _run_install(
@@ -192,7 +217,7 @@ def install_bundle(
             "venv",
             "--offline",
             "--python",
-            sys.executable,
+            str(base_python) if base_python else sys.executable,
             str(destination),
         ],
     )
@@ -384,7 +409,18 @@ def _prepare_home_locked(root: Path, home: Path) -> tuple[Path, Path]:
         failed = environment.rename(release / f"runtime-failed-{uuid.uuid4().hex}")
         print(f"已保留上次未完成的运行环境: {failed}")
     if not environment.exists():
-        _ = install_bundle(bundle, environment)
+        archive = bundle / "toolchain/python.tar"
+        if archive.is_file():
+            base = managed_path(home, release / "python")
+            if not base.exists():
+                staged_base = release / f"python-staging-{uuid.uuid4().hex}"
+                with tarfile.open(archive) as stream:
+                    stream.extractall(staged_base, filter="data")
+                staged_base.rename(base)
+            base_python = base / ("python.exe" if os.name == "nt" else "bin/python3")
+            _ = install_bundle(bundle, environment, base_python=base_python)
+        else:
+            _ = install_bundle(bundle, environment)
     check_receipt(environment, bundle)
     python = environment / (
         "Scripts/python.exe" if sys.platform == "win32" else "bin/python"
