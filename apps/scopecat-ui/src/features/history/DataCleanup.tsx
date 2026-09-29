@@ -27,9 +27,11 @@ function including(selection: Selection, owner: string): Selection | undefined {
 export function ClearData({
   runs = [],
   procedures = [],
+  analyses = [],
 }: {
   runs?: string[];
   procedures?: string[];
+  analyses?: string[];
 }) {
   const cache = useQueryClient();
   const [preview, setPreview] = useState<Preview>();
@@ -41,7 +43,7 @@ export function ClearData({
     selection: Selection = {
       runs,
       procedures,
-      analyses: [],
+      analyses,
       setups: [],
       setup_definitions: [],
       parameters: [],
@@ -70,6 +72,11 @@ export function ClearData({
         ),
       );
       await cache.invalidateQueries({ queryKey: ["data-cleanup"] });
+      await Promise.all([
+        cache.invalidateQueries({ queryKey: ["runs"] }),
+        cache.invalidateQueries({ queryKey: ["research", "runs"] }),
+        cache.invalidateQueries({ queryKey: ["analyses", "project"], exact: true }),
+      ]);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : String(caught));
     } finally {
@@ -82,7 +89,7 @@ export function ClearData({
       {!preview ? (
         <button
           className={secondaryButton}
-          disabled={pending || !(runs.length || procedures.length)}
+          disabled={pending || !(runs.length || procedures.length || analyses.length)}
           onClick={() => void inspect()}
         >
           Review data cleanup…

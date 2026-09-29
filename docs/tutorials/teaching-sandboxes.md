@@ -33,7 +33,8 @@ Closing the workbench page alone does not clear anything.
 
 ## Clean up ordinary measurements
 
-Open a measurement and choose **Review data cleanup…**. Inspect the selection,
+Open a measurement, project analysis or completed task and choose
+**Review data cleanup…**. Inspect the selection,
 estimated file size and any retaining references before confirming deletion.
 A task must finish or be cancelled through its normal controls first. If another
 analysis, calibration or published parameter revision still needs the evidence,
